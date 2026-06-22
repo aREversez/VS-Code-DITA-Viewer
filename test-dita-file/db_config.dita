@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="db_config" xml:lang="zh-CN">
+    <title>数据库高级配置指南</title>
+    <shortdesc>本文档介绍了如何使用 <keyword>DatabaseX</keyword> 的高级设置，包括性能优化、语法示例及配置项说明。</shortdesc>
+    <body>
+        <section id="section_terms">
+            <title>核心概念与文本格式</title>
+            <p>在开始配置之前，我们需要明确一个核心概念：<term>ACID 特性</term>。这是数据库事务正确执行的四个基本要素。</p>
+            <p>为了使文档更具可读性，我们可以对文本进行多种样式修饰： <b>粗体文本（重要提示）</b>、 <i>斜体文本（英文术语）</i>、
+                <u>下划线文本（强调）</u>，以及用于表示系统路径或命令的 <tt>monospaced 文本（如 /etc/config）</tt>。 </p>
+            <p>在编写数学公式或化学方程时，可以使用上标和下标，例如：算法复杂度 O(N<sup>2</sup>) 或 H<sub>2</sub>O 冷却系统。</p>
+            <p>关于配置文件的修改，官方文档中有一句短引用：<q>谨慎修改默认值</q>。同时，请牢记以下长引用：</p>
+            <lq>数据库的优化是一个持续的过程，需要不断地根据生产环境的真实业务监控数据进行微调，切勿盲目复制网上的现成配置方案。——《企业数据库最佳实践》</lq>
+        </section>
+        <section id="section_lists">
+            <title>操作步骤与列表展示</title>
+            <p>请严格按照以下顺序执行初始化操作：</p>
+            <ol>
+                <li>备份当前数据库的所有数据。</li>
+                <li>停止数据库服务。</li>
+                <li>应用新的配置文件。</li>
+            </ol>
+            <p>本版本支持以下核心特性：</p>
+            <ul>
+                <li>高可用集群部署</li>
+                <li>自动增量备份</li>
+                <li>智能读写分离</li>
+            </ul>
+            <p>以下是可选的附加组件简单列表（Simple List）：</p>
+            <sl>
+                <sli>监控插件-A</sli>
+                <sli>监控插件-B</sli>
+            </sl>
+        </section>
+        <section id="section_defs">
+            <title>核心参数定义列表</title>
+            <dl>
+                <dlentry>
+                    <dt>max_connections</dt>
+                    <dd>允许客户端连接到数据库的最大并发数。</dd>
+                </dlentry>
+                <dlentry>
+                    <dt>shared_buffers</dt>
+                    <dd>数据库服务器用于共享内存缓冲区的内存量，建议设置为系统内存的 25%。</dd>
+                </dlentry>
+            </dl>
+        </section>
+        <section id="section_tables">
+            <title>配置矩阵（复杂表格与简单表格）</title>
+            <p>标准配置对照表（Complex Table）如下：</p>
+            <table>
+                <tgroup cols="3">
+                    <colspec colname="col1" colwidth="1*"/>
+                    <colspec colname="col2" colwidth="2*"/>
+                    <colspec colname="col3" colwidth="1.5*"/>
+                    <thead>
+                        <row>
+                            <entry>参数名</entry>
+                            <entry>默认值</entry>
+                            <entry>推荐值</entry>
+                        </row>
+                    </thead>
+                    <tbody>
+                        <row>
+                            <entry>work_mem</entry>
+                            <entry>4MB</entry>
+                            <entry>64MB</entry>
+                        </row>
+                        <row>
+                            <entry>maintenance_work_mem</entry>
+                            <entry>64MB</entry>
+                            <entry>512MB</entry>
+                        </row>
+                    </tbody>
+                </tgroup>
+            </table>
+            <p>系统兼容性简化表（Simple Table）：</p>
+            <simpletable id="sim_table">
+                <sthead>
+                    <stentry>操作系统</stentry>
+                    <stentry>是否支持</stentry>
+                </sthead>
+                <strow>
+                    <stentry>Linux 内核 5.x</stentry>
+                    <stentry>是</stentry>
+                </strow>
+                <strow>
+                    <stentry>Windows Server 2022</stentry>
+                    <stentry>是</stentry>
+                </strow>
+            </simpletable>
+        </section>
+        <section id="section_visuals">
+            <title>架构图示</title>
+            <fig id="fig_db_topology">
+                <title>数据库分布式部署拓扑图</title>
+                <image href="images/db_topology.png" alt="展示了主从架构和哨兵节点的拓扑连接"/>
+            </fig>
+        </section>
+        <example id="example_sql">
+            <title>SQL 调优示例</title>
+            <p>您可以使用以下脚本创建优化索引，具体步骤可参照本篇的 <xref href="#db_config/section_lists"/>：</p>
+            <codeblock xml:space="preserve" outputclass="language-cpp">
+-- 创建高效的复合索引
+CREATE UNIQUE INDEX idx_user_composite 
+ON users (tenant_id, email) 
+WHERE status = 'active';
+            </codeblock>
+            <p>控制台的原始输出流格式（预格式化文本）如下：</p>
+            <pre>
+LOG:  duration: 12.345 ms  statement: CREATE INDEX...
+CREATE INDEX
+STATUS: SUCCESS
+            </pre>
+            <note type="warning">在生产环境执行大表索引构建时，请务必加上 CONCURRENTLY 关键字以避免锁表。</note>
+        </example>
+    </body>
+    <related-links>
+        <link href="db_overview.dita" format="dita">
+            <linktext>了解更多关于数据库基础架构概述的信息</linktext>
+        </link>
+    </related-links>
+</topic>

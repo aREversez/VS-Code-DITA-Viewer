@@ -1,0 +1,105 @@
+{
+  "name": "dita-viewer",
+  "displayName": "DITA Viewer",
+  "description": "DITA reading view for VS Code — renders .dita files as formatted read-only preview",
+  "version": "0.1.0",
+  "publisher": "dita-viewer",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:dita",
+    "onCustomEditor:ditaViewer.preview",
+    "onCommand:ditaViewer.showRendered"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "dita",
+        "extensions": [".dita"],
+        "aliases": ["DITA", "dita"]
+      }
+    ],
+    "customEditors": [
+      {
+        "viewType": "ditaViewer.preview",
+        "displayName": "DITA Reading View",
+        "selector": [
+          {
+            "filenamePattern": "*.dita"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
+    "commands": [
+      {
+        "command": "ditaViewer.showRendered",
+        "title": "Open DITA Reading View",
+        "icon": "media/icons/preview.svg"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "ditaViewer.showRendered",
+        "key": "ctrl+shift+alt+d",
+        "when": "editorLangId == dita || resourceExtname == .dita"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "ditaViewer.showRendered",
+          "when": "resourceExtname == .dita",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "ditaViewer.showRendered",
+          "when": "resourceExtname == .dita",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "ditaViewer.showRendered",
+          "when": "resourceExtname == .dita"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.config.js",
+    "build:dev": "node esbuild.config.js --dev",
+    "watch": "node esbuild.config.js --watch",
+    "lint": "eslint src/ --ext .ts",
+    "lint:fix": "eslint src/ --ext .ts --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "pretest": "tsc -p tsconfig.test.json",
+    "test": "mocha --config .mocharc.json",
+    "test:e2e": "node esbuild.config.js && node test-runner.cjs"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^20.17.0",
+    "@types/sax": "^1.2.7",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "esbuild": "^0.24.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "mocha": "^10.8.0",
+    "prettier": "^3.4.0",
+    "typescript": "^5.7.0",
+    "@vscode/test-electron": "^2.4.0"
+  },
+  "dependencies": {
+    "sax": "^1.4.1"
+  }
+}

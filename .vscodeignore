@@ -1,0 +1,11 @@
+.vscode/**
+.vscode-test/**
+test-dita-file/**
+test/**
+src/**
+tsconfig.json
+esbuild.config.js
+eslint.config.js
+.prettierrc
+node_modules/
+.gitignore

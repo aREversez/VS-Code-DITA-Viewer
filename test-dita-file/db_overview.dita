@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="db_overview" xml:lang="zh-CN">
+    <title>数据库架构概述</title>
+    <shortdesc>本文档提供系统的宏观拓扑架构与基础概念介绍。</shortdesc>
+    <body>
+        <section id="main_content">
+            <p>为了实现高性能的数据读写，系统采用了多层缓冲架构。关于如何调整这些缓冲区的具体参数，请参考：<xref href="db_config.dita#db_config"
+                />。</p>
+        </section>
+    </body>
+</topic>
