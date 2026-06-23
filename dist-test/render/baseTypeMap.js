@@ -7,6 +7,9 @@ function isInThead(ctx) {
 function getAttr(node, name) {
     return node.attributes?.[name];
 }
+function escapeAttr(s) {
+    return s.replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/&/g, '&amp;');
+}
 exports.BASE_TYPE_RENDERERS = {
     'topic/topic': (node, ctx, renderChildren) => {
         const id = getAttr(node, 'id');
@@ -73,21 +76,20 @@ exports.BASE_TYPE_RENDERERS = {
         const href = getAttr(node, 'href') || '';
         const alt = getAttr(node, 'alt') || '';
         const placement = getAttr(node, 'placement') || 'inline';
-        if (!href)
-            return '';
-        const imgSrc = ctx.asWebviewUri(href);
-        if (!imgSrc)
-            return '';
         const width = getAttr(node, 'width');
         const height = getAttr(node, 'height');
         const extra = `${width ? ` width="${width}"` : ''}${height ? ` height="${height}"` : ''}`;
-        return `<img src="${imgSrc}" alt="${alt}"${extra}${placement === 'break' ? ' class="image-break"' : ''} loading="lazy">`;
+        const imgSrc = href ? ctx.asWebviewUri(href) : '';
+        const cls = placement === 'break' ? ' class="image-break"' : '';
+        const errMsg = 'Image fail: ' + escapeAttr(href) + ' srcLen=' + imgSrc.length;
+        const errHandler = 'this.alt=\'' + errMsg + '\';this.style.outline=\'3px solid red\';this.style.outlineOffset=\'-1px\'';
+        return `<img src="${imgSrc || ''}" alt="${alt}"${extra}${cls} loading="lazy" onerror="${errHandler}" data-src="${escapeAttr(href)}">`;
     },
     'topic/fig': (node, ctx, renderChildren) => {
         const id = getAttr(node, 'id');
         const titleNode = (node.children || []).find((c) => c.type === 'element' && c.baseType === 'topic/title');
         const rest = (node.children || []).filter((c) => !(c.type === 'element' && c.baseType === 'topic/title'));
-        const figContent = rest.map((c) => renderChildren(c, ctx)).join('');
+        const figContent = renderChildren({ ...node, children: rest }, ctx);
         const figCaption = titleNode
             ? `<figcaption>${renderChildren(titleNode, { ...ctx, headingLevel: ctx.headingLevel + 1 })}</figcaption>`
             : '';

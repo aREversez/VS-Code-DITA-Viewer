@@ -9,3 +9,4 @@ eslint.config.js
 .prettierrc
 node_modules/
 .gitignore
+REQUIREMENTS.md

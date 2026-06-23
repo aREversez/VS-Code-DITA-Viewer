@@ -92,6 +92,109 @@
 **修复**: 
 1. 移除 `@media`，改为在 `DitaViewerProvider` 中通过 `vscode.window.activeColorTheme.kind` 检测 VS Code 主题
 2. 将 `vscode-dark` class 注入 `<html>` 元素
-3. CSS 使用 `.vscode-dark` 选择器仅覆盖 `blockquote` 文字颜色
+3. CSS 使用 `.vscode-dark` 选择器仅覆盖背景/边框色（不覆盖文字颜色）
+
+**影响**: 无。
+
+---
+
+## B7 — `<fig>` 内图片不显示
+
+**发现时间**: 2026-06-23 (Phase 1 功能验证)
+
+**现象**: 简单模式 `<image>`（直接作为 `<body>` 子节点）正常显示；复杂模式 `<fig><title>...</title><image href="..."/></fig>` 中图片不显示。
+
+**原因**: `topic/fig` 渲染器使用 `rest.map(c => renderChildren(c, ctx))` 渲染非标题子节点。`renderChildren(c, ctx)` 渲染的是 `c.children`（`<image>` 的子节点，通常是空的），而非 `c` 自身。简单模式 `<image>` 由 `renderElement` 直接调用图片渲染器，但在 `<fig>` 内部时被 `renderChildren(c, ctx)` 跳过了元素级渲染。
+
+**修复**: 改为 `renderChildren({ ...node, children: rest }, ctx)` — 创建一个过滤后的 `<fig>` 节点版本传给 `renderChildren`，它会为 `rest` 中每个子节点调用 `renderElement`，正确触发元素渲染器。
+
+```typescript
+// 错误
+const figContent = rest.map((c) => renderChildren(c, ctx)).join('');
+// 正确
+const figContent = renderChildren({ ...node, children: rest }, ctx);
+```
+
+**影响**: 无。
+
+---
+
+## B8 — 双向滚动同步：源码→预览回跳
+
+**发现时间**: 2026-06-23 (双向同步功能验证)
+
+**现象**: 预览页向下连续滑动时屏幕内容突然往上滑回；源码页向下滑动时预览页往回跳。
+
+**原因**: 多因素叠加导致的循环回跳：
+
+1. **平滑滚动阻塞**：`scrollIntoView({ behavior: 'smooth' })` 产生动画，持续触发 scroll 事件，期间 `isScrolling` 标记阻止了后续 `revealLine` 消息，导致 webview 落后于源码位置
+2. **过时 scrollSync 回拉**：webview 在滚动停止后 500ms 报告当前顶部行号（`scrollSync`），此时源码已被用户继续向下滚动，扩展收到过时的行号后执行 `revealRange` 把源码往回拖
+3. **异步事件多次触发**：`revealRange` 是异步操作，`onDidChangeTextEditorVisibleRanges` 可能触发多次。一次性标记 `skipNextVisibleSync` 只跳过第一次，后续事件仍把 `revealLine` 发回预览
+4. **已到底元素仍执行 scrollIntoView**：预览已到末尾后 `scrollToLine` 找到最后元素并执行 `scrollIntoView({ block: 'start' })`，把末尾元素拉到视口顶部，看起来像跳回开头
+
+**修复**（分 4 轮迭代）：
+
+```
+迭代 1 — 比较判定法防循环（替换定时锁 isSyncing/isUserScroll）：
+- webview→source：扩展收到 scrollSync 后，比较 webview 行号与源码当前顶部行号，
+  差值 > 1 才执行 revealRange，否则跳过
+- source→webview：不再加锁，onDidChangeTextEditorVisibleRanges +
+  onDidChangeTextEditorSelection 双事件触发
+
+迭代 2 — isScrolling 标记：
+- 用户滚动时 isScrolling = true，revealLine 消息被忽略
+- 停止滚动 500ms 后 isScrolling = false，触发 scrollSync
+
+迭代 3 — skipVisibleUntil 时间窗口（替换一次性 skipNextVisibleSync）：
+- scrollSync 处理后设置 skipVisibleUntil = Date.now() + 250ms
+- 250ms 内所有 visibleRanges 事件被屏蔽，吸收异步多次触发
+
+迭代 4 — 最终方案：
+a) scrollIntoView 改为即时（移除 behavior: 'smooth'），不产生动画
+b) scrollSync 仅前向同步：diff = message.line - currentTopLine，仅当 diff > 1
+  （webview 领先源码）时才把源码往前拉，绝不往后拖
+c) 超出范围保护：revealLine 目标行 > 最后渲染元素+2 时滚到文档底部而非 scrollIntoView
+d) 不必要滚动跳过：匹配元素已在视口顶部 ±5px 内时跳过 scrollIntoView
+```
+
+**影响**: 无。
+
+---
+
+## B9 — 源码滚动超出预览末尾后预览跳回开头
+
+**发现时间**: 2026-06-23 (双向同步功能验证)
+
+**现象**: 源码行数远多于预览渲染行数。源码往下滑到超出预览末尾后，预览从末尾跳回开头并重新往下滚动。
+
+**原因**: 源码超出预览末尾后，`revealLine` 持续发送大行号（如 300、400）。`scrollToLine` 找到最后渲染元素（data-line ≈ 150）并执行 `scrollIntoView({ block: 'start' })`，该调用把末尾元素拉到视口顶部——当页面内容短于视口高度时，效果等同于跳回文档顶部。随后每个新的 `revealLine` 消息把预览从顶部重新往下拉，产生 "跳到开头继续往下滑" 的视觉效果。
+
+**修复**: `scrollToLine` 中添加保护：若 `revealLine` 目标行比匹配元素行号大 2 以上（即目标远超最后渲染内容），直接 `window.scrollTo(0, document.documentElement.scrollHeight)` 滚到文档底部，不再执行 `scrollIntoView`。同时添加不必要滚动跳过（匹配元素已在视口顶部 ±5px 内时跳过 `scrollIntoView`）。
+
+```typescript
+if (targetLine > elLine + 2) {
+  window.scrollTo(0, document.documentElement.scrollHeight);
+  return;
+}
+```
+
+**影响**: 无。
+
+---
+
+## B10 — 图片加载失败
+
+**发现时间**: 2026-06-23 (Phase 1 功能验证)
+
+**现象**: 所有图片无法显示（简单模式和 `<fig>` 内均不显示），最终定位为 `<fig>` 内图片问题（B7）。
+
+**原因**: 路径解析不正确——`vscode.Uri.joinPath` 在 Windows 上可能不处理 `../` 路径段，导致 `webview.asWebviewUri` 无法找到图片文件。数据 URI 回退方案使用 `path.join` 但未用 `path.resolve` 正规化路径。
+
+**修复**:
+
+1. 双重加载策略：先尝试 `webview.asWebviewUri`，失败后回退到 data URI
+2. 路径正规化：使用 `path.resolve(docRootDir, relPath)` 解析 `../` 相对路径，再转换为 `Uri.file` 传入 `webview.asWebviewUri`
+3. CSP `img-src ${webview.cspSource} data:` 同时允许两种方案
+4. 始终渲染 `<img>` 元素（即使 src 为空），添加 `onerror` 诊断（红色边框 + 错误路径 + src 长度）
 
 **影响**: 无。

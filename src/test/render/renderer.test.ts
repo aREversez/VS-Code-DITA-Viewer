@@ -39,7 +39,7 @@ describe('renderer', () => {
       makeEl('topic/title', [makeText('My Title')]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('<h1 title="title">'));
+    assert.ok(html.includes('title="title"'));
     assert.ok(html.includes('My Title'));
     assert.ok(html.includes('</h1>'));
   });
@@ -59,7 +59,8 @@ describe('renderer', () => {
       ]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('<p title="p">Hello world</p>'));
+    assert.ok(html.includes('title="p"'));
+    assert.ok(html.includes('Hello world'));
   });
 
   it('should render note with type-specific class', () => {
@@ -84,10 +85,11 @@ describe('renderer', () => {
       ]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('<ul title="ul">'));
-    assert.ok(html.includes('<ol title="ol">'));
-    assert.ok(html.includes('<li title="li">A</li>'));
-    assert.ok(html.includes('<li title="li">1</li>'));
+    assert.ok(html.includes('title="ul"'));
+    assert.ok(html.includes('title="ol"'));
+    assert.ok(html.includes('title="li"'));
+    assert.ok(html.includes('>A<'));
+    assert.ok(html.includes('>1<'));
   });
 
   it('should render definition list', () => {
@@ -100,9 +102,11 @@ describe('renderer', () => {
       ]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('<dl title="dl">'));
-    assert.ok(html.includes('<dt title="dt">term</dt>'));
-    assert.ok(html.includes('<dd title="dd">definition</dd>'));
+    assert.ok(html.includes('title="dl"'));
+    assert.ok(html.includes('title="dt"'));
+    assert.ok(html.includes('title="dd"'));
+    assert.ok(html.includes('>term<'));
+    assert.ok(html.includes('>definition<'));
   });
 
   it('should render CALS table', () => {
@@ -142,8 +146,9 @@ describe('renderer', () => {
     ]);
     const html = renderDocument(doc, defaultCtx);
     assert.ok(html.includes('class="simple-table"'));
-    assert.ok(html.includes('<td title="stentry">OS</td>'));
-    assert.ok(html.includes('<td title="stentry">Linux</td>'));
+    assert.ok(html.includes('title="stentry"'));
+    assert.ok(html.includes('>OS<'));
+    assert.ok(html.includes('>Linux<'));
   });
 
   it('should render image with asWebviewUri', () => {
@@ -172,7 +177,8 @@ describe('renderer', () => {
       makeEl('topic/xref', [makeText('see section')], { href: '#section1' }),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('<a title="xref" href="#section1"'));
+    assert.ok(html.includes('title="xref"'));
+    assert.ok(html.includes('href="#section1"'));
     assert.ok(html.includes('see section'));
   });
 
@@ -194,12 +200,18 @@ describe('renderer', () => {
       makeEl('topic/sub', [makeText('sub')]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('<strong title="b">bold</strong>'));
-    assert.ok(html.includes('<em title="i">italic</em>'));
-    assert.ok(html.includes('<u title="u">underline</u>'));
-    assert.ok(html.includes('<code title="tt">mono</code>'));
-    assert.ok(html.includes('<sup title="sup">sup</sup>'));
-    assert.ok(html.includes('<sub title="sub">sub</sub>'));
+    assert.ok(html.includes('title="b"'));
+    assert.ok(html.includes('title="i"'));
+    assert.ok(html.includes('title="u"'));
+    assert.ok(html.includes('title="tt"'));
+    assert.ok(html.includes('title="sup"'));
+    assert.ok(html.includes('title="sub"'));
+    assert.ok(html.includes('>bold<'));
+    assert.ok(html.includes('>italic<'));
+    assert.ok(html.includes('>underline<'));
+    assert.ok(html.includes('>mono<'));
+    assert.ok(html.includes('>sup<'));
+    assert.ok(html.includes('>sub<'));
   });
 
   it('should render quotes and blockquotes', () => {
@@ -208,8 +220,10 @@ describe('renderer', () => {
       makeEl('topic/lq', [makeText('block quote')]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('<q title="q">inline quote</q>'));
-    assert.ok(html.includes('<blockquote title="lq">block quote</blockquote>'));
+    assert.ok(html.includes('title="q"'));
+    assert.ok(html.includes('title="lq"'));
+    assert.ok(html.includes('>inline quote<'));
+    assert.ok(html.includes('>block quote<'));
   });
 
   it('should render keyword and term with spans', () => {
@@ -218,8 +232,12 @@ describe('renderer', () => {
       makeEl('topic/term', [makeText('term')]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('<span title="keyword" class="keyword">kw</span>'));
-    assert.ok(html.includes('<span title="term" class="term">term</span>'));
+    assert.ok(html.includes('title="keyword"'));
+    assert.ok(html.includes('title="term"'));
+    assert.ok(html.includes('class="keyword"'));
+    assert.ok(html.includes('class="term"'));
+    assert.ok(html.includes('>kw<'));
+    assert.ok(html.includes('>term<'));
   });
 
   it('should escape HTML in text nodes', () => {
@@ -271,7 +289,10 @@ describe('renderer', () => {
       ]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('<h1 title="title">Main</h1>'));
-    assert.ok(html.includes('<h2 title="title">Section</h2>'));
+    assert.ok(html.includes('title="title"'));
+    assert.ok(html.includes('>Main<'));
+    assert.ok(/<h1[\s>]/.test(html));
+    assert.ok(/<h2[\s>]/.test(html));
+    assert.ok(html.includes('>Section<'));
   });
 });

@@ -91,13 +91,10 @@
                 </strow>
             </simpletable>
         </section>
-        <section id="section_visuals">
-            <title>架构图示</title>
-            <fig id="fig_db_topology">
+        <section id="section_visuals"><title>架构图示</title><fig id="fig_db_topology">
                 <title>数据库分布式部署拓扑图</title>
-                <image href="images/db_topology.png" alt="展示了主从架构和哨兵节点的拓扑连接"/>
-            </fig>
-        </section>
+                <image href="../images/db_topology.png" alt="images/db_topology.png"/>
+            </fig></section>
         <example id="example_sql">
             <title>SQL 调优示例</title>
             <p>您可以使用以下脚本创建优化索引，具体步骤可参照本篇的 <xref href="#db_config/section_lists"/>：</p>

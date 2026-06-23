@@ -34,8 +34,8 @@ function escapeHtml(text: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function injectTitle(html: string, tagName: string): string {
-  return html.replace(/^<([a-zA-Z][a-zA-Z0-9]*)/, `<$1 title="${tagName}"`);
+function injectAttributes(html: string, tagName: string, line: number): string {
+  return html.replace(/^<([a-zA-Z][a-zA-Z0-9]*)/, `<$1 title="${tagName}" data-line="${line}"`);
 }
 
 function renderElement(node: DitaNode, context: RenderContext): string {
@@ -61,7 +61,7 @@ function renderElement(node: DitaNode, context: RenderContext): string {
     let html = renderer(node, childCtx, renderChildren);
     if (baseType && !PASS_THROUGH_BASETYPES.has(baseType)) {
       const tagName = node.tagName || baseType.split('/').pop() || baseType;
-      html = injectTitle(html, tagName);
+      html = injectAttributes(html, tagName, node.sourceRange.startLine);
     }
     return html;
   }
