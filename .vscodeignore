@@ -10,3 +10,4 @@ eslint.config.js
 node_modules/
 .gitignore
 REQUIREMENTS.md
+output/

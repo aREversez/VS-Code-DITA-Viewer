@@ -1,0 +1,219 @@
+/* 
+ * DITA Viewer — custom documentation theme
+ * Mimics typical published output (Oxygen XML WebHelp style)
+ */
+
+/* ── Brand colors ── */
+:root {
+  --brand-primary: #1a73e8;
+  --brand-primary-light: #e8f0fe;
+  --brand-text: #202124;
+  --brand-bg: #ffffff;
+  --brand-accent: #ea4335;
+  --brand-code-bg: #f8f9fa;
+  --brand-border: #dadce0;
+  --brand-heading: #1967d2;
+  --brand-link: #1a73e8;
+  --brand-font: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --brand-mono: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+}
+
+/* ── Typography ── */
+body {
+  font-family: var(--brand-font);
+  color: var(--brand-text);
+  line-height: 1.7;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 3rem 2rem;
+}
+
+/* ── Headings ── */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--brand-heading);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+h1 {
+  font-size: 2em;
+  border-bottom: 3px solid var(--brand-primary);
+  padding-bottom: 0.4em;
+  margin-top: 0;
+}
+
+h2 {
+  font-size: 1.5em;
+  border-bottom: 1px solid var(--brand-border);
+  padding-bottom: 0.3em;
+  margin-top: 2em;
+}
+
+h3 { font-size: 1.25em; margin-top: 1.8em; }
+h4 { font-size: 1.1em; margin-top: 1.5em; }
+
+/* ── Links ── */
+.xref {
+  color: var(--brand-link);
+  text-decoration: none;
+  font-weight: 500;
+}
+.xref:hover {
+  text-decoration: underline;
+  color: #1557b0;
+}
+
+/* ── Topic article ── */
+.topic {
+  background: var(--brand-bg);
+  border-radius: 8px;
+  padding: 2rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+/* ── Short description ── */
+.shortdesc {
+  background: var(--brand-primary-light);
+  border-left: 4px solid var(--brand-primary);
+  padding: 1rem 1.25rem;
+  border-radius: 0 6px 6px 0;
+  font-size: 1.05em;
+  margin: 1.5rem 0;
+}
+
+/* ── Note boxes ── */
+.note {
+  border-left: 4px solid var(--brand-primary);
+  background: var(--brand-primary-light);
+  padding: 1rem 1.25rem;
+  margin: 1.25rem 0;
+  border-radius: 0 6px 6px 0;
+}
+
+.note__label {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.75em;
+  letter-spacing: 0.05em;
+  color: var(--brand-primary);
+}
+
+.note--warning { border-left-color: #f9ab00; background: #fef7e0; }
+.note--warning .note__label { color: #e37400; }
+.note--danger { border-left-color: var(--brand-accent); background: #fce8e6; }
+.note--danger .note__label { color: var(--brand-accent); }
+.note--important { border-left-color: #9334e6; background: #f3e8fd; }
+.note--important .note__label { color: #9334e6; }
+.note--tip { border-left-color: #34a853; background: #e6f4ea; }
+.note--tip .note__label { color: #34a853; }
+
+/* ── Tables ── */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.25rem 0;
+  font-size: 0.95em;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+table th {
+  background: var(--brand-primary);
+  color: #fff;
+  font-weight: 600;
+  padding: 0.65rem 0.85rem;
+  text-align: left;
+}
+
+table td {
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid var(--brand-border);
+}
+
+table tr:last-child td { border-bottom: none; }
+
+/* ── Code blocks ── */
+pre.codeblock, pre.preformatted {
+  background: var(--brand-code-bg);
+  border: 1px solid var(--brand-border);
+  border-radius: 6px;
+  padding: 1.25rem;
+  font-family: var(--brand-mono);
+  font-size: 0.88em;
+  line-height: 1.55;
+  overflow-x: auto;
+}
+
+.codeblock-lang {
+  background: var(--brand-primary);
+  color: #fff;
+  font-family: var(--brand-mono);
+  font-size: 0.7em;
+  padding: 0.15em 0.6em;
+  border-radius: 0 4px 0 4px;
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+code {
+  font-family: var(--brand-mono);
+  font-size: 0.9em;
+  background: var(--brand-code-bg);
+  padding: 0.15em 0.35em;
+  border-radius: 3px;
+  color: #d63384;
+}
+
+/* ── Inline elements ── */
+.keyword { color: var(--brand-primary); font-weight: 600; }
+.term { font-style: italic; border-bottom: 1px dashed var(--brand-border); }
+.ph { opacity: 0.75; }
+
+/* ── Blockquote ── */
+blockquote {
+  border-left: 3px solid var(--brand-border);
+  margin: 1.25rem 0;
+  padding: 0.75rem 1.25rem;
+  color: #5f6368;
+  font-style: italic;
+  background: var(--brand-code-bg);
+  border-radius: 0 4px 4px 0;
+}
+
+/* ── Images ── */
+img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin: 1.25rem 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+figure {
+  margin: 1.5rem 0;
+  text-align: center;
+  background: var(--brand-code-bg);
+  padding: 1.5rem;
+  border-radius: 8px;
+}
+
+figcaption {
+  font-style: italic;
+  margin-top: 0.75rem;
+  font-size: 0.9em;
+  color: #5f6368;
+}
+
+/* ── Lists ── */
+ul, ol { padding-left: 1.5em; }
+li { margin: 0.35em 0; }
+
+/* ── Related links ── */
+.related-links {
+  margin-top: 2.5rem;
+  padding-top: 1.5rem;
+  border-top: 2px solid var(--brand-border);
+}
+.related-links h2 { font-size: 1.1em; margin-top: 0; }

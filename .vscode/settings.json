@@ -1,0 +1,5 @@
+{
+  "dita-viewer.customCss": [
+    "test-dita-file/custom.css"
+  ]
+}

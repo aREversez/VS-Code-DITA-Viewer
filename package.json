@@ -2,7 +2,7 @@
   "name": "dita-viewer",
   "displayName": "DITA Viewer",
   "description": "DITA reading view for VS Code — renders .dita files as formatted read-only preview",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "dita-viewer",
   "engines": {
     "vscode": "^1.85.0"
@@ -71,6 +71,19 @@
           "when": "resourceExtname == .dita"
         }
       ]
+    },
+    "configuration": {
+      "title": "DITA Viewer",
+      "properties": {
+        "dita-viewer.customCss": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Custom CSS file paths to apply to the preview. Supports absolute paths, paths relative to workspace root, and paths relative to the DITA file directory."
+        }
+      }
     }
   },
   "scripts": {

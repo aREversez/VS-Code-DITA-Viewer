@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { parseDita } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
 import { readFileSync, existsSync } from 'fs';
-import { dirname, extname, join, resolve } from 'path';
+import { dirname, extname, isAbsolute, join, resolve } from 'path';
 import { DitaNode } from '../parser/domTypes';
 
 function getStylesCss(context: vscode.ExtensionContext): string {
@@ -216,6 +216,8 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
         resolveTitle: (id: string) => titleMap.get(id),
       });
 
+      const customCss = loadCustomCss(document.uri);
+
       const theme = vscode.window.activeColorTheme;
       const isDark = theme.kind === vscode.ColorThemeKind.Dark || theme.kind === vscode.ColorThemeKind.HighContrast;
 
@@ -226,6 +228,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'unsafe-inline';">
 <link rel="stylesheet" href="${stylesUri}">
+${customCss ? `<style>\n${customCss}\n</style>` : ''}
 <title>${document.fileName}</title>
 </head>
 <body>
@@ -280,4 +283,67 @@ function buildTitleMap(root: DitaNode): Map<string, string> {
   }
   walk(root);
   return map;
+}
+
+function loadCustomCss(docUri: vscode.Uri): string {
+  const parts: string[] = [];
+
+  // Method 1: convention — auto-discover custom.css by walking up from doc dir
+  let dir = dirname(docUri.fsPath);
+  const root = parseDocRoot(dir);
+  while (dir.length >= root.length) {
+    const candidate = join(dir, 'custom.css');
+    if (existsSync(candidate)) {
+      parts.push(readFileSync(candidate, 'utf-8'));
+      break;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+
+  // Method 2: explicit setting
+  try {
+    const config = vscode.workspace.getConfiguration('dita-viewer');
+    const paths: string[] | undefined = config.get('customCss');
+    if (paths) {
+      for (const p of paths) {
+        const found = resolveCssPath(p, dirname(docUri.fsPath));
+        // Avoid duplicating if convention already loaded same content
+        if (found && parts.indexOf(found) === -1) parts.push(found);
+      }
+    }
+  } catch {}
+
+  return parts.join('\n');
+}
+
+function parseDocRoot(dir: string): string {
+  const folders = vscode.workspace.workspaceFolders;
+  if (folders && folders.length > 0) return folders[0].uri.fsPath;
+  const parts = dir.split(/[\\/]/);
+  return parts.length > 2 ? parts.slice(0, 2).join('\\') : dir;
+}
+
+function resolveCssPath(cssPath: string, docDir: string): string | undefined {
+  if (isAbsolute(cssPath) && existsSync(cssPath)) {
+    return readFileSync(cssPath, 'utf-8');
+  }
+
+  const resolved = resolve(docDir, cssPath);
+  if (existsSync(resolved)) {
+    return readFileSync(resolved, 'utf-8');
+  }
+
+  const folders = vscode.workspace.workspaceFolders;
+  if (folders) {
+    for (const f of folders) {
+      const wsPath = resolve(f.uri.fsPath, cssPath);
+      if (existsSync(wsPath)) {
+        return readFileSync(wsPath, 'utf-8');
+      }
+    }
+  }
+
+  return undefined;
 }
