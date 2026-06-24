@@ -2,7 +2,7 @@
   "name": "dita-viewer",
   "displayName": "DITA Viewer",
   "description": "DITA reading view for VS Code — renders .dita files as formatted read-only preview",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "publisher": "dita-viewer",
   "engines": {
     "vscode": "^1.85.0"

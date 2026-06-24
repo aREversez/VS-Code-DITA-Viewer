@@ -1,0 +1,436 @@
+/*
+ * Modern Documentation Theme — clean, developer-focused WebHelp style
+ * Features: gradient header, tag-based labels, full DITA element coverage
+ */
+
+:root {
+  --mod-primary: #6c5ce7;
+  --mod-primary-dark: #4a3db8;
+  --mod-secondary: #00cec9;
+  --mod-accent: #fd79a8;
+  --mod-warning: #fdcb6e;
+  --mod-bg: #ffffff;
+  --mod-surface: #f8f9fd;
+  --mod-text: #2d3436;
+  --mod-text-muted: #636e72;
+  --mod-border: #e0e0e0;
+  --mod-code-bg: #f0f0f5;
+  --mod-radius: 8px;
+  --mod-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mod-heading-font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --mod-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+}
+
+body {
+  font-family: var(--mod-font);
+  color: var(--mod-text);
+  background: var(--mod-bg);
+  line-height: 1.7;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 72px 2rem 2rem;
+  position: relative;
+}
+
+/* ── Gradient header bar ── */
+body::before {
+  content: '';
+  display: block;
+  height: 48px;
+  margin: -72px -2rem 1.5rem;
+  background: linear-gradient(135deg, var(--mod-primary) 0%, var(--mod-secondary) 100%);
+  border-radius: 0 0 var(--mod-radius) var(--mod-radius);
+  box-shadow: 0 2px 12px rgba(108, 92, 231, 0.3);
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 48"><text x="24" y="30" font-family="Arial" font-size="15" font-weight="bold" fill="white">📘 Documentation Hub</text><text x="250" y="30" font-family="Arial" font-size="11" fill="rgba(255,255,255,0.7)">v2.5.0</text></svg>');
+  background-repeat: no-repeat;
+  background-position: 0 center;
+  background-size: auto 48px;
+}
+
+/* ── Footer ── */
+body::after {
+  content: 'Built with DITA Viewer | Last updated: June 2026';
+  display: block;
+  margin-top: 3rem;
+  padding: 1rem 0 0;
+  font-size: 0.75em;
+  color: var(--mod-text-muted);
+  text-align: center;
+  border-top: 1px solid var(--mod-border);
+}
+
+/* ── Topic ── */
+.topic {
+  background: var(--mod-surface);
+  border-radius: var(--mod-radius);
+  padding: 2rem;
+  border: 1px solid var(--mod-border);
+}
+
+.topic > h1:first-child {
+  margin-top: 0;
+  font-size: 2em;
+  background: linear-gradient(135deg, var(--mod-primary), var(--mod-secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  border: none;
+  padding: 0;
+}
+
+/* ── Short description ── */
+.shortdesc {
+  font-size: 1.05em;
+  color: var(--mod-text-muted);
+  padding: 1rem 1.25rem;
+  background: var(--mod-surface);
+  border: 1px solid var(--mod-border);
+  border-left: 4px solid var(--mod-primary);
+  border-radius: 0 var(--mod-radius) var(--mod-radius) 0;
+  margin: 1.5rem 0;
+}
+
+/* ── Headings ── */
+h1, h2, h3, h4 {
+  font-family: var(--mod-heading-font);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+h1 { font-size: 1.9em; color: var(--mod-primary); border-bottom: 2px solid var(--mod-border); padding-bottom: 0.3em; margin-top: 0; }
+h2 { font-size: 1.5em; color: var(--mod-primary-dark); margin-top: 2em; }
+h3 { font-size: 1.25em; color: var(--mod-text); margin-top: 1.8em; }
+h4 { font-size: 1.1em; color: var(--mod-text-muted); margin-top: 1.5em; }
+
+/* ── Basic inline ── */
+b, strong { font-weight: 700; }
+i, em { font-style: italic; }
+u { text-decoration: underline; text-decoration-style: wavy; text-decoration-color: var(--mod-accent); text-underline-offset: 3px; }
+sup { font-size: 0.7em; vertical-align: super; color: var(--mod-primary); }
+sub { font-size: 0.7em; vertical-align: sub; color: var(--mod-primary); }
+
+/* ── UI elements ── */
+.uicontrol {
+  font-weight: 600;
+  color: var(--mod-primary-dark);
+  background: #edeafb;
+  padding: 0.1em 0.45em;
+  border-radius: 4px;
+  font-size: 0.92em;
+  border: 1px solid #cdc6f3;
+}
+
+.wintitle {
+  font-weight: 600;
+  font-style: italic;
+  color: var(--mod-primary);
+}
+
+.menucascade > .uicontrol + .uicontrol::before {
+  content: ' → ';
+  color: var(--mod-text-muted);
+  font-weight: normal;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+/* ── Computer interaction ── */
+.filepath {
+  font-family: var(--mod-mono);
+  font-size: 0.88em;
+  background: var(--mod-code-bg);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+  border: 1px solid var(--mod-border);
+}
+
+.userinput {
+  font-family: var(--mod-mono);
+  font-size: 0.88em;
+  background: var(--mod-primary);
+  color: #fff;
+  padding: 0.1em 0.45em;
+  border-radius: 4px;
+}
+
+.systemoutput {
+  font-family: var(--mod-mono);
+  font-size: 0.88em;
+  background: #1a1a2e;
+  color: #00ff88;
+  padding: 0.15em 0.45em;
+  border-radius: 4px;
+}
+
+/* ── Inline code ── */
+code {
+  font-family: var(--mod-mono);
+  font-size: 0.88em;
+  background: var(--mod-code-bg);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  color: var(--mod-accent);
+  border: 1px solid var(--mod-border);
+}
+
+/* ── Code blocks ── */
+pre.codeblock, pre.preformatted {
+  background: #1e1e2e;
+  color: #cdd6f4;
+  border: none;
+  border-radius: var(--mod-radius);
+  padding: 1.25rem;
+  font-family: var(--mod-mono);
+  font-size: 0.88em;
+  line-height: 1.6;
+  overflow-x: auto;
+  position: relative;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.codeblock-lang {
+  background: var(--mod-primary);
+  color: #fff;
+  font-family: var(--mod-mono);
+  font-size: 0.68em;
+  font-weight: 600;
+  padding: 0.2em 0.7em;
+  border-radius: 0 var(--mod-radius) 0 var(--mod-radius);
+  position: absolute;
+  top: 0;
+  right: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+pre code { background: none; border: none; padding: 0; color: inherit; }
+
+/* ── Notes (with emoji indicators) ── */
+.note {
+  border: none;
+  border-left: 4px solid var(--mod-primary);
+  background: var(--mod-surface);
+  padding: 1rem 1.25rem;
+  margin: 1.25rem 0;
+  border-radius: var(--mod-radius);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.note__label {
+  font-weight: 700;
+  font-size: 0.75em;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  display: block;
+  margin-bottom: 0.25em;
+}
+
+.note--warning { border-left-color: #e17055; background: #fef5f0; }
+.note--warning .note__label::before { content: '⚠️ '; }
+.note--warning .note__label { color: #e17055; }
+.note--danger { border-left-color: #d63031; background: #fdf2f2; }
+.note--danger .note__label::before { content: '🚫 '; }
+.note--danger .note__label { color: #d63031; }
+.note--important { border-left-color: #6c5ce7; background: #f4f0fe; }
+.note--important .note__label::before { content: '❗ '; }
+.note--important .note__label { color: #6c5ce7; }
+.note--tip { border-left-color: #00b894; background: #f0fdf8; }
+.note--tip .note__label::before { content: '💡 '; }
+.note--tip .note__label { color: #00b894; }
+.note--restriction { border-left-color: #b2bec3; background: #f8f9fa; }
+.note--restriction .note__label::before { content: '⚠️ '; }
+.note--restriction .note__label { color: #636e72; }
+
+/* ── Tables ── */
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 1.25rem 0;
+  font-size: 0.93em;
+  border-radius: var(--mod-radius);
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+table th {
+  background: var(--mod-primary);
+  color: #fff;
+  font-weight: 600;
+  padding: 0.7rem 1rem;
+  text-align: left;
+}
+
+table td {
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--mod-border);
+  background: var(--mod-surface);
+  vertical-align: top;
+}
+
+table tr:last-child td { border-bottom: none; }
+table tr:hover td { background: #edeafb; }
+
+/* ── Images ── */
+img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--mod-radius);
+  margin: 1.25rem 0;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--mod-border);
+}
+
+/* ── Figures ── */
+figure {
+  margin: 1.5rem 0;
+  text-align: center;
+  background: var(--mod-surface);
+  padding: 1.5rem;
+  border-radius: var(--mod-radius);
+  border: 1px solid var(--mod-border);
+}
+
+figcaption {
+  font-style: italic;
+  margin-top: 0.75rem;
+  font-size: 0.9em;
+  color: var(--mod-text-muted);
+}
+
+/* ── Links ── */
+.xref {
+  color: var(--mod-primary);
+  text-decoration: none;
+  font-weight: 500;
+  border-bottom: 1px dashed var(--mod-primary);
+}
+.xref:hover { border-bottom-style: solid; color: var(--mod-primary-dark); }
+
+.xref[href^="http"]::after {
+  content: ' ↗';
+  font-size: 0.8em;
+  opacity: 0.6;
+}
+
+/* ── Lists ── */
+ul, ol { padding-left: 1.5em; }
+li { margin: 0.4em 0; }
+li::marker { color: var(--mod-primary); }
+.simple-list { list-style: none; padding-left: 1.5em; }
+
+/* ── Definition lists ── */
+dl { margin: 1em 0; }
+.dlentry {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--mod-border);
+  display: flex;
+  gap: 1rem;
+}
+.dlentry:last-child { border-bottom: none; }
+dt {
+  font-weight: 700;
+  color: var(--mod-primary);
+  min-width: 120px;
+  flex-shrink: 0;
+}
+dd { margin: 0; color: var(--mod-text-muted); }
+
+/* ── Blockquotes ── */
+blockquote {
+  border-left: 3px solid var(--mod-secondary);
+  margin: 1.25rem 0;
+  padding: 0.75rem 1.25rem;
+  background: var(--mod-surface);
+  border-radius: 0 var(--mod-radius) var(--mod-radius) 0;
+  color: var(--mod-text-muted);
+}
+
+/* ── Inline DITA elements ── */
+.keyword { color: var(--mod-primary); font-weight: 600; }
+.term { font-style: italic; border-bottom: 1px dashed var(--mod-secondary); cursor: help; }
+.ph { opacity: 0.8; }
+.apiname { font-family: var(--mod-mono); font-size: 0.9em; background: #edeafb; padding: 0.1em 0.3em; border-radius: 3px; }
+.option { font-family: var(--mod-mono); font-size: 0.9em; color: var(--mod-accent); font-weight: 600; }
+.parmname { font-family: var(--mod-mono); font-size: 0.9em; color: var(--mod-primary-dark); font-style: italic; }
+.cmdname { font-family: var(--mod-mono); font-size: 0.9em; color: var(--mod-primary); font-weight: 600; }
+.msgnum { font-family: var(--mod-mono); font-size: 0.85em; color: var(--mod-text-muted); }
+.varname { font-family: var(--mod-mono); font-size: 0.9em; color: var(--mod-accent); font-style: italic; }
+
+/* ── Draft comments ── */
+.draft-comment {
+  background: #fff9e6;
+  border: 2px dashed var(--mod-warning);
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  border-radius: var(--mod-radius);
+  color: #856404;
+  font-style: italic;
+  font-size: 0.9em;
+}
+.draft-comment::before {
+  content: '✏️ DRAFT COMMENT: ';
+  font-weight: 700;
+  font-style: normal;
+}
+
+/* ── Related links ── */
+.related-links {
+  margin-top: 2.5rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, var(--mod-surface), #edeafb);
+  border: 1px solid var(--mod-border);
+  border-radius: var(--mod-radius);
+}
+.related-links h2 { font-size: 1.1em; margin-top: 0; }
+
+/* ── Sections ── */
+section, .example { margin: 2rem 0; }
+
+/* ── Print ── */
+@media print {
+  body::before, body::after { display: none; }
+  body { padding: 0; }
+  .topic { box-shadow: none; border: 1px solid #ddd; }
+  pre.codeblock { box-shadow: none; border: 1px solid #ddd; }
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  body { padding: 60px 1rem 1rem; }
+  body::before { margin: -60px -1rem 1rem; }
+  .topic { padding: 1.5rem; }
+}
+
+@media (max-width: 600px) {
+  body::before { display: none; }
+  body { padding-top: 0.5rem; }
+}
+
+/* ── Dark mode ── */
+.vscode-dark {
+  --mod-bg: #1e1e2e;
+  --mod-surface: #282840;
+  --mod-text: #cdd6f4;
+  --mod-text-muted: #a6adc8;
+  --mod-border: #45475a;
+  --mod-code-bg: #313244;
+}
+
+.vscode-dark body::before {
+  background: linear-gradient(135deg, #45475a 0%, #6c5ce7 100%);
+}
+
+.vscode-dark pre.codeblock {
+  background: #11111b;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.vscode-dark table th { background: #45475a; }
+.vscode-dark table tr:hover td { background: #313244; }
+.vscode-dark .note--warning { background: #2d2216; }
+.vscode-dark .note--danger { background: #2d1616; }
+.vscode-dark .note--important { background: #1d1630; }
+.vscode-dark .note--tip { background: #162d22; }
+.vscode-dark .draft-comment { background: #2d2a16; color: #d4c78a; border-color: #8a7a2a; }

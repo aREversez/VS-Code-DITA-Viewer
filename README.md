@@ -8,7 +8,8 @@ A VS Code extension that renders `.dita` files as a formatted, read-only preview
 - **Bidirectional scroll sync** — scrolling in the source or preview keeps the other in sync
 - **Full DITA element coverage** — topic, sections, notes (all types), lists (ordered, unordered, simple, definition), tables, figures, code blocks with language labels, images, cross-references, quotes, related links, and inline formatting (keyword, term, ph, etc.)
 - **Theme-aware** — automatically adapts background and border colors to the current VS Code theme (light / dark)
-- **Custom CSS support** — override or extend the default styling
+- **Custom CSS support** — override or extend the default styling with an in-preview theme switcher
+- **CSS theme switcher** — preview includes a dropdown in the top-right corner to switch between available `.css` files on the fly
 
 ## Usage
 
@@ -27,6 +28,15 @@ The preview opens in a new column beside your source editor.
 ## Custom CSS
 
 You can customize the preview appearance with your own stylesheets.
+
+### Theme switcher
+
+When you open a DITA preview, a small toolbar appears in the **top-right corner** with:
+
+- **Theme dropdown** — lists all `.css` files discovered in the project (auto-discovered `custom.css` directory + workspace root + configured paths). Select one to instantly switch styles.
+- **Refresh button** (↻) — reloads the DITA content and re-renders the preview.
+
+The default theme is always `custom.css` if it exists. All available CSS files are loaded into the dropdown so you can toggle between them without re-opening the preview.
 
 ### Auto-discovery (zero config)
 
