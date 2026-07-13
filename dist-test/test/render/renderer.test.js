@@ -91,7 +91,7 @@ describe('renderer', () => {
         ]);
         const html = (0, renderer_1.renderDocument)(doc, defaultCtx);
         assert.ok(html.includes('class="note note--warning"'));
-        assert.ok(html.includes('warning:'));
+        assert.ok(html.includes('Warning:'));
     });
     it('should render ordered and unordered lists', () => {
         const doc = makeEl('topic/topic', [

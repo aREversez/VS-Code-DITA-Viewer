@@ -19,6 +19,26 @@ function escapeAttr(s: string): string {
   return s.replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/&/g, '&amp;');
 }
 
+const NOTE_LABELS_ZH: Record<string, string> = {
+  note: '注',
+  notice: '注意',
+  warning: '警告',
+  danger: '危险',
+  important: '重要',
+  tip: '提示',
+  restriction: '限制',
+};
+
+const NOTE_LABELS_EN: Record<string, string> = {
+  note: 'Note',
+  notice: 'Notice',
+  warning: 'Warning',
+  danger: 'Danger',
+  important: 'Important',
+  tip: 'Tip',
+  restriction: 'Restriction',
+};
+
 export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   'topic/topic': (node, ctx, renderChildren) => {
     const id = getAttr(node, 'id');
@@ -54,7 +74,17 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
   'topic/note': (node, ctx, renderChildren) => {
     const type = getAttr(node, 'type') || 'note';
-    return `<div class="note note--${type}"><span class="note__label">${type}:</span> ${renderChildren(node, ctx)}</div>`;
+    const labels = ctx.noteLabels || NOTE_LABELS_EN;
+    const label = labels[type] || type;
+    // Handle conref: note with conref attribute pulls content from another file
+    const conref = getAttr(node, 'conref');
+    if (conref && ctx.resolveConref) {
+      const resolved = ctx.resolveConref(conref);
+      if (resolved) {
+        return `<div class="note note--${type}"><span class="note__label">${label}:</span> ${resolved}</div>`;
+      }
+    }
+    return `<div class="note note--${type}"><span class="note__label">${label}:</span> ${renderChildren(node, ctx)}</div>`;
   },
 
   'topic/ul': (_node, ctx, renderChildren) => `<ul>${renderChildren(_node, ctx)}</ul>`,
@@ -122,7 +152,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     const figCaption = titleNode
       ? `<figcaption>${renderChildren(titleNode, { ...ctx, headingLevel: ctx.headingLevel + 1 })}</figcaption>`
       : '';
-    return `<figure${id ? ` id="${id}"` : ''}>${figCaption}${figContent}</figure>`;
+    return `<figure${id ? ` id="${id}"` : ''}>${figContent}${figCaption}</figure>`;
   },
 
   'topic/codeblock': (node, ctx, renderChildren) => {
@@ -176,6 +206,180 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   'topic/term': (_node, ctx, renderChildren) =>
     `<span class="term">${renderChildren(_node, ctx)}</span>`,
 
-  'topic/ph': (_node, ctx, renderChildren) =>
-    `<span class="ph">${renderChildren(_node, ctx)}</span>`,
+  'topic/ph': (node, ctx, renderChildren) => {
+    const keyref = getAttr(node, 'keyref');
+    if (keyref && ctx.resolveKey) {
+      const resolved = ctx.resolveKey(keyref);
+      if (resolved) return `<span class="ph">${escapeAttr(resolved)}</span>`;
+      // Show fallback for unresolved keyref (so user can see something is wrong)
+      return `<span class="ph unresolved-keyref" title="Unresolved key: ${escapeAttr(keyref)}">[${escapeAttr(keyref)}]</span>`;
+    }
+    return `<span class="ph">${renderChildren(node, ctx)}</span>`;
+  },
+
+  // UI elements
+  'topic/uicontrol': (_node, ctx, renderChildren) =>
+    `<span class="uicontrol">${renderChildren(_node, ctx)}</span>`,
+
+  'topic/wintitle': (_node, ctx, renderChildren) =>
+    `<span class="wintitle">${renderChildren(_node, ctx)}</span>`,
+
+  'topic/menucascade': (_node, ctx, renderChildren) =>
+    `<span class="menucascade">${renderChildren(_node, ctx)}</span>`,
+
+  // Computer interaction
+  'topic/filepath': (_node, ctx, renderChildren) =>
+    `<span class="filepath">${renderChildren(_node, ctx)}</span>`,
+
+  'topic/userinput': (_node, ctx, renderChildren) =>
+    `<span class="userinput">${renderChildren(_node, ctx)}</span>`,
+
+  'topic/systemoutput': (_node, ctx, renderChildren) =>
+    `<span class="systemoutput">${renderChildren(_node, ctx)}</span>`,
+
+  // API & code references
+  'topic/apiname': (_node, ctx, renderChildren) =>
+    `<span class="apiname">${renderChildren(_node, ctx)}</span>`,
+
+  'topic/option': (_node, ctx, renderChildren) =>
+    `<span class="option">${renderChildren(_node, ctx)}</span>`,
+
+  'topic/parmname': (_node, ctx, renderChildren) =>
+    `<span class="parmname">${renderChildren(_node, ctx)}</span>`,
+
+  'topic/cmdname': (_node, ctx, renderChildren) =>
+    `<span class="cmdname">${renderChildren(_node, ctx)}</span>`,
+
+  'topic/varname': (_node, ctx, renderChildren) =>
+    `<span class="varname">${renderChildren(_node, ctx)}</span>`,
+
+  'topic/msgnum': (_node, ctx, renderChildren) =>
+    `<span class="msgnum">${renderChildren(_node, ctx)}</span>`,
+
+  // Programming domain additions
+  'topic/codeph': (_node, ctx, renderChildren) =>
+    `<code class="codeph">${renderChildren(_node, ctx)}</code>`,
+  'topic/coderef': (_node, ctx, renderChildren) =>
+    `<span class="coderef">${renderChildren(_node, ctx)}</span>`,
+  'topic/synph': (_node, ctx, renderChildren) =>
+    `<span class="synph">${renderChildren(_node, ctx)}</span>`,
+  'topic/kwd': (_node, ctx, renderChildren) =>
+    `<span class="kwd">${renderChildren(_node, ctx)}</span>`,
+  'topic/var': (_node, ctx, renderChildren) =>
+    `<span class="var">${renderChildren(_node, ctx)}</span>`,
+  'topic/oper': (_node, ctx, renderChildren) =>
+    `<span class="oper">${renderChildren(_node, ctx)}</span>`,
+  'topic/sep': (_node, ctx, renderChildren) =>
+    `<span class="sep">${renderChildren(_node, ctx)}</span>`,
+  'topic/delim': (_node, ctx, renderChildren) =>
+    `<span class="delim">${renderChildren(_node, ctx)}</span>`,
+  'topic/fragment': (_node, ctx, renderChildren) =>
+    `<span class="fragment">${renderChildren(_node, ctx)}</span>`,
+  'topic/fragref': (_node, ctx, renderChildren) =>
+    `<span class="fragref">${renderChildren(_node, ctx)}</span>`,
+  'topic/synblk': (_node, ctx, renderChildren) =>
+    `<pre class="synblk">${renderChildren(_node, ctx)}</pre>`,
+  'topic/synnote': (_node, ctx, renderChildren) =>
+    `<div class="synnote">${renderChildren(_node, ctx)}</div>`,
+  'topic/synnoteref': (_node, ctx, renderChildren) =>
+    `<span class="synnoteref">${renderChildren(_node, ctx)}</span>`,
+  'topic/syntaxdiagram': (_node, ctx, renderChildren) =>
+    `<div class="syntaxdiagram">${renderChildren(_node, ctx)}</div>`,
+
+  // Software domain
+  'topic/screen': (_node, ctx, renderChildren) =>
+    `<pre class="screen">${renderChildren(_node, ctx)}</pre>`,
+  'topic/msgph': (_node, ctx, renderChildren) =>
+    `<span class="msgph">${renderChildren(_node, ctx)}</span>`,
+  'topic/msgblock': (_node, ctx, renderChildren) =>
+    `<pre class="msgblock">${renderChildren(_node, ctx)}</pre>`,
+
+  // Common body elements
+  'topic/lines': (_node, ctx, renderChildren) =>
+    `<pre class="lines">${renderChildren(_node, ctx)}</pre>`,
+  'topic/fn': (node, ctx, renderChildren) => {
+    const id = getAttr(node, 'id');
+    const callId = id ? ` fn-call-${id}` : '';
+    return `<sup class="fn${callId}">${renderChildren(node, ctx)}</sup>`;
+  },
+  'topic/cite': (_node, ctx, renderChildren) =>
+    `<cite>${renderChildren(_node, ctx)}</cite>`,
+  'topic/boolean': (node, ctx, renderChildren) => {
+    const val = getAttr(node, 'value') || '';
+    return `<span class="boolean" data-value="${escapeAttr(val)}">${val || renderChildren(node, ctx)}</span>`;
+  },
+  'topic/tm': (_node, ctx, renderChildren) =>
+    `<span class="tm">${renderChildren(_node, ctx)}</span>`,
+  'topic/indexterm': () => '',
+  'topic/indextermref': () => '',
+  'topic/index-see': () => '',
+  'topic/index-see-also': () => '',
+  'topic/index-sort-as': () => '',
+  'topic/index-base': () => '',
+  'topic/div': (_node, ctx, renderChildren) =>
+    `<div class="body-div">${renderChildren(_node, ctx)}</div>`,
+  'topic/sectiondiv': (_node, ctx, renderChildren) =>
+    `<div class="section-div">${renderChildren(_node, ctx)}</div>`,
+  'topic/bodydiv': (_node, ctx, renderChildren) =>
+    `<div class="body-div">${renderChildren(_node, ctx)}</div>`,
+  'topic/desc': (_node, ctx, renderChildren) =>
+    `<span class="desc">${renderChildren(_node, ctx)}</span>`,
+  'topic/alt': (_node, ctx, renderChildren) =>
+    `<span class="alt">${renderChildren(_node, ctx)}</span>`,
+
+  // Parameter lists
+  'topic/parml': (_node, ctx, renderChildren) =>
+    `<dl class="parml">${renderChildren(_node, ctx)}</dl>`,
+  'topic/plentry': (_node, ctx, renderChildren) =>
+    `<div class="plentry">${renderChildren(_node, ctx)}</div>`,
+  'topic/pt': (_node, ctx, renderChildren) =>
+    `<dt class="pt">${renderChildren(_node, ctx)}</dt>`,
+  'topic/pd': (_node, ctx, renderChildren) =>
+    `<dd class="pd">${renderChildren(_node, ctx)}</dd>`,
+
+  // Abbreviation & glossary
+  'topic/abbreviated-form': (node, ctx, renderChildren) => {
+    const keyref = getAttr(node, 'keyref');
+    if (keyref && ctx.resolveKey) return `<abbr class="abbreviated-form" title="${escapeAttr(keyref)}">${escapeAttr(ctx.resolveKey(keyref) || keyref)}</abbr>`;
+    return `<abbr class="abbreviated-form">${renderChildren(node, ctx)}</abbr>`;
+  },
+  'topic/glossterm': (_node, ctx, renderChildren) =>
+    `<dfn class="glossterm">${renderChildren(_node, ctx)}</dfn>`,
+  'topic/glossdef': (_node, ctx, renderChildren) =>
+    `<dd class="glossdef">${renderChildren(_node, ctx)}</dd>`,
+  'topic/glossentry': (_node, ctx, renderChildren) =>
+    `<dl class="glossentry">${renderChildren(_node, ctx)}</dl>`,
+  'topic/glossref': (_node, ctx, renderChildren) =>
+    `<span class="glossref">${renderChildren(_node, ctx)}</span>`,
+  'topic/glossgroup': (_node, ctx, renderChildren) =>
+    `<div class="glossgroup">${renderChildren(_node, ctx)}</div>`,
+
+  // Hazard
+  'topic/hazardstatement': (node, ctx, renderChildren) =>
+    `<div class="hazardstatement">${renderChildren(node, ctx)}</div>`,
+  'topic/typeofhazard': (_node, ctx, renderChildren) =>
+    `<span class="typeofhazard">${renderChildren(_node, ctx)}</span>`,
+  'topic/hazardsymbol': () => '',
+  'topic/howtoavoid': (_node, ctx, renderChildren) =>
+    `<p class="howtoavoid">${renderChildren(_node, ctx)}</p>`,
+  'topic/consequence': (_node, ctx, renderChildren) =>
+    `<p class="consequence">${renderChildren(_node, ctx)}</p>`,
+
+  // Multimedia
+  'topic/object': (_node, ctx, renderChildren) =>
+    `<object class="dita-object">${renderChildren(_node, ctx)}</object>`,
+  'topic/param': () => '',
+
+  // Anchors
+  'topic/anchor': (node) => {
+    const id = getAttr(node, 'id');
+    return id ? `<a id="${id}"></a>` : '';
+  },
+  'topic/anchorid': (node) => {
+    const id = getAttr(node, 'id');
+    return id ? `<span id="${id}"></span>` : '';
+  },
+  'topic/anchorkey': () => '',
+  'topic/anchorref': () => '',
+
 };

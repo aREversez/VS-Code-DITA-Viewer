@@ -69,7 +69,7 @@ describe('renderer', () => {
     ]);
     const html = renderDocument(doc, defaultCtx);
     assert.ok(html.includes('class="note note--warning"'));
-    assert.ok(html.includes('warning:'));
+    assert.ok(html.includes('Warning:'));
   });
 
   it('should render ordered and unordered lists', () => {

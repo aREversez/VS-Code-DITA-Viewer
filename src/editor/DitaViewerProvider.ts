@@ -5,15 +5,6 @@ import { readFileSync, existsSync, readdirSync } from 'fs';
 import { dirname, extname, isAbsolute, join, resolve, basename } from 'path';
 import { DitaNode } from '../parser/domTypes';
 
-function getStylesCss(context: vscode.ExtensionContext): string {
-  const stylePath = join(context.extensionPath, 'media', 'styles.css');
-  try {
-    return readFileSync(stylePath, 'utf-8');
-  } catch {
-    return '';
-  }
-}
-
 function getWebviewScript(): string {
   return `
 (function() {
@@ -34,11 +25,17 @@ function getWebviewScript(): string {
   }
 
   function onScrollEnd() {
-    var best = findClosest(0);
-    if (best) {
+    try {
+      var els = document.querySelectorAll('[data-line]');
+      if (!els.length) return;
+      var best = els[0], bestDist = Math.abs(els[0].getBoundingClientRect().top);
+      for (var i = 1; i < els.length; i++) {
+        var dist = Math.abs(els[i].getBoundingClientRect().top);
+        if (dist < bestDist) { bestDist = dist; best = els[i]; }
+      }
       var line = best.getAttribute('data-line');
       if (line !== null) vscode.postMessage({ type: 'scrollSync', line: parseInt(line, 10) });
-    }
+    } catch(e) {}
   }
 
   function scrollToLine(targetLine) {
@@ -56,13 +53,32 @@ function getWebviewScript(): string {
     }
   }
 
+  var fontSize = 100;
+
+  // Static highlight (no animation)
+  var hlStyle = document.createElement('style');
+  hlStyle.textContent = '.__hl{outline:2px solid var(--vscode-textLink-foreground,#4a90d9);outline-offset:2px;border-radius:3px;background:color-mix(in srgb,var(--vscode-textLink-foreground,#4a90d9) 12%,transparent);}';
+  document.head.appendChild(hlStyle);
+
+  function highlightElement(el) {
+    if (!el) return;
+    var prev = document.querySelector('.__hl');
+    if (prev) prev.classList.remove('__hl');
+    el.classList.add('__hl');
+  }
+
+  function isElementVisible(el) {
+    var rect = el.getBoundingClientRect();
+    return rect.top < window.innerHeight && rect.bottom > 0;
+  }
+
   window.addEventListener('scroll', function() {
     if (scrollTimer) clearTimeout(scrollTimer);
-    scrollTimer = setTimeout(onScrollEnd, 500);
+    scrollTimer = setTimeout(onScrollEnd, 150);
   });
 
   window.addEventListener('click', function(e) {
-    var a = e.target.closest ? e.target.closest('a') : null;
+    var a = e.target.closest ? e.target.closest('a.xref') : null;
     if (!a) return;
     var href = a.getAttribute('href');
     if (!href || href.charAt(0) !== '#') return;
@@ -72,11 +88,25 @@ function getWebviewScript(): string {
     if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   });
 
-  window.addEventListener('message', function(e) {
-    if (e.data.type === 'revealLine') scrollToLine(e.data.line);
+  window.addEventListener('dblclick', function(e) {
+    var el = e.target.closest ? e.target.closest('[data-line]') : null;
+    if (!el) return;
+    var line = parseInt(el.getAttribute('data-line'), 10);
+    if (!isNaN(line)) vscode.postMessage({ type: 'navigateToLine', line: line });
   });
 
-  // Toolbar shared styles
+  window.addEventListener('message', function(e) {
+    if (e.data.type === 'revealLine') scrollToLine(e.data.line);
+    if (e.data.type === 'highlightLine') {
+      var best = findClosest(e.data.line);
+      if (best) {
+        highlightElement(best);
+        if (!isElementVisible(best)) best.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    }
+  });
+
+  // Toolbar
   var tbStyle = 'position:fixed;top:4px;right:8px;z-index:9999;display:flex;align-items:center;gap:4px;padding:3px 6px;border-radius:5px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;background:var(--vscode-editor-background,rgba(30,30,30,0.88));border:1px solid var(--vscode-widget-border,rgba(255,255,255,0.12));backdrop-filter:blur(4px);opacity:0.75;transition:opacity 0.15s;';
   var ddStyle = 'padding:1px 4px;border-radius:3px;border:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));background:var(--vscode-dropdown-background,#333);color:var(--vscode-dropdown-foreground,#eee);font-size:11px;outline:none;cursor:pointer;';
   var btnStyle = 'padding:1px 5px;border-radius:3px;border:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));background:var(--vscode-dropdown-background,#333);color:var(--vscode-dropdown-foreground,#eee);cursor:pointer;font-size:13px;line-height:1;outline:none;display:flex;align-items:center;';
@@ -91,26 +121,45 @@ function getWebviewScript(): string {
   var cssFiles = window.__cssFiles || {};
   var defaultCss = window.__defaultCss || '';
   var cssKeys = Object.keys(cssFiles);
-
   if (cssKeys.length > 0) {
     var styleEl = document.createElement('style');
     styleEl.id = '__custom_css';
     styleEl.textContent = cssFiles[defaultCss] || '';
     document.head.appendChild(styleEl);
-
     var sel = document.createElement('select');
     sel.title = 'Select theme CSS';
     sel.style.cssText = 'max-width:130px;' + ddStyle;
     for (var i = 0; i < cssKeys.length; i++) {
       var opt = document.createElement('option');
       opt.value = cssKeys[i];
-      opt.textContent = cssKeys[i].replace(/\.css$/,'');
+      opt.textContent = cssKeys[i].replace(/\\.css$/,'');
       if (cssKeys[i] === defaultCss) opt.selected = true;
       sel.appendChild(opt);
     }
     sel.addEventListener('change', function() { styleEl.textContent = cssFiles[sel.value] || ''; });
     toolbar.appendChild(sel);
   }
+
+  // Font size controls
+  var fsDown = document.createElement('button');
+  fsDown.innerHTML = 'A−';
+  fsDown.title = 'Decrease font size';
+  fsDown.style.cssText = btnStyle + 'font-weight:bold;';
+  fsDown.addEventListener('click', function() {
+    fontSize = Math.max(60, fontSize - 10);
+    document.body.style.fontSize = fontSize + '%';
+  });
+  toolbar.appendChild(fsDown);
+
+  var fsUp = document.createElement('button');
+  fsUp.innerHTML = 'A+';
+  fsUp.title = 'Increase font size';
+  fsUp.style.cssText = btnStyle + 'font-weight:bold;';
+  fsUp.addEventListener('click', function() {
+    fontSize = Math.min(200, fontSize + 10);
+    document.body.style.fontSize = fontSize + '%';
+  });
+  toolbar.appendChild(fsUp);
 
   // Page width dropdown
   var widths = [
@@ -122,7 +171,7 @@ function getWebviewScript(): string {
   ];
   var wSel = document.createElement('select');
   wSel.title = 'Page width';
-  wSel.style.cssText = 'max-width:80px;' + ddStyle;
+  wSel.style.cssText = 'max-width:72px;' + ddStyle;
   for (var i = 0; i < widths.length; i++) {
     var opt = document.createElement('option');
     opt.value = widths[i].value;
@@ -187,8 +236,8 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
         if (editor) {
           const currentTopLine = editor.visibleRanges[0]?.start.line;
           if (currentTopLine !== undefined) {
-            const diff = message.line - currentTopLine;
-            if (diff > 1) {
+            const diff = Math.abs(message.line - currentTopLine);
+            if (diff >= 2) {
               skipVisibleUntil = Date.now() + 250;
               const line = Math.max(0, Math.min(message.line, document.lineCount - 1));
               editor.revealRange(new vscode.Range(line, 0, line, 0), vscode.TextEditorRevealType.AtTop);
@@ -196,7 +245,27 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
             }
           }
         }
+      } else if (message.type === 'navigateToLine') {
+        // Preview double-click → highlight in source, only scroll if not visible
+        const editor = findSourceEditor();
+        if (editor) {
+          const line = Math.max(0, Math.min(message.line, document.lineCount - 1));
+          const inView = editor.visibleRanges.some(r => line >= r.start.line && line <= r.end.line);
+          if (!inView) {
+            editor.revealRange(new vscode.Range(line, 0, line, 0), vscode.TextEditorRevealType.AtTop);
+          }
+          editor.selection = new vscode.Selection(new vscode.Position(line, 0), new vscode.Position(line, 0));
+        }
       }
+    });
+
+    // Source click → preview: highlight + scroll if not visible
+    const selectionSub = vscode.window.onDidChangeTextEditorSelection((e) => {
+      if (e.textEditor.document.uri.toString() !== document.uri.toString()) return;
+      if (Date.now() < skipVisibleUntil) return;
+      const sel = e.selections[0];
+      if (!sel || sel.start.line !== sel.end.line) return;
+      webviewPanel.webview.postMessage({ type: 'highlightLine', line: sel.start.line });
     });
 
     const doSyncSourceToWebview = () => {
@@ -234,6 +303,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     webviewPanel.onDidDispose(() => {
       changeSubscription.dispose();
       editorSub.dispose();
+      selectionSub.dispose();
     });
   }
 
@@ -276,11 +346,27 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       const ditaDoc = parseDita(document.getText());
       const titleMap = buildTitleMap(ditaDoc.root);
 
+      // Detect locale from xml:lang
+      const lang = ditaDoc.root.attributes?.['xml:lang'] || '';
+      const isZh = lang.startsWith('zh');
+      const noteLabels = isZh
+        ? { note: '注', notice: '注意', warning: '警告', danger: '危险', important: '重要', tip: '提示', restriction: '限制' }
+        : { note: 'Note', notice: 'Notice', warning: 'Warning', danger: 'Danger', important: 'Important', tip: 'Tip', restriction: 'Restriction' };
+
+      // Build key map from DITAMAP
+      const keyMap = buildKeyMap(document.uri);
+
+      // Build conref resolver
+      const conrefResolver = makeConrefResolver(docRootDir);
+
       const content = renderDocument(ditaDoc.root, {
         headingLevel: 1,
         asWebviewUri,
         documentDir: docRoot.fsPath,
         resolveTitle: (id: string) => titleMap.get(id),
+        resolveKey: (key: string) => keyMap.get(key),
+        resolveConref: (conref: string) => conrefResolver(conref),
+        noteLabels,
       });
 
       const { files, defaultName } = discoverCssFiles(document.uri);
@@ -362,10 +448,114 @@ function buildTitleMap(root: DitaNode): Map<string, string> {
   return map;
 }
 
-interface CssFileInfo {
-  name: string;
-  content: string;
+// ── Keyref: parse DITAMAP for key→value mappings ──
+
+function findDitamapFiles(docUri: vscode.Uri): string[] {
+  const results: string[] = [];
+  const docDir = dirname(docUri.fsPath);
+  const root = parseDocRoot(docDir);
+  let dir = docDir;
+  while (dir.length >= root.length) {
+    try {
+      for (const entry of readdirSync(dir)) {
+        if (entry.endsWith('.ditamap')) results.push(join(dir, entry));
+      }
+    } catch {}
+    if (results.length > 0) return results;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return results;
 }
+
+function buildKeyMap(docUri: vscode.Uri): Map<string, string> {
+  const map = new Map<string, string>();
+  const mapFiles = findDitamapFiles(docUri);
+  for (const mf of mapFiles) {
+    try {
+      const content = readFileSync(mf, 'utf-8');
+      // Match both topicref and keydef elements with keys attribute
+      const keyRegex = /<(?:topicref|keydef)[^>]*\s+keys\s*=\s*["']([^"']+)["']([^>]*)>/gi;
+      let match;
+      while ((match = keyRegex.exec(content)) !== null) {
+        const keys = match[1];
+        const rest = match[2] + content.substring(match.index + match[0].length, Math.min(match.index + match[0].length + 800, content.length));
+        // Priority order: keyword > linktext > navtitle > shortdesc > indexterm
+        const kwMatch = /<keywords>\s*<keyword>([^<]*)<\/keyword>/i.exec(rest);
+        if (kwMatch) { map.set(keys, kwMatch[1]); continue; }
+        const ltMatch = /<linktext>([^<]*)<\/linktext>/i.exec(rest);
+        if (ltMatch) { map.set(keys, ltMatch[1]); continue; }
+        const navMatch = /<navtitle>([^<]*)<\/navtitle>/i.exec(rest);
+        if (navMatch) { map.set(keys, navMatch[1]); continue; }
+        const sdMatch = /<shortdesc>([^<]*)<\/shortdesc>/i.exec(rest);
+        if (sdMatch) { map.set(keys, sdMatch[1]); continue; }
+        const idxMatch = /<indexterm>([^<]*)<\/indexterm>/i.exec(rest);
+        if (idxMatch) { map.set(keys, idxMatch[1]); continue; }
+        // Fallback: use key name
+        map.set(keys, keys);
+      }
+    } catch {}
+  }
+  return map;
+}
+
+// ── Conref: resolve <element conref="file#topicId/elementId"> ──
+
+function makeConrefResolver(docDir: string): (conref: string) => string | undefined {
+  const cache = new Map<string, DitaNode>();
+
+  function loadFile(filePath: string): DitaNode | undefined {
+    const absPath = resolve(docDir, filePath);
+    if (!existsSync(absPath)) return undefined;
+    if (cache.has(absPath)) return cache.get(absPath);
+    try {
+      const content = readFileSync(absPath, 'utf-8');
+      const doc = parseDita(content);
+      cache.set(absPath, doc.root);
+      return doc.root;
+    } catch {
+      cache.set(absPath, undefined);
+      return undefined;
+    }
+  }
+
+  function findElementById(root: DitaNode, targetId: string): DitaNode | undefined {
+    if (root.attributes?.id === targetId) return root;
+    for (const child of root.children || []) {
+      const found = findElementById(child, targetId);
+      if (found) return found;
+    }
+    return undefined;
+  }
+
+  function extractText(node: DitaNode): string {
+    let text = '';
+    for (const child of node.children || []) {
+      if (child.type === 'text') text += child.text || '';
+      else text += extractText(child);
+    }
+    return text;
+  }
+
+  return (conref: string): string | undefined => {
+    // Format: filepath#topicId/elementId  or  filepath#elementId
+    const hashIdx = conref.indexOf('#');
+    if (hashIdx < 0) return undefined;
+    const filePath = conref.substring(0, hashIdx);
+    const idPart = conref.substring(hashIdx + 1);
+    const parts = idPart.split('/');
+    const elementId = parts.length > 1 ? parts[1] : parts[0];
+
+    const root = loadFile(filePath);
+    if (!root) return undefined;
+    const el = findElementById(root, elementId);
+    if (!el) return undefined;
+    return extractText(el);
+  };
+}
+
+// ── CSS file discovery ──
 
 function discoverCssFiles(docUri: vscode.Uri): { files: Record<string, string>; defaultName: string } {
   const files: Record<string, string> = {};
@@ -385,18 +575,28 @@ function discoverCssFiles(docUri: vscode.Uri): { files: Record<string, string>; 
   const root = parseDocRoot(docDir);
   const cssDir = findCustomCssDir(docDir);
 
-  // Scan the directory where custom.css was found (or doc dir)
+  // Scan directories for .css files
+  const scanDirs = new Set<string>();
+  scanDirs.add(cssDir);
+  if (root !== cssDir) scanDirs.add(root);
+  // Add configured CSS directories
   try {
-    for (const entry of readdirSync(cssDir)) {
-      if (entry.endsWith('.css')) addFile(join(cssDir, entry));
+    const config = vscode.workspace.getConfiguration('dita-viewer');
+    const cssDirConfigs: string[] | undefined = config.get('cssDirectory');
+    if (cssDirConfigs) {
+      for (const dir of cssDirConfigs) {
+        const resolvedDir = resolveDirectoryPath(dir, docDir);
+        if (resolvedDir && existsSync(resolvedDir) && !scanDirs.has(resolvedDir)) {
+          scanDirs.add(resolvedDir);
+        }
+      }
     }
   } catch {}
 
-  // Also scan workspace root if different
-  if (root !== cssDir) {
+  for (const sd of scanDirs) {
     try {
-      for (const entry of readdirSync(root)) {
-        if (entry.endsWith('.css')) addFile(join(root, entry));
+      for (const entry of readdirSync(sd)) {
+        if (entry.toLowerCase().endsWith('.css')) addFile(join(sd, entry));
       }
     } catch {}
   }
@@ -446,6 +646,25 @@ function resolveCssFilePath(cssPath: string, docDir: string): string | undefined
   if (folders) {
     for (const f of folders) {
       const wsPath = resolve(f.uri.fsPath, cssPath);
+      if (existsSync(wsPath)) return wsPath;
+    }
+  }
+  return undefined;
+}
+
+function resolveDirectoryPath(dirPath: string, docDir: string): string | undefined {
+  // Absolute path
+  if (isAbsolute(dirPath)) {
+    return existsSync(dirPath) ? dirPath : undefined;
+  }
+  // Relative to doc directory
+  const fromDoc = resolve(docDir, dirPath);
+  if (existsSync(fromDoc)) return fromDoc;
+  // Relative to workspace root
+  const folders = vscode.workspace.workspaceFolders;
+  if (folders) {
+    for (const f of folders) {
+      const wsPath = resolve(f.uri.fsPath, dirPath);
       if (existsSync(wsPath)) return wsPath;
     }
   }

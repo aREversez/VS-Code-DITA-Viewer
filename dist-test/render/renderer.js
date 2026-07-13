@@ -26,11 +26,26 @@ function escapeHtml(text) {
 function injectAttributes(html, tagName, line) {
     return html.replace(/^<([a-zA-Z][a-zA-Z0-9]*)/, `<$1 title="${tagName}" data-line="${line}"`);
 }
+function makeTextNode(text, sourceRange) {
+    return { type: 'text', text, children: [], sourceRange };
+}
+function resolveConrefForNode(node, context) {
+    const conref = node.attributes?.conref;
+    if (!conref || !context.resolveConref)
+        return node;
+    const resolved = context.resolveConref(conref);
+    if (!resolved)
+        return node;
+    // Strip conref after resolving, replace children with resolved text
+    const { conref: _, ...restAttrs } = node.attributes || {};
+    return { ...node, children: [makeTextNode(resolved, node.sourceRange)], attributes: restAttrs };
+}
 function renderElement(node, context) {
     if (node.type === 'text') {
         return escapeHtml(node.text || '');
     }
-    const baseType = node.baseType;
+    const effectiveNode = resolveConrefForNode(node, context);
+    const baseType = effectiveNode.baseType;
     const renderer = baseType ? baseTypeMap_1.BASE_TYPE_RENDERERS[baseType] : undefined;
     const isContainer = baseType ? isContainerBaseType(baseType) : false;
     const nextHeadingLevel = isContainer
@@ -42,14 +57,14 @@ function renderElement(node, context) {
         parentBaseType: baseType,
     };
     if (renderer) {
-        let html = renderer(node, childCtx, renderChildren);
+        let html = renderer(effectiveNode, childCtx, renderChildren);
         if (baseType && !PASS_THROUGH_BASETYPES.has(baseType)) {
-            const tagName = node.tagName || baseType.split('/').pop() || baseType;
-            html = injectAttributes(html, tagName, node.sourceRange.startLine);
+            const tagName = effectiveNode.tagName || baseType.split('/').pop() || baseType;
+            html = injectAttributes(html, tagName, effectiveNode.sourceRange.startLine);
         }
         return html;
     }
-    return renderChildren(node, childCtx);
+    return renderChildren(effectiveNode, childCtx);
 }
 function renderChildren(node, context) {
     return (node.children || []).map((child) => renderElement(child, context)).join('');

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="instrument">
+    <title>instrument</title>
+    <body>
+        <p>Here is how to use the <ph><ph keyref="name"/></ph> tool:<ol id="ol_gcg_mrz_rjc">
+                <li>Click <menucascade>
+                        <uicontrol>Edit</uicontrol>
+                        <uicontrol>Select</uicontrol>
+                        <uicontrol>Rectangle</uicontrol>
+                    </menucascade><note id="note_rl4_xtz_rjc">you can also right click the object
+                        and select <uicontrol>Rectangle</uicontrol> from the context
+                    menu.</note></li>
+                <li/>
+            </ol></p>
+    </body>
+</topic>

@@ -37,6 +37,7 @@ body {
   max-width: var(--max-width);
   margin: 0 auto;
   padding: 2rem 1.5rem;
+  color: var(--vscode-editor-foreground);
 }
 
 /* Topic article */
@@ -103,7 +104,7 @@ img { max-width: 100%; height: auto; border-radius: 4px; margin: 1rem 0; }
 
 /* Figures */
 figure { margin: 1.5rem 0; text-align: center; }
-figcaption { font-style: italic; margin-top: 0.5rem; font-size: 0.95em; }
+figcaption { font-style: italic; margin-top: 0.5rem; font-size: 0.95em; text-align: left; }
 
 /* Code blocks */
 pre.codeblock, pre.preformatted {
@@ -148,6 +149,69 @@ pre code { background: none; padding: 0; border-radius: 0; }
 .keyword { font-weight: 500; }
 .term { font-style: italic; border-bottom: 1px dotted; }
 .ph { opacity: 0.8; }
+.unresolved-keyref { opacity: 1; color: #e67e22; border: 1px dashed #e67e22; padding: 0 0.3em; border-radius: 3px; cursor: help; }
+
+/* User Interface domain */
+.uicontrol { font-weight: 500; color: var(--vscode-textLink-foreground); }
+.menucascade .uicontrol + .uicontrol::before { content: ' › '; color: var(--color-border); font-weight: normal; }
+.wintitle { font-style: italic; font-weight: 600; }
+.filepath { font-family: var(--code-font); font-size: 0.9em; padding: 0.1em 0.3em; background: var(--color-code-bg); border-radius: 3px; }
+.userinput { font-family: var(--code-font); font-size: 0.9em; padding: 0.1em 0.3em; background: var(--color-code-bg); border-radius: 3px; border: 1px dashed var(--color-border); }
+.systemoutput { font-family: var(--code-font); font-size: 0.9em; padding: 0.1em 0.3em; background: var(--color-code-bg); border-radius: 3px; }
+.apiname { font-family: var(--code-font); font-size: 0.9em; font-weight: 500; }
+.parmname { font-family: var(--code-font); font-size: 0.9em; font-style: italic; }
+.option { font-family: var(--code-font); font-size: 0.9em; color: var(--color-link); }
+.cmdname { font-family: var(--code-font); font-size: 0.9em; font-weight: 600; }
+.varname { font-family: var(--code-font); font-size: 0.9em; font-style: italic; color: var(--color-link); }
+.msgnum { font-family: var(--code-font); font-size: 0.85em; padding: 0.1em 0.3em; border: 1px solid var(--color-border); border-radius: 3px; }
+
+/* Programming domain */
+.codeph { font-family: var(--code-font); font-size: 0.9em; background: var(--color-code-bg); padding: 0.1em 0.3em; border-radius: 3px; }
+.synph { font-family: var(--code-font); font-size: 0.9em; }
+.kwd { font-weight: 600; font-family: var(--code-font); }
+.var { font-style: italic; font-family: var(--code-font); }
+.oper { font-weight: 600; color: var(--color-link); }
+.sep { color: var(--color-border); }
+.delim { font-weight: 600; color: var(--color-link); }
+.syntaxdiagram { border: 1px solid var(--color-border); border-radius: 4px; padding: 1rem; margin: 1rem 0; overflow-x: auto; }
+.synblk { background: var(--color-code-bg); border: 1px solid var(--color-border); border-radius: 4px; padding: 0.75rem; margin: 0.5rem 0; overflow-x: auto; font-family: var(--code-font); font-size: 0.9em; }
+.synnote { font-size: 0.9em; margin: 0.5rem 0; padding: 0.5rem; border-left: 3px solid var(--color-border); }
+.fragment { font-family: var(--code-font); font-size: 0.9em; }
+.fragref { font-family: var(--code-font); font-size: 0.9em; color: var(--color-link); }
+
+/* Software domain */
+.screen { background: var(--color-code-bg); border: 1px solid var(--color-border); border-radius: 4px; padding: 1rem; overflow-x: auto; font-family: var(--code-font); font-size: 0.9em; line-height: 1.5; white-space: pre-wrap; }
+.msgph { font-family: var(--code-font); font-size: 0.9em; }
+.msgblock { background: var(--color-code-bg); border: 1px solid var(--color-border); border-radius: 4px; padding: 0.75rem; font-family: var(--code-font); font-size: 0.9em; white-space: pre-wrap; }
+
+/* Body elements */
+.lines { background: var(--color-code-bg); border: 1px solid var(--color-border); border-radius: 4px; padding: 0.75rem 1rem; font-family: var(--code-font); font-size: 0.9em; line-height: 1.5; white-space: pre-wrap; }
+.fn { font-size: 0.75em; vertical-align: super; cursor: help; color: var(--color-link); }
+cite { font-style: italic; }
+.boolean { font-family: var(--code-font); font-size: 0.9em; font-weight: 500; }
+.tm { font-size: 0.75em; vertical-align: super; }
+.body-div { margin: 0.75rem 0; }
+.section-div { margin: 0.75rem 0; }
+
+/* Parameter lists */
+.parml { margin: 1em 0; }
+.plentry { margin: 0.5em 0; }
+.pt { font-weight: 600; font-family: var(--code-font); font-size: 0.95em; margin-top: 0.5em; }
+.pd { margin-left: 1.5em; }
+
+/* Abbreviation / Glossary */
+.abbreviated-form { border-bottom: 1px dotted var(--color-border); cursor: help; }
+.glossterm { font-weight: 600; font-style: italic; }
+.glossdef { margin-left: 1.5em; }
+.glossentry { margin: 1em 0; }
+
+/* Hazard */
+.hazardstatement { border-left: 4px solid #c0392b; background: var(--color-danger-bg); padding: 0.75rem 1rem; margin: 1rem 0; border-radius: 0 4px 4px 0; }
+.typeofhazard { font-weight: 600; color: #c0392b; }
+.howtoavoid { margin: 0.5rem 0; }
+.consequence { margin: 0.5rem 0; }
+
+/* Other */
 
 /* Related links */
 .related-links { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--color-border); }

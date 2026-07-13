@@ -82,6 +82,14 @@
           },
           "default": [],
           "description": "Custom CSS file paths to apply to the preview. Supports absolute paths, paths relative to workspace root, and paths relative to the DITA file directory."
+        },
+        "dita-viewer.cssDirectory": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Directories to scan for available CSS files. Supports absolute paths, workspace-relative paths, and document-relative paths. CSS files found here appear in the preview theme dropdown."
         }
       }
     }
