@@ -196,12 +196,12 @@ describe('renderer', () => {
         assert.ok(html.includes('href="#section1"'));
         assert.ok(html.includes('see section'));
     });
-    it('should render external xref as placeholder text', () => {
+    it('should render external xref showing the href', () => {
         const doc = makeEl('topic/topic', [
             makeEl('topic/xref', [], { href: 'other.dita#topic1' }),
         ]);
         const html = (0, renderer_1.renderDocument)(doc, defaultCtx);
-        assert.ok(html.includes('Phase 2'));
+        assert.ok(html.includes('other.dita#topic1'));
     });
     it('should render inline formatting', () => {
         const doc = makeEl('topic/topic', [

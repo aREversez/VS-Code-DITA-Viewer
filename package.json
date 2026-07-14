@@ -98,7 +98,7 @@
     "build": "node esbuild.config.js",
     "build:dev": "node esbuild.config.js --dev",
     "watch": "node esbuild.config.js --watch",
-    "lint": "eslint src/ --ext .ts",
+    "lint": "eslint src/",
     "lint:fix": "eslint src/ --ext .ts --fix",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "pretest": "tsc -p tsconfig.test.json",

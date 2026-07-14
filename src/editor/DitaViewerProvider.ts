@@ -3,6 +3,7 @@ import { parseDita } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { dirname, extname, isAbsolute, join, resolve, basename } from 'path';
+import { randomBytes } from 'crypto';
 import { DitaNode } from '../parser/domTypes';
 
 function getWebviewScript(): string {
@@ -343,7 +344,9 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     };
 
     try {
-      const ditaDoc = parseDita(document.getText());
+      const rawXml = document.getText();
+      const preprocessedXml = preprocessEntities(rawXml);
+      const ditaDoc = parseDita(preprocessedXml);
       const titleMap = buildTitleMap(ditaDoc.root);
 
       // Detect locale from xml:lang
@@ -379,20 +382,23 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       const cssFilesJson = escapeJson(JSON.stringify(files));
       const defaultNameJson = escapeJson(JSON.stringify(defaultName));
 
+      // CSP nonce for defense-in-depth against XSS
+      const nonce = randomBytes(16).toString('base64');
+
       return `<!DOCTYPE html>
 <html lang="en"${isDark ? ' class="vscode-dark"' : ''}>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'unsafe-inline';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <link rel="stylesheet" href="${stylesUri}">
 ${defaultContent ? `<style>\n${defaultContent}\n</style>` : ''}
 <title>${document.fileName}</title>
-<script>window.__cssFiles=${cssFilesJson};window.__defaultCss=${defaultNameJson};</script>
+<script nonce="${nonce}">window.__cssFiles=${cssFilesJson};window.__defaultCss=${defaultNameJson};</script>
 </head>
 <body>
 ${content}
-<script>${script}</script>
+<script nonce="${nonce}">${script}</script>
 </body>
 </html>`;
     } catch (err) {
@@ -446,6 +452,25 @@ function buildTitleMap(root: DitaNode): Map<string, string> {
   }
   walk(root);
   return map;
+}
+
+// ── XML entity preprocessing ──
+
+function preprocessEntities(xml: string): string {
+  // Extract entity declarations from DOCTYPE internal subset: <!ENTITY name "value">
+  const entityRegex = /<!ENTITY\s+(\S+)\s+"((?:[^"\\]|\\.)*)">/g;
+  let match;
+  const entities: Array<[string, string]> = [];
+  while ((match = entityRegex.exec(xml)) !== null) {
+    entities.push([match[1], match[2]]);
+  }
+  if (entities.length === 0) return xml;
+  // Inline the entities to avoid SAX parse errors
+  let result = xml.replace(entityRegex, '');
+  for (const [name, value] of entities) {
+    result = result.replace(new RegExp(`&${name};`, 'g'), value);
+  }
+  return result;
 }
 
 // ── Keyref: parse DITAMAP for key→value mappings ──
@@ -632,7 +657,10 @@ function findCustomCssDir(docDir: string): string {
 function parseDocRoot(dir: string): string {
   const folders = vscode.workspace.workspaceFolders;
   if (folders && folders.length > 0) return folders[0].uri.fsPath;
+  const sep = dir.includes('/') ? '/' : '\\';
   const parts = dir.split(/[\\/]/);
+  // POSIX: root is "/", Windows: root is "C:\"
+  if (sep === '/') return '/' + parts.slice(1, 2).join('/');
   return parts.length > 2 ? parts.slice(0, 2).join('\\') : dir;
 }
 

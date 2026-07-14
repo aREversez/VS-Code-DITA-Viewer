@@ -19,30 +19,15 @@ function escapeAttr(s: string): string {
   return s.replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/&/g, '&amp;');
 }
 
-const NOTE_LABELS_ZH: Record<string, string> = {
-  note: '注',
-  notice: '注意',
-  warning: '警告',
-  danger: '危险',
-  important: '重要',
-  tip: '提示',
-  restriction: '限制',
-};
-
-const NOTE_LABELS_EN: Record<string, string> = {
-  note: 'Note',
-  notice: 'Notice',
-  warning: 'Warning',
-  danger: 'Danger',
-  important: 'Important',
-  tip: 'Tip',
-  restriction: 'Restriction',
-};
+function safeAttr(name: string, value: string | undefined | null): string {
+  if (value == null) return '';
+  return ` ${name}="${escapeAttr(value)}"`;
+}
 
 export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   'topic/topic': (node, ctx, renderChildren) => {
     const id = getAttr(node, 'id');
-    return `<article${id ? ` id="${id}"` : ''} class="topic">${renderChildren(node, ctx)}</article>`;
+    return `<article${safeAttr('id', id)} class="topic">${renderChildren(node, ctx)}</article>`;
   },
 
   'topic/title': (node, ctx, renderChildren) => {
@@ -60,12 +45,12 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
   'topic/section': (node, ctx, renderChildren) => {
     const id = getAttr(node, 'id');
-    return `<section${id ? ` id="${id}"` : ''}>${renderChildren(node, ctx)}</section>`;
+    return `<section${safeAttr('id', id)}>${renderChildren(node, ctx)}</section>`;
   },
 
   'topic/example': (node, ctx, renderChildren) => {
     const id = getAttr(node, 'id');
-    return `<section${id ? ` id="${id}"` : ''} class="example">${renderChildren(node, ctx)}</section>`;
+    return `<section${safeAttr('id', id)} class="example">${renderChildren(node, ctx)}</section>`;
   },
 
   'topic/p': (_node, ctx, renderChildren) => {
@@ -74,17 +59,9 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
   'topic/note': (node, ctx, renderChildren) => {
     const type = getAttr(node, 'type') || 'note';
-    const labels = ctx.noteLabels || NOTE_LABELS_EN;
+    const labels = ctx.noteLabels || { note: 'Note', notice: 'Notice', warning: 'Warning', danger: 'Danger', important: 'Important', tip: 'Tip', restriction: 'Restriction' };
     const label = labels[type] || type;
-    // Handle conref: note with conref attribute pulls content from another file
-    const conref = getAttr(node, 'conref');
-    if (conref && ctx.resolveConref) {
-      const resolved = ctx.resolveConref(conref);
-      if (resolved) {
-        return `<div class="note note--${type}"><span class="note__label">${label}:</span> ${resolved}</div>`;
-      }
-    }
-    return `<div class="note note--${type}"><span class="note__label">${label}:</span> ${renderChildren(node, ctx)}</div>`;
+    return `<div class="note note--${type}"><span class="note__label">${escapeAttr(label)}:</span> ${renderChildren(node, ctx)}</div>`;
   },
 
   'topic/ul': (_node, ctx, renderChildren) => `<ul>${renderChildren(_node, ctx)}</ul>`,
@@ -100,7 +77,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
   'topic/table': (node, ctx, renderChildren) => {
     const id = getAttr(node, 'id');
-    return `<table${id ? ` id="${id}"` : ''} class="cals-table">${renderChildren(node, ctx)}</table>`;
+    return `<table${safeAttr('id', id)} class="cals-table">${renderChildren(node, ctx)}</table>`;
   },
 
   'topic/tgroup': (_node, ctx, renderChildren) => renderChildren(_node, ctx),
@@ -116,7 +93,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
   'topic/simpletable': (node, ctx, renderChildren) => {
     const id = getAttr(node, 'id');
-    return `<table${id ? ` id="${id}"` : ''} class="simple-table">${renderChildren(node, ctx)}</table>`;
+    return `<table${safeAttr('id', id)} class="simple-table">${renderChildren(node, ctx)}</table>`;
   },
 
   'topic/sthead': (_node, ctx, renderChildren) => `<thead>${renderChildren(_node, ctx)}</thead>`,
@@ -132,12 +109,12 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     const placement = getAttr(node, 'placement') || 'inline';
     const width = getAttr(node, 'width');
     const height = getAttr(node, 'height');
-    const extra = `${width ? ` width="${width}"` : ''}${height ? ` height="${height}"` : ''}`;
+    const extra = `${safeAttr('width', width)}${safeAttr('height', height)}`;
     const imgSrc = href ? ctx.asWebviewUri(href) : '';
     const cls = placement === 'break' ? ' class="image-break"' : '';
     const errMsg = 'Image fail: ' + escapeAttr(href) + ' srcLen=' + imgSrc.length;
     const errHandler = 'this.alt=\'' + errMsg + '\';this.style.outline=\'3px solid red\';this.style.outlineOffset=\'-1px\'';
-    return `<img src="${imgSrc || ''}" alt="${alt}"${extra}${cls} loading="lazy" onerror="${errHandler}" data-src="${escapeAttr(href)}">`;
+    return `<img src="${imgSrc || ''}"${safeAttr('alt', alt)}${extra}${cls} loading="lazy" onerror="${errHandler}" data-src="${escapeAttr(href)}">`;
   },
 
   'topic/fig': (node, ctx, renderChildren) => {
@@ -152,14 +129,14 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     const figCaption = titleNode
       ? `<figcaption>${renderChildren(titleNode, { ...ctx, headingLevel: ctx.headingLevel + 1 })}</figcaption>`
       : '';
-    return `<figure${id ? ` id="${id}"` : ''}>${figContent}${figCaption}</figure>`;
+    return `<figure${safeAttr('id', id)}>${figContent}${figCaption}</figure>`;
   },
 
   'topic/codeblock': (node, ctx, renderChildren) => {
     const outputClass = getAttr(node, 'outputclass') || '';
     const lang = outputClass.replace(/^language-/, '');
-    const langLabel = lang ? `<div class="codeblock-lang">${lang}</div>` : '';
-    return `<pre class="codeblock ${outputClass}"><code>${renderChildren(node, ctx)}</code>${langLabel}</pre>`;
+    const langLabel = lang ? `<div class="codeblock-lang">${escapeAttr(lang)}</div>` : '';
+    return `<pre class="codeblock ${escapeAttr(outputClass)}"><code>${renderChildren(node, ctx)}</code>${langLabel}</pre>`;
   },
 
   'topic/pre': (_node, ctx, renderChildren) =>
@@ -168,7 +145,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   'topic/xref': (node, ctx, renderChildren) => {
     const href = getAttr(node, 'href') || '';
     if (!href) return '';
-
+    const hrefAttr = escapeAttr(href);
     const content =
       node.children.length > 0
         ? renderChildren(node, ctx)
@@ -177,14 +154,20 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
           : href;
 
     if (href.startsWith('#')) {
-      const anchor = href.includes('/') ? '#' + href.split('/').pop() : href;
+      const anchor = href.includes('/') ? escapeAttr('#' + href.split('/').pop()!) : hrefAttr;
       return `<a href="${anchor}" class="xref">${content}</a>`;
     }
 
-    return `<span class="xref-external">→ 引用其他文件，Phase 2 支持</span>`;
+    return `<span class="xref-external">→ ${escapeAttr(href)}</span>`;
   },
 
-  'topic/link': (_node, ctx, renderChildren) => renderChildren(_node, ctx),
+  'topic/link': (node, ctx, renderChildren) => {
+    const href = getAttr(node, 'href');
+    const keyref = getAttr(node, 'keyref');
+    const target = href || keyref || '';
+    if (!target) return renderChildren(node, ctx);
+    return `<a href="${escapeAttr(target)}" class="link">${renderChildren(node, ctx)}</a>`;
+  },
   'topic/linktext': (_node, ctx, renderChildren) => renderChildren(_node, ctx),
 
   'topic/related-links': (_node, ctx, renderChildren) =>
@@ -211,7 +194,6 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     if (keyref && ctx.resolveKey) {
       const resolved = ctx.resolveKey(keyref);
       if (resolved) return `<span class="ph">${escapeAttr(resolved)}</span>`;
-      // Show fallback for unresolved keyref (so user can see something is wrong)
       return `<span class="ph unresolved-keyref" title="Unresolved key: ${escapeAttr(keyref)}">[${escapeAttr(keyref)}]</span>`;
     }
     return `<span class="ph">${renderChildren(node, ctx)}</span>`;
@@ -299,14 +281,14 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     `<pre class="lines">${renderChildren(_node, ctx)}</pre>`,
   'topic/fn': (node, ctx, renderChildren) => {
     const id = getAttr(node, 'id');
-    const callId = id ? ` fn-call-${id}` : '';
-    return `<sup class="fn${callId}">${renderChildren(node, ctx)}</sup>`;
+    const cls = id ? ` fn-call-${escapeAttr(id)}` : '';
+    return `<sup class="fn${cls}">${renderChildren(node, ctx)}</sup>`;
   },
   'topic/cite': (_node, ctx, renderChildren) =>
     `<cite>${renderChildren(_node, ctx)}</cite>`,
   'topic/boolean': (node, ctx, renderChildren) => {
     const val = getAttr(node, 'value') || '';
-    return `<span class="boolean" data-value="${escapeAttr(val)}">${val || renderChildren(node, ctx)}</span>`;
+    return `<span class="boolean" data-value="${escapeAttr(val)}">${escapeAttr(val) || renderChildren(node, ctx)}</span>`;
   },
   'topic/tm': (_node, ctx, renderChildren) =>
     `<span class="tm">${renderChildren(_node, ctx)}</span>`,
@@ -373,11 +355,11 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   // Anchors
   'topic/anchor': (node) => {
     const id = getAttr(node, 'id');
-    return id ? `<a id="${id}"></a>` : '';
+    return id ? `<a${safeAttr('id', id)}></a>` : '';
   },
   'topic/anchorid': (node) => {
     const id = getAttr(node, 'id');
-    return id ? `<span id="${id}"></span>` : '';
+    return id ? `<span${safeAttr('id', id)}></span>` : '';
   },
   'topic/anchorkey': () => '',
   'topic/anchorref': () => '',
