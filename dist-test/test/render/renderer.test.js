@@ -285,6 +285,54 @@ describe('renderer', () => {
         assert.ok(html.includes('cpp'));
         assert.ok(html.includes('class="codeblock language-cpp"'));
     });
+    it('should escape id attribute to prevent XSS', () => {
+        const doc = makeEl('topic/topic', [
+            makeEl('topic/section', [makeText('ok')], { id: 'x"><img src=x onerror="alert(1)">' }),
+        ]);
+        const html = (0, renderer_1.renderDocument)(doc, defaultCtx);
+        assert.ok(!html.includes('<img '), 'should not contain raw img tag');
+        assert.ok(html.includes('&gt;&lt;img'), 'should have escaped angle brackets');
+        assert.ok(html.includes('&quot;'), 'should have escaped quotes');
+    });
+    it('should escape note type attribute to prevent XSS', () => {
+        const doc = makeEl('topic/topic', [
+            makeEl('topic/note', [makeText('ok')], { type: 'x"><img src=x onerror="alert(1)">' }),
+        ]);
+        const html = (0, renderer_1.renderDocument)(doc, defaultCtx);
+        assert.ok(!html.includes('<img '));
+        assert.ok(html.includes('note--x'));
+        assert.ok(html.includes('&gt;&lt;img'));
+        assert.ok(html.includes('&quot;'));
+    });
+    it('should escape xref href and prevent tag injection in fallback content', () => {
+        const doc = makeEl('topic/topic', [
+            makeEl('topic/xref', [], { href: '#x"><img src=x onerror="alert(1)">' }),
+        ]);
+        const html = (0, renderer_1.renderDocument)(doc, defaultCtx);
+        assert.ok(!html.includes('<img '), 'should not contain raw img tag');
+        assert.ok(html.includes('&gt;&lt;img'), 'angle brackets in fallback content should be escaped');
+        assert.ok(html.includes('&quot;'), 'quotes should be escaped');
+    });
+    it('should escape image alt attribute to prevent XSS', () => {
+        const doc = makeEl('topic/topic', [
+            makeEl('topic/image', [], { href: 'test.png', alt: 'x"><img src=x onerror="alert(1)">' }),
+        ]);
+        const html = (0, renderer_1.renderDocument)(doc, defaultCtx);
+        // The page's own <img> tag is fine; check the injected payload doesn't create a SECOND img
+        const firstImg = html.indexOf('<img');
+        const secondImg = html.indexOf('<img', firstImg + 1);
+        assert.ok(secondImg === -1, 'should not contain a second raw img tag from injection');
+        assert.ok(html.includes('&gt;&lt;img'), 'angle brackets should be escaped');
+        assert.ok(html.includes('&quot;'), 'quotes should be escaped');
+    });
+    it('should not double-escape ampersand in attributes', () => {
+        const doc = makeEl('topic/topic', [
+            makeEl('topic/section', [makeText('ok')], { id: 'A&B "test"' }),
+        ]);
+        const html = (0, renderer_1.renderDocument)(doc, defaultCtx);
+        assert.ok(html.includes('A&amp;B &quot;test&quot;'), 'should escape once');
+        assert.ok(!html.includes('&amp;amp;'), 'should not double-escape');
+    });
     it('should increase heading level inside sections', () => {
         const doc = makeEl('topic/topic', [
             makeEl('topic/title', [makeText('Main')]),

@@ -61,6 +61,17 @@ function getWebviewScript(): string {
   hlStyle.textContent = '.__hl{outline:2px solid var(--vscode-textLink-foreground,#4a90d9);outline-offset:2px;border-radius:3px;background:color-mix(in srgb,var(--vscode-textLink-foreground,#4a90d9) 12%,transparent);}';
   document.head.appendChild(hlStyle);
 
+  // Image error handling (event delegation, nonce-safe)
+  document.addEventListener('error', function(e) {
+    var img = e.target;
+    if (img.tagName !== 'IMG' || !img.hasAttribute('data-dita-src')) return;
+    var src = img.getAttribute('data-dita-src') || 'unknown';
+    var msg = 'Image fail: ' + src;
+    img.alt = msg;
+    img.style.outline = '3px solid red';
+    img.style.outlineOffset = '-1px';
+  }, true);
+
   function highlightElement(el) {
     if (!el) return;
     var prev = document.querySelector('.__hl');
@@ -361,12 +372,22 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
 
       // Build conref resolver
       const conrefResolver = makeConrefResolver(docRootDir);
+      const fileTitleResolver = makeFileTitleResolver(docRootDir);
+
+      const resolveTitle = (id: string): string | undefined => {
+        // Local id match first
+        const local = titleMap.get(id);
+        if (local) return local;
+        // Cross-file: id might be "file.dita#topicId"
+        if (id.includes('#')) return fileTitleResolver(id);
+        return undefined;
+      };
 
       const content = renderDocument(ditaDoc.root, {
         headingLevel: 1,
         asWebviewUri,
         documentDir: docRoot.fsPath,
-        resolveTitle: (id: string) => titleMap.get(id),
+        resolveTitle,
         resolveKey: (key: string) => keyMap.get(key),
         resolveConref: (conref: string) => conrefResolver(conref),
         noteLabels,
@@ -525,15 +546,15 @@ function buildKeyMap(docUri: vscode.Uri): Map<string, string> {
   return map;
 }
 
-// ── Conref: resolve <element conref="file#topicId/elementId"> ──
+// ── Cross-file helpers (conref + title resolver share file cache) ──
 
-function makeConrefResolver(docDir: string): (conref: string) => string | undefined {
-  const cache = new Map<string, DitaNode>();
+function makeFileCache(docDir: string) {
+  const cache = new Map<string, DitaNode | undefined>();
 
   function loadFile(filePath: string): DitaNode | undefined {
     const absPath = resolve(docDir, filePath);
-    if (!existsSync(absPath)) return undefined;
     if (cache.has(absPath)) return cache.get(absPath);
+    if (!existsSync(absPath)) { cache.set(absPath, undefined); return undefined; }
     try {
       const content = readFileSync(absPath, 'utf-8');
       const doc = parseDita(content);
@@ -554,6 +575,22 @@ function makeConrefResolver(docDir: string): (conref: string) => string | undefi
     return undefined;
   }
 
+  function findTitleOfElement(root: DitaNode, elementId: string): string | undefined {
+    const el = findElementById(root, elementId);
+    if (!el) return undefined;
+    const titleChild = (el.children || []).find(
+      (c) => c.type === 'element' && c.baseType === 'topic/title',
+    );
+    if (!titleChild) return undefined;
+    return collectText(titleChild);
+  }
+
+  return { loadFile, findElementById, findTitleOfElement };
+}
+
+function makeConrefResolver(docDir: string): (conref: string) => string | undefined {
+  const cache = makeFileCache(docDir);
+
   function extractText(node: DitaNode): string {
     let text = '';
     for (const child of node.children || []) {
@@ -564,7 +601,6 @@ function makeConrefResolver(docDir: string): (conref: string) => string | undefi
   }
 
   return (conref: string): string | undefined => {
-    // Format: filepath#topicId/elementId  or  filepath#elementId
     const hashIdx = conref.indexOf('#');
     if (hashIdx < 0) return undefined;
     const filePath = conref.substring(0, hashIdx);
@@ -572,11 +608,28 @@ function makeConrefResolver(docDir: string): (conref: string) => string | undefi
     const parts = idPart.split('/');
     const elementId = parts.length > 1 ? parts[1] : parts[0];
 
-    const root = loadFile(filePath);
+    const root = cache.loadFile(filePath);
     if (!root) return undefined;
-    const el = findElementById(root, elementId);
+    const el = cache.findElementById(root, elementId);
     if (!el) return undefined;
     return extractText(el);
+  };
+}
+
+function makeFileTitleResolver(docDir: string): (href: string) => string | undefined {
+  const cache = makeFileCache(docDir);
+
+  return (href: string): string | undefined => {
+    // Format: filepath#topicId  or  filepath#topicId/elementId
+    const hashIdx = href.indexOf('#');
+    if (hashIdx < 0) return undefined;
+    const filePath = href.substring(0, hashIdx);
+    const idPart = href.substring(hashIdx + 1);
+    const topicId = idPart.split('/')[0];
+
+    const root = cache.loadFile(filePath);
+    if (!root) return undefined;
+    return cache.findTitleOfElement(root, topicId);
   };
 }
 

@@ -8,7 +8,7 @@ function getAttr(node, name) {
     return node.attributes?.[name];
 }
 function escapeAttr(s) {
-    return s.replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/&/g, '&amp;');
+    return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 function safeAttr(name, value) {
     if (value == null)
@@ -45,7 +45,7 @@ exports.BASE_TYPE_RENDERERS = {
         const type = getAttr(node, 'type') || 'note';
         const labels = ctx.noteLabels || { note: 'Note', notice: 'Notice', warning: 'Warning', danger: 'Danger', important: 'Important', tip: 'Tip', restriction: 'Restriction' };
         const label = labels[type] || type;
-        return `<div class="note note--${type}"><span class="note__label">${escapeAttr(label)}:</span> ${renderChildren(node, ctx)}</div>`;
+        return `<div class="note note--${escapeAttr(type)}"><span class="note__label">${escapeAttr(label)}:</span> ${renderChildren(node, ctx)}</div>`;
     },
     'topic/ul': (_node, ctx, renderChildren) => `<ul>${renderChildren(_node, ctx)}</ul>`,
     'topic/ol': (_node, ctx, renderChildren) => `<ol>${renderChildren(_node, ctx)}</ol>`,
@@ -88,9 +88,7 @@ exports.BASE_TYPE_RENDERERS = {
         const extra = `${safeAttr('width', width)}${safeAttr('height', height)}`;
         const imgSrc = href ? ctx.asWebviewUri(href) : '';
         const cls = placement === 'break' ? ' class="image-break"' : '';
-        const errMsg = 'Image fail: ' + escapeAttr(href) + ' srcLen=' + imgSrc.length;
-        const errHandler = 'this.alt=\'' + errMsg + '\';this.style.outline=\'3px solid red\';this.style.outlineOffset=\'-1px\'';
-        return `<img src="${imgSrc || ''}"${safeAttr('alt', alt)}${extra}${cls} loading="lazy" onerror="${errHandler}" data-src="${escapeAttr(href)}">`;
+        return `<img src="${imgSrc || ''}"${safeAttr('alt', alt)}${extra}${cls} loading="lazy" data-dita-src="${escapeAttr(href)}">`;
     },
     'topic/fig': (node, ctx, renderChildren) => {
         const id = getAttr(node, 'id');
@@ -114,16 +112,26 @@ exports.BASE_TYPE_RENDERERS = {
         if (!href)
             return '';
         const hrefAttr = escapeAttr(href);
-        const content = node.children.length > 0
-            ? renderChildren(node, ctx)
-            : href.startsWith('#')
-                ? ctx.resolveTitle?.(href.includes('/') ? href.split('/').pop() : href.slice(1)) || href
-                : href;
-        if (href.startsWith('#')) {
-            const anchor = href.includes('/') ? escapeAttr('#' + href.split('/').pop()) : hrefAttr;
-            return `<a href="${anchor}" class="xref">${content}</a>`;
+        let content;
+        if (node.children.length > 0) {
+            content = renderChildren(node, ctx);
         }
-        return `<span class="xref-external">→ ${escapeAttr(href)}</span>`;
+        else if (href.startsWith('#')) {
+            const id = href.includes('/') ? href.split('/').pop() : href.slice(1);
+            content = ctx.resolveTitle?.(id) || escapeAttr(href);
+        }
+        else if (href.includes('#')) {
+            // Cross-file xref: try to resolve the referenced element's title
+            content = ctx.resolveTitle?.(href) || escapeAttr(href);
+        }
+        else {
+            content = escapeAttr(href);
+        }
+        if (href.startsWith('#')) {
+            const anchor = href.includes('/') ? '#' + href.split('/').pop() : href;
+            return `<a href="${escapeAttr(anchor)}" class="xref">${content}</a>`;
+        }
+        return `<span class="xref-external">→ ${content}</span>`;
     },
     'topic/link': (node, ctx, renderChildren) => {
         const href = getAttr(node, 'href');

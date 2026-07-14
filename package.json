@@ -99,7 +99,7 @@
     "build:dev": "node esbuild.config.js --dev",
     "watch": "node esbuild.config.js --watch",
     "lint": "eslint src/",
-    "lint:fix": "eslint src/ --ext .ts --fix",
+    "lint:fix": "eslint src/ --fix",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "pretest": "tsc -p tsconfig.test.json",
     "test": "mocha --config .mocharc.json",
