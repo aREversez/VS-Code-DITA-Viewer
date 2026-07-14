@@ -111,18 +111,16 @@ exports.BASE_TYPE_RENDERERS = {
         const href = getAttr(node, 'href') || '';
         if (!href)
             return '';
-        const hrefAttr = escapeAttr(href);
         let content;
         if (node.children.length > 0) {
             content = renderChildren(node, ctx);
         }
         else if (href.startsWith('#')) {
             const id = href.includes('/') ? href.split('/').pop() : href.slice(1);
-            content = ctx.resolveTitle?.(id) || escapeAttr(href);
+            content = escapeAttr(ctx.resolveTitle?.(id) ?? '') || escapeAttr(href);
         }
         else if (href.includes('#')) {
-            // Cross-file xref: try to resolve the referenced element's title
-            content = ctx.resolveTitle?.(href) || escapeAttr(href);
+            content = escapeAttr(ctx.resolveTitle?.(href) ?? '') || escapeAttr(href);
         }
         else {
             content = escapeAttr(href);

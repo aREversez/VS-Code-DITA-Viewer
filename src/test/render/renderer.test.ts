@@ -269,6 +269,19 @@ describe('renderer', () => {
     assert.ok(html.includes('href="#sec1"'));
   });
 
+  it('should escape resolveTitle content to prevent HTML injection', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveTitle: () => 'A <img src=x onerror="alert(1)"> title',
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/xref', [], { href: '#topic/sec1' }),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('A &lt;img src=x onerror=&quot;alert(1)&quot;&gt; title'));
+    assert.ok(!html.includes('<img'));
+  });
+
   it('should add language label to codeblock with outputclass', () => {
     const doc = makeEl('topic/topic', [
       makeEl('topic/codeblock', [makeText('code')], { outputclass: 'language-cpp' }),
