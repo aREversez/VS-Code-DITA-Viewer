@@ -132,7 +132,7 @@ const MAP_BASE_TYPE_RENDERERS: Record<string, Renderer> = {
       (c) => c.type === 'element' && c.baseType === 'map/map-title',
     );
     const titleHtml = titleEl
-      ? `<h1 class="map-title">${extractText(titleEl)}</h1>`
+      ? `<h1 class="map-title">${escapeAttr(extractText(titleEl))}</h1>`
       : '';
     const bodyChildren = node.children.filter(
       (c) => c.type !== 'element' || c.baseType !== 'map/map-title',

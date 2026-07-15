@@ -45,4 +45,21 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(showRenderedCommand);
+
+  const showMapRenderedCommand = vscode.commands.registerCommand(
+    'ditaViewer.showMapRendered',
+    () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) return;
+
+      vscode.commands.executeCommand(
+        'vscode.openWith',
+        editor.document.uri,
+        'ditaViewer.mapPreview',
+          vscode.ViewColumn.Beside,
+      );
+    },
+  );
+
+  context.subscriptions.push(showMapRenderedCommand);
 }

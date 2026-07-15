@@ -16,6 +16,13 @@ describe('mapRenderer', () => {
     assert.ok(html.includes('class="map-tree"'));
   });
 
+  it('should escape map title text to prevent XSS', () => {
+    const xml = `<map><title>Evil &lt;img src=x onerror=alert(1)&gt; Title</title></map>`;
+    const html = parseAndRender(xml);
+    assert.ok(html.includes('&lt;img src=x onerror=alert(1)&gt;'), 'angle brackets should be escaped');
+    assert.ok(!html.includes('<img'), 'no raw img tag should appear');
+  });
+
   it('should render topicref with linktext as display name', () => {
     const xml = `<map>
       <topicref keys="product_name" href="topics/db_overview.dita">
