@@ -224,5 +224,114 @@ q { font-style: italic; }
 /* Section spacing */
 section, .example { margin: 1.5rem 0; }
 
+/* ── DITAMAP tree view ── */
+
+.ditamap-container {
+  padding: 0 0.5rem;
+}
+
+.map-title {
+  font-size: 1.6em;
+  font-weight: 600;
+  margin: 0 0 1rem 0;
+  padding-bottom: 0.3em;
+  border-bottom: 2px solid var(--color-border);
+}
+
+.map-tree {
+  list-style: none;
+  padding-left: 1.2em;
+  margin: 0.25em 0;
+}
+
+.map-tree--inline {
+  padding-left: 0;
+}
+
+.map-tree-item {
+  margin: 0.15em 0;
+  padding: 0.15em 0;
+}
+
+.map-tree-item--nav {
+  cursor: pointer;
+}
+
+.map-tree-item--keydef {
+  opacity: 0.7;
+}
+
+.map-tree-item--head {
+  font-weight: 600;
+}
+
+.map-tree-item--group {
+  border-left: 2px solid var(--color-border);
+  padding-left: 0.5em;
+}
+
+.map-tree-icon {
+  margin-right: 0.35em;
+  font-size: 0.9em;
+  user-select: none;
+}
+
+.map-tree-link {
+  color: var(--color-link);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.map-tree-link:hover {
+  text-decoration: underline;
+}
+
+.map-tree-label {
+  vertical-align: middle;
+}
+
+.map-tree-label--keydef {
+  font-style: italic;
+  color: var(--vscode-editor-foreground);
+}
+
+.map-tree-label--head {
+  font-weight: 600;
+}
+
+/* Reltable */
+.map-reltable {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.map-reltable-title {
+  font-size: 1.1em;
+  margin: 0 0 0.5rem 0;
+}
+
+.map-reltable-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.relheader th {
+  font-weight: 600;
+  background: var(--color-code-bg);
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--color-border);
+}
+
+.relrow td {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--color-border);
+}
+
+.relcell-content {
+  display: block;
+}
+
 /* Responsive */
 @media (max-width: 600px) { body { padding: 1rem; } }

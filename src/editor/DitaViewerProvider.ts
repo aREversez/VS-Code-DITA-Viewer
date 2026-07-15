@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { parseDita } from '../parser/ditaParser';
+import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { dirname, extname, isAbsolute, join, resolve, basename } from 'path';
@@ -475,25 +475,6 @@ function buildTitleMap(root: DitaNode): Map<string, string> {
   return map;
 }
 
-// ── XML entity preprocessing ──
-
-function preprocessEntities(xml: string): string {
-  // Extract entity declarations from DOCTYPE internal subset: <!ENTITY name "value">
-  const entityRegex = /<!ENTITY\s+(\S+)\s+"((?:[^"\\]|\\.)*)">/g;
-  let match;
-  const entities: Array<[string, string]> = [];
-  while ((match = entityRegex.exec(xml)) !== null) {
-    entities.push([match[1], match[2]]);
-  }
-  if (entities.length === 0) return xml;
-  // Inline the entities to avoid SAX parse errors
-  let result = xml.replace(entityRegex, '');
-  for (const [name, value] of entities) {
-    result = result.replace(new RegExp(`&${name};`, 'g'), value);
-  }
-  return result;
-}
-
 // ── Keyref: parse DITAMAP for key→value mappings ──
 
 function findDitamapFiles(docUri: vscode.Uri): string[] {
@@ -515,32 +496,59 @@ function findDitamapFiles(docUri: vscode.Uri): string[] {
   return results;
 }
 
+function extractTextFromNode(node: DitaNode): string {
+  if (node.type === 'text') return node.text || '';
+  return (node.children || []).map(extractTextFromNode).join('');
+}
+
+function getNodeValue(node: DitaNode, childBaseTypes: string[]): string | undefined {
+  for (const bt of childBaseTypes) {
+    const child = (node.children || []).find(
+      (c) => c.type === 'element' && c.baseType === bt,
+    );
+    if (child) {
+      const text = extractTextFromNode(child).trim();
+      if (text) return text;
+    }
+  }
+  return undefined;
+}
+
+function getKeyValueFromRef(node: DitaNode): string | undefined {
+  // Priority: keyword > linktext > navtitle > shortdesc > indexterm
+  const topicmeta = (node.children || []).find(
+    (c) => c.type === 'element' && (c.baseType === 'map/topicmeta'),
+  );
+  if (!topicmeta) return undefined; // No topicmeta, no value
+  return getNodeValue(topicmeta, [
+    'map/keyword',
+    'map/linktext',
+    'map/navtitle',
+    'map/shortdesc',
+  ]);
+}
+
 function buildKeyMap(docUri: vscode.Uri): Map<string, string> {
   const map = new Map<string, string>();
   const mapFiles = findDitamapFiles(docUri);
   for (const mf of mapFiles) {
     try {
       const content = readFileSync(mf, 'utf-8');
-      // Match both topicref and keydef elements with keys attribute
-      const keyRegex = /<(?:topicref|keydef)[^>]*\s+keys\s*=\s*["']([^"']+)["']([^>]*)>/gi;
-      let match;
-      while ((match = keyRegex.exec(content)) !== null) {
-        const keys = match[1];
-        const rest = match[2] + content.substring(match.index + match[0].length, Math.min(match.index + match[0].length + 800, content.length));
-        // Priority order: keyword > linktext > navtitle > shortdesc > indexterm
-        const kwMatch = /<keywords>\s*<keyword>([^<]*)<\/keyword>/i.exec(rest);
-        if (kwMatch) { map.set(keys, kwMatch[1]); continue; }
-        const ltMatch = /<linktext>([^<]*)<\/linktext>/i.exec(rest);
-        if (ltMatch) { map.set(keys, ltMatch[1]); continue; }
-        const navMatch = /<navtitle>([^<]*)<\/navtitle>/i.exec(rest);
-        if (navMatch) { map.set(keys, navMatch[1]); continue; }
-        const sdMatch = /<shortdesc>([^<]*)<\/shortdesc>/i.exec(rest);
-        if (sdMatch) { map.set(keys, sdMatch[1]); continue; }
-        const idxMatch = /<indexterm>([^<]*)<\/indexterm>/i.exec(rest);
-        if (idxMatch) { map.set(keys, idxMatch[1]); continue; }
-        // Fallback: use key name
-        map.set(keys, keys);
+      const doc = parseDitamap(preprocessEntities(content));
+      const mapRoot = doc.root;
+      // Walk all direct children of <map> looking for topicref/keydef with keys
+      function walk(node: DitaNode) {
+        if (node.type !== 'element') return;
+        const baseType = node.baseType;
+        if ((baseType === 'map/topicref' || baseType === 'map/keydef') && node.attributes?.keys) {
+          const keys = node.attributes.keys;
+          const value = getKeyValueFromRef(node);
+          map.set(keys, value || keys);
+        }
+        for (const child of node.children || []) walk(child);
       }
+      // Walk map's children (topicref, keydef, etc. are directly under <map>)
+      for (const child of mapRoot.children || []) walk(child);
     } catch {}
   }
   return map;

@@ -12,8 +12,11 @@
   ],
   "activationEvents": [
     "onLanguage:dita",
+    "onLanguage:ditamap",
     "onCustomEditor:ditaViewer.preview",
-    "onCommand:ditaViewer.showRendered"
+    "onCustomEditor:ditaViewer.mapPreview",
+    "onCommand:ditaViewer.showRendered",
+    "onCommand:ditaViewer.showMapRendered"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -22,6 +25,11 @@
         "id": "dita",
         "extensions": [".dita"],
         "aliases": ["DITA", "dita"]
+      },
+      {
+        "id": "ditamap",
+        "extensions": [".ditamap"],
+        "aliases": ["DITA Map", "ditamap"]
       }
     ],
     "customEditors": [
@@ -34,12 +42,27 @@
           }
         ],
         "priority": "option"
+      },
+      {
+        "viewType": "ditaViewer.mapPreview",
+        "displayName": "DITA Map Reading View",
+        "selector": [
+          {
+            "filenamePattern": "*.ditamap"
+          }
+        ],
+        "priority": "option"
       }
     ],
     "commands": [
       {
         "command": "ditaViewer.showRendered",
         "title": "Open DITA Reading View",
+        "icon": "media/icons/preview.svg"
+      },
+      {
+        "command": "ditaViewer.showMapRendered",
+        "title": "Open DITA Map Reading View",
         "icon": "media/icons/preview.svg"
       }
     ],
@@ -48,6 +71,11 @@
         "command": "ditaViewer.showRendered",
         "key": "ctrl+shift+alt+d",
         "when": "editorLangId == dita || resourceExtname == .dita"
+      },
+      {
+        "command": "ditaViewer.showMapRendered",
+        "key": "ctrl+shift+alt+m",
+        "when": "editorLangId == ditamap || resourceExtname == .ditamap"
       }
     ],
     "menus": {
@@ -56,6 +84,11 @@
           "command": "ditaViewer.showRendered",
           "when": "resourceExtname == .dita",
           "group": "navigation"
+        },
+        {
+          "command": "ditaViewer.showMapRendered",
+          "when": "resourceExtname == .ditamap",
+          "group": "navigation"
         }
       ],
       "editor/context": [
@@ -63,12 +96,21 @@
           "command": "ditaViewer.showRendered",
           "when": "resourceExtname == .dita",
           "group": "navigation"
+        },
+        {
+          "command": "ditaViewer.showMapRendered",
+          "when": "resourceExtname == .ditamap",
+          "group": "navigation"
         }
       ],
       "commandPalette": [
         {
           "command": "ditaViewer.showRendered",
           "when": "resourceExtname == .dita"
+        },
+        {
+          "command": "ditaViewer.showMapRendered",
+          "when": "resourceExtname == .ditamap"
         }
       ]
     },
