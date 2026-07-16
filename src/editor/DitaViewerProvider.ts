@@ -5,6 +5,7 @@ import { readFileSync, existsSync, readdirSync } from 'fs';
 import { dirname, extname, isAbsolute, join, resolve, basename } from 'path';
 import { randomBytes } from 'crypto';
 import { DitaNode } from '../parser/domTypes';
+import { buildTitleMap, makeConrefResolver, makeFileTitleResolver } from './ditaRenderUtils';
 
 function getWebviewScript(): string {
   return `
@@ -450,31 +451,6 @@ function escapeJson(text: string): string {
   return text.replace(/<\/script>/gi, '<\\/script>');
 }
 
-function collectText(node: DitaNode): string {
-  if (node.type === 'text') return node.text || '';
-  return (node.children || []).map(collectText).join('');
-}
-
-function buildTitleMap(root: DitaNode): Map<string, string> {
-  const map = new Map<string, string>();
-  function walk(node: DitaNode) {
-    if (node.type === 'element') {
-      const id = node.attributes?.id;
-      if (id) {
-        const titleChild = (node.children || []).find(
-          (c) => c.type === 'element' && c.baseType === 'topic/title',
-        );
-        if (titleChild) {
-          map.set(id, collectText(titleChild));
-        }
-      }
-      for (const child of node.children || []) walk(child);
-    }
-  }
-  walk(root);
-  return map;
-}
-
 // ── Keyref: parse DITAMAP for key→value mappings ──
 
 function findDitamapFiles(docUri: vscode.Uri): string[] {
@@ -528,7 +504,7 @@ function getKeyValueFromRef(node: DitaNode): string | undefined {
   ]);
 }
 
-function buildKeyMap(docUri: vscode.Uri): Map<string, string> {
+export function buildKeyMap(docUri: vscode.Uri): Map<string, string> {
   const map = new Map<string, string>();
   const mapFiles = findDitamapFiles(docUri);
   for (const mf of mapFiles) {
@@ -554,92 +530,7 @@ function buildKeyMap(docUri: vscode.Uri): Map<string, string> {
   return map;
 }
 
-// ── Cross-file helpers (conref + title resolver share file cache) ──
-
-function makeFileCache(docDir: string) {
-  const cache = new Map<string, DitaNode | undefined>();
-
-  function loadFile(filePath: string): DitaNode | undefined {
-    const absPath = resolve(docDir, filePath);
-    if (cache.has(absPath)) return cache.get(absPath);
-    if (!existsSync(absPath)) { cache.set(absPath, undefined); return undefined; }
-    try {
-      const content = readFileSync(absPath, 'utf-8');
-      const doc = parseDita(content);
-      cache.set(absPath, doc.root);
-      return doc.root;
-    } catch {
-      cache.set(absPath, undefined);
-      return undefined;
-    }
-  }
-
-  function findElementById(root: DitaNode, targetId: string): DitaNode | undefined {
-    if (root.attributes?.id === targetId) return root;
-    for (const child of root.children || []) {
-      const found = findElementById(child, targetId);
-      if (found) return found;
-    }
-    return undefined;
-  }
-
-  function findTitleOfElement(root: DitaNode, elementId: string): string | undefined {
-    const el = findElementById(root, elementId);
-    if (!el) return undefined;
-    const titleChild = (el.children || []).find(
-      (c) => c.type === 'element' && c.baseType === 'topic/title',
-    );
-    if (!titleChild) return undefined;
-    return collectText(titleChild);
-  }
-
-  return { loadFile, findElementById, findTitleOfElement };
-}
-
-function makeConrefResolver(docDir: string): (conref: string) => string | undefined {
-  const cache = makeFileCache(docDir);
-
-  function extractText(node: DitaNode): string {
-    let text = '';
-    for (const child of node.children || []) {
-      if (child.type === 'text') text += child.text || '';
-      else text += extractText(child);
-    }
-    return text;
-  }
-
-  return (conref: string): string | undefined => {
-    const hashIdx = conref.indexOf('#');
-    if (hashIdx < 0) return undefined;
-    const filePath = conref.substring(0, hashIdx);
-    const idPart = conref.substring(hashIdx + 1);
-    const parts = idPart.split('/');
-    const elementId = parts.length > 1 ? parts[1] : parts[0];
-
-    const root = cache.loadFile(filePath);
-    if (!root) return undefined;
-    const el = cache.findElementById(root, elementId);
-    if (!el) return undefined;
-    return extractText(el);
-  };
-}
-
-function makeFileTitleResolver(docDir: string): (href: string) => string | undefined {
-  const cache = makeFileCache(docDir);
-
-  return (href: string): string | undefined => {
-    // Format: filepath#topicId  or  filepath#topicId/elementId
-    const hashIdx = href.indexOf('#');
-    if (hashIdx < 0) return undefined;
-    const filePath = href.substring(0, hashIdx);
-    const idPart = href.substring(hashIdx + 1);
-    const topicId = idPart.split('/')[0];
-
-    const root = cache.loadFile(filePath);
-    if (!root) return undefined;
-    return cache.findTitleOfElement(root, topicId);
-  };
-}
+// (cross-file helpers now in ditaRenderUtils.ts)
 
 // ── CSS file discovery ──
 

@@ -1,13 +1,17 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
-import { renderMapDocument } from '../render/mapTypeMap';
+import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
+import { renderTopicToHtml } from './ditaRenderUtils';
+import { buildKeyMap } from './DitaViewerProvider';
 import { dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
+import { readFileSync, existsSync } from 'fs';
 
 function getMapWebviewScript(): string {
   return `
 (function() {
   var vscode = acquireVsCodeApi();
+  var currentMode = 'tree';
 
   // Click on navigable tree node → post message to extension
   document.addEventListener('click', function(e) {
@@ -75,6 +79,22 @@ function getMapWebviewScript(): string {
   });
   toolbar.appendChild(wSel);
 
+  // Mode toggle button
+  var modeBtn = document.createElement('button');
+  modeBtn.title = 'Switch between outline tree and full book view';
+  modeBtn.style.cssText = btnStyle + 'font-size:11px;';
+  modeBtn.textContent = 'Outline';
+  function updateModeLabel() {
+    modeBtn.textContent = currentMode === 'tree' ? 'Book' : 'Outline';
+  }
+  modeBtn.addEventListener('click', function() {
+    var newMode = currentMode === 'tree' ? 'book' : 'tree';
+    currentMode = newMode;
+    updateModeLabel();
+    vscode.postMessage({ type: 'switchMode', mode: newMode });
+  });
+  toolbar.appendChild(modeBtn);
+
   document.body.appendChild(toolbar);
 })();
 `;
@@ -89,6 +109,8 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     _token: vscode.CancellationToken,
   ): Promise<void> {
     const documentRoot = vscode.Uri.file(dirname(document.uri.fsPath));
+    // Per-panel mode state (not global)
+    let currentMode: 'tree' | 'book' = 'tree';
 
     webviewPanel.webview.options = {
       enableScripts: true,
@@ -105,13 +127,13 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       } else if (message.type === 'openTopic') {
         const href = message.href as string;
         if (!href) return;
-        // Resolve relative to the ditamap file's directory
         const mapDir = dirname(document.uri.fsPath);
         const targetPath = resolve(mapDir, href);
         const targetUri = vscode.Uri.file(targetPath);
-
-        // Open in the existing DITA Reading View
         vscode.commands.executeCommand('vscode.openWith', targetUri, 'ditaViewer.preview');
+      } else if (message.type === 'switchMode') {
+        currentMode = message.mode as 'tree' | 'book';
+        updateWebview();
       }
     });
 
@@ -122,7 +144,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     });
 
     const updateWebview = () => {
-      const html = this.generateHtml(document, webviewPanel.webview);
+      const html = this.generateHtml(document, webviewPanel.webview, currentMode);
       webviewPanel.webview.html = html;
     };
 
@@ -136,6 +158,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
   private generateHtml(
     document: vscode.TextDocument,
     webview: vscode.Webview,
+    mode: 'tree' | 'book',
   ): string {
     const stylesUri = webview.asWebviewUri(
       vscode.Uri.file(join(this.context.extensionPath, 'media', 'styles.css')),
@@ -147,7 +170,13 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       const rawXml = document.getText();
       const preprocessedXml = preprocessEntities(rawXml);
       const mapDoc = parseDitamap(preprocessedXml);
-      const content = renderMapDocument(mapDoc.root, { docDir });
+
+      let content: string;
+      if (mode === 'book') {
+        content = this.renderBookContent(mapDoc.root, document, webview, docDir);
+      } else {
+        content = renderMapDocument(mapDoc.root, { docDir });
+      }
 
       const script = getMapWebviewScript();
       const nonce = randomBytes(16).toString('base64');
@@ -163,7 +192,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
 <link rel="stylesheet" href="${stylesUri}">
 <title>${document.fileName}</title>
 </head>
-<body>
+<body class="mode-${mode}">
 ${content}
 <script nonce="${nonce}">${script}</script>
 </body>
@@ -182,6 +211,82 @@ ${content}
 </html>`;
     }
   }
+
+  private renderBookContent(
+    mapRoot: import('../parser/domTypes').DitaNode,
+    document: vscode.TextDocument,
+    webview: vscode.Webview,
+    docDir: string,
+  ): string {
+    const entries = collectMapEntries(mapRoot);
+
+    // Build key map once for all entries
+    const keyMap = buildKeyMap(document.uri);
+
+    // Track visited absolute paths to avoid duplicates
+    const visited = new Set<string>();
+
+    const parts: string[] = [];
+    for (const entry of entries) {
+      if (entry.href) {
+        const absPath = resolve(docDir, entry.href);
+        if (visited.has(absPath)) {
+          parts.push(`<p class="book-skip">(Skipped: ${escapeHtml(entry.href)} already included above)</p>`);
+          continue;
+        }
+        visited.add(absPath);
+
+        // Create per-topic asWebviewUri that resolves relative to the topic's dir
+        const topicDir = dirname(absPath);
+        const asWebviewUri = (relPath: string): string => {
+          try {
+            const resolvedPath = resolve(topicDir, relPath);
+            const fileUri = vscode.Uri.file(resolvedPath);
+            const wvUri = webview.asWebviewUri(fileUri);
+            if (wvUri) return wvUri.toString();
+          } catch {}
+          try {
+            const fullPath = resolve(topicDir, relPath);
+            if (existsSync(fullPath)) {
+              const data = readFileSync(fullPath);
+              const ext = relPath.toLowerCase().split('.').pop() || '';
+              const mime =
+                ext === 'png' ? 'image/png' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg'
+                : ext === 'gif' ? 'image/gif' : ext === 'svg' ? 'image/svg+xml'
+                : ext === 'webp' ? 'image/webp' : 'image/png';
+              return `data:${mime};base64,${data.toString('base64')}`;
+            }
+          } catch {}
+          return '';
+        };
+
+        const headingLevel = Math.min(1 + entry.depth, 6);
+        const result = renderTopicToHtml({
+          filePath: absPath,
+          keyMap,
+          asWebviewUri,
+          headingLevel,
+        });
+
+        if (result.error) {
+          parts.push(`<div class="book-entry book-entry--error">
+            <h${headingLevel} class="book-entry-title">${escapeHtml(entry.displayName)}</h${headingLevel}>
+            <p class="book-error">${escapeHtml(result.error)}</p>
+          </div>`);
+        } else {
+          parts.push(`<div class="book-entry">${result.html}</div>`);
+        }
+      } else {
+        // No href: render as section heading placeholder
+        const headingLevel = Math.min(1 + entry.depth, 6);
+        parts.push(`<div class="book-entry book-entry--placeholder">
+          <h${headingLevel} class="book-section-heading">${escapeAttr(entry.displayName)}</h${headingLevel}>
+        </div>`);
+      }
+    }
+
+    return `<div class="ditamap-book">${parts.join('\n')}</div>`;
+  }
 }
 
 function escapeHtml(text: string): string {
@@ -190,4 +295,8 @@ function escapeHtml(text: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function escapeAttr(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }

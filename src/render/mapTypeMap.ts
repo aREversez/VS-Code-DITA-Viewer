@@ -206,6 +206,54 @@ const MAP_BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   'map/mapref': () => '',
 };
 
+export interface MapEntry {
+  href?: string;
+  displayName: string;
+  depth: number;
+  keys?: string;
+}
+
+function collectEntriesRecursive(node: DitaNode, depth: number, result: MapEntry[]): void {
+  if (node.type !== 'element') return;
+  const baseType = node.baseType;
+
+  // Skip reltable and its children
+  if (baseType === 'map/reltable') return;
+
+  if (baseType === 'map/topicref' || baseType === 'map/keydef' || baseType === 'map/topichead') {
+    const href = getAttr(node, 'href');
+    const keys = getAttr(node, 'keys');
+    result.push({
+      href,
+      displayName: getDisplayName(node),
+      depth,
+      keys,
+    });
+    // Recurse children at depth+1
+    for (const child of node.children || []) {
+      collectEntriesRecursive(child, depth + 1, result);
+    }
+  } else if (baseType === 'map/topicgroup') {
+    // topicgroup: no entry itself, but recurse at same depth
+    for (const child of node.children || []) {
+      collectEntriesRecursive(child, depth, result);
+    }
+  } else {
+    for (const child of node.children || []) {
+      collectEntriesRecursive(child, depth, result);
+    }
+  }
+}
+
+export function collectMapEntries(root: DitaNode): MapEntry[] {
+  const result: MapEntry[] = [];
+  // Start from map's children at depth 0
+  for (const child of root.children || []) {
+    collectEntriesRecursive(child, 0, result);
+  }
+  return result;
+}
+
 export function renderMapDocument(root: DitaNode, options: { docDir: string }): string {
   function renderElement(node: DitaNode, ctx: MapRenderContext): string {
     if (node.type === 'text') return '';
