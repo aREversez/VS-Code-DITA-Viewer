@@ -1,0 +1,78 @@
+export interface DitaOtLocation {
+  executablePath: string;
+  source: 'setting' | 'env' | 'path';
+}
+
+export type DetectionResult =
+  | { found: true; location: DitaOtLocation }
+  | { found: false; reason: 'not-configured' | 'setting-invalid' | 'not-found' }; // setting-invalid = configuredPath provided but file doesn't exist
+
+export function resolveDitaOtExecutable(input: {
+  configuredPath?: string;
+  ditaHomeEnv?: string;
+  pathEnv?: string;
+  platform: NodeJS.Platform;
+  fileExists: (p: string) => boolean;
+}): DetectionResult {
+  // Priority 1: configured path
+  if (input.configuredPath) {
+    const trimmed = input.configuredPath.trim();
+    // If the configured path itself looks like a file that exists, use it directly
+    if (input.fileExists(trimmed)) {
+      return { found: true, location: { executablePath: trimmed, source: 'setting' } };
+    }
+    // Otherwise assume it's an installation directory: append bin/{dita|dita.bat}
+    const exe = input.platform === 'win32'
+      ? `${trimmed}\\bin\\dita.bat`
+      : `${trimmed}/bin/dita`;
+    if (input.fileExists(exe)) {
+      return { found: true, location: { executablePath: exe, source: 'setting' } };
+    }
+    return { found: false, reason: 'setting-invalid' };
+  }
+
+  // Priority 2: DITA_HOME env
+  if (input.ditaHomeEnv) {
+    const exe = input.platform === 'win32'
+      ? `${input.ditaHomeEnv}\\bin\\dita.bat`
+      : `${input.ditaHomeEnv}/bin/dita`;
+    if (input.fileExists(exe)) {
+      return { found: true, location: { executablePath: exe, source: 'env' } };
+    }
+  }
+
+  // Priority 3: PATH env
+  if (input.pathEnv) {
+    const sep = input.platform === 'win32' ? ';' : ':';
+    const dirs = input.pathEnv.split(sep);
+    const exeName = input.platform === 'win32' ? 'dita.bat' : 'dita';
+    for (const dir of dirs) {
+      if (!dir) continue;
+      const candidate = `${dir}/${exeName}`.replace(/\\/g, '/');
+      if (input.fileExists(candidate)) {
+        return { found: true, location: { executablePath: candidate, source: 'path' } };
+      }
+    }
+  }
+
+  return { found: false, reason: 'not-found' };
+}
+
+export function buildDitaOtArgs(input: {
+  mapPath: string;
+  transtype: string;
+  outputDir: string;
+}): string[] {
+  return ['-i', input.mapPath, '-f', input.transtype, '-o', input.outputDir];
+}
+
+export type LogLevel = 'error' | 'warn' | 'info';
+
+const ERROR_RE = /^.*?\[ERROR\]/i;
+const WARN_RE = /^.*?\[WARN\]/i;
+
+export function classifyLogLine(line: string): LogLevel {
+  if (ERROR_RE.test(line)) return 'error';
+  if (WARN_RE.test(line)) return 'warn';
+  return 'info';
+}

@@ -12,7 +12,7 @@ A VS Code extension that renders **`.dita`** and **`.ditamap`** files as a forma
 - **Reltable and topicgroup support** — reltables are skipped from the tree; topicgroups render children without adding their own entry
 - **Theme-aware** — automatically adapts background and border colors to the current VS Code theme
 - **Custom CSS support** — override or extend the default styling with an in-preview theme switcher
-- **CSS theme switcher** — preview includes a dropdown in the top-right corner to switch between available `.css` files on the fly
+- **DITA-OT Transform** — run formal publishing transforms (`html5`, `pdf`, `xhtml`, `markdown`) using a local DITA-OT installation with live log output and cancellable progress
 
 ## Usage
 
@@ -120,6 +120,32 @@ table th { background: #2c3e50; color: #fff; }
 ```
 
 > **Note:** Custom CSS is not subject to the WebView's Content Security Policy, so you can use custom fonts, background images, etc. External images in CSS must still resolve to accessible paths.
+
+## DITA-OT Transform
+
+Transform your DITA maps to HTML5 (or other formats) using a local DITA-OT installation.
+
+### Prerequisites
+
+- Install [DITA-OT](https://www.dita-ot.org/documentation/installing) (requires Java Runtime Environment)
+- The extension does **not** bundle DITA-OT — it detects your existing installation
+
+### Detection priority
+
+1. **Setting** — `dita-viewer.ditaOtPath` configured in VS Code settings (absolute path to DITA-OT directory)
+2. **Environment** — `DITA_HOME` environment variable pointing to the DITA-OT root
+3. **PATH** — `dita` (or `dita.bat` on Windows) found in system PATH
+
+### Usage
+
+Open a `.ditamap` file (or a `.dita` topic inside a map project), then:
+
+1. Press `Ctrl+Shift+P` and run **DITA-OT: Transform Map to HTML5**
+2. Select a **transtype** (`html5`, `pdf`, `xhtml`, or `markdown`)
+3. The transform runs with a cancellable progress notification and live log output
+4. On completion, HTML5 output opens directly in your browser; other formats open in the file manager
+
+Output is written to `out/<transtype>/` alongside your map file. If the directory already contains files, you'll be prompted before overwriting.
 
 ## Installation
 

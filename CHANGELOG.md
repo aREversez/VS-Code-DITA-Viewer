@@ -54,6 +54,19 @@
 - `<fn>` (footnote) and `<pre>` element support
 - Improved note rendering with type-specific CSS classes
 
+### DITA-OT Transform Integration
+
+- New command `ditaViewer.transformWithDitaOt` — run DITA-OT publishing transforms from VS Code
+- **DITA-OT detection** — automatic discovery via setting (`dita-viewer.ditaOtPath`), `DITA_HOME` environment variable, or `PATH`, with clear error messages and guided setup
+- **Transtype selection** — QuickPick with `html5` (default), `pdf`, `xhtml`, `markdown`
+- **Real-time output logging** — dedicated `DITA-OT Transform` output channel with live streaming of stdout/stderr
+- **Cancellable** — progress notification with cancellation support that properly terminates the child process
+- **Smart output directory** — defaults to `<map-dir>/out/<transtype>/` with overwrite confirmation when directory is non-empty
+- **Completion actions** — `html5` outputs open directly in browser; other formats open in file manager
+- **Error log classification** — `[ERROR]` lines detected and reported in completion notification
+- **Map file resolution** — from `.dita` files, auto-discovers `.ditamap` in ancestor directories (with QuickPick for multiple candidates)
+- Pure-function testable utilities in `src/editor/ditaOtUtils.ts`: `resolveDitaOtExecutable()`, `buildDitaOtArgs()`, `classifyLogLine()`
+
 ### Bug Fixes
 
 - `buildKeyMap` import restored after refactoring
