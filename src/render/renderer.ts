@@ -1,4 +1,4 @@
-import { DitaNode } from '../parser/domTypes';
+import { DitaNode, SourceRange } from '../parser/domTypes';
 import { BASE_TYPE_RENDERERS } from './baseTypeMap';
 
 export interface RenderContext {
@@ -7,6 +7,9 @@ export interface RenderContext {
   documentDir: string;
   parentBaseType?: string;
   resolveTitle?: (id: string) => string | undefined;
+  resolveKey?: (key: string) => string | undefined;
+  resolveConref?: (conref: string) => string | undefined;
+  noteLabels?: Record<string, string>;
 }
 
 const CONTAINER_BASETYPES = new Set([
@@ -38,12 +41,27 @@ function injectAttributes(html: string, tagName: string, line: number): string {
   return html.replace(/^<([a-zA-Z][a-zA-Z0-9]*)/, `<$1 title="${tagName}" data-line="${line}"`);
 }
 
+function makeTextNode(text: string, sourceRange: SourceRange): DitaNode {
+  return { type: 'text', text, children: [], sourceRange };
+}
+
+function resolveConrefForNode(node: DitaNode, context: RenderContext): DitaNode {
+  const conref = node.attributes?.conref;
+  if (!conref || !context.resolveConref) return node;
+  const resolved = context.resolveConref(conref);
+  if (!resolved) return node;
+  // Strip conref after resolving, replace children with resolved text
+  const { conref: _, ...restAttrs } = node.attributes || {};
+  return { ...node, children: [makeTextNode(resolved, node.sourceRange)], attributes: restAttrs };
+}
+
 function renderElement(node: DitaNode, context: RenderContext): string {
   if (node.type === 'text') {
     return escapeHtml(node.text || '');
   }
 
-  const baseType = node.baseType;
+  const effectiveNode = resolveConrefForNode(node, context);
+  const baseType = effectiveNode.baseType;
   const renderer = baseType ? BASE_TYPE_RENDERERS[baseType] : undefined;
 
   const isContainer = baseType ? isContainerBaseType(baseType) : false;
@@ -58,15 +76,15 @@ function renderElement(node: DitaNode, context: RenderContext): string {
   };
 
   if (renderer) {
-    let html = renderer(node, childCtx, renderChildren);
+    let html = renderer(effectiveNode, childCtx, renderChildren);
     if (baseType && !PASS_THROUGH_BASETYPES.has(baseType)) {
-      const tagName = node.tagName || baseType.split('/').pop() || baseType;
-      html = injectAttributes(html, tagName, node.sourceRange.startLine);
+      const tagName = effectiveNode.tagName || baseType.split('/').pop() || baseType;
+      html = injectAttributes(html, tagName, effectiveNode.sourceRange.startLine);
     }
     return html;
   }
 
-  return renderChildren(node, childCtx);
+  return renderChildren(effectiveNode, childCtx);
 }
 
 function renderChildren(node: DitaNode, context: RenderContext): string {

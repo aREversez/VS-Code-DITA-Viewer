@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="db_ui_test" xml:lang="zh-CN">
+    <title>界面控件与重用内容测试</title>
+    <shortdesc>用于测试 menucascade、uicontrol、keyref、conref 等功能的渲染效果。</shortdesc>
+    <body>
+        <section id="section_ui">
+            <title>菜单与控件</title>
+            <p>点击 <menucascade><uicontrol>文件</uicontrol><uicontrol>打开</uicontrol></menucascade> 即可打开文件。</p>
+            <p>请选择 <menucascade><uicontrol>编辑</uicontrol><uicontrol>首选项</uicontrol><uicontrol>常规</uicontrol></menucascade> 进入设置。</p>
+            <p>按 <uicontrol>Ctrl+S</uicontrol> 保存，或点击 <uicontrol>确定</uicontrol> 按钮。</p>
+            <p>窗口标题显示为：<wintitle>配置向导</wintitle></p>
+        </section>
+        <section id="section_paths">
+            <title>文件路径与命令</title>
+            <p>配置文件位于 <filepath>/etc/app/config.yml</filepath>。</p>
+            <p>请在终端输入 <userinput>npm install dita-viewer</userinput>。</p>
+            <p>系统输出：<systemoutput>Build complete: dist/extension.js</systemoutput></p>
+            <p><codeph>pip install pillow</codeph></p>
+        </section>
+        <section id="section_apis">
+            <title>API 与参数</title>
+            <p>调用 <apiname>Database.connect()</apiname> 方法建立连接。</p>
+            <p>参数 <parmname>maxConnections</parmname> 默认值为 100。</p>
+            <p>使用选项 <option>-verbose</option> 查看详细信息。</p>
+            <p>执行命令：<cmdname>dita build</cmdname></p>
+            <p>变量 <varname>DB_HOST</varname> 请设置为环境变量。</p>
+            <p>错误代码：<msgnum>ERR_DB_001</msgnum></p>
+        </section>
+        <section id="section_keys">
+            <title>Keyref 与重用内容</title>
+            <p>产品名称：<ph keyref="product_name"/></p>
+            <p>公司名称：<ph keyref="company_name"/></p>
+            <p>版本号：<ph keyref="app_version"/></p>
+            <p>警告信息：<ph keyref="warning_msg"/></p>
+            <p>回退键：<ph keyref="fallback_key"/></p>
+        </section>
+        <section id="section_conref">
+            <title>Conref 测试</title>
+            <note conref="db_overview.dita#db_overview/shared_note" type="tip">此内容应被 conref 覆盖</note>
+        </section>
+    </body>
+</topic>

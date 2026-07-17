@@ -1,19 +1,22 @@
 # DITA Viewer
 
-A VS Code extension that renders `.dita` files as a formatted, read-only preview — similar to a WYSIWYG reading view. Built with [sax](https://github.com/isaacs/sax-js) XML parsing and a custom DITA-to-HTML rendering engine.
+A VS Code extension that renders **`.dita`** and **`.ditamap`** files as a formatted, read-only preview — similar to a WYSIWYG reading view. Built with [sax](https://github.com/isaacs/sax-js) XML parsing and a custom DITA-to-HTML rendering engine.
 
 ## Features
 
-- **One-click preview** — opens a rendered view side-by-side with the source
-- **Bidirectional scroll sync** — scrolling in the source or preview keeps the other in sync
-- **Full DITA element coverage** — topic, sections, notes (all types), lists (ordered, unordered, simple, definition), tables, figures, code blocks with language labels, images, cross-references, quotes, related links, and inline formatting (keyword, term, ph, etc.)
-- **Theme-aware** — automatically adapts background and border colors to the current VS Code theme (light / dark)
+- **DITA topic preview** (`.dita`) — rendered view with bidirectional scroll sync
+- **DITA Map preview** (`.ditamap`) — two modes:
+  - **Tree view** — structured hierarchy of map entries with display names and navigation
+  - **Book mode** — renders all referenced topics in sequence as a single reading flow
+- **Full DITA element coverage** — topic, sections, notes (all types), lists, tables, figures, code blocks with language labels, images, cross-references (with title resolution), quotes, related links, inline formatting, keydef/keyword display
+- **Reltable and topicgroup support** — reltables are skipped from the tree; topicgroups render children without adding their own entry
+- **Theme-aware** — automatically adapts background and border colors to the current VS Code theme
 - **Custom CSS support** — override or extend the default styling with an in-preview theme switcher
 - **CSS theme switcher** — preview includes a dropdown in the top-right corner to switch between available `.css` files on the fly
 
 ## Usage
 
-### Open a DITA Reading View
+### Open a DITA Topic Preview
 
 **Method 1 — Button:** Open a `.dita` file, then click the **preview icon** (book) in the editor title bar.
 
@@ -24,6 +27,22 @@ A VS Code extension that renders `.dita` files as a formatted, read-only preview
 **Method 4 — Shortcut:** With a `.dita` file focused, press `Ctrl+Shift+Alt+D`.
 
 The preview opens in a new column beside your source editor.
+
+### Open a DITA Map Preview
+
+**Method 1 — Button:** Open a `.ditamap` file, then click the **preview icon** (book) in the editor title bar.
+
+**Method 2 — Right-click:** Right-click a `.ditamap` file and select **Open DITA Map Reading View**.
+
+**Method 3 — Command Palette:** With a `.ditamap` file open, run **Open DITA Map Reading View**.
+
+**Method 4 — Shortcut:** With a `.ditamap` file focused, press `Ctrl+Shift+Alt+M`.
+
+#### Tree Mode vs Book Mode
+
+The map preview opens in **Tree mode** by default, showing the map's hierarchical structure. Click the **"Switch to Book Mode"** button in the toolbar to render all referenced topics inline as a continuous document. Click **"Switch to Tree Mode"** to return to the tree view.
+
+Duplicate topics (same file referenced multiple times) are shown with a skip message rather than being re-rendered.
 
 ## Custom CSS
 
@@ -106,7 +125,7 @@ table th { background: #2c3e50; color: #fff; }
 
 ### From VSIX
 
-1. Download `dita-viewer-1.0.1.vsix`
+1. Download `dita-viewer-1.0.3.vsix`
 2. In VS Code, press `Ctrl+Shift+P` → **Extensions: Install from VSIX...**
 3. Select the `.vsix` file
 
@@ -145,23 +164,26 @@ npx @vscode/vsce package --out output/dita-viewer-<version>.vsix
 src/
 ├── extension.ts              # Extension entry point, command registration
 ├── editor/
-│   └── DitaViewerProvider.ts # CustomTextEditorProvider, WebView setup, scroll sync
+│   ├── DitaViewerProvider.ts # CustomTextEditorProvider for .dita files
+│   ├── MapViewerProvider.ts  # CustomTextEditorProvider for .ditamap files (tree + book mode)
+│   └── ditaRenderUtils.ts    # Shared pure rendering utilities (no vscode dependency)
 ├── parser/
-│   ├── ditaParser.ts         # SAX-based DITA XML parser
+│   ├── ditaParser.ts         # SAX-based DITA XML parser (parseXml/parseDita/parseDitamap)
 │   ├── domTypes.ts           # DitaNode, DitaElement, DitaDocument types
-│   └── standardTagMap.ts     # Tag → DITA type mapping
+│   ├── standardTagMap.ts     # Tag → DITA type mapping for topics
+│   └── mapTagMap.ts          # Tag → DITA type mapping for maps
 └── render/
     ├── renderer.ts           # Recursive DitaNode → HTML engine
-    ├── baseTypeMap.ts        # All rendering functions per DITA type
-    └── styles.css            # Default preview styles
+    ├── baseTypeMap.ts        # Rendering functions per DITA base type
+    └── mapTypeMap.ts         # Map tree renderer (renderMapDocument, collectMapEntries)
 media/
 ├── styles.css                # Default preview stylesheet (included in VSIX)
 └── icons/
     ├── preview.svg
     └── preview~dark.svg
 test/
-├── parser/                   # Parser unit tests
-├── render/                   # Renderer unit tests
+├── parser/                   # Parser unit tests (dita + map)
+├── render/                   # Renderer unit tests (topic + map tree + map book)
 └── verify-real-files.ts      # Integration tests with real .dita files
 ```
 

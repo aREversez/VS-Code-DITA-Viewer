@@ -5,3 +5,4 @@ dist-test/
 output/
 *.vsix
 REQUIREMENTS.md
+ROADMAP.md

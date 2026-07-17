@@ -7,6 +7,7 @@
         <section id="main_content">
             <p>为了实现高性能的数据读写，系统采用了多层缓冲架构。关于如何调整这些缓冲区的具体参数，请参考：<xref href="db_config.dita#db_config"
                 />。</p>
+            <note id="shared_note" type="important">所有配置修改需要重启服务才能生效。</note>
         </section>
     </body>
 </topic>
