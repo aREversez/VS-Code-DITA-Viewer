@@ -76,3 +76,27 @@ export function classifyLogLine(line: string): LogLevel {
   if (WARN_RE.test(line)) return 'warn';
   return 'info';
 }
+
+// ── Line buffer for streamed chunk processing ──
+
+export interface LineBuffer {
+  processChunk(chunk: string): string[];
+  flush(): string[];
+}
+
+export function createLineBuffer(): LineBuffer {
+  let buffer = '';
+  return {
+    processChunk(chunk: string): string[] {
+      buffer += chunk;
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      return lines;
+    },
+    flush(): string[] {
+      const remaining = buffer;
+      buffer = '';
+      return remaining ? [remaining] : [];
+    },
+  };
+}

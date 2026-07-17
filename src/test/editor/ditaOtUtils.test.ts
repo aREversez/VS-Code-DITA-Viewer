@@ -3,6 +3,7 @@ import {
   resolveDitaOtExecutable,
   buildDitaOtArgs,
   classifyLogLine,
+  createLineBuffer,
 } from '../../editor/ditaOtUtils';
 
 describe('resolveDitaOtExecutable', () => {
@@ -241,5 +242,67 @@ describe('classifyLogLine', () => {
 
   it('should classify lines with leading text before [ERROR]', () => {
     assert.strictEqual(classifyLogLine('   [ERROR]  fatal'), 'error');
+  });
+});
+
+describe('createLineBuffer', () => {
+  it('should return complete lines from a single chunk', () => {
+    const buf = createLineBuffer();
+    const lines = buf.processChunk('line1\nline2\nline3\n');
+    assert.deepStrictEqual(lines, ['line1', 'line2', 'line3']);
+    assert.deepStrictEqual(buf.flush(), []);
+  });
+
+  it('should buffer partial line across chunks', () => {
+    const buf = createLineBuffer();
+    // First chunk: partial line (no trailing newline)
+    const chunk1 = buf.processChunk('Some normal log output...\n[ERR');
+    assert.deepStrictEqual(chunk1, ['Some normal log output...']);
+
+    // Second chunk: completes the line + more
+    const chunk2 = buf.processChunk('OR] Something failed badly\nmore output\n');
+    assert.deepStrictEqual(chunk2, ['[ERROR] Something failed badly', 'more output']);
+
+    // No remaining buffer
+    assert.deepStrictEqual(buf.flush(), []);
+  });
+
+  it('should detect [ERROR] across chunk boundary', () => {
+    const buf = createLineBuffer();
+    buf.processChunk('[ERR'); // partial - no lines yielded
+    const lines = buf.processChunk('OR] fail\n');
+    // Now we have a complete line
+    assert.strictEqual(lines.length, 1);
+    assert.strictEqual(classifyLogLine(lines[0]), 'error');
+  });
+
+  it('should return empty array for empty chunk', () => {
+    const buf = createLineBuffer();
+    assert.deepStrictEqual(buf.processChunk(''), []);
+  });
+
+  it('should handle chunk ending with newline', () => {
+    const buf = createLineBuffer();
+    const lines = buf.processChunk('a\nb\n');
+    assert.deepStrictEqual(lines, ['a', 'b']);
+    assert.deepStrictEqual(buf.flush(), []);
+  });
+
+  it('should flush remaining partial line', () => {
+    const buf = createLineBuffer();
+    buf.processChunk('partial line without newline');
+    assert.deepStrictEqual(buf.flush(), ['partial line without newline']);
+    // Second flush should be empty
+    assert.deepStrictEqual(buf.flush(), []);
+  });
+
+  it('should accumulate multiple partial chunks before newline', () => {
+    const buf = createLineBuffer();
+    buf.processChunk('hel');
+    buf.processChunk('lo ');
+    buf.processChunk('wor');
+    const lines = buf.processChunk('ld\n');
+    assert.deepStrictEqual(lines, ['hello world']);
+    assert.deepStrictEqual(buf.flush(), []);
   });
 });

@@ -2,9 +2,9 @@ import * as vscode from 'vscode';
 import { spawn } from 'child_process';
 import { existsSync, readdirSync } from 'fs';
 import { dirname, join } from 'path';
-import { DitaViewerProvider } from './editor/DitaViewerProvider';
+import { DitaViewerProvider, findDitamapFiles } from './editor/DitaViewerProvider';
 import { MapViewerProvider } from './editor/MapViewerProvider';
-import { resolveDitaOtExecutable, buildDitaOtArgs, classifyLogLine } from './editor/ditaOtUtils';
+import { resolveDitaOtExecutable, buildDitaOtArgs, classifyLogLine, createLineBuffer } from './editor/ditaOtUtils';
 
 const TRANSFORM_CMD = 'ditaViewer.transformWithDitaOt';
 
@@ -187,6 +187,7 @@ export function activate(context: vscode.ExtensionContext) {
             disposables.push(cancelListener);
 
             let errorCount = 0;
+            const lineBuffer = createLineBuffer();
 
             child.stdout?.on('data', (data: Buffer) => {
               outputChannel.append(data.toString());
@@ -195,8 +196,8 @@ export function activate(context: vscode.ExtensionContext) {
             child.stderr?.on('data', (data: Buffer) => {
               const text = data.toString();
               outputChannel.append(text);
-              // DITA-OT writes log lines to stderr
-              for (const line of text.split('\n')) {
+              const lines = lineBuffer.processChunk(text);
+              for (const line of lines) {
                 if (classifyLogLine(line) === 'error') errorCount++;
               }
             });
@@ -207,6 +208,11 @@ export function activate(context: vscode.ExtensionContext) {
             });
 
             child.on('close', async (code) => {
+              // Process any remaining partial line in the buffer
+              for (const line of lineBuffer.flush()) {
+                if (classifyLogLine(line) === 'error') errorCount++;
+              }
+
               if (cancelled) {
                 outputChannel.appendLine(`\n[DITA-OT] 转换已被用户取消。`);
                 resolvePromise(); // Resolve gracefully on cancel
@@ -278,29 +284,6 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   context.subscriptions.push(transformCommand);
-}
-
-/**
- * Walk up from the document directory looking for .ditamap files.
- */
-function findDitamapFiles(docUri: vscode.Uri): string[] {
-  const results: string[] = [];
-  const docDir = dirname(docUri.fsPath);
-  const folders = vscode.workspace.workspaceFolders;
-  const root = folders && folders.length > 0 ? folders[0].uri.fsPath : undefined;
-  let dir = docDir;
-  while (dir.length >= (root ? root.length : 3)) {
-    try {
-      for (const entry of readdirSync(dir)) {
-        if (entry.endsWith('.ditamap')) results.push(join(dir, entry));
-      }
-    } catch {}
-    if (results.length > 0) return results;
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return results;
 }
 
 async function resolveMapFile(): Promise<vscode.Uri | undefined> {

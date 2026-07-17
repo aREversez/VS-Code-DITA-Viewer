@@ -453,7 +453,7 @@ function escapeJson(text: string): string {
 
 // ── Keyref: parse DITAMAP for key→value mappings ──
 
-function findDitamapFiles(docUri: vscode.Uri): string[] {
+export function findDitamapFiles(docUri: vscode.Uri): string[] {
   const results: string[] = [];
   const docDir = dirname(docUri.fsPath);
   const root = parseDocRoot(docDir);
