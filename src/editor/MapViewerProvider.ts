@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderTopicToHtml } from './ditaRenderUtils';
+import { renderTopicToHtml, renderBookPlaceholder, renderBookError, renderBookSkipMessage, escapeHtml } from './ditaRenderUtils';
 import { buildKeyMap } from './DitaViewerProvider';
 import { dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
@@ -231,7 +231,7 @@ ${content}
       if (entry.href) {
         const absPath = resolve(docDir, entry.href);
         if (visited.has(absPath)) {
-          parts.push(`<p class="book-skip">(Skipped: ${escapeHtml(entry.href)} already included above)</p>`);
+          parts.push(renderBookSkipMessage(entry.href));
           continue;
         }
         visited.add(absPath);
@@ -269,19 +269,12 @@ ${content}
         });
 
         if (result.error) {
-          parts.push(`<div class="book-entry book-entry--error">
-            <h${headingLevel} class="book-entry-title">${escapeHtml(entry.displayName)}</h${headingLevel}>
-            <p class="book-error">${escapeHtml(result.error)}</p>
-          </div>`);
+          parts.push(renderBookError(entry.displayName, result.error, entry.depth));
         } else {
           parts.push(`<div class="book-entry">${result.html}</div>`);
         }
       } else {
-        // No href: render as section heading placeholder
-        const headingLevel = Math.min(1 + entry.depth, 6);
-        parts.push(`<div class="book-entry book-entry--placeholder">
-          <h${headingLevel} class="book-section-heading">${escapeAttr(entry.displayName)}</h${headingLevel}>
-        </div>`);
+        parts.push(renderBookPlaceholder(entry.displayName, entry.depth));
       }
     }
 
@@ -289,14 +282,4 @@ ${content}
   }
 }
 
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
-function escapeAttr(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}

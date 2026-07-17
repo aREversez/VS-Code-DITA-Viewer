@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import { collectMapEntries } from '../../render/mapTypeMap';
 import { parseDitamap, preprocessEntities } from '../../parser/ditaParser';
+import { renderBookPlaceholder, renderBookError, renderBookSkipMessage } from '../../editor/ditaRenderUtils';
 
 const TEST_MAP_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
@@ -131,44 +132,39 @@ describe('collectMapEntries', () => {
 });
 
 describe('bookRendering', () => {
-  it('should render placeholder for non-href entries with escaped displayName', () => {
-    // Use renderTopicToHtml indirectly via entry rendering logic simulation
-    // We test the escaping: navtitle/linktext with injection chars
-    const xml = `<map>
-      <topicref keys="injected">
-        <topicmeta><linktext>Evil &lt;script&gt;alert(1)&lt;/script&gt;</linktext></topicmeta>
-      </topicref>
-    </map>`;
-    const doc = parseMap(xml);
-    const entries = collectMapEntries(doc.root);
-    assert.strictEqual(entries.length, 1);
-    assert.strictEqual(entries[0].displayName, 'Evil <script>alert(1)</script>');
-
-    // Now verify escapeAttr is used: the placeholder heading should have escaped HTML
-    // We test displayName escaping in the placeholder output
-    // The \`escapeAttr\` function converts < to &lt; etc.
-    const escaped = entries[0].displayName
-      .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    assert.ok(escaped.includes('&lt;script&gt;'));
-    assert.ok(!escaped.includes('<script>'));
+  it('should render placeholder with escaped displayName (XSS guard)', () => {
+    const html = renderBookPlaceholder('Evil <script>alert(1)</script>', 0);
+    assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'), 'angle brackets should be escaped');
+    assert.ok(!html.includes('<script>'), 'no raw script tag');
+    assert.ok(html.includes('class="book-section-heading"'));
+    assert.ok(html.includes('<h1'));
   });
 
-  it('should render skip message for duplicate file', () => {
-    // Test that duplicate detection uses escapeHtml on href
-    const href = 'topics/<script>alert(1)</script>.dita';
-    const msgLines = [
-      `(Skipped: ${href.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')} already included above)`,
-    ];
-    assert.ok(msgLines[0].includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
-    assert.ok(!msgLines[0].includes('<script>alert(1)</script>'));
+  it('should render placeholder with correct heading level from depth', () => {
+    const h0 = renderBookPlaceholder('Section', 0);
+    assert.ok(h0.includes('<h1'));
+    const h2 = renderBookPlaceholder('Section', 2);
+    assert.ok(h2.includes('<h3'));
+    const deep = renderBookPlaceholder('Deep', 10);
+    assert.ok(deep.includes('<h6'), 'should cap at h6');
   });
 
-  it('should render error display with escaped file path', () => {
-    // Test that error rendering uses escapeHtml
-    const badPath = '/path/to/<script>alert(1)</script>.dita';
-    const errorMsg = `Error rendering ${badPath.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')}`;
-    assert.ok(errorMsg.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
-    assert.ok(!errorMsg.includes('<script>alert(1)</script>'));
+  it('should render skip message with escaped href (XSS guard)', () => {
+    const html = renderBookSkipMessage('topics/<script>alert(1)</script>.dita');
+    assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'), 'angle brackets should be escaped');
+    assert.ok(!html.includes('<script>'), 'no raw script tag');
+  });
+
+  it('should render error block with escaped displayName and error (XSS guard)', () => {
+    const html = renderBookError(
+      '<b>display</b>',
+      'Error rendering /path/to/<script>alert(1)</script>.dita',
+      0,
+    );
+    assert.ok(html.includes('&lt;b&gt;display&lt;/b&gt;'), 'displayName angle brackets escaped');
+    assert.ok(!html.includes('<b>'), 'no raw displayName tags');
+    assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'), 'error path angle brackets escaped');
+    assert.ok(!html.includes('<script>'), 'no raw script tag in error');
+    assert.ok(html.includes('class="book-error"'));
   });
 });

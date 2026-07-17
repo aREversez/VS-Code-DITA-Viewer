@@ -136,6 +136,41 @@ export function detectNoteLabels(root: DitaNode): Record<string, string> {
   return lang.startsWith('zh') ? ZH_NOTE_LABELS : DEFAULT_NOTE_LABELS;
 }
 
+// ── Escaping (single source of truth for non-renderer code) ──
+
+export function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+export function escapeAttr(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ── Book rendering helpers (pure, no vscode dependency) ──
+
+export function renderBookPlaceholder(displayName: string, depth: number): string {
+  const level = Math.min(1 + depth, 6);
+  return `<div class="book-entry book-entry--placeholder">
+  <h${level} class="book-section-heading">${escapeAttr(displayName)}</h${level}>
+</div>`;
+}
+
+export function renderBookError(displayName: string, errorMsg: string, depth: number): string {
+  const level = Math.min(1 + depth, 6);
+  return `<div class="book-entry book-entry--error">
+  <h${level} class="book-entry-title">${escapeHtml(displayName)}</h${level}>
+  <p class="book-error">${escapeHtml(errorMsg)}</p>
+</div>`;
+}
+
+export function renderBookSkipMessage(href: string): string {
+  return `<p class="book-skip">(Skipped: ${escapeHtml(href)} already included above)</p>`;
+}
+
 // ── Shared: render a single .dita file to an HTML fragment ──
 
 export interface TopicRenderInput {
@@ -184,7 +219,10 @@ export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
       noteLabels,
     });
 
-    const title = collectText(ditaDoc.root);
+    const titleNode = (ditaDoc.root.children || []).find(
+      (c) => c.type === 'element' && c.baseType === 'topic/title',
+    );
+    const title = titleNode ? collectText(titleNode) : undefined;
     return { html, title };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
