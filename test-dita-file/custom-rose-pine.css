@@ -234,6 +234,38 @@ dd { margin-left: 1.5em; }
 }
 .related-links h2 { font-size: 1.1em; margin-top: 0; }
 
+/* ── Related-topic links (map/link) ── */
+.link {
+  color: var(--rp-iris);
+  text-decoration: none;
+  font-weight: 500;
+}
+.link:hover { text-decoration: underline; }
+
+/* ── DITAMAP tree & book view ── */
+.ditamap-container,
+.ditamap-book {
+  background: var(--rp-surface);
+  border-radius: var(--rp-radius);
+  padding: 1.5rem 2rem;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+}
+
+.map-title { color: var(--rp-text); }
+
+.map-tree-item--nav:hover { background-color: var(--rp-hl-low); }
+
+.map-tree-link { color: var(--rp-iris); }
+
+.book-section-heading { color: var(--rp-subtle); }
+
+.book-entry--error {
+  border-left-color: var(--rp-love);
+  background: var(--rp-overlay);
+}
+
+.book-entry-title { color: var(--rp-love); }
+
 section, .example { margin: 1.5rem 0; }
 
 @media (max-width: 600px) {

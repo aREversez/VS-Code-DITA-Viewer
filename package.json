@@ -64,7 +64,7 @@
       {
         "command": "ditaViewer.showMapRendered",
         "title": "Open DITA Map Reading View",
-        "icon": "media/icons/preview.svg"
+        "icon": "media/icons/map-preview.svg"
       },
       {
         "command": "ditaViewer.transformWithDitaOt",

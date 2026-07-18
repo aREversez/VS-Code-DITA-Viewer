@@ -98,6 +98,13 @@ table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.95e
 table th, table td { border: 1px solid var(--color-border); padding: 0.5rem 0.75rem; text-align: left; vertical-align: top; }
 table th { background: var(--color-code-bg); font-weight: 600; }
 
+/* CALS tables (<table>/<tgroup>) get zebra striping for readability on larger tables */
+.cals-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--color-code-bg) 45%, transparent); }
+
+/* Simpletables are meant to be lighter-weight than CALS tables */
+.simple-table th, .simple-table td { padding: 0.4rem 0.6rem; }
+.simple-table th { background: transparent; border-bottom-width: 2px; }
+
 /* Images */
 img { max-width: 100%; height: auto; border-radius: 4px; margin: 1rem 0; }
 .image-break { display: block; }
@@ -144,6 +151,8 @@ pre code { background: none; padding: 0; border-radius: 0; }
 .xref { color: var(--color-link); text-decoration: none; }
 .xref:hover { text-decoration: underline; }
 .xref-external { font-style: italic; font-size: 0.9em; opacity: 0.7; }
+.link { color: var(--color-link); text-decoration: none; }
+.link:hover { text-decoration: underline; }
 
 /* Inline formatting */
 .keyword { font-weight: 500; }
@@ -250,11 +259,18 @@ section, .example { margin: 1.5rem 0; }
 
 .map-tree-item {
   margin: 0.15em 0;
-  padding: 0.15em 0;
+  padding: 0.25em 0.4em;
 }
 
 .map-tree-item--nav {
   cursor: pointer;
+  border-radius: 4px;
+  margin-left: -0.4em;
+  transition: background-color 0.1s ease;
+}
+
+.map-tree-item--nav:hover {
+  background-color: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.1));
 }
 
 .map-tree-item--keydef {
@@ -342,6 +358,75 @@ section, .example { margin: 1.5rem 0; }
 
 .relcell-content {
   display: block;
+}
+
+/* ── DITAMAP book view (merged full-book preview) ── */
+
+.ditamap-book {
+  display: flow-root;
+}
+
+/* Each merged topic gets a visual divider from the next one, so the
+   reader can tell where one source file ends and the next begins.
+   Uses :not(:first-child) rather than a separate override rule so this
+   can't be undone by a later, more specific variant rule's own spacing. */
+.ditamap-book > .book-entry:not(:first-child) {
+  padding-top: 2rem;
+  margin-top: 2rem;
+  border-top: 1px solid var(--color-border);
+}
+
+/* Placeholder entries (topichead / keydef-only topicref with no href):
+   shown as a structural divider, not real content. */
+.ditamap-book > .book-entry--placeholder:not(:first-child) {
+  padding-top: 1.5rem;
+  margin-top: 1.5rem;
+  border-top: 1px dashed var(--color-border);
+}
+
+.book-section-heading {
+  color: var(--vscode-descriptionForeground, inherit);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.85em;
+  font-weight: 700;
+  opacity: 0.8;
+}
+
+/* Failed-to-load entries reuse the "danger" note palette for consistency */
+.ditamap-book > .book-entry--error {
+  padding: 0.85rem 1rem;
+  margin: 1.5rem 0;
+  border-top: none;
+  border-left: 4px solid var(--color-danger-border);
+  background: var(--color-danger-bg);
+  border-radius: 0 4px 4px 0;
+}
+
+.ditamap-book > .book-entry--error:first-child {
+  margin-top: 0;
+}
+
+.book-entry-title {
+  font-size: 1.05em;
+  font-weight: 600;
+  margin: 0 0 0.35em 0;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.book-error {
+  margin: 0;
+  font-size: 0.9em;
+  font-family: var(--code-font);
+  opacity: 0.9;
+}
+
+.book-skip {
+  margin: 0.5rem 0;
+  font-size: 0.85em;
+  font-style: italic;
+  opacity: 0.65;
 }
 
 /* Responsive */

@@ -380,6 +380,36 @@ blockquote {
 }
 .related-links h2 { font-size: 1.1em; margin-top: 0; }
 
+/* ── Related-topic links (map/link) ── */
+.link { color: var(--web-primary); text-decoration: none; }
+.link:hover { text-decoration: underline; }
+
+/* ── DITAMAP tree & book view (standalone, no topic sidebar) ── */
+.ditamap-container,
+.ditamap-book {
+  background: var(--web-surface);
+  border: 1px solid var(--web-border);
+  border-radius: var(--web-radius);
+  padding: 1.5rem 2rem;
+}
+
+.map-title { color: var(--web-text); }
+
+.map-tree-item--nav:hover { background-color: var(--web-primary-light); }
+
+.map-tree-link { color: var(--web-primary); }
+
+.book-section-heading { color: var(--web-text-muted); }
+
+.book-entry--error {
+  border-left-color: var(--web-accent);
+  background: #fce8e6;
+}
+
+.book-entry-title { color: var(--web-accent); }
+
+.vscode-dark .book-entry--error { background: #2d1616; }
+
 /* ── Breadcrumb simulation ── */
 .topic > *:first-child::before {
   content: 'Home / Products / ';

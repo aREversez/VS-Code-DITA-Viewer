@@ -385,6 +385,43 @@ blockquote {
 }
 .related-links h2 { font-size: 1.1em; margin-top: 0; }
 
+/* ── Related-topic links (map/link) ── */
+.link {
+  color: var(--mod-primary);
+  text-decoration: none;
+  font-weight: 500;
+  border-bottom: 1px dashed var(--mod-primary);
+}
+.link:hover { border-bottom-style: solid; color: var(--mod-primary-dark); }
+
+/* ── DITAMAP tree & book view ── */
+.ditamap-container,
+.ditamap-book {
+  background: var(--mod-surface);
+  border-radius: var(--mod-radius);
+  padding: 1.5rem 2rem;
+  border: 1px solid var(--mod-border);
+}
+
+.map-title { color: var(--mod-text); }
+
+.map-tree-item--nav:hover {
+  background-color: color-mix(in srgb, var(--mod-primary) 12%, transparent);
+}
+
+.map-tree-link { color: var(--mod-primary); font-weight: 500; }
+
+.book-section-heading { color: var(--mod-text-muted); }
+
+.book-entry--error {
+  border-left-color: #d63031;
+  background: #fdf2f2;
+}
+
+.book-entry-title { color: #d63031; }
+
+.vscode-dark .book-entry--error { background: #2d1616; }
+
 /* ── Sections ── */
 section, .example { margin: 2rem 0; }
 

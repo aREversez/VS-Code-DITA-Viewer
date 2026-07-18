@@ -338,6 +338,40 @@ blockquote {
 }
 .related-links h2 { font-size: 1.1em; margin-top: 0; color: var(--corp-primary); }
 
+/* ── Related-topic links (map/link) ── */
+.link {
+  color: var(--corp-primary-light);
+  text-decoration: none;
+  font-weight: 500;
+}
+.link:hover { text-decoration: underline; color: var(--corp-accent); }
+
+/* ── DITAMAP tree & book view ── */
+.ditamap-container,
+.ditamap-book {
+  background: var(--corp-surface);
+  padding: 2rem 2.5rem;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.map-title { color: var(--corp-text); }
+
+.map-tree-item--nav:hover { background-color: var(--corp-bg); }
+
+.map-tree-link { color: var(--corp-primary-light); }
+
+.book-section-heading { color: var(--corp-text-muted); }
+
+.book-entry--error {
+  border-left-color: #c0392b;
+  background: #fdf2f2;
+}
+
+.book-entry-title { color: #c0392b; }
+
+.vscode-dark .book-entry--error { background: #2d1616; }
+
 /* ── Draft comment (visible in preview) ── */
 .draft-comment {
   background: #fff3cd;

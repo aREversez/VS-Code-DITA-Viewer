@@ -217,3 +217,62 @@ li { margin: 0.35em 0; }
   border-top: 2px solid var(--brand-border);
 }
 .related-links h2 { font-size: 1.1em; margin-top: 0; }
+
+/* ── Related-topic links (map/link) ── */
+.link {
+  color: var(--brand-link);
+  text-decoration: none;
+  font-weight: 500;
+}
+.link:hover {
+  text-decoration: underline;
+  color: #1557b0;
+}
+
+/* ── DITAMAP tree view ── */
+.ditamap-container {
+  background: var(--brand-bg);
+  border-radius: 8px;
+  padding: 1.5rem 2rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.map-title {
+  color: var(--brand-heading);
+  border-bottom: 3px solid var(--brand-primary);
+}
+
+.map-tree-item--nav:hover {
+  background-color: var(--brand-primary-light);
+}
+
+.map-tree-link {
+  color: var(--brand-link);
+  font-weight: 500;
+}
+
+.map-reltable .relheader th {
+  background: var(--brand-primary);
+  color: #fff;
+}
+
+/* ── DITAMAP book view ── */
+.ditamap-book {
+  background: var(--brand-bg);
+  border-radius: 8px;
+  padding: 1.5rem 2rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.book-section-heading {
+  color: var(--brand-primary);
+}
+
+.book-entry--error {
+  border-left-color: var(--brand-accent);
+  background: #fce8e6;
+}
+
+.book-entry-title {
+  color: var(--brand-accent);
+}
