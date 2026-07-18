@@ -174,6 +174,20 @@ function getWebviewScript(): string {
   });
   toolbar.appendChild(fsUp);
 
+  // Font toggle (serif / sans-serif)
+  var isSerif = false;
+  var fontBtn = document.createElement('button');
+  fontBtn.textContent = 'Sans';
+  fontBtn.title = 'Current: Sans-serif. Click to switch to Serif';
+  fontBtn.style.cssText = btnStyle + 'font-size:11px;';
+  fontBtn.addEventListener('click', function() {
+    isSerif = !isSerif;
+    fontBtn.textContent = isSerif ? 'Serif' : 'Sans';
+    fontBtn.title = isSerif ? 'Current: Serif. Click to switch to Sans-serif' : 'Current: Sans-serif. Click to switch to Serif';
+    document.body.style.fontFamily = isSerif ? "Georgia,'Times New Roman','Noto Serif SC','Songti SC',STSong,SimSun,serif" : '';
+  });
+  toolbar.appendChild(fontBtn);
+
   // Page width dropdown
   var widths = [
     { label: 'Auto', value: '' },
@@ -304,6 +318,14 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       }
     });
 
+    // Re-render on theme switch so the manually-computed light/dark class
+    // (used for DITA-specific colors that have no direct VS Code theme
+    // equivalent, e.g. note backgrounds) never goes stale relative to the
+    // actual active theme.
+    const themeSubscription = vscode.window.onDidChangeActiveColorTheme(() => {
+      updateWebview();
+    });
+
     const updateWebview = () => {
       const html = this.generateHtml(document, webviewPanel.webview);
       webviewPanel.webview.html = html;
@@ -317,6 +339,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       changeSubscription.dispose();
       editorSub.dispose();
       selectionSub.dispose();
+      themeSubscription.dispose();
     });
   }
 

@@ -46,80 +46,142 @@ Duplicate topics (same file referenced multiple times) are shown with a skip mes
 
 ## Custom CSS
 
-You can customize the preview appearance with your own stylesheets.
+You can customize the preview appearance with your own stylesheets. CSS files are loaded into the preview's **Theme dropdown** in the top-right toolbar, letting you switch between themes instantly without re-opening the preview.
 
-### Theme switcher
+### Quick start
 
-When you open a DITA preview, a small toolbar appears in the **top-right corner** with:
+1. Create a `custom.css` file next to your DITA files
+2. Open/reload any `.dita` or `.ditamap` preview
+3. The file appears in the **Theme dropdown** and is applied automatically
 
-- **Theme dropdown** — lists all `.css` files discovered in the project (auto-discovered `custom.css` directory + workspace root + configured paths). Select one to instantly switch styles.
-- **Refresh button** (↻) — reloads the DITA content and re-renders the preview.
+> The default theme is always `custom.css` if one exists. If you name it something else (e.g. `my-theme.css`), it still appears in the dropdown — you just need to select it manually the first time.
 
-The default theme is always `custom.css` if it exists. All available CSS files are loaded into the dropdown so you can toggle between them without re-opening the preview.
+### How CSS files are discovered
 
-### Auto-discovery (zero config)
+The extension finds CSS files in this priority order:
 
-Place a `custom.css` file anywhere in an ancestor directory of your DITA file. The extension walks up from the DITA file's directory toward the workspace root and loads the first `custom.css` it finds.
+1. **Auto-discovery (walk-up)** — Starting from your DITA file's directory, the extension walks up toward the workspace root looking for any directory that contains a `custom.css` file. The **closest** such directory and the **workspace root** are both scanned for all `.css` files.
 
-```
-my-project/
-├── custom.css              ← loaded automatically
-├── docs/
-│   ├── custom.css          ← also works (closest ancestor wins)
-│   └── topics/
-│       └── overview.dita
-└── maps/
-    └── project.ditamap
-```
+   ```
+   my-project/                  ← workspace root (also scanned)
+   ├── custom.css               ← found by walk-up at root
+   ├── docs/
+   │   ├── custom.css           ← closest ancestor wins here (walk-up stops)
+   │   ├── themes/
+   │   │   ├── rose-pine.css    ← also loaded (same directory as custom.css)
+   │   │   └── dawn.css
+   │   └── topics/
+   │       └── overview.dita    ← your DITA file
+   └── maps/
+       └── project.ditamap
+   ```
 
-### Manual configuration
+2. **Configured directories** — `dita-viewer.cssDirectory` lists additional directories to scan for `.css` files.
 
-Set `dita-viewer.customCss` in your settings (Workspace or User):
+3. **Explicit file paths** — `dita-viewer.customCss` lists specific `.css` files (workspace-relative, document-relative, or absolute).
+
+All discovered files appear in the toolbar's **Theme dropdown**. Select any entry to apply it immediately.
+
+### Configuration methods
+
+#### VS Code Settings UI
+
+Press `Ctrl+Shift+P` → search **"DITA Viewer"** to find all settings including `dita-viewer.cssDirectory` and `dita-viewer.customCss`.
+
+#### `settings.json`
 
 ```jsonc
 {
-  // Single file (workspace-relative)
-  "dita-viewer.customCss": ["custom.css"],
-
-  // Multiple files (applied in order)
-  "dita-viewer.customCss": [
-    "base.css",
-    "theme.css",
-    "overrides.css"
+  // Directories to scan for .css files (auto-discovery runs first)
+  "dita-viewer.cssDirectory": [
+    "docs/styles",
+    "../team-shared/themes"
   ],
 
-  // Mixed path types
+  // Explicit file paths (highest priority)
   "dita-viewer.customCss": [
-    "docs/styles/published.css",    // workspace relative
-    "../shared/global.css",          // document relative
-    "C:/team-styles/common.css"      // absolute path
+    "my-theme.css",                // workspace-relative
+    "docs/styles/published.css",   // workspace-relative
+    "../shared/global.css",        // document-relative (relative to the DITA file)
+    "C:/team-styles/common.css"    // absolute path
   ]
 }
 ```
 
-You can also set it via the Settings UI: `Ctrl+Shift+P` → search "DITA Viewer".
-
 ### What you can override
 
-Custom CSS is injected after the default stylesheet and can override any default rule. Common customizations:
+Custom CSS is injected **after** the default `media/styles.css` and can override any rule. The default stylesheet defines these CSS variables for easy theming:
 
 ```css
-/* Override default CSS variables */
 :root {
-  --color-note-bg: #fff3cd;
-  --color-note-border: #ffc107;
+  --color-bg: transparent;           /* page background */
+  --color-text: inherit;             /* body text color */
+  --color-link: var(--vscode-textLink-foreground);
+  --color-border: var(--vscode-widget-border, #ddd);
+  --color-code-bg: var(--vscode-textCodeBlock-background, #f8f8f8);
+  --color-code-lang-bg: #e0e0e0;
+  --color-note-bg: var(--vscode-editor-background);
+  --color-note-border: var(--vscode-textLink-foreground);
+  --color-table-header-bg: #e8e8e8;
+  --color-table-border: #ccc;
+  --color-blockquote-border: #ddd;
+  --color-related-links-bg: #f5f5f5;
+}
+```
+
+To override, just set the variable in your CSS:
+
+```css
+:root {
   --color-code-bg: #1e1e1e;
   --color-link: #0078d4;
 }
-
-/* Override element styles */
-body { font-family: 'Noto Sans SC', sans-serif; }
-table th { background: #2c3e50; color: #fff; }
-
-/* Full document theme (see test-dita-file/custom.css for a complete example) */
 ```
 
-> **Note:** Custom CSS is not subject to the WebView's Content Security Policy, so you can use custom fonts, background images, etc. External images in CSS must still resolve to accessible paths.
+### Practical examples
+
+#### Minimal: just font and color tweaks
+
+```css
+body { font-family: 'Noto Sans SC', sans-serif; }
+a { color: #1a73e8; }
+pre.codeblock { background: #f5f5f5; border-radius: 6px; }
+```
+
+#### Complete page theme
+
+Create a full documentation-style theme by overriding most elements. See the example files in `test-dita-file/`:
+
+| File | Style |
+|---|---|
+| `custom.css` | Bright documentation (Oxygen WebHelp style) |
+| `custom-doc-web.css` | Full-width web publication theme |
+| `custom-doc-modern.css` | Modern dev docs with gradient header |
+| `custom-doc-corporate.css` | Corporate intranet with branding |
+| `custom-rose-pine.css` | Dark Rosé Pine theme |
+| `custom-rose-dawn.css` | Light Rosé Pine Dawn theme |
+
+Open a DITA preview, then use the **Theme dropdown** to cycle through these and see how they look.
+
+#### Dark mode overrides
+
+Your CSS can also provide `.vscode-dark` overrides that activate when VS Code's color theme is dark:
+
+```css
+.vscode-dark {
+  --color-code-bg: #2d2d2d;
+  --color-note-bg: #1e1e1e;
+}
+.vscode-dark table th { background: #45475a; }
+```
+
+### How CSS is injected
+
+1. The default `media/styles.css` is always loaded first
+2. Then the custom CSS file content replaces the previous custom style (switching themes is instantaneous — no page reload needed)
+3. CSS specificity works normally: rules in your file override the defaults if they have equal or higher specificity
+
+> **Note:** Custom CSS is not subject to the WebView's Content Security Policy, so you can use `@font-face`, custom fonts, background images, etc. External images in CSS must still resolve to accessible paths on disk.
 
 ## DITA-OT Transform
 

@@ -14,9 +14,13 @@
   --color-danger-border: #c0392b;
   --color-important-border: #8e44ad;
   --color-tip-border: #27ae60;
-  --color-code-bg: #f8f8f8;
+  /* Bound directly to VS Code's own live theme variable (falls back to a
+     light gray if it's ever unavailable) so this always tracks the real,
+     current theme instead of relying on a manually-computed .vscode-dark
+     class that can go stale relative to the actual active theme. */
+  --color-code-bg: var(--vscode-textCodeBlock-background, #f8f8f8);
   --color-link: #2b6cb0;
-  --color-code-lang-bg: #e8e8e8;
+  --color-code-lang-bg: var(--vscode-textPreformat-background, #e8e8e8);
 }
 
 .vscode-dark {
@@ -26,13 +30,14 @@
   --color-danger-bg: #331a1a;
   --color-important-bg: #261a33;
   --color-tip-bg: #1a3326;
-  --color-code-bg: #2a2a2a;
   --color-link: #6ab0f3;
-  --color-code-lang-bg: #3a3a3a;
+  --color-code-bg: var(--vscode-textCodeBlock-background, #555);
+  --color-code-lang-bg: var(--vscode-textPreformat-background, #666);
 }
 
 body {
   font-family: var(--body-font);
+  font-size: 1em;
   line-height: var(--line-height);
   max-width: var(--max-width);
   margin: 0 auto;
@@ -140,6 +145,7 @@ pre.codeblock, pre.preformatted {
 code {
   font-family: var(--code-font);
   font-size: 0.9em;
+  color: var(--vscode-editor-foreground);
   background: var(--color-code-bg);
   padding: 0.15em 0.3em;
   border-radius: 3px;
@@ -164,9 +170,9 @@ pre code { background: none; padding: 0; border-radius: 0; }
 .uicontrol { font-weight: 500; color: var(--vscode-textLink-foreground); }
 .menucascade .uicontrol + .uicontrol::before { content: ' › '; color: var(--color-border); font-weight: normal; }
 .wintitle { font-style: italic; font-weight: 600; }
-.filepath { font-family: var(--code-font); font-size: 0.9em; padding: 0.1em 0.3em; background: var(--color-code-bg); border-radius: 3px; }
-.userinput { font-family: var(--code-font); font-size: 0.9em; padding: 0.1em 0.3em; background: var(--color-code-bg); border-radius: 3px; border: 1px dashed var(--color-border); }
-.systemoutput { font-family: var(--code-font); font-size: 0.9em; padding: 0.1em 0.3em; background: var(--color-code-bg); border-radius: 3px; }
+.filepath { font-family: var(--code-font); font-size: 0.9em; padding: 0.1em 0.3em; background: var(--color-code-bg); border-radius: 3px; color: var(--vscode-editor-foreground); }
+.userinput { font-family: var(--code-font); font-size: 0.9em; padding: 0.1em 0.3em; background: var(--color-code-bg); border-radius: 3px; border: 1px dashed var(--color-border); color: var(--vscode-editor-foreground); }
+.systemoutput { font-family: var(--code-font); font-size: 0.9em; padding: 0.1em 0.3em; background: var(--color-code-bg); border-radius: 3px; color: var(--vscode-editor-foreground); }
 .apiname { font-family: var(--code-font); font-size: 0.9em; font-weight: 500; }
 .parmname { font-family: var(--code-font); font-size: 0.9em; font-style: italic; }
 .option { font-family: var(--code-font); font-size: 0.9em; color: var(--color-link); }
@@ -175,7 +181,7 @@ pre code { background: none; padding: 0; border-radius: 0; }
 .msgnum { font-family: var(--code-font); font-size: 0.85em; padding: 0.1em 0.3em; border: 1px solid var(--color-border); border-radius: 3px; }
 
 /* Programming domain */
-.codeph { font-family: var(--code-font); font-size: 0.9em; background: var(--color-code-bg); padding: 0.1em 0.3em; border-radius: 3px; }
+.codeph { font-family: var(--code-font); font-size: 0.9em; background: var(--color-code-bg); padding: 0.1em 0.3em; border-radius: 3px; color: var(--vscode-editor-foreground); }
 .synph { font-family: var(--code-font); font-size: 0.9em; }
 .kwd { font-weight: 600; font-family: var(--code-font); }
 .var { font-style: italic; font-family: var(--code-font); }
