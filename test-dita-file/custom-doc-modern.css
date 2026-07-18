@@ -34,17 +34,19 @@ body {
 
 /* ── Gradient header bar ── */
 body::before {
-  content: '';
-  display: block;
+  content: '📘  Documentation Hub  v2.5.0';
+  display: flex;
+  align-items: center;
   height: 48px;
   margin: -72px -2rem 1.5rem;
+  padding: 0 2rem;
   background: linear-gradient(135deg, var(--mod-primary) 0%, var(--mod-secondary) 100%);
   border-radius: 0 0 var(--mod-radius) var(--mod-radius);
   box-shadow: 0 2px 12px rgba(108, 92, 231, 0.3);
-  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 48"><text x="24" y="30" font-family="Arial" font-size="15" font-weight="bold" fill="white">📘 Documentation Hub</text><text x="250" y="30" font-family="Arial" font-size="11" fill="rgba(255,255,255,0.7)">v2.5.0</text></svg>');
-  background-repeat: no-repeat;
-  background-position: 0 center;
-  background-size: auto 48px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.02em;
 }
 
 /* ── Footer ── */
@@ -128,7 +130,7 @@ sub { font-size: 0.7em; vertical-align: sub; color: var(--mod-primary); }
 
 .menucascade > .uicontrol + .uicontrol::before {
   content: ' → ';
-  color: var(--mod-text-muted);
+  color: var(--mod-text);
   font-weight: normal;
   background: none;
   border: none;
@@ -219,7 +221,7 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
 
 .note__label {
   font-weight: 700;
-  font-size: 0.75em;
+  font-size: 1em;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   display: block;

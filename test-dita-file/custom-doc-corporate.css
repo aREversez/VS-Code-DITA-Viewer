@@ -131,7 +131,7 @@ sub { font-size: 0.75em; vertical-align: sub; }
 }
 .menucascade > .uicontrol + .uicontrol::before {
   content: ' › ';
-  color: var(--corp-text-muted);
+  color: var(--corp-text);
   font-weight: normal;
 }
 
@@ -214,7 +214,7 @@ pre code { background: none; padding: 0; }
 .note__label {
   font-weight: 700;
   text-transform: uppercase;
-  font-size: 0.72em;
+  font-size: 1em;
   letter-spacing: 0.08em;
   display: block;
   margin-bottom: 0.3em;
