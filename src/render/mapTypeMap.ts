@@ -106,15 +106,21 @@ function renderRef(node: DitaNode, ctx: MapRenderContext, renderChildren: (node:
   const keyAttr = safeAttr('data-keys', keys);
   const hrefAttr = href ? safeAttr('data-href', href) : '';
 
+  // For keydef entries, show key name → display value
+  const isKeydef = !!keys && !href;
+  const label = isKeydef && keys
+    ? `<span class="map-tree-keyname">${escapeAttr(keys)}</span><span class="map-tree-keysep"> → </span>${nameAttr}`
+    : nameAttr;
+
   if (nav) {
     return `<li class="map-tree-item map-tree-item--nav"${keyAttr}${hrefAttr}>
-      <a href="#" class="map-tree-link" data-href="${escapeAttr(href)}">${icon}<span class="map-tree-label">${nameAttr}</span></a>
+      <a href="#" class="map-tree-link" data-href="${escapeAttr(href)}">${icon}<span class="map-tree-label">${label}</span></a>
       ${childrenHtml ? `<ul class="map-tree">${childrenHtml}</ul>` : ''}
     </li>`;
   }
 
   return `<li class="map-tree-item map-tree-item--keydef"${keyAttr}${hrefAttr}>
-    ${icon}<span class="map-tree-label map-tree-label--keydef">${nameAttr}</span>
+    ${icon}<span class="map-tree-label map-tree-label--keydef">${label}</span>
     ${childrenHtml ? `<ul class="map-tree">${childrenHtml}</ul>` : ''}
   </li>`;
 }

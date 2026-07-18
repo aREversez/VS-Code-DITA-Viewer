@@ -2,25 +2,29 @@
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
 <map>
     <title>Test</title>
-    <keydef keys="name">
+    <keydef keys="product_name">
         <topicmeta>
             <keywords>
-                <keyword>Rectangle</keyword>
+                <keyword>DatabaseX Pro v3.0</keyword>
             </keywords>
         </topicmeta>
     </keydef>
-    <topicref keys="product_name" href="topics/db_overview.dita">
-        <topicmeta><linktext>DatabaseX Pro v3.0</linktext></topicmeta>
-    </topicref>
-    <topicref keys="company_name">
-        <topicmeta><linktext>ACME Corporation</linktext></topicmeta>
-    </topicref>
+    <keydef keys="company_name">
+        <topicmeta>
+            <keywords>
+                <keyword>ACME Corporation</keyword>
+            </keywords>
+        </topicmeta>
+    </keydef>
+    <keydef keys="product_version">
+        <topicmeta>
+            <keywords>
+                <keyword>V1.0.0</keyword>
+            </keywords>
+        </topicmeta>
+    </keydef>
     <topicref href="topics/db_overview.dita"/>
     <topicref href="topics/db_config.dita"/>
     <topicref href="topics/db_ui_test.dita"/>
-    <topicref keys="product_version">
-        <topicmeta>
-            <linktext>V1.0.0</linktext>
-        </topicmeta>
-    </topicref>
+    <topicref href="topics/keys.dita"/>
 </map>

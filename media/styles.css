@@ -296,6 +296,17 @@ section, .example { margin: 1.5rem 0; }
   color: var(--vscode-editor-foreground);
 }
 
+.map-tree-keyname {
+  font-weight: 600;
+  color: var(--vscode-textLink-foreground, #3794ff);
+  font-style: normal;
+}
+
+.map-tree-keysep {
+  color: var(--vscode-descriptionForeground, #888);
+  font-style: normal;
+}
+
 .map-tree-label--head {
   font-weight: 600;
 }
