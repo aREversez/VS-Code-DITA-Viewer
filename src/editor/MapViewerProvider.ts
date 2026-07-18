@@ -7,11 +7,11 @@ import { dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
 import { readFileSync, existsSync } from 'fs';
 
-function getMapWebviewScript(initialMode: 'tree' | 'book'): string {
+function getMapWebviewScript(): string {
   return `
 (function() {
   var vscode = acquireVsCodeApi();
-  var currentMode = '${initialMode}';
+  var currentMode = 'tree';
 
   // Click on navigable tree node → post message to extension
   document.addEventListener('click', function(e) {
@@ -83,10 +83,10 @@ function getMapWebviewScript(initialMode: 'tree' | 'book'): string {
   var modeBtn = document.createElement('button');
   modeBtn.title = 'Switch between outline tree and full book view';
   modeBtn.style.cssText = btnStyle + 'font-size:11px;';
+  modeBtn.textContent = 'Outline';
   function updateModeLabel() {
     modeBtn.textContent = currentMode === 'tree' ? 'Book' : 'Outline';
   }
-  updateModeLabel();
   modeBtn.addEventListener('click', function() {
     var newMode = currentMode === 'tree' ? 'book' : 'tree';
     currentMode = newMode;
@@ -178,7 +178,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         content = renderMapDocument(mapDoc.root, { docDir });
       }
 
-      const script = getMapWebviewScript(mode);
+      const script = getMapWebviewScript();
       const nonce = randomBytes(16).toString('base64');
       const theme = vscode.window.activeColorTheme;
       const isDark = theme.kind === vscode.ColorThemeKind.Dark || theme.kind === vscode.ColorThemeKind.HighContrast;
