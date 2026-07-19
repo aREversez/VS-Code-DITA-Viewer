@@ -1,0 +1,73 @@
+/* ── Dark mode palette ── */
+html.dark {
+  --color-bg: #1a1a1a;
+  --color-text: #e0e0e0;
+  --color-border: #444;
+  --color-link: #6ab0f3;
+  --color-code-bg: #2a2a2a;
+  --color-code-border: #444;
+  --color-note-bg: #1a2633;
+  --color-warning-bg: #33281a;
+  --color-danger-bg: #331a1a;
+  --color-important-bg: #261a33;
+  --color-tip-bg: #1a3326;
+  --color-sidebar-bg: #222;
+  --color-surface: #2a2a2a;
+  --color-muted: #999;
+}
+
+html.dark body {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+html.dark a { color: var(--color-link); }
+
+html.dark h1, html.dark h2, html.dark h3, html.dark h4 { color: #f0f0f0; }
+
+html.dark .dv-toolbar,
+html.dark .dv-page-toc,
+html.dark .dv-back-to-top,
+html.dark .dv-dark-toggle {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+}
+html.dark .dv-toolbar button,
+html.dark .dv-copy-btn { background: #333; border-color: #555; color: #ddd; }
+html.dark .dv-toolbar button:hover,
+html.dark .dv-copy-btn:hover { background: #444; }
+
+html.dark .dv-sidebar {
+  background: var(--color-sidebar-bg);
+  border-color: var(--color-border);
+}
+html.dark .dv-sidebar a { color: #ccc; }
+html.dark .dv-sidebar a:hover { background: #333; }
+html.dark .dv-sidebar a.active { background: #1a3a6a; color: #6ab0f3; }
+
+html.dark .dv-page-toc a { color: #aaa; }
+html.dark .dv-page-toc a:hover { color: var(--color-link); background: #333; }
+html.dark .dv-page-toc-title { border-bottom-color: var(--color-border); }
+
+html.dark pre.codeblock,
+html.dark pre.pre {
+  background: var(--color-code-bg) !important;
+  border-color: var(--color-code-border);
+}
+html.dark code { color: #e0e0e0; }
+
+html.dark .note,
+html.dark .note_important { background: var(--color-important-bg); border-color: #443366; }
+html.dark .note_tip { background: var(--color-tip-bg); border-color: #336644; }
+html.dark .note_warning { background: var(--color-warning-bg); border-color: #665533; }
+html.dark .note_danger { background: var(--color-danger-bg); border-color: #663333; }
+html.dark .note__title { color: #ccc; }
+
+html.dark table,
+html.dark .table { border-color: var(--color-border); }
+html.dark th, html.dark td { border-color: var(--color-border); }
+html.dark thead { background: #222; }
+
+html.dark .shortdesc { background: #222; color: #ccc; }
+html.dark blockquote { border-left-color: #555; color: #bbb; }
+html.dark figcaption { color: #aaa; }

@@ -170,7 +170,7 @@
         "dita-viewer.ditaOtInjectNavToolbar": {
           "type": "boolean",
           "default": true,
-          "description": "转换完成后注入导航工具栏（折叠/展开 + 上一页/下一页按钮），仅对 html5/xhtml 有效。"
+          "description": "（已废弃）转换完成后注入站点增强功能（导航、侧边栏等）。新版本使用转换流程中的 QuickPick 选择具体功能，此设置仅作为旧版兼容保留。"
         }
       }
     }

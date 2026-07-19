@@ -1,17 +1,18 @@
 import * as vscode from 'vscode';
 import { spawn } from 'child_process';
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs';
-import { basename, dirname, extname, isAbsolute, join, resolve } from 'path';
+import { basename, dirname, isAbsolute, join, resolve } from 'path';
 import { DitaViewerProvider, findDitamapFiles } from './editor/DitaViewerProvider';
 import { MapViewerProvider } from './editor/MapViewerProvider';
-import { parseDitamap, preprocessEntities } from './parser/ditaParser';
-import { collectMapEntries } from './render/mapTypeMap';
 import {
   resolveDitaOtExecutable,
   buildDitaOtArgs,
+  buildNavManifest,
   classifyLogLine,
   createLineBuffer,
   CssArg,
+  NavManifestEntry,
+  SiteChromeFeatures,
 } from './editor/ditaOtUtils';
 
 const TRANSFORM_CMD = 'ditaViewer.transformWithDitaOt';
@@ -78,6 +79,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(showMapRenderedCommand);
 
   // DITA-OT transform command
+  const extensionPath = context.extensionPath;
   const transformCommand = vscode.commands.registerCommand(TRANSFORM_CMD, async () => {
     const tokenSource = new vscode.CancellationTokenSource();
     const disposables: vscode.Disposable[] = [];
@@ -199,7 +201,39 @@ export function activate(context: vscode.ExtensionContext) {
         ditavalFile = normalizeDriveLetter(ditavalUri[0].fsPath);
       }
 
-      // 7. Run transformation
+      // 7. Pick site chrome features (html5/xhtml only)
+      let siteChromeFeatures: SiteChromeFeatures | undefined;
+      if (transtype === 'html5' || transtype === 'xhtml') {
+        const featureItems: (vscode.QuickPickItem & { key: keyof SiteChromeFeatures })[] = [
+          { label: '导航工具栏', description: '上一页/下一页 + 折叠/展开章节', key: 'navToolbar', picked: true },
+          { label: '侧边栏目录', description: '左侧固定目录树', key: 'sidebar', picked: true },
+          { label: '本页目录', description: '右侧本页标题导航', key: 'onPageToc', picked: true },
+          { label: '代码复制按钮', description: '代码块复制按钮', key: 'copyCode', picked: true },
+          { label: '回到顶部', description: '右下角回到顶部按钮', key: 'backToTop', picked: true },
+          { label: '暗色模式', description: '亮色/暗色切换', key: 'darkMode', picked: true },
+        ] as any;
+        const picked = await vscode.window.showQuickPick(featureItems, {
+          canPickMany: true,
+          placeHolder: '选择要启用的站点增强功能（默认全部启用）',
+          ignoreFocusOut: false,
+        });
+        if (picked) {
+          const features: SiteChromeFeatures = {
+            navToolbar: false, sidebar: false, onPageToc: false,
+            copyCode: false, backToTop: false, darkMode: false,
+          };
+          for (const item of picked) features[item.key] = true;
+          siteChromeFeatures = features;
+        } else {
+          // User cancelled: enable all by default (keep backward compatibility)
+          siteChromeFeatures = {
+            navToolbar: true, sidebar: true, onPageToc: true,
+            copyCode: true, backToTop: true, darkMode: true,
+          };
+        }
+      }
+
+      // 8. Run transformation
       const args = buildDitaOtArgs({ mapPath, transtype, outputDir, cssArg, ditavalFile });
       const outputChannel = vscode.window.createOutputChannel('DITA-OT Transform');
 
@@ -285,16 +319,15 @@ export function activate(context: vscode.ExtensionContext) {
               // Success
               outputChannel.appendLine(`\n[DITA-OT] 转换完成。输出目录: ${outputDir}`);
 
-              // 8. Inject navigation toolbar (if enabled) — run before notification
+              // 8. Inject site chrome (features enabled via QuickPick during flow)
               if (transtype === 'html5' || transtype === 'xhtml') {
                 try {
-                  const injectNav = vscode.workspace.getConfiguration('dita-viewer').get('ditaOtInjectNavToolbar');
-                  if (injectNav) {
-                    injectNavToolbar(mapPath, outputDir);
-                    outputChannel.appendLine(`\n[DITA-OT] 导航工具栏已注入。`);
+                  if (siteChromeFeatures) {
+                    injectSiteChrome(extensionPath, mapPath, outputDir, siteChromeFeatures);
+                    outputChannel.appendLine(`\n[DITA-OT] 站点增强已注入。`);
                   }
                 } catch (e) {
-                  outputChannel.appendLine(`\n[DITA-OT] 导航工具栏注入失败: ${e}`);
+                  outputChannel.appendLine(`\n[DITA-OT] 站点增强注入失败: ${e}`);
                 }
               }
 
@@ -355,49 +388,31 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(transformCommand);
 }
 
-// ── Navigation toolbar injection (prev/next + collapse/expand) ──
+// ── Site chrome injection ──
 
-interface NavManifestEntry {
-  file: string;
-  title: string;
-}
-
-function buildNavManifest(mapPath: string): NavManifestEntry[] {
-  const raw = readFileSync(mapPath, 'utf-8');
-  const doc = parseDitamap(preprocessEntities(raw));
-  const entries = collectMapEntries(doc.root);
-  return entries
-    .filter((e) => e.href && e.href.toLowerCase().endsWith('.dita'))
-    .map((e) => ({
-      file: basename(e.href!, extname(e.href!)) + '.html',
-      title: e.displayName,
-    }));
-}
-
-function generateNavScript(manifest: NavManifestEntry[]): string {
-  const css = '.dv-toolbar{position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:999;display:flex;flex-direction:column;gap:2px;padding:4px;background:#fff;border:1px solid #ddd;border-right:none;border-radius:4px 0 0 4px;box-shadow:0 2px 6px rgba(0,0,0,.1)}.dv-toolbar button{cursor:pointer;border:1px solid #ccc;border-radius:3px;padding:6px 10px;background:#f8f8f8;font-size:16px;line-height:1}.dv-toolbar button:hover{background:#e8e8e8}.section.dv-collapsed>:not(.sectiontitle){display:none}';
-  return `(function(){
-var MANIFEST=${JSON.stringify(manifest)};
-function cur(){var p=location.pathname;return p.substring(p.lastIndexOf('/')+1)||'index.html';}
-var idx=-1;for(var i=0;i<MANIFEST.length;i++){if(MANIFEST[i].file===cur()){idx=i;break;}}
-var s=document.createElement('style');
-s.textContent='${css}';
-document.head.appendChild(s);
-var bar=document.createElement('div');bar.className='dv-toolbar';
-var tb=document.createElement('button');tb.textContent='§';
-tb.title='折叠/展开章节';
-tb.onclick=function(){document.querySelectorAll('section.section').forEach(function(sec){sec.classList.toggle('dv-collapsed');});};
-bar.appendChild(tb);
-if(idx>0){var pb=document.createElement('button');pb.textContent='‹';pb.title='上一页';pb.onclick=function(){location.href=MANIFEST[idx-1].file;};bar.appendChild(pb);}
-if(idx>=0&&idx<MANIFEST.length-1){var nb=document.createElement('button');nb.textContent='›';nb.title='下一页';nb.onclick=function(){location.href=MANIFEST[idx+1].file;};bar.appendChild(nb);}
-document.body.appendChild(bar);
-})();`;
-}
-
-function injectNavToolbar(mapPath: string, outputDir: string): void {
+function injectSiteChrome(
+  extPath: string,
+  mapPath: string,
+  outputDir: string,
+  features: SiteChromeFeatures,
+): void {
   const manifest = buildNavManifest(mapPath);
-  writeFileSync(join(outputDir, 'dita-viewer-nav.js'), generateNavScript(manifest), 'utf-8');
+  const jsTemplate = readFileSync(join(extPath, 'media', 'transform-assets', 'site-chrome.js'), 'utf-8');
+  const js = jsTemplate
+    .replace('/* __DV_MANIFEST__ */', JSON.stringify(manifest))
+    .replace('/* __DV_FEATURES__ */', JSON.stringify(features));
+  writeFileSync(join(outputDir, 'dita-viewer-chrome.js'), js, 'utf-8');
 
+  const css = readFileSync(join(extPath, 'media', 'transform-assets', 'site-chrome.css'), 'utf-8');
+  writeFileSync(join(outputDir, 'dita-viewer-chrome.css'), css, 'utf-8');
+
+  const hasDark = features.darkMode;
+  if (hasDark) {
+    const darkCss = readFileSync(join(extPath, 'media', 'transform-assets', 'dark-mode.css'), 'utf-8');
+    writeFileSync(join(outputDir, 'dita-viewer-dark.css'), darkCss, 'utf-8');
+  }
+
+  // Walk all HTML files (including index.html) and inject link+script tags
   function walk(dir: string) {
     for (const entry of readdirSync(dir)) {
       const full = join(dir, entry);
@@ -405,13 +420,23 @@ function injectNavToolbar(mapPath: string, outputDir: string): void {
         if (statSync(full).isDirectory()) { walk(full); continue; }
       } catch { continue; }
       if (!entry.toLowerCase().endsWith('.html')) continue;
-      if (entry.toLowerCase() === 'index.html') continue;
       let html = readFileSync(full, 'utf-8');
-      if (html.includes('dita-viewer-nav.js')) continue;
+      if (html.includes('dita-viewer-chrome')) continue;
+
       const rel = full.substring(outputDir.length).replace(/\\/g, '/');
       const depth = rel.replace(/^\/+/, '').split('/').length - 1;
       const prefix = depth > 0 ? '../'.repeat(depth) : '';
-      html = html.replace('</body>', '<script src="' + prefix + 'dita-viewer-nav.js"></script></body>');
+
+      // Insert CSS link before </head>, script before </body>
+      const cssLink = '<link rel="stylesheet" type="text/css" href="' + prefix + 'dita-viewer-chrome.css">';
+      html = html.replace('</head>', cssLink + '</head>');
+
+      if (hasDark) {
+        const darkLink = '<link rel="stylesheet" type="text/css" href="' + prefix + 'dita-viewer-dark.css">';
+        html = html.replace('</head>', darkLink + '</head>');
+      }
+
+      html = html.replace('</body>', '<script src="' + prefix + 'dita-viewer-chrome.js"></script></body>');
       writeFileSync(full, html, 'utf-8');
     }
   }

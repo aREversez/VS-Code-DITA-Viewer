@@ -1,3 +1,34 @@
+import { readFileSync } from 'fs';
+import { basename, extname } from 'path';
+import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
+import { collectMapEntries } from '../render/mapTypeMap';
+
+export interface NavManifestEntry {
+  file: string;
+  title: string;
+}
+
+export interface SiteChromeFeatures {
+  navToolbar: boolean;
+  sidebar: boolean;
+  onPageToc: boolean;
+  copyCode: boolean;
+  backToTop: boolean;
+  darkMode: boolean;
+}
+
+export function buildNavManifest(mapPath: string): NavManifestEntry[] {
+  const raw = readFileSync(mapPath, 'utf-8');
+  const doc = parseDitamap(preprocessEntities(raw));
+  const entries = collectMapEntries(doc.root);
+  return entries
+    .filter((e) => e.href && e.href.toLowerCase().endsWith('.dita'))
+    .map((e) => ({
+      file: basename(e.href!, extname(e.href!)) + '.html',
+      title: e.displayName,
+    }));
+}
+
 export interface DitaOtLocation {
   executablePath: string;
   source: 'setting' | 'env' | 'path';
