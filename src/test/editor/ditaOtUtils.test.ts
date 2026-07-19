@@ -213,6 +213,59 @@ describe('buildDitaOtArgs', () => {
       'C:\\project\\out\\xhtml',
     ]);
   });
+
+  it('should include CSS args when cssArg is provided', () => {
+    const args = buildDitaOtArgs({
+      mapPath: '/map.ditamap',
+      transtype: 'html5',
+      outputDir: '/out',
+      cssArg: { filename: 'my-theme.css', root: '/project/css' },
+    });
+    assert.deepStrictEqual(args, [
+      '-i', '/map.ditamap',
+      '-f', 'html5',
+      '-o', '/out',
+      '--args.css', 'my-theme.css',
+      '--args.cssroot', '/project/css',
+      '--args.copycss', 'yes',
+      '--args.csspath', 'css',
+    ]);
+  });
+
+  it('should include filter arg when ditavalFile is provided', () => {
+    const args = buildDitaOtArgs({
+      mapPath: '/map.ditamap',
+      transtype: 'pdf',
+      outputDir: '/out',
+      ditavalFile: '/filters/profiling.ditaval',
+    });
+    assert.deepStrictEqual(args, [
+      '-i', '/map.ditamap',
+      '-f', 'pdf',
+      '-o', '/out',
+      '--filter', '/filters/profiling.ditaval',
+    ]);
+  });
+
+  it('should include both CSS and filter args when both provided', () => {
+    const args = buildDitaOtArgs({
+      mapPath: '/map.ditamap',
+      transtype: 'xhtml',
+      outputDir: '/out',
+      cssArg: { filename: 'custom.css', root: '/root' },
+      ditavalFile: '/filter.ditaval',
+    });
+    assert.deepStrictEqual(args, [
+      '-i', '/map.ditamap',
+      '-f', 'xhtml',
+      '-o', '/out',
+      '--args.css', 'custom.css',
+      '--args.cssroot', '/root',
+      '--args.copycss', 'yes',
+      '--args.csspath', 'css',
+      '--filter', '/filter.ditaval',
+    ]);
+  });
 });
 
 describe('classifyLogLine', () => {

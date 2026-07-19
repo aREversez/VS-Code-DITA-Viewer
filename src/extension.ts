@@ -1,10 +1,16 @@
 import * as vscode from 'vscode';
 import { spawn } from 'child_process';
 import { existsSync, readdirSync } from 'fs';
-import { dirname, join } from 'path';
+import { basename, dirname, isAbsolute, join, resolve } from 'path';
 import { DitaViewerProvider, findDitamapFiles } from './editor/DitaViewerProvider';
 import { MapViewerProvider } from './editor/MapViewerProvider';
-import { resolveDitaOtExecutable, buildDitaOtArgs, classifyLogLine, createLineBuffer } from './editor/ditaOtUtils';
+import {
+  resolveDitaOtExecutable,
+  buildDitaOtArgs,
+  classifyLogLine,
+  createLineBuffer,
+  CssArg,
+} from './editor/ditaOtUtils';
 
 const TRANSFORM_CMD = 'ditaViewer.transformWithDitaOt';
 
@@ -157,8 +163,42 @@ export function activate(context: vscode.ExtensionContext) {
         } catch {}
       }
 
-      // 5. Run transformation
-      const args = buildDitaOtArgs({ mapPath, transtype, outputDir });
+      // 5. Pick optional CSS (html5/xhtml only)
+      let cssArg: CssArg | undefined;
+      if (transtype === 'html5' || transtype === 'xhtml') {
+        const cssFiles = scanCssFiles(mapDir);
+        if (cssFiles.length > 0) {
+          const items: (vscode.QuickPickItem & { css?: CssArg })[] = [
+            { label: '$(close) 不添加自定义 CSS', description: '使用 DITA-OT 默认样式', css: undefined },
+            ...cssFiles.map((fp) => ({
+              label: `$(file) ${basename(fp)}`,
+              description: dirname(fp),
+              css: { filename: basename(fp), root: dirname(fp) } as CssArg,
+            })),
+          ];
+          const picked = await vscode.window.showQuickPick(items, {
+            placeHolder: '选择自定义 CSS 文件（可选）',
+            ignoreFocusOut: false,
+          });
+          if (picked && picked.css) cssArg = picked.css;
+        }
+      }
+
+      // 6. Pick optional DITAVAL filter
+      let ditavalFile: string | undefined;
+      const ditavalUri = await vscode.window.showOpenDialog({
+        canSelectFiles: true,
+        canSelectFolders: false,
+        canSelectMany: false,
+        filters: { 'DITAVAL 筛选文件': ['ditaval'] },
+        openLabel: '选择筛选文件',
+      });
+      if (ditavalUri && ditavalUri.length > 0) {
+        ditavalFile = normalizeDriveLetter(ditavalUri[0].fsPath);
+      }
+
+      // 7. Run transformation
+      const args = buildDitaOtArgs({ mapPath, transtype, outputDir, cssArg, ditavalFile });
       const outputChannel = vscode.window.createOutputChannel('DITA-OT Transform');
 
       disposables.push(
@@ -298,6 +338,53 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   context.subscriptions.push(transformCommand);
+}
+
+function scanCssFiles(mapDir: string): string[] {
+  const files = new Map<string, string>();
+  const dirs = new Set<string>();
+
+  dirs.add(mapDir);
+
+  const root =
+    vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
+  if (root && root !== mapDir) dirs.add(root);
+
+  try {
+    const cfgDirs: string[] | undefined =
+      vscode.workspace.getConfiguration('dita-viewer').get('cssDirectory');
+    if (cfgDirs) {
+      for (const d of cfgDirs) {
+        const abs = isAbsolute(d) ? d : resolve(mapDir, d);
+        if (existsSync(abs)) dirs.add(abs);
+      }
+    }
+  } catch {}
+
+  for (const d of dirs) {
+    try {
+      for (const entry of readdirSync(d)) {
+        if (entry.toLowerCase().endsWith('.css') && !files.has(entry)) {
+          files.set(entry, join(d, entry));
+        }
+      }
+    } catch {}
+  }
+
+  try {
+    const customPaths: string[] | undefined =
+      vscode.workspace.getConfiguration('dita-viewer').get('customCss');
+    if (customPaths) {
+      for (const p of customPaths) {
+        const abs = isAbsolute(p) ? p : resolve(mapDir, p);
+        if (existsSync(abs) && !files.has(basename(abs))) {
+          files.set(basename(abs), abs);
+        }
+      }
+    }
+  } catch {}
+
+  return [...files.values()];
 }
 
 function normalizeDriveLetter(p: string): string {

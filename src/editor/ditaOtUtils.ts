@@ -58,12 +58,29 @@ export function resolveDitaOtExecutable(input: {
   return { found: false, reason: 'not-found' };
 }
 
+export interface CssArg {
+  filename: string;
+  root: string;
+}
+
 export function buildDitaOtArgs(input: {
   mapPath: string;
   transtype: string;
   outputDir: string;
+  cssArg?: CssArg;
+  ditavalFile?: string;
 }): string[] {
-  return ['-i', input.mapPath, '-f', input.transtype, '-o', input.outputDir];
+  const args = ['-i', input.mapPath, '-f', input.transtype, '-o', input.outputDir];
+  if (input.cssArg) {
+    args.push('--args.css', input.cssArg.filename);
+    args.push('--args.cssroot', input.cssArg.root);
+    args.push('--args.copycss', 'yes');
+    args.push('--args.csspath', 'css');
+  }
+  if (input.ditavalFile) {
+    args.push('--filter', input.ditavalFile);
+  }
+  return args;
 }
 
 export type LogLevel = 'error' | 'warn' | 'info';
