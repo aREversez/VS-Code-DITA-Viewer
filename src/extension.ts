@@ -11,7 +11,6 @@ import {
   classifyLogLine,
   createLineBuffer,
   CssArg,
-  NavManifestEntry,
   SiteChromeFeatures,
 } from './editor/ditaOtUtils';
 
@@ -211,7 +210,7 @@ export function activate(context: vscode.ExtensionContext) {
           { label: '代码复制按钮', description: '代码块复制按钮', key: 'copyCode', picked: true },
           { label: '回到顶部', description: '右下角回到顶部按钮', key: 'backToTop', picked: true },
           { label: '暗色模式', description: '亮色/暗色切换', key: 'darkMode', picked: true },
-        ] as any;
+        ];
         const picked = await vscode.window.showQuickPick(featureItems, {
           canPickMany: true,
           placeHolder: '选择要启用的站点增强功能（默认全部启用）',
@@ -222,7 +221,7 @@ export function activate(context: vscode.ExtensionContext) {
             navToolbar: false, sidebar: false, onPageToc: false,
             copyCode: false, backToTop: false, darkMode: false,
           };
-          for (const item of picked) features[item.key] = true;
+          for (const item of picked) features[(item as any).key] = true;
           siteChromeFeatures = features;
         } else {
           // User cancelled: enable all by default (keep backward compatibility)

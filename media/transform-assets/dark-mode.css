@@ -56,7 +56,7 @@ html.dark pre.pre {
 }
 html.dark code { color: #e0e0e0; }
 
-html.dark .note,
+html.dark .note { background: var(--color-note-bg); border-color: #2a4a6a; }
 html.dark .note_important { background: var(--color-important-bg); border-color: #443366; }
 html.dark .note_tip { background: var(--color-tip-bg); border-color: #336644; }
 html.dark .note_warning { background: var(--color-warning-bg); border-color: #665533; }
