@@ -35,17 +35,6 @@ const KEYDEF_XML = `<?xml version="1.0" encoding="UTF-8"?>
   </keydef>
 </map>`;
 
-const MAP_WITH_REFS_XML = `<?xml version="1.0" encoding="UTF-8"?>
-<map>
-  <topicref href="keys.ditamap"/>
-  <topicref href="overview.dita"/>
-  <keydef keys="name">
-    <topicmeta>
-      <keywords><keyword>My Product</keyword></keywords>
-    </topicmeta>
-  </keydef>
-</map>`;
-
 describe('expandDitamapRefs', () => {
   it('should do nothing for non-element node', () => {
     const node = textNode('hello');
