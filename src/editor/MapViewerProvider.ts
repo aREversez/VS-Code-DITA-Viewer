@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderTopicToHtml, renderBookPlaceholder, renderBookError, renderBookSkipMessage, escapeHtml } from './ditaRenderUtils';
+import { renderTopicToHtml, renderBookPlaceholder, renderBookError, renderBookSkipMessage, escapeHtml, expandDitamapRefs } from './ditaRenderUtils';
 import { buildKeyMap } from './DitaViewerProvider';
 import { dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
@@ -112,36 +112,6 @@ function getMapWebviewScript(): string {
   document.body.appendChild(toolbar);
 })();
 `;
-}
-
-function expandDitamapRefs(node: import('../parser/domTypes').DitaNode, docDir: string, visited?: Set<string>): void {
-  if (node.type !== 'element') return;
-  const href = node.attributes?.href;
-  const baseType = node.baseType;
-
-  if (href && href.endsWith('.ditamap') && (baseType === 'map/topicref' || baseType === 'map/keydef')) {
-    const targetPath = resolve(docDir, href);
-    if (!visited) visited = new Set();
-    if (visited.has(targetPath)) return;
-    visited.add(targetPath);
-    try {
-      const content = readFileSync(targetPath, 'utf-8');
-      const doc = parseDitamap(preprocessEntities(content));
-      const refChildren = (doc.root.children || []).filter(
-        (c) => c.type === 'element',
-      );
-      if (refChildren.length > 0) {
-        if (!node.children) node.children = [];
-        node.children.push(...refChildren);
-      }
-    } catch {
-      // file not found or parse error — skip silently
-    }
-  }
-
-  for (const child of node.children || []) {
-    expandDitamapRefs(child, docDir, visited);
-  }
 }
 
 export class MapViewerProvider implements vscode.CustomTextEditorProvider {

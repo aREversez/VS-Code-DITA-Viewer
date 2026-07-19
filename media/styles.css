@@ -51,6 +51,7 @@ body {
 /* Short description */
 .shortdesc {
   background: var(--color-note-bg);
+  color: var(--vscode-descriptionForeground, var(--vscode-editor-foreground));
   padding: 0.75rem 1rem;
   border-radius: 4px;
   font-size: 1.05em;
@@ -76,6 +77,7 @@ p { margin: 0.75em 0; }
 .note {
   border-left: 4px solid var(--color-note-border);
   background: var(--color-note-bg);
+  color: var(--vscode-editor-foreground);
   padding: 0.75rem 1rem;
   margin: 1rem 0;
   border-radius: 0 4px 4px 0;
@@ -101,7 +103,7 @@ dd { margin-left: 1.5em; }
 /* Tables */
 table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.95em; }
 table th, table td { border: 1px solid var(--color-border); padding: 0.5rem 0.75rem; text-align: left; vertical-align: top; }
-table th { background: var(--color-code-bg); font-weight: 600; }
+table th { background: var(--color-code-bg); color: var(--vscode-editor-foreground); font-weight: 600; }
 
 /* CALS tables (<table>/<tgroup>) get zebra striping for readability on larger tables */
 .cals-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--color-code-bg) 45%, transparent); }
@@ -121,6 +123,7 @@ figcaption { font-style: italic; margin-top: 0.5rem; font-size: 0.95em; text-ali
 /* Code blocks */
 pre.codeblock, pre.preformatted {
   background: var(--color-code-bg);
+  color: var(--vscode-editor-foreground);
   border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 1rem;
@@ -135,6 +138,7 @@ pre.codeblock, pre.preformatted {
   font-family: var(--code-font);
   font-size: 0.72em;
   background: var(--color-code-lang-bg);
+  color: var(--vscode-editor-foreground);
   padding: 0.1em 0.5em;
   border-radius: 0 3px 0 3px;
   position: absolute;
@@ -189,18 +193,18 @@ pre code { background: none; padding: 0; border-radius: 0; }
 .sep { color: var(--color-border); }
 .delim { font-weight: 600; color: var(--color-link); }
 .syntaxdiagram { border: 1px solid var(--color-border); border-radius: 4px; padding: 1rem; margin: 1rem 0; overflow-x: auto; }
-.synblk { background: var(--color-code-bg); border: 1px solid var(--color-border); border-radius: 4px; padding: 0.75rem; margin: 0.5rem 0; overflow-x: auto; font-family: var(--code-font); font-size: 0.9em; }
+.synblk { background: var(--color-code-bg); color: var(--vscode-editor-foreground); border: 1px solid var(--color-border); border-radius: 4px; padding: 0.75rem; margin: 0.5rem 0; overflow-x: auto; font-family: var(--code-font); font-size: 0.9em; }
 .synnote { font-size: 0.9em; margin: 0.5rem 0; padding: 0.5rem; border-left: 3px solid var(--color-border); }
 .fragment { font-family: var(--code-font); font-size: 0.9em; }
 .fragref { font-family: var(--code-font); font-size: 0.9em; color: var(--color-link); }
 
 /* Software domain */
-.screen { background: var(--color-code-bg); border: 1px solid var(--color-border); border-radius: 4px; padding: 1rem; overflow-x: auto; font-family: var(--code-font); font-size: 0.9em; line-height: 1.5; white-space: pre-wrap; }
+.screen { background: var(--color-code-bg); color: var(--vscode-editor-foreground); border: 1px solid var(--color-border); border-radius: 4px; padding: 1rem; overflow-x: auto; font-family: var(--code-font); font-size: 0.9em; line-height: 1.5; white-space: pre-wrap; }
 .msgph { font-family: var(--code-font); font-size: 0.9em; }
-.msgblock { background: var(--color-code-bg); border: 1px solid var(--color-border); border-radius: 4px; padding: 0.75rem; font-family: var(--code-font); font-size: 0.9em; white-space: pre-wrap; }
+.msgblock { background: var(--color-code-bg); color: var(--vscode-editor-foreground); border: 1px solid var(--color-border); border-radius: 4px; padding: 0.75rem; font-family: var(--code-font); font-size: 0.9em; white-space: pre-wrap; }
 
 /* Body elements */
-.lines { background: var(--color-code-bg); border: 1px solid var(--color-border); border-radius: 4px; padding: 0.75rem 1rem; font-family: var(--code-font); font-size: 0.9em; line-height: 1.5; white-space: pre-wrap; }
+.lines { background: var(--color-code-bg); color: var(--vscode-editor-foreground); border: 1px solid var(--color-border); border-radius: 4px; padding: 0.75rem 1rem; font-family: var(--code-font); font-size: 0.9em; line-height: 1.5; white-space: pre-wrap; }
 .fn { font-size: 0.75em; vertical-align: super; cursor: help; color: var(--color-link); }
 cite { font-style: italic; }
 .boolean { font-family: var(--code-font); font-size: 0.9em; font-weight: 500; }
@@ -221,7 +225,7 @@ cite { font-style: italic; }
 .glossentry { margin: 1em 0; }
 
 /* Hazard */
-.hazardstatement { border-left: 4px solid #c0392b; background: var(--color-danger-bg); padding: 0.75rem 1rem; margin: 1rem 0; border-radius: 0 4px 4px 0; }
+.hazardstatement { border-left: 4px solid #c0392b; background: var(--color-danger-bg); color: var(--vscode-editor-foreground); padding: 0.75rem 1rem; margin: 1rem 0; border-radius: 0 4px 4px 0; }
 .typeofhazard { font-weight: 600; color: #c0392b; }
 .howtoavoid { margin: 0.5rem 0; }
 .consequence { margin: 0.5rem 0; }
@@ -342,6 +346,7 @@ section, .example { margin: 1.5rem 0; }
 .relheader th {
   font-weight: 600;
   background: var(--color-code-bg);
+  color: var(--vscode-editor-foreground);
   padding: 0.4rem 0.6rem;
   border: 1px solid var(--color-border);
 }
@@ -395,6 +400,7 @@ section, .example { margin: 1.5rem 0; }
   border-top: none;
   border-left: 4px solid var(--color-danger-border);
   background: var(--color-danger-bg);
+  color: var(--vscode-editor-foreground);
   border-radius: 0 4px 4px 0;
 }
 
