@@ -81,6 +81,8 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showErrorMessage('请先打开一个 .ditamap 文件。');
         return;
       }
+      const mapPath = normalizeDriveLetter(mapUri.fsPath);
+      const mapDir = dirname(mapPath);
 
       // 2. Detect DITA-OT
       const configPath: string | undefined = vscode.workspace.getConfiguration('dita-viewer').get('ditaOtPath');
@@ -129,7 +131,6 @@ export function activate(context: vscode.ExtensionContext) {
       const transtype = selected.label;
 
       // 4. Choose output directory
-      const mapDir = dirname(mapUri.fsPath);
       const defaultDir = join(mapDir, 'out', transtype);
       const chosenUri = await vscode.window.showOpenDialog({
         canSelectFolders: true,
@@ -138,9 +139,9 @@ export function activate(context: vscode.ExtensionContext) {
         defaultUri: vscode.Uri.file(defaultDir),
         openLabel: '选择输出目录',
       });
-      const outputDir = (chosenUri && chosenUri.length > 0)
-        ? chosenUri[0].fsPath
-        : defaultDir;
+      const outputDir = normalizeDriveLetter(
+        (chosenUri && chosenUri.length > 0) ? chosenUri[0].fsPath : defaultDir,
+      );
 
       if (existsSync(outputDir)) {
         try {
@@ -157,7 +158,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
 
       // 5. Run transformation
-      const args = buildDitaOtArgs({ mapPath: mapUri.fsPath, transtype, outputDir });
+      const args = buildDitaOtArgs({ mapPath, transtype, outputDir });
       const outputChannel = vscode.window.createOutputChannel('DITA-OT Transform');
 
       disposables.push(
@@ -297,6 +298,13 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   context.subscriptions.push(transformCommand);
+}
+
+function normalizeDriveLetter(p: string): string {
+  if (process.platform === 'win32' && /^[a-z]:/.test(p)) {
+    return p[0].toUpperCase() + p.slice(1);
+  }
+  return p;
 }
 
 async function resolveMapFile(): Promise<vscode.Uri | undefined> {
