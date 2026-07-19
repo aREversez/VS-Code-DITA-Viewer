@@ -6,6 +6,16 @@ function cur() {
   return p.substring(p.lastIndexOf('/') + 1) || 'index.html';
 }
 
+function isIndex() { return cur() === 'index.html'; }
+
+function rootPrefix() {
+  var link = document.querySelector('link[href*="dita-viewer-chrome"]');
+  if (!link) return '';
+  var href = link.getAttribute('href');
+  var idx = href.lastIndexOf('/');
+  return idx >= 0 ? href.substring(0, idx + 1) : '';
+}
+
 function initNavToolbar() {
   var idx = -1;
   for (var i = 0; i < MANIFEST.length; i++) {
@@ -20,6 +30,12 @@ function initNavToolbar() {
     });
   };
   bar.appendChild(tb);
+  if (!isIndex()) {
+    var homeBtn = document.createElement('button'); homeBtn.textContent = '\u2302';
+    homeBtn.title = '\u56DE\u5230\u4E3B\u9875';
+    homeBtn.onclick = function () { location.href = rootPrefix() + 'index.html'; };
+    bar.appendChild(homeBtn);
+  }
   if (idx > 0) {
     var pb = document.createElement('button'); pb.textContent = '\u2039'; pb.title = '\u4E0A\u4E00\u9875';
     pb.onclick = function () { location.href = MANIFEST[idx - 1].file; };
@@ -34,6 +50,7 @@ function initNavToolbar() {
 }
 
 function initSidebar() {
+  if (isIndex()) { document.body.classList.add('dv-index'); return; }
   var nav = document.querySelector('nav');
   if (!nav) return;
   nav.classList.add('dv-sidebar');
@@ -56,6 +73,7 @@ function initSidebar() {
 }
 
 function initOnPageToc() {
+  if (isIndex()) return;
   var items = [];
   document.querySelectorAll('section[id]').forEach(function (sec) {
     var titleEl = sec.querySelector('h2.sectiontitle, h3.sectiontitle');
@@ -84,17 +102,23 @@ function initOnPageToc() {
   document.body.appendChild(container);
 }
 
-function initCopyCode() {
+function initCodeLabels() {
   document.querySelectorAll('pre.codeblock, pre.pre').forEach(function (pre) {
-    var btn = document.createElement('button'); btn.className = 'dv-copy-btn';
-    btn.textContent = '\u590D\u5236';
+    var classes = pre.className.split(/\s+/);
+    var lang = '';
+    for (var j = 0; j < classes.length; j++) {
+      if (classes[j].indexOf('language-') === 0) { lang = classes[j].substring(9); break; }
+    }
+    if (!lang) lang = '\u4EE3\u7801';
+    var label = document.createElement('span'); label.className = 'dv-code-lang';
+    label.textContent = lang;
     pre.style.position = 'relative';
-    pre.appendChild(btn);
-    btn.onclick = function () {
+    pre.appendChild(label);
+    label.onclick = function () {
       var text = pre.textContent;
       var done = function () {
-        btn.textContent = '\u5DF2\u590D\u5236';
-        setTimeout(function () { btn.textContent = '\u590D\u5236'; }, 2000);
+        label.textContent = '\u5DF2\u590D\u5236';
+        setTimeout(function () { label.textContent = lang; }, 2000);
       };
       var fallback = function () {
         try {
@@ -146,6 +170,6 @@ function initDarkMode() {
 if (FEATURES.navToolbar) initNavToolbar();
 if (FEATURES.sidebar) initSidebar();
 if (FEATURES.onPageToc) initOnPageToc();
-if (FEATURES.copyCode) initCopyCode();
+if (FEATURES.copyCode) initCodeLabels();
 if (FEATURES.backToTop) initBackToTop();
 if (FEATURES.darkMode) initDarkMode();

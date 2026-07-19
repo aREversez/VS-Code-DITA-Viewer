@@ -101,7 +101,7 @@ export function buildDitaOtArgs(input: {
   cssArg?: CssArg;
   ditavalFile?: string;
 }): string[] {
-  const args = ['-i', input.mapPath, '-f', input.transtype, '-o', input.outputDir];
+  const args = ['-i', input.mapPath, '-f', input.transtype, '-o', input.outputDir, '--nav-toc=full'];
   if (input.cssArg) {
     args.push('--args.css', input.cssArg.filename);
     args.push('--args.cssroot', input.cssArg.root);

@@ -1,17 +1,17 @@
 /* ── Dark mode palette ── */
 html.dark {
-  --color-bg: #1a1a1a;
-  --color-text: #e0e0e0;
+  --color-bg: #1e1e1e;
+  --color-text: #d4d4d4;
   --color-border: #444;
   --color-link: #6ab0f3;
-  --color-code-bg: #2a2a2a;
+  --color-code-bg: #1a1a1a;
   --color-code-border: #444;
   --color-note-bg: #1a2633;
   --color-warning-bg: #33281a;
   --color-danger-bg: #331a1a;
   --color-important-bg: #261a33;
   --color-tip-bg: #1a3326;
-  --color-sidebar-bg: #222;
+  --color-sidebar-bg: #252525;
   --color-surface: #2a2a2a;
   --color-muted: #999;
 }
@@ -23,8 +23,9 @@ html.dark body {
 
 html.dark a { color: var(--color-link); }
 
-html.dark h1, html.dark h2, html.dark h3, html.dark h4 { color: #f0f0f0; }
+html.dark h1, html.dark h2, html.dark h3, html.dark h4 { color: #e8e8e8; }
 
+/* ── Floating UI elements ── */
 html.dark .dv-toolbar,
 html.dark .dv-page-toc,
 html.dark .dv-back-to-top,
@@ -32,30 +33,58 @@ html.dark .dv-dark-toggle {
   background: var(--color-surface);
   border-color: var(--color-border);
 }
-html.dark .dv-toolbar button,
-html.dark .dv-copy-btn { background: #333; border-color: #555; color: #ddd; }
-html.dark .dv-toolbar button:hover,
-html.dark .dv-copy-btn:hover { background: #444; }
+html.dark .dv-toolbar button { background: #333; border-color: #555; color: #ddd; }
+html.dark .dv-toolbar button:hover { background: #444; }
 
 html.dark .dv-sidebar {
   background: var(--color-sidebar-bg);
   border-color: var(--color-border);
 }
-html.dark .dv-sidebar a { color: #ccc; }
+html.dark .dv-sidebar a { color: #bbb; }
 html.dark .dv-sidebar a:hover { background: #333; }
 html.dark .dv-sidebar a.active { background: #1a3a6a; color: #6ab0f3; }
+html.dark .dv-sidebar ul ul { padding-left: 1rem; }
 
 html.dark .dv-page-toc a { color: #aaa; }
 html.dark .dv-page-toc a:hover { color: var(--color-link); background: #333; }
 html.dark .dv-page-toc-title { border-bottom-color: var(--color-border); }
 
+/* ── Index page ── */
+html.dark .dv-index { background: var(--color-bg); }
+html.dark .dv-index nav a {
+  background: #2a2a2a;
+  color: #d4d4d4;
+  border-color: var(--color-border);
+}
+html.dark .dv-index nav a:hover {
+  background: #333;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+/* ── Code blocks ── */
 html.dark pre.codeblock,
 html.dark pre.pre {
   background: var(--color-code-bg) !important;
   border-color: var(--color-code-border);
 }
-html.dark code { color: #e0e0e0; }
+html.dark code, html.dark .codeph, html.dark .tt { color: #d4d4d4; }
+html.dark .dv-code-lang {
+  background: #333;
+  color: #aaa;
+  border-color: var(--color-border);
+}
+html.dark .dv-code-lang:hover { background: #444; color: #ddd; }
 
+/* ── Inline code, keyboard, filepath ── */
+html.dark kbd,
+html.dark .userinput,
+html.dark .filepath {
+  background: #2a2a2a;
+  border-color: var(--color-border);
+  color: #d4d4d4;
+}
+
+/* ── Notes / admonitions ── */
 html.dark .note { background: var(--color-note-bg); border-color: #2a4a6a; }
 html.dark .note_important { background: var(--color-important-bg); border-color: #443366; }
 html.dark .note_tip { background: var(--color-tip-bg); border-color: #336644; }
@@ -63,11 +92,20 @@ html.dark .note_warning { background: var(--color-warning-bg); border-color: #66
 html.dark .note_danger { background: var(--color-danger-bg); border-color: #663333; }
 html.dark .note__title { color: #ccc; }
 
+/* ── Tables ── */
 html.dark table,
 html.dark .table { border-color: var(--color-border); }
 html.dark th, html.dark td { border-color: var(--color-border); }
-html.dark thead { background: #222; }
+html.dark thead { background: #252525; }
+html.dark tbody tr:nth-child(even) { background: #222; }
+html.dark tbody tr:nth-child(odd) { background: #1a1a1a; }
 
-html.dark .shortdesc { background: #222; color: #ccc; }
+/* ── Misc content ── */
+html.dark .shortdesc { background: #252525; color: #bbb; }
 html.dark blockquote { border-left-color: #555; color: #bbb; }
 html.dark figcaption { color: #aaa; }
+html.dark .related-links,
+html.dark .linklist { border-color: var(--color-border); }
+html.dark .related-links a,
+html.dark .linklist a { color: var(--color-link); }
+html.dark hr { border-color: var(--color-border); }

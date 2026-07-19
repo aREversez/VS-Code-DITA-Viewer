@@ -43,8 +43,10 @@
   padding: 1rem;
   box-sizing: border-box;
 }
-.dv-sidebar ul.map { list-style: none; padding: 0; margin: 0; }
-.dv-sidebar .topicref { margin: 0.25rem 0; }
+.dv-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.dv-sidebar ul ul { padding-left: 1rem; }
+.dv-sidebar li { margin: 0.15rem 0; }
+.dv-sidebar .title { display: none; }
 .dv-sidebar a {
   text-decoration: none;
   color: #333;
@@ -59,6 +61,36 @@
   font-weight: 600;
 }
 .dv-has-sidebar { margin-left: 260px; }
+
+/* ── Index page (no sidebar) ── */
+.dv-index {
+  margin: 0 auto;
+  padding: 3rem 1rem;
+}
+.dv-index .title { text-align: center; font-size: 1.8rem; margin-bottom: 2rem; }
+.dv-index nav {
+  max-width: 700px;
+  margin: 0 auto;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+.dv-index nav ul.map { list-style: none; padding: 0; margin: 0; }
+.dv-index nav .topicref { margin: 0.5rem 0; }
+.dv-index nav a {
+  display: block;
+  padding: 10px 16px;
+  text-decoration: none;
+  color: #333;
+  background: #fafafa;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.dv-index nav a:hover {
+  background: #f0f4ff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
 
 /* ── On-page TOC ── */
 .dv-page-toc {
@@ -94,23 +126,23 @@
 }
 .dv-page-toc a:hover { background: #f0f0f0; color: #1a56db; }
 
-/* ── Copy code button ── */
-.dv-copy-btn {
+/* ── Code language label (top-right, click to copy) ── */
+.dv-code-lang {
   position: absolute;
-  top: 4px;
-  left: 4px;
+  top: 0;
+  right: 0;
   z-index: 1;
   cursor: pointer;
-  border: 1px solid #ccc;
-  border-radius: 3px;
-  padding: 2px 8px;
-  font-size: 12px;
-  background: #f8f8f8;
-  opacity: 0.6;
-  transition: opacity 0.2s;
+  font-size: 11px;
+  font-family: sans-serif;
+  padding: 2px 10px;
+  background: #e8e8e8;
+  color: #555;
+  border-radius: 0 3px 0 4px;
+  user-select: none;
+  transition: background 0.2s;
 }
-pre:hover .dv-copy-btn { opacity: 1; }
-.dv-copy-btn:hover { background: #e8e8e8; }
+.dv-code-lang:hover { background: #d0d0d0; }
 
 /* ── Back to top ── */
 .dv-back-to-top {
@@ -167,4 +199,6 @@ pre:hover .dv-copy-btn { opacity: 1; }
   .dv-has-sidebar { margin-left: 0; }
   .dv-page-toc { display: none; }
   .dv-toolbar { display: none; }
+  .dv-index { padding: 1.5rem 1rem; }
+  .dv-index .title { font-size: 1.4rem; }
 }
