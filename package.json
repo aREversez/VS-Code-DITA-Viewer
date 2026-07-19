@@ -74,7 +74,11 @@
       },
       {
         "command": "ditaViewer.transformWithDitaOt",
-        "title": "DITA-OT: Transform Map to HTML5"
+        "title": "DITA-OT: Transform Map…",
+        "icon": {
+          "light": "media/icons/transform.svg",
+          "dark": "media/icons/transform.svg"
+        }
       }
     ],
     "keybindings": [
@@ -100,6 +104,11 @@
           "command": "ditaViewer.showMapRendered",
           "when": "resourceExtname == .ditamap",
           "group": "navigation"
+        },
+        {
+          "command": "ditaViewer.transformWithDitaOt",
+          "when": "resourceExtname == .ditamap",
+          "group": "navigation"
         }
       ],
       "editor/context": [
@@ -112,6 +121,11 @@
           "command": "ditaViewer.showMapRendered",
           "when": "resourceExtname == .ditamap",
           "group": "navigation"
+        },
+        {
+          "command": "ditaViewer.transformWithDitaOt",
+          "when": "resourceExtname == .ditamap",
+          "group": "navigation"
         }
       ],
       "commandPalette": [
@@ -121,6 +135,10 @@
         },
         {
           "command": "ditaViewer.showMapRendered",
+          "when": "resourceExtname == .ditamap"
+        },
+        {
+          "command": "ditaViewer.transformWithDitaOt",
           "when": "resourceExtname == .ditamap"
         }
       ]

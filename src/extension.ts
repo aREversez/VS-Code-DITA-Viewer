@@ -128,9 +128,19 @@ export function activate(context: vscode.ExtensionContext) {
       if (!selected) return;
       const transtype = selected.label;
 
-      // 4. Determine output directory
+      // 4. Choose output directory
       const mapDir = dirname(mapUri.fsPath);
-      const outputDir = join(mapDir, 'out', transtype);
+      const defaultDir = join(mapDir, 'out', transtype);
+      const chosenUri = await vscode.window.showOpenDialog({
+        canSelectFolders: true,
+        canSelectFiles: false,
+        canSelectMany: false,
+        defaultUri: vscode.Uri.file(defaultDir),
+        openLabel: '选择输出目录',
+      });
+      const outputDir = (chosenUri && chosenUri.length > 0)
+        ? chosenUri[0].fsPath
+        : defaultDir;
 
       if (existsSync(outputDir)) {
         try {
@@ -173,7 +183,10 @@ export function activate(context: vscode.ExtensionContext) {
           });
 
           return new Promise<void>((resolvePromise, rejectPromise) => {
-            const child = spawn(result.location.executablePath, args, { shell: false });
+            // On Windows, batch files (.bat) require shell: true to execute reliably,
+            // otherwise spawn can fail with EINVAL when paths contain spaces.
+            const isWin = process.platform === 'win32';
+            const child = spawn(result.location.executablePath, args, { shell: isWin });
             let cancelled = false;
 
             const cancelListener = tokenSource.token.onCancellationRequested(() => {
