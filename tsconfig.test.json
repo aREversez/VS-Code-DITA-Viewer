@@ -6,6 +6,6 @@
     "declaration": false,
     "sourceMap": true
   },
-  "include": ["src/test/**/*", "src/parser/**/*", "src/render/**/*"],
+  "include": ["src/test/**/*", "src/parser/**/*", "src/render/**/*", "src/editor/ditaOtUtils.ts", "src/editor/ditaRenderUtils.ts"],
   "exclude": ["node_modules"]
 }

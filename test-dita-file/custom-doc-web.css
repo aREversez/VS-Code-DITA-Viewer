@@ -17,7 +17,6 @@
   --web-heading-font: 'Roboto', 'Segoe UI', sans-serif;
   --web-mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
   --web-radius: 4px;
-  --web-sidebar-width: 280px;
 }
 
 /* ── Full-width body ── */
@@ -33,64 +32,34 @@ body {
 
 /* ── Fixed top navigation bar ── */
 body::before {
-  content: '';
-  display: block;
+  content: '📖  Documentation Portal';
+  display: flex;
+  align-items: center;
   height: 48px;
+  padding: 0 1.5rem;
   background: var(--web-primary);
   position: sticky;
   top: 0;
   z-index: 100;
-  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 48"><text x="20" y="30" font-family="Arial" font-size="14" font-weight="bold" fill="white">📖 Documentation Portal</text><text x="660" y="30" font-family="Arial" font-size="11" fill="rgba(255,255,255,0.7)">Search ...</text></svg>');
-  background-repeat: no-repeat;
-  background-size: auto 48px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
 }
 
-/* ── Two-column layout: sidebar + content ── */
+/* ── Single-column layout ── */
 .topic {
-  display: flex;
-  gap: 0;
-  min-height: calc(100vh - 48px);
   background: var(--web-bg);
-  max-width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
 }
 
-/* Simulated sidebar via pseudo */
-.topic::before {
-  content: 'Contents\n\nIntroduction\nGetting Started\nInstallation\nConfiguration\nUsage Guide\nAdvanced Topics\nTroubleshooting\nAPI Reference\nRelease Notes';
-  white-space: pre;
-  display: block;
-  width: var(--web-sidebar-width);
-  flex-shrink: 0;
-  padding: 1.5rem 1rem;
-  background: var(--web-surface);
-  border-right: 1px solid var(--web-border);
-  font-size: 0.85em;
-  color: var(--web-text-muted);
-  line-height: 2;
-  position: sticky;
-  top: 48px;
-  height: calc(100vh - 48px);
-  overflow-y: auto;
-}
-
-/* Main content area */
 .topic > h1:first-child {
-  margin: 0;
-  padding: 1.5rem 2rem 0.75rem;
+  margin: 0 0 0.5em;
+  padding: 1.5rem 0 0.75rem;
   font-size: 2em;
   color: var(--web-primary);
   border-bottom: 2px solid var(--web-primary);
-  width: 100%;
-}
-
-/* Wrap remaining content */
-.topic > :not(h1:first-child) {
-  margin-left: calc(var(--web-sidebar-width) * -1);
-  padding-left: calc(var(--web-sidebar-width) + 2rem);
-  padding-right: 2rem;
-  width: 100%;
-  max-width: 1000px;
 }
 
 /* ── Short description ── */
@@ -101,7 +70,7 @@ body::before {
   background: var(--web-primary-light);
   border-left: 4px solid var(--web-primary);
   border-radius: 0 4px 4px 0;
-  margin: 1.5rem 2rem 1.5rem calc(var(--web-sidebar-width) + 2rem);
+  margin: 1.5rem 0;
 }
 
 /* ── Headings ── */
@@ -145,7 +114,7 @@ sub { font-size: 0.75em; vertical-align: sub; color: var(--web-primary); }
 
 .menucascade > .uicontrol + .uicontrol::before {
   content: ' › ';
-  color: var(--web-text-muted);
+  color: var(--web-text);
   font-weight: normal;
   background: none;
   border: none;
@@ -157,6 +126,7 @@ sub { font-size: 0.75em; vertical-align: sub; color: var(--web-primary); }
   font-family: var(--web-mono);
   font-size: 0.9em;
   background: var(--web-code-bg);
+  color: var(--web-text);
   padding: 0.1em 0.35em;
   border-radius: 3px;
 }
@@ -232,7 +202,7 @@ pre code { background: none; padding: 0; color: inherit; }
 
 .note__label {
   font-weight: 700;
-  font-size: 0.72em;
+  font-size: 1em;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   display: block;
@@ -375,30 +345,45 @@ blockquote {
   background: var(--web-surface);
   border: 1px solid var(--web-border);
   border-radius: var(--web-radius);
-  margin-left: calc(var(--web-sidebar-width) + 2rem);
-  margin-right: 2rem;
 }
 .related-links h2 { font-size: 1.1em; margin-top: 0; }
 
-/* ── Breadcrumb simulation ── */
-.topic > *:first-child::before {
-  content: 'Home / Products / ';
-  display: block;
-  font-size: 0.8em;
-  color: var(--web-text-muted);
-  margin-bottom: 0.5em;
+/* ── Related-topic links (map/link) ── */
+.link { color: var(--web-primary); text-decoration: none; }
+.link:hover { text-decoration: underline; }
+
+/* ── DITAMAP tree & book view (standalone, no topic sidebar) ── */
+.ditamap-container,
+.ditamap-book {
+  background: var(--web-surface);
+  border: 1px solid var(--web-border);
+  border-radius: var(--web-radius);
+  padding: 1.5rem 2rem;
 }
+
+.map-title { color: var(--web-text); }
+
+.map-tree-item--nav:hover { background-color: var(--web-primary-light); }
+
+.map-tree-link { color: var(--web-primary); }
+
+.book-section-heading { color: var(--web-text-muted); }
+
+.book-entry--error {
+  border-left-color: var(--web-accent);
+  background: #fce8e6;
+}
+
+.book-entry-title { color: var(--web-accent); }
+
+.vscode-dark .book-entry--error { background: #2d1616; }
 
 /* ── Sections ── */
 section, .example { margin: 2rem 0; }
 
 /* ── Print ── */
 @media print {
-  body::before, .topic::before { display: none; }
-  .topic { display: block; }
-  .shortdesc { margin-left: 0; }
-  .topic > :not(h1:first-child) { margin-left: 0; padding-left: 2rem; }
-  .related-links { margin-left: 0; }
+  body::before { display: none; }
   pre.codeblock { box-shadow: none; border: 1px solid #ddd; }
 }
 
@@ -416,7 +401,6 @@ section, .example { margin: 2rem 0; }
 }
 
 .vscode-dark .topic { background: var(--web-bg); }
-.vscode-dark .topic::before { background: var(--web-surface); border-color: var(--web-border); }
 .vscode-dark body::before { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); }
 .vscode-dark .uicontrol { border-color: var(--web-border); }
 .vscode-dark .xref { color: var(--web-primary); }

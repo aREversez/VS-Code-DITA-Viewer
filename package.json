@@ -2,7 +2,7 @@
   "name": "dita-viewer",
   "displayName": "DITA Viewer",
   "description": "DITA reading view for VS Code — renders .dita files as formatted read-only preview",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "publisher": "dita-viewer",
   "engines": {
     "vscode": "^1.85.0"
@@ -16,7 +16,8 @@
     "onCustomEditor:ditaViewer.preview",
     "onCustomEditor:ditaViewer.mapPreview",
     "onCommand:ditaViewer.showRendered",
-    "onCommand:ditaViewer.showMapRendered"
+    "onCommand:ditaViewer.showMapRendered",
+    "onCommand:ditaViewer.transformWithDitaOt"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -58,12 +59,26 @@
       {
         "command": "ditaViewer.showRendered",
         "title": "Open DITA Reading View",
-        "icon": "media/icons/preview.svg"
+        "icon": {
+          "light": "media/icons/preview.svg",
+          "dark": "media/icons/preview~dark.svg"
+        }
       },
       {
         "command": "ditaViewer.showMapRendered",
         "title": "Open DITA Map Reading View",
-        "icon": "media/icons/preview.svg"
+        "icon": {
+          "light": "media/icons/map-preview.svg",
+          "dark": "media/icons/map-preview~dark.svg"
+        }
+      },
+      {
+        "command": "ditaViewer.transformWithDitaOt",
+        "title": "DITA-OT: Transform Map…",
+        "icon": {
+          "light": "media/icons/transform.svg",
+          "dark": "media/icons/transform~dark.svg"
+        }
       }
     ],
     "keybindings": [
@@ -89,6 +104,11 @@
           "command": "ditaViewer.showMapRendered",
           "when": "resourceExtname == .ditamap",
           "group": "navigation"
+        },
+        {
+          "command": "ditaViewer.transformWithDitaOt",
+          "when": "resourceExtname == .ditamap",
+          "group": "navigation"
         }
       ],
       "editor/context": [
@@ -101,6 +121,11 @@
           "command": "ditaViewer.showMapRendered",
           "when": "resourceExtname == .ditamap",
           "group": "navigation"
+        },
+        {
+          "command": "ditaViewer.transformWithDitaOt",
+          "when": "resourceExtname == .ditamap",
+          "group": "navigation"
         }
       ],
       "commandPalette": [
@@ -110,6 +135,10 @@
         },
         {
           "command": "ditaViewer.showMapRendered",
+          "when": "resourceExtname == .ditamap"
+        },
+        {
+          "command": "ditaViewer.transformWithDitaOt",
           "when": "resourceExtname == .ditamap"
         }
       ]
@@ -132,6 +161,16 @@
           },
           "default": [],
           "description": "Directories to scan for available CSS files. Supports absolute paths, workspace-relative paths, and document-relative paths. CSS files found here appear in the preview theme dropdown."
+        },
+        "dita-viewer.ditaOtPath": {
+          "type": "string",
+          "default": "",
+          "description": "DITA-OT 安装目录的绝对路径（该目录下应有 bin/dita 或 bin\\dita.bat）。留空则自动探测 DITA_HOME 环境变量和 PATH。"
+        },
+        "dita-viewer.ditaOtInjectNavToolbar": {
+          "type": "boolean",
+          "default": true,
+          "description": "（已废弃）转换完成后注入站点增强功能（导航、侧边栏等）。新版本使用转换流程中的 QuickPick 选择具体功能，此设置仅作为旧版兼容保留。"
         }
       }
     }

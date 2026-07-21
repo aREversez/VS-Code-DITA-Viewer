@@ -6,3 +6,4 @@ output/
 *.vsix
 REQUIREMENTS.md
 ROADMAP.md
+test-dita-file/out/

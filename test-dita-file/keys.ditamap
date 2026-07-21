@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<map>
+    <title>reused keys</title>
+    <keydef keys="product_name">
+        <topicmeta>
+            <keywords>
+                <keyword>DatabaseX Pro v3.0</keyword>
+            </keywords>
+        </topicmeta>
+    </keydef>
+    <keydef keys="app_version">
+        <topicmeta>
+            <keywords>
+                <keyword>V1.0.0</keyword>
+            </keywords>
+        </topicmeta>
+    </keydef>
+    <keydef keys="company_name">
+        <topicmeta>
+            <keywords>
+                <keyword>ACME Corporation</keyword>
+            </keywords>
+        </topicmeta>
+    </keydef>
+    <keydef keys="warning_msg">
+        <topicmeta>
+            <keywords>
+                <keyword>Please ensure network is connected.</keyword>
+            </keywords>
+        </topicmeta>
+    </keydef>
+    <keydef keys="fallback_key">
+        <topicmeta>
+            <keywords>
+                <keyword>Ctrl + 3</keyword>
+            </keywords>
+        </topicmeta>
+    </keydef>
+</map>

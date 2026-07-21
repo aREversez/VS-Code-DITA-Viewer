@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderTopicToHtml, renderBookPlaceholder, renderBookError, renderBookSkipMessage, escapeHtml } from './ditaRenderUtils';
+import { renderTopicToHtml, renderBookPlaceholder, renderBookError, renderBookSkipMessage, escapeHtml, expandDitamapRefs } from './ditaRenderUtils';
 import { buildKeyMap } from './DitaViewerProvider';
 import { dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
@@ -54,6 +54,20 @@ function getMapWebviewScript(): string {
     document.body.style.fontSize = fontSize + '%';
   });
   toolbar.appendChild(fsUp);
+
+  // Font toggle (serif / sans-serif)
+  var isSerif = false;
+  var fontBtn = document.createElement('button');
+  fontBtn.textContent = 'Sans';
+  fontBtn.title = 'Current: Sans-serif. Click to switch to Serif';
+  fontBtn.style.cssText = btnStyle + 'font-size:11px;';
+  fontBtn.addEventListener('click', function() {
+    isSerif = !isSerif;
+    fontBtn.textContent = isSerif ? 'Serif' : 'Sans';
+    fontBtn.title = isSerif ? 'Current: Serif. Click to switch to Sans-serif' : 'Current: Sans-serif. Click to switch to Serif';
+    document.body.style.fontFamily = isSerif ? "Georgia,'Times New Roman','Noto Serif SC','Songti SC',STSong,SimSun,serif" : '';
+  });
+  toolbar.appendChild(fontBtn);
 
   // Page width
   var widths = [
@@ -130,7 +144,8 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         const mapDir = dirname(document.uri.fsPath);
         const targetPath = resolve(mapDir, href);
         const targetUri = vscode.Uri.file(targetPath);
-        vscode.commands.executeCommand('vscode.openWith', targetUri, 'ditaViewer.preview');
+        const viewType = href.toLowerCase().endsWith('.ditamap') ? 'ditaViewer.mapPreview' : 'ditaViewer.preview';
+        vscode.commands.executeCommand('vscode.openWith', targetUri, viewType);
       } else if (message.type === 'switchMode') {
         currentMode = message.mode as 'tree' | 'book';
         updateWebview();
@@ -143,6 +158,12 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       }
     });
 
+    // Re-render on theme switch so the manually-computed light/dark class
+    // never goes stale relative to the actual active theme.
+    const themeSubscription = vscode.window.onDidChangeActiveColorTheme(() => {
+      updateWebview();
+    });
+
     const updateWebview = () => {
       const html = this.generateHtml(document, webviewPanel.webview, currentMode);
       webviewPanel.webview.html = html;
@@ -152,6 +173,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
 
     webviewPanel.onDidDispose(() => {
       changeSubscription.dispose();
+      themeSubscription.dispose();
     });
   }
 
@@ -170,6 +192,10 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       const rawXml = document.getText();
       const preprocessedXml = preprocessEntities(rawXml);
       const mapDoc = parseDitamap(preprocessedXml);
+
+      // Expand topicrefs/keydefs that reference external .ditamap files
+      // so their key-value pairs are visible inline in both tree and book mode
+      expandDitamapRefs(mapDoc.root, docDir);
 
       let content: string;
       if (mode === 'book') {

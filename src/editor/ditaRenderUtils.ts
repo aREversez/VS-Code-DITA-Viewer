@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { DitaNode } from '../parser/domTypes';
-import { parseDita, preprocessEntities } from '../parser/ditaParser';
+import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
 
 // ── Text extraction ──
@@ -184,6 +184,47 @@ export interface TopicRenderResult {
   html: string;
   title?: string;
   error?: string;
+}
+
+// ── Ditamap reference expansion ──
+// Walks the map tree and inlines children from referenced .ditamap files
+// so key-value pairs appear inline in tree/book view.
+
+export type FileReader = (path: string, encoding: 'utf-8') => string;
+
+export function expandDitamapRefs(
+  node: DitaNode,
+  docDir: string,
+  readFile: FileReader = readFileSync as unknown as FileReader,
+  visited?: Set<string>,
+): void {
+  if (node.type !== 'element') return;
+  const href = node.attributes?.href;
+  const baseType = node.baseType;
+
+  if (href && href.endsWith('.ditamap') && (baseType === 'map/topicref' || baseType === 'map/keydef')) {
+    const targetPath = resolve(docDir, href);
+    if (!visited) visited = new Set();
+    if (visited.has(targetPath)) return;
+    visited.add(targetPath);
+    try {
+      const content = readFile(targetPath, 'utf-8');
+      const doc = parseDitamap(preprocessEntities(content));
+      const refChildren = (doc.root.children || []).filter(
+        (c) => c.type === 'element',
+      );
+      if (refChildren.length > 0) {
+        if (!node.children) node.children = [];
+        node.children.push(...refChildren);
+      }
+    } catch {
+      // file not found or parse error — skip silently
+    }
+  }
+
+  for (const child of node.children || []) {
+    expandDitamapRefs(child, docDir, readFile, visited);
+  }
 }
 
 export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
