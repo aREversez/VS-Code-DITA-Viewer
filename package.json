@@ -77,7 +77,7 @@
         "title": "DITA-OT: Transform Map…",
         "icon": {
           "light": "media/icons/transform.svg",
-          "dark": "media/icons/transform.svg"
+          "dark": "media/icons/transform~dark.svg"
         }
       }
     ],

@@ -236,7 +236,7 @@ For `html5` / `xhtml` output, the extension automatically injects a **navigation
 
 ### From VSIX
 
-1. Download `dita-viewer-1.1.0.vsix`
+1. Download the latest `.vsix` from the [releases page](https://github.com/anomalyco/vs-code-dita-view-plugin/releases)
 2. In VS Code, press `Ctrl+Shift+P` → **Extensions: Install from VSIX...**
 3. Select the `.vsix` file
 
