@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.0.4 (2026-07-21)
+
+### Site-Chrome Enhancements (HTML5/XHTML Output)
+
+- **Navigation toolbar** — fixed right-side toolbar with section collapse/expand, back-to-home button, and prev/next page navigation (auto-resolved from the DITA map)
+- **Sidebar TOC** — fixed left sidebar with full topic tree; current page highlighted with scroll-into-view; collapses to static on mobile
+- **On-page heading navigation** — floating right-side TOC listing `h2`/`h3` headings within the current page; smooth-scroll on click
+- **Code language labels** — language extracted from `outputclass` (e.g. `language-cpp`) and displayed at top-right; clicking the label copies the entire code block content (clipboard API with execCommand fallback)
+- **Back-to-top button** — floating circular button at bottom-right, appears after scrolling past 400px
+- **Dark mode toggle** — floating toggle at bottom-right, switches between light/dark themes; respects `prefers-color-scheme` on first visit; preference persisted in `localStorage`
+- **Dark mode CSS** — comprehensive `dark-mode.css` covering all UI elements (sidebar, toolbar, code blocks, tables, notes, blockquotes, links, inline code/kbd/filepath, related-links)
+- **Index page** — homepage detected automatically; sidebar removed; navigation list displayed as centered card-style directory; no toolbar collapse/sidebar/on-page-TOC injected
+- All features opt-out via QuickPick during transform flow; injected as `dita-viewer-chrome.js` + `dita-viewer-chrome.css` (+ `dita-viewer-dark.css`) into the DITA-OT output
+
+### DITA-OT Transform Workflow
+
+- **CSS file selection** — QuickPick scans map directory and workspace root for `.css` files; selected file passed to DITA-OT via `args.css` / `args.cssroot` / `args.copycss` / `args.csspath`
+- **DITAVAL filter support** — optional `.ditaval` file selection passed via `--filter` for conditional content profiling
+- **Command rename** — "DITA-OT: Transform Map to HTML5" renamed to "DITA-OT: Transform Map…" to reflect multi-transtype support
+- **Transform icon** — toolbar button for the DITA-OT transform command added to the editor title bar
+- **`--nav-toc=full`** — DITA-OT generates full TOC `<nav>` in every page, enabling the sidebar on topic pages
+
+### Bug Fixes
+
+- **Drive letter case** — Windows drive letters in output paths now consistently normalized to uppercase (prevents "path not found" mismatches)
+- **Dark mode initial palette** — background `#1a1a1a`→`#1e1e1e` for better readability; added missing inline-code, keyboard, filepath, table-alternate-row, and related-links styles
+- **Home button path** — now derives correct root-relative path from the injected CSS `<link>` href, fixing broken navigation from subdirectory topic pages
+- **Sidebar selectors** — changed from `.dv-sidebar ul.map` / `.dv-sidebar .topicref` to generic `.dv-sidebar ul` / `.dv-sidebar li` to correctly match DITA-OT's `<nav class="toc">` output structure
+
+### Infrastructure
+
+- `esbuild.config.js` — production build with minification; development build `--dev` preserves source maps
+- `ditaOtUtils.ts` — `buildDitaOtArgs()` extended with CSS/DITAVAL parameters; `SiteChromeFeatures` interface for feature flag typing
+- `extension.ts` — full QuickPick-driven transform flow documented with step-by-step progress notification
+
 ## 1.0.3 (2026-07-17)
 
 ### DITA Map Preview

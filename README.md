@@ -12,7 +12,7 @@ A VS Code extension that renders **`.dita`** and **`.ditamap`** files as a forma
 - **Reltable and topicgroup support** — reltables are skipped from the tree; topicgroups render children without adding their own entry
 - **Theme-aware** — automatically adapts background and border colors to the current VS Code theme
 - **Custom CSS support** — override or extend the default styling with an in-preview theme switcher
-- **DITA-OT Transform** — run formal publishing transforms (`html5`, `pdf`, `xhtml`, `markdown`) using a local DITA-OT installation with live log output and cancellable progress
+- **DITA-OT Transform** — run formal publishing transforms (`html5`, `pdf`, `xhtml`, `markdown`) using a local DITA-OT installation with live log output, cancellable progress, CSS/DITAVAL support, and automatic injection of site-chrome enhancements (sidebar TOC, on-page navigation, code language labels, back-to-top, dark mode)
 
 ## Usage
 
@@ -202,18 +202,41 @@ Transform your DITA maps to HTML5 (or other formats) using a local DITA-OT insta
 
 Open a `.ditamap` file (or a `.dita` topic inside a map project), then:
 
-1. Press `Ctrl+Shift+P` and run **DITA-OT: Transform Map to HTML5**
-2. Select a **transtype** (`html5`, `pdf`, `xhtml`, or `markdown`)
-3. The transform runs with a cancellable progress notification and live log output
-4. On completion, HTML5 output opens directly in your browser; other formats open in the file manager
+1. Press `Ctrl+Shift+P` and run **DITA-OT: Transform Map…**
+2. Select a **transtype** (`html5`, `pdf`, `xhtml`, `markdown`)
+3. (Optional) Select a **CSS file** to pass to DITA-OT via `args.css` — the extension scans the map directory and workspace root for `.css` files
+4. (Optional) Select a **DITAVAL filter file** to apply conditional processing
+5. Select which **site-chrome enhancements** to inject into the output (all enabled by default):
+   - **Nav toolbar** — prev/next page navigation + section collapse/expand + back-to-home button
+   - **Sidebar TOC** — fixed left sidebar with the full topic tree (highlights current page)
+   - **On-page TOC** — right-side floating heading navigation with smooth-scroll
+   - **Code language labels** — language label at top-right of code blocks; click to copy code
+   - **Back to top** — floating back-to-top button at bottom-right
+   - **Dark mode** — light/dark toggle with `prefers-color-scheme` auto-detection
+6. The transform runs with a cancellable progress notification and live log output in the **DITA-OT Transform** output channel
+7. On completion:
+   - `html5` / `xhtml` output is enhanced with all selected site-chrome features and opened in your browser
+   - `pdf` / `markdown` output opens in the file manager
 
 Output is written to `out/<transtype>/` alongside your map file. If the directory already contains files, you'll be prompted before overwriting.
+
+#### CSS support
+
+When transforming to `html5` or `xhtml`, you can select a CSS file that gets passed to DITA-OT via `args.css`, `args.cssroot`, `args.copycss`, and `args.csspath`. The extension scans the map's directory and the workspace root for `.css` files and presents them in a QuickPick. This lets you control the formal published output's appearance without manually editing DITA-OT configuration.
+
+#### DITAVAL filter support
+
+You can optionally select a `.ditaval` filter file during the transform flow. When chosen, it's passed to DITA-OT via `--filter`, enabling conditional content filtering (profiling) during the formal publish.
+
+#### Site-chrome enhancements
+
+For `html5` / `xhtml` output, the extension automatically injects a **navigation toolbar**, **sidebar TOC**, **on-page heading navigation**, **code language labels with click-to-copy**, **back-to-top button**, and a **dark mode toggle**. All features are opt-out — deselect any you don't need during the QuickPick step, or re-enable them on subsequent transforms. The enhancements are written directly into the DITA-OT output directory as `dita-viewer-chrome.js`, `dita-viewer-chrome.css`, and (if dark mode is enabled) `dita-viewer-dark.css`, then linked into every HTML file.
 
 ## Installation
 
 ### From VSIX
 
-1. Download `dita-viewer-1.0.3.vsix`
+1. Download `dita-viewer-1.1.0.vsix`
 2. In VS Code, press `Ctrl+Shift+P` → **Extensions: Install from VSIX...**
 3. Select the `.vsix` file
 
