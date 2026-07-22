@@ -221,7 +221,7 @@ export function activate(context: vscode.ExtensionContext) {
             navToolbar: false, sidebar: false, onPageToc: false,
             copyCode: false, backToTop: false, darkMode: false,
           };
-          for (const item of picked) features[(item as any).key] = true;
+          for (const item of picked) features[(item as { key: keyof SiteChromeFeatures }).key] = true;
           siteChromeFeatures = features;
         } else {
           // User cancelled: enable all by default (keep backward compatibility)
