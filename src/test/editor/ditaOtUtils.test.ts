@@ -181,6 +181,7 @@ describe('buildDitaOtArgs', () => {
       'html5',
       '-o',
       '/project/out/html5',
+      '--nav-toc=full',
     ]);
   });
 
@@ -197,6 +198,7 @@ describe('buildDitaOtArgs', () => {
       'pdf',
       '-o',
       '/my project/out/pdf',
+      '--nav-toc=full',
     ]);
   });
 
@@ -213,6 +215,7 @@ describe('buildDitaOtArgs', () => {
       'xhtml',
       '-o',
       'C:\\project\\out\\xhtml',
+      '--nav-toc=full',
     ]);
   });
 
@@ -227,6 +230,7 @@ describe('buildDitaOtArgs', () => {
       '-i', '/map.ditamap',
       '-f', 'html5',
       '-o', '/out',
+      '--nav-toc=full',
       '--args.css', 'my-theme.css',
       '--args.cssroot', '/project/css',
       '--args.copycss', 'yes',
@@ -245,6 +249,7 @@ describe('buildDitaOtArgs', () => {
       '-i', '/map.ditamap',
       '-f', 'pdf',
       '-o', '/out',
+      '--nav-toc=full',
       '--filter', '/filters/profiling.ditaval',
     ]);
   });
@@ -261,6 +266,7 @@ describe('buildDitaOtArgs', () => {
       '-i', '/map.ditamap',
       '-f', 'xhtml',
       '-o', '/out',
+      '--nav-toc=full',
       '--args.css', 'custom.css',
       '--args.cssroot', '/root',
       '--args.copycss', 'yes',

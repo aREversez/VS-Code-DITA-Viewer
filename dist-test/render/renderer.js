@@ -37,7 +37,7 @@ function resolveConrefForNode(node, context) {
     if (!resolved)
         return node;
     // Strip conref after resolving, replace children with resolved text
-    const { conref: _, ...restAttrs } = node.attributes || {};
+    const { conref: _unused, ...restAttrs } = node.attributes || {};
     return { ...node, children: [makeTextNode(resolved, node.sourceRange)], attributes: restAttrs };
 }
 function renderElement(node, context) {

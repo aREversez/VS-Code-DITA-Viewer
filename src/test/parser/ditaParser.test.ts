@@ -1,7 +1,5 @@
 import * as assert from 'assert';
 import { parseDita } from '../../parser/ditaParser';
-import { DitaNode } from '../../parser/domTypes';
-
 describe('ditaParser', () => {
   it('should parse a minimal topic with title and shortdesc', () => {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>

@@ -51,7 +51,9 @@ function resolveConrefForNode(node: DitaNode, context: RenderContext): DitaNode 
   const resolved = context.resolveConref(conref);
   if (!resolved) return node;
   // Strip conref after resolving, replace children with resolved text
-  const { conref: _, ...restAttrs } = node.attributes || {};
+  const restAttrs = Object.fromEntries(
+    Object.entries(node.attributes || {}).filter(([k]) => k !== 'conref')
+  );
   return { ...node, children: [makeTextNode(resolved, node.sourceRange)], attributes: restAttrs };
 }
 
