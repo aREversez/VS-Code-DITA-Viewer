@@ -26,6 +26,32 @@ function getWebviewScript(): string {
     return best;
   }
 
+  // Finds the smallest (most specific / deepest) element whose full source
+  // range actually contains the given (line, col) position, rather than
+  // just picking whichever element's *start* line happens to be numerically
+  // closest. This correctly distinguishes plain text that is a direct child
+  // of a coarse ancestor (e.g. <p>) from an inline tag (e.g. <uicontrol>)
+  // that shares the same source line but only covers a narrower column range.
+  function findContaining(line, col) {
+    var els = document.querySelectorAll('[data-line]');
+    var best = null;
+    var bestSpan = Infinity;
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      var sl = parseInt(el.getAttribute('data-line'), 10);
+      var el2 = parseInt(el.getAttribute('data-end-line'), 10);
+      var sc = parseInt(el.getAttribute('data-start-col'), 10);
+      var ec = parseInt(el.getAttribute('data-end-col'), 10);
+      if (isNaN(sl) || isNaN(el2) || isNaN(sc) || isNaN(ec)) continue;
+      var afterStart = line > sl || (line === sl && col >= sc);
+      var beforeEnd = line < el2 || (line === el2 && col <= ec);
+      if (!afterStart || !beforeEnd) continue;
+      var span = (el2 - sl) * 100000 + (ec - sc);
+      if (span < bestSpan) { bestSpan = span; best = el; }
+    }
+    return best || findClosest(line);
+  }
+
   function onScrollEnd() {
     try {
       var els = document.querySelectorAll('[data-line]');
@@ -41,17 +67,12 @@ function getWebviewScript(): string {
   }
 
   function scrollToLine(targetLine) {
-    if (targetLine <= 0) { window.scrollTo(0, 0); return; }
+    if (targetLine <= 0) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
     var best = findClosest(targetLine);
     if (!best) return;
-    var elLine = parseInt(best.getAttribute('data-line'), 10);
-    if (targetLine > elLine + 2) {
-      window.scrollTo(0, document.documentElement.scrollHeight);
-      return;
-    }
     var rect = best.getBoundingClientRect();
     if (rect.top < -5 || rect.top > 5) {
-      best.scrollIntoView({ block: 'start' });
+      best.scrollIntoView({ block: 'start', behavior: 'smooth' });
     }
   }
 
@@ -111,7 +132,7 @@ function getWebviewScript(): string {
   window.addEventListener('message', function(e) {
     if (e.data.type === 'revealLine') scrollToLine(e.data.line);
     if (e.data.type === 'highlightLine') {
-      var best = findClosest(e.data.line);
+      var best = findContaining(e.data.line, e.data.col || 0);
       if (best) {
         highlightElement(best);
         if (!isElementVisible(best)) best.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -292,7 +313,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       if (Date.now() < skipVisibleUntil) return;
       const sel = e.selections[0];
       if (!sel || sel.start.line !== sel.end.line) return;
-      webviewPanel.webview.postMessage({ type: 'highlightLine', line: sel.start.line });
+      webviewPanel.webview.postMessage({ type: 'highlightLine', line: sel.start.line, col: sel.start.character });
     });
 
     const doSyncSourceToWebview = () => {
@@ -303,12 +324,15 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       }
     };
 
+    let visibleRangeTimer: ReturnType<typeof setTimeout> | undefined;
     const editorSub = vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
-      if (e.textEditor.document.uri.toString() === document.uri.toString()) {
-        if (Date.now() < skipVisibleUntil) return;
+      if (e.textEditor.document.uri.toString() !== document.uri.toString()) return;
+      if (Date.now() < skipVisibleUntil) return;
+      if (visibleRangeTimer) clearTimeout(visibleRangeTimer);
+      visibleRangeTimer = setTimeout(() => {
         const topLine = e.textEditor.visibleRanges[0]?.start.line;
         if (topLine !== undefined) postRevealLine(topLine);
-      }
+      }, 120);
     });
 
     const changeSubscription = vscode.workspace.onDidChangeTextDocument((e) => {
@@ -336,6 +360,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     setTimeout(doSyncSourceToWebview, 300);
 
     webviewPanel.onDidDispose(() => {
+      if (visibleRangeTimer) clearTimeout(visibleRangeTimer);
       changeSubscription.dispose();
       editorSub.dispose();
       selectionSub.dispose();
