@@ -4,6 +4,19 @@
   "description": "DITA reading view for VS Code — renders .dita files as formatted read-only preview",
   "version": "1.0.4",
   "publisher": "dita-viewer",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aREversez/VS-Code-DITA-Viewer"
+  },
+  "icon": "media/icons/extension-icon.png",
+  "keywords": [
+    "dita",
+    "xml",
+    "documentation",
+    "preview",
+    "ditamap"
+  ],
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -24,13 +37,23 @@
     "languages": [
       {
         "id": "dita",
-        "extensions": [".dita"],
-        "aliases": ["DITA", "dita"]
+        "extensions": [
+          ".dita"
+        ],
+        "aliases": [
+          "DITA",
+          "dita"
+        ]
       },
       {
         "id": "ditamap",
-        "extensions": [".ditamap"],
-        "aliases": ["DITA Map", "ditamap"]
+        "extensions": [
+          ".ditamap"
+        ],
+        "aliases": [
+          "DITA Map",
+          "ditamap"
+        ]
       }
     ],
     "customEditors": [
@@ -193,13 +216,14 @@
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
+    "@vscode/test-electron": "^2.4.0",
     "esbuild": "^0.24.0",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
     "mocha": "^10.8.0",
+    "pngjs": "^7.0.0",
     "prettier": "^3.4.0",
-    "typescript": "^5.7.0",
-    "@vscode/test-electron": "^2.4.0"
+    "typescript": "^5.7.0"
   },
   "dependencies": {
     "sax": "^1.4.1"
