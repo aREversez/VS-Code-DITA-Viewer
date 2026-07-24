@@ -5,11 +5,12 @@ async function main() {
   try {
     const extensionDevelopmentPath = path.resolve(__dirname);
     const extensionTestsPath = path.resolve(__dirname, 'dist/test');
+    const testWorkspace = path.resolve(__dirname, 'test-dita-file');
 
     await runTests({
       extensionDevelopmentPath,
       extensionTestsPath,
-      launchArgs: ['--disable-extensions'],
+      launchArgs: [testWorkspace, '--disable-extensions'],
     });
   } catch (err) {
     console.error('Test run failed:', err);

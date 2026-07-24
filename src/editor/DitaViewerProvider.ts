@@ -7,6 +7,18 @@ import { randomBytes } from 'crypto';
 import { DitaNode } from '../parser/domTypes';
 import { buildTitleMap, makeConrefResolver, makeFileTitleResolver } from './ditaRenderUtils';
 
+// Test-only hook: @vscode/test-electron integration tests can't read a
+// webview's rendered HTML directly (VS Code doesn't expose the WebviewPanel
+// created for a custom editor back to the caller of `vscode.openWith`), so
+// each render stores its output here, keyed by document URI, for the test
+// suite to read via the extension's exports. Negligible memory/perf cost;
+// has no effect on normal usage.
+const lastRenderedHtmlByUri = new Map<string, string>();
+
+export function getLastRenderedHtmlForTesting(uriString: string): string | undefined {
+  return lastRenderedHtmlByUri.get(uriString);
+}
+
 function getWebviewScript(): string {
   return `
 (function() {
@@ -335,11 +347,14 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       }, 120);
     });
 
+    let renderDebounceTimer: ReturnType<typeof setTimeout> | undefined;
     const changeSubscription = vscode.workspace.onDidChangeTextDocument((e) => {
-      if (e.document.uri.toString() === document.uri.toString()) {
+      if (e.document.uri.toString() !== document.uri.toString()) return;
+      if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
+      renderDebounceTimer = setTimeout(() => {
         updateWebview();
         setTimeout(doSyncSourceToWebview, 200);
-      }
+      }, 300);
     });
 
     // Re-render on theme switch so the manually-computed light/dark class
@@ -353,6 +368,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     const updateWebview = () => {
       const html = this.generateHtml(document, webviewPanel.webview);
       webviewPanel.webview.html = html;
+      lastRenderedHtmlByUri.set(document.uri.toString(), html);
     };
 
     updateWebview();
@@ -361,6 +377,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
 
     webviewPanel.onDidDispose(() => {
       if (visibleRangeTimer) clearTimeout(visibleRangeTimer);
+      if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
       changeSubscription.dispose();
       editorSub.dispose();
       selectionSub.dispose();

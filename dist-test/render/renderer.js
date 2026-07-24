@@ -23,8 +23,8 @@ function escapeHtml(text) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
 }
-function injectAttributes(html, tagName, line) {
-    return html.replace(/^<([a-zA-Z][a-zA-Z0-9]*)/, `<$1 title="${tagName}" data-line="${line}"`);
+function injectAttributes(html, tagName, range) {
+    return html.replace(/^<([a-zA-Z][a-zA-Z0-9]*)/, `<$1 title="${tagName}" data-line="${range.startLine}" data-end-line="${range.endLine}" data-start-col="${range.startCol}" data-end-col="${range.endCol}"`);
 }
 function makeTextNode(text, sourceRange) {
     return { type: 'text', text, children: [], sourceRange };
@@ -37,7 +37,7 @@ function resolveConrefForNode(node, context) {
     if (!resolved)
         return node;
     // Strip conref after resolving, replace children with resolved text
-    const { conref: _unused, ...restAttrs } = node.attributes || {};
+    const restAttrs = Object.fromEntries(Object.entries(node.attributes || {}).filter(([k]) => k !== 'conref'));
     return { ...node, children: [makeTextNode(resolved, node.sourceRange)], attributes: restAttrs };
 }
 function renderElement(node, context) {
@@ -60,7 +60,7 @@ function renderElement(node, context) {
         let html = renderer(effectiveNode, childCtx, renderChildren);
         if (baseType && !PASS_THROUGH_BASETYPES.has(baseType)) {
             const tagName = effectiveNode.tagName || baseType.split('/').pop() || baseType;
-            html = injectAttributes(html, tagName, effectiveNode.sourceRange.startLine);
+            html = injectAttributes(html, tagName, effectiveNode.sourceRange);
         }
         return html;
     }

@@ -7,6 +7,13 @@ import { dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
 import { readFileSync, existsSync } from 'fs';
 
+// Test-only hook: see the identical comment in DitaViewerProvider.ts.
+const lastRenderedHtmlByUri = new Map<string, string>();
+
+export function getLastRenderedMapHtmlForTesting(uriString: string): string | undefined {
+  return lastRenderedHtmlByUri.get(uriString);
+}
+
 function getMapWebviewScript(): string {
   return `
 (function() {
@@ -152,10 +159,11 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       }
     });
 
+    let renderDebounceTimer: ReturnType<typeof setTimeout> | undefined;
     const changeSubscription = vscode.workspace.onDidChangeTextDocument((e) => {
-      if (e.document.uri.toString() === document.uri.toString()) {
-        updateWebview();
-      }
+      if (e.document.uri.toString() !== document.uri.toString()) return;
+      if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
+      renderDebounceTimer = setTimeout(updateWebview, 300);
     });
 
     // Re-render on theme switch so the manually-computed light/dark class
@@ -167,11 +175,13 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     const updateWebview = () => {
       const html = this.generateHtml(document, webviewPanel.webview, currentMode);
       webviewPanel.webview.html = html;
+      lastRenderedHtmlByUri.set(document.uri.toString(), html);
     };
 
     updateWebview();
 
     webviewPanel.onDidDispose(() => {
+      if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
       changeSubscription.dispose();
       themeSubscription.dispose();
     });

@@ -2,8 +2,8 @@ import * as vscode from 'vscode';
 import { spawn } from 'child_process';
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs';
 import { basename, dirname, isAbsolute, join, resolve } from 'path';
-import { DitaViewerProvider, findDitamapFiles } from './editor/DitaViewerProvider';
-import { MapViewerProvider } from './editor/MapViewerProvider';
+import { DitaViewerProvider, findDitamapFiles, getLastRenderedHtmlForTesting } from './editor/DitaViewerProvider';
+import { MapViewerProvider, getLastRenderedMapHtmlForTesting } from './editor/MapViewerProvider';
 import {
   resolveDitaOtExecutable,
   buildDitaOtArgs,
@@ -385,6 +385,18 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   context.subscriptions.push(transformCommand);
+
+  // Exposed via `vscode.extensions.getExtension(id).exports` so the
+  // @vscode/test-electron integration suite can inspect rendered webview
+  // content without VS Code providing a public API to read a custom
+  // editor's WebviewPanel from outside its own provider. Not used by the
+  // extension itself at runtime.
+  return {
+    _test: {
+      getLastRenderedHtml: getLastRenderedHtmlForTesting,
+      getLastRenderedMapHtml: getLastRenderedMapHtmlForTesting,
+    },
+  };
 }
 
 // ── Site chrome injection ──
