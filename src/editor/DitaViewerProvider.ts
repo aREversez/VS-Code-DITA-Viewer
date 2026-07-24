@@ -5,7 +5,7 @@ import { readFileSync, existsSync, readdirSync } from 'fs';
 import { dirname, extname, isAbsolute, join, resolve, basename } from 'path';
 import { randomBytes } from 'crypto';
 import { DitaNode } from '../parser/domTypes';
-import { buildTitleMap, makeConrefResolver, makeFileTitleResolver } from './ditaRenderUtils';
+import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeFileTitleResolver } from './ditaRenderUtils';
 
 // Test-only hook: @vscode/test-electron integration tests can't read a
 // webview's rendered HTML directly (VS Code doesn't expose the WebviewPanel
@@ -551,6 +551,19 @@ function getNodeValue(node: DitaNode, childBaseTypes: string[]): string | undefi
       const text = extractTextFromNode(child).trim();
       if (text) return text;
     }
+    // DITA wraps <keyword> inside <keywords>; also search inside known wrappers
+    const wrapper = (node.children || []).find(
+      (c) => c.type === 'element' && (c.baseType === 'map/keywords'),
+    );
+    if (wrapper) {
+      const inner = (wrapper.children || []).find(
+        (c) => c.type === 'element' && c.baseType === bt,
+      );
+      if (inner) {
+        const text = extractTextFromNode(inner).trim();
+        if (text) return text;
+      }
+    }
   }
   return undefined;
 }
@@ -577,7 +590,8 @@ export function buildKeyMap(docUri: vscode.Uri): Map<string, string> {
       const content = readFileSync(mf, 'utf-8');
       const doc = parseDitamap(preprocessEntities(content));
       const mapRoot = doc.root;
-      // Walk all direct children of <map> looking for topicref/keydef with keys
+      // Expand referenced ditamaps so keydefs from included maps are visible
+      expandDitamapRefs(mapRoot, dirname(mf));
       function walk(node: DitaNode) {
         if (node.type !== 'element') return;
         const baseType = node.baseType;
@@ -588,7 +602,6 @@ export function buildKeyMap(docUri: vscode.Uri): Map<string, string> {
         }
         for (const child of node.children || []) walk(child);
       }
-      // Walk map's children (topicref, keydef, etc. are directly under <map>)
       for (const child of mapRoot.children || []) walk(child);
     } catch {}
   }
