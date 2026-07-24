@@ -184,7 +184,7 @@
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "pretest": "tsc -p tsconfig.test.json",
     "test": "mocha --config .mocharc.json",
-    "test:e2e": "node esbuild.config.js && node test-runner.cjs"
+    "test:e2e": "node esbuild.config.js && tsc -p tsconfig.e2e.json && node test-runner.cjs"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",

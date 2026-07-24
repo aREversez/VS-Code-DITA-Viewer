@@ -5,7 +5,19 @@ import { readFileSync, existsSync, readdirSync } from 'fs';
 import { dirname, extname, isAbsolute, join, resolve, basename } from 'path';
 import { randomBytes } from 'crypto';
 import { DitaNode } from '../parser/domTypes';
-import { buildTitleMap, makeConrefResolver, makeFileTitleResolver } from './ditaRenderUtils';
+import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeFileTitleResolver } from './ditaRenderUtils';
+
+// Test-only hook: @vscode/test-electron integration tests can't read a
+// webview's rendered HTML directly (VS Code doesn't expose the WebviewPanel
+// created for a custom editor back to the caller of `vscode.openWith`), so
+// each render stores its output here, keyed by document URI, for the test
+// suite to read via the extension's exports. Negligible memory/perf cost;
+// has no effect on normal usage.
+const lastRenderedHtmlByUri = new Map<string, string>();
+
+export function getLastRenderedHtmlForTesting(uriString: string): string | undefined {
+  return lastRenderedHtmlByUri.get(uriString);
+}
 
 function getWebviewScript(): string {
   return `
@@ -26,6 +38,32 @@ function getWebviewScript(): string {
     return best;
   }
 
+  // Finds the smallest (most specific / deepest) element whose full source
+  // range actually contains the given (line, col) position, rather than
+  // just picking whichever element's *start* line happens to be numerically
+  // closest. This correctly distinguishes plain text that is a direct child
+  // of a coarse ancestor (e.g. <p>) from an inline tag (e.g. <uicontrol>)
+  // that shares the same source line but only covers a narrower column range.
+  function findContaining(line, col) {
+    var els = document.querySelectorAll('[data-line]');
+    var best = null;
+    var bestSpan = Infinity;
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      var sl = parseInt(el.getAttribute('data-line'), 10);
+      var el2 = parseInt(el.getAttribute('data-end-line'), 10);
+      var sc = parseInt(el.getAttribute('data-start-col'), 10);
+      var ec = parseInt(el.getAttribute('data-end-col'), 10);
+      if (isNaN(sl) || isNaN(el2) || isNaN(sc) || isNaN(ec)) continue;
+      var afterStart = line > sl || (line === sl && col >= sc);
+      var beforeEnd = line < el2 || (line === el2 && col <= ec);
+      if (!afterStart || !beforeEnd) continue;
+      var span = (el2 - sl) * 100000 + (ec - sc);
+      if (span < bestSpan) { bestSpan = span; best = el; }
+    }
+    return best || findClosest(line);
+  }
+
   function onScrollEnd() {
     try {
       var els = document.querySelectorAll('[data-line]');
@@ -41,17 +79,12 @@ function getWebviewScript(): string {
   }
 
   function scrollToLine(targetLine) {
-    if (targetLine <= 0) { window.scrollTo(0, 0); return; }
+    if (targetLine <= 0) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
     var best = findClosest(targetLine);
     if (!best) return;
-    var elLine = parseInt(best.getAttribute('data-line'), 10);
-    if (targetLine > elLine + 2) {
-      window.scrollTo(0, document.documentElement.scrollHeight);
-      return;
-    }
     var rect = best.getBoundingClientRect();
     if (rect.top < -5 || rect.top > 5) {
-      best.scrollIntoView({ block: 'start' });
+      best.scrollIntoView({ block: 'start', behavior: 'smooth' });
     }
   }
 
@@ -111,7 +144,7 @@ function getWebviewScript(): string {
   window.addEventListener('message', function(e) {
     if (e.data.type === 'revealLine') scrollToLine(e.data.line);
     if (e.data.type === 'highlightLine') {
-      var best = findClosest(e.data.line);
+      var best = findContaining(e.data.line, e.data.col || 0);
       if (best) {
         highlightElement(best);
         if (!isElementVisible(best)) best.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -292,7 +325,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       if (Date.now() < skipVisibleUntil) return;
       const sel = e.selections[0];
       if (!sel || sel.start.line !== sel.end.line) return;
-      webviewPanel.webview.postMessage({ type: 'highlightLine', line: sel.start.line });
+      webviewPanel.webview.postMessage({ type: 'highlightLine', line: sel.start.line, col: sel.start.character });
     });
 
     const doSyncSourceToWebview = () => {
@@ -303,19 +336,25 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       }
     };
 
+    let visibleRangeTimer: ReturnType<typeof setTimeout> | undefined;
     const editorSub = vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
-      if (e.textEditor.document.uri.toString() === document.uri.toString()) {
-        if (Date.now() < skipVisibleUntil) return;
+      if (e.textEditor.document.uri.toString() !== document.uri.toString()) return;
+      if (Date.now() < skipVisibleUntil) return;
+      if (visibleRangeTimer) clearTimeout(visibleRangeTimer);
+      visibleRangeTimer = setTimeout(() => {
         const topLine = e.textEditor.visibleRanges[0]?.start.line;
         if (topLine !== undefined) postRevealLine(topLine);
-      }
+      }, 120);
     });
 
+    let renderDebounceTimer: ReturnType<typeof setTimeout> | undefined;
     const changeSubscription = vscode.workspace.onDidChangeTextDocument((e) => {
-      if (e.document.uri.toString() === document.uri.toString()) {
+      if (e.document.uri.toString() !== document.uri.toString()) return;
+      if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
+      renderDebounceTimer = setTimeout(() => {
         updateWebview();
         setTimeout(doSyncSourceToWebview, 200);
-      }
+      }, 300);
     });
 
     // Re-render on theme switch so the manually-computed light/dark class
@@ -329,6 +368,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     const updateWebview = () => {
       const html = this.generateHtml(document, webviewPanel.webview);
       webviewPanel.webview.html = html;
+      lastRenderedHtmlByUri.set(document.uri.toString(), html);
     };
 
     updateWebview();
@@ -336,6 +376,8 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     setTimeout(doSyncSourceToWebview, 300);
 
     webviewPanel.onDidDispose(() => {
+      if (visibleRangeTimer) clearTimeout(visibleRangeTimer);
+      if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
       changeSubscription.dispose();
       editorSub.dispose();
       selectionSub.dispose();
@@ -509,6 +551,19 @@ function getNodeValue(node: DitaNode, childBaseTypes: string[]): string | undefi
       const text = extractTextFromNode(child).trim();
       if (text) return text;
     }
+    // DITA wraps <keyword> inside <keywords>; also search inside known wrappers
+    const wrapper = (node.children || []).find(
+      (c) => c.type === 'element' && (c.baseType === 'map/keywords'),
+    );
+    if (wrapper) {
+      const inner = (wrapper.children || []).find(
+        (c) => c.type === 'element' && c.baseType === bt,
+      );
+      if (inner) {
+        const text = extractTextFromNode(inner).trim();
+        if (text) return text;
+      }
+    }
   }
   return undefined;
 }
@@ -535,7 +590,8 @@ export function buildKeyMap(docUri: vscode.Uri): Map<string, string> {
       const content = readFileSync(mf, 'utf-8');
       const doc = parseDitamap(preprocessEntities(content));
       const mapRoot = doc.root;
-      // Walk all direct children of <map> looking for topicref/keydef with keys
+      // Expand referenced ditamaps so keydefs from included maps are visible
+      expandDitamapRefs(mapRoot, dirname(mf));
       function walk(node: DitaNode) {
         if (node.type !== 'element') return;
         const baseType = node.baseType;
@@ -546,7 +602,6 @@ export function buildKeyMap(docUri: vscode.Uri): Map<string, string> {
         }
         for (const child of node.children || []) walk(child);
       }
-      // Walk map's children (topicref, keydef, etc. are directly under <map>)
       for (const child of mapRoot.children || []) walk(child);
     } catch {}
   }

@@ -37,8 +37,11 @@ function escapeHtml(text: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function injectAttributes(html: string, tagName: string, line: number): string {
-  return html.replace(/^<([a-zA-Z][a-zA-Z0-9]*)/, `<$1 title="${tagName}" data-line="${line}"`);
+function injectAttributes(html: string, tagName: string, range: SourceRange): string {
+  return html.replace(
+    /^<([a-zA-Z][a-zA-Z0-9]*)/,
+    `<$1 title="${tagName}" data-line="${range.startLine}" data-end-line="${range.endLine}" data-start-col="${range.startCol}" data-end-col="${range.endCol}"`,
+  );
 }
 
 function makeTextNode(text: string, sourceRange: SourceRange): DitaNode {
@@ -81,7 +84,7 @@ function renderElement(node: DitaNode, context: RenderContext): string {
     let html = renderer(effectiveNode, childCtx, renderChildren);
     if (baseType && !PASS_THROUGH_BASETYPES.has(baseType)) {
       const tagName = effectiveNode.tagName || baseType.split('/').pop() || baseType;
-      html = injectAttributes(html, tagName, effectiveNode.sourceRange.startLine);
+      html = injectAttributes(html, tagName, effectiveNode.sourceRange);
     }
     return html;
   }

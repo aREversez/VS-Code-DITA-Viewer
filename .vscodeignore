@@ -3,7 +3,9 @@
 test-dita-file/**
 test/**
 src/**
+dist/test/**
 tsconfig.json
+tsconfig.e2e.json
 esbuild.config.js
 eslint.config.js
 .prettierrc
