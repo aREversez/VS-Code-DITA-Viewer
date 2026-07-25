@@ -295,3 +295,8 @@ li { margin: 0.35em 0; }
 .book-entry-title {
   color: var(--brand-accent);
 }
+
+.vscode-dark .note {
+  color: #202124;
+}
+

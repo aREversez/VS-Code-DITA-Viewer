@@ -298,3 +298,8 @@ section, .example { margin: 1.5rem 0; }
   body { padding: 1rem; }
   .topic { padding: 1rem; }
 }
+
+.vscode-dark .note {
+  color: var(--rp-text);
+}
+
