@@ -87,7 +87,7 @@ export function activate(context: vscode.ExtensionContext) {
       // 1. Determine input map file
       const mapUri = await resolveMapFile();
       if (!mapUri) {
-        vscode.window.showErrorMessage('请先打开一个 .ditamap 文件。');
+        vscode.window.showErrorMessage(vscode.l10n.t('Please open a .ditamap file first.'));
         return;
       }
       const mapPath = normalizeDriveLetter(mapUri.fsPath);
@@ -107,19 +107,21 @@ export function activate(context: vscode.ExtensionContext) {
 
       if (!result.found) {
         if (result.reason === 'setting-invalid') {
+          const openSettingsLabel = vscode.l10n.t('Open Settings');
           const action = await vscode.window.showErrorMessage(
-            `配置的 DITA-OT 路径无效：${configuredPath} 下未找到 dita 可执行文件。`,
-            '打开设置',
+            vscode.l10n.t('The configured DITA-OT path is invalid: no dita executable was found under {0}.', configuredPath ?? ''),
+            openSettingsLabel,
           );
-          if (action === '打开设置') {
+          if (action === openSettingsLabel) {
             vscode.commands.executeCommand('workbench.action.openSettings', 'dita-viewer.ditaOtPath');
           }
         } else {
+          const viewInstructionsLabel = vscode.l10n.t('View Install Instructions');
           const action = await vscode.window.showErrorMessage(
-            '未找到 DITA-OT。请安装 DITA-OT 或配置 DITA_HOME 环境变量。',
-            '查看安装说明',
+            vscode.l10n.t('DITA-OT was not found. Please install DITA-OT or configure the DITA_HOME environment variable.'),
+            viewInstructionsLabel,
           );
-          if (action === '查看安装说明') {
+          if (action === viewInstructionsLabel) {
             vscode.env.openExternal(vscode.Uri.parse('https://www.dita-ot.org/documentation/installing'));
           }
         }
@@ -128,13 +130,13 @@ export function activate(context: vscode.ExtensionContext) {
 
       // 3. QuickPick transtype
       const TRANSTYPES = [
-        { label: 'html5', description: 'HTML5 (默认)' },
+        { label: 'html5', description: vscode.l10n.t('HTML5 (default)') },
         { label: 'pdf', description: 'PDF' },
         { label: 'xhtml', description: 'XHTML' },
         { label: 'markdown', description: 'Markdown' },
       ];
       const selected = await vscode.window.showQuickPick(TRANSTYPES, {
-        placeHolder: '选择输出格式（transtype）',
+        placeHolder: vscode.l10n.t('Select an output format (transtype)'),
       });
       if (!selected) return;
       const transtype = selected.label;
@@ -146,7 +148,7 @@ export function activate(context: vscode.ExtensionContext) {
         canSelectFiles: false,
         canSelectMany: false,
         defaultUri: vscode.Uri.file(defaultDir),
-        openLabel: '选择输出目录',
+        openLabel: vscode.l10n.t('Select Output Directory'),
       });
       const outputDir = normalizeDriveLetter(
         (chosenUri && chosenUri.length > 0) ? chosenUri[0].fsPath : defaultDir,
@@ -156,12 +158,13 @@ export function activate(context: vscode.ExtensionContext) {
         try {
           const entries = readdirSync(outputDir);
           if (entries.length > 0) {
+            const overwriteLabel = vscode.l10n.t('Overwrite');
             const overwrite = await vscode.window.showWarningMessage(
-              `输出目录已存在且非空：${outputDir}。是否覆盖？`,
+              vscode.l10n.t('The output directory already exists and is not empty: {0}. Overwrite it?', outputDir),
               { modal: true },
-              '覆盖',
+              overwriteLabel,
             );
-            if (overwrite !== '覆盖') return;
+            if (overwrite !== overwriteLabel) return;
           }
         } catch {}
       }
@@ -172,7 +175,7 @@ export function activate(context: vscode.ExtensionContext) {
         const cssFiles = scanCssFiles(mapDir);
         if (cssFiles.length > 0) {
           const items: (vscode.QuickPickItem & { css?: CssArg })[] = [
-            { label: '$(close) 不添加自定义 CSS', description: '使用 DITA-OT 默认样式', css: undefined },
+            { label: `$(close) ${vscode.l10n.t('No custom CSS')}`, description: vscode.l10n.t('Use DITA-OT default styles'), css: undefined },
             ...cssFiles.map((fp) => ({
               label: `$(file) ${basename(fp)}`,
               description: dirname(fp),
@@ -180,7 +183,7 @@ export function activate(context: vscode.ExtensionContext) {
             })),
           ];
           const picked = await vscode.window.showQuickPick(items, {
-            placeHolder: '选择自定义 CSS 文件（可选）',
+            placeHolder: vscode.l10n.t('Select a custom CSS file (optional)'),
             ignoreFocusOut: false,
           });
           if (picked && picked.css) cssArg = picked.css;
@@ -193,8 +196,8 @@ export function activate(context: vscode.ExtensionContext) {
         canSelectFiles: true,
         canSelectFolders: false,
         canSelectMany: false,
-        filters: { 'DITAVAL 筛选文件': ['ditaval'] },
-        openLabel: '选择筛选文件',
+        filters: { [vscode.l10n.t('DITAVAL Filter Files')]: ['ditaval'] },
+        openLabel: vscode.l10n.t('Select Filter File'),
       });
       if (ditavalUri && ditavalUri.length > 0) {
         ditavalFile = normalizeDriveLetter(ditavalUri[0].fsPath);
@@ -204,16 +207,16 @@ export function activate(context: vscode.ExtensionContext) {
       let siteChromeFeatures: SiteChromeFeatures | undefined;
       if (transtype === 'html5' || transtype === 'xhtml') {
         const featureItems: (vscode.QuickPickItem & { key: keyof SiteChromeFeatures })[] = [
-          { label: '导航工具栏', description: '上一页/下一页 + 折叠/展开章节', key: 'navToolbar', picked: true },
-          { label: '侧边栏目录', description: '左侧固定目录树', key: 'sidebar', picked: true },
-          { label: '本页目录', description: '右侧本页标题导航', key: 'onPageToc', picked: true },
-          { label: '代码复制按钮', description: '代码块复制按钮', key: 'copyCode', picked: true },
-          { label: '回到顶部', description: '右下角回到顶部按钮', key: 'backToTop', picked: true },
-          { label: '暗色模式', description: '亮色/暗色切换', key: 'darkMode', picked: true },
+          { label: vscode.l10n.t('Navigation Toolbar'), description: vscode.l10n.t('Prev/Next page + collapsible sections'), key: 'navToolbar', picked: true },
+          { label: vscode.l10n.t('Sidebar Outline'), description: vscode.l10n.t('Fixed table of contents on the left'), key: 'sidebar', picked: true },
+          { label: vscode.l10n.t('On-This-Page'), description: vscode.l10n.t('Right-hand navigation for headings on the current page'), key: 'onPageToc', picked: true },
+          { label: vscode.l10n.t('Copy-Code Button'), description: vscode.l10n.t('Copy button on code blocks'), key: 'copyCode', picked: true },
+          { label: vscode.l10n.t('Back to Top'), description: vscode.l10n.t('Back-to-top button in the bottom-right corner'), key: 'backToTop', picked: true },
+          { label: vscode.l10n.t('Dark Mode'), description: vscode.l10n.t('Light/dark theme toggle'), key: 'darkMode', picked: true },
         ];
         const picked = await vscode.window.showQuickPick(featureItems, {
           canPickMany: true,
-          placeHolder: '选择要启用的站点增强功能（默认全部启用）',
+          placeHolder: vscode.l10n.t('Select the site enhancements to enable (all enabled by default)'),
           ignoreFocusOut: false,
         });
         if (picked) {
@@ -248,7 +251,7 @@ export function activate(context: vscode.ExtensionContext) {
       await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: `DITA-OT: 正在转换为 ${transtype}（首次转换可能需要较长时间）`,
+          title: vscode.l10n.t('DITA-OT: Transforming to {0} (the first run may take a while)', transtype),
           cancellable: true,
         },
         async (progress, cancellationToken) => {
@@ -292,7 +295,7 @@ export function activate(context: vscode.ExtensionContext) {
             });
 
             child.on('error', (err) => {
-              outputChannel.appendLine(`\n[DITA-OT] 进程启动失败: ${err.message}`);
+              outputChannel.appendLine(vscode.l10n.t('\n[DITA-OT] Failed to start process: {0}', err.message));
               rejectPromise(err);
             });
 
@@ -303,62 +306,65 @@ export function activate(context: vscode.ExtensionContext) {
               }
 
               if (cancelled) {
-                outputChannel.appendLine(`\n[DITA-OT] 转换已被用户取消。`);
+                outputChannel.appendLine(vscode.l10n.t('\n[DITA-OT] Transformation cancelled by user.'));
                 resolvePromise(); // Resolve gracefully on cancel
                 return;
               }
 
               if (code !== 0) {
-                outputChannel.appendLine(`\n[DITA-OT] 进程退出，退出码: ${code}`);
-                outputChannel.appendLine(`\n[DITA-OT] 命令: ${result.location.executablePath} ${args.join(' ')}`);
-                rejectPromise(new Error(`DITA-OT 退出码: ${code}`));
+                outputChannel.appendLine(vscode.l10n.t('\n[DITA-OT] Process exited with code: {0}', String(code)));
+                outputChannel.appendLine(vscode.l10n.t('\n[DITA-OT] Command: {0} {1}', result.location.executablePath, args.join(' ')));
+                rejectPromise(new Error(vscode.l10n.t('DITA-OT exit code: {0}', String(code))));
                 return;
               }
 
               // Success
-              outputChannel.appendLine(`\n[DITA-OT] 转换完成。输出目录: ${outputDir}`);
+              outputChannel.appendLine(vscode.l10n.t('\n[DITA-OT] Transformation complete. Output directory: {0}', outputDir));
 
               // 8. Inject site chrome (features enabled via QuickPick during flow)
               if (transtype === 'html5' || transtype === 'xhtml') {
                 try {
                   if (siteChromeFeatures) {
                     injectSiteChrome(extensionPath, mapPath, outputDir, siteChromeFeatures);
-                    outputChannel.appendLine(`\n[DITA-OT] 站点增强已注入。`);
+                    outputChannel.appendLine(vscode.l10n.t('\n[DITA-OT] Site enhancements injected.'));
                   }
                 } catch (e) {
-                  outputChannel.appendLine(`\n[DITA-OT] 站点增强注入失败: ${e}`);
+                  outputChannel.appendLine(vscode.l10n.t('\n[DITA-OT] Failed to inject site enhancements: {0}', String(e)));
                 }
               }
 
               const errorSummary = errorCount > 0
-                ? `（检测到 ${errorCount} 个错误）`
+                ? vscode.l10n.t(' ({0} error(s) detected)', String(errorCount))
                 : '';
 
               if (transtype === 'html5') {
                 const indexPath = join(outputDir, 'index.html');
                 if (existsSync(indexPath)) {
+                  const openInBrowserLabel = vscode.l10n.t('Open in Browser');
                   const action = await vscode.window.showInformationMessage(
-                    `DITA-OT 转换完成${errorSummary}`,
-                    '在浏览器中打开',
+                    vscode.l10n.t('DITA-OT transformation complete{0}', errorSummary),
+                    openInBrowserLabel,
                   );
-                  if (action === '在浏览器中打开') {
+                  if (action === openInBrowserLabel) {
                     vscode.env.openExternal(vscode.Uri.file(indexPath));
                   }
                 } else {
+                  const revealLabel = vscode.l10n.t('Reveal in File Explorer');
                   const action = await vscode.window.showInformationMessage(
-                    `DITA-OT 转换完成${errorSummary}`,
-                    '在文件管理器中显示',
+                    vscode.l10n.t('DITA-OT transformation complete{0}', errorSummary),
+                    revealLabel,
                   );
-                  if (action === '在文件管理器中显示') {
+                  if (action === revealLabel) {
                     vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(outputDir));
                   }
                 }
               } else {
+                const revealLabel = vscode.l10n.t('Reveal in File Explorer');
                 const action = await vscode.window.showInformationMessage(
-                  `DITA-OT 转换完成${errorSummary}`,
-                  '在文件管理器中显示',
+                  vscode.l10n.t('DITA-OT transformation complete{0}', errorSummary),
+                  revealLabel,
                 );
-                if (action === '在文件管理器中显示') {
+                if (action === revealLabel) {
                   vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(outputDir));
                 }
               }
@@ -370,11 +376,12 @@ export function activate(context: vscode.ExtensionContext) {
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      const viewLogLabel = vscode.l10n.t('View Output Log');
       const action = await vscode.window.showErrorMessage(
-        `DITA-OT 转换失败: ${message}`,
-        '查看输出日志',
+        vscode.l10n.t('DITA-OT transformation failed: {0}', message),
+        viewLogLabel,
       );
-      if (action === '查看输出日志') {
+      if (action === viewLogLabel) {
         vscode.commands.executeCommand('workbench.action.output.toggleOutput');
       }
     } finally {
@@ -529,10 +536,10 @@ async function resolveMapFile(): Promise<vscode.Uri | undefined> {
 
     const items = maps.map((m) => ({
       label: m,
-      description: '选择关联的 DITA Map',
+      description: vscode.l10n.t('Associated DITA Map'),
     }));
     const picked = await vscode.window.showQuickPick(items, {
-      placeHolder: '找到多个 DITA Map 文件，请选择要使用的：',
+      placeHolder: vscode.l10n.t('Multiple DITA Map files found — select the one to use:'),
     });
     return picked ? vscode.Uri.file(picked.label) : undefined;
   }

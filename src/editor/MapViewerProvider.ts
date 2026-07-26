@@ -15,6 +15,23 @@ export function getLastRenderedMapHtmlForTesting(uriString: string): string | un
 }
 
 function getMapWebviewScript(): string {
+  const L = {
+    decreaseFontSize: JSON.stringify(vscode.l10n.t('Decrease font size')),
+    increaseFontSize: JSON.stringify(vscode.l10n.t('Increase font size')),
+    fontSans: JSON.stringify(vscode.l10n.t('Sans')),
+    fontSerif: JSON.stringify(vscode.l10n.t('Serif')),
+    fontCurrentSans: JSON.stringify(vscode.l10n.t('Current: Sans-serif. Click to switch to Serif')),
+    fontCurrentSerif: JSON.stringify(vscode.l10n.t('Current: Serif. Click to switch to Sans-serif')),
+    pageWidth: JSON.stringify(vscode.l10n.t('Page width')),
+    widthAuto: JSON.stringify(vscode.l10n.t('Auto')),
+    widthFull: JSON.stringify(vscode.l10n.t('Full')),
+    widthWide: JSON.stringify(vscode.l10n.t('Wide')),
+    widthDesktop: JSON.stringify(vscode.l10n.t('Desktop')),
+    widthNarrow: JSON.stringify(vscode.l10n.t('Narrow')),
+    switchModeTitle: JSON.stringify(vscode.l10n.t('Switch between outline tree and full book view')),
+    modeOutline: JSON.stringify(vscode.l10n.t('Outline')),
+    modeBook: JSON.stringify(vscode.l10n.t('Book')),
+  };
   return `
 (function() {
   var vscode = acquireVsCodeApi();
@@ -44,7 +61,7 @@ function getMapWebviewScript(): string {
   var fontSize = 100;
   var fsDown = document.createElement('button');
   fsDown.innerHTML = 'A\u2212';
-  fsDown.title = 'Decrease font size';
+  fsDown.title = ${L.decreaseFontSize};
   fsDown.style.cssText = btnStyle + 'font-weight:bold;';
   fsDown.addEventListener('click', function() {
     fontSize = Math.max(60, fontSize - 10);
@@ -54,7 +71,7 @@ function getMapWebviewScript(): string {
 
   var fsUp = document.createElement('button');
   fsUp.innerHTML = 'A+';
-  fsUp.title = 'Increase font size';
+  fsUp.title = ${L.increaseFontSize};
   fsUp.style.cssText = btnStyle + 'font-weight:bold;';
   fsUp.addEventListener('click', function() {
     fontSize = Math.min(200, fontSize + 10);
@@ -65,28 +82,28 @@ function getMapWebviewScript(): string {
   // Font toggle (serif / sans-serif)
   var isSerif = false;
   var fontBtn = document.createElement('button');
-  fontBtn.textContent = 'Sans';
-  fontBtn.title = 'Current: Sans-serif. Click to switch to Serif';
+  fontBtn.textContent = ${L.fontSans};
+  fontBtn.title = ${L.fontCurrentSans};
   fontBtn.style.cssText = btnStyle + 'font-size:11px;';
   fontBtn.addEventListener('click', function() {
     isSerif = !isSerif;
-    fontBtn.textContent = isSerif ? 'Serif' : 'Sans';
-    fontBtn.title = isSerif ? 'Current: Serif. Click to switch to Sans-serif' : 'Current: Sans-serif. Click to switch to Serif';
+    fontBtn.textContent = isSerif ? ${L.fontSerif} : ${L.fontSans};
+    fontBtn.title = isSerif ? ${L.fontCurrentSerif} : ${L.fontCurrentSans};
     document.body.style.fontFamily = isSerif ? "Georgia,'Times New Roman','Noto Serif SC','Songti SC',STSong,SimSun,serif" : '';
   });
   toolbar.appendChild(fontBtn);
 
   // Page width
   var widths = [
-    { label: 'Auto', value: '' },
-    { label: 'Full', value: '100%' },
-    { label: 'Wide', value: '1400px' },
-    { label: 'Desktop', value: '1280px' },
-    { label: 'Narrow', value: '720px' },
+    { label: ${L.widthAuto}, value: '' },
+    { label: ${L.widthFull}, value: '100%' },
+    { label: ${L.widthWide}, value: '1400px' },
+    { label: ${L.widthDesktop}, value: '1280px' },
+    { label: ${L.widthNarrow}, value: '720px' },
   ];
   var ddStyle = 'padding:1px 4px;border-radius:3px;border:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));background:var(--vscode-dropdown-background,#333);color:var(--vscode-dropdown-foreground,#eee);font-size:11px;outline:none;cursor:pointer;';
   var wSel = document.createElement('select');
-  wSel.title = 'Page width';
+  wSel.title = ${L.pageWidth};
   wSel.style.cssText = 'max-width:72px;' + ddStyle;
   for (var i = 0; i < widths.length; i++) {
     var opt = document.createElement('option');
@@ -102,11 +119,11 @@ function getMapWebviewScript(): string {
 
   // Mode toggle button
   var modeBtn = document.createElement('button');
-  modeBtn.title = 'Switch between outline tree and full book view';
+  modeBtn.title = ${L.switchModeTitle};
   modeBtn.style.cssText = btnStyle + 'font-size:11px;';
-  modeBtn.textContent = 'Outline';
+  modeBtn.textContent = ${L.modeOutline};
   function updateModeLabel() {
-    modeBtn.textContent = currentMode === 'tree' ? 'Book' : 'Outline';
+    modeBtn.textContent = currentMode === 'tree' ? ${L.modeBook} : ${L.modeOutline};
   }
   modeBtn.addEventListener('click', function() {
     var newMode = currentMode === 'tree' ? 'book' : 'tree';

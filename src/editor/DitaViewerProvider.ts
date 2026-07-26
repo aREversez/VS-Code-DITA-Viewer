@@ -20,6 +20,22 @@ export function getLastRenderedHtmlForTesting(uriString: string): string | undef
 }
 
 function getWebviewScript(): string {
+  const L = {
+    selectThemeCss: JSON.stringify(vscode.l10n.t('Select theme CSS')),
+    decreaseFontSize: JSON.stringify(vscode.l10n.t('Decrease font size')),
+    increaseFontSize: JSON.stringify(vscode.l10n.t('Increase font size')),
+    fontSans: JSON.stringify(vscode.l10n.t('Sans')),
+    fontSerif: JSON.stringify(vscode.l10n.t('Serif')),
+    fontCurrentSans: JSON.stringify(vscode.l10n.t('Current: Sans-serif. Click to switch to Serif')),
+    fontCurrentSerif: JSON.stringify(vscode.l10n.t('Current: Serif. Click to switch to Sans-serif')),
+    pageWidth: JSON.stringify(vscode.l10n.t('Page width')),
+    widthAuto: JSON.stringify(vscode.l10n.t('Auto')),
+    widthFull: JSON.stringify(vscode.l10n.t('Full')),
+    widthWide: JSON.stringify(vscode.l10n.t('Wide')),
+    widthDesktop: JSON.stringify(vscode.l10n.t('Desktop')),
+    widthNarrow: JSON.stringify(vscode.l10n.t('Narrow')),
+    reloadContent: JSON.stringify(vscode.l10n.t('Reload DITA content')),
+  };
   return `
 (function() {
   var vscode = acquireVsCodeApi();
@@ -173,7 +189,7 @@ function getWebviewScript(): string {
     styleEl.textContent = cssFiles[defaultCss] || '';
     document.head.appendChild(styleEl);
     var sel = document.createElement('select');
-    sel.title = 'Select theme CSS';
+    sel.title = ${L.selectThemeCss};
     sel.style.cssText = 'max-width:130px;' + ddStyle;
     for (var i = 0; i < cssKeys.length; i++) {
       var opt = document.createElement('option');
@@ -189,7 +205,7 @@ function getWebviewScript(): string {
   // Font size controls
   var fsDown = document.createElement('button');
   fsDown.innerHTML = 'A−';
-  fsDown.title = 'Decrease font size';
+  fsDown.title = ${L.decreaseFontSize};
   fsDown.style.cssText = btnStyle + 'font-weight:bold;';
   fsDown.addEventListener('click', function() {
     fontSize = Math.max(60, fontSize - 10);
@@ -199,7 +215,7 @@ function getWebviewScript(): string {
 
   var fsUp = document.createElement('button');
   fsUp.innerHTML = 'A+';
-  fsUp.title = 'Increase font size';
+  fsUp.title = ${L.increaseFontSize};
   fsUp.style.cssText = btnStyle + 'font-weight:bold;';
   fsUp.addEventListener('click', function() {
     fontSize = Math.min(200, fontSize + 10);
@@ -210,27 +226,27 @@ function getWebviewScript(): string {
   // Font toggle (serif / sans-serif)
   var isSerif = false;
   var fontBtn = document.createElement('button');
-  fontBtn.textContent = 'Sans';
-  fontBtn.title = 'Current: Sans-serif. Click to switch to Serif';
+  fontBtn.textContent = ${L.fontSans};
+  fontBtn.title = ${L.fontCurrentSans};
   fontBtn.style.cssText = btnStyle + 'font-size:11px;';
   fontBtn.addEventListener('click', function() {
     isSerif = !isSerif;
-    fontBtn.textContent = isSerif ? 'Serif' : 'Sans';
-    fontBtn.title = isSerif ? 'Current: Serif. Click to switch to Sans-serif' : 'Current: Sans-serif. Click to switch to Serif';
+    fontBtn.textContent = isSerif ? ${L.fontSerif} : ${L.fontSans};
+    fontBtn.title = isSerif ? ${L.fontCurrentSerif} : ${L.fontCurrentSans};
     document.body.style.fontFamily = isSerif ? "Georgia,'Times New Roman','Noto Serif SC','Songti SC',STSong,SimSun,serif" : '';
   });
   toolbar.appendChild(fontBtn);
 
   // Page width dropdown
   var widths = [
-    { label: 'Auto', value: '' },
-    { label: 'Full', value: '100%' },
-    { label: 'Wide', value: '1400px' },
-    { label: 'Desktop', value: '1280px' },
-    { label: 'Narrow', value: '720px' },
+    { label: ${L.widthAuto}, value: '' },
+    { label: ${L.widthFull}, value: '100%' },
+    { label: ${L.widthWide}, value: '1400px' },
+    { label: ${L.widthDesktop}, value: '1280px' },
+    { label: ${L.widthNarrow}, value: '720px' },
   ];
   var wSel = document.createElement('select');
-  wSel.title = 'Page width';
+  wSel.title = ${L.pageWidth};
   wSel.style.cssText = 'max-width:72px;' + ddStyle;
   for (var i = 0; i < widths.length; i++) {
     var opt = document.createElement('option');
@@ -247,7 +263,7 @@ function getWebviewScript(): string {
   // Refresh button
   var refreshBtn = document.createElement('button');
   refreshBtn.innerHTML = '&#x21bb;';
-  refreshBtn.title = 'Reload DITA content';
+  refreshBtn.title = ${L.reloadContent};
   refreshBtn.style.cssText = btnStyle;
   refreshBtn.addEventListener('click', function() { vscode.postMessage({ type: 'refresh' }); });
   toolbar.appendChild(refreshBtn);

@@ -1,7 +1,7 @@
 {
   "name": "dita-viewer",
   "displayName": "DITA Viewer",
-  "description": "DITA reading view for VS Code — renders .dita files as formatted read-only preview",
+  "description": "%extension.description%",
   "version": "1.0.4",
   "publisher": "dita-viewer",
   "license": "MIT",
@@ -33,6 +33,7 @@
     "onCommand:ditaViewer.transformWithDitaOt"
   ],
   "main": "./dist/extension.js",
+  "l10n": "./l10n",
   "contributes": {
     "languages": [
       {
@@ -81,7 +82,7 @@
     "commands": [
       {
         "command": "ditaViewer.showRendered",
-        "title": "Open DITA Reading View",
+        "title": "%command.showRendered.title%",
         "icon": {
           "light": "media/icons/preview.svg",
           "dark": "media/icons/preview~dark.svg"
@@ -89,7 +90,7 @@
       },
       {
         "command": "ditaViewer.showMapRendered",
-        "title": "Open DITA Map Reading View",
+        "title": "%command.showMapRendered.title%",
         "icon": {
           "light": "media/icons/map-preview.svg",
           "dark": "media/icons/map-preview~dark.svg"
@@ -97,7 +98,7 @@
       },
       {
         "command": "ditaViewer.transformWithDitaOt",
-        "title": "DITA-OT: Transform Map…",
+        "title": "%command.transformWithDitaOt.title%",
         "icon": {
           "light": "media/icons/transform.svg",
           "dark": "media/icons/transform~dark.svg"
@@ -167,7 +168,7 @@
       ]
     },
     "configuration": {
-      "title": "DITA Viewer",
+      "title": "%configuration.title%",
       "properties": {
         "dita-viewer.customCss": {
           "type": "array",
@@ -175,7 +176,7 @@
             "type": "string"
           },
           "default": [],
-          "description": "Custom CSS file paths to apply to the preview. Supports absolute paths, paths relative to workspace root, and paths relative to the DITA file directory."
+          "description": "%config.customCss.description%"
         },
         "dita-viewer.cssDirectory": {
           "type": "array",
@@ -183,17 +184,17 @@
             "type": "string"
           },
           "default": [],
-          "description": "Directories to scan for available CSS files. Supports absolute paths, workspace-relative paths, and document-relative paths. CSS files found here appear in the preview theme dropdown."
+          "description": "%config.cssDirectory.description%"
         },
         "dita-viewer.ditaOtPath": {
           "type": "string",
           "default": "",
-          "description": "DITA-OT 安装目录的绝对路径（该目录下应有 bin/dita 或 bin\\dita.bat）。留空则自动探测 DITA_HOME 环境变量和 PATH。"
+          "description": "%config.ditaOtPath.description%"
         },
         "dita-viewer.ditaOtInjectNavToolbar": {
           "type": "boolean",
           "default": true,
-          "description": "（已废弃）转换完成后注入站点增强功能（导航、侧边栏等）。新版本使用转换流程中的 QuickPick 选择具体功能，此设置仅作为旧版兼容保留。"
+          "description": "%config.ditaOtInjectNavToolbar.description%"
         }
       }
     }
