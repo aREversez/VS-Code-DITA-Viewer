@@ -241,7 +241,9 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       if (mode === 'book') {
         content = this.renderBookContent(mapDoc.root, document, webview, docDir);
       } else {
-        content = renderMapDocument(mapDoc.root, { docDir });
+        // Resolve <ph keyref="..."/> etc. in the map title and navtitles
+        const keyMap = buildKeyMap(document.uri);
+        content = renderMapDocument(mapDoc.root, { docDir, resolveKey: (k) => keyMap.get(k) });
       }
 
       const script = getMapWebviewScript();
@@ -284,10 +286,10 @@ ${content}
     webview: vscode.Webview,
     docDir: string,
   ): string {
-    const entries = collectMapEntries(mapRoot);
-
     // Build key map once for all entries
     const keyMap = buildKeyMap(document.uri);
+    const resolveKey = (k: string) => keyMap.get(k);
+    const entries = collectMapEntries(mapRoot, resolveKey);
 
     // Track visited absolute paths to avoid duplicates
     const visited = new Set<string>();

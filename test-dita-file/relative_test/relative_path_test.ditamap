@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
 <map>
-    <title>Test2</title>
+    <title><ph keyref="product_name"/> User Guide</title>
     <topicref href="../test.ditamap" format="ditamap"/>
 </map>

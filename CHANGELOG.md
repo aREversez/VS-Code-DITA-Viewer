@@ -9,6 +9,7 @@
 - **`<mapref>` support** — `mapref` elements are now expanded and rendered like `topicref`/`keydef` map references (previously rendered as empty)
 - **All-in-one maps** — a map that references only other maps (e.g. sub-maps in nested sub-folders) now renders the full merged tree, including recursively nested map references
 - **Key precedence** — key map discovery scans all ancestor directories (nearest first) with first-definition-wins semantics, matching the DITA key precedence rule
+- **`keyref` in map titles and navtitles** — `<ph keyref="..."/>` (and any empty element carrying a `keyref`) inside the map `<title>`, `navtitle`, `linktext`, or `keyword` now renders the resolved key value in the map preview (e.g. `<title><ph keyref="product_name"/> User Guide</title>`)
 
 ### Map Preview UX
 

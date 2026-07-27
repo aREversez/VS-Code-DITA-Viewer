@@ -147,4 +147,40 @@ describe('mapRenderer', () => {
     assert.ok(html.includes('db_config'));
     assert.ok(html.includes('db_ui_test'));
   });
+
+  it('should resolve ph keyref in the map title', () => {
+    const xml = `<map><title><ph keyref="product_name"/> User Guide</title></map>`;
+    const doc = parseDitamap(preprocessEntities(xml));
+    const keyMap = new Map([['product_name', 'DatabaseX Pro v3.0']]);
+    const html = renderMapDocument(doc.root, { docDir: '/test', resolveKey: (k) => keyMap.get(k) });
+    assert.ok(html.includes('DatabaseX Pro v3.0 User Guide'), `expected resolved title, got: ${html}`);
+  });
+
+  it('should leave the title text intact when the keyref is unresolved', () => {
+    const xml = `<map><title><ph keyref="missing_key"/> User Guide</title></map>`;
+    const doc = parseDitamap(preprocessEntities(xml));
+    const html = renderMapDocument(doc.root, { docDir: '/test', resolveKey: () => undefined });
+    assert.ok(html.includes('User Guide'));
+  });
+
+  it('should escape a malicious key value substituted into the title (XSS guard)', () => {
+    const xml = `<map><title><ph keyref="product_name"/></title></map>`;
+    const doc = parseDitamap(preprocessEntities(xml));
+    const keyMap = new Map([['product_name', '<img src=x onerror=alert(1)>']]);
+    const html = renderMapDocument(doc.root, { docDir: '/test', resolveKey: (k) => keyMap.get(k) });
+    assert.ok(!html.includes('<img'), 'raw tag must not appear');
+    assert.ok(html.includes('&lt;img'), 'value must be escaped');
+  });
+
+  it('should resolve ph keyref inside a navtitle display name', () => {
+    const xml = `<map>
+      <topicref href="topics/a.dita">
+        <topicmeta><navtitle>Configuring <ph keyref="product_name"/></navtitle></topicmeta>
+      </topicref>
+    </map>`;
+    const doc = parseDitamap(preprocessEntities(xml));
+    const keyMap = new Map([['product_name', 'DatabaseX Pro v3.0']]);
+    const html = renderMapDocument(doc.root, { docDir: '/test', resolveKey: (k) => keyMap.get(k) });
+    assert.ok(html.includes('Configuring DatabaseX Pro v3.0'), `expected resolved navtitle, got: ${html}`);
+  });
 });
