@@ -19,25 +19,37 @@ function getAttr(node: DitaNode, name: string): string | undefined {
   return node.attributes?.[name];
 }
 
-function extractText(node: DitaNode): string {
+type ResolveKey = (key: string) => string | undefined;
+
+function extractText(node: DitaNode, resolveKey?: ResolveKey): string {
   if (node.type === 'text') return node.text || '';
-  return (node.children || []).map(extractText).join('');
+  const own = (node.children || []).map((c) => extractText(c, resolveKey)).join('');
+  // Empty element carrying a keyref (e.g. <ph keyref="product"/>): substitute
+  // the key value; element content wins over the keyref when both exist
+  if (!own.trim() && resolveKey) {
+    const keyref = node.attributes?.keyref;
+    if (keyref) {
+      const resolved = resolveKey(keyref);
+      if (resolved) return resolved;
+    }
+  }
+  return own;
 }
 
-function getNodeText(node: DitaNode, childBaseTypes: string[]): string | undefined {
+function getNodeText(node: DitaNode, childBaseTypes: string[], resolveKey?: ResolveKey): string | undefined {
   for (const bt of childBaseTypes) {
     const child = (node.children || []).find(
       (c) => c.type === 'element' && c.baseType === bt,
     );
     if (child) {
-      const text = extractText(child).trim();
+      const text = extractText(child, resolveKey).trim();
       if (text) return text;
     }
   }
   return undefined;
 }
 
-function getDisplayName(node: DitaNode): string {
+function getDisplayName(node: DitaNode, resolveKey?: ResolveKey): string {
   const keys = getAttr(node, 'keys');
   const href = getAttr(node, 'href');
 
@@ -47,14 +59,14 @@ function getDisplayName(node: DitaNode): string {
     (c) => c.type === 'element' && (c.baseType === 'map/topicmeta'),
   );
   if (topicmeta) {
-    const metaText = getNodeText(topicmeta, ['map/navtitle', 'map/linktext', 'map/shortdesc']);
+    const metaText = getNodeText(topicmeta, ['map/navtitle', 'map/linktext', 'map/shortdesc'], resolveKey);
     if (metaText) return metaText;
     // keyword within topicmeta > keywords > keyword
     const keywords = topicmeta.children.find(
       (c) => c.type === 'element' && c.baseType === 'map/keywords',
     );
     if (keywords) {
-      const kwText = getNodeText(keywords, ['map/keyword']);
+      const kwText = getNodeText(keywords, ['map/keyword'], resolveKey);
       if (kwText) return kwText;
     }
   }
@@ -94,7 +106,7 @@ function renderChildrenForNode(
 function renderRef(node: DitaNode, ctx: MapRenderContext, renderChildren: (node: DitaNode, ctx: MapRenderContext) => string): string {
   const href = getAttr(node, 'href') || '';
   const keys = getAttr(node, 'keys') || '';
-  const displayName = getDisplayName(node);
+  const displayName = getDisplayName(node, ctx.resolveKey);
   const nav = isNavigable(node);
   const childrenHtml = renderChildrenForNode(node, ctx, renderChildren);
 
@@ -122,6 +134,8 @@ function renderRef(node: DitaNode, ctx: MapRenderContext, renderChildren: (node:
 export interface MapRenderContext {
   /** Base directory for resolving relative paths */
   docDir: string;
+  /** Resolves a key name to its keydef value (for <ph keyref="..."/> etc.) */
+  resolveKey?: ResolveKey;
   /** Callback to open a DITA file */
   onNavigate?: (href: string) => void;
 }
@@ -132,7 +146,7 @@ const MAP_BASE_TYPE_RENDERERS: Record<string, Renderer> = {
       (c) => c.type === 'element' && c.baseType === 'map/map-title',
     );
     const titleHtml = titleEl
-      ? `<h1 class="map-title">${escapeAttr(extractText(titleEl))}</h1>`
+      ? `<h1 class="map-title">${escapeAttr(extractText(titleEl, ctx.resolveKey))}</h1>`
       : '';
     const bodyChildren = node.children.filter(
       (c) => c.type !== 'element' || c.baseType !== 'map/map-title',
@@ -147,12 +161,12 @@ const MAP_BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     </div>`;
   },
 
-  'map/map-title': (node, _ctx, _renderChildren) =>
-    `<h1 class="map-title">${escapeAttr(extractText(node))}</h1>`,
+  'map/map-title': (node, ctx, _renderChildren) =>
+    `<h1 class="map-title">${escapeAttr(extractText(node, ctx.resolveKey))}</h1>`,
 
   'map/topicref': renderRef,
   'map/topichead': (node, ctx, renderChildren) => {
-    const displayName = getDisplayName(node);
+    const displayName = getDisplayName(node, ctx.resolveKey);
     const childrenHtml = renderChildrenForNode(node, ctx, renderChildren);
     return `<li class="map-tree-item map-tree-item--head">
       <span class="map-tree-label map-tree-label--head">${escapeAttr(displayName)}</span>
@@ -213,7 +227,7 @@ export interface MapEntry {
   keys?: string;
 }
 
-function collectEntriesRecursive(node: DitaNode, depth: number, result: MapEntry[]): void {
+function collectEntriesRecursive(node: DitaNode, depth: number, result: MapEntry[], resolveKey?: ResolveKey): void {
   if (node.type !== 'element') return;
   const baseType = node.baseType;
 
@@ -225,36 +239,36 @@ function collectEntriesRecursive(node: DitaNode, depth: number, result: MapEntry
     const keys = getAttr(node, 'keys');
     result.push({
       href,
-      displayName: getDisplayName(node),
+      displayName: getDisplayName(node, resolveKey),
       depth,
       keys,
     });
     // Recurse children at depth+1
     for (const child of node.children || []) {
-      collectEntriesRecursive(child, depth + 1, result);
+      collectEntriesRecursive(child, depth + 1, result, resolveKey);
     }
   } else if (baseType === 'map/topicgroup') {
     // topicgroup: no entry itself, but recurse at same depth
     for (const child of node.children || []) {
-      collectEntriesRecursive(child, depth, result);
+      collectEntriesRecursive(child, depth, result, resolveKey);
     }
   } else {
     for (const child of node.children || []) {
-      collectEntriesRecursive(child, depth, result);
+      collectEntriesRecursive(child, depth, result, resolveKey);
     }
   }
 }
 
-export function collectMapEntries(root: DitaNode): MapEntry[] {
+export function collectMapEntries(root: DitaNode, resolveKey?: ResolveKey): MapEntry[] {
   const result: MapEntry[] = [];
   // Start from map's children at depth 0
   for (const child of root.children || []) {
-    collectEntriesRecursive(child, 0, result);
+    collectEntriesRecursive(child, 0, result, resolveKey);
   }
   return result;
 }
 
-export function renderMapDocument(root: DitaNode, options: { docDir: string }): string {
+export function renderMapDocument(root: DitaNode, options: { docDir: string; resolveKey?: ResolveKey }): string {
   function renderElement(node: DitaNode, ctx: MapRenderContext): string {
     if (node.type === 'text') return '';
     const baseType = node.baseType;
@@ -267,6 +281,7 @@ export function renderMapDocument(root: DitaNode, options: { docDir: string }): 
 
   const ctx: MapRenderContext = {
     docDir: options.docDir,
+    resolveKey: options.resolveKey,
   };
 
   return renderElement(root, ctx);
