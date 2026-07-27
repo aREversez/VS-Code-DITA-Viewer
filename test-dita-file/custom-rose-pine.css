@@ -95,6 +95,7 @@ h4 { font-size: 1.1em; margin-top: 1.5em; }
 .note {
   border-left: 4px solid var(--rp-pine);
   background: var(--rp-overlay);
+  color: var(--rp-text);
   padding: 1rem 1.25rem;
   margin: 1.25rem 0;
   border-radius: 0 var(--rp-radius) var(--rp-radius) 0;

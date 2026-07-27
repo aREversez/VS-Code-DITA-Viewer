@@ -1,9 +1,26 @@
 {
   "name": "dita-viewer",
   "displayName": "DITA Viewer",
-  "description": "DITA reading view for VS Code — renders .dita files as formatted read-only preview",
-  "version": "1.0.4",
+  "description": "%extension.description%",
+  "version": "1.0.5",
   "publisher": "dita-viewer",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aREversez/VS-Code-DITA-Viewer"
+  },
+  "homepage": "https://github.com/aREversez/VS-Code-DITA-Viewer#readme",
+  "bugs": {
+    "url": "https://github.com/aREversez/VS-Code-DITA-Viewer/issues"
+  },
+  "icon": "media/icons/extension-icon.png",
+  "keywords": [
+    "dita",
+    "xml",
+    "documentation",
+    "preview",
+    "ditamap"
+  ],
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -20,17 +37,28 @@
     "onCommand:ditaViewer.transformWithDitaOt"
   ],
   "main": "./dist/extension.js",
+  "l10n": "./l10n",
   "contributes": {
     "languages": [
       {
         "id": "dita",
-        "extensions": [".dita"],
-        "aliases": ["DITA", "dita"]
+        "extensions": [
+          ".dita"
+        ],
+        "aliases": [
+          "DITA",
+          "dita"
+        ]
       },
       {
         "id": "ditamap",
-        "extensions": [".ditamap"],
-        "aliases": ["DITA Map", "ditamap"]
+        "extensions": [
+          ".ditamap"
+        ],
+        "aliases": [
+          "DITA Map",
+          "ditamap"
+        ]
       }
     ],
     "customEditors": [
@@ -58,23 +86,33 @@
     "commands": [
       {
         "command": "ditaViewer.showRendered",
-        "title": "Open DITA Reading View",
+        "title": "%command.showRendered.title%",
         "icon": {
           "light": "media/icons/preview.svg",
           "dark": "media/icons/preview~dark.svg"
         }
       },
       {
+        "command": "ditaViewer.showSource",
+        "title": "%command.showSource.title%",
+        "icon": "$(go-to-file)"
+      },
+      {
         "command": "ditaViewer.showMapRendered",
-        "title": "Open DITA Map Reading View",
+        "title": "%command.showMapRendered.title%",
         "icon": {
           "light": "media/icons/map-preview.svg",
           "dark": "media/icons/map-preview~dark.svg"
         }
       },
       {
+        "command": "ditaViewer.showMapSource",
+        "title": "%command.showMapSource.title%",
+        "icon": "$(go-to-file)"
+      },
+      {
         "command": "ditaViewer.transformWithDitaOt",
-        "title": "DITA-OT: Transform Map…",
+        "title": "%command.transformWithDitaOt.title%",
         "icon": {
           "light": "media/icons/transform.svg",
           "dark": "media/icons/transform~dark.svg"
@@ -97,12 +135,22 @@
       "editor/title": [
         {
           "command": "ditaViewer.showRendered",
-          "when": "resourceExtname == .dita",
+          "when": "resourceExtname == .dita && activeCustomEditorId != ditaViewer.preview",
+          "group": "navigation"
+        },
+        {
+          "command": "ditaViewer.showSource",
+          "when": "activeCustomEditorId == ditaViewer.preview",
           "group": "navigation"
         },
         {
           "command": "ditaViewer.showMapRendered",
-          "when": "resourceExtname == .ditamap",
+          "when": "resourceExtname == .ditamap && activeCustomEditorId != ditaViewer.mapPreview",
+          "group": "navigation"
+        },
+        {
+          "command": "ditaViewer.showMapSource",
+          "when": "activeCustomEditorId == ditaViewer.mapPreview",
           "group": "navigation"
         },
         {
@@ -134,8 +182,16 @@
           "when": "resourceExtname == .dita"
         },
         {
+          "command": "ditaViewer.showSource",
+          "when": "activeCustomEditorId == ditaViewer.preview"
+        },
+        {
           "command": "ditaViewer.showMapRendered",
           "when": "resourceExtname == .ditamap"
+        },
+        {
+          "command": "ditaViewer.showMapSource",
+          "when": "activeCustomEditorId == ditaViewer.mapPreview"
         },
         {
           "command": "ditaViewer.transformWithDitaOt",
@@ -144,7 +200,7 @@
       ]
     },
     "configuration": {
-      "title": "DITA Viewer",
+      "title": "%configuration.title%",
       "properties": {
         "dita-viewer.customCss": {
           "type": "array",
@@ -152,7 +208,7 @@
             "type": "string"
           },
           "default": [],
-          "description": "Custom CSS file paths to apply to the preview. Supports absolute paths, paths relative to workspace root, and paths relative to the DITA file directory."
+          "description": "%config.customCss.description%"
         },
         "dita-viewer.cssDirectory": {
           "type": "array",
@@ -160,17 +216,17 @@
             "type": "string"
           },
           "default": [],
-          "description": "Directories to scan for available CSS files. Supports absolute paths, workspace-relative paths, and document-relative paths. CSS files found here appear in the preview theme dropdown."
+          "description": "%config.cssDirectory.description%"
         },
         "dita-viewer.ditaOtPath": {
           "type": "string",
           "default": "",
-          "description": "DITA-OT 安装目录的绝对路径（该目录下应有 bin/dita 或 bin\\dita.bat）。留空则自动探测 DITA_HOME 环境变量和 PATH。"
+          "description": "%config.ditaOtPath.description%"
         },
         "dita-viewer.ditaOtInjectNavToolbar": {
           "type": "boolean",
           "default": true,
-          "description": "（已废弃）转换完成后注入站点增强功能（导航、侧边栏等）。新版本使用转换流程中的 QuickPick 选择具体功能，此设置仅作为旧版兼容保留。"
+          "description": "%config.ditaOtInjectNavToolbar.description%"
         }
       }
     }
@@ -193,13 +249,15 @@
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
+    "@vscode/test-electron": "^2.4.0",
     "esbuild": "^0.24.0",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
     "mocha": "^10.8.0",
+    "pngjs": "^7.0.0",
     "prettier": "^3.4.0",
-    "typescript": "^5.7.0",
-    "@vscode/test-electron": "^2.4.0"
+    "sharp": "^0.35.3",
+    "typescript": "^5.7.0"
   },
   "dependencies": {
     "sax": "^1.4.1"

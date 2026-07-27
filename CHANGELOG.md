@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.0.5 (2026-07-27)
+
+### Key Resolution & Map References
+
+- **Cross-folder keydef maps** — `keyref` values now resolve correctly when the keydef map lives in a different folder than the root map (parent folder, sub-folder, or anywhere reachable through map references); resolution follows the source map's references instead of assuming a same-level `keys.ditamap`
+- **Href rebasing** — when a referenced map is inlined, all local hrefs inside it are rebased from the referenced map's folder onto the root map's folder, so topics, images, and nested maps resolve from any directory depth
+- **`<mapref>` support** — `mapref` elements are now expanded and rendered like `topicref`/`keydef` map references (previously rendered as empty)
+- **All-in-one maps** — a map that references only other maps (e.g. sub-maps in nested sub-folders) now renders the full merged tree, including recursively nested map references
+- **Key precedence** — key map discovery scans all ancestor directories (nearest first) with first-definition-wins semantics, matching the DITA key precedence rule
+
+### Map Preview UX
+
+- **Refresh button** — map preview toolbar now includes a reload button
+- **Mode toggle fix** — switching to Book mode no longer gets stuck: the toggle now correctly returns to Tree mode on the next click
+- **Book mode map entries** — referenced `.ditamap` entries render as section placeholders instead of failing to load as topics
+
+### Reading View ⇄ Source Toggle
+
+- **Two-way toggle** — running *Open DITA Reading View* / *Open DITA Map Reading View* (button, keybinding, or command palette) while the reading view is active now switches back to the source editor: focuses an already-open source tab and closes the preview, or reopens the tab with the text editor in place
+- **Context-aware toolbar button** — while a reading view is active, the editor title button changes to **Back to DITA Source** / **Back to DITA Map Source** (`$(go-to-file)` icon), so the tooltip no longer misleadingly says "Open … Reading View"; new companion commands `ditaViewer.showSource` / `ditaViewer.showMapSource`
+
+### Bug Fixes
+
+- **Disposed webview guard** — pending sync timers in the topic preview no longer post to a disposed webview when the panel is closed or replaced quickly (fixes an uncaught "Webview is disposed" error)
+
 ## 1.0.4 (2026-07-21)
 
 ### Site-Chrome Enhancements (HTML5/XHTML Output)

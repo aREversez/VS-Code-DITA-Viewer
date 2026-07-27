@@ -63,4 +63,49 @@ describe('DITA/DITAMAP preview rendering', () => {
 
     await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
+
+  it('toggles back to the source editor when the command runs in the reading view', async () => {
+    const uri = vscode.Uri.file(path.join(fixturesDir, 'topics', 'db_overview.dita'));
+
+    // Open the reading view directly (no source text tab open)
+    await vscode.commands.executeCommand('vscode.openWith', uri, 'ditaViewer.preview');
+    await waitFor(() => {
+      const tab = vscode.window.tabGroups.activeTabGroup.activeTab;
+      return tab?.input instanceof vscode.TabInputCustom && tab.input.viewType === 'ditaViewer.preview';
+    });
+
+    // Running the command again from the reading view must switch to source
+    await vscode.commands.executeCommand('ditaViewer.showRendered');
+    await waitFor(() => {
+      const tab = vscode.window.tabGroups.activeTabGroup.activeTab;
+      return tab?.input instanceof vscode.TabInputText && tab.input.uri.toString() === uri.toString();
+    });
+
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+  });
+
+  it('toggles the map reading view back to source and focuses an existing text tab', async () => {
+    const uri = vscode.Uri.file(path.join(fixturesDir, 'test.ditamap'));
+
+    // Open source first, then the reading view beside it (the toolbar flow)
+    await vscode.window.showTextDocument(uri);
+    await vscode.commands.executeCommand('ditaViewer.showMapRendered');
+    await waitFor(() => {
+      const tab = vscode.window.tabGroups.activeTabGroup.activeTab;
+      return tab?.input instanceof vscode.TabInputCustom && tab.input.viewType === 'ditaViewer.mapPreview';
+    });
+
+    // Toggling from the reading view closes it and focuses the source tab
+    await vscode.commands.executeCommand('ditaViewer.showMapRendered');
+    await waitFor(() => {
+      const tab = vscode.window.tabGroups.activeTabGroup.activeTab;
+      return tab?.input instanceof vscode.TabInputText && tab.input.uri.toString() === uri.toString();
+    });
+    const previewStillOpen = vscode.window.tabGroups.all.some((g) =>
+      g.tabs.some((t) => t.input instanceof vscode.TabInputCustom && t.input.viewType === 'ditaViewer.mapPreview'),
+    );
+    assert.strictEqual(previewStillOpen, false, 'expected the map reading view tab to be closed');
+
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+  });
 });

@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'fs';
-import { resolve, dirname } from 'path';
+import { resolve, dirname, relative, isAbsolute } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
@@ -192,6 +192,46 @@ export interface TopicRenderResult {
 
 export type FileReader = (path: string, encoding: 'utf-8') => string;
 
+const URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
+
+function isLocalHref(href: string, scope?: string): boolean {
+  if (!href || href.startsWith('#')) return false;
+  if (scope === 'external' || scope === 'peer') return false;
+  if (URL_SCHEME_RE.test(href)) return false;
+  if (isAbsolute(href)) return false;
+  return true;
+}
+
+/** True when the node is a topicref/keydef/mapref pointing at another local .ditamap. */
+export function isDitamapRef(node: DitaNode): boolean {
+  if (node.type !== 'element') return false;
+  const baseType = node.baseType;
+  if (baseType !== 'map/topicref' && baseType !== 'map/keydef' && baseType !== 'map/mapref') return false;
+  const href = node.attributes?.href;
+  if (!href || !isLocalHref(href, node.attributes?.scope)) return false;
+  const pathPart = href.split('#')[0].toLowerCase();
+  return pathPart.endsWith('.ditamap') || node.attributes?.format === 'ditamap';
+}
+
+// Hrefs inside a referenced map are relative to that map's own folder.
+// When its children are inlined into the root map's tree, rewrite them so
+// they stay valid relative to the root map's folder — otherwise nested
+// keydef maps, sub-map topics and navigation all resolve to wrong paths.
+function rebaseHrefs(node: DitaNode, fromDir: string, toDir: string): void {
+  if (node.type !== 'element') return;
+  const href = node.attributes?.href;
+  if (href && node.attributes && isLocalHref(href, node.attributes.scope)) {
+    const hashIdx = href.indexOf('#');
+    const pathPart = hashIdx >= 0 ? href.substring(0, hashIdx) : href;
+    const fragment = hashIdx >= 0 ? href.substring(hashIdx) : '';
+    if (pathPart) {
+      const abs = resolve(fromDir, pathPart);
+      node.attributes.href = relative(toDir, abs).replace(/\\/g, '/') + fragment;
+    }
+  }
+  for (const child of node.children || []) rebaseHrefs(child, fromDir, toDir);
+}
+
 export function expandDitamapRefs(
   node: DitaNode,
   docDir: string,
@@ -199,11 +239,10 @@ export function expandDitamapRefs(
   visited?: Set<string>,
 ): void {
   if (node.type !== 'element') return;
-  const href = node.attributes?.href;
-  const baseType = node.baseType;
 
-  if (href && href.endsWith('.ditamap') && (baseType === 'map/topicref' || baseType === 'map/keydef')) {
-    const targetPath = resolve(docDir, href);
+  if (isDitamapRef(node)) {
+    const href = node.attributes!.href!;
+    const targetPath = resolve(docDir, href.split('#')[0]);
     if (!visited) visited = new Set();
     if (visited.has(targetPath)) return;
     visited.add(targetPath);
@@ -214,6 +253,10 @@ export function expandDitamapRefs(
         (c) => c.type === 'element',
       );
       if (refChildren.length > 0) {
+        const refDir = dirname(targetPath);
+        if (refDir !== resolve(docDir)) {
+          for (const rc of refChildren) rebaseHrefs(rc, refDir, docDir);
+        }
         if (!node.children) node.children = [];
         node.children.push(...refChildren);
       }
