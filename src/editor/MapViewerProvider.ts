@@ -31,11 +31,16 @@ function getMapWebviewScript(): string {
     switchModeTitle: JSON.stringify(vscode.l10n.t('Switch between outline tree and full book view')),
     modeOutline: JSON.stringify(vscode.l10n.t('Outline')),
     modeBook: JSON.stringify(vscode.l10n.t('Book')),
+    reloadContent: JSON.stringify(vscode.l10n.t('Reload DITA content')),
   };
   return `
 (function() {
   var vscode = acquireVsCodeApi();
-  var currentMode = 'tree';
+  // The whole HTML document is regenerated on every mode switch, so derive
+  // the current mode from the body class instead of a hardcoded default —
+  // otherwise the script's state resets to 'tree' while the extension is in
+  // 'book' mode and the toggle can never switch back.
+  var currentMode = document.body.classList.contains('mode-book') ? 'book' : 'tree';
 
   // Click on navigable tree node → post message to extension
   document.addEventListener('click', function(e) {
@@ -121,10 +126,10 @@ function getMapWebviewScript(): string {
   var modeBtn = document.createElement('button');
   modeBtn.title = ${L.switchModeTitle};
   modeBtn.style.cssText = btnStyle + 'font-size:11px;';
-  modeBtn.textContent = ${L.modeOutline};
   function updateModeLabel() {
     modeBtn.textContent = currentMode === 'tree' ? ${L.modeBook} : ${L.modeOutline};
   }
+  updateModeLabel();
   modeBtn.addEventListener('click', function() {
     var newMode = currentMode === 'tree' ? 'book' : 'tree';
     currentMode = newMode;
@@ -132,6 +137,14 @@ function getMapWebviewScript(): string {
     vscode.postMessage({ type: 'switchMode', mode: newMode });
   });
   toolbar.appendChild(modeBtn);
+
+  // Refresh button
+  var refreshBtn = document.createElement('button');
+  refreshBtn.innerHTML = '&#x21bb;';
+  refreshBtn.title = ${L.reloadContent};
+  refreshBtn.style.cssText = btnStyle;
+  refreshBtn.addEventListener('click', function() { vscode.postMessage({ type: 'refresh' }); });
+  toolbar.appendChild(refreshBtn);
 
   document.body.appendChild(toolbar);
 })();
@@ -282,6 +295,13 @@ ${content}
     const parts: string[] = [];
     for (const entry of entries) {
       if (entry.href) {
+        // Sub-map reference: its contents were already inlined as child
+        // entries by expandDitamapRefs — render a section heading only
+        // instead of parsing the map file as a topic.
+        if (entry.href.split('#')[0].toLowerCase().endsWith('.ditamap')) {
+          parts.push(renderBookPlaceholder(entry.displayName, entry.depth));
+          continue;
+        }
         const absPath = resolve(docDir, entry.href);
         if (visited.has(absPath)) {
           parts.push(renderBookSkipMessage(entry.href));

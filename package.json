@@ -89,12 +89,22 @@
         }
       },
       {
+        "command": "ditaViewer.showSource",
+        "title": "%command.showSource.title%",
+        "icon": "$(go-to-file)"
+      },
+      {
         "command": "ditaViewer.showMapRendered",
         "title": "%command.showMapRendered.title%",
         "icon": {
           "light": "media/icons/map-preview.svg",
           "dark": "media/icons/map-preview~dark.svg"
         }
+      },
+      {
+        "command": "ditaViewer.showMapSource",
+        "title": "%command.showMapSource.title%",
+        "icon": "$(go-to-file)"
       },
       {
         "command": "ditaViewer.transformWithDitaOt",
@@ -121,12 +131,22 @@
       "editor/title": [
         {
           "command": "ditaViewer.showRendered",
-          "when": "resourceExtname == .dita",
+          "when": "resourceExtname == .dita && activeCustomEditorId != ditaViewer.preview",
+          "group": "navigation"
+        },
+        {
+          "command": "ditaViewer.showSource",
+          "when": "activeCustomEditorId == ditaViewer.preview",
           "group": "navigation"
         },
         {
           "command": "ditaViewer.showMapRendered",
-          "when": "resourceExtname == .ditamap",
+          "when": "resourceExtname == .ditamap && activeCustomEditorId != ditaViewer.mapPreview",
+          "group": "navigation"
+        },
+        {
+          "command": "ditaViewer.showMapSource",
+          "when": "activeCustomEditorId == ditaViewer.mapPreview",
           "group": "navigation"
         },
         {
@@ -158,8 +178,16 @@
           "when": "resourceExtname == .dita"
         },
         {
+          "command": "ditaViewer.showSource",
+          "when": "activeCustomEditorId == ditaViewer.preview"
+        },
+        {
           "command": "ditaViewer.showMapRendered",
           "when": "resourceExtname == .ditamap"
+        },
+        {
+          "command": "ditaViewer.showMapSource",
+          "when": "activeCustomEditorId == ditaViewer.mapPreview"
         },
         {
           "command": "ditaViewer.transformWithDitaOt",

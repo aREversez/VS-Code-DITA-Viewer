@@ -1,7 +1,9 @@
 {
   "extension.description": "DITA reading view for VS Code — renders .dita files as formatted read-only preview",
   "command.showRendered.title": "Open DITA Reading View",
+  "command.showSource.title": "Back to DITA Source",
   "command.showMapRendered.title": "Open DITA Map Reading View",
+  "command.showMapSource.title": "Back to DITA Map Source",
   "command.transformWithDitaOt.title": "DITA-OT: Transform Map…",
   "configuration.title": "DITA Viewer",
   "config.customCss.description": "Custom CSS file paths to apply to the preview. Supports absolute paths, paths relative to workspace root, and paths relative to the DITA file directory.",

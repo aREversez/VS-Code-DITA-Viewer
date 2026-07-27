@@ -1,7 +1,9 @@
 {
   "extension.description": "VS Code 的 DITA 阅读视图 — 将 .dita 文件渲染为格式化的只读预览",
   "command.showRendered.title": "打开 DITA 阅读视图",
+  "command.showSource.title": "返回 DITA 源码",
   "command.showMapRendered.title": "打开 DITA Map 阅读视图",
+  "command.showMapSource.title": "返回 DITA Map 源码",
   "command.transformWithDitaOt.title": "DITA-OT：转换 Map…",
   "configuration.title": "DITA Viewer",
   "config.customCss.description": "应用于预览的自定义 CSS 文件路径。支持绝对路径、相对于工作区根目录的路径、以及相对于 DITA 文件所在目录的路径。",

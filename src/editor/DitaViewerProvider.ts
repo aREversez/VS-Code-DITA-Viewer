@@ -297,7 +297,13 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
         (e) => e.document.uri.toString() === document.uri.toString(),
       );
 
+    // The toggle command (and "Reopen Editor With") can dispose this panel
+    // while sync timers are still pending — guard every deferred webview
+    // access so nothing posts to a disposed webview.
+    let disposed = false;
+
     const postRevealLine = (line: number) => {
+      if (disposed) return;
       webviewPanel.webview.postMessage({ type: 'revealLine', line });
     };
 
@@ -382,6 +388,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     });
 
     const updateWebview = () => {
+      if (disposed) return;
       const html = this.generateHtml(document, webviewPanel.webview);
       webviewPanel.webview.html = html;
       lastRenderedHtmlByUri.set(document.uri.toString(), html);
@@ -389,9 +396,11 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
 
     updateWebview();
 
-    setTimeout(doSyncSourceToWebview, 300);
+    const initialSyncTimer = setTimeout(doSyncSourceToWebview, 300);
 
     webviewPanel.onDidDispose(() => {
+      disposed = true;
+      clearTimeout(initialSyncTimer);
       if (visibleRangeTimer) clearTimeout(visibleRangeTimer);
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
       changeSubscription.dispose();
@@ -534,7 +543,7 @@ function escapeJson(text: string): string {
 
 // ── Keyref: parse DITAMAP for key→value mappings ──
 
-export function findDitamapFiles(docUri: vscode.Uri): string[] {
+export function findDitamapFiles(docUri: vscode.Uri, stopAtFirstMatch = true): string[] {
   const results: string[] = [];
   const docDir = dirname(docUri.fsPath);
   const root = parseDocRoot(docDir);
@@ -545,7 +554,7 @@ export function findDitamapFiles(docUri: vscode.Uri): string[] {
         if (entry.endsWith('.ditamap')) results.push(join(dir, entry));
       }
     } catch {}
-    if (results.length > 0) return results;
+    if (stopAtFirstMatch && results.length > 0) return results;
     const parent = dirname(dir);
     if (parent === dir) break;
     dir = parent;
@@ -600,7 +609,10 @@ function getKeyValueFromRef(node: DitaNode): string | undefined {
 
 export function buildKeyMap(docUri: vscode.Uri): Map<string, string> {
   const map = new Map<string, string>();
-  const mapFiles = findDitamapFiles(docUri);
+  // Scan all ancestor folders (not just the nearest one with a map) so keydef
+  // maps living in outer folders are still picked up; maps referenced from any
+  // scanned map are followed via expandDitamapRefs regardless of location.
+  const mapFiles = findDitamapFiles(docUri, false);
   for (const mf of mapFiles) {
     try {
       const content = readFileSync(mf, 'utf-8');
@@ -614,7 +626,8 @@ export function buildKeyMap(docUri: vscode.Uri): Map<string, string> {
         if ((baseType === 'map/topicref' || baseType === 'map/keydef') && node.attributes?.keys) {
           const keys = node.attributes.keys;
           const value = getKeyValueFromRef(node);
-          map.set(keys, value || keys);
+          // First definition wins (DITA precedence; nearest map scanned first)
+          if (!map.has(keys)) map.set(keys, value || keys);
         }
         for (const child of node.children || []) walk(child);
       }

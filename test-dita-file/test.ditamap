@@ -2,7 +2,7 @@
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
 <map>
     <title>Test</title>
-    <topicref href="keys.ditamap" format="ditamap"/>
+    <topicref href="common/keys.ditamap" format="ditamap"/>
     <topicref href="topics/db_overview.dita"/>
     <topicref href="topics/db_config.dita"/>
     <topicref href="topics/db_ui_test.dita"/>

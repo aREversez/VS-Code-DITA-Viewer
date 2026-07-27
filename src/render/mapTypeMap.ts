@@ -203,7 +203,7 @@ const MAP_BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   'map/keyword': () => '',
   'map/anchor': () => '',
   'map/navref': () => '',
-  'map/mapref': () => '',
+  'map/mapref': renderRef,
 };
 
 export interface MapEntry {
@@ -220,7 +220,7 @@ function collectEntriesRecursive(node: DitaNode, depth: number, result: MapEntry
   // Skip reltable and its children
   if (baseType === 'map/reltable') return;
 
-  if (baseType === 'map/topicref' || baseType === 'map/keydef' || baseType === 'map/topichead') {
+  if (baseType === 'map/topicref' || baseType === 'map/keydef' || baseType === 'map/mapref' || baseType === 'map/topichead') {
     const href = getAttr(node, 'href');
     const keys = getAttr(node, 'keys');
     result.push({

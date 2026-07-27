@@ -11,12 +11,14 @@ describe('extension activation', () => {
     assert.strictEqual(ext!.isActive, true);
   });
 
-  it('registers the three DITA Viewer commands', async () => {
+  it('registers the DITA Viewer commands', async () => {
     const ext = vscode.extensions.getExtension(EXTENSION_ID);
     await ext?.activate();
     const commands = await vscode.commands.getCommands(true);
     assert.ok(commands.includes('ditaViewer.showRendered'));
+    assert.ok(commands.includes('ditaViewer.showSource'));
     assert.ok(commands.includes('ditaViewer.showMapRendered'));
+    assert.ok(commands.includes('ditaViewer.showMapSource'));
     assert.ok(commands.includes('ditaViewer.transformWithDitaOt'));
   });
 });

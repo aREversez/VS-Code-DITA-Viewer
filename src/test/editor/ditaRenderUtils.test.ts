@@ -123,4 +123,73 @@ describe('expandDitamapRefs', () => {
     assert.strictEqual(child.children.length, 2);
     assert.strictEqual(child.children[0].attributes?.keys, 'product-name');
   });
+
+  it('should expand a keydef map living in a sub-folder', () => {
+    const node = makeEl('map/topicref', { href: 'common/keys.ditamap' });
+    const readFile: FileReader = (path, _enc) => {
+      assert.ok(path.replace(/\\/g, '/').endsWith('/project/common/keys.ditamap'));
+      return KEYDEF_XML;
+    };
+
+    expandDitamapRefs(node, '/project', readFile);
+
+    assert.strictEqual(node.children.length, 2);
+    assert.strictEqual(node.children[0].attributes?.keys, 'product-name');
+  });
+
+  it('should expand mapref elements', () => {
+    const node = makeEl('map/mapref', { href: 'keys.ditamap' });
+    const readFile: FileReader = (_p, _e) => KEYDEF_XML;
+
+    expandDitamapRefs(node, '/dir', readFile);
+
+    assert.strictEqual(node.children.length, 2);
+    assert.strictEqual(node.children[0].attributes?.keys, 'product-name');
+  });
+
+  it('should rebase topic hrefs from a sub-folder map onto the root map dir', () => {
+    const node = makeEl('map/topicref', { href: 'sub/inner.ditamap' });
+    const readFile: FileReader = (path, _enc) => {
+      const p = path.replace(/\\/g, '/');
+      if (p.endsWith('/project/sub/inner.ditamap')) {
+        return `<map>
+          <topicref href="topics/a.dita"/>
+          <topicref href="../shared/b.dita"/>
+          <topicref href="http://example.com/x.dita" scope="external"/>
+        </map>`;
+      }
+      throw new Error('unexpected: ' + path);
+    };
+
+    expandDitamapRefs(node, '/project', readFile);
+
+    assert.strictEqual(node.children.length, 3);
+    assert.strictEqual(node.children[0].attributes?.href, 'sub/topics/a.dita');
+    assert.strictEqual(node.children[1].attributes?.href, 'shared/b.dita');
+    // external hrefs must not be rewritten
+    assert.strictEqual(node.children[2].attributes?.href, 'http://example.com/x.dita');
+  });
+
+  it('should resolve nested map refs relative to the including map', () => {
+    const node = makeEl('map/topicref', { href: 'sub/inner.ditamap' });
+    const readFile: FileReader = (path, _enc) => {
+      const p = path.replace(/\\/g, '/');
+      if (p.endsWith('/project/sub/inner.ditamap')) {
+        // keys.ditamap is relative to sub/, not to the root map
+        return `<map><topicref href="keys.ditamap"/></map>`;
+      }
+      if (p.endsWith('/project/sub/keys.ditamap')) {
+        return KEYDEF_XML;
+      }
+      throw new Error('unexpected: ' + path);
+    };
+
+    expandDitamapRefs(node, '/project', readFile);
+
+    assert.strictEqual(node.children.length, 1);
+    const inner = node.children[0];
+    assert.strictEqual(inner.attributes?.href, 'sub/keys.ditamap');
+    assert.strictEqual(inner.children.length, 2);
+    assert.strictEqual(inner.children[0].attributes?.keys, 'product-name');
+  });
 });

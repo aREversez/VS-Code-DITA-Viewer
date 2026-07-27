@@ -43,39 +43,64 @@ export function activate(context: vscode.ExtensionContext) {
     ),
   );
 
+  // Toggle between the reading view and the source editor: when the active
+  // tab is already the given reading view, switch back to the text editor;
+  // otherwise open the reading view beside the source.
+  const toggleReadingView = async (viewType: string) => {
+    const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
+    const input = activeTab?.input;
+    if (activeTab && input instanceof vscode.TabInputCustom && input.viewType === viewType) {
+      const uriStr = input.uri.toString();
+      // If the source is already open as a text tab, focus it and close the preview
+      for (const group of vscode.window.tabGroups.all) {
+        for (const tab of group.tabs) {
+          if (tab.input instanceof vscode.TabInputText && tab.input.uri.toString() === uriStr) {
+            await vscode.window.showTextDocument(tab.input.uri, { viewColumn: group.viewColumn });
+            await vscode.window.tabGroups.close(activeTab);
+            return;
+          }
+        }
+      }
+      // Otherwise reopen this tab with the default text editor in place
+      await vscode.commands.executeCommand('vscode.openWith', input.uri, 'default', activeTab.group.viewColumn);
+      return;
+    }
+
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) return;
+    await vscode.commands.executeCommand(
+      'vscode.openWith',
+      editor.document.uri,
+      viewType,
+      vscode.ViewColumn.Beside,
+    );
+  };
+
   const showRenderedCommand = vscode.commands.registerCommand(
     'ditaViewer.showRendered',
-    () => {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor) return;
-
-      vscode.commands.executeCommand(
-        'vscode.openWith',
-        editor.document.uri,
-        'ditaViewer.preview',
-          vscode.ViewColumn.Beside,
-      );
-    },
+    () => toggleReadingView('ditaViewer.preview'),
   );
 
   context.subscriptions.push(showRenderedCommand);
 
   const showMapRenderedCommand = vscode.commands.registerCommand(
     'ditaViewer.showMapRendered',
-    () => {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor) return;
-
-      vscode.commands.executeCommand(
-        'vscode.openWith',
-        editor.document.uri,
-        'ditaViewer.mapPreview',
-          vscode.ViewColumn.Beside,
-      );
-    },
+    () => toggleReadingView('ditaViewer.mapPreview'),
   );
 
   context.subscriptions.push(showMapRenderedCommand);
+
+  // "Back to source" companions: shown (via when clauses) only while the
+  // corresponding reading view is active, so the editor-title button carries
+  // an accurate tooltip instead of "Open … Reading View". Same toggle logic.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('ditaViewer.showSource', () =>
+      toggleReadingView('ditaViewer.preview'),
+    ),
+    vscode.commands.registerCommand('ditaViewer.showMapSource', () =>
+      toggleReadingView('ditaViewer.mapPreview'),
+    ),
+  );
 
   // DITA-OT transform command
   const extensionPath = context.extensionPath;
