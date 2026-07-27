@@ -2,12 +2,16 @@
 
 A VS Code extension that renders **`.dita`** and **`.ditamap`** files as a formatted, read-only preview — similar to a WYSIWYG reading view. Built with [sax](https://github.com/isaacs/sax-js) XML parsing and a custom DITA-to-HTML rendering engine.
 
+> GitHub: [aREversez/VS-Code-DITA-Viewer](https://github.com/aREversez/VS-Code-DITA-Viewer) · [Changelog](CHANGELOG.md) · [Issues](https://github.com/aREversez/VS-Code-DITA-Viewer/issues)
+
 ## Features
 
 - **DITA topic preview** (`.dita`) — rendered view with bidirectional scroll sync
 - **DITA Map preview** (`.ditamap`) — two modes:
-  - **Tree view** — structured hierarchy of map entries with display names and navigation
+  - **Outline (tree) view** — structured hierarchy of map entries with display names and navigation
   - **Book mode** — renders all referenced topics in sequence as a single reading flow
+- **Two-way preview toggle** — the same button/shortcut that opens a reading view switches back to the source editor when pressed inside the preview (the toolbar button becomes **Back to DITA Source**)
+- **Key and map-reference resolution** — `keyref` values resolve across folders by following the map's own references (`topicref`/`keydef`/`mapref` to other `.ditamap` files); nested and "all-in-one" maps are merged recursively with hrefs rebased onto the root map
 - **Full DITA element coverage** — topic, sections, notes (all types), lists, tables, figures, code blocks with language labels, images, cross-references (with title resolution), quotes, related links, inline formatting, keydef/keyword display
 - **Reltable and topicgroup support** — reltables are skipped from the tree; topicgroups render children without adding their own entry
 - **Theme-aware** — automatically adapts background and border colors to the current VS Code theme
@@ -28,6 +32,8 @@ A VS Code extension that renders **`.dita`** and **`.ditamap`** files as a forma
 
 The preview opens in a new column beside your source editor.
 
+> **Back to source:** while the reading view is focused, the editor title button changes to **Back to DITA Source** — click it (or press the same shortcut / run the same command) to return to the source editor. If the source file is already open in another tab, it is focused and the preview is closed; otherwise the preview tab is reopened in place as a text editor.
+
 ### Open a DITA Map Preview
 
 **Method 1 — Button:** Open a `.ditamap` file, then click the **preview icon** (book) in the editor title bar.
@@ -38,11 +44,18 @@ The preview opens in a new column beside your source editor.
 
 **Method 4 — Shortcut:** With a `.ditamap` file focused, press `Ctrl+Shift+Alt+M`.
 
-#### Tree Mode vs Book Mode
+> The same two-way toggle applies: inside the map reading view, the title button becomes **Back to DITA Map Source**.
 
-The map preview opens in **Tree mode** by default, showing the map's hierarchical structure. Click the **"Switch to Book Mode"** button in the toolbar to render all referenced topics inline as a continuous document. Click **"Switch to Tree Mode"** to return to the tree view.
+#### Outline Mode vs Book Mode
+
+The map preview opens in **Outline (tree) mode** by default, showing the map's hierarchical structure. Use the **Outline / Book** toggle in the toolbar to render all referenced topics inline as a continuous document, and click it again to return to the outline. A **reload button** (↻) in the toolbar re-renders the preview from the files on disk.
 
 Duplicate topics (same file referenced multiple times) are shown with a skip message rather than being re-rendered.
+
+#### Keys and map references
+
+- `keyref` elements display the value from the matching `keydef`. The keydef map does **not** need to sit next to the root map or be named `keys.ditamap` — any local `.ditamap` referenced via `topicref`, `keydef`, or `mapref` (or found in an ancestor directory) is scanned, and the nearest definition wins.
+- Maps that reference other maps (including “all-in-one” maps whose children live in nested sub-folders) are merged recursively; relative hrefs inside referenced maps are rebased automatically so topics and images resolve correctly.
 
 ## Custom CSS
 
@@ -236,15 +249,15 @@ For `html5` / `xhtml` output, the extension automatically injects a **navigation
 
 ### From VSIX
 
-1. Download the latest `.vsix` from the [releases page](https://github.com/anomalyco/vs-code-dita-view-plugin/releases)
+1. Download the latest `.vsix` from the [releases page](https://github.com/aREversez/VS-Code-DITA-Viewer/releases)
 2. In VS Code, press `Ctrl+Shift+P` → **Extensions: Install from VSIX...**
 3. Select the `.vsix` file
 
 ### From source
 
 ```bash
-git clone <repo-url>
-cd dita-viewer
+git clone https://github.com/aREversez/VS-Code-DITA-Viewer.git
+cd VS-Code-DITA-Viewer
 npm install
 npm run build
 ```
@@ -266,36 +279,38 @@ npm run format         # Format with Prettier
 ### Packaging
 
 ```bash
-npx @vscode/vsce package --out output/dita-viewer-<version>.vsix
+npx @vscode/vsce package --out output/
 ```
+
+The `.vsix` file name is derived from the `name` and `version` fields in `package.json` (e.g. `output/dita-viewer-1.0.5.vsix`).
 
 ## Project Structure
 
 ```
 src/
-├── extension.ts              # Extension entry point, command registration
+├── extension.ts              # Extension entry point, command registration, DITA-OT transform flow
 ├── editor/
-│   ├── DitaViewerProvider.ts # CustomTextEditorProvider for .dita files
-│   ├── MapViewerProvider.ts  # CustomTextEditorProvider for .ditamap files (tree + book mode)
-│   └── ditaRenderUtils.ts    # Shared pure rendering utilities (no vscode dependency)
+│   ├── DitaViewerProvider.ts # CustomTextEditorProvider for .dita files (scroll sync, key map)
+│   ├── MapViewerProvider.ts  # CustomTextEditorProvider for .ditamap files (outline + book mode)
+│   ├── ditaRenderUtils.ts    # Shared pure rendering utilities (no vscode dependency)
+│   └── ditaOtUtils.ts        # DITA-OT detection, argument building, log classification
 ├── parser/
 │   ├── ditaParser.ts         # SAX-based DITA XML parser (parseXml/parseDita/parseDitamap)
 │   ├── domTypes.ts           # DitaNode, DitaElement, DitaDocument types
 │   ├── standardTagMap.ts     # Tag → DITA type mapping for topics
 │   └── mapTagMap.ts          # Tag → DITA type mapping for maps
-└── render/
-    ├── renderer.ts           # Recursive DitaNode → HTML engine
-    ├── baseTypeMap.ts        # Rendering functions per DITA base type
-    └── mapTypeMap.ts         # Map tree renderer (renderMapDocument, collectMapEntries)
+├── render/
+│   ├── renderer.ts           # Recursive DitaNode → HTML engine
+│   ├── baseTypeMap.ts        # Rendering functions per DITA base type
+│   └── mapTypeMap.ts         # Map tree renderer (renderMapDocument, collectMapEntries)
+├── test/                     # Unit tests (parser, render, editor utilities)
+└── test-e2e/                 # End-to-end tests (@vscode/test-electron)
 media/
 ├── styles.css                # Default preview stylesheet (included in VSIX)
-└── icons/
-    ├── preview.svg
-    └── preview~dark.svg
-test/
-├── parser/                   # Parser unit tests (dita + map)
-├── render/                   # Renderer unit tests (topic + map tree + map book)
-└── verify-real-files.ts      # Integration tests with real .dita files
+├── icons/                    # Editor title bar + extension icons
+└── transform-assets/         # Site-chrome JS/CSS injected into DITA-OT output
+l10n/                         # Runtime translations (en + zh-cn)
+test-dita-file/               # Sample DITA project used for manual testing and e2e fixtures
 ```
 
 ## License

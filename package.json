@@ -2,12 +2,16 @@
   "name": "dita-viewer",
   "displayName": "DITA Viewer",
   "description": "%extension.description%",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "publisher": "dita-viewer",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/aREversez/VS-Code-DITA-Viewer"
+  },
+  "homepage": "https://github.com/aREversez/VS-Code-DITA-Viewer#readme",
+  "bugs": {
+    "url": "https://github.com/aREversez/VS-Code-DITA-Viewer/issues"
   },
   "icon": "media/icons/extension-icon.png",
   "keywords": [
