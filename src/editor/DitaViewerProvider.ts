@@ -5,7 +5,7 @@ import { readFileSync, existsSync, readdirSync } from 'fs';
 import { dirname, extname, isAbsolute, join, resolve, basename } from 'path';
 import { randomBytes } from 'crypto';
 import { DitaNode } from '../parser/domTypes';
-import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeFileTitleResolver } from './ditaRenderUtils';
+import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeFileTitleResolver, getSearchOverlayScript } from './ditaRenderUtils';
 
 // Test-only hook: @vscode/test-electron integration tests can't read a
 // webview's rendered HTML directly (VS Code doesn't expose the WebviewPanel
@@ -35,6 +35,13 @@ function getWebviewScript(): string {
     widthDesktop: JSON.stringify(vscode.l10n.t('Desktop')),
     widthNarrow: JSON.stringify(vscode.l10n.t('Narrow')),
     reloadContent: JSON.stringify(vscode.l10n.t('Reload DITA content')),
+    searchPlaceholder: vscode.l10n.t('Search'),
+    searchNext: vscode.l10n.t('Next match'),
+    searchPrev: vscode.l10n.t('Previous match'),
+    searchClose: vscode.l10n.t('Close search'),
+    searchMatchCase: vscode.l10n.t('Match case'),
+    searchUseRegex: vscode.l10n.t('Use regex'),
+    searchInvalidRegex: vscode.l10n.t('Invalid regex'),
   };
   return `
 (function() {
@@ -269,6 +276,16 @@ function getWebviewScript(): string {
   toolbar.appendChild(refreshBtn);
 
   document.body.appendChild(toolbar);
+
+  ${getSearchOverlayScript({
+    placeholder: L.searchPlaceholder,
+    nextMatch: L.searchNext,
+    prevMatch: L.searchPrev,
+    close: L.searchClose,
+    matchCase: L.searchMatchCase,
+    useRegex: L.searchUseRegex,
+    invalidRegex: L.searchInvalidRegex,
+  })}
 })();
 `;
 }
@@ -469,9 +486,8 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
         // Local id match first
         const local = titleMap.get(id);
         if (local) return local;
-        // Cross-file: id might be "file.dita#topicId"
-        if (id.includes('#')) return fileTitleResolver(id);
-        return undefined;
+        // Cross-file: id may be "file.dita#topicId" or just "file.dita"
+        return fileTitleResolver(id);
       };
 
       const content = renderDocument(ditaDoc.root, {

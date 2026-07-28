@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderTopicToHtml, renderBookPlaceholder, renderBookError, renderBookSkipMessage, escapeHtml, expandDitamapRefs } from './ditaRenderUtils';
+import { renderTopicToHtml, renderBookPlaceholder, renderBookError, renderBookSkipMessage, escapeHtml, expandDitamapRefs, getSearchOverlayScript } from './ditaRenderUtils';
 import { buildKeyMap } from './DitaViewerProvider';
+import { formatLocalizedRole } from '../language/bookRoleL10n';
 import { dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
 import { readFileSync, existsSync } from 'fs';
@@ -32,6 +33,13 @@ function getMapWebviewScript(): string {
     modeOutline: JSON.stringify(vscode.l10n.t('Outline')),
     modeBook: JSON.stringify(vscode.l10n.t('Book')),
     reloadContent: JSON.stringify(vscode.l10n.t('Reload DITA content')),
+    searchPlaceholder: vscode.l10n.t('Search'),
+    searchNext: vscode.l10n.t('Next match'),
+    searchPrev: vscode.l10n.t('Previous match'),
+    searchClose: vscode.l10n.t('Close search'),
+    searchMatchCase: vscode.l10n.t('Match case'),
+    searchUseRegex: vscode.l10n.t('Use regex'),
+    searchInvalidRegex: vscode.l10n.t('Invalid regex'),
   };
   return `
 (function() {
@@ -147,6 +155,16 @@ function getMapWebviewScript(): string {
   toolbar.appendChild(refreshBtn);
 
   document.body.appendChild(toolbar);
+
+  ${getSearchOverlayScript({
+    placeholder: L.searchPlaceholder,
+    nextMatch: L.searchNext,
+    prevMatch: L.searchPrev,
+    close: L.searchClose,
+    matchCase: L.searchMatchCase,
+    useRegex: L.searchUseRegex,
+    invalidRegex: L.searchInvalidRegex,
+  })}
 })();
 `;
 }
@@ -243,7 +261,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       } else {
         // Resolve <ph keyref="..."/> etc. in the map title and navtitles
         const keyMap = buildKeyMap(document.uri);
-        content = renderMapDocument(mapDoc.root, { docDir, resolveKey: (k) => keyMap.get(k) });
+        content = renderMapDocument(mapDoc.root, { docDir, resolveKey: (k) => keyMap.get(k), roleFormat: formatLocalizedRole });
       }
 
       const script = getMapWebviewScript();

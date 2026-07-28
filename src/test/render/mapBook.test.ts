@@ -116,6 +116,84 @@ describe('collectMapEntries', () => {
     assert.strictEqual(entries[0].displayName, 'Main');
   });
 
+  // ── BookMap collectMapEntries tests ──
+
+  it('should collect chapter entries from a bookmap', () => {
+    const xml = `<bookmap>
+      <chapter href="topics/ch1.dita">
+        <topicmeta><linktext>Chapter 1</linktext></topicmeta>
+      </chapter>
+      <chapter href="topics/ch2.dita">
+        <topicmeta><linktext>Chapter 2</linktext></topicmeta>
+      </chapter>
+      <appendix href="topics/appA.dita"/>
+    </bookmap>`;
+    const doc = parseMap(xml);
+    const entries = collectMapEntries(doc.root);
+    assert.strictEqual(entries.length, 3);
+    assert.strictEqual(entries[0].displayName, 'Chapter 1');
+    assert.strictEqual(entries[0].href, 'topics/ch1.dita');
+    assert.strictEqual(entries[0].depth, 0);
+    assert.strictEqual(entries[1].displayName, 'Chapter 2');
+    assert.strictEqual(entries[2].displayName, 'appA');
+  });
+
+  it('should pass through frontmatter/booklists/toc and collect their children at same depth', () => {
+    const xml = `<bookmap>
+      <frontmatter>
+        <booklists>
+          <toc/>
+        </booklists>
+        <chapter href="topics/preface.dita">
+          <topicmeta><linktext>Preface</linktext></topicmeta>
+        </chapter>
+      </frontmatter>
+      <chapter href="topics/ch1.dita">
+        <topicmeta><linktext>Chapter 1</linktext></topicmeta>
+      </chapter>
+    </bookmap>`;
+    const doc = parseMap(xml);
+    const entries = collectMapEntries(doc.root);
+    assert.strictEqual(entries.length, 2);
+    assert.strictEqual(entries[0].displayName, 'Preface');
+    assert.strictEqual(entries[0].depth, 0, 'chapter inside frontmatter should be at depth 0');
+    assert.strictEqual(entries[1].displayName, 'Chapter 1');
+    assert.strictEqual(entries[1].depth, 0);
+  });
+
+  it('should collect nested chapters inside part at correct depth', () => {
+    const xml = `<bookmap>
+      <part href="topics/part1.dita">
+        <topicmeta><linktext>Part I</linktext></topicmeta>
+        <chapter href="topics/ch1.dita">
+          <topicmeta><linktext>Chapter 1</linktext></topicmeta>
+        </chapter>
+      </part>
+    </bookmap>`;
+    const doc = parseMap(xml);
+    const entries = collectMapEntries(doc.root);
+    assert.strictEqual(entries.length, 2);
+    assert.strictEqual(entries[0].displayName, 'Part I');
+    assert.strictEqual(entries[0].depth, 0);
+    assert.strictEqual(entries[1].displayName, 'Chapter 1');
+    assert.strictEqual(entries[1].depth, 1);
+  });
+
+  it('should handle backmatter with nested chapter', () => {
+    const xml = `<bookmap>
+      <backmatter>
+        <chapter href="topics/appendix.dita">
+          <topicmeta><linktext>Appendix</linktext></topicmeta>
+        </chapter>
+      </backmatter>
+    </bookmap>`;
+    const doc = parseMap(xml);
+    const entries = collectMapEntries(doc.root);
+    assert.strictEqual(entries.length, 1);
+    assert.strictEqual(entries[0].displayName, 'Appendix');
+    assert.strictEqual(entries[0].depth, 0);
+  });
+
   it('should handle topicgroup without adding its own entry', () => {
     const xml = `<map>
       <topicgroup>

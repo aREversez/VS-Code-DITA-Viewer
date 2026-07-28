@@ -1,5 +1,8 @@
 import * as assert from 'assert';
-import { expandDitamapRefs, FileReader } from '../../editor/ditaRenderUtils';
+import { mkdtempSync, writeFileSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { expandDitamapRefs, FileReader, makeFileTitleResolver, findTextMatches } from '../../editor/ditaRenderUtils';
 import type { DitaNode } from '../../parser/domTypes';
 
 function makeEl(baseType: string, attrs: Record<string, string>, children: DitaNode[] = []): DitaNode {
@@ -191,5 +194,95 @@ describe('expandDitamapRefs', () => {
     assert.strictEqual(inner.attributes?.href, 'sub/keys.ditamap');
     assert.strictEqual(inner.children.length, 2);
     assert.strictEqual(inner.children[0].attributes?.keys, 'product-name');
+  });
+});
+
+describe('makeFileTitleResolver', () => {
+  let dir: string;
+
+  before(() => {
+    dir = mkdtempSync(join(tmpdir(), 'dita-title-'));
+    writeFileSync(join(dir, 'topic.dita'), `<topic id="t1"><title>Real Topic Title</title></topic>`);
+    // File deliberately named like a bare id — must NOT be picked up
+    writeFileSync(join(dir, 'someid'), `<topic id="someid"><title>Ghost Title</title></topic>`);
+  });
+
+  after(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('should resolve the root title of a local .dita href', () => {
+    const resolver = makeFileTitleResolver(dir);
+    assert.strictEqual(resolver('topic.dita'), 'Real Topic Title');
+  });
+
+  it('should return undefined for external URLs instead of probing the filesystem', () => {
+    const resolver = makeFileTitleResolver(dir);
+    assert.strictEqual(resolver('https://example.com/page.dita'), undefined);
+    assert.strictEqual(resolver('mailto:someone@example.com'), undefined);
+  });
+
+  it('should return undefined for absolute paths', () => {
+    const resolver = makeFileTitleResolver(dir);
+    assert.strictEqual(resolver(join(dir, 'topic.dita')), undefined);
+  });
+
+  it('should not treat a bare id as a filename even when a matching file exists', () => {
+    const resolver = makeFileTitleResolver(dir);
+    assert.strictEqual(resolver('someid'), undefined);
+  });
+});
+
+describe('findTextMatches', () => {
+  it('should find case-sensitive plain-text matches', () => {
+    const m = findTextMatches('abc ABC abc', 'abc', false, true);
+    assert.deepStrictEqual(m, [
+      { start: 0, end: 3 },
+      { start: 8, end: 11 },
+    ]);
+  });
+
+  it('should find case-insensitive plain-text matches', () => {
+    const m = findTextMatches('abc ABC', 'abc', false, false);
+    assert.deepStrictEqual(m, [
+      { start: 0, end: 3 },
+      { start: 4, end: 7 },
+    ]);
+  });
+
+  it('should keep offsets correct when the text contains length-changing Unicode case folds', () => {
+    // 'İ'.toLowerCase() has length 2 — the old lowerText-index approach
+    // shifted every later match by one position per İ
+    const text = 'İİİ abc';
+    const m = findTextMatches(text, 'abc', false, false);
+    assert.deepStrictEqual(m, [{ start: 4, end: 7 }]);
+    assert.strictEqual(text.substring(4, 7), 'abc');
+  });
+
+  it('should treat regex metacharacters literally in plain-text mode', () => {
+    const m = findTextMatches('cost is $5 (approx)', '$5 (approx)', false, true);
+    assert.deepStrictEqual(m, [{ start: 8, end: 19 }]);
+  });
+
+  it('should support regex mode', () => {
+    const m = findTextMatches('v1.2 and v3.4', 'v\\d+\\.\\d+', true, true);
+    assert.deepStrictEqual(m, [
+      { start: 0, end: 4 },
+      { start: 9, end: 13 },
+    ]);
+  });
+
+  it('should return null for an invalid regex', () => {
+    assert.strictEqual(findTextMatches('abc', '(unclosed', true, true), null);
+  });
+
+  it('should not loop forever on zero-width regex matches', () => {
+    const m = findTextMatches('bbb', 'a*', true, true);
+    assert.deepStrictEqual(m, []);
+  });
+
+  it('should cap matches per text node at 1000', () => {
+    const m = findTextMatches('a'.repeat(5000), 'a', false, true);
+    assert.strictEqual(m!.length, 1000);
   });
 });

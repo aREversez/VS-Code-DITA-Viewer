@@ -13,10 +13,23 @@ import {
   CssArg,
   SiteChromeFeatures,
 } from './editor/ditaOtUtils';
+import { registerLanguageFeatures } from './language/ditaLanguageFeatures';
+import { registerMapTreeView } from './language/ditaMapTreeProvider';
+import { registerExportHtmlCommand } from './editor/exportHtml';
 
 const TRANSFORM_CMD = 'ditaViewer.transformWithDitaOt';
 
 export function activate(context: vscode.ExtensionContext) {
+  // Language features: go-to-definition, completion, outline symbols,
+  // broken-reference diagnostics (items shared by .dita and .ditamap)
+  registerLanguageFeatures(context);
+
+  // Explorer sidebar tree view of the active DITA map
+  registerMapTreeView(context);
+
+  // "Export as HTML" command (self-contained file, no DITA-OT needed)
+  registerExportHtmlCommand(context);
+
   // DITA topic preview (.dita)
   context.subscriptions.push(
     vscode.window.registerCustomEditorProvider(
@@ -346,7 +359,7 @@ export function activate(context: vscode.ExtensionContext) {
               // Success
               outputChannel.appendLine(vscode.l10n.t('\n[DITA-OT] Transformation complete. Output directory: {0}', outputDir));
 
-              // 8. Inject site chrome (features enabled via QuickPick during flow)
+              // 9. Inject site chrome (features enabled via QuickPick during flow)
               if (transtype === 'html5' || transtype === 'xhtml') {
                 try {
                   if (siteChromeFeatures) {
@@ -361,6 +374,10 @@ export function activate(context: vscode.ExtensionContext) {
               const errorSummary = errorCount > 0
                 ? vscode.l10n.t(' ({0} error(s) detected)', String(errorCount))
                 : '';
+
+              // Resolve the progress promise FIRST so the progress notification
+              // dismisses immediately, then show the info message.
+              resolvePromise();
 
               if (transtype === 'html5') {
                 const indexPath = join(outputDir, 'index.html');
@@ -393,8 +410,6 @@ export function activate(context: vscode.ExtensionContext) {
                   vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(outputDir));
                 }
               }
-
-              resolvePromise();
             });
           });
         },

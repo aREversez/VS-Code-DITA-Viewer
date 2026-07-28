@@ -182,12 +182,20 @@ describe('renderer', () => {
     assert.ok(html.includes('see section'));
   });
 
-  it('should render external xref showing the href', () => {
+  it('should render external xref showing the href when resolveTitle is unavailable', () => {
     const doc = makeEl('topic/topic', [
       makeEl('topic/xref', [], { href: 'other.dita#topic1' }),
     ]);
     const html = renderDocument(doc, defaultCtx);
     assert.ok(html.includes('other.dita#topic1'));
+  });
+
+  it('should render external xref without fragment showing the href when resolveTitle is unavailable', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/xref', [], { href: 'other.dita' }),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('other.dita'));
   });
 
   it('should render inline formatting', () => {
@@ -280,6 +288,56 @@ describe('renderer', () => {
     const html = renderDocument(doc, ctx);
     assert.ok(html.includes('A &lt;img src=x onerror=&quot;alert(1)&quot;&gt; title'));
     assert.ok(!html.includes('<img'));
+  });
+
+  it('should resolve cross-file xref title without fragment via resolveTitle', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveTitle: (id: string) => (id === 'other.dita' ? 'Other Topic Title' : undefined),
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/xref', [], { href: 'other.dita' }),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('Other Topic Title'), 'should show resolved title');
+    assert.ok(!html.includes('>other.dita<'), 'should not show raw href as content');
+  });
+
+  it('should resolve cross-file xref title with fragment via resolveTitle', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveTitle: (id: string) => (id === 'other.dita#topic1' ? 'Cross-File Topic' : undefined),
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/xref', [], { href: 'other.dita#topic1' }),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('Cross-File Topic'), 'should show resolved title');
+  });
+
+  it('should fall back to raw href when resolveTitle returns undefined for cross-file xref', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveTitle: () => undefined,
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/xref', [], { href: 'missing.dita' }),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('missing.dita'), 'should fall back to raw href');
+  });
+
+  it('should prefer xref text content over resolveTitle', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveTitle: () => 'Resolved Title',
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/xref', [makeText('Custom Link Text')], { href: 'other.dita' }),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('Custom Link Text'), 'should show custom text');
+    assert.ok(!html.includes('Resolved Title'), 'should not show resolved title when custom text exists');
   });
 
   it('should add language label to codeblock with outputclass', () => {
