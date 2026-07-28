@@ -12,6 +12,10 @@ A VS Code extension that renders **`.dita`** and **`.ditamap`** files as a forma
   - **Book mode** — renders all referenced topics in sequence as a single reading flow
 - **Two-way preview toggle** — the same button/shortcut that opens a reading view switches back to the source editor when pressed inside the preview (the toolbar button becomes **Back to DITA Source**)
 - **Key and map-reference resolution** — `keyref` values resolve across folders by following the map's own references (`topicref`/`keydef`/`mapref` to other `.ditamap` files); nested and "all-in-one" maps are merged recursively with hrefs rebased onto the root map
+- **BookMap semantics** — chapter/part/appendix entries carry numbered role badges in document order (Chapter 1, Part I, Appendix A …, localized in zh-CN as 第 1 章 / 第 I 部分 / 附录 A); `<booktitle>` renders as a title page with the main title elevated and alternate titles as subtitles
+- **Writing assistance** — Go to Definition for `keyref`/`conref`/`href` (Ctrl+Click), context-aware IntelliSense (tags, attributes, defined keys, workspace files, target ids), HTML-style auto-closing tags, broken-reference diagnostics in the Problems panel, document outline/breadcrumbs, and ready-made DITA snippets
+- **DITA Map Explorer** — persistent sidebar tree of the map associated with the active editor, with click-to-open navigation and numbered book divisions
+- **Export as HTML** — render any topic or full map to a single self-contained `.html` file (styles inlined, images embedded) without DITA-OT
 - **Full DITA element coverage** — topic, sections, notes (all types), lists, tables, figures, code blocks with language labels, images, cross-references (with title resolution), quotes, related links, inline formatting, keydef/keyword display
 - **Reltable and topicgroup support** — reltables are skipped from the tree; topicgroups render children without adding their own entry
 - **Theme-aware** — automatically adapts background and border colors to the current VS Code theme

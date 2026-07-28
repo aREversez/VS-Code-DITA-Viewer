@@ -1,0 +1,172 @@
+{
+  "DITA Concept Topic": {
+    "prefix": "concept",
+    "body": [
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
+      "<!DOCTYPE concept PUBLIC \"-//OASIS//DTD DITA Concept//EN\" \"concept.dtd\">",
+      "<concept id=\"${1:concept_id}\">",
+      "\t<title>${2:Title}</title>",
+      "\t<shortdesc>${3:Short description}</shortdesc>",
+      "\t<conbody>",
+      "\t\t<p>${0}</p>",
+      "\t</conbody>",
+      "</concept>"
+    ],
+    "description": "DITA concept topic skeleton"
+  },
+  "DITA Task Topic": {
+    "prefix": "task",
+    "body": [
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
+      "<!DOCTYPE task PUBLIC \"-//OASIS//DTD DITA Task//EN\" \"task.dtd\">",
+      "<task id=\"${1:task_id}\">",
+      "\t<title>${2:Title}</title>",
+      "\t<shortdesc>${3:Short description}</shortdesc>",
+      "\t<taskbody>",
+      "\t\t<steps>",
+      "\t\t\t<step><cmd>${4:First step}</cmd></step>",
+      "\t\t\t<step><cmd>${0:Second step}</cmd></step>",
+      "\t\t</steps>",
+      "\t</taskbody>",
+      "</task>"
+    ],
+    "description": "DITA task topic skeleton"
+  },
+  "DITA Reference Topic": {
+    "prefix": "reference",
+    "body": [
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
+      "<!DOCTYPE reference PUBLIC \"-//OASIS//DTD DITA Reference//EN\" \"reference.dtd\">",
+      "<reference id=\"${1:reference_id}\">",
+      "\t<title>${2:Title}</title>",
+      "\t<refbody>",
+      "\t\t<section>${0}</section>",
+      "\t</refbody>",
+      "</reference>"
+    ],
+    "description": "DITA reference topic skeleton"
+  },
+  "Note": {
+    "prefix": "note",
+    "body": ["<note type=\"${1|note,tip,important,caution,warning,danger,attention,remember,restriction|}\">${0}</note>"],
+    "description": "DITA note with type"
+  },
+  "Section": {
+    "prefix": "section",
+    "body": [
+      "<section id=\"${1:section_id}\">",
+      "\t<title>${2:Section Title}</title>",
+      "\t<p>${0}</p>",
+      "</section>"
+    ],
+    "description": "Section with title"
+  },
+  "Cross-Reference (xref)": {
+    "prefix": "xref",
+    "body": ["<xref href=\"${1:topic.dita}\">${0}</xref>"],
+    "description": "Cross-reference to another topic"
+  },
+  "External Link": {
+    "prefix": "xref-external",
+    "body": ["<xref href=\"${1:https://example.com}\" scope=\"external\" format=\"html\">${0:Link text}</xref>"],
+    "description": "External web link"
+  },
+  "Figure with Image": {
+    "prefix": "fig",
+    "body": [
+      "<fig id=\"${1:fig_id}\">",
+      "\t<title>${2:Figure Title}</title>",
+      "\t<image href=\"${3:images/example.png}\">",
+      "\t\t<alt>${4:Alternative text}</alt>",
+      "\t</image>",
+      "</fig>"
+    ],
+    "description": "Figure containing an image"
+  },
+  "CALS Table": {
+    "prefix": "table",
+    "body": [
+      "<table id=\"${1:table_id}\">",
+      "\t<title>${2:Table Title}</title>",
+      "\t<tgroup cols=\"2\">",
+      "\t\t<thead>",
+      "\t\t\t<row>",
+      "\t\t\t\t<entry>${3:Header 1}</entry>",
+      "\t\t\t\t<entry>${4:Header 2}</entry>",
+      "\t\t\t</row>",
+      "\t\t</thead>",
+      "\t\t<tbody>",
+      "\t\t\t<row>",
+      "\t\t\t\t<entry>${5:Cell 1}</entry>",
+      "\t\t\t\t<entry>${0:Cell 2}</entry>",
+      "\t\t\t</row>",
+      "\t\t</tbody>",
+      "\t</tgroup>",
+      "</table>"
+    ],
+    "description": "CALS table with header row"
+  },
+  "Simple Table": {
+    "prefix": "simpletable",
+    "body": [
+      "<simpletable>",
+      "\t<sthead>",
+      "\t\t<stentry>${1:Header 1}</stentry>",
+      "\t\t<stentry>${2:Header 2}</stentry>",
+      "\t</sthead>",
+      "\t<strow>",
+      "\t\t<stentry>${3:Cell 1}</stentry>",
+      "\t\t<stentry>${0:Cell 2}</stentry>",
+      "\t</strow>",
+      "</simpletable>"
+    ],
+    "description": "Simple table"
+  },
+  "Unordered List": {
+    "prefix": "ul",
+    "body": [
+      "<ul>",
+      "\t<li>${1:First item}</li>",
+      "\t<li>${0:Second item}</li>",
+      "</ul>"
+    ],
+    "description": "Unordered list"
+  },
+  "Ordered List": {
+    "prefix": "ol",
+    "body": [
+      "<ol>",
+      "\t<li>${1:First item}</li>",
+      "\t<li>${0:Second item}</li>",
+      "</ol>"
+    ],
+    "description": "Ordered list"
+  },
+  "Definition List": {
+    "prefix": "dl",
+    "body": [
+      "<dl>",
+      "\t<dlentry>",
+      "\t\t<dt>${1:Term}</dt>",
+      "\t\t<dd>${0:Definition}</dd>",
+      "\t</dlentry>",
+      "</dl>"
+    ],
+    "description": "Definition list"
+  },
+  "Code Block": {
+    "prefix": "codeblock",
+    "body": ["<codeblock outputclass=\"${1:language-xml}\">${0}</codeblock>"],
+    "description": "Code block with language class"
+  },
+  "Keyref Phrase": {
+    "prefix": "ph-keyref",
+    "body": ["<ph keyref=\"${1:key_name}\"/>"],
+    "description": "Phrase resolved from a key definition"
+  },
+  "Content Reference (conref)": {
+    "prefix": "conref",
+    "body": ["<p conref=\"${1:file.dita}#${2:topic_id}/${3:element_id}\"/>"],
+    "description": "Reuse content from another topic via conref"
+  }
+}

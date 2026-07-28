@@ -13,10 +13,23 @@ import {
   CssArg,
   SiteChromeFeatures,
 } from './editor/ditaOtUtils';
+import { registerLanguageFeatures } from './language/ditaLanguageFeatures';
+import { registerMapTreeView } from './language/ditaMapTreeProvider';
+import { registerExportHtmlCommand } from './editor/exportHtml';
 
 const TRANSFORM_CMD = 'ditaViewer.transformWithDitaOt';
 
 export function activate(context: vscode.ExtensionContext) {
+  // Language features: go-to-definition, completion, outline symbols,
+  // broken-reference diagnostics (items shared by .dita and .ditamap)
+  registerLanguageFeatures(context);
+
+  // Explorer sidebar tree view of the active DITA map
+  registerMapTreeView(context);
+
+  // "Export as HTML" command (self-contained file, no DITA-OT needed)
+  registerExportHtmlCommand(context);
+
   // DITA topic preview (.dita)
   context.subscriptions.push(
     vscode.window.registerCustomEditorProvider(

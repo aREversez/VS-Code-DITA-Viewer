@@ -1,0 +1,82 @@
+{
+  "DITA Map Skeleton": {
+    "prefix": "map",
+    "body": [
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
+      "<!DOCTYPE map PUBLIC \"-//OASIS//DTD DITA Map//EN\" \"map.dtd\">",
+      "<map>",
+      "\t<title>${1:Map Title}</title>",
+      "\t<topicref href=\"${2:topics/intro.dita}\"/>",
+      "\t${0}",
+      "</map>"
+    ],
+    "description": "DITA map skeleton"
+  },
+  "BookMap Skeleton": {
+    "prefix": "bookmap",
+    "body": [
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
+      "<!DOCTYPE bookmap PUBLIC \"-//OASIS//DTD DITA BookMap//EN\" \"bookmap.dtd\">",
+      "<bookmap>",
+      "\t<booktitle>",
+      "\t\t<mainbooktitle>${1:Book Title}</mainbooktitle>",
+      "\t</booktitle>",
+      "\t<frontmatter>",
+      "\t\t<preface href=\"${2:topics/preface.dita}\"/>",
+      "\t</frontmatter>",
+      "\t<chapter href=\"${3:topics/chapter1.dita}\"/>",
+      "\t${0}",
+      "</bookmap>"
+    ],
+    "description": "DITA bookmap skeleton"
+  },
+  "Topic Reference": {
+    "prefix": "topicref",
+    "body": ["<topicref href=\"${1:topics/topic.dita}\"${2: navtitle=\"${3:Navigation Title}\"}/>"],
+    "description": "Topic reference"
+  },
+  "Topic Head (grouping)": {
+    "prefix": "topichead",
+    "body": [
+      "<topichead navtitle=\"${1:Group Title}\">",
+      "\t<topicref href=\"${0:topics/topic.dita}\"/>",
+      "</topichead>"
+    ],
+    "description": "Navigation grouping without content"
+  },
+  "Key Definition": {
+    "prefix": "keydef",
+    "body": [
+      "<keydef keys=\"${1:key_name}\">",
+      "\t<topicmeta>",
+      "\t\t<keywords>",
+      "\t\t\t<keyword>${2:Key Value}</keyword>",
+      "\t\t</keywords>",
+      "\t</topicmeta>",
+      "</keydef>"
+    ],
+    "description": "Key definition with keyword value"
+  },
+  "Map Reference": {
+    "prefix": "mapref",
+    "body": ["<mapref href=\"${1:common/keys.ditamap}\"/>"],
+    "description": "Reference to another ditamap"
+  },
+  "Chapter": {
+    "prefix": "chapter",
+    "body": ["<chapter href=\"${1:topics/chapter.dita}\"/>"],
+    "description": "BookMap chapter reference"
+  },
+  "Relationship Table": {
+    "prefix": "reltable",
+    "body": [
+      "<reltable>",
+      "\t<relrow>",
+      "\t\t<relcell><topicref href=\"${1:topics/a.dita}\"/></relcell>",
+      "\t\t<relcell><topicref href=\"${0:topics/b.dita}\"/></relcell>",
+      "\t</relrow>",
+      "</reltable>"
+    ],
+    "description": "Relationship table"
+  }
+}

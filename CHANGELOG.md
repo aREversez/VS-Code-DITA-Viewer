@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.0.6 (2026-07-28)
+
+### Language Features (new)
+
+- **Go to Definition** — Ctrl+Click on `keyref`/`conkeyref` jumps to the key definition in the owning map; `conref`/`href` jumps to the referenced file and the exact target element id
+- **IntelliSense completion** — context-aware completion for DITA tags, attribute names, and attribute values: defined keys for `keyref`, workspace `.dita`/`.ditamap` files for `href`, target ids for `conref` fragments; typing `</` offers the matching closing tag
+- **Auto-closing tags** — typing `>` after an opening tag inserts the matching `</tag>` with the cursor kept inside (mirrors VS Code's built-in HTML behavior); handles comments, CDATA, self-closing tags, and `>` inside attribute values correctly
+- **Reference diagnostics** — broken references surface in the Problems panel as you type (debounced): undefined keys, missing referenced files, and missing target ids
+- **Document outline** — Outline view and breadcrumbs for topics (title/section hierarchy, including `concept`/`task`/`reference` roots) and maps (topicref tree with keydefs and structural containers)
+- **DITA snippets** — ready-made snippets for common structures (topic/concept/task/reference skeletons, sections, tables, figures, notes, xref/keyref, …)
+
+### DITA Map Explorer (new)
+
+- **Sidebar tree view** — the map associated with the active editor stays visible in the Explorer while editing any `.dita` file; click any entry to open the referenced topic; refresh button and automatic reload on map save
+
+### Export as HTML (new)
+
+- **`DITA: Export as HTML…`** — renders the active topic or full map to a single self-contained `.html` file (styles inlined, images embedded as data URIs) using the extension's own pipeline — no DITA-OT required
+
+### BookMap Semantics
+
+- **Numbered role badges** — chapters, parts, and appendixes are numbered in document order (Chapter 1/2/3 continuing across parts, Part I/II in roman numerals, Appendix A…Z/AA) in the map preview, sidebar tree, outline, and HTML export
+- **Localized badges** — role labels follow the VS Code display language (zh-CN: 第 1 章 / 第 I 部分 / 附录 A, plus 前言、声明、献词、后记、摘要、修订记录、术语表)
+- **Book title page** — `<booktitle>` renders `mainbooktitle` as an elevated headline with `booktitlealt`/`subtitle` as subtitle lines instead of concatenating them into one string; the HTML export title prefers `mainbooktitle`
+- **Structural rendering** — bookmap structural containers (`frontmatter`, `backmatter`, `booklists`, `toc`, …) render as labeled groups in tree view and pass through in book view
+
+### Map Preview
+
+- **In-preview search** — search overlay in topic and map reading views with match navigation, case-sensitivity, and regex toggles
+- **Cross-file xref titles** — improved title resolution for cross-file `xref` targets
+
 ## 1.0.5 (2026-07-27)
 
 ### Key Resolution & Map References

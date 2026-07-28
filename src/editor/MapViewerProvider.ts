@@ -3,6 +3,7 @@ import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
 import { renderTopicToHtml, renderBookPlaceholder, renderBookError, renderBookSkipMessage, escapeHtml, expandDitamapRefs, getSearchOverlayScript } from './ditaRenderUtils';
 import { buildKeyMap } from './DitaViewerProvider';
+import { formatLocalizedRole } from '../language/bookRoleL10n';
 import { dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
 import { readFileSync, existsSync } from 'fs';
@@ -260,7 +261,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       } else {
         // Resolve <ph keyref="..."/> etc. in the map title and navtitles
         const keyMap = buildKeyMap(document.uri);
-        content = renderMapDocument(mapDoc.root, { docDir, resolveKey: (k) => keyMap.get(k) });
+        content = renderMapDocument(mapDoc.root, { docDir, resolveKey: (k) => keyMap.get(k), roleFormat: formatLocalizedRole });
       }
 
       const script = getMapWebviewScript();

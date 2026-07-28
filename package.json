@@ -2,7 +2,7 @@
   "name": "dita-viewer",
   "displayName": "DITA Viewer",
   "description": "%extension.description%",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "publisher": "dita-viewer",
   "license": "MIT",
   "repository": {
@@ -34,7 +34,9 @@
     "onCustomEditor:ditaViewer.mapPreview",
     "onCommand:ditaViewer.showRendered",
     "onCommand:ditaViewer.showMapRendered",
-    "onCommand:ditaViewer.transformWithDitaOt"
+    "onCommand:ditaViewer.transformWithDitaOt",
+    "onCommand:ditaViewer.exportHtml",
+    "onView:ditaViewer.mapExplorer"
   ],
   "main": "./dist/extension.js",
   "l10n": "./l10n",
@@ -117,6 +119,16 @@
           "light": "media/icons/transform.svg",
           "dark": "media/icons/transform~dark.svg"
         }
+      },
+      {
+        "command": "ditaViewer.exportHtml",
+        "title": "%command.exportHtml.title%",
+        "icon": "$(export)"
+      },
+      {
+        "command": "ditaViewer.mapExplorer.refresh",
+        "title": "%command.mapExplorerRefresh.title%",
+        "icon": "$(refresh)"
       }
     ],
     "keybindings": [
@@ -131,7 +143,40 @@
         "when": "editorLangId == ditamap || resourceExtname == .ditamap"
       }
     ],
+    "snippets": [
+      {
+        "language": "dita",
+        "path": "./snippets/dita.json"
+      },
+      {
+        "language": "ditamap",
+        "path": "./snippets/ditamap.json"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "ditaViewer.mapExplorer",
+          "name": "%view.mapExplorer.name%",
+          "icon": "media/icons/map-preview.svg",
+          "when": "resourceExtname == .dita || resourceExtname == .ditamap || ditaViewer.hasMap"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "ditaViewer.mapExplorer",
+        "contents": "%view.mapExplorer.welcome%"
+      }
+    ],
     "menus": {
+      "view/title": [
+        {
+          "command": "ditaViewer.mapExplorer.refresh",
+          "when": "view == ditaViewer.mapExplorer",
+          "group": "navigation"
+        }
+      ],
       "editor/title": [
         {
           "command": "ditaViewer.showRendered",
@@ -174,6 +219,11 @@
           "command": "ditaViewer.transformWithDitaOt",
           "when": "resourceExtname == .ditamap",
           "group": "navigation"
+        },
+        {
+          "command": "ditaViewer.exportHtml",
+          "when": "resourceExtname == .dita || resourceExtname == .ditamap",
+          "group": "1_export"
         }
       ],
       "commandPalette": [
@@ -196,6 +246,14 @@
         {
           "command": "ditaViewer.transformWithDitaOt",
           "when": "resourceExtname == .ditamap"
+        },
+        {
+          "command": "ditaViewer.exportHtml",
+          "when": "resourceExtname == .dita || resourceExtname == .ditamap || activeCustomEditorId == ditaViewer.preview || activeCustomEditorId == ditaViewer.mapPreview"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.refresh",
+          "when": "false"
         }
       ]
     },

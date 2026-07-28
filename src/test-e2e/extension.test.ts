@@ -20,5 +20,7 @@ describe('extension activation', () => {
     assert.ok(commands.includes('ditaViewer.showMapRendered'));
     assert.ok(commands.includes('ditaViewer.showMapSource'));
     assert.ok(commands.includes('ditaViewer.transformWithDitaOt'));
+    assert.ok(commands.includes('ditaViewer.exportHtml'));
+    assert.ok(commands.includes('ditaViewer.mapExplorer.refresh'));
   });
 });

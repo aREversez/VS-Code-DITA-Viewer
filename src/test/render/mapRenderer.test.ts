@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { renderMapDocument } from '../../render/mapTypeMap';
+import { getMapTitleText, renderMapDocument } from '../../render/mapTypeMap';
 import { parseDitamap, preprocessEntities } from '../../parser/ditaParser';
 
 function parseAndRender(xml: string): string {
@@ -305,5 +305,55 @@ describe('mapRenderer', () => {
     const keyMap = new Map([['product_name', 'DatabaseX Pro v3.0']]);
     const html = renderMapDocument(doc.root, { docDir: '/test', resolveKey: (k) => keyMap.get(k) });
     assert.ok(html.includes('Configuring DatabaseX Pro v3.0'), `expected resolved navtitle, got: ${html}`);
+  });
+
+  it('should elevate mainbooktitle to the headline with booktitlealt as subtitle', () => {
+    const xml = `<bookmap>
+      <booktitle>
+        <mainbooktitle>Admin Guide</mainbooktitle>
+        <booktitlealt>Version 3</booktitlealt>
+      </booktitle>
+      <chapter href="c1.dita"/>
+    </bookmap>`;
+    const html = parseAndRender(xml);
+    assert.ok(html.includes('<div class="book-titlepage">'), `expected titlepage, got: ${html}`);
+    assert.ok(html.includes('<h1 class="map-title">Admin Guide</h1>'), 'main title alone in h1');
+    assert.ok(html.includes('<p class="book-subtitle">Version 3</p>'), 'alt title as subtitle');
+    assert.ok(!html.includes('Admin GuideVersion 3'), 'titles must not be concatenated');
+  });
+
+  it('should apply an injected role formatter to tree badges', () => {
+    const xml = `<bookmap>
+      <chapter href="c1.dita"/>
+      <chapter href="c2.dita"/>
+    </bookmap>`;
+    const doc = parseDitamap(preprocessEntities(xml));
+    const html = renderMapDocument(doc.root, {
+      docDir: '/test',
+      roleFormat: (info) => `第 ${info.ordinal} 章`,
+    });
+    assert.ok(html.includes('<span class="map-tree-badge">第 1 章</span>'), `expected zh badge, got: ${html}`);
+    assert.ok(html.includes('<span class="map-tree-badge">第 2 章</span>'));
+  });
+
+  describe('getMapTitleText', () => {
+    it('returns the plain map title', () => {
+      const doc = parseDitamap(preprocessEntities(`<map><title>My Map</title></map>`));
+      assert.strictEqual(getMapTitleText(doc.root), 'My Map');
+    });
+
+    it('prefers mainbooktitle over the concatenated booktitle content', () => {
+      const doc = parseDitamap(
+        preprocessEntities(
+          `<bookmap><booktitle><mainbooktitle>Admin Guide</mainbooktitle><booktitlealt>Version 3</booktitlealt></booktitle></bookmap>`,
+        ),
+      );
+      assert.strictEqual(getMapTitleText(doc.root), 'Admin Guide');
+    });
+
+    it('returns undefined when the map has no title', () => {
+      const doc = parseDitamap(preprocessEntities(`<map><topicref href="a.dita"/></map>`));
+      assert.strictEqual(getMapTitleText(doc.root), undefined);
+    });
   });
 });
