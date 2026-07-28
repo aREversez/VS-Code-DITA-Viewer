@@ -250,4 +250,41 @@ describe('mapParser', () => {
     assert.ok(prodRef);
     assert.strictEqual(prodRef!.attributes?.href, 'topics/db_overview.dita');
   });
+
+  it('should map less common bookmap topicref specializations so their hrefs are not dropped', () => {
+    const xml = `<bookmap>
+      <frontmatter>
+        <bookabstract href="abstract.dita"/>
+        <dedication href="dedication.dita"/>
+      </frontmatter>
+      <backmatter>
+        <amendments href="amendments.dita"/>
+        <booklists>
+          <abbrevlist/>
+          <bibliolist/>
+          <trademarklist/>
+        </booklists>
+        <colophon href="colophon.dita"/>
+        <glossaryref href="glossary.dita"/>
+      </backmatter>
+    </bookmap>`;
+    const doc = parseDitamap(preprocessEntities(xml));
+
+    const byBaseType: Record<string, string[]> = {};
+    (function walk(node: typeof doc.root) {
+      if (node.type === 'element' && node.baseType) {
+        (byBaseType[node.baseType] ||= []).push(node.tagName || '');
+      }
+      for (const child of node.children || []) walk(child);
+    })(doc.root);
+
+    // Every href-bearing specialization must be a topicref so tree/book views render it
+    for (const tag of ['bookabstract', 'dedication', 'amendments', 'colophon', 'glossaryref']) {
+      assert.ok(byBaseType['map/topicref']?.includes(tag), `${tag} should map to map/topicref`);
+    }
+    // Booklist members are structural containers
+    for (const tag of ['abbrevlist', 'bibliolist', 'trademarklist']) {
+      assert.ok(byBaseType['map/bookmap-structural']?.includes(tag), `${tag} should map to map/bookmap-structural`);
+    }
+  });
 });

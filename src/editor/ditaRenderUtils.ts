@@ -107,9 +107,17 @@ export function makeFileTitleResolver(docDir: string): (href: string) => string 
   const cache = makeFileCache(docDir);
 
   return (href: string): string | undefined => {
+    // Only local relative references can be resolved from disk — never probe
+    // the filesystem for external URLs or absolute paths (on Windows an
+    // https:// href would otherwise resolve to a junk docDir\https:\ path).
+    if (!href || URL_SCHEME_RE.test(href) || isAbsolute(href)) return undefined;
     const hashIdx = href.indexOf('#');
     if (hashIdx < 0) {
-      // No fragment: resolve the root topic's title from the file
+      // No fragment: only hrefs that look like DITA files get file-level
+      // resolution — bare ids (unmatched local anchors that callers pass
+      // through) must not be probed as filenames.
+      if (!/\.(dita|xml)$/i.test(href)) return undefined;
+      // Resolve the root topic's title from the file
       const root = cache.loadFile(href);
       if (!root) return undefined;
       const titleChild = (root.children || []).find(
@@ -125,6 +133,40 @@ export function makeFileTitleResolver(docDir: string): (href: string) => string 
     if (!root) return undefined;
     return cache.findTitleOfElement(root, topicId);
   };
+}
+
+// ── Search text matching ──
+// Pure match engine shared between unit tests and the webview search overlay
+// (injected there via findTextMatches.toString(), so it must stay fully
+// self-contained — no references to other module-level bindings).
+export function findTextMatches(
+  text: string,
+  term: string,
+  useRegex: boolean,
+  caseSensitive: boolean,
+): { start: number; end: number }[] | null {
+  const matches: { start: number; end: number }[] = [];
+  // Plain-text terms are regex-escaped and run through the same regex path:
+  // the 'i' flag handles case-insensitivity without toLowerCase(), whose
+  // length-changing Unicode folds (İ, ẞ, …) would skew match offsets.
+  const pattern = useRegex ? term : term.replace(/[.*+?^$\{\}()|[\]\\]/g, '\\$&');
+  let regex: RegExp;
+  try {
+    regex = new RegExp(pattern, caseSensitive ? 'g' : 'gi');
+  } catch {
+    return null;
+  }
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(text)) !== null) {
+    if (m[0].length > 0) {
+      matches.push({ start: m.index, end: m.index + m[0].length });
+      // Cap per-node matches so degenerate patterns cannot flood the DOM
+      if (matches.length >= 1000) break;
+    } else {
+      regex.lastIndex++;
+    }
+  }
+  return matches;
 }
 
 // ── Default note labels ──
@@ -438,40 +480,12 @@ export function getSearchOverlayScript(opts: {
     currentMatch = -1;
   }
 
-  // Returns array of {start, end} match positions within a text string
+  // Returns array of {start, end} match positions within a text string.
+  // Core implementation is the exported findTextMatches (unit-tested TS),
+  // injected here so webview and tests always run the same algorithm.
+  var findTextMatchesCore = ${findTextMatches.toString()};
   function findMatchesInText(text, term) {
-    var matches = [];
-    if (useRegex) {
-      var flags = 'g';
-      if (!caseSensitive) flags += 'i';
-      var regex;
-      try { regex = new RegExp(term, flags); }
-      catch(e) { return null; }
-      regex.lastIndex = 0;
-      var m;
-      while ((m = regex.exec(text)) !== null) {
-        if (m[0].length > 0) {
-          matches.push({ start: m.index, end: m.index + m[0].length });
-        } else {
-          regex.lastIndex++;
-        }
-      }
-    } else if (caseSensitive) {
-      var idx = 0;
-      while ((idx = text.indexOf(term, idx)) !== -1) {
-        matches.push({ start: idx, end: idx + term.length });
-        idx += term.length;
-      }
-    } else {
-      var lowerText = text.toLowerCase();
-      var lowerTerm = term.toLowerCase();
-      var idx2 = 0;
-      while ((idx2 = lowerText.indexOf(lowerTerm, idx2)) !== -1) {
-        matches.push({ start: idx2, end: idx2 + term.length });
-        idx2 += term.length;
-      }
-    }
-    return matches;
+    return findTextMatchesCore(text, term, useRegex, caseSensitive);
   }
 
   function performSearch(term) {

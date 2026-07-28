@@ -36,6 +36,11 @@ export const MAP_STANDARD_TAG_TO_BASETYPE: Record<string, string> = {
   preface: 'map/topicref',
   notices: 'map/topicref',
   draftintro: 'map/topicref',
+  glossaryref: 'map/topicref',
+  dedication: 'map/topicref',
+  colophon: 'map/topicref',
+  bookabstract: 'map/topicref',
+  amendments: 'map/topicref',
 
   // BookMap structural containers — rendered as visible labels in tree view,
   // children pass through at same depth for book view entry collection
@@ -47,6 +52,9 @@ export const MAP_STANDARD_TAG_TO_BASETYPE: Record<string, string> = {
   tablelist: 'map/bookmap-structural',
   indexlist: 'map/bookmap-structural',
   glossarylist: 'map/bookmap-structural',
+  abbrevlist: 'map/bookmap-structural',
+  bibliolist: 'map/bookmap-structural',
+  trademarklist: 'map/bookmap-structural',
 
   // Reltable
   reltable: 'map/reltable',
