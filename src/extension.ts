@@ -346,7 +346,7 @@ export function activate(context: vscode.ExtensionContext) {
               // Success
               outputChannel.appendLine(vscode.l10n.t('\n[DITA-OT] Transformation complete. Output directory: {0}', outputDir));
 
-              // 8. Inject site chrome (features enabled via QuickPick during flow)
+              // 9. Inject site chrome (features enabled via QuickPick during flow)
               if (transtype === 'html5' || transtype === 'xhtml') {
                 try {
                   if (siteChromeFeatures) {
@@ -361,6 +361,10 @@ export function activate(context: vscode.ExtensionContext) {
               const errorSummary = errorCount > 0
                 ? vscode.l10n.t(' ({0} error(s) detected)', String(errorCount))
                 : '';
+
+              // Resolve the progress promise FIRST so the progress notification
+              // dismisses immediately, then show the info message.
+              resolvePromise();
 
               if (transtype === 'html5') {
                 const indexPath = join(outputDir, 'index.html');
@@ -393,8 +397,6 @@ export function activate(context: vscode.ExtensionContext) {
                   vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(outputDir));
                 }
               }
-
-              resolvePromise();
             });
           });
         },

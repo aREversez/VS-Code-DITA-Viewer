@@ -2,6 +2,9 @@ export const MAP_STANDARD_TAG_TO_BASETYPE: Record<string, string> = {
   // Root
   map: 'map/map',
 
+  // BookMap root (specializes map)
+  bookmap: 'map/map',
+
   // Metadata within topicmeta
   title: 'map/map-title',
   topicmeta: 'map/topicmeta',
@@ -11,11 +14,39 @@ export const MAP_STANDARD_TAG_TO_BASETYPE: Record<string, string> = {
   keywords: 'map/keywords',
   keyword: 'map/keyword',
 
+  // BookMap title structure (specializes map/title)
+  booktitle: 'map/map-title',
+  mainbooktitle: 'map/map-title',
+  booktitlealt: 'map/map-title',
+  subtitle: 'map/map-title',
+
+  // BookMap metadata (specializes topicmeta)
+  bookmeta: 'map/topicmeta',
+
   // Topic references
   topicref: 'map/topicref',
   topichead: 'map/topichead',
   topicgroup: 'map/topicgroup',
   keydef: 'map/keydef',
+
+  // BookMap topicref specializations
+  chapter: 'map/topicref',
+  appendix: 'map/topicref',
+  part: 'map/topicref',
+  preface: 'map/topicref',
+  notices: 'map/topicref',
+  draftintro: 'map/topicref',
+
+  // BookMap structural containers — rendered as visible labels in tree view,
+  // children pass through at same depth for book view entry collection
+  frontmatter: 'map/bookmap-structural',
+  backmatter: 'map/bookmap-structural',
+  booklists: 'map/bookmap-structural',
+  toc: 'map/bookmap-structural',
+  figurelist: 'map/bookmap-structural',
+  tablelist: 'map/bookmap-structural',
+  indexlist: 'map/bookmap-structural',
+  glossarylist: 'map/bookmap-structural',
 
   // Reltable
   reltable: 'map/reltable',

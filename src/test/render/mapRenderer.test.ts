@@ -172,6 +172,129 @@ describe('mapRenderer', () => {
     assert.ok(html.includes('&lt;img'), 'value must be escaped');
   });
 
+  // ── BookMap rendering tests ──
+
+  it('should render a bookmap with booktitle/mainbooktitle', () => {
+    const xml = `<bookmap>
+      <booktitle><mainbooktitle>My Book</mainbooktitle></booktitle>
+      <chapter href="topics/intro.dita">
+        <topicmeta><navtitle>Introduction</navtitle></topicmeta>
+      </chapter>
+    </bookmap>`;
+    const html = parseAndRender(xml);
+    assert.ok(html.includes('My Book'), 'book title should appear');
+    assert.ok(html.includes('Introduction'), 'chapter navtitle should appear');
+    assert.ok(html.includes('class="ditamap-container"'), 'should use map container');
+    assert.ok(html.includes('map-tree-item--nav'), 'chapter should render as navigable');
+    assert.ok(html.includes('data-href="topics/intro.dita"'), 'chapter href should appear');
+  });
+
+  it('should render mainbooktitle directly when no booktitle wrapper', () => {
+    const xml = `<bookmap>
+      <mainbooktitle>Direct Title</mainbooktitle>
+    </bookmap>`;
+    const html = parseAndRender(xml);
+    assert.ok(html.includes('Direct Title'), 'mainbooktitle should appear as title');
+  });
+
+  it('should render chapter as navigable link', () => {
+    const xml = `<bookmap>
+      <chapter href="topics/ch1.dita"/>
+      <appendix href="topics/appA.dita"/>
+      <part href="topics/part1.dita"/>
+    </bookmap>`;
+    const html = parseAndRender(xml);
+    assert.ok(html.includes('ch1'), 'chapter href filename fallback');
+    assert.ok(html.includes('appA'), 'appendix href filename fallback');
+    assert.ok(html.includes('part1'), 'part href filename fallback');
+    assert.ok(html.includes('map-tree-item--nav'), 'should render as navigable');
+  });
+
+  it('should render frontmatter/booklists/toc as visible structural labels', () => {
+    const xml = `<bookmap>
+      <frontmatter>
+        <booklists>
+          <toc/>
+        </booklists>
+      </frontmatter>
+    </bookmap>`;
+    const html = parseAndRender(xml);
+    // All three labels should appear capitalized
+    assert.ok(html.includes('Frontmatter'), 'Frontmatter label should appear');
+    assert.ok(html.includes('Booklists'), 'Booklists label should appear');
+    assert.ok(html.includes('Toc'), 'Toc label should appear');
+    // Should use the structural CSS class
+    assert.ok(html.includes('map-tree-item--structural'), 'should use structural item class');
+    assert.ok(html.includes('map-tree-label--structural'), 'should use structural label class');
+    // Toc is empty — should not have a nested ul under it
+    const tocIdx = html.indexOf('Toc');
+    const afterToc = html.substring(tocIdx);
+    assert.ok(!afterToc.includes('<ul class="map-tree">'), 'Toc should not have children');
+  });
+
+  it('should render frontmatter with structural labels and nested chapter', () => {
+    const xml = `<bookmap>
+      <frontmatter>
+        <booklists>
+          <toc/>
+        </booklists>
+        <chapter href="topics/preface.dita"/>
+      </frontmatter>
+    </bookmap>`;
+    const html = parseAndRender(xml);
+    assert.ok(html.includes('Frontmatter'), 'Frontmatter label should appear');
+    assert.ok(html.includes('Booklists'), 'Booklists label should appear');
+    assert.ok(html.includes('Toc'), 'Toc label should appear');
+    assert.ok(html.includes('preface'), 'chapter inside frontmatter should still appear');
+    assert.ok(html.includes('map-tree-item--nav'), 'chapter should render as navigable');
+    // No stray h1 headings from booklists/toc
+    assert.ok(!html.includes('class="map-title"'), 'should not have extra title headings from booklists/toc');
+  });
+
+  it('should render chapter with topicmeta linktext as display name', () => {
+    const xml = `<bookmap>
+      <chapter href="topics/ch1.dita">
+        <topicmeta><linktext>Chapter One: Getting Started</linktext></topicmeta>
+      </chapter>
+    </bookmap>`;
+    const html = parseAndRender(xml);
+    assert.ok(html.includes('Chapter One: Getting Started'), 'linktext should be used as display name');
+    assert.ok(html.includes('data-href="topics/ch1.dita"'));
+  });
+
+  it('should render nested chapters inside part', () => {
+    const xml = `<bookmap>
+      <part href="topics/part1.dita">
+        <topicmeta><linktext>Part I</linktext></topicmeta>
+        <chapter href="topics/ch1.dita">
+          <topicmeta><linktext>Chapter 1</linktext></topicmeta>
+        </chapter>
+        <chapter href="topics/ch2.dita">
+          <topicmeta><linktext>Chapter 2</linktext></topicmeta>
+        </chapter>
+      </part>
+    </bookmap>`;
+    const html = parseAndRender(xml);
+    assert.ok(html.includes('Part I'), 'part linktext should appear');
+    assert.ok(html.includes('Chapter 1'), 'chapter 1 should appear');
+    assert.ok(html.includes('Chapter 2'), 'chapter 2 should appear');
+    // Nested ul for chapters inside part
+    const partIdx = html.indexOf('Part I');
+    const nestedUlIdx = html.indexOf('<ul class="map-tree">', partIdx + 10);
+    assert.ok(nestedUlIdx >= 0, 'should have nested tree for chapters inside part');
+  });
+
+  it('should not break standard map rendering when bookmap elements exist', () => {
+    const xml = `<map>
+      <title>Standard Map</title>
+      <topicref href="topics/a.dita"/>
+    </map>`;
+    const html = parseAndRender(xml);
+    assert.ok(html.includes('Standard Map'), 'standard map title should work');
+    assert.ok(html.includes('class="ditamap-container"'));
+    assert.ok(html.includes('data-href="topics/a.dita"'));
+  });
+
   it('should resolve ph keyref inside a navtitle display name', () => {
     const xml = `<map>
       <topicref href="topics/a.dita">

@@ -179,6 +179,18 @@ const MAP_BASE_TYPE_RENDERERS: Record<string, Renderer> = {
       <ul class="map-tree">${childrenHtml}</ul>
     </li>`;
   },
+  'map/bookmap-structural': (node, ctx, renderChildren) => {
+    // BookMap structural containers (frontmatter, booklists, toc, etc.)
+    // render as visible non-navigable labels with nested children
+    const displayName = node.tagName
+      ? node.tagName.charAt(0).toUpperCase() + node.tagName.slice(1)
+      : '(unnamed)';
+    const childrenHtml = renderChildrenForNode(node, ctx, renderChildren);
+    return `<li class="map-tree-item map-tree-item--structural">
+      <span class="map-tree-label map-tree-label--structural">${escapeAttr(displayName)}</span>
+      ${childrenHtml ? `<ul class="map-tree">${childrenHtml}</ul>` : ''}
+    </li>`;
+  },
   'map/keydef': renderRef,
 
   'map/reltable': (node, ctx, renderChildren) => {
@@ -247,8 +259,8 @@ function collectEntriesRecursive(node: DitaNode, depth: number, result: MapEntry
     for (const child of node.children || []) {
       collectEntriesRecursive(child, depth + 1, result, resolveKey);
     }
-  } else if (baseType === 'map/topicgroup') {
-    // topicgroup: no entry itself, but recurse at same depth
+  } else if (baseType === 'map/topicgroup' || baseType === 'map/bookmap-structural') {
+    // topicgroup / bookmap-structural: no entry itself, but recurse at same depth
     for (const child of node.children || []) {
       collectEntriesRecursive(child, depth, result, resolveKey);
     }

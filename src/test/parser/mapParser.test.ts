@@ -128,6 +128,104 @@ describe('mapParser', () => {
     assert.strictEqual(ref!.attributes?.keys, undefined);
   });
 
+  // ── BookMap parsing tests ──
+
+  it('should parse a bookmap root element as map/map', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<bookmap>
+  <booktitle><mainbooktitle>My Book</mainbooktitle></booktitle>
+  <chapter href="intro.dita"/>
+</bookmap>`;
+    const doc = parseDitamap(xml);
+    assert.strictEqual(doc.root.baseType, 'map/map');
+    assert.strictEqual(doc.root.tagName, 'bookmap');
+  });
+
+  it('should parse booktitle and mainbooktitle as map-title', () => {
+    const xml = `<bookmap>
+  <booktitle><mainbooktitle>My Book Title</mainbooktitle></booktitle>
+</bookmap>`;
+    const doc = parseDitamap(xml);
+    const booktitle = doc.root.children.find(
+      (c) => c.type === 'element' && c.baseType === 'map/map-title',
+    );
+    assert.ok(booktitle, 'booktitle not found as map-title');
+    assert.strictEqual(booktitle!.tagName, 'booktitle');
+    const mainbooktitle = booktitle!.children.find(
+      (c) => c.type === 'element' && c.baseType === 'map/map-title',
+    );
+    assert.ok(mainbooktitle, 'mainbooktitle not found as map-title');
+    assert.strictEqual(mainbooktitle!.tagName, 'mainbooktitle');
+  });
+
+  it('should parse chapter as map/topicref', () => {
+    const xml = `<bookmap>
+  <chapter href="topics/intro.dita">
+    <topicmeta><navtitle>Introduction</navtitle></topicmeta>
+  </chapter>
+</bookmap>`;
+    const doc = parseDitamap(xml);
+    const chapter = doc.root.children.find(
+      (c) => c.type === 'element' && c.baseType === 'map/topicref',
+    );
+    assert.ok(chapter, 'chapter not found as topicref');
+    assert.strictEqual(chapter!.tagName, 'chapter');
+    assert.strictEqual(chapter!.attributes?.href, 'topics/intro.dita');
+  });
+
+  it('should parse frontmatter, booklists, and toc as map/bookmap-structural', () => {
+    const xml = `<bookmap>
+  <frontmatter>
+    <booklists>
+      <toc/>
+    </booklists>
+  </frontmatter>
+</bookmap>`;
+    const doc = parseDitamap(xml);
+    const frontmatter = doc.root.children.find(
+      (c) => c.type === 'element' && c.baseType === 'map/bookmap-structural' && c.tagName === 'frontmatter',
+    );
+    assert.ok(frontmatter, 'frontmatter not found as bookmap-structural');
+    const booklists = frontmatter!.children.find(
+      (c) => c.type === 'element' && c.baseType === 'map/bookmap-structural' && c.tagName === 'booklists',
+    );
+    assert.ok(booklists, 'booklists not found as bookmap-structural');
+    const toc = booklists!.children.find(
+      (c) => c.type === 'element' && c.baseType === 'map/bookmap-structural' && c.tagName === 'toc',
+    );
+    assert.ok(toc, 'toc not found as bookmap-structural');
+  });
+
+  it('should parse appendix and part as map/topicref', () => {
+    const xml = `<bookmap>
+  <part href="part1.dita">
+    <chapter href="ch1.dita"/>
+  </part>
+  <appendix href="appA.dita"/>
+</bookmap>`;
+    const doc = parseDitamap(xml);
+    const refs = doc.root.children.filter(
+      (c) => c.type === 'element' && c.baseType === 'map/topicref',
+    );
+    assert.strictEqual(refs.length, 2);
+    assert.strictEqual(refs[0].tagName, 'part');
+    assert.strictEqual(refs[1].tagName, 'appendix');
+  });
+
+  it('should parse bookmeta as map/topicmeta', () => {
+    const xml = `<bookmap>
+  <bookmeta>
+    <keywords><keyword>BookMeta</keyword></keywords>
+  </bookmeta>
+</bookmap>`;
+    const doc = parseDitamap(xml);
+    const bookmeta = doc.root.children.find(
+      (c) => c.type === 'element' && c.baseType === 'map/topicmeta',
+    );
+    assert.ok(bookmeta, 'bookmeta not found as topicmeta');
+    assert.strictEqual(bookmeta!.tagName, 'bookmeta');
+  });
+
   it('should parse real test.ditamap content', () => {
     const doc = parseDitamap(preprocessEntities(TEST_MAP_XML));
     assert.strictEqual(doc.root.baseType, 'map/map');
