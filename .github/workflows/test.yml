@@ -23,3 +23,10 @@ jobs:
       - run: npm run build
       - run: npm test
       - run: npm run lint
+      # VS Code integration tests need a display server on Linux
+      - name: E2E tests (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:e2e
+      - name: E2E tests (Windows/macOS)
+        if: runner.os != 'Linux'
+        run: npm run test:e2e

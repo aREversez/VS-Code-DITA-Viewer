@@ -101,6 +101,29 @@ describe('ditaParser', () => {
     assert.strictEqual(body.children[1].baseType, 'topic/pre');
   });
 
+  it('should preserve CDATA section content', () => {
+    const xml = `<topic id="t"><body><codeblock><![CDATA[if (a < b) { return "x & y"; }]]></codeblock></body></topic>`;
+    const doc = parseDita(xml);
+    const body = doc.root.children[0];
+    const codeblock = body.children[0];
+    const text = codeblock.children
+      .filter((c) => c.type === 'text')
+      .map((c) => c.text)
+      .join('');
+    assert.ok(text.includes('if (a < b)'), `CDATA content should be kept, got: ${text}`);
+    assert.ok(text.includes('"x & y"'), 'special chars inside CDATA should survive');
+  });
+
+  it('should map hyphenated standard tags to their baseTypes', () => {
+    const xml = `<topic id="t"><body><p><draft-comment>todo</draft-comment></p></body><related-links><link href="a.dita"/></related-links></topic>`;
+    const doc = parseDita(xml);
+    const body = doc.root.children[0];
+    const draft = body.children[0].children[0];
+    assert.strictEqual(draft.baseType, 'topic/draft-comment');
+    const relatedLinks = doc.root.children[1];
+    assert.strictEqual(relatedLinks.baseType, 'topic/related-links');
+  });
+
   // ── preprocessEntities tests ──
 
   it('should strip DOCTYPE with PUBLIC ID and no internal subset', () => {
@@ -152,6 +175,28 @@ describe('ditaParser', () => {
     assert.strictEqual(doc.root.tagName, 'topic');
   });
 
+  it('should substitute well-known ISO character entities', () => {
+    const xml = `<topic id="t"><p>A&nbsp;B &mdash; &copy;&nbsp;2026 &hellip; 5&nbsp;&plusmn;&nbsp;1</p></topic>`;
+    const processed = preprocessEntities(xml);
+    assert.ok(processed.includes('A\u00a0B'), 'nbsp should become U+00A0');
+    assert.ok(processed.includes('\u2014'), 'mdash should become em dash');
+    assert.ok(processed.includes('\u00a9\u00a02026'), 'copy should become \u00a9');
+    assert.ok(processed.includes('\u2026'), 'hellip should become ellipsis');
+    assert.ok(processed.includes('\u00b1'), 'plusmn should become \u00b1');
+    const doc = parseDita(processed);
+    assert.strictEqual(doc.root.tagName, 'topic');
+  });
+
+  it('should let declared entities take precedence over the ISO table', () => {
+    const xml = `<!DOCTYPE topic [
+  <!ENTITY copy "Custom Copy">
+]>
+<topic id="t"><p>&copy;</p></topic>`;
+    const processed = preprocessEntities(xml);
+    assert.ok(processed.includes('Custom Copy'), 'declared entity value should win');
+    assert.ok(!processed.includes('\u00a9'), 'ISO fallback should not apply');
+  });
+
   it('should preserve built-in XML entities', () => {
     const xml = `<topic id="t"><p>&lt;tag&gt; &amp; &quot;stuff&quot;</p></topic>`;
     const processed = preprocessEntities(xml);
@@ -161,6 +206,31 @@ describe('ditaParser', () => {
     assert.ok(processed.includes('&quot;'), 'quot entity should be preserved');
     const doc = parseDita(processed);
     assert.strictEqual(doc.root.tagName, 'topic');
+  });
+
+  it('should resolve entity whose name contains a regex metacharacter exactly', () => {
+    const xml = `<!DOCTYPE topic [
+  <!ENTITY my.ent "DOT">
+]>
+<topic id="t"><p>&my.ent; but not &myxent;</p></topic>`;
+    const processed = preprocessEntities(xml);
+    assert.ok(processed.includes('DOT'), 'exact entity should be resolved');
+    // With an unescaped RegExp, "my.ent" would also match "myxent"
+    assert.ok(!processed.includes('&myxent;') || !processed.includes('DOT but not DOT'),
+      'metacharacter must not make the pattern match other names');
+    assert.ok(!/DOT but not DOT/.test(processed), 'only the exact name should be replaced');
+  });
+
+  it('should keep $-patterns in entity values literal', () => {
+    const xml = `<!DOCTYPE topic [
+  <!ENTITY price "$&amp; and $' cost">
+]>
+<topic id="t"><p>&price;</p></topic>`;
+    const processed = preprocessEntities(xml);
+    // String.replace would expand $& to the matched text without a
+    // function replacement — the raw value must appear untouched.
+    assert.ok(processed.includes("$&amp; and $' cost"), `expected literal value, got: ${processed}`);
+    assert.ok(!processed.includes('&price;'), 'entity reference should be gone');
   });
 
   it('should parse DITA file with DOCTYPE and entity refs used in conref target', () => {

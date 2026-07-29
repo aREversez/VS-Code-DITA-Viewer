@@ -6,6 +6,10 @@ export interface RenderContext {
   asWebviewUri: (path: string) => string;
   documentDir: string;
   parentBaseType?: string;
+  /** True while rendering descendants of thead/sthead (entry/stentry → th) */
+  inTableHeader?: boolean;
+  /** Conref targets already resolved on this branch (cycle protection) */
+  conrefChain?: ReadonlySet<string>;
   resolveTitle?: (id: string) => string | undefined;
   resolveKey?: (key: string) => string | undefined;
   resolveConref?: (conref: string) => DitaNode | undefined;
@@ -47,6 +51,9 @@ function injectAttributes(html: string, tagName: string, range: SourceRange): st
 function resolveConrefForNode(node: DitaNode, context: RenderContext): DitaNode {
   const conref = node.attributes?.conref;
   if (!conref || !context.resolveConref) return node;
+  // A conref already resolved on this branch points back here — stop the
+  // cycle and render the element's literal content instead of recursing.
+  if (context.conrefChain?.has(conref)) return node;
   const target = context.resolveConref(conref);
   if (!target) return node;
 
@@ -77,6 +84,12 @@ function resolveConrefForNode(node: DitaNode, context: RenderContext): DitaNode 
 function resolveKeyrefForNode(node: DitaNode, context: RenderContext): DitaNode {
   const keyref = node.attributes?.keyref;
   if (!keyref || !context.resolveKey) return node;
+  // Per the DITA spec, existing element content wins over the key-resolved
+  // text — only substitute when the element is effectively empty.
+  const hasLocalContent = (node.children || []).some(
+    (c) => c.type === 'element' || (c.text || '').trim() !== '',
+  );
+  if (hasLocalContent) return node;
   const resolved = context.resolveKey(keyref);
   if (!resolved) return node;
   // Strip keyref after resolving, replace children with resolved text
@@ -96,6 +109,8 @@ function renderElement(node: DitaNode, context: RenderContext): string {
   }
 
   let effectiveNode = resolveConrefForNode(node, context);
+  const resolvedConref =
+    effectiveNode !== node ? node.attributes?.conref : undefined;
   effectiveNode = resolveKeyrefForNode(effectiveNode, context);
   const baseType = effectiveNode.baseType;
   const renderer = baseType ? BASE_TYPE_RENDERERS[baseType] : undefined;
@@ -109,6 +124,9 @@ function renderElement(node: DitaNode, context: RenderContext): string {
     ...context,
     headingLevel: nextHeadingLevel,
     parentBaseType: baseType,
+    conrefChain: resolvedConref
+      ? new Set([...(context.conrefChain || []), resolvedConref])
+      : context.conrefChain,
   };
 
   if (renderer) {

@@ -295,6 +295,36 @@ describe('mapRenderer', () => {
     assert.ok(html.includes('data-href="topics/a.dita"'));
   });
 
+  it('should render relheader relcolspec titles as th cells', () => {
+    const xml = `<map>
+      <reltable>
+        <relheader>
+          <relcolspec><title>Concepts</title></relcolspec>
+          <relcolspec><title>Tasks</title></relcolspec>
+        </relheader>
+        <relrow>
+          <relcell><topicref href="c.dita"/></relcell>
+          <relcell><topicref href="t.dita"/></relcell>
+        </relrow>
+      </reltable>
+    </map>`;
+    const html = parseAndRender(xml);
+    assert.ok(html.includes('<th>Concepts</th>'), `relcolspec title should be a th cell, got: ${html}`);
+    assert.ok(html.includes('<th>Tasks</th>'), 'second relcolspec title should be a th cell');
+    assert.ok(html.includes('class="relrow"'), 'relrow should still render');
+  });
+
+  it('should render an empty relheader row when relcolspec has no title', () => {
+    const xml = `<map>
+      <reltable>
+        <relheader><relcolspec/></relheader>
+        <relrow><relcell><topicref href="a.dita"/></relcell></relrow>
+      </reltable>
+    </map>`;
+    const html = parseAndRender(xml);
+    assert.ok(html.includes('<tr class="relheader"><th></th></tr>'), `expected empty th, got: ${html}`);
+  });
+
   it('should resolve ph keyref inside a navtitle display name', () => {
     const xml = `<map>
       <topicref href="topics/a.dita">

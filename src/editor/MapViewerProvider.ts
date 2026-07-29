@@ -6,7 +6,6 @@ import { buildKeyMap } from './DitaViewerProvider';
 import { formatLocalizedRole } from '../language/bookRoleL10n';
 import { dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
-import { readFileSync, existsSync } from 'fs';
 
 // Test-only hook: see the identical comment in DitaViewerProvider.ts.
 const lastRenderedHtmlByUri = new Map<string, string>();
@@ -197,9 +196,12 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         const href = message.href as string;
         if (!href) return;
         const mapDir = dirname(document.uri.fsPath);
-        const targetPath = resolve(mapDir, decodeHrefPart(href.split('#')[0]));
+        const filePart = decodeHrefPart(href.split('#')[0]);
+        const targetPath = resolve(mapDir, filePart);
         const targetUri = vscode.Uri.file(targetPath);
-        const viewType = href.toLowerCase().endsWith('.ditamap') ? 'ditaViewer.mapPreview' : 'ditaViewer.preview';
+        // Decide the viewer by the file part only — "sub.ditamap#id" must
+        // still open in the map preview.
+        const viewType = filePart.toLowerCase().endsWith('.ditamap') ? 'ditaViewer.mapPreview' : 'ditaViewer.preview';
         vscode.commands.executeCommand('vscode.openWith', targetUri, viewType);
       } else if (message.type === 'switchMode') {
         currentMode = message.mode as 'tree' | 'book';
@@ -232,6 +234,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
       changeSubscription.dispose();
       themeSubscription.dispose();
+      lastRenderedHtmlByUri.delete(document.uri.toString());
     });
   }
 
@@ -332,26 +335,12 @@ ${content}
         // Create per-topic asWebviewUri that resolves relative to the topic's dir
         const topicDir = dirname(absPath);
         const asWebviewUri = (relPath: string): string => {
-          const fsRelPath = decodeHrefPart(relPath);
           try {
-            const resolvedPath = resolve(topicDir, fsRelPath);
-            const fileUri = vscode.Uri.file(resolvedPath);
-            const wvUri = webview.asWebviewUri(fileUri);
-            if (wvUri) return wvUri.toString();
-          } catch {}
-          try {
-            const fullPath = resolve(topicDir, fsRelPath);
-            if (existsSync(fullPath)) {
-              const data = readFileSync(fullPath);
-              const ext = relPath.toLowerCase().split('.').pop() || '';
-              const mime =
-                ext === 'png' ? 'image/png' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg'
-                : ext === 'gif' ? 'image/gif' : ext === 'svg' ? 'image/svg+xml'
-                : ext === 'webp' ? 'image/webp' : 'image/png';
-              return `data:${mime};base64,${data.toString('base64')}`;
-            }
-          } catch {}
-          return '';
+            const resolvedPath = resolve(topicDir, decodeHrefPart(relPath));
+            return webview.asWebviewUri(vscode.Uri.file(resolvedPath)).toString();
+          } catch {
+            return '';
+          }
         };
 
         const headingLevel = Math.min(1 + entry.depth, 6);

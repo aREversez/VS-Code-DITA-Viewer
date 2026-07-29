@@ -114,6 +114,39 @@ export function buildDitaOtArgs(input: {
   return args;
 }
 
+export interface SpawnSpec {
+  command: string;
+  args: string[];
+  /** Pass through to child_process.spawn (Windows cmd.exe invocation only) */
+  windowsVerbatimArguments?: boolean;
+}
+
+/**
+ * Builds a safe spawn invocation for the DITA-OT executable. On Windows,
+ * dita.bat must run through cmd.exe, but `shell: true` concatenates all
+ * arguments unquoted — breaking paths with spaces and allowing cmd
+ * metacharacters (&, ^, |) in user-controlled paths to inject commands.
+ * Instead every argument is explicitly double-quoted (with "" escaping)
+ * and passed verbatim to `cmd.exe /d /s /c`.
+ */
+export function buildDitaOtSpawnSpec(
+  executablePath: string,
+  args: string[],
+  platform: NodeJS.Platform,
+): SpawnSpec {
+  if (platform !== 'win32') {
+    return { command: executablePath, args };
+  }
+  const quote = (a: string) => `"${a.replace(/"/g, '""')}"`;
+  const commandLine = [quote(executablePath), ...args.map(quote)].join(' ');
+  return {
+    command: 'cmd.exe',
+    // /s makes cmd strip only the outer quotes of the wrapped command line
+    args: ['/d', '/s', '/c', `"${commandLine}"`],
+    windowsVerbatimArguments: true,
+  };
+}
+
 export type LogLevel = 'error' | 'warn' | 'info';
 
 const ERROR_RE = /^.*?\[ERROR\]/i;

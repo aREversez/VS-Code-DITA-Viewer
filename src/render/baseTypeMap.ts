@@ -1,8 +1,11 @@
 import { DitaNode } from '../parser/domTypes';
 import { RenderContext } from './renderer';
 
-function isInThead(ctx: RenderContext): boolean {
-  return ctx.parentBaseType === 'topic/thead';
+// parentBaseType only reflects the immediate ancestor (entry sits under row,
+// not thead), so header status is carried by an explicit ctx flag set when
+// entering thead/sthead and cleared when entering tbody.
+function isInTableHeader(ctx: RenderContext): boolean {
+  return ctx.inTableHeader === true;
 }
 
 export type Renderer = (
@@ -31,7 +34,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   },
 
   'topic/title': (node, ctx, renderChildren) => {
-    const level = Math.min(ctx.headingLevel, 6);
+    const level = Math.min(Math.max(ctx.headingLevel, 1), 6);
     return `<h${level}>${renderChildren(node, ctx)}</h${level}>`;
   },
 
@@ -175,11 +178,13 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   },
   'topic/colspec': () => '',
 
-  'topic/thead': (_node, ctx, renderChildren) => `<thead>${renderChildren(_node, ctx)}</thead>`,
-  'topic/tbody': (_node, ctx, renderChildren) => `<tbody>${renderChildren(_node, ctx)}</tbody>`,
+  'topic/thead': (_node, ctx, renderChildren) =>
+    `<thead>${renderChildren(_node, { ...ctx, inTableHeader: true })}</thead>`,
+  'topic/tbody': (_node, ctx, renderChildren) =>
+    `<tbody>${renderChildren(_node, { ...ctx, inTableHeader: false })}</tbody>`,
   'topic/row': (_node, ctx, renderChildren) => `<tr>${renderChildren(_node, ctx)}</tr>`,
   'topic/entry': (node, ctx, renderChildren) => {
-    const tag = isInThead(ctx) ? 'th' : 'td';
+    const tag = isInTableHeader(ctx) ? 'th' : 'td';
     const colspan = getAttr(node, 'colspan');
     const rowspan = getAttr(node, 'rowspan');
     const attrs = `${safeAttr('colspan', colspan)}${safeAttr('rowspan', rowspan)}`;
@@ -191,10 +196,12 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     return `<table${safeAttr('id', id)} class="simple-table">${renderChildren(node, ctx)}</table>`;
   },
 
-  'topic/sthead': (_node, ctx, renderChildren) => `<thead>${renderChildren(_node, ctx)}</thead>`,
-  'topic/strow': (_node, ctx, renderChildren) => `<tr>${renderChildren(_node, ctx)}</tr>`,
+  'topic/sthead': (_node, ctx, renderChildren) =>
+    `<thead>${renderChildren(_node, { ...ctx, inTableHeader: true })}</thead>`,
+  'topic/strow': (_node, ctx, renderChildren) =>
+    `<tr>${renderChildren(_node, { ...ctx, inTableHeader: false })}</tr>`,
   'topic/stentry': (node, ctx, renderChildren) => {
-    const tag = isInThead(ctx) ? 'th' : 'td';
+    const tag = isInTableHeader(ctx) ? 'th' : 'td';
     return `<${tag}>${renderChildren(node, ctx)}</${tag}>`;
   },
 
@@ -207,7 +214,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     const extra = `${safeAttr('width', width)}${safeAttr('height', height)}`;
     const imgSrc = href ? ctx.asWebviewUri(href) : '';
     const cls = placement === 'break' ? ' class="image-break"' : '';
-    return `<img src="${imgSrc || ''}"${safeAttr('alt', alt)}${extra}${cls} loading="lazy" data-dita-src="${escapeAttr(href)}">`;
+    return `<img src="${escapeAttr(imgSrc)}"${safeAttr('alt', alt)}${extra}${cls} loading="lazy" data-dita-src="${escapeAttr(href)}">`;
   },
 
   'topic/fig': (node, ctx, renderChildren) => {
@@ -289,7 +296,12 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
   'topic/ph': (node, ctx, renderChildren) => {
     const keyref = getAttr(node, 'keyref');
-    if (keyref && ctx.resolveKey) {
+    const hasContent = (node.children || []).some(
+      (c) => c.type === 'element' || (c.text || '').trim() !== '',
+    );
+    // Content wins over keyref (DITA spec). An empty ph with a resolvable
+    // keyref is substituted upstream; reaching here empty means unresolved.
+    if (keyref && !hasContent && ctx.resolveKey) {
       const resolved = ctx.resolveKey(keyref);
       if (resolved) return `<span class="ph">${escapeAttr(resolved)}</span>`;
       return `<span class="ph unresolved-keyref" title="Unresolved key: ${escapeAttr(keyref)}">[${escapeAttr(keyref)}]</span>`;

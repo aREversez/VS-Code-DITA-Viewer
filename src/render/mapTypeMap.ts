@@ -373,10 +373,15 @@ const MAP_BASE_TYPE_RENDERERS: Record<string, Renderer> = {
       <table class="map-reltable-table"><tbody>${bodyHtml}</tbody></table>
     </div>`;
   },
-  'map/relheader': (node, ctx, renderChildren) => {
+  'map/relheader': (node, ctx) => {
+    // Per the DITA spec relheader contains relcolspec (not relcell); show
+    // each column's title text as the header cell.
     const cells = node.children
-      .filter((c) => c.type === 'element' && c.baseType === 'map/relcell')
-      .map((c) => renderChildren(c, ctx));
+      .filter((c) => c.type === 'element' && c.baseType === 'map/relcolspec')
+      .map((c) => {
+        const text = getAttr(c, 'navtitle') || extractText(c, ctx.resolveKey).trim();
+        return escapeAttr(text);
+      });
     return `<tr class="relheader">${cells.map((c) => `<th>${c}</th>`).join('')}</tr>`;
   },
   'map/relrow': (node, ctx, renderChildren) => {

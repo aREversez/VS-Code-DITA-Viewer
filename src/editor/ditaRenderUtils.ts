@@ -303,24 +303,27 @@ export function expandDitamapRefs(
     const href = node.attributes!.href!;
     const targetPath = resolve(docDir, decodeHrefPart(href.split('#')[0]));
     if (!visited) visited = new Set();
-    if (visited.has(targetPath)) return;
-    visited.add(targetPath);
-    try {
-      const content = readFile(targetPath, 'utf-8');
-      const doc = parseDitamap(preprocessEntities(content));
-      const refChildren = (doc.root.children || []).filter(
-        (c) => c.type === 'element',
-      );
-      if (refChildren.length > 0) {
-        const refDir = dirname(targetPath);
-        if (refDir !== resolve(docDir)) {
-          for (const rc of refChildren) rebaseHrefs(rc, refDir, docDir);
+    // Already-inlined maps are skipped, but this node's other children
+    // (and siblings via the loop below) must still be expanded.
+    if (!visited.has(targetPath)) {
+      visited.add(targetPath);
+      try {
+        const content = readFile(targetPath, 'utf-8');
+        const doc = parseDitamap(preprocessEntities(content));
+        const refChildren = (doc.root.children || []).filter(
+          (c) => c.type === 'element',
+        );
+        if (refChildren.length > 0) {
+          const refDir = dirname(targetPath);
+          if (refDir !== resolve(docDir)) {
+            for (const rc of refChildren) rebaseHrefs(rc, refDir, docDir);
+          }
+          if (!node.children) node.children = [];
+          node.children.push(...refChildren);
         }
-        if (!node.children) node.children = [];
-        node.children.push(...refChildren);
+      } catch {
+        // file not found or parse error — skip silently
       }
-    } catch {
-      // file not found or parse error — skip silently
     }
   }
 

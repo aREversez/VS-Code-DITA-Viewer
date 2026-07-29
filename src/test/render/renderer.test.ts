@@ -44,6 +44,16 @@ describe('renderer', () => {
     assert.ok(html.includes('</h1>'));
   });
 
+  it('should clamp heading levels to the h1–h6 range', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/title', [makeText('Clamped')]),
+    ]);
+    const low = renderDocument(doc, { ...defaultCtx, headingLevel: 0 });
+    assert.ok(/<h1\b/.test(low), `expected h1 for level 0, got: ${low}`);
+    const high = renderDocument(doc, { ...defaultCtx, headingLevel: 9 });
+    assert.ok(/<h6\b/.test(high) && high.includes('</h6>'), `expected h6 for level 9, got: ${high}`);
+  });
+
   it('should render shortdesc with class', () => {
     const doc = makeEl('topic/topic', [
       makeEl('topic/shortdesc', [makeText('A short desc')]),
@@ -129,8 +139,24 @@ describe('renderer', () => {
     ]);
     const html = renderDocument(doc, defaultCtx);
     assert.ok(html.includes('class="cals-table"'));
-    assert.ok(html.includes('<th'));
-    assert.ok(html.includes('<td'));
+    assert.ok(/<th\b[^>]*>Header<\/th>/.test(html), `header entry should render as th, got: ${html}`);
+    assert.ok(/<td\b[^>]*>Data<\/td>/.test(html), `body entry should render as td, got: ${html}`);
+  });
+
+  it('should render simple table header stentry as th and row stentry as td', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/simpletable', [
+        makeEl('topic/sthead', [
+          makeEl('topic/stentry', [makeText('OS')]),
+        ]),
+        makeEl('topic/strow', [
+          makeEl('topic/stentry', [makeText('Linux')]),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(/<th\b[^>]*>OS<\/th>/.test(html), `sthead stentry should render as th, got: ${html}`);
+    assert.ok(/<td\b[^>]*>Linux<\/td>/.test(html), `strow stentry should render as td, got: ${html}`);
   });
 
   it('should render simple table', () => {
@@ -635,6 +661,27 @@ describe('renderer', () => {
     assert.ok(html.includes('fallback'), 'should keep original children when conref is unresolved');
   });
 
+  it('should stop rendering on circular conref instead of recursing forever', () => {
+    // Target's content conrefs back to itself — without the conrefChain
+    // guard this recursion never terminates (stack overflow).
+    const target = makeEl('topic/p', [
+      makeText('cycle-text '),
+      makeEl('topic/p', [makeText('inner-fallback')], { conref: 'reuse.dita#r/loop' }),
+    ], { id: 'loop' });
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveConref: (_conref: string) => target,
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/p', [], { conref: 'reuse.dita#r/loop' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('cycle-text'), 'first-level conref should still resolve');
+    assert.ok(html.includes('inner-fallback'), 'cyclic conref should fall back to literal content');
+  });
+
   // ── Keyref resolution tests ──
 
   it('should resolve varname keyref to key value', () => {
@@ -700,5 +747,35 @@ describe('renderer', () => {
     assert.ok(html.includes('MyApp Pro'), 'should contain resolved key value');
     assert.ok(html.includes('class="ph"'), 'ph span should be rendered');
     assert.ok(!html.includes('keyref'), 'keyref attribute should be stripped after resolution');
+  });
+
+  it('should prefer local element content over the keyref value', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveKey: (_key: string) => 'key-value',
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/ph', [makeText('local content')], { keyref: 'product' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('local content'), 'element content wins per the DITA spec');
+    assert.ok(!html.includes('key-value'), 'key value must not replace existing content');
+  });
+
+  it('should escape the resolved img src attribute', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      asWebviewUri: (p: string) => `vscode-resource:${p}" onerror="alert(1)`,
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/image', [], { href: 'img.png' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(!html.includes('onerror="alert(1)"'), 'src must not break out of its attribute');
+    assert.ok(html.includes('&quot;'), 'quote in the URI should be escaped');
   });
 });

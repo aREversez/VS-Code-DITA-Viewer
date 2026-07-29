@@ -51,7 +51,7 @@ export const STANDARD_TAG_TO_BASETYPE: Record<string, string> = {
   xref: 'topic/xref',
   link: 'topic/link',
   linktext: 'topic/linktext',
-  relatedLinks: 'topic/related-links',
+  'related-links': 'topic/related-links',
 
   // Inline formatting
   b: 'topic/b',
@@ -89,10 +89,10 @@ export const STANDARD_TAG_TO_BASETYPE: Record<string, string> = {
 
   // Misc
   ph: 'topic/ph',
-  draftComment: 'topic/draft-comment',
-  requiredCleanup: 'topic/required-cleanup',
+  'draft-comment': 'topic/draft-comment',
+  'required-cleanup': 'topic/required-cleanup',
   data: 'topic/data',
-  dataAbout: 'topic/data-about',
+  'data-about': 'topic/data-about',
   foreign: 'topic/foreign',
   state: 'topic/state',
 

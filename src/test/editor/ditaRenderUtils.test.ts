@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { expandDitamapRefs, FileReader, makeConrefResolver, makeFileTitleResolver, findTextMatches, decodeHrefPart } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
@@ -146,6 +146,24 @@ describe('expandDitamapRefs', () => {
     // Then b.ditamap ref is expanded: but a.ditamap is in visited set, so it stops
     assert.strictEqual(node.children.length, 2); // original child + expanded from a.ditamap
     assert.strictEqual(visited.size, 2); // a.ditamap and b.ditamap
+  });
+
+  it('should still expand children when the node itself points at a visited map', () => {
+    const child = makeEl('map/mapref', { href: 'b.ditamap' });
+    const node = makeEl('map/mapref', { href: 'a.ditamap' }, [child]);
+    const readFile: FileReader = (path) => {
+      if (path.replace(/\\/g, '/').endsWith('b.ditamap')) return KEYDEF_XML;
+      throw new Error('visited map must not be re-read: ' + path);
+    };
+
+    // a.ditamap was already inlined elsewhere; the old early-return skipped
+    // the whole subtree, leaving b.ditamap unexpanded.
+    const visited = new Set<string>([resolve('/dir', 'a.ditamap')]);
+    expandDitamapRefs(node, '/dir', readFile, visited);
+
+    assert.strictEqual(node.children.length, 1, 'a.ditamap itself must not be re-inlined');
+    assert.strictEqual(child.children.length, 2);
+    assert.strictEqual(child.children[0].attributes?.keys, 'product-name');
   });
 
   it('should recurse into existing children', () => {

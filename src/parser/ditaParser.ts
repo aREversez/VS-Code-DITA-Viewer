@@ -116,6 +116,16 @@ function makeParser(tagMap: Record<string, string>) {
       currentText += text;
     };
 
+    // CDATA sections fire a separate sax event (not ontext) — without this
+    // handler, <![CDATA[...]]> content (common in codeblocks) is dropped.
+    parser.oncdata = (text: string) => {
+      if (currentText.length === 0) {
+        currentTextStartLine = parser.line;
+        currentTextStartCol = parser.column;
+      }
+      currentText += text;
+    };
+
     parser.onerror = (err) => {
       throw new Error(`SAX parse error at line ${parser.line}:${parser.column}: ${err.message}`);
     };
@@ -137,6 +147,22 @@ function makeParser(tagMap: Record<string, string>) {
 }
 
 /**
+ * Common ISO/HTML character entities that DITA DTDs normally declare in
+ * external subsets. The DOCTYPE (and with it those declarations) is
+ * stripped before parsing, so map the frequent ones to literal characters
+ * instead of silently deleting the text.
+ */
+const ISO_ENTITIES: Record<string, string> = {
+  nbsp: '\u00a0', copy: '©', reg: '®', trade: '™', deg: '°', plusmn: '±',
+  micro: 'µ', middot: '·', laquo: '«', raquo: '»', sect: '§', para: '¶',
+  times: '×', divide: '÷', frac12: '½', frac14: '¼', frac34: '¾',
+  sup1: '¹', sup2: '²', sup3: '³', cent: '¢', pound: '£', yen: '¥', euro: '€',
+  ndash: '–', mdash: '—', lsquo: '\u2018', rsquo: '\u2019', ldquo: '\u201c', rdquo: '\u201d',
+  hellip: '…', bull: '•', dagger: '†', Dagger: '‡', prime: '′', Prime: '″',
+  larr: '←', uarr: '↑', rarr: '→', darr: '↓', harr: '↔',
+};
+
+/**
  * Preprocess XML to avoid SAX parse errors:
  * 1. Extract entity declarations from the DOCTYPE
  * 2. Strip the entire DOCTYPE declaration
@@ -156,16 +182,21 @@ export function preprocessEntities(xml: string): string {
   // 2. Strip the entire DOCTYPE declaration
   let result = stripDoctype(xml);
 
-  // 3. Replace known entity references with their values
+  // 3. Replace known entity references with their values. Entity names may
+  //    contain regex metacharacters (e.g. '.'), so escape them; the value is
+  //    substituted via a callback so '$&'/'$$' sequences stay literal.
   for (const [name, value] of entities) {
-    result = result.replace(new RegExp(`&${name};`, 'g'), value);
+    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    result = result.replace(new RegExp(`&${escapedName};`, 'g'), () => value);
   }
 
   // 4. Remove any remaining undeclared entity references to prevent
-  //    SAX parse errors. Keep built-in XML entities and numeric refs.
+  //    SAX parse errors. Keep built-in XML entities and substitute
+  //    well-known ISO character entities with their literal characters.
   const builtin = new Set(['amp', 'lt', 'gt', 'quot', 'apos']);
   result = result.replace(/&([a-zA-Z_][a-zA-Z0-9_.-]*);/g, (full, name) => {
-    return builtin.has(name) ? full : '';
+    if (builtin.has(name)) return full;
+    return ISO_ENTITIES[name] ?? '';
   });
 
   return result;
