@@ -620,6 +620,9 @@ interface KeyMapCacheEntry {
   map: Map<string, string>;
 }
 const keyMapCache = new Map<string, KeyMapCacheEntry>();
+// One entry per document directory; bound it so long sessions touching many
+// folders cannot grow the cache without limit (evicts oldest-inserted first).
+const KEY_MAP_CACHE_MAX = 50;
 
 function stampFiles(files: string[]): string {
   return files
@@ -674,6 +677,10 @@ export function buildKeyMap(docUri: vscode.Uri): Map<string, string> {
     } catch {}
   }
 
+  if (keyMapCache.size >= KEY_MAP_CACHE_MAX && !keyMapCache.has(docDir)) {
+    const oldest = keyMapCache.keys().next().value;
+    if (oldest !== undefined) keyMapCache.delete(oldest);
+  }
   keyMapCache.set(docDir, {
     mapFilesKey,
     stamps: stampFiles(involvedFiles),

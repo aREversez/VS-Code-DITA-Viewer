@@ -62,6 +62,18 @@ describe('renderer', () => {
     assert.ok(html.includes('class="shortdesc"'));
   });
 
+  it('should render itemgroup (task info/stepxmp base type) as a div', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/li', [
+        makeEl('topic/ph', [makeText('Do it')], undefined, 'cmd'),
+        makeEl('topic/itemgroup', [makeText('details')], undefined, 'info'),
+      ], undefined, 'step'),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(/<div\b[^>]*class="itemgroup"[^>]*>details<\/div>/.test(html), `got: ${html}`);
+    assert.ok(/<li\b[^>]*>/.test(html), 'step should render as li');
+  });
+
   it('should render paragraphs', () => {
     const doc = makeEl('topic/topic', [
       makeEl('topic/body', [

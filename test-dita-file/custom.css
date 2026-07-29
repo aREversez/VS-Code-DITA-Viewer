@@ -356,6 +356,7 @@ li { margin: 0.35em 0; }
 .book-entry--error {
   border-left-color: var(--brand-accent);
   background: var(--note-danger-bg);
+  color: var(--brand-text);
 }
 
 .book-entry-title {

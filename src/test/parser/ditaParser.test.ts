@@ -124,6 +124,45 @@ describe('ditaParser', () => {
     assert.strictEqual(relatedLinks.baseType, 'topic/related-links');
   });
 
+  it('should map task module tags to their topic/* base types', () => {
+    const xml = `<task id="t"><title>T</title><taskbody>
+      <context><p>ctx</p></context>
+      <steps><step><cmd>Do it</cmd><info>details</info></step></steps>
+      <steps-unordered><step><cmd>Or this</cmd></step></steps-unordered>
+      <result><p>done</p></result>
+    </taskbody></task>`;
+    const doc = parseDita(xml);
+    assert.strictEqual(doc.root.baseType, 'topic/topic');
+    const taskbody = doc.root.children.find((c) => c.tagName === 'taskbody')!;
+    assert.strictEqual(taskbody.baseType, 'topic/body');
+    const els = (n: typeof doc.root) => n.children.filter((c) => c.type === 'element');
+    const [context, steps, stepsUnordered, result] = els(taskbody);
+    assert.strictEqual(context.baseType, 'topic/section');
+    assert.strictEqual(steps.baseType, 'topic/ol');
+    assert.strictEqual(stepsUnordered.baseType, 'topic/ul');
+    assert.strictEqual(result.baseType, 'topic/section');
+    const step = els(steps)[0];
+    assert.strictEqual(step.baseType, 'topic/li');
+    assert.strictEqual(els(step)[0].baseType, 'topic/ph'); // cmd
+    assert.strictEqual(els(step)[1].baseType, 'topic/itemgroup'); // info
+  });
+
+  it('should map concept and reference module tags to their topic/* base types', () => {
+    const conceptDoc = parseDita(`<concept id="c"><title>C</title><conbody><p>x</p></conbody></concept>`);
+    assert.strictEqual(conceptDoc.root.baseType, 'topic/topic');
+    assert.strictEqual(conceptDoc.root.children[1].baseType, 'topic/body');
+
+    const refDoc = parseDita(
+      `<reference id="r"><refbody><properties><property><proptype>a</proptype><propvalue>b</propvalue></property></properties></refbody></reference>`,
+    );
+    const refbody = refDoc.root.children[0];
+    assert.strictEqual(refbody.baseType, 'topic/body');
+    const properties = refbody.children[0];
+    assert.strictEqual(properties.baseType, 'topic/simpletable');
+    assert.strictEqual(properties.children[0].baseType, 'topic/strow');
+    assert.strictEqual(properties.children[0].children[0].baseType, 'topic/stentry');
+  });
+
   // ── preprocessEntities tests ──
 
   it('should strip DOCTYPE with PUBLIC ID and no internal subset', () => {

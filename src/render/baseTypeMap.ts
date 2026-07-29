@@ -60,6 +60,10 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     return `<p>${renderChildren(_node, ctx)}</p>`;
   },
 
+  'topic/itemgroup': (node, ctx, renderChildren) => {
+    return `<div class="itemgroup">${renderChildren(node, ctx)}</div>`;
+  },
+
   'topic/note': (node, ctx, renderChildren) => {
     const type = getAttr(node, 'type') || 'note';
     const labels = ctx.noteLabels || { note: 'Note', notice: 'Notice', warning: 'Warning', danger: 'Danger', important: 'Important', tip: 'Tip', restriction: 'Restriction' };
