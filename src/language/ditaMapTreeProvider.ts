@@ -91,17 +91,20 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
         this.mapRoot = doc.root;
         const keyMap = buildKeyMap(vscode.Uri.file(this.mapPath));
         this.resolveKey = (k: string) => keyMap.get(k);
-        // Assign numbered division labels in document order
+        // Assign numbered division labels per nesting depth
         const roleLabel = createBookRoleLabeler(formatLocalizedRole);
-        const labelWalk = (node: DitaNode): void => {
+        const labelWalk = (node: DitaNode, depth: number): void => {
           for (const child of node.children || []) {
             if (child.type !== 'element') continue;
-            const label = roleLabel(child.tagName);
+            const bt = child.baseType;
+            // topicgroup / bookmap-structural are transparent: children stay at same depth
+            const childDepth = bt === 'map/topicgroup' || bt === 'map/bookmap-structural' ? depth : depth + 1;
+            const label = roleLabel(child.tagName, childDepth);
             if (label) this.roleLabels.set(child, label);
-            labelWalk(child);
+            labelWalk(child, childDepth);
           }
         };
-        labelWalk(doc.root);
+        labelWalk(doc.root, -1);
       } catch {
         this.mapRoot = undefined;
       }

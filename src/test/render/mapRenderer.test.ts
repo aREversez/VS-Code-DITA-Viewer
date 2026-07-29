@@ -336,6 +336,27 @@ describe('mapRenderer', () => {
     assert.ok(html.includes('<span class="map-tree-badge">第 2 章</span>'));
   });
 
+  it('should restart chapter numbering per nesting depth in rendered tree', () => {
+    const xml = `<bookmap>
+      <chapter href="c1.dita">
+        <chapter href="c1-1.dita"/>
+        <chapter href="c1-2.dita"/>
+      </chapter>
+      <chapter href="c2.dita">
+        <chapter href="c2-1.dita"/>
+      </chapter>
+    </bookmap>`;
+    const doc = parseDitamap(preprocessEntities(xml));
+    const html = renderMapDocument(doc.root, { docDir: '/test' });
+    assert.ok(html.includes('Chapter 1'), 'top-level Chapter 1');
+    assert.ok(html.includes('Chapter 2'), 'top-level Chapter 2');
+    // Count occurrences of each badge
+    const ch1Count = (html.match(/map-tree-badge">Chapter 1<\/span>/g) || []).length;
+    const ch2Count = (html.match(/map-tree-badge">Chapter 2<\/span>/g) || []).length;
+    assert.strictEqual(ch1Count, 3, 'Chapter 1 should appear 3 times (c1, c1-1, c2-1)');
+    assert.strictEqual(ch2Count, 2, 'Chapter 2 should appear 2 times (c2, c1-2)');
+  });
+
   describe('getMapTitleText', () => {
     it('returns the plain map title', () => {
       const doc = parseDitamap(preprocessEntities(`<map><title>My Map</title></map>`));

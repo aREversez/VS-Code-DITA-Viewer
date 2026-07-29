@@ -451,7 +451,15 @@ export function registerLanguageFeatures(context: vscode.ExtensionContext): void
     vscode.workspace.onDidOpenTextDocument((d) => validateDocument(d, collection)),
     vscode.workspace.onDidSaveTextDocument((d) => validateDocument(d, collection)),
     vscode.workspace.onDidChangeTextDocument((e) => scheduleValidation(e.document)),
-    vscode.workspace.onDidCloseTextDocument((d) => collection.delete(d.uri)),
+    vscode.workspace.onDidCloseTextDocument((d) => {
+      const key = d.uri.toString();
+      const timer = timers.get(key);
+      if (timer) {
+        clearTimeout(timer);
+        timers.delete(key);
+      }
+      collection.delete(d.uri);
+    }),
     { dispose: () => timers.forEach((t) => clearTimeout(t)) },
   );
 

@@ -428,20 +428,20 @@ export function getMapRefName(node: DitaNode): string {
 /** Outline for a .ditamap file: topicref hierarchy with structural containers. */
 export function collectMapSymbols(root: DitaNode, roleFormat?: RoleLabelFormatter): DocSymbolSpec[] {
   const roleLabel = createBookRoleLabeler(roleFormat);
-  function walk(node: DitaNode): DocSymbolSpec[] {
+  function walk(node: DitaNode, depth: number): DocSymbolSpec[] {
     const result: DocSymbolSpec[] = [];
     for (const child of node.children || []) {
       if (child.type !== 'element') continue;
       const bt = child.baseType;
       if (bt === 'map/topicref' || bt === 'map/mapref') {
         // Book divisions surface their numbered role ("Chapter 1", …)
-        const label = roleLabel(child.tagName);
+        const label = roleLabel(child.tagName, depth);
         result.push({
           name: getMapRefName(child),
           detail: label || child.tagName,
           kind: 'ref',
           range: child.sourceRange,
-          children: walk(child),
+          children: walk(child, depth + 1),
         });
       } else if (bt === 'map/keydef') {
         result.push({
@@ -449,7 +449,7 @@ export function collectMapSymbols(root: DitaNode, roleFormat?: RoleLabelFormatte
           detail: child.tagName,
           kind: 'keydef',
           range: child.sourceRange,
-          children: walk(child),
+          children: walk(child, depth + 1),
         });
       } else if (bt === 'map/topichead') {
         result.push({
@@ -457,22 +457,22 @@ export function collectMapSymbols(root: DitaNode, roleFormat?: RoleLabelFormatte
           detail: child.tagName,
           kind: 'head',
           range: child.sourceRange,
-          children: walk(child),
+          children: walk(child, depth + 1),
         });
       } else if (bt === 'map/bookmap-structural') {
         result.push({
           name: child.tagName || '(container)',
           kind: 'structural',
           range: child.sourceRange,
-          children: walk(child),
+          children: walk(child, depth),
         });
       } else if (bt === 'map/reltable') {
         continue;
       } else {
-        result.push(...walk(child));
+        result.push(...walk(child, depth));
       }
     }
     return result;
   }
-  return walk(root);
+  return walk(root, 0);
 }

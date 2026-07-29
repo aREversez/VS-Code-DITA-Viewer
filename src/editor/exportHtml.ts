@@ -3,64 +3,18 @@
 // images embedded as data URIs, shareable without any toolchain installed.
 
 import * as vscode from 'vscode';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { basename, dirname, extname, join, resolve } from 'path';
+import { readFileSync, writeFileSync } from 'fs';
+import { basename, dirname, join, resolve } from 'path';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { collectMapEntries, getMapTitleText } from '../render/mapTypeMap';
 import { formatLocalizedRole } from '../language/bookRoleL10n';
 import { expandDitamapRefs, renderTopicToHtml } from './ditaRenderUtils';
 import { buildKeyMap } from './DitaViewerProvider';
+import { buildStandaloneHtml, makeDataUriInliner, buildBookHeading } from './exportHtmlHelpers';
 
-// ── Pure helpers (unit-tested) ──
+// ── Pure helpers (re-exported from exportHtmlHelpers, unit-tested there) ──
 
-export function buildStandaloneHtml(opts: { title: string; bodyHtml: string; css: string }): string {
-  const { title, bodyHtml, css } = opts;
-  const safeTitle = title
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="generator" content="DITA Viewer for VS Code">
-<title>${safeTitle}</title>
-<style>
-${css}
-</style>
-</head>
-<body>
-<main class="dita-export">
-${bodyHtml}
-</main>
-</body>
-</html>`;
-}
-
-const IMAGE_MIME: Record<string, string> = {
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  gif: 'image/gif',
-  svg: 'image/svg+xml',
-  webp: 'image/webp',
-};
-
-/** Returns an asWebviewUri-compatible callback that inlines images as data URIs. */
-export function makeDataUriInliner(baseDir: string): (relPath: string) => string {
-  return (relPath: string): string => {
-    try {
-      const abs = resolve(baseDir, relPath);
-      if (existsSync(abs)) {
-        const ext = extname(abs).slice(1).toLowerCase();
-        const mime = IMAGE_MIME[ext] || 'application/octet-stream';
-        return `data:${mime};base64,${readFileSync(abs).toString('base64')}`;
-      }
-    } catch {}
-    return '';
-  };
-}
+export { buildStandaloneHtml, makeDataUriInliner, buildBookHeading };
 
 // ── Content builders ──
 
@@ -92,12 +46,7 @@ function buildMapExport(fsPath: string): { title: string; bodyHtml: string; erro
 
   const visited = new Set<string>();
   const parts: string[] = [];
-  const heading = (name: string, depth: number, role?: string) => {
-    const level = Math.min(1 + depth, 6);
-    const safe = name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const badge = role ? `<span class="map-tree-badge">${role}</span> ` : '';
-    return `<h${level} class="book-heading">${badge}${safe}</h${level}>`;
-  };
+  const heading = buildBookHeading;
 
   for (const entry of entries) {
     if (entry.href && !entry.href.split('#')[0].toLowerCase().endsWith('.ditamap')) {
