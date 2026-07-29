@@ -136,20 +136,62 @@ function makeParser(tagMap: Record<string, string>) {
   };
 }
 
-/** Preprocess DOCTYPE entity declarations to avoid SAX parse errors */
+/**
+ * Preprocess XML to avoid SAX parse errors:
+ * 1. Extract entity declarations from the DOCTYPE
+ * 2. Strip the entire DOCTYPE declaration
+ * 3. Replace known entity references with their values
+ * 4. Remove any remaining undeclared entity references
+ *    (keeps built-in XML entities: &amp; &lt; &gt; &quot; &apos;)
+ */
 export function preprocessEntities(xml: string): string {
+  // 1. Extract simple entity declarations: <!ENTITY name "value">
   const entityRegex = /<!ENTITY\s+(\S+)\s+"((?:[^"\\]|\\.)*)">/g;
   let match;
   const entities: Array<[string, string]> = [];
   while ((match = entityRegex.exec(xml)) !== null) {
     entities.push([match[1], match[2]]);
   }
-  if (entities.length === 0) return xml;
-  let result = xml.replace(entityRegex, '');
+
+  // 2. Strip the entire DOCTYPE declaration
+  let result = stripDoctype(xml);
+
+  // 3. Replace known entity references with their values
   for (const [name, value] of entities) {
     result = result.replace(new RegExp(`&${name};`, 'g'), value);
   }
+
+  // 4. Remove any remaining undeclared entity references to prevent
+  //    SAX parse errors. Keep built-in XML entities and numeric refs.
+  const builtin = new Set(['amp', 'lt', 'gt', 'quot', 'apos']);
+  result = result.replace(/&([a-zA-Z_][a-zA-Z0-9_.-]*);/g, (full, name) => {
+    return builtin.has(name) ? full : '';
+  });
+
   return result;
+}
+
+/** Strips the entire <!DOCTYPE ...> declaration, including internal subset [...]. */
+function stripDoctype(xml: string): string {
+  const start = xml.indexOf('<!DOCTYPE');
+  if (start < 0) return xml;
+
+  // Check for an internal subset marked by [ ... ]>
+  const bracketStart = xml.indexOf('[', start);
+  const firstGt = xml.indexOf('>', start);
+
+  if (bracketStart >= 0 && (firstGt < 0 || bracketStart < firstGt)) {
+    // Has internal subset — find the closing ]>
+    const end = xml.indexOf(']>', bracketStart);
+    if (end >= 0) {
+      return xml.substring(0, start) + xml.substring(end + 2);
+    }
+  }
+  // No internal subset — just strip up to and including the first >
+  if (firstGt >= 0) {
+    return xml.substring(0, start) + xml.substring(firstGt + 1);
+  }
+  return xml;
 }
 
 const _parseDita = makeParser(STANDARD_TAG_TO_BASETYPE);

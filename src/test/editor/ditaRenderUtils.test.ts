@@ -2,7 +2,9 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { expandDitamapRefs, FileReader, makeFileTitleResolver, findTextMatches } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeFileTitleResolver, findTextMatches } from '../../editor/ditaRenderUtils';
+import { parseDita, preprocessEntities } from '../../parser/ditaParser';
+import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
 
 function makeEl(baseType: string, attrs: Record<string, string>, children: DitaNode[] = []): DitaNode {
@@ -230,6 +232,186 @@ describe('makeFileTitleResolver', () => {
   it('should not treat a bare id as a filename even when a matching file exists', () => {
     const resolver = makeFileTitleResolver(dir);
     assert.strictEqual(resolver('someid'), undefined);
+  });
+});
+
+describe('makeConrefResolver', () => {
+  let dir: string;
+
+  before(() => {
+    dir = mkdtempSync(join(tmpdir(), 'dita-conref-'));
+    writeFileSync(join(dir, 'reuse.dita'), `<topic id="conref_topic">
+  <title>Reuse Topic</title>
+  <body>
+    <p id="note_script"><b>Important</b> note text</p>
+    <plentry id="plentry_1">
+      <pt>Parameter A</pt>
+      <pd>Value A</pd>
+    </plentry>
+    <ph id="element_only"><image href="icon.png"/></ph>
+  </body>
+</topic>`);
+    writeFileSync(join(dir, 'reuse_gemesh.dita'), `<topic id="conref_gemesh">
+  <title>Gemesh Topic</title>
+  <body>
+    <plentry id="plentry_dg5">
+      <pt>DB Host</pt>
+      <pd>localhost</pd>
+    </plentry>
+  </body>
+</topic>`);
+  });
+
+  after(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('should resolve ph conref returning the target element', () => {
+    const resolver = makeConrefResolver(dir);
+    const el = resolver('reuse.dita#conref_topic/note_script');
+    assert.ok(el, 'should return resolved element');
+    assert.strictEqual(el!.type, 'element');
+    // Children should contain a <b> element and note text
+    const childElements = (el!.children || []).filter((n) => n.type === 'element');
+    const childTexts = (el!.children || []).filter((n) => n.type === 'text');
+    assert.ok(childElements.some((n) => n.baseType === 'topic/b'), 'should contain a b element');
+    assert.ok(childTexts.some((n) => (n.text || '').includes('note text')), 'should contain note text');
+  });
+
+  it('should resolve plentry conref returning target element with pt/pd children', () => {
+    const resolver = makeConrefResolver(dir);
+    const el = resolver('reuse.dita#conref_topic/plentry_1');
+    assert.ok(el, 'should return resolved element');
+    assert.strictEqual(el!.baseType, 'topic/plentry');
+    const childElements = (el!.children || []).filter((n) => n.type === 'element');
+    assert.ok(childElements.some((n) => n.baseType === 'topic/pt'), 'should contain a pt element');
+    assert.ok(childElements.some((n) => n.baseType === 'topic/pd'), 'should contain a pd element');
+    // Verify pt and pd appear in correct order
+    const ptIdx = childElements.findIndex((n) => n.baseType === 'topic/pt');
+    const pdIdx = childElements.findIndex((n) => n.baseType === 'topic/pd');
+    assert.ok(ptIdx < pdIdx, 'pt should come before pd');
+  });
+
+  it('should return target element even when it has only element children', () => {
+    const resolver = makeConrefResolver(dir);
+    const el = resolver('reuse.dita#conref_topic/element_only');
+    assert.ok(el, 'should return resolved element, not undefined');
+    assert.strictEqual(el!.baseType, 'topic/ph');
+    const childElements = (el!.children || []).filter((n) => n.type === 'element');
+    assert.ok(childElements.some((n) => n.baseType === 'topic/image'), 'should contain an image element');
+  });
+
+  it('should resolve conref with only element id (no topic id)', () => {
+    const resolver = makeConrefResolver(dir);
+    const el = resolver('reuse.dita#note_script');
+    assert.ok(el, 'should resolve with bare element id');
+    assert.strictEqual(el!.attributes?.id, 'note_script');
+  });
+
+  it('should return undefined for missing file', () => {
+    const resolver = makeConrefResolver(dir);
+    const el = resolver('nonexistent.dita#some_id');
+    assert.strictEqual(el, undefined);
+  });
+
+  it('should return undefined for missing element id', () => {
+    const resolver = makeConrefResolver(dir);
+    const el = resolver('reuse.dita#conref_topic/nonexistent_id');
+    assert.strictEqual(el, undefined);
+  });
+
+  it('should render ph conref with filepath child as span.filepath (end-to-end)', () => {
+    // Create a target file with <ph id="note_script"><filepath>.fscript</filepath></ph>
+    writeFileSync(join(dir, 'conref.dita'), `<topic id="conref">
+  <title>Conref Reuse</title>
+  <body>
+    <ph id="note_script"><filepath>.fscript</filepath></ph>
+  </body>
+</topic>`);
+
+    const conrefResolver = makeConrefResolver(dir);
+    // Source document: <ph conref="conref.dita#conref/note_script">
+    const sourceXml = `<topic id="main_topic">
+  <title>Main</title>
+  <body>
+    <p>Run the <ph conref="conref.dita#conref/note_script"/> now.</p>
+  </body>
+</topic>`;
+    const doc = parseDita(preprocessEntities(sourceXml));
+    const html = renderDocument(doc.root, {
+      headingLevel: 1,
+      asWebviewUri: (p: string) => `vscode-resource:${p}`,
+      documentDir: dir,
+      resolveConref: (conref: string) => conrefResolver(conref),
+    });
+    // Same-type conref: <ph> target, children (including <filepath>) are pulled in
+    assert.ok(html.includes('class="filepath"'), `should contain span.filepath, got: ${html}`);
+    assert.ok(html.includes('.fscript'), 'should contain .fscript text');
+    assert.ok(!html.includes('conref'), 'conref attribute should be stripped');
+  });
+
+  it('should render ph conref with filepath as cross-type target (end-to-end)', () => {
+    // Target file where the element with id is a <filepath> itself (different type)
+    writeFileSync(join(dir, 'conref_fp.dita'), `<topic id="conref_fp">
+  <title>Conref FP</title>
+  <body>
+    <p>Run the <filepath id="fp_script">.fscript</filepath> file.</p>
+  </body>
+</topic>`);
+
+    const conrefResolver = makeConrefResolver(dir);
+    // Source: <ph conref="conref_fp.dita#conref_fp/fp_script">
+    const sourceXml = `<topic id="main_topic2">
+  <title>Main2</title>
+  <body>
+    <p>Use <ph conref="conref_fp.dita#conref_fp/fp_script"/> today.</p>
+  </body>
+</topic>`;
+    const doc = parseDita(preprocessEntities(sourceXml));
+    const html = renderDocument(doc.root, {
+      headingLevel: 1,
+      asWebviewUri: (p: string) => `vscode-resource:${p}`,
+      documentDir: dir,
+      resolveConref: (conref: string) => conrefResolver(conref),
+    });
+    // Cross-type conref: <ph> referencing <filepath> — the <filepath> tag
+    // replaces the <ph>, so span.filepath should be rendered.
+    assert.ok(html.includes('class="filepath"'), `should contain span.filepath (cross-type), got: ${html}`);
+    assert.ok(html.includes('.fscript'), 'should contain .fscript text');
+    assert.ok(!html.includes('conref'), 'conref attribute should be stripped');
+  });
+
+  it('should resolve ph conref from file with DOCTYPE and entities (end-to-end)', () => {
+    // Target file with DOCTYPE and entity declarations (typical DITA file)
+    writeFileSync(join(dir, 'conref_doctype.dita'), `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd" [
+  <!ENTITY prod "SuperApp">
+]>
+<topic id="conref_dt">
+  <title>Conref DT</title>
+  <body>
+    <p id="note_script_dt">Run &prod; with <filepath>.fscript</filepath></p>
+  </body>
+</topic>`);
+
+    const conrefResolver = makeConrefResolver(dir);
+    const sourceXml = `<topic id="main_dt">
+  <title>Main</title>
+  <body>
+    <p>Use <ph conref="conref_doctype.dita#conref_dt/note_script_dt"/> now.</p>
+  </body>
+</topic>`;
+    const doc = parseDita(preprocessEntities(sourceXml));
+    const html = renderDocument(doc.root, {
+      headingLevel: 1,
+      asWebviewUri: (p: string) => `vscode-resource:${p}`,
+      documentDir: dir,
+      resolveConref: (conref: string) => conrefResolver(conref),
+    });
+    assert.ok(html.includes('SuperApp'), `should contain resolved entity value, got: ${html}`);
+    assert.ok(html.includes('.fscript'), 'should contain filepath text');
+    assert.ok(html.includes('class="filepath"'), 'filepath element should be rendered');
+    assert.ok(!html.includes('conref'), 'conref attribute should be stripped');
   });
 });
 

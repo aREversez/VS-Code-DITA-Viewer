@@ -12,6 +12,7 @@
   --web-text: #1a1a1a;
   --web-text-muted: #5f6368;
   --web-border: #dadce0;
+  --web-table-border: #9aa0a6;
   --web-code-bg: #f1f3f4;
   --web-font: 'Roboto', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
   --web-heading-font: 'Roboto', 'Segoe UI', sans-serif;
@@ -226,6 +227,7 @@ table {
   border-collapse: collapse;
   margin: 1.25rem 0;
   font-size: 0.93em;
+  border: 2px solid var(--web-table-border);
   border-radius: var(--web-radius);
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
@@ -237,17 +239,15 @@ table th {
   font-weight: 600;
   padding: 0.7rem 1rem;
   text-align: left;
+  border: 1px solid var(--web-table-border);
 }
 
 table td {
   padding: 0.6rem 1rem;
-  border-bottom: 1px solid var(--web-border);
+  border: 1px solid var(--web-table-border);
   background: var(--web-bg);
   vertical-align: top;
 }
-
-table tr:last-child td { border-bottom: none; }
-table tr:hover td { background: var(--web-primary-light); }
 
 /* ── Images ── */
 img {
@@ -397,6 +397,7 @@ section, .example { margin: 2rem 0; }
   --web-text: #e0e0e0;
   --web-text-muted: #a0a0a0;
   --web-border: #3c3c3c;
+  --web-table-border: #6a6f73;
   --web-code-bg: #2d2d2d;
 }
 

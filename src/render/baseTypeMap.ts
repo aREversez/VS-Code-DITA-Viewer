@@ -80,7 +80,99 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     return `<table${safeAttr('id', id)} class="cals-table">${renderChildren(node, ctx)}</table>`;
   },
 
-  'topic/tgroup': (_node, ctx, renderChildren) => renderChildren(_node, ctx),
+  'topic/tgroup': (node, ctx, renderChildren) => {
+    // Build column name → number map from colspec elements
+    const colspecs = (node.children || []).filter(
+      (c) => c.type === 'element' && c.baseType === 'topic/colspec',
+    );
+    const colMap = new Map<string, number>();
+    colspecs.forEach((cs, i) => {
+      const colname = cs.attributes?.colname;
+      if (colname) {
+        const colnum = cs.attributes?.colnum
+          ? parseInt(cs.attributes.colnum, 10)
+          : i + 1;
+        colMap.set(colname, colnum);
+      }
+    });
+
+    // Pre-process entries: add colspan/rowspan attributes derived from
+    // CALS namest/nameend and morerows so the entry renderer can emit
+    // them as standard HTML attributes.
+    function addSpans(el: DitaNode): DitaNode {
+      if (el.type !== 'element') return el;
+      const processedChildren = (el.children || []).map(addSpans);
+      if (el.baseType === 'topic/entry') {
+        const attrs = { ...el.attributes };
+        const { namest, nameend } = attrs;
+        if (namest && nameend && !attrs.colspan) {
+          const startCol = colMap.get(namest);
+          const endCol = colMap.get(nameend);
+          if (startCol !== undefined && endCol !== undefined) {
+            attrs.colspan = String(endCol - startCol + 1);
+          }
+        }
+        if (attrs.morerows !== undefined && !attrs.rowspan) {
+          const mr = parseInt(attrs.morerows, 10);
+          if (!isNaN(mr)) attrs.rowspan = String(mr + 1);
+        }
+        return { ...el, attributes: attrs, children: processedChildren };
+      }
+      return { ...el, children: processedChildren };
+    }
+
+    const processedNode = addSpans(node);
+
+    // Generate <colgroup> with column widths
+    // CALS colwidth can be: "5*" or "1.5*" (proportional), "*" (= 1*),
+    // "50px", "30%", "2in", or a bare number (treated as pixels).
+    let colgroup = '';
+    if (colspecs.length > 0) {
+      // Calculate total proportional parts for "*" notation
+      let totalStars = 0;
+      let hasStars = false;
+      for (const cs of colspecs) {
+        const w = cs.attributes?.colwidth;
+        if (w) {
+          const m = w.match(/^(\d+(?:\.\d+)?)?\*$/);
+          if (m) {
+            hasStars = true;
+            totalStars += m[1] ? parseFloat(m[1]) : 1;
+          }
+        }
+      }
+      const cols = colspecs
+        .map((cs) => {
+          const w = cs.attributes?.colwidth;
+          if (!w) return '<col>';
+          // Convert CALS proportional notation (N*) to percentage
+          const starMatch = w.match(/^(\d+(?:\.\d+)?)?\*$/);
+          if (starMatch && hasStars && totalStars > 0) {
+            const parts = starMatch[1] ? parseFloat(starMatch[1]) : 1;
+            const pct = (parts / totalStars) * 100;
+            return `<col style="width: ${pct.toFixed(2)}%">`;
+          }
+          // Bare number → treat as pixels
+          if (/^\d+(?:\.\d+)?$/.test(w)) {
+            return `<col style="width: ${escapeAttr(w)}px">`;
+          }
+          // Pass through CSS-compatible values (px, %, em, in, cm, etc.)
+          return `<col style="width: ${escapeAttr(w)}">`;
+        })
+        .join('');
+      colgroup = `<colgroup>${cols}</colgroup>`;
+    }
+
+    // Render non-colspec children (thead, tbody, tfoot)
+    const childCtx: RenderContext = { ...ctx, parentBaseType: 'topic/tgroup' };
+    const nodeWithoutColspec: DitaNode = {
+      ...processedNode,
+      children: (processedNode.children || []).filter(
+        (c) => !(c.type === 'element' && c.baseType === 'topic/colspec'),
+      ),
+    };
+    return colgroup + renderChildren(nodeWithoutColspec, childCtx);
+  },
   'topic/colspec': () => '',
 
   'topic/thead': (_node, ctx, renderChildren) => `<thead>${renderChildren(_node, ctx)}</thead>`,
@@ -88,7 +180,10 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   'topic/row': (_node, ctx, renderChildren) => `<tr>${renderChildren(_node, ctx)}</tr>`,
   'topic/entry': (node, ctx, renderChildren) => {
     const tag = isInThead(ctx) ? 'th' : 'td';
-    return `<${tag}>${renderChildren(node, ctx)}</${tag}>`;
+    const colspan = getAttr(node, 'colspan');
+    const rowspan = getAttr(node, 'rowspan');
+    const attrs = `${safeAttr('colspan', colspan)}${safeAttr('rowspan', rowspan)}`;
+    return `<${tag}${attrs}>${renderChildren(node, ctx)}</${tag}>`;
   },
 
   'topic/simpletable': (node, ctx, renderChildren) => {

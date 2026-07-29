@@ -1,27 +1,74 @@
 /* 
  * DITA Viewer — custom documentation theme
  * Mimics typical published output (Oxygen XML WebHelp style)
+ * Theme-adaptive: adapts to VS Code light/dark themes via .vscode-dark
  */
 
-/* ── Brand colors ── */
+/* ── Brand colors (light theme defaults) ── */
 :root {
   --brand-primary: #1a73e8;
   --brand-primary-light: #e8f0fe;
-  --brand-text: #202124;
-  --brand-bg: #ffffff;
+  --brand-text: #1a1a1a;
+  --brand-bg: #fafbfc;
   --brand-accent: #ea4335;
   --brand-code-bg: #f8f9fa;
   --brand-border: #dadce0;
+  --brand-table-border: #9aa0a6;
   --brand-heading: #1967d2;
   --brand-link: #1a73e8;
   --brand-font: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --brand-mono: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  /* Note variant backgrounds (light) */
+  --note-warning-bg: #fef7e0;
+  --note-danger-bg: #fce8e6;
+  --note-important-bg: #f3e8fd;
+  --note-tip-bg: #e6f4ea;
+  /* Note variant label colors (light) */
+  --note-warning-label: #b06000;
+  --note-danger-label: #c5221f;
+  --note-important-label: #771da8;
+  --note-tip-label: #137a3e;
+  /* Secondary text (for blockquote, figcaption) */
+  --brand-text-secondary: #5f6368;
+  /* Inline code color */
+  --brand-code-color: #d63384;
+}
+
+/* ── Dark theme overrides ── */
+.vscode-dark {
+  --brand-primary: #8ab4f8;
+  --brand-primary-light: #1a2a3a;
+  --brand-text: #e8eaed;
+  --brand-bg: #1e1e1e;
+  --brand-accent: #f28b82;
+  --brand-code-bg: #2d2d2d;
+  --brand-border: #3c4043;
+  --brand-table-border: #6a6f73;
+  --brand-heading: #8ab4f8;
+  --brand-link: #8ab4f8;
+  /* Note variant backgrounds (dark) */
+  --note-warning-bg: #33281a;
+  --note-danger-bg: #331a1a;
+  --note-important-bg: #261a33;
+  --note-tip-bg: #1a3326;
+  /* Note variant label colors (dark) */
+  --note-warning-label: #f9ab00;
+  --note-danger-label: #f28b82;
+  --note-important-label: #c58af9;
+  --note-tip-label: #81c995;
+  /* Secondary text */
+  --brand-text-secondary: #9aa0a6;
+  /* Inline code color */
+  --brand-code-color: #f48fb1;
 }
 
 /* ── Typography ── */
+html, body {
+  background: var(--brand-bg);
+  color: var(--brand-text);
+}
 body {
   font-family: var(--brand-font);
-  color: var(--brand-text);
   line-height: 1.7;
   max-width: 960px;
   margin: 0 auto;
@@ -60,7 +107,7 @@ h4 { font-size: 1.1em; margin-top: 1.5em; }
 }
 .xref:hover {
   text-decoration: underline;
-  color: #1557b0;
+  color: var(--brand-link);
 }
 
 /* ── UI interaction elements ── */
@@ -93,6 +140,7 @@ h4 { font-size: 1.1em; margin-top: 1.5em; }
 .note {
   border-left: 4px solid var(--brand-primary);
   background: var(--brand-primary-light);
+  color: var(--brand-text);
   padding: 1rem 1.25rem;
   margin: 1.25rem 0;
   border-radius: 0 6px 6px 0;
@@ -106,14 +154,14 @@ h4 { font-size: 1.1em; margin-top: 1.5em; }
   color: var(--brand-primary);
 }
 
-.note--warning { border-left-color: #f9ab00; background: #fef7e0; }
-.note--warning .note__label { color: #e37400; }
-.note--danger { border-left-color: var(--brand-accent); background: #fce8e6; }
-.note--danger .note__label { color: var(--brand-accent); }
-.note--important { border-left-color: #9334e6; background: #f3e8fd; }
-.note--important .note__label { color: #9334e6; }
-.note--tip { border-left-color: #34a853; background: #e6f4ea; }
-.note--tip .note__label { color: #34a853; }
+.note--warning { border-left-color: #f9ab00; background: var(--note-warning-bg); }
+.note--warning .note__label { color: var(--note-warning-label); }
+.note--danger { border-left-color: var(--brand-accent); background: var(--note-danger-bg); }
+.note--danger .note__label { color: var(--note-danger-label); }
+.note--important { border-left-color: #9334e6; background: var(--note-important-bg); }
+.note--important .note__label { color: var(--note-important-label); }
+.note--tip { border-left-color: #34a853; background: var(--note-tip-bg); }
+.note--tip .note__label { color: var(--note-tip-label); }
 
 /* ── Tables ── */
 table {
@@ -121,6 +169,7 @@ table {
   border-collapse: collapse;
   margin: 1.25rem 0;
   font-size: 0.95em;
+  border: 2px solid var(--brand-table-border);
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(0,0,0,0.06);
@@ -132,14 +181,14 @@ table th {
   font-weight: 600;
   padding: 0.65rem 0.85rem;
   text-align: left;
+  border: 1px solid var(--brand-table-border);
 }
 
 table td {
   padding: 0.6rem 0.85rem;
-  border-bottom: 1px solid var(--brand-border);
+  border: 1px solid var(--brand-table-border);
+  vertical-align: top;
 }
-
-table tr:last-child td { border-bottom: none; }
 
 /* ── Code blocks ── */
 pre.codeblock, pre.preformatted {
@@ -171,7 +220,7 @@ code {
   background: var(--brand-code-bg);
   padding: 0.15em 0.35em;
   border-radius: 3px;
-  color: #d63384;
+  color: var(--brand-code-color);
 }
 
 /* ── Inline elements ── */
@@ -195,7 +244,7 @@ blockquote {
   border-left: 3px solid var(--brand-border);
   margin: 1.25rem 0;
   padding: 0.75rem 1.25rem;
-  color: #5f6368;
+  color: var(--brand-text-secondary);
   font-style: italic;
   background: var(--brand-code-bg);
   border-radius: 0 4px 4px 0;
@@ -222,12 +271,29 @@ figcaption {
   font-style: italic;
   margin-top: 0.75rem;
   font-size: 0.9em;
-  color: #5f6368;
+  color: var(--brand-text-secondary);
 }
 
 /* ── Lists ── */
 ul, ol { padding-left: 1.5em; }
 li { margin: 0.35em 0; }
+
+/* ── Parameter list (parml) ── */
+.parml {
+  margin: 1.25rem 0;
+  padding: 0;
+}
+.plentry {
+  margin: 0.5rem 0;
+}
+.parml .pt {
+  font-weight: 600;
+  color: var(--brand-primary);
+}
+.parml .pd {
+  margin: 0 0 0.5rem 0;
+  padding-left: 1.5em;
+}
 
 /* ── Related links ── */
 .related-links {
@@ -245,7 +311,7 @@ li { margin: 0.35em 0; }
 }
 .link:hover {
   text-decoration: underline;
-  color: #1557b0;
+  color: var(--brand-link);
 }
 
 /* ── DITAMAP tree view ── */
@@ -289,14 +355,9 @@ li { margin: 0.35em 0; }
 
 .book-entry--error {
   border-left-color: var(--brand-accent);
-  background: #fce8e6;
+  background: var(--note-danger-bg);
 }
 
 .book-entry-title {
   color: var(--brand-accent);
 }
-
-.vscode-dark .note {
-  color: #202124;
-}
-

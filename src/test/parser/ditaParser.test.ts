@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { parseDita } from '../../parser/ditaParser';
+import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 describe('ditaParser', () => {
   it('should parse a minimal topic with title and shortdesc', () => {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -99,5 +99,98 @@ describe('ditaParser', () => {
     const body = doc.root.children[0];
     assert.strictEqual(body.children[0].baseType, 'topic/codeblock');
     assert.strictEqual(body.children[1].baseType, 'topic/pre');
+  });
+
+  // ── preprocessEntities tests ──
+
+  it('should strip DOCTYPE with PUBLIC ID and no internal subset', () => {
+    const xml = `<?xml version="1.0"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="t"><title>Test</title></topic>`;
+    const processed = preprocessEntities(xml);
+    assert.ok(!processed.includes('<!DOCTYPE'), 'DOCTYPE should be stripped');
+    assert.ok(processed.includes('<topic'), 'topic element should remain');
+    const doc = parseDita(processed);
+    assert.strictEqual(doc.root.tagName, 'topic');
+  });
+
+  it('should strip DOCTYPE with internal subset and resolve entities', () => {
+    const xml = `<?xml version="1.0"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd" [
+  <!ENTITY product "MyProduct">
+  <!ENTITY version "2.0">
+]>
+<topic id="t"><title>&product; &version;</title></topic>`;
+    const processed = preprocessEntities(xml);
+    assert.ok(!processed.includes('<!DOCTYPE'), 'DOCTYPE should be stripped');
+    assert.ok(!processed.includes('&product;'), 'entity should be resolved');
+    assert.ok(processed.includes('MyProduct'), 'entity value should appear');
+    assert.ok(processed.includes('2.0'), 'entity value should appear');
+    const doc = parseDita(processed);
+    assert.strictEqual(doc.root.tagName, 'topic');
+  });
+
+  it('should strip DOCTYPE with only internal subset (no PUBLIC ID)', () => {
+    const xml = `<!DOCTYPE topic [
+  <!ENTITY foo "bar">
+]>
+<topic id="t"><p>&foo;</p></topic>`;
+    const processed = preprocessEntities(xml);
+    assert.ok(!processed.includes('<!DOCTYPE'), 'DOCTYPE should be stripped');
+    assert.ok(processed.includes('bar'), 'entity should be resolved');
+    const doc = parseDita(processed);
+    assert.strictEqual(doc.root.tagName, 'topic');
+  });
+
+  it('should remove undeclared entity references to prevent parse errors', () => {
+    const xml = `<topic id="t"><p>Text with &undeclared; entity</p></topic>`;
+    const processed = preprocessEntities(xml);
+    assert.ok(!processed.includes('&undeclared;'), 'undeclared entity should be removed');
+    assert.ok(processed.includes('Text with'), 'surrounding text should remain');
+    // Should parse without error
+    const doc = parseDita(processed);
+    assert.strictEqual(doc.root.tagName, 'topic');
+  });
+
+  it('should preserve built-in XML entities', () => {
+    const xml = `<topic id="t"><p>&lt;tag&gt; &amp; &quot;stuff&quot;</p></topic>`;
+    const processed = preprocessEntities(xml);
+    assert.ok(processed.includes('&amp;'), 'amp entity should be preserved');
+    assert.ok(processed.includes('&lt;'), 'lt entity should be preserved');
+    assert.ok(processed.includes('&gt;'), 'gt entity should be preserved');
+    assert.ok(processed.includes('&quot;'), 'quot entity should be preserved');
+    const doc = parseDita(processed);
+    assert.strictEqual(doc.root.tagName, 'topic');
+  });
+
+  it('should parse DITA file with DOCTYPE and entity refs used in conref target', () => {
+    // Simulates a typical conref target file
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd" [
+  <!ENTITY prod "SuperApp">
+]>
+<topic id="conref">
+  <title>Reuse</title>
+  <body>
+    <p id="note_script">Run &prod; with <filepath>.fscript</filepath></p>
+  </body>
+</topic>`;
+    const processed = preprocessEntities(xml);
+    const doc = parseDita(processed);
+    assert.strictEqual(doc.root.tagName, 'topic');
+    // Find element with id="note_script"
+    const findEl = (node: typeof doc.root, id: string): typeof doc.root | undefined => {
+      if (node.attributes?.id === id) return node;
+      for (const child of node.children || []) {
+        if (child.type === 'element') {
+          const found = findEl(child, id);
+          if (found) return found;
+        }
+      }
+      return undefined;
+    };
+    const el = findEl(doc.root, 'note_script');
+    assert.ok(el, 'should find element with id=note_script');
+    assert.strictEqual(el!.baseType, 'topic/p');
   });
 });

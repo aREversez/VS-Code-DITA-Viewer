@@ -75,19 +75,10 @@ export function makeFileCache(docDir: string) {
   return { loadFile, findElementById, findTitleOfElement };
 }
 
-export function makeConrefResolver(docDir: string): (conref: string) => string | undefined {
+export function makeConrefResolver(docDir: string): (conref: string) => DitaNode | undefined {
   const cache = makeFileCache(docDir);
 
-  function extractText(node: DitaNode): string {
-    let text = '';
-    for (const child of node.children || []) {
-      if (child.type === 'text') text += child.text || '';
-      else text += extractText(child);
-    }
-    return text;
-  }
-
-  return (conref: string): string | undefined => {
+  return (conref: string): DitaNode | undefined => {
     const hashIdx = conref.indexOf('#');
     if (hashIdx < 0) return undefined;
     const filePath = conref.substring(0, hashIdx);
@@ -99,7 +90,10 @@ export function makeConrefResolver(docDir: string): (conref: string) => string |
     if (!root) return undefined;
     const el = cache.findElementById(root, elementId);
     if (!el) return undefined;
-    return extractText(el);
+    // Return the entire target element so its tag/baseType is preserved.
+    // resolveConrefForNode in the renderer decides whether to replace just
+    // the children (same-type conref) or the entire element (cross-type).
+    return el;
   };
 }
 
