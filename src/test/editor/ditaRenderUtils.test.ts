@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeFileTitleResolver, findTextMatches } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeFileTitleResolver, findTextMatches, decodeHrefPart } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -40,6 +40,24 @@ const KEYDEF_XML = `<?xml version="1.0" encoding="UTF-8"?>
   </keydef>
 </map>`;
 
+describe('decodeHrefPart', () => {
+  it('should decode %20 to a space', () => {
+    assert.strictEqual(decodeHrefPart('images/db%20topology.png'), 'images/db topology.png');
+  });
+
+  it('should return strings without percent signs unchanged', () => {
+    assert.strictEqual(decodeHrefPart('images/db_topology.png'), 'images/db_topology.png');
+  });
+
+  it('should decode UTF-8 escape sequences', () => {
+    assert.strictEqual(decodeHrefPart('%E5%9B%BE%E7%89%87.png'), '图片.png');
+  });
+
+  it('should return malformed escape sequences unchanged', () => {
+    assert.strictEqual(decodeHrefPart('50%zz.png'), '50%zz.png');
+  });
+});
+
 describe('expandDitamapRefs', () => {
   it('should do nothing for non-element node', () => {
     const node = textNode('hello');
@@ -57,6 +75,19 @@ describe('expandDitamapRefs', () => {
     const node = makeEl('map/topicref', { href: 'topic.dita' });
     expandDitamapRefs(node, '/dir', () => '');
     assert.strictEqual(node.children.length, 0);
+  });
+
+  it('should percent-decode encoded submap hrefs before reading the file', () => {
+    const node = makeEl('map/mapref', { href: 'sub%20maps/key%20defs.ditamap', format: 'ditamap' });
+    const seen: string[] = [];
+    const readFile: FileReader = (p) => {
+      seen.push(p);
+      return KEYDEF_XML;
+    };
+    expandDitamapRefs(node, '/dir', readFile);
+    assert.strictEqual(seen.length, 1);
+    assert.ok(seen[0].includes('sub maps'), `decoded dir, got: ${seen[0]}`);
+    assert.ok(seen[0].endsWith('key defs.ditamap'), `decoded file, got: ${seen[0]}`);
   });
 
   it('should expand children from referenced ditamap', () => {

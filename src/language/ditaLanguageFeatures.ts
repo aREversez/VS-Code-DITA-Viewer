@@ -24,6 +24,7 @@ import {
   offsetToLineCol,
 } from './ditaLanguageUtils';
 import { buildKeyMap, findDitamapFiles } from '../editor/DitaViewerProvider';
+import { decodeHrefPart } from '../editor/ditaRenderUtils';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { STANDARD_TAG_TO_BASETYPE } from '../parser/standardTagMap';
 import { MAP_STANDARD_TAG_TO_BASETYPE } from '../parser/mapTagMap';
@@ -102,7 +103,7 @@ class DitaDefinitionProvider implements vscode.DefinitionProvider {
     const fragment = hashIdx >= 0 ? hit.value.substring(hashIdx + 1) : '';
 
     const docDir = dirname(document.uri.fsPath);
-    const targetPath = filePart ? resolve(docDir, filePart) : document.uri.fsPath;
+    const targetPath = filePart ? resolve(docDir, decodeHrefPart(filePart)) : document.uri.fsPath;
     if (!existsSync(targetPath)) return undefined;
 
     if (!fragment) {
@@ -212,7 +213,7 @@ class DitaCompletionProvider implements vscode.CompletionItemProvider {
       if (hashIdx >= 0) {
         // After '#': suggest ids from the target file (or this file when empty)
         const filePart = prefix.substring(0, hashIdx);
-        const targetPath = filePart ? resolve(docDir, filePart) : document.uri.fsPath;
+        const targetPath = filePart ? resolve(docDir, decodeHrefPart(filePart)) : document.uri.fsPath;
         let targetText: string;
         try {
           targetText = filePart ? readFileSync(targetPath, 'utf-8') : text;
@@ -345,7 +346,7 @@ function validateDocument(document: vscode.TextDocument, collection: vscode.Diag
     const filePart = hashIdx >= 0 ? entry.value.substring(0, hashIdx) : entry.value;
     const fragment = hashIdx >= 0 ? entry.value.substring(hashIdx + 1) : '';
 
-    const targetPath = filePart ? resolve(docDir, filePart) : document.uri.fsPath;
+    const targetPath = filePart ? resolve(docDir, decodeHrefPart(filePart)) : document.uri.fsPath;
     if (!existsSync(targetPath)) {
       const d = new vscode.Diagnostic(
         range,

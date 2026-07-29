@@ -7,7 +7,7 @@ import { existsSync, readFileSync } from 'fs';
 import { dirname, resolve } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
-import { expandDitamapRefs } from '../editor/ditaRenderUtils';
+import { expandDitamapRefs, decodeHrefPart } from '../editor/ditaRenderUtils';
 import { buildKeyMap, findDitamapFiles } from '../editor/DitaViewerProvider';
 import { createBookRoleLabeler, getDisplayName } from '../render/mapTypeMap';
 import { formatLocalizedRole } from './bookRoleL10n';
@@ -152,7 +152,7 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
 
     // Click opens the referenced local file
     if (href && !/^[a-z][a-z0-9+.-]*:/i.test(href) && node.attributes?.scope !== 'external') {
-      const filePart = href.split('#')[0];
+      const filePart = decodeHrefPart(href.split('#')[0]);
       const abs = resolve(mapDir, filePart);
       if (existsSync(abs)) {
         item.command = {

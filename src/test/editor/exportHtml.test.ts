@@ -51,6 +51,14 @@ describe('makeDataUriInliner', () => {
     assert.ok(result.startsWith('data:image/png;base64,'));
   });
 
+  it('should decode %20 hrefs to find images with spaces in their names', () => {
+    const pngPath = join(tmpDir, 'db topology.png');
+    writeFileSync(pngPath, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    const inliner = makeDataUriInliner(tmpDir);
+    const result = inliner('db%20topology.png');
+    assert.ok(result.startsWith('data:image/png;base64,'));
+  });
+
   it('should inline SVG files with the correct MIME type', () => {
     const svgPath = join(tmpDir, 'icon.svg');
     writeFileSync(svgPath, '<svg></svg>');

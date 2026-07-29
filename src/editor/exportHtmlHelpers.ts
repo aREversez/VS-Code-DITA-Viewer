@@ -3,7 +3,7 @@
 
 import { existsSync, readFileSync } from 'fs';
 import { extname, resolve } from 'path';
-import { escapeAttr } from './ditaRenderUtils';
+import { escapeAttr, decodeHrefPart } from './ditaRenderUtils';
 
 /** Builds a self-contained HTML document string. All values are escaped. */
 export function buildStandaloneHtml(opts: { title: string; bodyHtml: string; css: string }): string {
@@ -41,7 +41,7 @@ const IMAGE_MIME: Record<string, string> = {
 export function makeDataUriInliner(baseDir: string): (relPath: string) => string {
   return (relPath: string): string => {
     try {
-      const abs = resolve(baseDir, relPath);
+      const abs = resolve(baseDir, decodeHrefPart(relPath));
       if (existsSync(abs)) {
         const ext = extname(abs).slice(1).toLowerCase();
         const mime = IMAGE_MIME[ext] || 'application/octet-stream';

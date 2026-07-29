@@ -8,7 +8,7 @@ import { basename, dirname, join, resolve } from 'path';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { collectMapEntries, getMapTitleText } from '../render/mapTypeMap';
 import { formatLocalizedRole } from '../language/bookRoleL10n';
-import { expandDitamapRefs, renderTopicToHtml } from './ditaRenderUtils';
+import { expandDitamapRefs, renderTopicToHtml, decodeHrefPart } from './ditaRenderUtils';
 import { buildKeyMap } from './DitaViewerProvider';
 import { buildStandaloneHtml, makeDataUriInliner, buildBookHeading } from './exportHtmlHelpers';
 
@@ -50,7 +50,7 @@ function buildMapExport(fsPath: string): { title: string; bodyHtml: string; erro
 
   for (const entry of entries) {
     if (entry.href && !entry.href.split('#')[0].toLowerCase().endsWith('.ditamap')) {
-      const absPath = resolve(docDir, entry.href.split('#')[0]);
+      const absPath = resolve(docDir, decodeHrefPart(entry.href.split('#')[0]));
       if (visited.has(absPath)) continue;
       visited.add(absPath);
       const result = renderTopicToHtml({

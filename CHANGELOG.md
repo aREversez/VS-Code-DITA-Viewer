@@ -21,7 +21,7 @@
 
 ### BookMap Semantics
 
-- **Numbered role badges** — chapters, parts, and appendixes are numbered in document order (Chapter 1/2/3 continuing across parts, Part I/II in roman numerals, Appendix A…Z/AA) in the map preview, sidebar tree, outline, and HTML export
+- **Numbered role badges** — chapters, parts, and appendixes are numbered per nesting depth (top-level Chapter 1/2/3, nested chapters restart at 1 under each parent; Part I/II in roman numerals, Appendix A…Z/AA) in the map preview, sidebar tree, outline, and HTML export
 - **Localized badges** — role labels follow the VS Code display language (zh-CN: 第 1 章 / 第 I 部分 / 附录 A, plus 前言、声明、献词、后记、摘要、修订记录、术语表)
 - **Book title page** — `<booktitle>` renders `mainbooktitle` as an elevated headline with `booktitlealt`/`subtitle` as subtitle lines instead of concatenating them into one string; the HTML export title prefers `mainbooktitle`
 - **Structural rendering** — bookmap structural containers (`frontmatter`, `backmatter`, `booklists`, `toc`, …) render as labeled groups in tree view and pass through in book view
@@ -30,6 +30,12 @@
 
 - **In-preview search** — search overlay in topic and map reading views with match navigation, case-sensitivity, and regex toggles
 - **Cross-file xref titles** — improved title resolution for cross-file `xref` targets
+
+### Fixes
+
+- **Percent-encoded hrefs** — hrefs containing `%20` and other URL escapes (the default encoding DITA tools apply to spaces and non-ASCII file names) now resolve to the actual file on disk everywhere: image loading in previews and HTML export, topic/sub-map resolution, sidebar clicks, Go to Definition, and reference diagnostics
+- **HTML export badge escaping** — role badge text is HTML-escaped in exported files
+- **Diagnostics cleanup** — pending diagnostic timers are cleared when a document closes
 
 ## 1.0.5 (2026-07-27)
 

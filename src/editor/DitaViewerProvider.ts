@@ -5,7 +5,7 @@ import { readFileSync, existsSync, readdirSync } from 'fs';
 import { dirname, extname, isAbsolute, join, resolve, basename } from 'path';
 import { randomBytes } from 'crypto';
 import { DitaNode } from '../parser/domTypes';
-import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeFileTitleResolver, getSearchOverlayScript } from './ditaRenderUtils';
+import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeFileTitleResolver, getSearchOverlayScript, decodeHrefPart } from './ditaRenderUtils';
 
 // Test-only hook: @vscode/test-electron integration tests can't read a
 // webview's rendered HTML directly (VS Code doesn't expose the WebviewPanel
@@ -438,14 +438,15 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     const docRootDir = dirname(document.uri.fsPath);
     const docRoot = vscode.Uri.file(docRootDir);
     const asWebviewUri = (relPath: string): string => {
+      const fsRelPath = decodeHrefPart(relPath);
       try {
-        const resolvedPath = resolve(docRootDir, relPath);
+        const resolvedPath = resolve(docRootDir, fsRelPath);
         const fileUri = vscode.Uri.file(resolvedPath);
         const webviewUri = webview.asWebviewUri(fileUri);
         if (webviewUri) return webviewUri.toString();
       } catch {}
       try {
-        const fullPath = resolve(docRootDir, relPath);
+        const fullPath = resolve(docRootDir, fsRelPath);
         if (existsSync(fullPath)) {
           const data = readFileSync(fullPath);
           const ext = extname(relPath).toLowerCase();

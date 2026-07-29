@@ -39,7 +39,7 @@ export function makeFileCache(docDir: string) {
   const cache = new Map<string, DitaNode | undefined>();
 
   function loadFile(filePath: string): DitaNode | undefined {
-    const absPath = resolve(docDir, filePath);
+    const absPath = resolve(docDir, decodeHrefPart(filePath));
     if (cache.has(absPath)) return cache.get(absPath);
     if (!existsSync(absPath)) { cache.set(absPath, undefined); return undefined; }
     try {
@@ -238,6 +238,21 @@ export type FileReader = (path: string, encoding: 'utf-8') => string;
 
 const URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 
+/**
+ * Percent-decodes an href path segment for filesystem lookups. DITA tools
+ * URL-encode spaces and special characters in hrefs (e.g. "my%20image.png"),
+ * but the file on disk keeps the literal name. Malformed escape sequences
+ * are returned unchanged.
+ */
+export function decodeHrefPart(part: string): string {
+  if (!part.includes('%')) return part;
+  try {
+    return decodeURIComponent(part);
+  } catch {
+    return part;
+  }
+}
+
 function isLocalHref(href: string, scope?: string): boolean {
   if (!href || href.startsWith('#')) return false;
   if (scope === 'external' || scope === 'peer') return false;
@@ -286,7 +301,7 @@ export function expandDitamapRefs(
 
   if (isDitamapRef(node)) {
     const href = node.attributes!.href!;
-    const targetPath = resolve(docDir, href.split('#')[0]);
+    const targetPath = resolve(docDir, decodeHrefPart(href.split('#')[0]));
     if (!visited) visited = new Set();
     if (visited.has(targetPath)) return;
     visited.add(targetPath);

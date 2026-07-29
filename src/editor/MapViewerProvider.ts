@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderTopicToHtml, renderBookPlaceholder, renderBookError, renderBookSkipMessage, escapeHtml, expandDitamapRefs, getSearchOverlayScript } from './ditaRenderUtils';
+import { renderTopicToHtml, renderBookPlaceholder, renderBookError, renderBookSkipMessage, escapeHtml, expandDitamapRefs, getSearchOverlayScript, decodeHrefPart } from './ditaRenderUtils';
 import { buildKeyMap } from './DitaViewerProvider';
 import { formatLocalizedRole } from '../language/bookRoleL10n';
 import { dirname, join, resolve } from 'path';
@@ -197,7 +197,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         const href = message.href as string;
         if (!href) return;
         const mapDir = dirname(document.uri.fsPath);
-        const targetPath = resolve(mapDir, href);
+        const targetPath = resolve(mapDir, decodeHrefPart(href.split('#')[0]));
         const targetUri = vscode.Uri.file(targetPath);
         const viewType = href.toLowerCase().endsWith('.ditamap') ? 'ditaViewer.mapPreview' : 'ditaViewer.preview';
         vscode.commands.executeCommand('vscode.openWith', targetUri, viewType);
@@ -322,7 +322,7 @@ ${content}
           parts.push(renderBookPlaceholder(entry.displayName, entry.depth));
           continue;
         }
-        const absPath = resolve(docDir, entry.href);
+        const absPath = resolve(docDir, decodeHrefPart(entry.href.split('#')[0]));
         if (visited.has(absPath)) {
           parts.push(renderBookSkipMessage(entry.href));
           continue;
@@ -332,14 +332,15 @@ ${content}
         // Create per-topic asWebviewUri that resolves relative to the topic's dir
         const topicDir = dirname(absPath);
         const asWebviewUri = (relPath: string): string => {
+          const fsRelPath = decodeHrefPart(relPath);
           try {
-            const resolvedPath = resolve(topicDir, relPath);
+            const resolvedPath = resolve(topicDir, fsRelPath);
             const fileUri = vscode.Uri.file(resolvedPath);
             const wvUri = webview.asWebviewUri(fileUri);
             if (wvUri) return wvUri.toString();
           } catch {}
           try {
-            const fullPath = resolve(topicDir, relPath);
+            const fullPath = resolve(topicDir, fsRelPath);
             if (existsSync(fullPath)) {
               const data = readFileSync(fullPath);
               const ext = relPath.toLowerCase().split('.').pop() || '';
