@@ -292,10 +292,13 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   // Highlight domain additions (specialize topic/ph; given element-specific
   // baseTypes + renderers so the visual styling survives even when the class
   // attribute is omitted from the XML — same approach as b/i/u above).
+  // line-through maps to the semantic <s> element (zero CSS, like b→<strong>);
+  // overline has no semantic HTML element, so it uses a .overline CSS class
+  // (defined in styles.css) instead of an inline style so themes can override it.
   'topic/line-through': (_node, ctx, renderChildren) =>
-    `<span class="line-through" style="text-decoration: line-through;">${renderChildren(_node, ctx)}</span>`,
+    `<s>${renderChildren(_node, ctx)}</s>`,
   'topic/overline': (_node, ctx, renderChildren) =>
-    `<span class="overline" style="text-decoration: overline;">${renderChildren(_node, ctx)}</span>`,
+    `<span class="overline">${renderChildren(_node, ctx)}</span>`,
 
   'topic/q': (_node, ctx, renderChildren) => `<q>${renderChildren(_node, ctx)}</q>`,
   'topic/lq': (_node, ctx, renderChildren) => `<blockquote>${renderChildren(_node, ctx)}</blockquote>`,

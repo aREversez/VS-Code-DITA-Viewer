@@ -33,25 +33,27 @@ function findEl(node: ReturnType<typeof parseDita>['root'], tagName: string) {
 
 describe('tag completion (DTD-derived baseType mappings)', () => {
   // ── Highlight domain: element-specific baseType + distinct renderer ──
-  it('line-through resolves to topic/line-through and renders a styled span', () => {
+  it('line-through resolves to topic/line-through and renders a semantic <s>', () => {
     const xml = `<topic id="t"><body><p><line-through>struck</line-through></p></body></topic>`;
     const { root, html } = parseTopic(xml);
     const lt = findEl(root, 'line-through');
     assert.ok(lt, 'line-through element should be parsed');
     assert.strictEqual(lt!.baseType, 'topic/line-through');
-    assert.ok(
-      /class="line-through"[^>]*style="text-decoration: line-through;"/.test(html),
-      `expected styled line-through span, got: ${html}`,
-    );
-    assert.ok(html.includes('>struck<'));
+    // Semantic <s> tag (zero CSS), matching b→<strong>/i→<em> convention;
+    // renderer injects title/data-* attrs after the tag name.
+    assert.ok(/<s\b[^>]*>struck<\/s>/.test(html), `expected <s>struck</s>, got: ${html}`);
+    assert.ok(!html.includes('text-decoration'), 'no inline style for line-through');
   });
 
-  it('overline resolves to topic/overline and renders an overline span', () => {
+  it('overline resolves to topic/overline and renders a class-only span', () => {
     const xml = `<topic id="t"><body><p><overline>over</overline></p></body></topic>`;
     const { root, html } = parseTopic(xml);
     const ov = findEl(root, 'overline');
     assert.strictEqual(ov!.baseType, 'topic/overline');
-    assert.ok(/class="overline"[^>]*style="text-decoration: overline;"/.test(html), `got: ${html}`);
+    // Class-only span (no inline style) so themes can override the decoration
+    // via the .overline rule in styles.css.
+    assert.ok(/<span\b[^>]*class="overline"[^>]*>over<\/span>/.test(html), `got: ${html}`);
+    assert.ok(!html.includes('text-decoration'), 'overline must not use an inline style');
   });
 
   // ── Equation domain: first-pair baseType (existing renderers) ──
