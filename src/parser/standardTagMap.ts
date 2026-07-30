@@ -218,4 +218,74 @@ export const STANDARD_TAG_TO_BASETYPE: Record<string, string> = {
   propvalue: 'topic/stentry',
   propdesc: 'topic/stentry',
 
+  // ── Highlight domain additions (element-specific baseType + renderer, ──
+  // matching the existing b/i/u convention so distinct visual styling is ──
+  // preserved even when the class attribute is omitted from the XML). ──
+  // Evidence: base/dtd/highlightDomain.mod — class "+ topic/ph hi-d/line-through "
+  'line-through': 'topic/line-through',
+  // Evidence: base/dtd/highlightDomain.mod — class "+ topic/ph hi-d/overline "
+  overline: 'topic/overline',
+
+  // ── Equation domain ── baseType = first pair of the class chain ──
+  // Evidence: technicalContent/dtd/equationDomain.mod
+  'equation-inline': 'topic/ph',
+  'equation-block': 'topic/div',
+  'equation-number': 'topic/ph',
+  'equation-figure': 'topic/fig',
+
+  // ── Troubleshooting module ── Evidence: technicalContent/dtd/troubleshooting.mod
+  troubleshooting: 'topic/topic',
+  troublebody: 'topic/body',
+  troubleSolution: 'topic/bodydiv',
+  cause: 'topic/section',
+  condition: 'topic/section',
+  remedy: 'topic/section',
+  responsibleParty: 'topic/p',
+
+  // ── Glossentry module ── Evidence: technicalContent/dtd/glossentry.mod
+  glossBody: 'topic/body',
+  glossAbbreviation: 'topic/title',
+  glossAcronym: 'topic/title',
+  glossShortForm: 'topic/title',
+  glossSynonym: 'topic/title',
+  glossPartOfSpeech: 'topic/data',
+  glossProperty: 'topic/data',
+  glossStatus: 'topic/data',
+  glossAlt: 'topic/section',
+  glossAlternateFor: 'topic/xref',
+  glossScopeNote: 'topic/note',
+  glossSurfaceForm: 'topic/p',
+  glossSymbol: 'topic/image',
+  glossUsage: 'topic/note',
+
+  // ── Task requirements domain (taskreq-d) ── ──
+  // Evidence: technicalContent/dtd/taskreqDomain.mod — each class chain's ──
+  // first pair is the topic/* ancestor (section/ul/ol/li/p/data). ──
+  prelreqs: 'topic/section',
+  closereqs: 'topic/section',
+  reqconds: 'topic/ul',
+  noconds: 'topic/li',
+  reqcond: 'topic/li',
+  reqcontp: 'topic/li',
+  reqpers: 'topic/ul',
+  personnel: 'topic/li',
+  perscat: 'topic/li',
+  perskill: 'topic/li',
+  esttime: 'topic/li',
+  supequip: 'topic/p',
+  nosupeq: 'topic/data',
+  supeqli: 'topic/ul',
+  supequi: 'topic/li',
+  supplies: 'topic/p',
+  nosupply: 'topic/data',
+  supplyli: 'topic/ul',
+  supply: 'topic/li',
+  spares: 'topic/p',
+  nospares: 'topic/data',
+  sparesli: 'topic/ul',
+  spare: 'topic/li',
+  safety: 'topic/ol',
+  nosafety: 'topic/li',
+  safecond: 'topic/li',
+
 };

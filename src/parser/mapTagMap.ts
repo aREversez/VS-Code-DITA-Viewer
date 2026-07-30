@@ -67,4 +67,24 @@ export const MAP_STANDARD_TAG_TO_BASETYPE: Record<string, string> = {
   anchor: 'map/anchor',
   navref: 'map/navref',
   mapref: 'map/mapref',
+
+  // ── ditavalref domain ── Evidence: base/dtd/ditavalrefDomain.mod ──
+  // class "+ map/topicref ditavalref-d/ditavalref" → first pair map/topicref
+  ditavalref: 'map/topicref',
+  // class "+ map/topicmeta ditavalref-d/ditavalmeta" → map/topicmeta
+  ditavalmeta: 'map/topicmeta',
+
+  // ── mapGroup domain ── Evidence: base/dtd/mapGroup.mod ──
+  anchorref: 'map/topicref',
+  topicset: 'map/topicref',
+  topicsetref: 'map/topicref',
+
+  // ── glossref domain ── Evidence: technicalContent/dtd/glossrefDomain.mod ──
+  // class "+ map/topicref glossref-d/glossref" → map/topicref
+  glossref: 'map/topicref',
+
+  // ── BookMap division/list wrappers (topicref specializations) ──
+  // Evidence: bookmap/dtd/bookmap.mod — class "- map/topicref bookmap/..."
+  appendices: 'map/topicref',
+  booklist: 'map/topicref',
 };

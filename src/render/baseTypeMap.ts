@@ -289,6 +289,14 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   'topic/sup': (_node, ctx, renderChildren) => `<sup>${renderChildren(_node, ctx)}</sup>`,
   'topic/sub': (_node, ctx, renderChildren) => `<sub>${renderChildren(_node, ctx)}</sub>`,
 
+  // Highlight domain additions (specialize topic/ph; given element-specific
+  // baseTypes + renderers so the visual styling survives even when the class
+  // attribute is omitted from the XML — same approach as b/i/u above).
+  'topic/line-through': (_node, ctx, renderChildren) =>
+    `<span class="line-through" style="text-decoration: line-through;">${renderChildren(_node, ctx)}</span>`,
+  'topic/overline': (_node, ctx, renderChildren) =>
+    `<span class="overline" style="text-decoration: overline;">${renderChildren(_node, ctx)}</span>`,
+
   'topic/q': (_node, ctx, renderChildren) => `<q>${renderChildren(_node, ctx)}</q>`,
   'topic/lq': (_node, ctx, renderChildren) => `<blockquote>${renderChildren(_node, ctx)}</blockquote>`,
 
