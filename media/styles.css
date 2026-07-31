@@ -211,6 +211,7 @@ cite { font-style: italic; }
 .tm { font-size: 0.75em; vertical-align: super; }
 .body-div { margin: 0.75rem 0; }
 .section-div { margin: 0.75rem 0; }
+.figgroup { margin: 0.75rem 0; }
 
 /* Parameter lists */
 .parml { margin: 1em 0; }

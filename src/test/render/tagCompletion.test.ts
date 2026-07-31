@@ -193,4 +193,145 @@ describe('tag completion (DTD-derived baseType mappings)', () => {
     assert.ok(html.includes('data-href="app.dita"'));
     assert.ok(html.includes('data-href="figlist.dita"'));
   });
+
+  // ── Second deferred batch: remaining 75 topic-side entries ──────────────
+
+  // ── Utilities domain: image maps (visible body content) ──
+  it('imagemap/area/shape/coords/sort-as resolve to their topic ancestors', () => {
+    const xml = `<topic id="t"><body>
+      <imagemap>
+        <image href="diagram.png"/>
+        <area>
+          <shape>rect</shape>
+          <coords>0,0,10,10</coords>
+          <xref href="detail.dita">Detail</xref>
+        </area>
+      </imagemap>
+      <p><term sort-as="apple">Apple</term></p>
+    </body></topic>`;
+    const { root, html } = parseTopic(xml);
+    assert.strictEqual(findEl(root, 'imagemap')!.baseType, 'topic/fig');
+    assert.strictEqual(findEl(root, 'area')!.baseType, 'topic/figgroup');
+    assert.strictEqual(findEl(root, 'shape')!.baseType, 'topic/keyword');
+    assert.strictEqual(findEl(root, 'coords')!.baseType, 'topic/ph');
+    assert.ok(html.includes('class="figgroup"'), 'area should render via the new figgroup wrapper');
+  });
+
+  // ── Programming domain: grouping alternatives (visible body content) ──
+  it('groupchoice/groupcomp/groupseq/repsep resolve to figgroup/ph', () => {
+    const xml = `<topic id="t"><body>
+      <syntaxdiagram>
+        <groupseq><kwd>a</kwd><repsep/><kwd>b</kwd></groupseq>
+        <groupchoice><kwd>x</kwd><kwd>y</kwd></groupchoice>
+        <groupcomp><kwd>m</kwd><kwd>n</kwd></groupcomp>
+      </syntaxdiagram>
+    </body></topic>`;
+    const { root, html } = parseTopic(xml);
+    assert.strictEqual(findEl(root, 'groupseq')!.baseType, 'topic/figgroup');
+    assert.strictEqual(findEl(root, 'groupchoice')!.baseType, 'topic/figgroup');
+    assert.strictEqual(findEl(root, 'groupcomp')!.baseType, 'topic/figgroup');
+    assert.strictEqual(findEl(root, 'repsep')!.baseType, 'topic/ph');
+    assert.ok((html.match(/class="figgroup"/g) || []).length === 3);
+  });
+
+  // ── MathML / SVG foreign-content domains ──
+  it('mathml/mathmlref and svg-container/svgref resolve to foreign/xref', () => {
+    const xml = `<topic id="t"><body>
+      <p><mathml>x</mathml> <mathmlref href="eq.dita">see eq</mathmlref></p>
+      <p><svg-container>s</svg-container> <svgref href="fig.dita">see fig</svgref></p>
+    </body></topic>`;
+    const { root } = parseTopic(xml);
+    assert.strictEqual(findEl(root, 'mathml')!.baseType, 'topic/foreign');
+    assert.strictEqual(findEl(root, 'mathmlref')!.baseType, 'topic/xref');
+    assert.strictEqual(findEl(root, 'svg-container')!.baseType, 'topic/foreign');
+    assert.strictEqual(findEl(root, 'svgref')!.baseType, 'topic/xref');
+  });
+
+  // ── UI, markup, xml domains, and hazard messagepanel ──
+  it('ui/markup/xml domain keyword-like elements and hazard messagepanel resolve correctly', () => {
+    const xml = `<topic id="t"><body>
+      <p><uicontrol>Save<shortcut>S</shortcut></uicontrol></p>
+      <p><markupname>&lt;p&gt;</markupname></p>
+      <p><xmlelement>p</xmlelement> <xmlatt>class</xmlatt> <xmlnsname>xmlns:x</xmlnsname>
+         <xmlpi>xml-stylesheet</xmlpi> <parameterentity>% foo</parameterentity>
+         <textentity>&amp;copy;</textentity> <numcharref>&amp;#160;</numcharref></p>
+      <hazardstatement><messagepanel><typeofhazard>Shock</typeofhazard></messagepanel></hazardstatement>
+    </body></topic>`;
+    const { root } = parseTopic(xml);
+    assert.strictEqual(findEl(root, 'shortcut')!.baseType, 'topic/keyword');
+    assert.strictEqual(findEl(root, 'markupname')!.baseType, 'topic/keyword');
+    for (const tag of ['xmlelement', 'xmlatt', 'xmlnsname', 'xmlpi', 'parameterentity', 'textentity', 'numcharref']) {
+      assert.strictEqual(findEl(root, tag)!.baseType, 'topic/keyword', `${tag} should map to topic/keyword`);
+    }
+    assert.strictEqual(findEl(root, 'messagepanel')!.baseType, 'topic/ul');
+  });
+
+  // ── Prolog/bookmeta-locked metadata (release-management + bookmap) ──
+  // These resolve correctly at the parser level, but in real documents they
+  // always sit under <prolog> (topic/prolog → '') or <bookmeta>
+  // (map/topicmeta → '' in mapTypeMap.ts), both of which already swallow
+  // their entire subtree. So unlike the utilities/programming/mathml/svg
+  // domains above, adding these baseTypes does NOT change what actually
+  // renders for a real .dita/.bookmap file today — it only makes the
+  // baseType data itself correct for any other consumer that walks the
+  // parsed tree at the topic-parser level (parseDita).
+  it('release-management change-* fields resolve to topic/metadata|data (prolog-locked, still suppressed)', () => {
+    const xml = `<topic id="t">
+      <prolog>
+        <change-historylist>
+          <change-item>
+            <change-person>Jane</change-person>
+            <change-revisionid>r7</change-revisionid>
+          </change-item>
+        </change-historylist>
+      </prolog>
+      <body><p>Visible</p></body>
+    </topic>`;
+    const { root, html } = parseTopic(xml);
+    assert.strictEqual(findEl(root, 'change-historylist')!.baseType, 'topic/metadata');
+    assert.strictEqual(findEl(root, 'change-item')!.baseType, 'topic/data');
+    assert.strictEqual(findEl(root, 'change-person')!.baseType, 'topic/data');
+    // Still suppressed by the ancestor <prolog>, same as before this batch.
+    assert.ok(!html.includes('Jane'), 'change-person text must not leak into the body');
+    assert.ok(html.includes('Visible'));
+  });
+
+  it('bookmap metadata fields resolve to topic/data|ph|title (bookmeta-locked, still suppressed)', () => {
+    const xml = `<bookmap>
+      <booktitle><mainbooktitle>My Book</mainbooktitle></booktitle>
+      <bookmeta>
+        <bookid><isbn>123</isbn><booknumber>7</booknumber></bookid>
+        <publisherinformation>Acme Press</publisherinformation>
+      </bookmeta>
+    </bookmap>`;
+    const doc = parseDitamap(preprocessEntities(xml));
+    // bookmeta's children resolve via the @class-attribute fallback only when
+    // present; here we confirm the map-side render still suppresses the
+    // whole <bookmeta> subtree via the existing map/topicmeta → '' renderer,
+    // regardless of these new topic-side baseType entries.
+    const html = renderMapDocument(doc.root, { docDir: '/test' });
+    assert.ok(!html.includes('Acme Press'), 'bookmeta content must not leak into the map tree render');
+  });
+
+  it('delay-resolution exportanchors and ditavalref-d prefix/suffix fields resolve (prolog-locked)', () => {
+    const xml = `<topic id="t">
+      <prolog>
+        <exportanchors>
+          <dvrResourcePrefix>pre-</dvrResourcePrefix>
+          <dvrResourceSuffix>-suf</dvrResourceSuffix>
+          <dvrKeyscopePrefix>kpre-</dvrKeyscopePrefix>
+          <dvrKeyscopeSuffix>-ksuf</dvrKeyscopeSuffix>
+        </exportanchors>
+      </prolog>
+      <body><p>Visible</p></body>
+    </topic>`;
+    const { root, html } = parseTopic(xml);
+    assert.strictEqual(findEl(root, 'exportanchors')!.baseType, 'topic/keywords');
+    assert.strictEqual(findEl(root, 'dvrResourcePrefix')!.baseType, 'topic/data');
+    assert.strictEqual(findEl(root, 'dvrResourceSuffix')!.baseType, 'topic/data');
+    assert.strictEqual(findEl(root, 'dvrKeyscopePrefix')!.baseType, 'topic/data');
+    assert.strictEqual(findEl(root, 'dvrKeyscopeSuffix')!.baseType, 'topic/data');
+    assert.ok(!html.includes('pre-'), 'exportanchors content must not leak into the body');
+    assert.ok(html.includes('Visible'));
+  });
 });

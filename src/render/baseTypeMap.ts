@@ -429,6 +429,11 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     `<div class="section-div">${renderChildren(_node, ctx)}</div>`,
   'topic/bodydiv': (_node, ctx, renderChildren) =>
     `<div class="body-div">${renderChildren(_node, ctx)}</div>`,
+  // Generic grouping container (image-map <area> group, programming domain
+  // groupchoice/groupcomp/groupseq alternatives). Same block treatment as
+  // bodydiv/sectiondiv — no distinct visual semantics of its own.
+  'topic/figgroup': (_node, ctx, renderChildren) =>
+    `<div class="figgroup">${renderChildren(_node, ctx)}</div>`,
   'topic/desc': (_node, ctx, renderChildren) =>
     `<span class="desc">${renderChildren(_node, ctx)}</span>`,
   'topic/alt': (_node, ctx, renderChildren) =>
@@ -497,5 +502,14 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   // task/reference. Without this entry the fallback renderer recurses into
   // children, causing author/keyword content to appear in the body.
   'topic/prolog': () => '',
+
+  // These three (topic/keywords, topic/metadata, topic/publisher) are always
+  // nested inside <prolog> in valid DITA — topic/prolog already suppresses
+  // the whole subtree above, so these never actually get reached. Mapped
+  // explicitly anyway, matching the anchorid/anchorkey/anchorref/prolog
+  // precedent of not relying solely on an ancestor's suppression.
+  'topic/keywords': () => '',
+  'topic/metadata': () => '',
+  'topic/publisher': () => '',
 
 };

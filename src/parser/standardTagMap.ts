@@ -289,4 +289,124 @@ export const STANDARD_TAG_TO_BASETYPE: Record<string, string> = {
   nosafety: 'topic/li',
   safecond: 'topic/li',
 
+  // ── Delay-resolution domain (delay-d) ──
+  // Evidence: base/dtd/delayResolutionDomain.mod:94 — class
+  // "+ topic/keywords delay-d/exportanchors". exportanchors always lives
+  // inside <prolog>, so it never renders on its own (see topic/prolog
+  // suppression in baseTypeMap.ts) — mapped here for baseType correctness.
+  exportanchors: 'topic/keywords',
+
+  // ── Ditavalref domain (ditavalref-d) ──
+  // Evidence: base/dtd/ditavalrefDomain.mod:163-166
+  dvrResourcePrefix: 'topic/data',
+  dvrResourceSuffix: 'topic/data',
+  dvrKeyscopePrefix: 'topic/data',
+  dvrKeyscopeSuffix: 'topic/data',
+
+  // ── Hazard statement domain (additional) ──
+  // Evidence: base/dtd/hazardstatementDomain.mod:233
+  messagepanel: 'topic/ul',
+
+  // ── Utilities domain (image maps) ──
+  // Evidence: base/dtd/utilitiesDomain.mod:151-155
+  imagemap: 'topic/fig',
+  area: 'topic/figgroup',
+  shape: 'topic/keyword',
+  coords: 'topic/ph',
+  'sort-as': 'topic/data',
+
+  // ── Markup domain ──
+  // Evidence: technicalContent/dtd/markupDomain.mod:45
+  markupname: 'topic/keyword',
+
+  // ── MathML domain ──
+  // Evidence: technicalContent/dtd/mathmlDomain.mod:89-90
+  mathml: 'topic/foreign',
+  mathmlref: 'topic/xref',
+
+  // ── Programming domain (grouping elements) ──
+  // Evidence: technicalContent/dtd/programmingDomain.mod:677-679,688
+  groupchoice: 'topic/figgroup',
+  groupcomp: 'topic/figgroup',
+  groupseq: 'topic/figgroup',
+  repsep: 'topic/ph',
+
+  // ── Release-management domain (relmgmt-d) ──
+  // Evidence: technicalContent/dtd/releaseManagementDomain.mod:231-241.
+  // change-historylist always lives inside <prolog> like exportanchors above.
+  'change-historylist': 'topic/metadata',
+  'change-item': 'topic/data',
+  'change-person': 'topic/data',
+  'change-organization': 'topic/data',
+  'change-revisionid': 'topic/data',
+  'change-request-reference': 'topic/data',
+  'change-request-system': 'topic/data',
+  'change-request-id': 'topic/data',
+  'change-started': 'topic/data',
+  'change-completed': 'topic/data',
+  'change-summary': 'topic/data',
+
+  // ── SVG domain ──
+  // Evidence: technicalContent/dtd/svgDomain.mod:70-71
+  'svg-container': 'topic/foreign',
+  svgref: 'topic/xref',
+
+  // ── UI domain (additional) ──
+  // Evidence: technicalContent/dtd/uiDomain.mod:158
+  shortcut: 'topic/keyword',
+
+  // ── XML domain ──
+  // Evidence: technicalContent/dtd/xmlDomain.mod:154-160
+  numcharref: 'topic/keyword',
+  parameterentity: 'topic/keyword',
+  textentity: 'topic/keyword',
+  xmlatt: 'topic/keyword',
+  xmlelement: 'topic/keyword',
+  xmlnsname: 'topic/keyword',
+  xmlpi: 'topic/keyword',
+
+  // ── Bookmap metadata fields ──
+  // Evidence: bookmap/dtd/bookmap.mod:1204-1259. These are front-matter
+  // metadata (copyright/publisher/revision info), not body content — no
+  // dedicated visual treatment needed, generic topic/data|ph|title covers
+  // them the same way it already covers the rest of the bookmeta block.
+  approved: 'topic/data',
+  bookchangehistory: 'topic/data',
+  bookevent: 'topic/data',
+  bookeventtype: 'topic/data',
+  bookid: 'topic/data',
+  booklibrary: 'topic/ph',
+  booknumber: 'topic/data',
+  bookowner: 'topic/data',
+  bookpartno: 'topic/data',
+  bookrestriction: 'topic/data',
+  bookrights: 'topic/data',
+  booktitle: 'topic/title',
+  booktitlealt: 'topic/ph',
+  completed: 'topic/ph',
+  copyrfirst: 'topic/data',
+  copyrlast: 'topic/data',
+  day: 'topic/ph',
+  edited: 'topic/data',
+  edition: 'topic/data',
+  isbn: 'topic/data',
+  mainbooktitle: 'topic/ph',
+  maintainer: 'topic/data',
+  month: 'topic/ph',
+  organization: 'topic/data',
+  person: 'topic/data',
+  printlocation: 'topic/data',
+  published: 'topic/data',
+  // publisherinformation always lives inside <prolog>/bookmeta like
+  // exportanchors/change-historylist above.
+  publisherinformation: 'topic/publisher',
+  publishtype: 'topic/data',
+  reviewed: 'topic/data',
+  revisionid: 'topic/ph',
+  started: 'topic/ph',
+  summary: 'topic/ph',
+  tested: 'topic/data',
+  volume: 'topic/data',
+  year: 'topic/ph',
+
 };
