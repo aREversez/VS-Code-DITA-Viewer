@@ -790,4 +790,39 @@ describe('renderer', () => {
     assert.ok(!html.includes('onerror="alert(1)"'), 'src must not break out of its attribute');
     assert.ok(html.includes('&quot;'), 'quote in the URI should be escaped');
   });
+
+  // ── Prolog suppression tests ──
+
+  it('should not render prolog metadata content in the body', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/title', [makeText('T')]),
+      makeEl('topic/prolog', [
+        makeEl('topic/keyword', [makeText('SECRET_KEYWORD_TOKEN')], undefined, 'keyword'),
+      ], undefined, 'prolog'),
+      makeEl('topic/body', [
+        makeEl('topic/p', [makeText('Real body text')]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('SECRET_KEYWORD_TOKEN'), 'prolog keyword must not leak into output');
+    assert.ok(html.includes('Real body text'), 'body content should still render');
+  });
+
+  it('should suppress the entire prolog subtree including nested metadata', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/title', [makeText('T')]),
+      makeEl('topic/prolog', [
+        makeText('Jane Secret Author'),
+        makeEl('topic/keyword', [makeText('SECRET_KEYWORD_TOKEN')], undefined, 'keyword'),
+      ], undefined, 'prolog'),
+      makeEl('topic/body', [
+        makeEl('topic/p', [makeText('Visible')]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('Jane Secret Author'), 'prolog author text must not leak');
+    assert.ok(!html.includes('SECRET_KEYWORD_TOKEN'), 'prolog keyword must not leak');
+    assert.ok(!html.includes('class="keyword"'), 'prolog keyword span must not render');
+    assert.ok(html.includes('Visible'), 'body content should still render');
+  });
 });

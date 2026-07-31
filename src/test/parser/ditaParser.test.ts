@@ -124,6 +124,14 @@ describe('ditaParser', () => {
     assert.strictEqual(relatedLinks.baseType, 'topic/related-links');
   });
 
+  it('should map prolog to topic/prolog without relying on @class', () => {
+    const xml = `<topic id="t"><title>T</title><prolog><author>Jane</author><metadata><keywords><keyword>k</keyword></keywords></metadata></prolog><body><p>body</p></body></topic>`;
+    const doc = parseDita(xml);
+    const prolog = doc.root.children.find((c) => c.tagName === 'prolog');
+    assert.ok(prolog, 'prolog element should exist');
+    assert.strictEqual(prolog!.baseType, 'topic/prolog');
+  });
+
   it('should map task module tags to their topic/* base types', () => {
     const xml = `<task id="t"><title>T</title><taskbody>
       <context><p>ctx</p></context>

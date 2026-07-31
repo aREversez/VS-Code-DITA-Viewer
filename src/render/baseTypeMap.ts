@@ -489,4 +489,13 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   'topic/anchorkey': () => '',
   'topic/anchorref': () => '',
 
+  // Prolog — metadata container (author, critdates, permissions, metadata,
+  // keywords, etc.). Entirely non-display; swallow the whole subtree so
+  // nothing leaks into the body preview. Mirrors the anchorkey/anchorref
+  // pattern. Evidence: base/dtd/commonElementMod.ent — class
+  // "- topic/prolog " — appears between title and body in topic/concept/
+  // task/reference. Without this entry the fallback renderer recurses into
+  // children, causing author/keyword content to appear in the body.
+  'topic/prolog': () => '',
+
 };

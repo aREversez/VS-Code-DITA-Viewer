@@ -3,6 +3,7 @@ export const STANDARD_TAG_TO_BASETYPE: Record<string, string> = {
   topic: 'topic/topic',
   title: 'topic/title',
   shortdesc: 'topic/shortdesc',
+  prolog: 'topic/prolog',
   body: 'topic/body',
   section: 'topic/section',
   example: 'topic/example',
