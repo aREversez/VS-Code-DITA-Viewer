@@ -39,7 +39,7 @@ export function makeFileCache(docDir: string) {
   const cache = new Map<string, DitaNode | undefined>();
 
   function loadFile(filePath: string): DitaNode | undefined {
-    const absPath = resolve(docDir, filePath);
+    const absPath = resolve(docDir, decodeHrefPart(filePath));
     if (cache.has(absPath)) return cache.get(absPath);
     if (!existsSync(absPath)) { cache.set(absPath, undefined); return undefined; }
     try {
@@ -75,19 +75,10 @@ export function makeFileCache(docDir: string) {
   return { loadFile, findElementById, findTitleOfElement };
 }
 
-export function makeConrefResolver(docDir: string): (conref: string) => string | undefined {
+export function makeConrefResolver(docDir: string): (conref: string) => DitaNode | undefined {
   const cache = makeFileCache(docDir);
 
-  function extractText(node: DitaNode): string {
-    let text = '';
-    for (const child of node.children || []) {
-      if (child.type === 'text') text += child.text || '';
-      else text += extractText(child);
-    }
-    return text;
-  }
-
-  return (conref: string): string | undefined => {
+  return (conref: string): DitaNode | undefined => {
     const hashIdx = conref.indexOf('#');
     if (hashIdx < 0) return undefined;
     const filePath = conref.substring(0, hashIdx);
@@ -99,7 +90,10 @@ export function makeConrefResolver(docDir: string): (conref: string) => string |
     if (!root) return undefined;
     const el = cache.findElementById(root, elementId);
     if (!el) return undefined;
-    return extractText(el);
+    // Return the entire target element so its tag/baseType is preserved.
+    // resolveConrefForNode in the renderer decides whether to replace just
+    // the children (same-type conref) or the entire element (cross-type).
+    return el;
   };
 }
 
@@ -244,6 +238,21 @@ export type FileReader = (path: string, encoding: 'utf-8') => string;
 
 const URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 
+/**
+ * Percent-decodes an href path segment for filesystem lookups. DITA tools
+ * URL-encode spaces and special characters in hrefs (e.g. "my%20image.png"),
+ * but the file on disk keeps the literal name. Malformed escape sequences
+ * are returned unchanged.
+ */
+export function decodeHrefPart(part: string): string {
+  if (!part.includes('%')) return part;
+  try {
+    return decodeURIComponent(part);
+  } catch {
+    return part;
+  }
+}
+
 function isLocalHref(href: string, scope?: string): boolean {
   if (!href || href.startsWith('#')) return false;
   if (scope === 'external' || scope === 'peer') return false;
@@ -292,26 +301,29 @@ export function expandDitamapRefs(
 
   if (isDitamapRef(node)) {
     const href = node.attributes!.href!;
-    const targetPath = resolve(docDir, href.split('#')[0]);
+    const targetPath = resolve(docDir, decodeHrefPart(href.split('#')[0]));
     if (!visited) visited = new Set();
-    if (visited.has(targetPath)) return;
-    visited.add(targetPath);
-    try {
-      const content = readFile(targetPath, 'utf-8');
-      const doc = parseDitamap(preprocessEntities(content));
-      const refChildren = (doc.root.children || []).filter(
-        (c) => c.type === 'element',
-      );
-      if (refChildren.length > 0) {
-        const refDir = dirname(targetPath);
-        if (refDir !== resolve(docDir)) {
-          for (const rc of refChildren) rebaseHrefs(rc, refDir, docDir);
+    // Already-inlined maps are skipped, but this node's other children
+    // (and siblings via the loop below) must still be expanded.
+    if (!visited.has(targetPath)) {
+      visited.add(targetPath);
+      try {
+        const content = readFile(targetPath, 'utf-8');
+        const doc = parseDitamap(preprocessEntities(content));
+        const refChildren = (doc.root.children || []).filter(
+          (c) => c.type === 'element',
+        );
+        if (refChildren.length > 0) {
+          const refDir = dirname(targetPath);
+          if (refDir !== resolve(docDir)) {
+            for (const rc of refChildren) rebaseHrefs(rc, refDir, docDir);
+          }
+          if (!node.children) node.children = [];
+          node.children.push(...refChildren);
         }
-        if (!node.children) node.children = [];
-        node.children.push(...refChildren);
+      } catch {
+        // file not found or parse error — skip silently
       }
-    } catch {
-      // file not found or parse error — skip silently
     }
   }
 

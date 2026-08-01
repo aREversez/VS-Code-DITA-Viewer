@@ -67,36 +67,71 @@ export interface RoleLabelInfo {
 /** Formats a role label for display; injectable so VS Code callers can localize. */
 export type RoleLabelFormatter = (info: RoleLabelInfo) => string;
 
+/** Stateful book-division labeler that numbers divisions per nesting depth. */
+export type RoleLabeler = (tagName: string | undefined, depth: number) => string | undefined;
+
 const defaultRoleFormat: RoleLabelFormatter = ({ role, ordinal }) =>
   ordinal ? `${role} ${ordinal}` : role;
 
 /**
- * Returns a stateful labeler that numbers book divisions in document order:
+ * Returns a stateful labeler that numbers book divisions per nesting depth:
  * chapters "Chapter 1, 2, …", parts "Part I, II, …", appendixes
- * "Appendix A, B, …"; other bookmap roles keep their plain names.
+ * "Appendix A, B, …". When a division is encountered at depth D, all
+ * counters at depths > D are reset, so nested chapters under a new
+ * sibling restart from 1:
+ *
+ *   Chapter 1
+ *       Chapter 1
+ *       Chapter 2
+ *   Chapter 2
+ *       Chapter 1
+ *
+ * Other bookmap roles keep their plain names (Preface, Notices, …).
  * Pass a formatter to control the display text (e.g. localized "第 1 章").
  */
 export function createBookRoleLabeler(
   format: RoleLabelFormatter = defaultRoleFormat,
-): (tagName: string | undefined) => string | undefined {
-  let chapters = 0;
-  let parts = 0;
-  let appendixes = 0;
-  return (tagName) => {
+): RoleLabeler {
+  let chapterCounters: number[] = [];
+  let partCounters: number[] = [];
+  let appendixCounters: number[] = [];
+
+  /** Increments the counter at `depth`, truncating deeper entries. */
+  const bump = (counters: number[], depth: number): number => {
+    while (counters.length <= depth) counters.push(0);
+    counters[depth]++;
+    counters.length = depth + 1; // reset deeper counters for this type
+    return counters[depth];
+  };
+
+  /** Resets all counter types at depths > `depth` (new sibling = fresh children). */
+  const resetDeeperThan = (depth: number): void => {
+    chapterCounters.length = Math.min(chapterCounters.length, depth + 1);
+    partCounters.length = Math.min(partCounters.length, depth + 1);
+    appendixCounters.length = Math.min(appendixCounters.length, depth + 1);
+  };
+
+  return (tagName, depth) => {
     if (!tagName) return undefined;
     const base = BOOKMAP_REF_ROLES[tagName];
     if (!base) return undefined;
-    if (tagName === 'chapter') return format({ tagName, role: base, ordinal: String(++chapters) });
-    if (tagName === 'part') return format({ tagName, role: base, ordinal: toRoman(++parts) });
+
+    // Any recognized division resets deeper counters so nested divisions
+    // under a new sibling restart from 1
+    resetDeeperThan(depth);
+
+    if (tagName === 'chapter')
+      return format({ tagName, role: base, ordinal: String(bump(chapterCounters, depth)) });
+    if (tagName === 'part')
+      return format({ tagName, role: base, ordinal: toRoman(bump(partCounters, depth)) });
     if (tagName === 'appendix') {
-      appendixes++;
-      // A, B, … Z, AA, AB, …
-      let n = appendixes;
+      const n = bump(appendixCounters, depth);
       let letters = '';
-      while (n > 0) {
-        n--;
-        letters = String.fromCharCode(65 + (n % 26)) + letters;
-        n = Math.floor(n / 26);
+      let m = n;
+      while (m > 0) {
+        m--;
+        letters = String.fromCharCode(65 + (m % 26)) + letters;
+        m = Math.floor(m / 26);
       }
       return format({ tagName, role: base, ordinal: letters });
     }
@@ -209,12 +244,15 @@ function renderRef(node: DitaNode, ctx: MapRenderContext, renderChildren: (node:
   const keys = getAttr(node, 'keys') || '';
   const displayName = getDisplayName(node, ctx.resolveKey);
   const nav = isNavigable(node);
+  const depth = ctx.depth ?? 0;
   const role = ctx.roleLabel
-    ? ctx.roleLabel(node.tagName)
+    ? ctx.roleLabel(node.tagName, depth)
     : node.tagName
       ? BOOKMAP_REF_ROLES[node.tagName]
       : undefined;
-  const childrenHtml = renderChildrenForNode(node, ctx, renderChildren);
+  // Children of a topicref are one level deeper
+  const childCtx: MapRenderContext = { ...ctx, depth: depth + 1 };
+  const childrenHtml = renderChildrenForNode(node, childCtx, renderChildren);
   const badge = role ? `<span class="map-tree-badge">${escapeAttr(role)}</span>` : '';
 
   const icon = nav
@@ -245,8 +283,10 @@ export interface MapRenderContext {
   resolveKey?: ResolveKey;
   /** Callback to open a DITA file */
   onNavigate?: (href: string) => void;
-  /** Stateful book-division labeler (numbered roles in document order) */
-  roleLabel?: (tagName: string | undefined) => string | undefined;
+  /** Stateful book-division labeler (numbered roles per nesting depth) */
+  roleLabel?: RoleLabeler;
+  /** Current nesting depth (for depth-aware role numbering) */
+  depth?: number;
 }
 
 /**
@@ -297,7 +337,8 @@ const MAP_BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   'map/topicref': renderRef,
   'map/topichead': (node, ctx, renderChildren) => {
     const displayName = getDisplayName(node, ctx.resolveKey);
-    const childrenHtml = renderChildrenForNode(node, ctx, renderChildren);
+    const childCtx: MapRenderContext = { ...ctx, depth: (ctx.depth ?? 0) + 1 };
+    const childrenHtml = renderChildrenForNode(node, childCtx, renderChildren);
     return `<li class="map-tree-item map-tree-item--head">
       <span class="map-tree-label map-tree-label--head">${escapeAttr(displayName)}</span>
       ${childrenHtml ? `<ul class="map-tree">${childrenHtml}</ul>` : ''}
@@ -332,10 +373,15 @@ const MAP_BASE_TYPE_RENDERERS: Record<string, Renderer> = {
       <table class="map-reltable-table"><tbody>${bodyHtml}</tbody></table>
     </div>`;
   },
-  'map/relheader': (node, ctx, renderChildren) => {
+  'map/relheader': (node, ctx) => {
+    // Per the DITA spec relheader contains relcolspec (not relcell); show
+    // each column's title text as the header cell.
     const cells = node.children
-      .filter((c) => c.type === 'element' && c.baseType === 'map/relcell')
-      .map((c) => renderChildren(c, ctx));
+      .filter((c) => c.type === 'element' && c.baseType === 'map/relcolspec')
+      .map((c) => {
+        const text = getAttr(c, 'navtitle') || extractText(c, ctx.resolveKey).trim();
+        return escapeAttr(text);
+      });
     return `<tr class="relheader">${cells.map((c) => `<th>${c}</th>`).join('')}</tr>`;
   },
   'map/relrow': (node, ctx, renderChildren) => {
@@ -376,7 +422,7 @@ function collectEntriesRecursive(
   depth: number,
   result: MapEntry[],
   resolveKey: ResolveKey | undefined,
-  roleLabel: (tagName: string | undefined) => string | undefined,
+  roleLabel: RoleLabeler,
 ): void {
   if (node.type !== 'element') return;
   const baseType = node.baseType;
@@ -392,7 +438,7 @@ function collectEntriesRecursive(
       displayName: getDisplayName(node, resolveKey),
       depth,
       keys,
-      role: roleLabel(node.tagName),
+      role: roleLabel(node.tagName, depth),
     });
     // Recurse children at depth+1
     for (const child of node.children || []) {
@@ -442,6 +488,7 @@ export function renderMapDocument(
     docDir: options.docDir,
     resolveKey: options.resolveKey,
     roleLabel: createBookRoleLabeler(options.roleFormat),
+    depth: 0,
   };
 
   return renderElement(root, ctx);

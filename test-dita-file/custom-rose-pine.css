@@ -125,6 +125,7 @@ table {
   border-collapse: collapse;
   margin: 1.25rem 0;
   font-size: 0.95em;
+  border: 2px solid var(--rp-muted);
   border-radius: var(--rp-radius);
   overflow: hidden;
 }
@@ -135,15 +136,15 @@ table th {
   font-weight: 600;
   padding: 0.65rem 0.85rem;
   text-align: left;
+  border: 1px solid var(--rp-muted);
 }
 
 table td {
   padding: 0.6rem 0.85rem;
-  border-bottom: 1px solid var(--rp-overlay);
+  border: 1px solid var(--rp-muted);
   background: var(--rp-surface);
+  vertical-align: top;
 }
-
-table tr:last-child td { border-bottom: none; }
 
 pre.codeblock, pre.preformatted {
   background: var(--rp-hl-low);

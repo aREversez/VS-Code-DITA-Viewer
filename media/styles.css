@@ -4,6 +4,7 @@
   --line-height: 1.6;
   --max-width: 900px;
   --color-border: #ddd;
+  --table-border: #999;
   --color-note-bg: #f0f7ff;
   --color-warning-bg: #fffbf0;
   --color-danger-bg: #fef2f2;
@@ -25,6 +26,7 @@
 
 .vscode-dark {
   --color-border: #555;
+  --table-border: #777;
   --color-note-bg: #1a2633;
   --color-warning-bg: #33281a;
   --color-danger-bg: #331a1a;
@@ -101,12 +103,9 @@ dt { font-weight: 600; margin-top: 0.5em; }
 dd { margin-left: 1.5em; }
 
 /* Tables */
-table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.95em; }
-table th, table td { border: 1px solid var(--color-border); padding: 0.5rem 0.75rem; text-align: left; vertical-align: top; }
+table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.95em; border: 2px solid var(--table-border); }
+table th, table td { border: 1px solid var(--table-border); padding: 0.5rem 0.75rem; text-align: left; vertical-align: top; }
 table th { background: var(--color-code-bg); color: var(--vscode-editor-foreground); font-weight: 600; }
-
-/* CALS tables (<table>/<tgroup>) get zebra striping for readability on larger tables */
-.cals-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--color-code-bg) 45%, transparent); }
 
 /* Simpletables are meant to be lighter-weight than CALS tables */
 .simple-table th, .simple-table td { padding: 0.4rem 0.6rem; }
@@ -168,6 +167,7 @@ pre code { background: none; padding: 0; border-radius: 0; }
 .keyword { font-weight: 500; }
 .term { font-style: italic; border-bottom: 1px dotted; }
 .ph { opacity: 0.8; }
+.overline { text-decoration: overline; }
 .unresolved-keyref { opacity: 1; color: #e67e22; border: 1px dashed #e67e22; padding: 0 0.3em; border-radius: 3px; cursor: help; }
 
 /* User Interface domain */
@@ -211,6 +211,7 @@ cite { font-style: italic; }
 .tm { font-size: 0.75em; vertical-align: super; }
 .body-div { margin: 0.75rem 0; }
 .section-div { margin: 0.75rem 0; }
+.figgroup { margin: 0.75rem 0; }
 
 /* Parameter lists */
 .parml { margin: 1em 0; }

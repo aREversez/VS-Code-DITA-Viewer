@@ -1,0 +1,2118 @@
+{
+  "generatedAt": "2026-07-30T02:06:37.921Z",
+  "ditaDtdRoot": "E:\\Software\\dita-ot\\plugins\\org.oasis-open.dita.v1_3\\dtd",
+  "scannedDirs": [
+    "base",
+    "technicalContent",
+    "bookmap"
+  ],
+  "topicEntries": {
+    "abbreviated-form": {
+      "tagName": "abbreviated-form",
+      "baseType": "topic/term",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/abbreviateDomain.mod",
+      "sourceLine": 67,
+      "classValue": "+ topic/term abbrev-d/abbreviated-form"
+    },
+    "anchorid": {
+      "tagName": "anchorid",
+      "baseType": "topic/keyword",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/delayResolutionDomain.mod",
+      "sourceLine": 95,
+      "classValue": "+ topic/keyword delay-d/anchorid"
+    },
+    "anchorkey": {
+      "tagName": "anchorkey",
+      "baseType": "topic/keyword",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/delayResolutionDomain.mod",
+      "sourceLine": 96,
+      "classValue": "+ topic/keyword delay-d/anchorkey"
+    },
+    "apiname": {
+      "tagName": "apiname",
+      "baseType": "topic/keyword",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/programmingDomain.mod",
+      "sourceLine": 670,
+      "classValue": "+ topic/keyword pr-d/apiname"
+    },
+    "approved": {
+      "tagName": "approved",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1204,
+      "classValue": "- topic/data bookmap/approved"
+    },
+    "area": {
+      "tagName": "area",
+      "baseType": "topic/figgroup",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/utilitiesDomain.mod",
+      "sourceLine": 152,
+      "classValue": "+ topic/figgroup ut-d/area"
+    },
+    "b": {
+      "tagName": "b",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/highlightDomain.mod",
+      "sourceLine": 191,
+      "classValue": "+ topic/ph hi-d/b"
+    },
+    "bookchangehistory": {
+      "tagName": "bookchangehistory",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1208,
+      "classValue": "- topic/data bookmap/bookchangehistory"
+    },
+    "bookevent": {
+      "tagName": "bookevent",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1209,
+      "classValue": "- topic/data bookmap/bookevent"
+    },
+    "bookeventtype": {
+      "tagName": "bookeventtype",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1210,
+      "classValue": "- topic/data bookmap/bookeventtype"
+    },
+    "bookid": {
+      "tagName": "bookid",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1211,
+      "classValue": "- topic/data bookmap/bookid"
+    },
+    "booklibrary": {
+      "tagName": "booklibrary",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1212,
+      "classValue": "- topic/ph bookmap/booklibrary"
+    },
+    "booknumber": {
+      "tagName": "booknumber",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1216,
+      "classValue": "- topic/data bookmap/booknumber"
+    },
+    "bookowner": {
+      "tagName": "bookowner",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1217,
+      "classValue": "- topic/data bookmap/bookowner"
+    },
+    "bookpartno": {
+      "tagName": "bookpartno",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1218,
+      "classValue": "- topic/data bookmap/bookpartno"
+    },
+    "bookrestriction": {
+      "tagName": "bookrestriction",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1219,
+      "classValue": "- topic/data bookmap/bookrestriction"
+    },
+    "bookrights": {
+      "tagName": "bookrights",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1220,
+      "classValue": "- topic/data bookmap/bookrights"
+    },
+    "booktitle": {
+      "tagName": "booktitle",
+      "baseType": "topic/title",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1221,
+      "classValue": "- topic/title bookmap/booktitle"
+    },
+    "booktitlealt": {
+      "tagName": "booktitlealt",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1222,
+      "classValue": "- topic/ph bookmap/booktitlealt"
+    },
+    "cause": {
+      "tagName": "cause",
+      "baseType": "topic/section",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/troubleshooting.mod",
+      "sourceLine": 205,
+      "classValue": "- topic/section troubleshooting/cause"
+    },
+    "change-completed": {
+      "tagName": "change-completed",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/releaseManagementDomain.mod",
+      "sourceLine": 240,
+      "classValue": "+ topic/data relmgmt-d/change-completed"
+    },
+    "change-historylist": {
+      "tagName": "change-historylist",
+      "baseType": "topic/metadata",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/releaseManagementDomain.mod",
+      "sourceLine": 231,
+      "classValue": "+ topic/metadata relmgmt-d/change-historylist"
+    },
+    "change-item": {
+      "tagName": "change-item",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/releaseManagementDomain.mod",
+      "sourceLine": 232,
+      "classValue": "+ topic/data relmgmt-d/change-item"
+    },
+    "change-organization": {
+      "tagName": "change-organization",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/releaseManagementDomain.mod",
+      "sourceLine": 234,
+      "classValue": "+ topic/data relmgmt-d/change-organization"
+    },
+    "change-person": {
+      "tagName": "change-person",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/releaseManagementDomain.mod",
+      "sourceLine": 233,
+      "classValue": "+ topic/data relmgmt-d/change-person"
+    },
+    "change-request-id": {
+      "tagName": "change-request-id",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/releaseManagementDomain.mod",
+      "sourceLine": 238,
+      "classValue": "+ topic/data relmgmt-d/change-request-id"
+    },
+    "change-request-reference": {
+      "tagName": "change-request-reference",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/releaseManagementDomain.mod",
+      "sourceLine": 236,
+      "classValue": "+ topic/data relmgmt-d/change-request-reference"
+    },
+    "change-request-system": {
+      "tagName": "change-request-system",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/releaseManagementDomain.mod",
+      "sourceLine": 237,
+      "classValue": "+ topic/data relmgmt-d/change-request-system"
+    },
+    "change-revisionid": {
+      "tagName": "change-revisionid",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/releaseManagementDomain.mod",
+      "sourceLine": 235,
+      "classValue": "+ topic/data relmgmt-d/change-revisionid"
+    },
+    "change-started": {
+      "tagName": "change-started",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/releaseManagementDomain.mod",
+      "sourceLine": 239,
+      "classValue": "+ topic/data relmgmt-d/change-started"
+    },
+    "change-summary": {
+      "tagName": "change-summary",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/releaseManagementDomain.mod",
+      "sourceLine": 241,
+      "classValue": "+ topic/data relmgmt-d/change-summary"
+    },
+    "chdesc": {
+      "tagName": "chdesc",
+      "baseType": "topic/stentry",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 656,
+      "classValue": "- topic/stentry task/chdesc"
+    },
+    "chdeschd": {
+      "tagName": "chdeschd",
+      "baseType": "topic/stentry",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 654,
+      "classValue": "- topic/stentry task/chdeschd"
+    },
+    "chhead": {
+      "tagName": "chhead",
+      "baseType": "topic/sthead",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 651,
+      "classValue": "- topic/sthead task/chhead"
+    },
+    "choice": {
+      "tagName": "choice",
+      "baseType": "topic/li",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 643,
+      "classValue": "- topic/li task/choice"
+    },
+    "choices": {
+      "tagName": "choices",
+      "baseType": "topic/ul",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 642,
+      "classValue": "- topic/ul task/choices"
+    },
+    "choicetable": {
+      "tagName": "choicetable",
+      "baseType": "topic/simpletable",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 650,
+      "classValue": "- topic/simpletable task/choicetable"
+    },
+    "choption": {
+      "tagName": "choption",
+      "baseType": "topic/stentry",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 655,
+      "classValue": "- topic/stentry task/choption"
+    },
+    "choptionhd": {
+      "tagName": "choptionhd",
+      "baseType": "topic/stentry",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 653,
+      "classValue": "- topic/stentry task/choptionhd"
+    },
+    "chrow": {
+      "tagName": "chrow",
+      "baseType": "topic/strow",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 652,
+      "classValue": "- topic/strow task/chrow"
+    },
+    "closereqs": {
+      "tagName": "closereqs",
+      "baseType": "topic/section",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/taskreqDomain.mod",
+      "sourceLine": 480,
+      "classValue": "+ topic/section task/postreq taskreq-d/closereqs"
+    },
+    "cmd": {
+      "tagName": "cmd",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 634,
+      "classValue": "- topic/ph task/cmd"
+    },
+    "cmdname": {
+      "tagName": "cmdname",
+      "baseType": "topic/keyword",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/softwareDomain.mod",
+      "sourceLine": 195,
+      "classValue": "+ topic/keyword sw-d/cmdname"
+    },
+    "codeblock": {
+      "tagName": "codeblock",
+      "baseType": "topic/pre",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/programmingDomain.mod",
+      "sourceLine": 671,
+      "classValue": "+ topic/pre pr-d/codeblock"
+    },
+    "codeph": {
+      "tagName": "codeph",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/programmingDomain.mod",
+      "sourceLine": 672,
+      "classValue": "+ topic/ph pr-d/codeph"
+    },
+    "coderef": {
+      "tagName": "coderef",
+      "baseType": "topic/xref",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/programmingDomain.mod",
+      "sourceLine": 673,
+      "classValue": "+ topic/xref pr-d/coderef"
+    },
+    "completed": {
+      "tagName": "completed",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1225,
+      "classValue": "- topic/ph bookmap/completed"
+    },
+    "conbody": {
+      "tagName": "conbody",
+      "baseType": "topic/body",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/concept.mod",
+      "sourceLine": 132,
+      "classValue": "- topic/body  concept/conbody"
+    },
+    "conbodydiv": {
+      "tagName": "conbodydiv",
+      "baseType": "topic/bodydiv",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/concept.mod",
+      "sourceLine": 133,
+      "classValue": "- topic/bodydiv concept/conbodydiv"
+    },
+    "concept": {
+      "tagName": "concept",
+      "baseType": "topic/topic",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/concept.mod",
+      "sourceLine": 131,
+      "classValue": "- topic/topic concept/concept"
+    },
+    "condition": {
+      "tagName": "condition",
+      "baseType": "topic/section",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/troubleshooting.mod",
+      "sourceLine": 206,
+      "classValue": "- topic/section troubleshooting/condition"
+    },
+    "consequence": {
+      "tagName": "consequence",
+      "baseType": "topic/li",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/hazardstatementDomain.mod",
+      "sourceLine": 236,
+      "classValue": "+ topic/li hazard-d/consequence"
+    },
+    "context": {
+      "tagName": "context",
+      "baseType": "topic/section",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 648,
+      "classValue": "- topic/section task/context"
+    },
+    "coords": {
+      "tagName": "coords",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/utilitiesDomain.mod",
+      "sourceLine": 154,
+      "classValue": "+ topic/ph ut-d/coords"
+    },
+    "copyrfirst": {
+      "tagName": "copyrfirst",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1226,
+      "classValue": "- topic/data bookmap/copyrfirst"
+    },
+    "copyrlast": {
+      "tagName": "copyrlast",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1227,
+      "classValue": "- topic/data bookmap/copyrlast"
+    },
+    "day": {
+      "tagName": "day",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1228,
+      "classValue": "- topic/ph bookmap/day"
+    },
+    "delim": {
+      "tagName": "delim",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/programmingDomain.mod",
+      "sourceLine": 674,
+      "classValue": "+ topic/ph pr-d/delim"
+    },
+    "dvrKeyscopePrefix": {
+      "tagName": "dvrKeyscopePrefix",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/ditavalrefDomain.mod",
+      "sourceLine": 165,
+      "classValue": "+ topic/data ditavalref-d/dvrKeyscopePrefix"
+    },
+    "dvrKeyscopeSuffix": {
+      "tagName": "dvrKeyscopeSuffix",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/ditavalrefDomain.mod",
+      "sourceLine": 166,
+      "classValue": "+ topic/data ditavalref-d/dvrKeyscopeSuffix"
+    },
+    "dvrResourcePrefix": {
+      "tagName": "dvrResourcePrefix",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/ditavalrefDomain.mod",
+      "sourceLine": 163,
+      "classValue": "+ topic/data ditavalref-d/dvrResourcePrefix"
+    },
+    "dvrResourceSuffix": {
+      "tagName": "dvrResourceSuffix",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/ditavalrefDomain.mod",
+      "sourceLine": 164,
+      "classValue": "+ topic/data ditavalref-d/dvrResourceSuffix"
+    },
+    "edited": {
+      "tagName": "edited",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1231,
+      "classValue": "- topic/data bookmap/edited"
+    },
+    "edition": {
+      "tagName": "edition",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1232,
+      "classValue": "- topic/data bookmap/edition"
+    },
+    "equation-block": {
+      "tagName": "equation-block",
+      "baseType": "topic/div",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/equationDomain.mod",
+      "sourceLine": 104,
+      "classValue": "+ topic/div equation-d/equation-block"
+    },
+    "equation-figure": {
+      "tagName": "equation-figure",
+      "baseType": "topic/fig",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/equationDomain.mod",
+      "sourceLine": 106,
+      "classValue": "+ topic/fig equation-d/equation-figure"
+    },
+    "equation-inline": {
+      "tagName": "equation-inline",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/equationDomain.mod",
+      "sourceLine": 103,
+      "classValue": "+ topic/ph equation-d/equation-inline"
+    },
+    "equation-number": {
+      "tagName": "equation-number",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/equationDomain.mod",
+      "sourceLine": 105,
+      "classValue": "+ topic/ph equation-d/equation-number"
+    },
+    "esttime": {
+      "tagName": "esttime",
+      "baseType": "topic/li",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/taskreqDomain.mod",
+      "sourceLine": 489,
+      "classValue": "+ topic/li task/li taskreq-d/esttime"
+    },
+    "exportanchors": {
+      "tagName": "exportanchors",
+      "baseType": "topic/keywords",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/delayResolutionDomain.mod",
+      "sourceLine": 94,
+      "classValue": "+ topic/keywords delay-d/exportanchors"
+    },
+    "filepath": {
+      "tagName": "filepath",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/softwareDomain.mod",
+      "sourceLine": 196,
+      "classValue": "+ topic/ph sw-d/filepath"
+    },
+    "fragment": {
+      "tagName": "fragment",
+      "baseType": "topic/figgroup",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/programmingDomain.mod",
+      "sourceLine": 675,
+      "classValue": "+ topic/figgroup pr-d/fragment"
+    },
+    "fragref": {
+      "tagName": "fragref",
+      "baseType": "topic/xref",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/programmingDomain.mod",
+      "sourceLine": 676,
+      "classValue": "+ topic/xref pr-d/fragref"
+    },
+    "glossAbbreviation": {
+      "tagName": "glossAbbreviation",
+      "baseType": "topic/title",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/glossentry.mod",
+      "sourceLine": 488,
+      "classValue": "- topic/title concept/title glossentry/glossAbbreviation"
+    },
+    "glossAcronym": {
+      "tagName": "glossAcronym",
+      "baseType": "topic/title",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/glossentry.mod",
+      "sourceLine": 489,
+      "classValue": "- topic/title concept/title glossentry/glossAcronym"
+    },
+    "glossAlt": {
+      "tagName": "glossAlt",
+      "baseType": "topic/section",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/glossentry.mod",
+      "sourceLine": 495,
+      "classValue": "- topic/section concept/section glossentry/glossAlt"
+    },
+    "glossAlternateFor": {
+      "tagName": "glossAlternateFor",
+      "baseType": "topic/xref",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/glossentry.mod",
+      "sourceLine": 496,
+      "classValue": "- topic/xref concept/xref glossentry/glossAlternateFor"
+    },
+    "glossBody": {
+      "tagName": "glossBody",
+      "baseType": "topic/body",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/glossentry.mod",
+      "sourceLine": 487,
+      "classValue": "- topic/body concept/conbody glossentry/glossBody"
+    },
+    "glossPartOfSpeech": {
+      "tagName": "glossPartOfSpeech",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/glossentry.mod",
+      "sourceLine": 492,
+      "classValue": "- topic/data concept/data glossentry/glossPartOfSpeech"
+    },
+    "glossProperty": {
+      "tagName": "glossProperty",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/glossentry.mod",
+      "sourceLine": 493,
+      "classValue": "- topic/data concept/data glossentry/glossProperty"
+    },
+    "glossScopeNote": {
+      "tagName": "glossScopeNote",
+      "baseType": "topic/note",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/glossentry.mod",
+      "sourceLine": 497,
+      "classValue": "- topic/note concept/note glossentry/glossScopeNote"
+    },
+    "glossShortForm": {
+      "tagName": "glossShortForm",
+      "baseType": "topic/title",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/glossentry.mod",
+      "sourceLine": 490,
+      "classValue": "- topic/title concept/title glossentry/glossShortForm"
+    },
+    "glossStatus": {
+      "tagName": "glossStatus",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/glossentry.mod",
+      "sourceLine": 494,
+      "classValue": "- topic/data concept/data glossentry/glossStatus"
+    },
+    "glossSurfaceForm": {
+      "tagName": "glossSurfaceForm",
+      "baseType": "topic/p",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/glossentry.mod",
+      "sourceLine": 498,
+      "classValue": "- topic/p concept/p glossentry/glossSurfaceForm"
+    },
+    "glossSymbol": {
+      "tagName": "glossSymbol",
+      "baseType": "topic/image",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/glossentry.mod",
+      "sourceLine": 499,
+      "classValue": "- topic/image concept/image glossentry/glossSymbol"
+    },
+    "glossSynonym": {
+      "tagName": "glossSynonym",
+      "baseType": "topic/title",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/glossentry.mod",
+      "sourceLine": 491,
+      "classValue": "- topic/title concept/title glossentry/glossSynonym"
+    },
+    "glossUsage": {
+      "tagName": "glossUsage",
+      "baseType": "topic/note",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/glossentry.mod",
+      "sourceLine": 500,
+      "classValue": "- topic/note concept/note glossentry/glossUsage"
+    },
+    "glossdef": {
+      "tagName": "glossdef",
+      "baseType": "topic/abstract",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/glossentry.mod",
+      "sourceLine": 486,
+      "classValue": "- topic/abstract concept/abstract glossentry/glossdef"
+    },
+    "glossentry": {
+      "tagName": "glossentry",
+      "baseType": "topic/topic",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/glossentry.mod",
+      "sourceLine": 484,
+      "classValue": "- topic/topic concept/concept glossentry/glossentry"
+    },
+    "glossgroup": {
+      "tagName": "glossgroup",
+      "baseType": "topic/topic",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/glossgroup.mod",
+      "sourceLine": 78,
+      "classValue": "- topic/topic concept/concept glossgroup/glossgroup"
+    },
+    "glossterm": {
+      "tagName": "glossterm",
+      "baseType": "topic/title",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/glossentry.mod",
+      "sourceLine": 485,
+      "classValue": "- topic/title concept/title glossentry/glossterm"
+    },
+    "groupchoice": {
+      "tagName": "groupchoice",
+      "baseType": "topic/figgroup",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/programmingDomain.mod",
+      "sourceLine": 677,
+      "classValue": "+ topic/figgroup pr-d/groupchoice"
+    },
+    "groupcomp": {
+      "tagName": "groupcomp",
+      "baseType": "topic/figgroup",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/programmingDomain.mod",
+      "sourceLine": 678,
+      "classValue": "+ topic/figgroup pr-d/groupcomp"
+    },
+    "groupseq": {
+      "tagName": "groupseq",
+      "baseType": "topic/figgroup",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/programmingDomain.mod",
+      "sourceLine": 679,
+      "classValue": "+ topic/figgroup pr-d/groupseq"
+    },
+    "hazardstatement": {
+      "tagName": "hazardstatement",
+      "baseType": "topic/note",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/hazardstatementDomain.mod",
+      "sourceLine": 232,
+      "classValue": "+ topic/note hazard-d/hazardstatement"
+    },
+    "hazardsymbol": {
+      "tagName": "hazardsymbol",
+      "baseType": "topic/image",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/hazardstatementDomain.mod",
+      "sourceLine": 234,
+      "classValue": "+ topic/image hazard-d/hazardsymbol"
+    },
+    "howtoavoid": {
+      "tagName": "howtoavoid",
+      "baseType": "topic/li",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/hazardstatementDomain.mod",
+      "sourceLine": 237,
+      "classValue": "+ topic/li hazard-d/howtoavoid"
+    },
+    "i": {
+      "tagName": "i",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/highlightDomain.mod",
+      "sourceLine": 192,
+      "classValue": "+ topic/ph hi-d/i"
+    },
+    "imagemap": {
+      "tagName": "imagemap",
+      "baseType": "topic/fig",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/utilitiesDomain.mod",
+      "sourceLine": 151,
+      "classValue": "+ topic/fig ut-d/imagemap"
+    },
+    "index-see": {
+      "tagName": "index-see",
+      "baseType": "topic/index-base",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/indexingDomain.mod",
+      "sourceLine": 100,
+      "classValue": "+ topic/index-base indexing-d/index-see"
+    },
+    "index-see-also": {
+      "tagName": "index-see-also",
+      "baseType": "topic/index-base",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/indexingDomain.mod",
+      "sourceLine": 101,
+      "classValue": "+ topic/index-base indexing-d/index-see-also"
+    },
+    "index-sort-as": {
+      "tagName": "index-sort-as",
+      "baseType": "topic/index-base",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/indexingDomain.mod",
+      "sourceLine": 102,
+      "classValue": "+ topic/index-base indexing-d/index-sort-as"
+    },
+    "info": {
+      "tagName": "info",
+      "baseType": "topic/itemgroup",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 638,
+      "classValue": "- topic/itemgroup task/info"
+    },
+    "isbn": {
+      "tagName": "isbn",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1237,
+      "classValue": "- topic/data bookmap/isbn"
+    },
+    "kwd": {
+      "tagName": "kwd",
+      "baseType": "topic/keyword",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/programmingDomain.mod",
+      "sourceLine": 680,
+      "classValue": "+ topic/keyword pr-d/kwd"
+    },
+    "line-through": {
+      "tagName": "line-through",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/highlightDomain.mod",
+      "sourceLine": 193,
+      "classValue": "+ topic/ph hi-d/line-through"
+    },
+    "mainbooktitle": {
+      "tagName": "mainbooktitle",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1238,
+      "classValue": "- topic/ph bookmap/mainbooktitle"
+    },
+    "maintainer": {
+      "tagName": "maintainer",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1239,
+      "classValue": "- topic/data bookmap/maintainer"
+    },
+    "markupname": {
+      "tagName": "markupname",
+      "baseType": "topic/keyword",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/markupDomain.mod",
+      "sourceLine": 45,
+      "classValue": "+ topic/keyword markup-d/markupname"
+    },
+    "mathml": {
+      "tagName": "mathml",
+      "baseType": "topic/foreign",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/mathmlDomain.mod",
+      "sourceLine": 89,
+      "classValue": "+ topic/foreign mathml-d/mathml"
+    },
+    "mathmlref": {
+      "tagName": "mathmlref",
+      "baseType": "topic/xref",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/mathmlDomain.mod",
+      "sourceLine": 90,
+      "classValue": "+ topic/xref mathml-d/mathmlref"
+    },
+    "menucascade": {
+      "tagName": "menucascade",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/uiDomain.mod",
+      "sourceLine": 156,
+      "classValue": "+ topic/ph ui-d/menucascade"
+    },
+    "messagepanel": {
+      "tagName": "messagepanel",
+      "baseType": "topic/ul",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/hazardstatementDomain.mod",
+      "sourceLine": 233,
+      "classValue": "+ topic/ul hazard-d/messagepanel"
+    },
+    "month": {
+      "tagName": "month",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1240,
+      "classValue": "- topic/ph bookmap/month"
+    },
+    "msgblock": {
+      "tagName": "msgblock",
+      "baseType": "topic/pre",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/softwareDomain.mod",
+      "sourceLine": 197,
+      "classValue": "+ topic/pre sw-d/msgblock"
+    },
+    "msgnum": {
+      "tagName": "msgnum",
+      "baseType": "topic/keyword",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/softwareDomain.mod",
+      "sourceLine": 198,
+      "classValue": "+ topic/keyword sw-d/msgnum"
+    },
+    "msgph": {
+      "tagName": "msgph",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/softwareDomain.mod",
+      "sourceLine": 199,
+      "classValue": "+ topic/ph sw-d/msgph"
+    },
+    "noconds": {
+      "tagName": "noconds",
+      "baseType": "topic/li",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/taskreqDomain.mod",
+      "sourceLine": 482,
+      "classValue": "+ topic/li task/li taskreq-d/noconds"
+    },
+    "nosafety": {
+      "tagName": "nosafety",
+      "baseType": "topic/li",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/taskreqDomain.mod",
+      "sourceLine": 503,
+      "classValue": "+ topic/li task/li taskreq-d/nosafety"
+    },
+    "nospares": {
+      "tagName": "nospares",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/taskreqDomain.mod",
+      "sourceLine": 499,
+      "classValue": "+ topic/data task/data taskreq-d/nospares"
+    },
+    "nosupeq": {
+      "tagName": "nosupeq",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/taskreqDomain.mod",
+      "sourceLine": 491,
+      "classValue": "+ topic/data task/data taskreq-d/nosupeq"
+    },
+    "nosupply": {
+      "tagName": "nosupply",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/taskreqDomain.mod",
+      "sourceLine": 495,
+      "classValue": "+ topic/data task/data taskreq-d/nosupply"
+    },
+    "numcharref": {
+      "tagName": "numcharref",
+      "baseType": "topic/keyword",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/xmlDomain.mod",
+      "sourceLine": 154,
+      "classValue": "+ topic/keyword markup-d/markupname xml-d/numcharref"
+    },
+    "oper": {
+      "tagName": "oper",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/programmingDomain.mod",
+      "sourceLine": 681,
+      "classValue": "+ topic/ph pr-d/oper"
+    },
+    "option": {
+      "tagName": "option",
+      "baseType": "topic/keyword",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/programmingDomain.mod",
+      "sourceLine": 682,
+      "classValue": "+ topic/keyword pr-d/option"
+    },
+    "organization": {
+      "tagName": "organization",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1242,
+      "classValue": "- topic/data bookmap/organization"
+    },
+    "overline": {
+      "tagName": "overline",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/highlightDomain.mod",
+      "sourceLine": 194,
+      "classValue": "+ topic/ph hi-d/overline"
+    },
+    "parameterentity": {
+      "tagName": "parameterentity",
+      "baseType": "topic/keyword",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/xmlDomain.mod",
+      "sourceLine": 155,
+      "classValue": "+ topic/keyword markup-d/markupname xml-d/parameterentity"
+    },
+    "parml": {
+      "tagName": "parml",
+      "baseType": "topic/dl",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/programmingDomain.mod",
+      "sourceLine": 683,
+      "classValue": "+ topic/dl pr-d/parml"
+    },
+    "parmname": {
+      "tagName": "parmname",
+      "baseType": "topic/keyword",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/programmingDomain.mod",
+      "sourceLine": 684,
+      "classValue": "+ topic/keyword pr-d/parmname"
+    },
+    "pd": {
+      "tagName": "pd",
+      "baseType": "topic/dd",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/programmingDomain.mod",
+      "sourceLine": 685,
+      "classValue": "+ topic/dd pr-d/pd"
+    },
+    "perscat": {
+      "tagName": "perscat",
+      "baseType": "topic/li",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/taskreqDomain.mod",
+      "sourceLine": 487,
+      "classValue": "+ topic/li task/li taskreq-d/perscat"
+    },
+    "perskill": {
+      "tagName": "perskill",
+      "baseType": "topic/li",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/taskreqDomain.mod",
+      "sourceLine": 488,
+      "classValue": "+ topic/li task/li taskreq-d/perskill"
+    },
+    "person": {
+      "tagName": "person",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1244,
+      "classValue": "- topic/data bookmap/person"
+    },
+    "personnel": {
+      "tagName": "personnel",
+      "baseType": "topic/li",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/taskreqDomain.mod",
+      "sourceLine": 486,
+      "classValue": "+ topic/li task/li taskreq-d/personnel"
+    },
+    "plentry": {
+      "tagName": "plentry",
+      "baseType": "topic/dlentry",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/programmingDomain.mod",
+      "sourceLine": 686,
+      "classValue": "+ topic/dlentry pr-d/plentry"
+    },
+    "postreq": {
+      "tagName": "postreq",
+      "baseType": "topic/section",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 647,
+      "classValue": "- topic/section task/postreq"
+    },
+    "prelreqs": {
+      "tagName": "prelreqs",
+      "baseType": "topic/section",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/taskreqDomain.mod",
+      "sourceLine": 479,
+      "classValue": "+ topic/section task/prereq taskreq-d/prelreqs"
+    },
+    "prereq": {
+      "tagName": "prereq",
+      "baseType": "topic/section",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 646,
+      "classValue": "- topic/section task/prereq"
+    },
+    "printlocation": {
+      "tagName": "printlocation",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1246,
+      "classValue": "- topic/data bookmap/printlocation"
+    },
+    "propdesc": {
+      "tagName": "propdesc",
+      "baseType": "topic/stentry",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/reference.mod",
+      "sourceLine": 342,
+      "classValue": "- topic/stentry     reference/propdesc"
+    },
+    "propdeschd": {
+      "tagName": "propdeschd",
+      "baseType": "topic/stentry",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/reference.mod",
+      "sourceLine": 346,
+      "classValue": "- topic/stentry     reference/propdeschd"
+    },
+    "properties": {
+      "tagName": "properties",
+      "baseType": "topic/simpletable",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/reference.mod",
+      "sourceLine": 338,
+      "classValue": "- topic/simpletable reference/properties"
+    },
+    "property": {
+      "tagName": "property",
+      "baseType": "topic/strow",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/reference.mod",
+      "sourceLine": 339,
+      "classValue": "- topic/strow       reference/property"
+    },
+    "prophead": {
+      "tagName": "prophead",
+      "baseType": "topic/sthead",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/reference.mod",
+      "sourceLine": 343,
+      "classValue": "- topic/sthead      reference/prophead"
+    },
+    "proptype": {
+      "tagName": "proptype",
+      "baseType": "topic/stentry",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/reference.mod",
+      "sourceLine": 340,
+      "classValue": "- topic/stentry     reference/proptype"
+    },
+    "proptypehd": {
+      "tagName": "proptypehd",
+      "baseType": "topic/stentry",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/reference.mod",
+      "sourceLine": 344,
+      "classValue": "- topic/stentry     reference/proptypehd"
+    },
+    "propvalue": {
+      "tagName": "propvalue",
+      "baseType": "topic/stentry",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/reference.mod",
+      "sourceLine": 341,
+      "classValue": "- topic/stentry     reference/propvalue"
+    },
+    "propvaluehd": {
+      "tagName": "propvaluehd",
+      "baseType": "topic/stentry",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/reference.mod",
+      "sourceLine": 345,
+      "classValue": "- topic/stentry     reference/propvaluehd"
+    },
+    "pt": {
+      "tagName": "pt",
+      "baseType": "topic/dt",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/programmingDomain.mod",
+      "sourceLine": 687,
+      "classValue": "+ topic/dt pr-d/pt"
+    },
+    "published": {
+      "tagName": "published",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1247,
+      "classValue": "- topic/data bookmap/published"
+    },
+    "publisherinformation": {
+      "tagName": "publisherinformation",
+      "baseType": "topic/publisher",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1248,
+      "classValue": "- topic/publisher bookmap/publisherinformation"
+    },
+    "publishtype": {
+      "tagName": "publishtype",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1249,
+      "classValue": "- topic/data bookmap/publishtype"
+    },
+    "refbody": {
+      "tagName": "refbody",
+      "baseType": "topic/body",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/reference.mod",
+      "sourceLine": 335,
+      "classValue": "- topic/body        reference/refbody"
+    },
+    "refbodydiv": {
+      "tagName": "refbodydiv",
+      "baseType": "topic/bodydiv",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/reference.mod",
+      "sourceLine": 336,
+      "classValue": "- topic/bodydiv     reference/refbodydiv"
+    },
+    "reference": {
+      "tagName": "reference",
+      "baseType": "topic/topic",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/reference.mod",
+      "sourceLine": 334,
+      "classValue": "- topic/topic       reference/reference"
+    },
+    "refsyn": {
+      "tagName": "refsyn",
+      "baseType": "topic/section",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/reference.mod",
+      "sourceLine": 337,
+      "classValue": "- topic/section     reference/refsyn"
+    },
+    "remedy": {
+      "tagName": "remedy",
+      "baseType": "topic/section",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/troubleshooting.mod",
+      "sourceLine": 207,
+      "classValue": "- topic/section troubleshooting/remedy"
+    },
+    "repsep": {
+      "tagName": "repsep",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/programmingDomain.mod",
+      "sourceLine": 688,
+      "classValue": "+ topic/ph pr-d/repsep"
+    },
+    "reqcond": {
+      "tagName": "reqcond",
+      "baseType": "topic/li",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/taskreqDomain.mod",
+      "sourceLine": 483,
+      "classValue": "+ topic/li task/li taskreq-d/reqcond"
+    },
+    "reqconds": {
+      "tagName": "reqconds",
+      "baseType": "topic/ul",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/taskreqDomain.mod",
+      "sourceLine": 481,
+      "classValue": "+ topic/ul task/ul taskreq-d/reqconds"
+    },
+    "reqcontp": {
+      "tagName": "reqcontp",
+      "baseType": "topic/li",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/taskreqDomain.mod",
+      "sourceLine": 484,
+      "classValue": "+ topic/li task/li taskreq-d/reqcontp"
+    },
+    "reqpers": {
+      "tagName": "reqpers",
+      "baseType": "topic/ul",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/taskreqDomain.mod",
+      "sourceLine": 485,
+      "classValue": "+ topic/ul task/ul taskreq-d/reqpers"
+    },
+    "responsibleParty": {
+      "tagName": "responsibleParty",
+      "baseType": "topic/p",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/troubleshooting.mod",
+      "sourceLine": 208,
+      "classValue": "- topic/p troubleshooting/responsibleParty"
+    },
+    "result": {
+      "tagName": "result",
+      "baseType": "topic/section",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 644,
+      "classValue": "- topic/section task/result"
+    },
+    "reviewed": {
+      "tagName": "reviewed",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1250,
+      "classValue": "- topic/data bookmap/reviewed"
+    },
+    "revisionid": {
+      "tagName": "revisionid",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1251,
+      "classValue": "- topic/ph bookmap/revisionid"
+    },
+    "safecond": {
+      "tagName": "safecond",
+      "baseType": "topic/li",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/taskreqDomain.mod",
+      "sourceLine": 504,
+      "classValue": "+ topic/li task/li taskreq-d/safecond"
+    },
+    "safety": {
+      "tagName": "safety",
+      "baseType": "topic/ol",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/taskreqDomain.mod",
+      "sourceLine": 502,
+      "classValue": "+ topic/ol task/ol taskreq-d/safety"
+    },
+    "screen": {
+      "tagName": "screen",
+      "baseType": "topic/pre",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/uiDomain.mod",
+      "sourceLine": 157,
+      "classValue": "+ topic/pre ui-d/screen"
+    },
+    "sep": {
+      "tagName": "sep",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/programmingDomain.mod",
+      "sourceLine": 689,
+      "classValue": "+ topic/ph pr-d/sep"
+    },
+    "shape": {
+      "tagName": "shape",
+      "baseType": "topic/keyword",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/utilitiesDomain.mod",
+      "sourceLine": 153,
+      "classValue": "+ topic/keyword ut-d/shape"
+    },
+    "shortcut": {
+      "tagName": "shortcut",
+      "baseType": "topic/keyword",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/uiDomain.mod",
+      "sourceLine": 158,
+      "classValue": "+ topic/keyword ui-d/shortcut"
+    },
+    "sort-as": {
+      "tagName": "sort-as",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/utilitiesDomain.mod",
+      "sourceLine": 155,
+      "classValue": "+ topic/data ut-d/sort-as"
+    },
+    "spare": {
+      "tagName": "spare",
+      "baseType": "topic/li",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/taskreqDomain.mod",
+      "sourceLine": 501,
+      "classValue": "+ topic/li task/li taskreq-d/spare"
+    },
+    "spares": {
+      "tagName": "spares",
+      "baseType": "topic/p",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/taskreqDomain.mod",
+      "sourceLine": 498,
+      "classValue": "+ topic/p task/p taskreq-d/spares"
+    },
+    "sparesli": {
+      "tagName": "sparesli",
+      "baseType": "topic/ul",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/taskreqDomain.mod",
+      "sourceLine": 500,
+      "classValue": "+ topic/ul task/ul taskreq-d/sparesli"
+    },
+    "started": {
+      "tagName": "started",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1252,
+      "classValue": "- topic/ph bookmap/started"
+    },
+    "step": {
+      "tagName": "step",
+      "baseType": "topic/li",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 633,
+      "classValue": "- topic/li task/step"
+    },
+    "stepresult": {
+      "tagName": "stepresult",
+      "baseType": "topic/itemgroup",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 640,
+      "classValue": "- topic/itemgroup task/stepresult"
+    },
+    "steps": {
+      "tagName": "steps",
+      "baseType": "topic/ol",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 630,
+      "classValue": "- topic/ol task/steps"
+    },
+    "steps-informal": {
+      "tagName": "steps-informal",
+      "baseType": "topic/section",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 649,
+      "classValue": "- topic/section task/steps-informal"
+    },
+    "steps-unordered": {
+      "tagName": "steps-unordered",
+      "baseType": "topic/ul",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 631,
+      "classValue": "- topic/ul task/steps-unordered"
+    },
+    "stepsection": {
+      "tagName": "stepsection",
+      "baseType": "topic/li",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 632,
+      "classValue": "- topic/li task/stepsection"
+    },
+    "steptroubleshooting": {
+      "tagName": "steptroubleshooting",
+      "baseType": "topic/itemgroup",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 641,
+      "classValue": "- topic/itemgroup task/steptroubleshooting"
+    },
+    "stepxmp": {
+      "tagName": "stepxmp",
+      "baseType": "topic/itemgroup",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 639,
+      "classValue": "- topic/itemgroup task/stepxmp"
+    },
+    "sub": {
+      "tagName": "sub",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/highlightDomain.mod",
+      "sourceLine": 195,
+      "classValue": "+ topic/ph hi-d/sub"
+    },
+    "substep": {
+      "tagName": "substep",
+      "baseType": "topic/li",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 636,
+      "classValue": "- topic/li task/substep"
+    },
+    "substeps": {
+      "tagName": "substeps",
+      "baseType": "topic/ol",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 635,
+      "classValue": "- topic/ol task/substeps"
+    },
+    "summary": {
+      "tagName": "summary",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1253,
+      "classValue": "- topic/ph bookmap/summary"
+    },
+    "sup": {
+      "tagName": "sup",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/highlightDomain.mod",
+      "sourceLine": 196,
+      "classValue": "+ topic/ph hi-d/sup"
+    },
+    "supeqli": {
+      "tagName": "supeqli",
+      "baseType": "topic/ul",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/taskreqDomain.mod",
+      "sourceLine": 492,
+      "classValue": "+ topic/ul task/ul taskreq-d/supeqli"
+    },
+    "supequi": {
+      "tagName": "supequi",
+      "baseType": "topic/li",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/taskreqDomain.mod",
+      "sourceLine": 493,
+      "classValue": "+ topic/li task/li taskreq-d/supequi"
+    },
+    "supequip": {
+      "tagName": "supequip",
+      "baseType": "topic/p",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/taskreqDomain.mod",
+      "sourceLine": 490,
+      "classValue": "+ topic/p task/p taskreq-d/supequip"
+    },
+    "supplies": {
+      "tagName": "supplies",
+      "baseType": "topic/p",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/taskreqDomain.mod",
+      "sourceLine": 494,
+      "classValue": "+ topic/p task/p taskreq-d/supplies"
+    },
+    "supply": {
+      "tagName": "supply",
+      "baseType": "topic/li",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/taskreqDomain.mod",
+      "sourceLine": 497,
+      "classValue": "+ topic/li task/li taskreq-d/supply"
+    },
+    "supplyli": {
+      "tagName": "supplyli",
+      "baseType": "topic/ul",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/taskreqDomain.mod",
+      "sourceLine": 496,
+      "classValue": "+ topic/ul task/ul taskreq-d/supplyli"
+    },
+    "svg-container": {
+      "tagName": "svg-container",
+      "baseType": "topic/foreign",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/svgDomain.mod",
+      "sourceLine": 70,
+      "classValue": "+ topic/foreign svg-d/svg-container"
+    },
+    "svgref": {
+      "tagName": "svgref",
+      "baseType": "topic/xref",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/svgDomain.mod",
+      "sourceLine": 71,
+      "classValue": "+ topic/xref svg-d/svgref"
+    },
+    "synblk": {
+      "tagName": "synblk",
+      "baseType": "topic/figgroup",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/programmingDomain.mod",
+      "sourceLine": 690,
+      "classValue": "+ topic/figgroup pr-d/synblk"
+    },
+    "synnote": {
+      "tagName": "synnote",
+      "baseType": "topic/fn",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/programmingDomain.mod",
+      "sourceLine": 691,
+      "classValue": "+ topic/fn pr-d/synnote"
+    },
+    "synnoteref": {
+      "tagName": "synnoteref",
+      "baseType": "topic/xref",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/programmingDomain.mod",
+      "sourceLine": 692,
+      "classValue": "+ topic/xref pr-d/synnoteref"
+    },
+    "synph": {
+      "tagName": "synph",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/programmingDomain.mod",
+      "sourceLine": 693,
+      "classValue": "+ topic/ph pr-d/synph"
+    },
+    "syntaxdiagram": {
+      "tagName": "syntaxdiagram",
+      "baseType": "topic/fig",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/programmingDomain.mod",
+      "sourceLine": 694,
+      "classValue": "+ topic/fig pr-d/syntaxdiagram"
+    },
+    "systemoutput": {
+      "tagName": "systemoutput",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/softwareDomain.mod",
+      "sourceLine": 200,
+      "classValue": "+ topic/ph sw-d/systemoutput"
+    },
+    "task": {
+      "tagName": "task",
+      "baseType": "topic/topic",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 628,
+      "classValue": "- topic/topic task/task"
+    },
+    "taskbody": {
+      "tagName": "taskbody",
+      "baseType": "topic/body",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 629,
+      "classValue": "- topic/body task/taskbody"
+    },
+    "tasktroubleshooting": {
+      "tagName": "tasktroubleshooting",
+      "baseType": "topic/section",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 645,
+      "classValue": "- topic/section task/tasktroubleshooting"
+    },
+    "tested": {
+      "tagName": "tested",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1255,
+      "classValue": "- topic/data bookmap/tested"
+    },
+    "textentity": {
+      "tagName": "textentity",
+      "baseType": "topic/keyword",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/xmlDomain.mod",
+      "sourceLine": 156,
+      "classValue": "+ topic/keyword markup-d/markupname xml-d/textentity"
+    },
+    "troubleSolution": {
+      "tagName": "troubleSolution",
+      "baseType": "topic/bodydiv",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/troubleshooting.mod",
+      "sourceLine": 204,
+      "classValue": "- topic/bodydiv troubleshooting/troubleSolution"
+    },
+    "troublebody": {
+      "tagName": "troublebody",
+      "baseType": "topic/body",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/troubleshooting.mod",
+      "sourceLine": 203,
+      "classValue": "- topic/body troubleshooting/troublebody"
+    },
+    "troubleshooting": {
+      "tagName": "troubleshooting",
+      "baseType": "topic/topic",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/troubleshooting.mod",
+      "sourceLine": 202,
+      "classValue": "- topic/topic troubleshooting/troubleshooting"
+    },
+    "tt": {
+      "tagName": "tt",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/highlightDomain.mod",
+      "sourceLine": 197,
+      "classValue": "+ topic/ph hi-d/tt"
+    },
+    "tutorialinfo": {
+      "tagName": "tutorialinfo",
+      "baseType": "topic/itemgroup",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/task.mod",
+      "sourceLine": 637,
+      "classValue": "- topic/itemgroup task/tutorialinfo"
+    },
+    "typeofhazard": {
+      "tagName": "typeofhazard",
+      "baseType": "topic/li",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/hazardstatementDomain.mod",
+      "sourceLine": 235,
+      "classValue": "+ topic/li hazard-d/typeofhazard"
+    },
+    "u": {
+      "tagName": "u",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "base/dtd/highlightDomain.mod",
+      "sourceLine": 198,
+      "classValue": "+ topic/ph hi-d/u"
+    },
+    "uicontrol": {
+      "tagName": "uicontrol",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/uiDomain.mod",
+      "sourceLine": 159,
+      "classValue": "+ topic/ph ui-d/uicontrol"
+    },
+    "userinput": {
+      "tagName": "userinput",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/softwareDomain.mod",
+      "sourceLine": 201,
+      "classValue": "+ topic/ph sw-d/userinput"
+    },
+    "var": {
+      "tagName": "var",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/programmingDomain.mod",
+      "sourceLine": 695,
+      "classValue": "+ topic/ph pr-d/var"
+    },
+    "varname": {
+      "tagName": "varname",
+      "baseType": "topic/keyword",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/softwareDomain.mod",
+      "sourceLine": 202,
+      "classValue": "+ topic/keyword sw-d/varname"
+    },
+    "volume": {
+      "tagName": "volume",
+      "baseType": "topic/data",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1258,
+      "classValue": "- topic/data bookmap/volume"
+    },
+    "wintitle": {
+      "tagName": "wintitle",
+      "baseType": "topic/keyword",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/uiDomain.mod",
+      "sourceLine": 160,
+      "classValue": "+ topic/keyword ui-d/wintitle"
+    },
+    "xmlatt": {
+      "tagName": "xmlatt",
+      "baseType": "topic/keyword",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/xmlDomain.mod",
+      "sourceLine": 157,
+      "classValue": "+ topic/keyword markup-d/markupname xml-d/xmlatt"
+    },
+    "xmlelement": {
+      "tagName": "xmlelement",
+      "baseType": "topic/keyword",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/xmlDomain.mod",
+      "sourceLine": 158,
+      "classValue": "+ topic/keyword markup-d/markupname xml-d/xmlelement"
+    },
+    "xmlnsname": {
+      "tagName": "xmlnsname",
+      "baseType": "topic/keyword",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/xmlDomain.mod",
+      "sourceLine": 159,
+      "classValue": "+ topic/keyword markup-d/markupname xml-d/xmlnsname"
+    },
+    "xmlpi": {
+      "tagName": "xmlpi",
+      "baseType": "topic/keyword",
+      "bucket": "topic",
+      "sourceFile": "technicalContent/dtd/xmlDomain.mod",
+      "sourceLine": 160,
+      "classValue": "+ topic/keyword markup-d/markupname xml-d/xmlpi"
+    },
+    "year": {
+      "tagName": "year",
+      "baseType": "topic/ph",
+      "bucket": "topic",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1259,
+      "classValue": "- topic/ph bookmap/year"
+    }
+  },
+  "mapEntries": {
+    "abbrevlist": {
+      "tagName": "abbrevlist",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1200,
+      "classValue": "- map/topicref bookmap/abbrevlist"
+    },
+    "amendments": {
+      "tagName": "amendments",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1201,
+      "classValue": "- map/topicref bookmap/amendments"
+    },
+    "anchorref": {
+      "tagName": "anchorref",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "base/dtd/mapGroup.mod",
+      "sourceLine": 538,
+      "classValue": "+ map/topicref mapgroup-d/anchorref"
+    },
+    "appendices": {
+      "tagName": "appendices",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1202,
+      "classValue": "- map/topicref bookmap/appendices"
+    },
+    "appendix": {
+      "tagName": "appendix",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1203,
+      "classValue": "- map/topicref bookmap/appendix"
+    },
+    "backmatter": {
+      "tagName": "backmatter",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1205,
+      "classValue": "- map/topicref bookmap/backmatter"
+    },
+    "bibliolist": {
+      "tagName": "bibliolist",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1206,
+      "classValue": "- map/topicref bookmap/bibliolist"
+    },
+    "bookabstract": {
+      "tagName": "bookabstract",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1207,
+      "classValue": "- map/topicref bookmap/bookabstract"
+    },
+    "booklist": {
+      "tagName": "booklist",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1213,
+      "classValue": "- map/topicref bookmap/booklist"
+    },
+    "booklists": {
+      "tagName": "booklists",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1214,
+      "classValue": "- map/topicref bookmap/booklists"
+    },
+    "bookmap": {
+      "tagName": "bookmap",
+      "baseType": "map/map",
+      "bucket": "map",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1199,
+      "classValue": "- map/map bookmap/bookmap"
+    },
+    "bookmeta": {
+      "tagName": "bookmeta",
+      "baseType": "map/topicmeta",
+      "bucket": "map",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1215,
+      "classValue": "- map/topicmeta bookmap/bookmeta"
+    },
+    "chapter": {
+      "tagName": "chapter",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1223,
+      "classValue": "- map/topicref bookmap/chapter"
+    },
+    "colophon": {
+      "tagName": "colophon",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1224,
+      "classValue": "- map/topicref bookmap/colophon"
+    },
+    "dedication": {
+      "tagName": "dedication",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1229,
+      "classValue": "- map/topicref bookmap/dedication"
+    },
+    "ditavalmeta": {
+      "tagName": "ditavalmeta",
+      "baseType": "map/topicmeta",
+      "bucket": "map",
+      "sourceFile": "base/dtd/ditavalrefDomain.mod",
+      "sourceLine": 162,
+      "classValue": "+ map/topicmeta ditavalref-d/ditavalmeta"
+    },
+    "ditavalref": {
+      "tagName": "ditavalref",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "base/dtd/ditavalrefDomain.mod",
+      "sourceLine": 161,
+      "classValue": "+ map/topicref ditavalref-d/ditavalref"
+    },
+    "draftintro": {
+      "tagName": "draftintro",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1230,
+      "classValue": "- map/topicref bookmap/draftintro"
+    },
+    "figurelist": {
+      "tagName": "figurelist",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1233,
+      "classValue": "- map/topicref bookmap/figurelist"
+    },
+    "frontmatter": {
+      "tagName": "frontmatter",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1234,
+      "classValue": "- map/topicref bookmap/frontmatter"
+    },
+    "glossarylist": {
+      "tagName": "glossarylist",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1235,
+      "classValue": "- map/topicref bookmap/glossarylist"
+    },
+    "glossref": {
+      "tagName": "glossref",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "technicalContent/dtd/glossrefDomain.mod",
+      "sourceLine": 136,
+      "classValue": "+ map/topicref glossref-d/glossref"
+    },
+    "indexlist": {
+      "tagName": "indexlist",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1236,
+      "classValue": "- map/topicref bookmap/indexlist"
+    },
+    "keydef": {
+      "tagName": "keydef",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "base/dtd/mapGroup.mod",
+      "sourceLine": 539,
+      "classValue": "+ map/topicref mapgroup-d/keydef"
+    },
+    "mapref": {
+      "tagName": "mapref",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "base/dtd/mapGroup.mod",
+      "sourceLine": 540,
+      "classValue": "+ map/topicref mapgroup-d/mapref"
+    },
+    "notices": {
+      "tagName": "notices",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1241,
+      "classValue": "- map/topicref bookmap/notices"
+    },
+    "part": {
+      "tagName": "part",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1243,
+      "classValue": "- map/topicref bookmap/part"
+    },
+    "preface": {
+      "tagName": "preface",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1245,
+      "classValue": "- map/topicref bookmap/preface"
+    },
+    "tablelist": {
+      "tagName": "tablelist",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1254,
+      "classValue": "- map/topicref bookmap/tablelist"
+    },
+    "toc": {
+      "tagName": "toc",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1256,
+      "classValue": "- map/topicref bookmap/toc"
+    },
+    "topicgroup": {
+      "tagName": "topicgroup",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "base/dtd/mapGroup.mod",
+      "sourceLine": 541,
+      "classValue": "+ map/topicref mapgroup-d/topicgroup"
+    },
+    "topichead": {
+      "tagName": "topichead",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "base/dtd/mapGroup.mod",
+      "sourceLine": 542,
+      "classValue": "+ map/topicref mapgroup-d/topichead"
+    },
+    "topicset": {
+      "tagName": "topicset",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "base/dtd/mapGroup.mod",
+      "sourceLine": 543,
+      "classValue": "+ map/topicref mapgroup-d/topicset"
+    },
+    "topicsetref": {
+      "tagName": "topicsetref",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "base/dtd/mapGroup.mod",
+      "sourceLine": 544,
+      "classValue": "+ map/topicref mapgroup-d/topicsetref"
+    },
+    "trademarklist": {
+      "tagName": "trademarklist",
+      "baseType": "map/topicref",
+      "bucket": "map",
+      "sourceFile": "bookmap/dtd/bookmap.mod",
+      "sourceLine": 1257,
+      "classValue": "- map/topicref bookmap/trademarklist"
+    }
+  },
+  "duplicateConflicts": []
+}

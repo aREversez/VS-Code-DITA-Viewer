@@ -316,23 +316,69 @@ describe('ditaLanguageUtils', () => {
   describe('createBookRoleLabeler', () => {
     it('numbers chapters, parts (roman) and appendixes (letters) independently', () => {
       const label = createBookRoleLabeler();
-      assert.strictEqual(label('preface'), 'Preface');
-      assert.strictEqual(label('part'), 'Part I');
-      assert.strictEqual(label('chapter'), 'Chapter 1');
-      assert.strictEqual(label('chapter'), 'Chapter 2');
-      assert.strictEqual(label('part'), 'Part II');
-      assert.strictEqual(label('chapter'), 'Chapter 3');
-      assert.strictEqual(label('appendix'), 'Appendix A');
-      assert.strictEqual(label('appendix'), 'Appendix B');
-      assert.strictEqual(label('topicref'), undefined);
-      assert.strictEqual(label(undefined), undefined);
+      assert.strictEqual(label('preface', 0), 'Preface');
+      assert.strictEqual(label('part', 0), 'Part I');
+      assert.strictEqual(label('chapter', 0), 'Chapter 1');
+      assert.strictEqual(label('chapter', 0), 'Chapter 2');
+      assert.strictEqual(label('part', 0), 'Part II');
+      assert.strictEqual(label('chapter', 0), 'Chapter 3');
+      assert.strictEqual(label('appendix', 0), 'Appendix A');
+      assert.strictEqual(label('appendix', 0), 'Appendix B');
+      assert.strictEqual(label('topicref', 0), undefined);
+      assert.strictEqual(label(undefined, 0), undefined);
     });
 
     it('rolls appendix letters past Z', () => {
       const label = createBookRoleLabeler();
       let last = '';
-      for (let i = 0; i < 27; i++) last = label('appendix')!;
+      for (let i = 0; i < 27; i++) last = label('appendix', 0)!;
       assert.strictEqual(last, 'Appendix AA');
+    });
+
+    it('restarts chapter numbering per nesting depth', () => {
+      const label = createBookRoleLabeler();
+      // Top-level chapters: 1, 2, 3
+      assert.strictEqual(label('chapter', 0), 'Chapter 1');
+      // Nested under Chapter 1: 1, 2, 3
+      assert.strictEqual(label('chapter', 1), 'Chapter 1');
+      assert.strictEqual(label('chapter', 1), 'Chapter 2');
+      assert.strictEqual(label('chapter', 1), 'Chapter 3');
+      // Back to top level: 2 (deeper counters reset)
+      assert.strictEqual(label('chapter', 0), 'Chapter 2');
+      // Nested under Chapter 2: 1, 2, 3, 4
+      assert.strictEqual(label('chapter', 1), 'Chapter 1');
+      assert.strictEqual(label('chapter', 1), 'Chapter 2');
+      assert.strictEqual(label('chapter', 1), 'Chapter 3');
+      assert.strictEqual(label('chapter', 1), 'Chapter 4');
+      // Back to top level: 3
+      assert.strictEqual(label('chapter', 0), 'Chapter 3');
+      // Nested under Chapter 3: 1, 2, 3, 4, 5
+      assert.strictEqual(label('chapter', 1), 'Chapter 1');
+      assert.strictEqual(label('chapter', 1), 'Chapter 2');
+      assert.strictEqual(label('chapter', 1), 'Chapter 3');
+      assert.strictEqual(label('chapter', 1), 'Chapter 4');
+      assert.strictEqual(label('chapter', 1), 'Chapter 5');
+    });
+
+    it('resets deeper counters when any division is encountered', () => {
+      const label = createBookRoleLabeler();
+      // Chapter at depth 1 under a (nonexistent) parent
+      assert.strictEqual(label('chapter', 1), 'Chapter 1');
+      assert.strictEqual(label('chapter', 1), 'Chapter 2');
+      // A part at depth 0 resets depth-1 chapter counter
+      assert.strictEqual(label('part', 0), 'Part I');
+      // Chapter at depth 1 should restart
+      assert.strictEqual(label('chapter', 1), 'Chapter 1');
+    });
+
+    it('numbers parts and appendixes per depth independently', () => {
+      const label = createBookRoleLabeler();
+      assert.strictEqual(label('part', 0), 'Part I');
+      assert.strictEqual(label('part', 0), 'Part II');
+      assert.strictEqual(label('part', 1), 'Part I');
+      assert.strictEqual(label('part', 1), 'Part II');
+      assert.strictEqual(label('appendix', 0), 'Appendix A');
+      assert.strictEqual(label('appendix', 1), 'Appendix A');
     });
 
     it('threads numbered roles through collectMapEntries', () => {
@@ -358,11 +404,11 @@ describe('ditaLanguageUtils', () => {
         return `[${info.role}]`;
       };
       const label = createBookRoleLabeler(zh);
-      assert.strictEqual(label('preface'), '[Preface]');
-      assert.strictEqual(label('chapter'), '第 1 章');
-      assert.strictEqual(label('chapter'), '第 2 章');
-      assert.strictEqual(label('part'), '第 I 部分');
-      assert.strictEqual(label('appendix'), '附录 A');
+      assert.strictEqual(label('preface', 0), '[Preface]');
+      assert.strictEqual(label('chapter', 0), '第 1 章');
+      assert.strictEqual(label('chapter', 0), '第 2 章');
+      assert.strictEqual(label('part', 0), '第 I 部分');
+      assert.strictEqual(label('appendix', 0), '附录 A');
     });
 
     it('threads the formatter through collectMapSymbols and collectMapEntries', () => {

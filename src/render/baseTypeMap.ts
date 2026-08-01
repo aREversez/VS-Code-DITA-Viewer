@@ -1,8 +1,11 @@
 import { DitaNode } from '../parser/domTypes';
 import { RenderContext } from './renderer';
 
-function isInThead(ctx: RenderContext): boolean {
-  return ctx.parentBaseType === 'topic/thead';
+// parentBaseType only reflects the immediate ancestor (entry sits under row,
+// not thead), so header status is carried by an explicit ctx flag set when
+// entering thead/sthead and cleared when entering tbody.
+function isInTableHeader(ctx: RenderContext): boolean {
+  return ctx.inTableHeader === true;
 }
 
 export type Renderer = (
@@ -31,7 +34,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   },
 
   'topic/title': (node, ctx, renderChildren) => {
-    const level = Math.min(ctx.headingLevel, 6);
+    const level = Math.min(Math.max(ctx.headingLevel, 1), 6);
     return `<h${level}>${renderChildren(node, ctx)}</h${level}>`;
   },
 
@@ -57,6 +60,10 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     return `<p>${renderChildren(_node, ctx)}</p>`;
   },
 
+  'topic/itemgroup': (node, ctx, renderChildren) => {
+    return `<div class="itemgroup">${renderChildren(node, ctx)}</div>`;
+  },
+
   'topic/note': (node, ctx, renderChildren) => {
     const type = getAttr(node, 'type') || 'note';
     const labels = ctx.noteLabels || { note: 'Note', notice: 'Notice', warning: 'Warning', danger: 'Danger', important: 'Important', tip: 'Tip', restriction: 'Restriction' };
@@ -80,15 +87,112 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     return `<table${safeAttr('id', id)} class="cals-table">${renderChildren(node, ctx)}</table>`;
   },
 
-  'topic/tgroup': (_node, ctx, renderChildren) => renderChildren(_node, ctx),
+  'topic/tgroup': (node, ctx, renderChildren) => {
+    // Build column name → number map from colspec elements
+    const colspecs = (node.children || []).filter(
+      (c) => c.type === 'element' && c.baseType === 'topic/colspec',
+    );
+    const colMap = new Map<string, number>();
+    colspecs.forEach((cs, i) => {
+      const colname = cs.attributes?.colname;
+      if (colname) {
+        const colnum = cs.attributes?.colnum
+          ? parseInt(cs.attributes.colnum, 10)
+          : i + 1;
+        colMap.set(colname, colnum);
+      }
+    });
+
+    // Pre-process entries: add colspan/rowspan attributes derived from
+    // CALS namest/nameend and morerows so the entry renderer can emit
+    // them as standard HTML attributes.
+    function addSpans(el: DitaNode): DitaNode {
+      if (el.type !== 'element') return el;
+      const processedChildren = (el.children || []).map(addSpans);
+      if (el.baseType === 'topic/entry') {
+        const attrs = { ...el.attributes };
+        const { namest, nameend } = attrs;
+        if (namest && nameend && !attrs.colspan) {
+          const startCol = colMap.get(namest);
+          const endCol = colMap.get(nameend);
+          if (startCol !== undefined && endCol !== undefined) {
+            attrs.colspan = String(endCol - startCol + 1);
+          }
+        }
+        if (attrs.morerows !== undefined && !attrs.rowspan) {
+          const mr = parseInt(attrs.morerows, 10);
+          if (!isNaN(mr)) attrs.rowspan = String(mr + 1);
+        }
+        return { ...el, attributes: attrs, children: processedChildren };
+      }
+      return { ...el, children: processedChildren };
+    }
+
+    const processedNode = addSpans(node);
+
+    // Generate <colgroup> with column widths
+    // CALS colwidth can be: "5*" or "1.5*" (proportional), "*" (= 1*),
+    // "50px", "30%", "2in", or a bare number (treated as pixels).
+    let colgroup = '';
+    if (colspecs.length > 0) {
+      // Calculate total proportional parts for "*" notation
+      let totalStars = 0;
+      let hasStars = false;
+      for (const cs of colspecs) {
+        const w = cs.attributes?.colwidth;
+        if (w) {
+          const m = w.match(/^(\d+(?:\.\d+)?)?\*$/);
+          if (m) {
+            hasStars = true;
+            totalStars += m[1] ? parseFloat(m[1]) : 1;
+          }
+        }
+      }
+      const cols = colspecs
+        .map((cs) => {
+          const w = cs.attributes?.colwidth;
+          if (!w) return '<col>';
+          // Convert CALS proportional notation (N*) to percentage
+          const starMatch = w.match(/^(\d+(?:\.\d+)?)?\*$/);
+          if (starMatch && hasStars && totalStars > 0) {
+            const parts = starMatch[1] ? parseFloat(starMatch[1]) : 1;
+            const pct = (parts / totalStars) * 100;
+            return `<col style="width: ${pct.toFixed(2)}%">`;
+          }
+          // Bare number → treat as pixels
+          if (/^\d+(?:\.\d+)?$/.test(w)) {
+            return `<col style="width: ${escapeAttr(w)}px">`;
+          }
+          // Pass through CSS-compatible values (px, %, em, in, cm, etc.)
+          return `<col style="width: ${escapeAttr(w)}">`;
+        })
+        .join('');
+      colgroup = `<colgroup>${cols}</colgroup>`;
+    }
+
+    // Render non-colspec children (thead, tbody, tfoot)
+    const childCtx: RenderContext = { ...ctx, parentBaseType: 'topic/tgroup' };
+    const nodeWithoutColspec: DitaNode = {
+      ...processedNode,
+      children: (processedNode.children || []).filter(
+        (c) => !(c.type === 'element' && c.baseType === 'topic/colspec'),
+      ),
+    };
+    return colgroup + renderChildren(nodeWithoutColspec, childCtx);
+  },
   'topic/colspec': () => '',
 
-  'topic/thead': (_node, ctx, renderChildren) => `<thead>${renderChildren(_node, ctx)}</thead>`,
-  'topic/tbody': (_node, ctx, renderChildren) => `<tbody>${renderChildren(_node, ctx)}</tbody>`,
+  'topic/thead': (_node, ctx, renderChildren) =>
+    `<thead>${renderChildren(_node, { ...ctx, inTableHeader: true })}</thead>`,
+  'topic/tbody': (_node, ctx, renderChildren) =>
+    `<tbody>${renderChildren(_node, { ...ctx, inTableHeader: false })}</tbody>`,
   'topic/row': (_node, ctx, renderChildren) => `<tr>${renderChildren(_node, ctx)}</tr>`,
   'topic/entry': (node, ctx, renderChildren) => {
-    const tag = isInThead(ctx) ? 'th' : 'td';
-    return `<${tag}>${renderChildren(node, ctx)}</${tag}>`;
+    const tag = isInTableHeader(ctx) ? 'th' : 'td';
+    const colspan = getAttr(node, 'colspan');
+    const rowspan = getAttr(node, 'rowspan');
+    const attrs = `${safeAttr('colspan', colspan)}${safeAttr('rowspan', rowspan)}`;
+    return `<${tag}${attrs}>${renderChildren(node, ctx)}</${tag}>`;
   },
 
   'topic/simpletable': (node, ctx, renderChildren) => {
@@ -96,10 +200,12 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     return `<table${safeAttr('id', id)} class="simple-table">${renderChildren(node, ctx)}</table>`;
   },
 
-  'topic/sthead': (_node, ctx, renderChildren) => `<thead>${renderChildren(_node, ctx)}</thead>`,
-  'topic/strow': (_node, ctx, renderChildren) => `<tr>${renderChildren(_node, ctx)}</tr>`,
+  'topic/sthead': (_node, ctx, renderChildren) =>
+    `<thead>${renderChildren(_node, { ...ctx, inTableHeader: true })}</thead>`,
+  'topic/strow': (_node, ctx, renderChildren) =>
+    `<tr>${renderChildren(_node, { ...ctx, inTableHeader: false })}</tr>`,
   'topic/stentry': (node, ctx, renderChildren) => {
-    const tag = isInThead(ctx) ? 'th' : 'td';
+    const tag = isInTableHeader(ctx) ? 'th' : 'td';
     return `<${tag}>${renderChildren(node, ctx)}</${tag}>`;
   },
 
@@ -112,7 +218,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     const extra = `${safeAttr('width', width)}${safeAttr('height', height)}`;
     const imgSrc = href ? ctx.asWebviewUri(href) : '';
     const cls = placement === 'break' ? ' class="image-break"' : '';
-    return `<img src="${imgSrc || ''}"${safeAttr('alt', alt)}${extra}${cls} loading="lazy" data-dita-src="${escapeAttr(href)}">`;
+    return `<img src="${escapeAttr(imgSrc)}"${safeAttr('alt', alt)}${extra}${cls} loading="lazy" data-dita-src="${escapeAttr(href)}">`;
   },
 
   'topic/fig': (node, ctx, renderChildren) => {
@@ -183,6 +289,17 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   'topic/sup': (_node, ctx, renderChildren) => `<sup>${renderChildren(_node, ctx)}</sup>`,
   'topic/sub': (_node, ctx, renderChildren) => `<sub>${renderChildren(_node, ctx)}</sub>`,
 
+  // Highlight domain additions (specialize topic/ph; given element-specific
+  // baseTypes + renderers so the visual styling survives even when the class
+  // attribute is omitted from the XML — same approach as b/i/u above).
+  // line-through maps to the semantic <s> element (zero CSS, like b→<strong>);
+  // overline has no semantic HTML element, so it uses a .overline CSS class
+  // (defined in styles.css) instead of an inline style so themes can override it.
+  'topic/line-through': (_node, ctx, renderChildren) =>
+    `<s>${renderChildren(_node, ctx)}</s>`,
+  'topic/overline': (_node, ctx, renderChildren) =>
+    `<span class="overline">${renderChildren(_node, ctx)}</span>`,
+
   'topic/q': (_node, ctx, renderChildren) => `<q>${renderChildren(_node, ctx)}</q>`,
   'topic/lq': (_node, ctx, renderChildren) => `<blockquote>${renderChildren(_node, ctx)}</blockquote>`,
 
@@ -194,7 +311,12 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
   'topic/ph': (node, ctx, renderChildren) => {
     const keyref = getAttr(node, 'keyref');
-    if (keyref && ctx.resolveKey) {
+    const hasContent = (node.children || []).some(
+      (c) => c.type === 'element' || (c.text || '').trim() !== '',
+    );
+    // Content wins over keyref (DITA spec). An empty ph with a resolvable
+    // keyref is substituted upstream; reaching here empty means unresolved.
+    if (keyref && !hasContent && ctx.resolveKey) {
       const resolved = ctx.resolveKey(keyref);
       if (resolved) return `<span class="ph">${escapeAttr(resolved)}</span>`;
       return `<span class="ph unresolved-keyref" title="Unresolved key: ${escapeAttr(keyref)}">[${escapeAttr(keyref)}]</span>`;
@@ -307,6 +429,11 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     `<div class="section-div">${renderChildren(_node, ctx)}</div>`,
   'topic/bodydiv': (_node, ctx, renderChildren) =>
     `<div class="body-div">${renderChildren(_node, ctx)}</div>`,
+  // Generic grouping container (image-map <area> group, programming domain
+  // groupchoice/groupcomp/groupseq alternatives). Same block treatment as
+  // bodydiv/sectiondiv — no distinct visual semantics of its own.
+  'topic/figgroup': (_node, ctx, renderChildren) =>
+    `<div class="figgroup">${renderChildren(_node, ctx)}</div>`,
   'topic/desc': (_node, ctx, renderChildren) =>
     `<span class="desc">${renderChildren(_node, ctx)}</span>`,
   'topic/alt': (_node, ctx, renderChildren) =>
@@ -366,5 +493,23 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   },
   'topic/anchorkey': () => '',
   'topic/anchorref': () => '',
+
+  // Prolog — metadata container (author, critdates, permissions, metadata,
+  // keywords, etc.). Entirely non-display; swallow the whole subtree so
+  // nothing leaks into the body preview. Mirrors the anchorkey/anchorref
+  // pattern. Evidence: base/dtd/commonElementMod.ent — class
+  // "- topic/prolog " — appears between title and body in topic/concept/
+  // task/reference. Without this entry the fallback renderer recurses into
+  // children, causing author/keyword content to appear in the body.
+  'topic/prolog': () => '',
+
+  // These three (topic/keywords, topic/metadata, topic/publisher) are always
+  // nested inside <prolog> in valid DITA — topic/prolog already suppresses
+  // the whole subtree above, so these never actually get reached. Mapped
+  // explicitly anyway, matching the anchorid/anchorkey/anchorref/prolog
+  // precedent of not relying solely on an ancestor's suppression.
+  'topic/keywords': () => '',
+  'topic/metadata': () => '',
+  'topic/publisher': () => '',
 
 };

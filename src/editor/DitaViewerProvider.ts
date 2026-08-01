@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
-import { readFileSync, existsSync, readdirSync } from 'fs';
-import { dirname, extname, isAbsolute, join, resolve, basename } from 'path';
+import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { dirname, isAbsolute, join, resolve, basename } from 'path';
 import { randomBytes } from 'crypto';
 import { DitaNode } from '../parser/domTypes';
-import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeFileTitleResolver, getSearchOverlayScript } from './ditaRenderUtils';
+import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeFileTitleResolver, getSearchOverlayScript, decodeHrefPart, FileReader } from './ditaRenderUtils';
 
 // Test-only hook: @vscode/test-electron integration tests can't read a
 // webview's rendered HTML directly (VS Code doesn't expose the WebviewPanel
@@ -424,6 +424,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       editorSub.dispose();
       selectionSub.dispose();
       themeSubscription.dispose();
+      lastRenderedHtmlByUri.delete(document.uri.toString());
     });
   }
 
@@ -439,27 +440,11 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     const docRoot = vscode.Uri.file(docRootDir);
     const asWebviewUri = (relPath: string): string => {
       try {
-        const resolvedPath = resolve(docRootDir, relPath);
-        const fileUri = vscode.Uri.file(resolvedPath);
-        const webviewUri = webview.asWebviewUri(fileUri);
-        if (webviewUri) return webviewUri.toString();
-      } catch {}
-      try {
-        const fullPath = resolve(docRootDir, relPath);
-        if (existsSync(fullPath)) {
-          const data = readFileSync(fullPath);
-          const ext = extname(relPath).toLowerCase();
-          const mime =
-            ext === '.png' ? 'image/png'
-            : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg'
-            : ext === '.gif' ? 'image/gif'
-            : ext === '.svg' ? 'image/svg+xml'
-            : ext === '.webp' ? 'image/webp'
-            : 'image/png';
-          return `data:${mime};base64,${data.toString('base64')}`;
-        }
-      } catch {}
-      return '';
+        const resolvedPath = resolve(docRootDir, decodeHrefPart(relPath));
+        return webview.asWebviewUri(vscode.Uri.file(resolvedPath)).toString();
+      } catch {
+        return '';
+      }
     };
 
     try {
@@ -567,7 +552,7 @@ export function findDitamapFiles(docUri: vscode.Uri, stopAtFirstMatch = true): s
   while (dir.length >= root.length) {
     try {
       for (const entry of readdirSync(dir)) {
-        if (entry.endsWith('.ditamap')) results.push(join(dir, entry));
+        if (entry.toLowerCase().endsWith('.ditamap')) results.push(join(dir, entry));
       }
     } catch {}
     if (stopAtFirstMatch && results.length > 0) return results;
@@ -623,19 +608,60 @@ function getKeyValueFromRef(node: DitaNode): string | undefined {
   ]);
 }
 
+// buildKeyMap sits on hot paths (preview re-render, completion, diagnostics,
+// map tree) and used to re-read and re-parse every ancestor ditamap each
+// call. Cache per document directory; invalidated when the set of ancestor
+// maps changes or any involved file's mtime changes (including maps pulled
+// in via expandDitamapRefs, tracked through the recording reader).
+interface KeyMapCacheEntry {
+  mapFilesKey: string;
+  stamps: string;
+  files: string[];
+  map: Map<string, string>;
+}
+const keyMapCache = new Map<string, KeyMapCacheEntry>();
+// One entry per document directory; bound it so long sessions touching many
+// folders cannot grow the cache without limit (evicts oldest-inserted first).
+const KEY_MAP_CACHE_MAX = 50;
+
+function stampFiles(files: string[]): string {
+  return files
+    .map((f) => {
+      try {
+        return String(statSync(f).mtimeMs);
+      } catch {
+        return '?';
+      }
+    })
+    .join('|');
+}
+
 export function buildKeyMap(docUri: vscode.Uri): Map<string, string> {
-  const map = new Map<string, string>();
+  const docDir = dirname(docUri.fsPath);
   // Scan all ancestor folders (not just the nearest one with a map) so keydef
   // maps living in outer folders are still picked up; maps referenced from any
   // scanned map are followed via expandDitamapRefs regardless of location.
   const mapFiles = findDitamapFiles(docUri, false);
+  const mapFilesKey = mapFiles.join('|');
+
+  const cached = keyMapCache.get(docDir);
+  if (cached && cached.mapFilesKey === mapFilesKey && stampFiles(cached.files) === cached.stamps) {
+    return cached.map;
+  }
+
+  const map = new Map<string, string>();
+  const involvedFiles = [...mapFiles];
+  const recordingRead: FileReader = (path, encoding) => {
+    involvedFiles.push(path);
+    return readFileSync(path, encoding);
+  };
   for (const mf of mapFiles) {
     try {
       const content = readFileSync(mf, 'utf-8');
       const doc = parseDitamap(preprocessEntities(content));
       const mapRoot = doc.root;
       // Expand referenced ditamaps so keydefs from included maps are visible
-      expandDitamapRefs(mapRoot, dirname(mf));
+      expandDitamapRefs(mapRoot, dirname(mf), recordingRead);
       function walk(node: DitaNode) {
         if (node.type !== 'element') return;
         const baseType = node.baseType;
@@ -650,6 +676,17 @@ export function buildKeyMap(docUri: vscode.Uri): Map<string, string> {
       for (const child of mapRoot.children || []) walk(child);
     } catch {}
   }
+
+  if (keyMapCache.size >= KEY_MAP_CACHE_MAX && !keyMapCache.has(docDir)) {
+    const oldest = keyMapCache.keys().next().value;
+    if (oldest !== undefined) keyMapCache.delete(oldest);
+  }
+  keyMapCache.set(docDir, {
+    mapFilesKey,
+    stamps: stampFiles(involvedFiles),
+    files: involvedFiles,
+    map,
+  });
   return map;
 }
 
@@ -730,6 +767,10 @@ function findCustomCssDir(docDir: string): string {
 }
 
 function parseDocRoot(dir: string): string {
+  // Multi-root workspaces: bound upward walks by the folder that actually
+  // contains the document, not always the first folder.
+  const owner = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(dir));
+  if (owner) return owner.uri.fsPath;
   const folders = vscode.workspace.workspaceFolders;
   if (folders && folders.length > 0) return folders[0].uri.fsPath;
   const sep = dir.includes('/') ? '/' : '\\';

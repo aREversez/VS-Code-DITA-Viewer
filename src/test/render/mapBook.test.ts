@@ -207,6 +207,92 @@ describe('collectMapEntries', () => {
     assert.strictEqual(entries[0].displayName, 'A');
     assert.strictEqual(entries[1].displayName, 'B');
   });
+
+  it('should restart chapter numbering per nesting depth', () => {
+    const xml = `<bookmap>
+      <chapter href="c1.dita">
+        <chapter href="c1-1.dita"/>
+        <chapter href="c1-2.dita"/>
+        <chapter href="c1-3.dita"/>
+      </chapter>
+      <chapter href="c2.dita">
+        <chapter href="c2-1.dita"/>
+        <chapter href="c2-2.dita"/>
+        <chapter href="c2-3.dita"/>
+        <chapter href="c2-4.dita"/>
+      </chapter>
+      <chapter href="c3.dita">
+        <chapter href="c3-1.dita"/>
+        <chapter href="c3-2.dita"/>
+        <chapter href="c3-3.dita"/>
+        <chapter href="c3-4.dita"/>
+        <chapter href="c3-5.dita"/>
+      </chapter>
+    </bookmap>`;
+    const doc = parseMap(xml);
+    const entries = collectMapEntries(doc.root);
+    // Top-level: Chapter 1, Chapter 2, Chapter 3
+    assert.strictEqual(entries[0].role, 'Chapter 1'); // c1
+    assert.strictEqual(entries[1].role, 'Chapter 1'); // c1-1
+    assert.strictEqual(entries[2].role, 'Chapter 2'); // c1-2
+    assert.strictEqual(entries[3].role, 'Chapter 3'); // c1-3
+    assert.strictEqual(entries[4].role, 'Chapter 2'); // c2
+    assert.strictEqual(entries[5].role, 'Chapter 1'); // c2-1
+    assert.strictEqual(entries[6].role, 'Chapter 2'); // c2-2
+    assert.strictEqual(entries[7].role, 'Chapter 3'); // c2-3
+    assert.strictEqual(entries[8].role, 'Chapter 4'); // c2-4
+    assert.strictEqual(entries[9].role, 'Chapter 3'); // c3
+    assert.strictEqual(entries[10].role, 'Chapter 1'); // c3-1
+    assert.strictEqual(entries[11].role, 'Chapter 2'); // c3-2
+    assert.strictEqual(entries[12].role, 'Chapter 3'); // c3-3
+    assert.strictEqual(entries[13].role, 'Chapter 4'); // c3-4
+    assert.strictEqual(entries[14].role, 'Chapter 5'); // c3-5
+  });
+
+  it('should restart chapter numbering inside parts', () => {
+    const xml = `<bookmap>
+      <part href="p1.dita">
+        <chapter href="c1.dita"/>
+        <chapter href="c2.dita"/>
+      </part>
+      <part href="p2.dita">
+        <chapter href="c3.dita"/>
+        <chapter href="c4.dita"/>
+      </part>
+    </bookmap>`;
+    const doc = parseMap(xml);
+    const entries = collectMapEntries(doc.root);
+    assert.strictEqual(entries[0].role, 'Part I');
+    assert.strictEqual(entries[1].role, 'Chapter 1'); // under Part I
+    assert.strictEqual(entries[2].role, 'Chapter 2'); // under Part I
+    assert.strictEqual(entries[3].role, 'Part II');
+    assert.strictEqual(entries[4].role, 'Chapter 1'); // under Part II (restarts)
+    assert.strictEqual(entries[5].role, 'Chapter 2'); // under Part II
+  });
+
+  it('should restart chapter numbering through frontmatter', () => {
+    const xml = `<bookmap>
+      <frontmatter>
+        <chapter href="preface.dita"/>
+      </frontmatter>
+      <chapter href="c1.dita">
+        <chapter href="c1-1.dita"/>
+      </chapter>
+      <chapter href="c2.dita">
+        <chapter href="c2-1.dita"/>
+      </chapter>
+    </bookmap>`;
+    const doc = parseMap(xml);
+    const entries = collectMapEntries(doc.root);
+    // frontmatter chapter at depth 0
+    assert.strictEqual(entries[0].role, 'Chapter 1');
+    // c1 at depth 0: Chapter 2, nested c1-1 at depth 1: Chapter 1
+    assert.strictEqual(entries[1].role, 'Chapter 2');
+    assert.strictEqual(entries[2].role, 'Chapter 1');
+    // c2 at depth 0: Chapter 3, nested c2-1 at depth 1: Chapter 1 (restarts)
+    assert.strictEqual(entries[3].role, 'Chapter 3');
+    assert.strictEqual(entries[4].role, 'Chapter 1');
+  });
 });
 
 describe('bookRendering', () => {

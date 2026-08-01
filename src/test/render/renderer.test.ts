@@ -44,12 +44,34 @@ describe('renderer', () => {
     assert.ok(html.includes('</h1>'));
   });
 
+  it('should clamp heading levels to the h1–h6 range', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/title', [makeText('Clamped')]),
+    ]);
+    const low = renderDocument(doc, { ...defaultCtx, headingLevel: 0 });
+    assert.ok(/<h1\b/.test(low), `expected h1 for level 0, got: ${low}`);
+    const high = renderDocument(doc, { ...defaultCtx, headingLevel: 9 });
+    assert.ok(/<h6\b/.test(high) && high.includes('</h6>'), `expected h6 for level 9, got: ${high}`);
+  });
+
   it('should render shortdesc with class', () => {
     const doc = makeEl('topic/topic', [
       makeEl('topic/shortdesc', [makeText('A short desc')]),
     ]);
     const html = renderDocument(doc, defaultCtx);
     assert.ok(html.includes('class="shortdesc"'));
+  });
+
+  it('should render itemgroup (task info/stepxmp base type) as a div', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/li', [
+        makeEl('topic/ph', [makeText('Do it')], undefined, 'cmd'),
+        makeEl('topic/itemgroup', [makeText('details')], undefined, 'info'),
+      ], undefined, 'step'),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(/<div\b[^>]*class="itemgroup"[^>]*>details<\/div>/.test(html), `got: ${html}`);
+    assert.ok(/<li\b[^>]*>/.test(html), 'step should render as li');
   });
 
   it('should render paragraphs', () => {
@@ -129,8 +151,24 @@ describe('renderer', () => {
     ]);
     const html = renderDocument(doc, defaultCtx);
     assert.ok(html.includes('class="cals-table"'));
-    assert.ok(html.includes('<th'));
-    assert.ok(html.includes('<td'));
+    assert.ok(/<th\b[^>]*>Header<\/th>/.test(html), `header entry should render as th, got: ${html}`);
+    assert.ok(/<td\b[^>]*>Data<\/td>/.test(html), `body entry should render as td, got: ${html}`);
+  });
+
+  it('should render simple table header stentry as th and row stentry as td', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/simpletable', [
+        makeEl('topic/sthead', [
+          makeEl('topic/stentry', [makeText('OS')]),
+        ]),
+        makeEl('topic/strow', [
+          makeEl('topic/stentry', [makeText('Linux')]),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(/<th\b[^>]*>OS<\/th>/.test(html), `sthead stentry should render as th, got: ${html}`);
+    assert.ok(/<td\b[^>]*>Linux<\/td>/.test(html), `strow stentry should render as td, got: ${html}`);
   });
 
   it('should render simple table', () => {
@@ -149,6 +187,139 @@ describe('renderer', () => {
     assert.ok(html.includes('title="stentry"'));
     assert.ok(html.includes('>OS<'));
     assert.ok(html.includes('>Linux<'));
+  });
+
+  it('should render CALS table with colspan from namest/nameend', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/table', [
+        makeEl('topic/tgroup', [
+          makeEl('topic/colspec', [], { colname: 'c1' }),
+          makeEl('topic/colspec', [], { colname: 'c2' }),
+          makeEl('topic/colspec', [], { colname: 'c3' }),
+          makeEl('topic/thead', [
+            makeEl('topic/row', [
+              makeEl('topic/entry', [makeText('Header')], { namest: 'c1', nameend: 'c3' }),
+            ]),
+          ]),
+          makeEl('topic/tbody', [
+            makeEl('topic/row', [
+              makeEl('topic/entry', [makeText('A')]),
+              makeEl('topic/entry', [makeText('B')]),
+              makeEl('topic/entry', [makeText('C')]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('colspan="3"'), 'should have colspan=3 for merged header cell');
+  });
+
+  it('should render CALS table with rowspan from morerows', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/table', [
+        makeEl('topic/tgroup', [
+          makeEl('topic/colspec', [], { colname: 'c1' }),
+          makeEl('topic/colspec', [], { colname: 'c2' }),
+          makeEl('topic/tbody', [
+            makeEl('topic/row', [
+              makeEl('topic/entry', [makeText('Merged')], { morerows: '1' }),
+              makeEl('topic/entry', [makeText('B')]),
+            ]),
+            makeEl('topic/row', [
+              makeEl('topic/entry', [makeText('D')]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('rowspan="2"'), 'should have rowspan=2 for merged cell (morerows=1 → rowspan=2)');
+  });
+
+  it('should render CALS table with colgroup from colspec colwidth', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/table', [
+        makeEl('topic/tgroup', [
+          makeEl('topic/colspec', [], { colname: 'c1', colwidth: '5*' }),
+          makeEl('topic/colspec', [], { colname: 'c2', colwidth: '3*' }),
+          makeEl('topic/tbody', [
+            makeEl('topic/row', [
+              makeEl('topic/entry', [makeText('A')]),
+              makeEl('topic/entry', [makeText('B')]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('<colgroup>'), 'should generate colgroup');
+    assert.ok(html.includes('62.50'), '5* out of 8* total = 62.5%');
+    assert.ok(html.includes('37.50'), '3* out of 8* total = 37.5%');
+  });
+
+  it('should render CALS table with decimal proportional colwidth', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/table', [
+        makeEl('topic/tgroup', [
+          makeEl('topic/colspec', [], { colname: 'c1', colwidth: '1.5*' }),
+          makeEl('topic/colspec', [], { colname: 'c2', colwidth: '1*' }),
+          makeEl('topic/tbody', [
+            makeEl('topic/row', [
+              makeEl('topic/entry', [makeText('A')]),
+              makeEl('topic/entry', [makeText('B')]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('60.00'), '1.5* out of 2.5* total = 60%');
+    assert.ok(html.includes('40.00'), '1* out of 2.5* total = 40%');
+  });
+
+  it('should render CALS table with bare-number colwidth as px', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/table', [
+        makeEl('topic/tgroup', [
+          makeEl('topic/colspec', [], { colname: 'c1', colwidth: '200' }),
+          makeEl('topic/colspec', [], { colname: 'c2', colwidth: '100' }),
+          makeEl('topic/tbody', [
+            makeEl('topic/row', [
+              makeEl('topic/entry', [makeText('A')]),
+              makeEl('topic/entry', [makeText('B')]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('width: 200px'), 'bare number 200 should become 200px');
+    assert.ok(html.includes('width: 100px'), 'bare number 100 should become 100px');
+  });
+
+  it('should render CALS table with both colspan and rowspan', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/table', [
+        makeEl('topic/tgroup', [
+          makeEl('topic/colspec', [], { colname: 'c1' }),
+          makeEl('topic/colspec', [], { colname: 'c2' }),
+          makeEl('topic/colspec', [], { colname: 'c3' }),
+          makeEl('topic/tbody', [
+            makeEl('topic/row', [
+              makeEl('topic/entry', [makeText('Big')], { namest: 'c1', nameend: 'c2', morerows: '1' }),
+              makeEl('topic/entry', [makeText('C')]),
+            ]),
+            makeEl('topic/row', [
+              makeEl('topic/entry', [makeText('F')]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('colspan="2"'), 'should have colspan=2');
+    assert.ok(html.includes('rowspan="2"'), 'should have rowspan=2');
   });
 
   it('should render image with asWebviewUri', () => {
@@ -418,5 +589,240 @@ describe('renderer', () => {
     assert.ok(/<h1[\s>]/.test(html));
     assert.ok(/<h2[\s>]/.test(html));
     assert.ok(html.includes('>Section<'));
+  });
+
+  // ── Conref resolution tests ──
+
+  it('should resolve ph conref with same-type target preserving children', () => {
+    // Target is a <ph> (same baseType as referencing <ph>)
+    const target = makeEl('topic/ph', [
+      makeEl('topic/b', [makeText('Important')]),
+      makeText(' note text'),
+    ], { id: 'ph_note' });
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveConref: (_conref: string) => target,
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/ph', [], { conref: 'reuse.dita#r/ph_note' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('Important'), 'should contain resolved child element text');
+    assert.ok(html.includes('note text'), 'should contain resolved child text');
+    assert.ok(!html.includes('conref'), 'should strip conref attribute after resolution');
+  });
+
+  it('should resolve ph conref with cross-type target preserving target tag', () => {
+    // Target is a <filepath> (different baseType from referencing <ph>)
+    const target = makeEl('topic/filepath', [makeText('.fscript')], { id: 'fp_1' });
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveConref: (_conref: string) => target,
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/p', [
+          makeEl('topic/ph', [], { conref: 'reuse.dita#r/fp_1' }),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('class="filepath"'), 'filepath span should be rendered (target tag preserved)');
+    assert.ok(html.includes('.fscript'), 'filepath text should be present');
+    assert.ok(!html.includes('conref'), 'should strip conref attribute');
+  });
+
+  it('should resolve plentry conref preserving pt/pd structure', () => {
+    // Target is a <plentry> (same baseType) with pt/pd children
+    const target = makeEl('topic/plentry', [
+      makeEl('topic/pt', [makeText('Parameter A')]),
+      makeEl('topic/pd', [makeText('Value A')]),
+    ], { id: 'plentry_1' });
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveConref: (_conref: string) => target,
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/parml', [
+          makeEl('topic/plentry', [], { conref: 'reuse.dita#r/plentry_1' }),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('class="plentry"'), 'plentry container should be rendered');
+    assert.ok(html.includes('class="pt"'), 'pt element should be rendered as dt');
+    assert.ok(html.includes('Parameter A'), 'pt text should be preserved');
+    assert.ok(html.includes('class="pd"'), 'pd element should be rendered as dd');
+    assert.ok(html.includes('Value A'), 'pd text should be preserved');
+  });
+
+  it('should leave node unchanged when conref is unresolved (undefined)', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveConref: (_conref: string) => undefined,
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/ph', [makeText('fallback')], { conref: 'missing.dita#r/ph_1' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('fallback'), 'should keep original children when conref is unresolved');
+  });
+
+  it('should stop rendering on circular conref instead of recursing forever', () => {
+    // Target's content conrefs back to itself — without the conrefChain
+    // guard this recursion never terminates (stack overflow).
+    const target = makeEl('topic/p', [
+      makeText('cycle-text '),
+      makeEl('topic/p', [makeText('inner-fallback')], { conref: 'reuse.dita#r/loop' }),
+    ], { id: 'loop' });
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveConref: (_conref: string) => target,
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/p', [], { conref: 'reuse.dita#r/loop' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('cycle-text'), 'first-level conref should still resolve');
+    assert.ok(html.includes('inner-fallback'), 'cyclic conref should fall back to literal content');
+  });
+
+  // ── Keyref resolution tests ──
+
+  it('should resolve varname keyref to key value', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveKey: (key: string) => key === 'product_install_path' ? '/opt/product' : undefined,
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/p', [
+          makeText('Install to '),
+          makeEl('topic/varname', [], { keyref: 'product_install_path' }),
+          makeText('.'),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('/opt/product'), 'should contain resolved key value');
+    assert.ok(html.includes('class="varname"'), 'varname span should be rendered');
+    assert.ok(!html.includes('keyref'), 'keyref attribute should be stripped after resolution');
+  });
+
+  it('should resolve keyword keyref to key value', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveKey: (key: string) => key === 'version' ? '2.0' : undefined,
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/keyword', [], { keyref: 'version' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('2.0'), 'should contain resolved key value');
+    assert.ok(html.includes('class="keyword"'), 'keyword span should be rendered');
+  });
+
+  it('should leave node unchanged when keyref is unresolved', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveKey: (_key: string) => undefined,
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/varname', [makeText('fallback')], { keyref: 'missing_key' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('fallback'), 'should keep fallback content when keyref is unresolved');
+  });
+
+  it('should resolve ph keyref to key value (generic handler)', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveKey: (key: string) => key === 'product' ? 'MyApp Pro' : undefined,
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/ph', [], { keyref: 'product' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('MyApp Pro'), 'should contain resolved key value');
+    assert.ok(html.includes('class="ph"'), 'ph span should be rendered');
+    assert.ok(!html.includes('keyref'), 'keyref attribute should be stripped after resolution');
+  });
+
+  it('should prefer local element content over the keyref value', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveKey: (_key: string) => 'key-value',
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/ph', [makeText('local content')], { keyref: 'product' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('local content'), 'element content wins per the DITA spec');
+    assert.ok(!html.includes('key-value'), 'key value must not replace existing content');
+  });
+
+  it('should escape the resolved img src attribute', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      asWebviewUri: (p: string) => `vscode-resource:${p}" onerror="alert(1)`,
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/image', [], { href: 'img.png' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(!html.includes('onerror="alert(1)"'), 'src must not break out of its attribute');
+    assert.ok(html.includes('&quot;'), 'quote in the URI should be escaped');
+  });
+
+  // ── Prolog suppression tests ──
+
+  it('should not render prolog metadata content in the body', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/title', [makeText('T')]),
+      makeEl('topic/prolog', [
+        makeEl('topic/keyword', [makeText('SECRET_KEYWORD_TOKEN')], undefined, 'keyword'),
+      ], undefined, 'prolog'),
+      makeEl('topic/body', [
+        makeEl('topic/p', [makeText('Real body text')]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('SECRET_KEYWORD_TOKEN'), 'prolog keyword must not leak into output');
+    assert.ok(html.includes('Real body text'), 'body content should still render');
+  });
+
+  it('should suppress the entire prolog subtree including nested metadata', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/title', [makeText('T')]),
+      makeEl('topic/prolog', [
+        makeText('Jane Secret Author'),
+        makeEl('topic/keyword', [makeText('SECRET_KEYWORD_TOKEN')], undefined, 'keyword'),
+      ], undefined, 'prolog'),
+      makeEl('topic/body', [
+        makeEl('topic/p', [makeText('Visible')]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('Jane Secret Author'), 'prolog author text must not leak');
+    assert.ok(!html.includes('SECRET_KEYWORD_TOKEN'), 'prolog keyword must not leak');
+    assert.ok(!html.includes('class="keyword"'), 'prolog keyword span must not render');
+    assert.ok(html.includes('Visible'), 'body content should still render');
   });
 });

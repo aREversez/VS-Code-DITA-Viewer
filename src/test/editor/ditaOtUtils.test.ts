@@ -3,6 +3,7 @@ import { join } from 'path';
 import {
   resolveDitaOtExecutable,
   buildDitaOtArgs,
+  buildDitaOtSpawnSpec,
   buildNavManifest,
   classifyLogLine,
   createLineBuffer,
@@ -392,5 +393,68 @@ describe('createLineBuffer', () => {
     const lines = buf.processChunk('ld\n');
     assert.deepStrictEqual(lines, ['hello world']);
     assert.deepStrictEqual(buf.flush(), []);
+  });
+});
+
+describe('buildDitaOtSpawnSpec', () => {
+  it('should pass command and args through unchanged on POSIX', () => {
+    const spec = buildDitaOtSpawnSpec(
+      '/opt/dita ot/bin/dita',
+      ['--input', '/tmp/my map.ditamap', '--format', 'html5'],
+      'linux',
+    );
+    assert.strictEqual(spec.command, '/opt/dita ot/bin/dita');
+    assert.deepStrictEqual(spec.args, ['--input', '/tmp/my map.ditamap', '--format', 'html5']);
+    assert.strictEqual(spec.windowsVerbatimArguments, undefined);
+  });
+
+  it('should wrap the command line with cmd.exe /d /s /c on Windows', () => {
+    const spec = buildDitaOtSpawnSpec(
+      'C:\\dita-ot\\bin\\dita.bat',
+      ['--input', 'C:\\docs\\map.ditamap'],
+      'win32',
+    );
+    assert.strictEqual(spec.command, 'cmd.exe');
+    assert.deepStrictEqual(spec.args.slice(0, 3), ['/d', '/s', '/c']);
+    assert.strictEqual(spec.windowsVerbatimArguments, true);
+    assert.strictEqual(
+      spec.args[3],
+      '""C:\\dita-ot\\bin\\dita.bat" "--input" "C:\\docs\\map.ditamap""',
+    );
+  });
+
+  it('should quote arguments containing spaces on Windows', () => {
+    const spec = buildDitaOtSpawnSpec(
+      'C:\\Program Files\\dita-ot\\bin\\dita.bat',
+      ['--input', 'C:\\My Docs\\user guide.ditamap'],
+      'win32',
+    );
+    const wrapped = spec.args[3];
+    assert.ok(wrapped.includes('"C:\\Program Files\\dita-ot\\bin\\dita.bat"'), 'executable stays one token');
+    assert.ok(wrapped.includes('"C:\\My Docs\\user guide.ditamap"'), 'path with spaces stays one token');
+  });
+
+  it('should neutralize shell metacharacters in arguments on Windows', () => {
+    const spec = buildDitaOtSpawnSpec(
+      'C:\\dita-ot\\bin\\dita.bat',
+      ['--input', 'C:\\docs\\evil & calc.exe.ditamap'],
+      'win32',
+    );
+    const wrapped = spec.args[3];
+    // The metacharacter must sit inside quotes, never as a bare token
+    assert.ok(wrapped.includes('"C:\\docs\\evil & calc.exe.ditamap"'));
+    // Strip the outer /s wrapper quotes, then drop every quoted token —
+    // nothing outside quotes may contain the metacharacter
+    const outsideQuotes = wrapped.slice(1, -1).replace(/"[^"]*"/g, '');
+    assert.ok(!outsideQuotes.includes('&'), 'no unquoted & should remain');
+  });
+
+  it('should escape embedded double quotes as doubled quotes on Windows', () => {
+    const spec = buildDitaOtSpawnSpec(
+      'C:\\dita-ot\\bin\\dita.bat',
+      ['--filter=some"value'],
+      'win32',
+    );
+    assert.ok(spec.args[3].includes('"--filter=some""value"'), `expected doubled quote, got: ${spec.args[3]}`);
   });
 });

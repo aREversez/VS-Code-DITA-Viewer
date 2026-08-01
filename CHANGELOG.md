@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.7 (2026-08-01)
+
+### Rendering Completeness (new)
+
+- **DTD-driven tag mapping audit** — every element's `@class` default value in the DITA-OT 1.3 DTDs (base, technicalContent, bookmap) was extracted and diffed against the extension's hand-maintained tag map, closing every gap found: task/concept/reference topic types, the troubleshooting module, glossary entry substructure (`glossBody`, `glossAlt`, synonyms/acronyms/…), the taskreq domain, image-map and programming-domain grouping elements (`figgroup`), MathML/SVG foreign-content wrappers, and the remaining release-management and bookmap metadata fields — now render correctly even when the source XML omits explicit `@class` attributes (a reusable extraction script, `scripts/extract-dita-class.cjs`, is checked in for re-running against future DITA-OT upgrades)
+- **`<prolog>` no longer leaks into the preview** — topic metadata (`author`, `keywords`, revision history, etc.) previously rendered as unstyled text at the top of the body when the source lacked an explicit `@class="- topic/prolog "` attribute; it's now correctly suppressed
+- **Highlight domain: `line-through`/`overline`** — render as a semantic `<s>` element and a themeable `.overline` CSS class respectively, matching the existing `b`/`i`/`u`/`tt`/`sup`/`sub` convention
+
 ## 1.0.6 (2026-07-28)
 
 ### Language Features (new)
@@ -21,7 +29,7 @@
 
 ### BookMap Semantics
 
-- **Numbered role badges** — chapters, parts, and appendixes are numbered in document order (Chapter 1/2/3 continuing across parts, Part I/II in roman numerals, Appendix A…Z/AA) in the map preview, sidebar tree, outline, and HTML export
+- **Numbered role badges** — chapters, parts, and appendixes are numbered per nesting depth (top-level Chapter 1/2/3, nested chapters restart at 1 under each parent; Part I/II in roman numerals, Appendix A…Z/AA) in the map preview, sidebar tree, outline, and HTML export
 - **Localized badges** — role labels follow the VS Code display language (zh-CN: 第 1 章 / 第 I 部分 / 附录 A, plus 前言、声明、献词、后记、摘要、修订记录、术语表)
 - **Book title page** — `<booktitle>` renders `mainbooktitle` as an elevated headline with `booktitlealt`/`subtitle` as subtitle lines instead of concatenating them into one string; the HTML export title prefers `mainbooktitle`
 - **Structural rendering** — bookmap structural containers (`frontmatter`, `backmatter`, `booklists`, `toc`, …) render as labeled groups in tree view and pass through in book view
@@ -30,6 +38,12 @@
 
 - **In-preview search** — search overlay in topic and map reading views with match navigation, case-sensitivity, and regex toggles
 - **Cross-file xref titles** — improved title resolution for cross-file `xref` targets
+
+### Fixes
+
+- **Percent-encoded hrefs** — hrefs containing `%20` and other URL escapes (the default encoding DITA tools apply to spaces and non-ASCII file names) now resolve to the actual file on disk everywhere: image loading in previews and HTML export, topic/sub-map resolution, sidebar clicks, Go to Definition, and reference diagnostics
+- **HTML export badge escaping** — role badge text is HTML-escaped in exported files
+- **Diagnostics cleanup** — pending diagnostic timers are cleared when a document closes
 
 ## 1.0.5 (2026-07-27)
 

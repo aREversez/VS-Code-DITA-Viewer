@@ -7,6 +7,7 @@ import { MapViewerProvider, getLastRenderedMapHtmlForTesting } from './editor/Ma
 import {
   resolveDitaOtExecutable,
   buildDitaOtArgs,
+  buildDitaOtSpawnSpec,
   buildNavManifest,
   classifyLogLine,
   createLineBuffer,
@@ -117,6 +118,11 @@ export function activate(context: vscode.ExtensionContext) {
 
   // DITA-OT transform command
   const extensionPath = context.extensionPath;
+  // Shared output channel: created once so the log survives after the
+  // command finishes ("View Output Log" used to open an already-disposed
+  // channel); each run clears the previous content.
+  const transformOutputChannel = vscode.window.createOutputChannel('DITA-OT Transform');
+  context.subscriptions.push(transformOutputChannel);
   const transformCommand = vscode.commands.registerCommand(TRANSFORM_CMD, async () => {
     const tokenSource = new vscode.CancellationTokenSource();
     const disposables: vscode.Disposable[] = [];
@@ -275,14 +281,10 @@ export function activate(context: vscode.ExtensionContext) {
 
       // 8. Run transformation
       const args = buildDitaOtArgs({ mapPath, transtype, outputDir, cssArg, ditavalFile });
-      const outputChannel = vscode.window.createOutputChannel('DITA-OT Transform');
+      const outputChannel = transformOutputChannel;
+      outputChannel.clear();
 
-      disposables.push(
-        vscode.Disposable.from(
-          { dispose: () => outputChannel.dispose() },
-          { dispose: () => tokenSource.dispose() },
-        ),
-      );
+      disposables.push({ dispose: () => tokenSource.dispose() });
 
       outputChannel.show(true);
 
@@ -300,19 +302,29 @@ export function activate(context: vscode.ExtensionContext) {
           });
 
           return new Promise<void>((resolvePromise, rejectPromise) => {
-            // On Windows, batch files (.bat) require shell: true to execute reliably,
-            // otherwise spawn can fail with EINVAL when paths contain spaces.
-            const isWin = process.platform === 'win32';
-            const child = spawn(result.location.executablePath, args, { shell: isWin });
+            // Windows batch files must run through cmd.exe; the spec quotes
+            // every argument explicitly instead of using shell: true (which
+            // concatenates args unquoted — space/metacharacter unsafe).
+            const spec = buildDitaOtSpawnSpec(result.location.executablePath, args, process.platform);
+            const child = spawn(spec.command, spec.args, {
+              windowsVerbatimArguments: spec.windowsVerbatimArguments,
+            });
             let cancelled = false;
+            let killTimer: ReturnType<typeof setTimeout> | undefined;
 
             const cancelListener = tokenSource.token.onCancellationRequested(() => {
               cancelled = true;
-              child.kill('SIGTERM');
-              // Give it a moment, then SIGKILL
-              setTimeout(() => {
-                try { child.kill('SIGKILL'); } catch {}
-              }, 3000);
+              if (process.platform === 'win32' && child.pid) {
+                // Kill the whole tree — terminating the cmd.exe wrapper alone
+                // leaves the DITA-OT Java process running.
+                try { spawn('taskkill', ['/pid', String(child.pid), '/t', '/f']); } catch {}
+              } else {
+                child.kill('SIGTERM');
+                // Give it a moment, then SIGKILL
+                killTimer = setTimeout(() => {
+                  try { child.kill('SIGKILL'); } catch {}
+                }, 3000);
+              }
             });
             disposables.push(cancelListener);
 
@@ -338,6 +350,7 @@ export function activate(context: vscode.ExtensionContext) {
             });
 
             child.on('close', async (code) => {
+              if (killTimer) clearTimeout(killTimer);
               // Process any remaining partial line in the buffer
               for (const line of lineBuffer.flush()) {
                 if (classifyLogLine(line) === 'error') errorCount++;
@@ -510,6 +523,7 @@ function scanCssFiles(mapDir: string): string[] {
   dirs.add(mapDir);
 
   const root =
+    vscode.workspace.getWorkspaceFolder(vscode.Uri.file(mapDir))?.uri.fsPath ??
     vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
   if (root && root !== mapDir) dirs.add(root);
 
@@ -562,11 +576,11 @@ async function resolveMapFile(): Promise<vscode.Uri | undefined> {
   if (!editor) return undefined;
 
   const docUri = editor.document.uri;
-  if (docUri.fsPath.endsWith('.ditamap')) {
+  if (docUri.fsPath.toLowerCase().endsWith('.ditamap')) {
     return docUri;
   }
 
-  if (docUri.fsPath.endsWith('.dita')) {
+  if (docUri.fsPath.toLowerCase().endsWith('.dita')) {
     const maps = findDitamapFiles(docUri);
     if (maps.length === 0) return undefined;
 
