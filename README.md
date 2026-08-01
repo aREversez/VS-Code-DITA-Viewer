@@ -16,7 +16,7 @@ A VS Code extension that renders **`.dita`** and **`.ditamap`** files as a forma
 - **Writing assistance** — Go to Definition for `keyref`/`conref`/`href` (Ctrl+Click), context-aware IntelliSense (tags, attributes, defined keys, workspace files, target ids), HTML-style auto-closing tags, broken-reference diagnostics in the Problems panel, document outline/breadcrumbs, and ready-made DITA snippets
 - **DITA Map Explorer** — persistent sidebar tree of the map associated with the active editor, with click-to-open navigation and numbered book divisions
 - **Export as HTML** — render any topic or full map to a single self-contained `.html` file (styles inlined, images embedded) without DITA-OT
-- **Full DITA element coverage** — topic, sections, notes (all types), lists, tables, figures, code blocks with language labels, images, cross-references (with title resolution), quotes, related links, inline formatting, keydef/keyword display
+- **Full DITA element coverage** — topic, sections, notes (all types), lists, tables, figures, code blocks with language labels, images, cross-references (with title resolution), quotes, related links, inline formatting, keydef/keyword display; specialization modules (task/concept/reference, troubleshooting, glossary, taskreq, highlight/programming/software/UI domains) are audited against the DITA-OT 1.3 DTDs and render correctly even without explicit `@class` attributes in the source
 - **Reltable and topicgroup support** — reltables are skipped from the tree; topicgroups render children without adding their own entry
 - **Theme-aware** — automatically adapts background and border colors to the current VS Code theme
 - **Custom CSS support** — override or extend the default styling with an in-preview theme switcher

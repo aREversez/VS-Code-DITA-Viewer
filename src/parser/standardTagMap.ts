@@ -381,6 +381,14 @@ export const STANDARD_TAG_TO_BASETYPE: Record<string, string> = {
   bookpartno: 'topic/data',
   bookrestriction: 'topic/data',
   bookrights: 'topic/data',
+  // NOTE: booktitle/booktitlealt/mainbooktitle already have dedicated,
+  // real-world-tested entries in mapTagMap.ts (all → 'map/map-title', added
+  // 2026-07-28 with the BookMap feature, driving the book title-page
+  // renderer). A real .bookmap file always goes through parseDitamap, which
+  // only consults mapTagMap.ts — so these three topic-side entries below
+  // are DTD-correct but effectively unreachable for actual bookmap
+  // documents; they only matter if parseDita ever sees one of these tags
+  // outside a bookmap context.
   booktitle: 'topic/title',
   booktitlealt: 'topic/ph',
   completed: 'topic/ph',

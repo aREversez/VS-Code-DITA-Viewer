@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Rendering Completeness (new)
+
+- **DTD-driven tag mapping audit** — every element's `@class` default value in the DITA-OT 1.3 DTDs (base, technicalContent, bookmap) was extracted and diffed against the extension's hand-maintained tag map, closing every gap found: task/concept/reference topic types, the troubleshooting module, glossary entry substructure (`glossBody`, `glossAlt`, synonyms/acronyms/…), the taskreq domain, image-map and programming-domain grouping elements (`figgroup`), MathML/SVG foreign-content wrappers, and the remaining release-management and bookmap metadata fields — now render correctly even when the source XML omits explicit `@class` attributes (a reusable extraction script, `scripts/extract-dita-class.cjs`, is checked in for re-running against future DITA-OT upgrades)
+- **`<prolog>` no longer leaks into the preview** — topic metadata (`author`, `keywords`, revision history, etc.) previously rendered as unstyled text at the top of the body when the source lacked an explicit `@class="- topic/prolog "` attribute; it's now correctly suppressed
+- **Highlight domain: `line-through`/`overline`** — render as a semantic `<s>` element and a themeable `.overline` CSS class respectively, matching the existing `b`/`i`/`u`/`tt`/`sup`/`sub` convention
+
 ## 1.0.6 (2026-07-28)
 
 ### Language Features (new)

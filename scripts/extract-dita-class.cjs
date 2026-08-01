@@ -6,6 +6,11 @@
 // Re-run this whenever DITA-OT is upgraded or a new specialization plugin is
 // installed:  node scripts/extract-dita-class.cjs
 //
+// Use --diff-only to recompute the diff against the existing
+// dita-class-extracted.json without rescanning the DTD (e.g. on a machine
+// without the DITA-OT install) after hand-editing standardTagMap.ts /
+// mapTagMap.ts:  node scripts/extract-dita-class.cjs --diff-only
+//
 // It writes two artifacts next to itself for review:
 //   - dita-class-extracted.json   (full table with source file:line evidence)
 //   - dita-class-diff.md          (new entries + conflicts + missing renderers)
@@ -182,68 +187,104 @@ function readRendererKeys(file) {
 
 // ── Main ─────────────────────────────────────────────────────────────
 
-function main() {
-  const files = listDtdFiles(DITA_DTD_ROOT);
-  if (files.length === 0) {
-    console.error(`No DTD files under ${DITA_DTD_ROOT}. Set DITA_DTD_ROOT.`);
+// ── 5b. --diff-only mode ────────────────────────────────────────────────
+// Recomputes the diff against the *existing* dita-class-extracted.json
+// instead of rescanning the DTD. Useful when you don't have the DITA-OT
+// install on this machine but want an up-to-date diff after hand-editing
+// standardTagMap.ts/mapTagMap.ts. Does NOT rewrite dita-class-extracted.json
+// (that file only changes on a real DTD rescan) and clearly marks the
+// diff.md header so nobody mistakes it for a fresh extraction.
+const DIFF_ONLY = process.argv.includes('--diff-only');
+
+function loadCachedCandidates() {
+  if (!fs.existsSync(EXTRACTED_JSON)) {
+    console.error(`--diff-only requires an existing ${path.relative(REPO_ROOT, EXTRACTED_JSON)}. Run without --diff-only once first.`);
     process.exit(1);
   }
+  const cached = JSON.parse(fs.readFileSync(EXTRACTED_JSON, 'utf8'));
+  return {
+    topicCandidates: cached.topicEntries || {},
+    mapCandidates: cached.mapEntries || {},
+    dupConflicts: cached.duplicateConflicts || [],
+    cachedGeneratedAt: cached.generatedAt,
+    cachedDtdRoot: cached.ditaDtdRoot,
+  };
+}
 
-  // extracted[tagName] = array of { baseType, bucket, file, line, classValue }
-  const extracted = {};
-  let dupConflicts = [];
+function main() {
+  let topicCandidates, mapCandidates, dupConflicts, filesScanned = 0;
+  let cachedProvenance = null;
 
-  for (const file of files) {
-    const rows = parseDtdFile(file);
-    for (const row of rows) {
-      const baseType = deriveBaseType(row.classValue);
-      if (!baseType) continue; // base element or unparseable
-      const bucket = bucketOf(baseType);
-      if (bucket === 'other') continue;
+  if (DIFF_ONLY) {
+    const cached = loadCachedCandidates();
+    topicCandidates = cached.topicCandidates;
+    mapCandidates = cached.mapCandidates;
+    dupConflicts = cached.dupConflicts;
+    cachedProvenance = { generatedAt: cached.cachedGeneratedAt, dtdRoot: cached.cachedDtdRoot };
+  } else {
+    const files = listDtdFiles(DITA_DTD_ROOT);
+    if (files.length === 0) {
+      console.error(`No DTD files under ${DITA_DTD_ROOT}. Set DITA_DTD_ROOT.`);
+      process.exit(1);
+    }
+    filesScanned = files.length;
 
-      const entry = {
-        tagName: row.tagName,
-        baseType,
-        bucket,
-        sourceFile: path.relative(DITA_DTD_ROOT, row.file).replace(/\\/g, '/'),
-        sourceLine: row.line,
-        classValue: row.classValue.trim(),
-      };
+    // extracted[tagName] = array of { baseType, bucket, file, line, classValue }
+    const extracted = {};
+    dupConflicts = [];
 
-      const prev = extracted[row.tagName];
-      if (prev) {
-        // Same tag declared in multiple modules. Keep them all for the diff
-        // report; the first declaration wins for the "extracted" table only
-        // when the base types agree, otherwise record a duplicate conflict.
-        const sameBucket = prev.bucket === entry.bucket;
-        if (sameBucket && prev.baseType !== entry.baseType) {
-          dupConflicts.push({ tagName: row.tagName, a: prev, b: entry });
+    for (const file of files) {
+      const rows = parseDtdFile(file);
+      for (const row of rows) {
+        const baseType = deriveBaseType(row.classValue);
+        if (!baseType) continue; // base element or unparseable
+        const bucket = bucketOf(baseType);
+        if (bucket === 'other') continue;
+
+        const entry = {
+          tagName: row.tagName,
+          baseType,
+          bucket,
+          sourceFile: path.relative(DITA_DTD_ROOT, row.file).replace(/\\/g, '/'),
+          sourceLine: row.line,
+          classValue: row.classValue.trim(),
+        };
+
+        const prev = extracted[row.tagName];
+        if (prev) {
+          // Same tag declared in multiple modules. Keep them all for the diff
+          // report; the first declaration wins for the "extracted" table only
+          // when the base types agree, otherwise record a duplicate conflict.
+          const sameBucket = prev.bucket === entry.bucket;
+          if (sameBucket && prev.baseType !== entry.baseType) {
+            dupConflicts.push({ tagName: row.tagName, a: prev, b: entry });
+          }
+          // Prefer the topic-side declaration for the topic bucket and the
+          // map-side declaration for the map bucket: later same-bucket entry
+          // overwrites only if it refines (it shouldn't here).
+          if (sameBucket) extracted[row.tagName] = entry;
+          else if (!extracted[row.tagName + '$$alt']) {
+            // keep the alternate bucket visible in the JSON via a synthetic key
+            extracted[row.tagName + '$$alt'] = entry;
+          }
+        } else {
+          extracted[row.tagName] = entry;
         }
-        // Prefer the topic-side declaration for the topic bucket and the
-        // map-side declaration for the map bucket: later same-bucket entry
-        // overwrites only if it refines (it shouldn't here).
-        if (sameBucket) extracted[row.tagName] = entry;
-        else if (!extracted[row.tagName + '$$alt']) {
-          // keep the alternate bucket visible in the JSON via a synthetic key
-          extracted[row.tagName + '$$alt'] = entry;
-        }
-      } else {
-        extracted[row.tagName] = entry;
       }
     }
-  }
 
-  // Build clean per-bucket candidate tables.
-  const topicCandidates = {};
-  const mapCandidates = {};
-  for (const [tag, e] of Object.entries(extracted)) {
-    if (tag.endsWith('$$alt')) {
-      if (e.bucket === 'topic') topicCandidates[tag.slice(0, -5)] = e;
-      else mapCandidates[tag.slice(0, -5)] = e;
-      continue;
+    // Build clean per-bucket candidate tables.
+    topicCandidates = {};
+    mapCandidates = {};
+    for (const [tag, e] of Object.entries(extracted)) {
+      if (tag.endsWith('$$alt')) {
+        if (e.bucket === 'topic') topicCandidates[tag.slice(0, -5)] = e;
+        else mapCandidates[tag.slice(0, -5)] = e;
+        continue;
+      }
+      if (e.bucket === 'topic') topicCandidates[tag] = e;
+      else mapCandidates[tag] = e;
     }
-    if (e.bucket === 'topic') topicCandidates[tag] = e;
-    else mapCandidates[tag] = e;
   }
 
   const existingTopic = readTsMap(STANDARD_MAP_SRC);
@@ -267,22 +308,29 @@ function main() {
   const newTopicBaseTypes = collectNewBaseTypes(diff, baseRenderers, existingBaseTypes);
   const newMapBaseTypes = collectNewBaseTypes(diffMap, mapRenderers, existingBaseTypes);
 
-  // ── Write JSON ──
-  const jsonPayload = {
-    generatedAt: new Date().toISOString(),
-    ditaDtdRoot: DITA_DTD_ROOT,
-    scannedDirs: SCAN_DIRS,
-    topicEntries: sortObj(topicCandidates),
-    mapEntries: sortObj(mapCandidates),
-    duplicateConflicts: dupConflicts,
-  };
-  fs.writeFileSync(EXTRACTED_JSON, JSON.stringify(jsonPayload, null, 2) + '\n');
+  // ── Write JSON (skipped in --diff-only: no fresh DTD data was read) ──
+  if (!DIFF_ONLY) {
+    const jsonPayload = {
+      generatedAt: new Date().toISOString(),
+      ditaDtdRoot: DITA_DTD_ROOT,
+      scannedDirs: SCAN_DIRS,
+      topicEntries: sortObj(topicCandidates),
+      mapEntries: sortObj(mapCandidates),
+      duplicateConflicts: dupConflicts,
+    };
+    fs.writeFileSync(EXTRACTED_JSON, JSON.stringify(jsonPayload, null, 2) + '\n');
+  }
 
   // ── Write diff markdown ──
   const md = [];
   md.push('# DITA @class → baseType extraction diff\n');
-  md.push(`Generated: ${jsonPayload.generatedAt}`);
-  md.push(`DTD root: \`${DITA_DTD_ROOT}\`\n`);
+  if (DIFF_ONLY) {
+    md.push(`Diff recomputed: ${new Date().toISOString()} (--diff-only: no DTD rescan)`);
+    md.push(`Candidates from cached extraction: ${cachedProvenance.generatedAt} (\`${cachedProvenance.dtdRoot}\`)\n`);
+  } else {
+    md.push(`Generated: ${new Date().toISOString()}`);
+    md.push(`DTD root: \`${DITA_DTD_ROOT}\`\n`);
+  }
   md.push('## Topic-side (`STANDARD_TAG_TO_BASETYPE`)\n');
   writeDiffSection(md, diff, 'topic');
   md.push('## Map-side (`MAP_STANDARD_TAG_TO_BASETYPE`)\n');
@@ -311,7 +359,11 @@ function main() {
   fs.writeFileSync(DIFF_MD, md.join('\n'));
 
   // ── Stdout summary ──
-  console.log(`Scanned ${files.length} DTD files under ${DITA_DTD_ROOT}`);
+  if (DIFF_ONLY) {
+    console.log(`--diff-only: using cached extraction from ${cachedProvenance.generatedAt}`);
+  } else {
+    console.log(`Scanned ${filesScanned} DTD files under ${DITA_DTD_ROOT}`);
+  }
   console.log(`Extracted ${Object.keys(topicCandidates).length} topic-side + ${Object.keys(mapCandidates).length} map-side entries.`);
   console.log(`\nTopic-side diff:`);
   console.log(`  new:       ${diff.onlyNew.length}`);
@@ -323,7 +375,7 @@ function main() {
   console.log(`  matched:   ${diffMap.matched.length}`);
   console.log(`\nNew base types without renderer: ${newTopicBaseTypes.length + newMapBaseTypes.length}`);
   if (dupConflicts.length) console.log(`Duplicate declarations: ${dupConflicts.length}`);
-  console.log(`\nWrote ${path.relative(REPO_ROOT, EXTRACTED_JSON)}`);
+  if (!DIFF_ONLY) console.log(`\nWrote ${path.relative(REPO_ROOT, EXTRACTED_JSON)}`);
   console.log(`Wrote ${path.relative(REPO_ROOT, DIFF_MD)}`);
 }
 
