@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Preview UX
+
+- **Font size and family now persist** — previously the preview always reopened with the default sans-serif font at 100%, discarding any size/serif choice made in an earlier session; both are now remembered (stored globally, applying to every DITA file you preview) and a new reset button restores the default in one click
+
 ## 1.0.7 (2026-08-01)
 
 ### Rendering Completeness (new)

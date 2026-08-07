@@ -19,6 +19,11 @@ export function getLastRenderedHtmlForTesting(uriString: string): string | undef
   return lastRenderedHtmlByUri.get(uriString);
 }
 
+// Font preferences (size % + serif toggle) are global rather than per-document:
+// they describe how the user likes to read, not something tied to one file.
+const FONT_PREFS_KEY = 'ditaViewer.fontPrefs';
+const DEFAULT_FONT_PREFS = { size: 100, serif: false };
+
 function getWebviewScript(): string {
   const L = {
     selectThemeCss: JSON.stringify(vscode.l10n.t('Select theme CSS')),
@@ -28,6 +33,7 @@ function getWebviewScript(): string {
     fontSerif: JSON.stringify(vscode.l10n.t('Serif')),
     fontCurrentSans: JSON.stringify(vscode.l10n.t('Current: Sans-serif. Click to switch to Serif')),
     fontCurrentSerif: JSON.stringify(vscode.l10n.t('Current: Serif. Click to switch to Sans-serif')),
+    resetFont: JSON.stringify(vscode.l10n.t('Reset font size and family to default')),
     pageWidth: JSON.stringify(vscode.l10n.t('Page width')),
     widthAuto: JSON.stringify(vscode.l10n.t('Auto')),
     widthFull: JSON.stringify(vscode.l10n.t('Full')),
@@ -111,7 +117,20 @@ function getWebviewScript(): string {
     }
   }
 
-  var fontSize = 100;
+  var fontPrefs = window.__fontPrefs || { size: 100, serif: false };
+  var fontSize = typeof fontPrefs.size === 'number' ? fontPrefs.size : 100;
+  var isSerif = fontPrefs.serif === true;
+  var SERIF_STACK = "Georgia,'Times New Roman','Noto Serif SC','Songti SC',STSong,SimSun,serif";
+
+  function applyFontPrefs() {
+    document.body.style.fontSize = fontSize + '%';
+    document.body.style.fontFamily = isSerif ? SERIF_STACK : '';
+  }
+  applyFontPrefs();
+
+  function saveFontPrefs() {
+    vscode.postMessage({ type: 'setFontPrefs', size: fontSize, serif: isSerif });
+  }
 
   // Static highlight (no animation)
   var hlStyle = document.createElement('style');
@@ -217,6 +236,7 @@ function getWebviewScript(): string {
   fsDown.addEventListener('click', function() {
     fontSize = Math.max(60, fontSize - 10);
     document.body.style.fontSize = fontSize + '%';
+    saveFontPrefs();
   });
   toolbar.appendChild(fsDown);
 
@@ -227,22 +247,38 @@ function getWebviewScript(): string {
   fsUp.addEventListener('click', function() {
     fontSize = Math.min(200, fontSize + 10);
     document.body.style.fontSize = fontSize + '%';
+    saveFontPrefs();
   });
   toolbar.appendChild(fsUp);
 
-  // Font toggle (serif / sans-serif)
-  var isSerif = false;
+  // Font toggle (serif / sans-serif) — reflects the persisted state on open
   var fontBtn = document.createElement('button');
-  fontBtn.textContent = ${L.fontSans};
-  fontBtn.title = ${L.fontCurrentSans};
+  fontBtn.textContent = isSerif ? ${L.fontSerif} : ${L.fontSans};
+  fontBtn.title = isSerif ? ${L.fontCurrentSerif} : ${L.fontCurrentSans};
   fontBtn.style.cssText = btnStyle + 'font-size:11px;';
   fontBtn.addEventListener('click', function() {
     isSerif = !isSerif;
     fontBtn.textContent = isSerif ? ${L.fontSerif} : ${L.fontSans};
     fontBtn.title = isSerif ? ${L.fontCurrentSerif} : ${L.fontCurrentSans};
-    document.body.style.fontFamily = isSerif ? "Georgia,'Times New Roman','Noto Serif SC','Songti SC',STSong,SimSun,serif" : '';
+    document.body.style.fontFamily = isSerif ? SERIF_STACK : '';
+    saveFontPrefs();
   });
   toolbar.appendChild(fontBtn);
+
+  // Reset font size + family to default in one click
+  var fontResetBtn = document.createElement('button');
+  fontResetBtn.innerHTML = '&#8635;';
+  fontResetBtn.title = ${L.resetFont};
+  fontResetBtn.style.cssText = btnStyle + 'font-size:12px;';
+  fontResetBtn.addEventListener('click', function() {
+    fontSize = 100;
+    isSerif = false;
+    applyFontPrefs();
+    fontBtn.textContent = ${L.fontSans};
+    fontBtn.title = ${L.fontCurrentSans};
+    saveFontPrefs();
+  });
+  toolbar.appendChild(fontResetBtn);
 
   // Page width dropdown
   var widths = [
@@ -355,6 +391,12 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
           }
           editor.selection = new vscode.Selection(new vscode.Position(line, 0), new vscode.Position(line, 0));
         }
+      } else if (message.type === 'setFontPrefs') {
+        // Persist across webview reopens/reloads — same size/family applies
+        // to every DITA file the user previews, not per-document.
+        const size = typeof message.size === 'number' ? message.size : DEFAULT_FONT_PREFS.size;
+        const serif = message.serif === true;
+        this.context.globalState.update(FONT_PREFS_KEY, { size, serif });
       }
     });
 
@@ -494,6 +536,8 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       const script = getWebviewScript();
       const cssFilesJson = escapeJson(JSON.stringify(files));
       const defaultNameJson = escapeJson(JSON.stringify(defaultName));
+      const fontPrefs = this.context.globalState.get(FONT_PREFS_KEY, DEFAULT_FONT_PREFS);
+      const fontPrefsJson = escapeJson(JSON.stringify(fontPrefs));
 
       // CSP nonce for defense-in-depth against XSS
       const nonce = randomBytes(16).toString('base64');
@@ -507,7 +551,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
 <link rel="stylesheet" href="${stylesUri}">
 ${defaultContent ? `<style>\n${defaultContent}\n</style>` : ''}
 <title>${document.fileName}</title>
-<script nonce="${nonce}">window.__cssFiles=${cssFilesJson};window.__defaultCss=${defaultNameJson};</script>
+<script nonce="${nonce}">window.__cssFiles=${cssFilesJson};window.__defaultCss=${defaultNameJson};window.__fontPrefs=${fontPrefsJson};</script>
 </head>
 <body>
 ${content}
