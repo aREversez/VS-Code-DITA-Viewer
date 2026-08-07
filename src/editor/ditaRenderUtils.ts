@@ -164,15 +164,32 @@ export function findTextMatches(
 }
 
 // ── Default note labels ──
+// Values follow DITA-OT's own strings-en-us.xml / strings-zh-cn.xml bundles
+// (org.dita.base/xsl/common) so the preview matches what a real DITA-OT
+// publish would show. Two intentional deviations from DITA-OT's exact
+// casing, kept for visual consistency across the 13 note types in this
+// project's own UI (DITA-OT itself is inconsistent here — only Caution and
+// Danger are upper-cased there, Warning is not):
+//   - Caution/Danger are title case here, not DITA-OT's "CAUTION"/"DANGER"
+//   - zh-cn "Notice" is left untranslated even in DITA-OT's own bundle
+//     (literally has a `<!--TODO:Notice-->` in the source); this project
+//     already ships '注意' for it, kept as-is here.
+// Covers the full DITA 1.3 note/@type enumeration (13 values); 'other' is
+// handled separately via @othertype in the topic/note renderer, since its
+// label isn't a fixed string.
 
 export const DEFAULT_NOTE_LABELS: Record<string, string> = {
   note: 'Note', notice: 'Notice', warning: 'Warning', danger: 'Danger',
   important: 'Important', tip: 'Tip', restriction: 'Restriction',
+  attention: 'Attention', caution: 'Caution', fastpath: 'Fastpath',
+  remember: 'Remember', trouble: 'Trouble',
 };
 
 export const ZH_NOTE_LABELS: Record<string, string> = {
   note: '注', notice: '注意', warning: '警告', danger: '危险',
   important: '重要', tip: '提示', restriction: '限制',
+  attention: '注意', caution: '警告', fastpath: '捷径',
+  remember: '切记', trouble: '故障',
 };
 
 export function detectNoteLabels(root: DitaNode): Record<string, string> {

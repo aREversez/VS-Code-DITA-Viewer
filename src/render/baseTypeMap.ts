@@ -18,6 +18,17 @@ function getAttr(node: DitaNode, name: string): string | undefined {
   return node.attributes?.[name];
 }
 
+// Mirrors DEFAULT_NOTE_LABELS in src/editor/ditaRenderUtils.ts. Duplicated
+// rather than imported to keep this module free of editor-layer
+// dependencies (it's also used by the HTML export pipeline); update both
+// if the label set changes.
+const FALLBACK_NOTE_LABELS: Record<string, string> = {
+  note: 'Note', notice: 'Notice', warning: 'Warning', danger: 'Danger',
+  important: 'Important', tip: 'Tip', restriction: 'Restriction',
+  attention: 'Attention', caution: 'Caution', fastpath: 'Fastpath',
+  remember: 'Remember', trouble: 'Trouble',
+};
+
 function escapeAttr(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -66,8 +77,22 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
   'topic/note': (node, ctx, renderChildren) => {
     const type = getAttr(node, 'type') || 'note';
-    const labels = ctx.noteLabels || { note: 'Note', notice: 'Notice', warning: 'Warning', danger: 'Danger', important: 'Important', tip: 'Tip', restriction: 'Restriction' };
-    const label = labels[type] || type;
+    const spectitle = getAttr(node, 'spectitle');
+    const othertype = getAttr(node, 'othertype');
+    const labels = ctx.noteLabels || FALLBACK_NOTE_LABELS;
+    // spectitle always wins when present (DITA lets any note override its
+    // default title); otherwise type="other" falls back to @othertype
+    // (its label isn't a fixed string, unlike the other 12 note types);
+    // otherwise look up the type in the label map, or fall back to the
+    // raw attribute value for anything outside the known enumeration.
+    let label: string;
+    if (spectitle) {
+      label = spectitle;
+    } else if (type === 'other' && othertype) {
+      label = othertype;
+    } else {
+      label = labels[type] || type;
+    }
     return `<div class="note note--${escapeAttr(type)}"><span class="note__label">${escapeAttr(label)}:</span> ${renderChildren(node, ctx)}</div>`;
   },
 

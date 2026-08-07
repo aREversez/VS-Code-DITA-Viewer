@@ -94,6 +94,43 @@ describe('renderer', () => {
     assert.ok(html.includes('Warning:'));
   });
 
+  it('should render labels for all 13 DITA 1.3 note/@type values (except other)', () => {
+    // Full enumeration per OASIS DITA 1.3 commonElements.mod note.attributes,
+    // minus 'other' which is covered separately below (its label comes from
+    // @othertype, not a fixed string).
+    const expected: Record<string, string> = {
+      note: 'Note:', notice: 'Notice:', warning: 'Warning:', danger: 'Danger:',
+      important: 'Important:', tip: 'Tip:', restriction: 'Restriction:',
+      attention: 'Attention:', caution: 'Caution:', fastpath: 'Fastpath:',
+      remember: 'Remember:', trouble: 'Trouble:',
+    };
+    for (const [type, label] of Object.entries(expected)) {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/note', [makeText('x')], { type }),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(html.includes(label), `type="${type}" should render label "${label}", got: ${html}`);
+    }
+  });
+
+  it('should use @othertype as the label when type="other"', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/note', [makeText('x')], { type: 'other', othertype: 'Best Practice' }),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('Best Practice:'));
+    assert.ok(!html.includes('>other:'));
+  });
+
+  it('should let @spectitle override the label for any note type', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/note', [makeText('x')], { type: 'tip', spectitle: 'Pro Tip' }),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('Pro Tip:'));
+    assert.ok(!html.includes('>Tip:'));
+  });
+
   it('should render ordered and unordered lists', () => {
     const doc = makeEl('topic/topic', [
       makeEl('topic/body', [

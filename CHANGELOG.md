@@ -5,6 +5,7 @@
 ### Preview UX
 
 - **Font size and family now persist** — previously the preview always reopened with the default sans-serif font at 100%, discarding any size/serif choice made in an earlier session; both are now remembered (stored globally, applying to every DITA file you preview) and a new reset button restores the default in one click
+- **`note/@type` label coverage completed** — 5 of the 13 DITA 1.3 note types (`attention`, `caution`, `fastpath`, `remember`, `trouble`) previously fell through to displaying the raw, untranslated attribute value (visually capitalized by CSS, which is why e.g. `type="attention"` showed as "Attention" in English regardless of document language); all 13 types now have proper English/Chinese labels, matching DITA-OT's own strings bundles. Also added support for `@spectitle` (overrides the label for any note type) and `@othertype` (supplies the label when `type="other"`), neither of which were read before.
 
 ## 1.0.7 (2026-08-01)
 
