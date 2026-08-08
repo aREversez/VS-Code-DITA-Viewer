@@ -37,6 +37,7 @@ function getWebviewScript(): string {
     decreaseImgZoom: JSON.stringify(vscode.l10n.t('Decrease image display size (preview only)')),
     increaseImgZoom: JSON.stringify(vscode.l10n.t('Increase image display size (preview only)')),
     resetImgZoomTitle: JSON.stringify(vscode.l10n.t('Click to reset image display size to 100%')),
+    imgSizeLabel: JSON.stringify(vscode.l10n.t('Img')),
     pageWidth: JSON.stringify(vscode.l10n.t('Page width')),
     widthAuto: JSON.stringify(vscode.l10n.t('Auto')),
     widthFull: JSON.stringify(vscode.l10n.t('Full')),
@@ -342,10 +343,14 @@ function getWebviewScript(): string {
   toolbar.appendChild(fontResetBtn);
 
   // Image display zoom — preview-only reading aid (does not touch the DITA
-  // source, and is independent of @scale below, which *is* source-driven).
-  // Session-only by design, unlike font prefs: this is meant as a quick
-  // "shrink distracting screenshots while I read the text" toggle, not a
-  // standing preference — reopening the preview goes back to 100%.
+  // source, and is independent of @scale, which *is* source-driven — see
+  // the --dita-scale / --dita-img-zoom split in styles.css). Session-only
+  // by design, unlike font prefs: this is meant as a quick "shrink
+  // distracting screenshots while I read the text" toggle, not a standing
+  // preference — reopening the preview goes back to 100%. Capped at 100%
+  // (pure shrink, no enlarge) since this drives max-width as a percentage
+  // of the pane — going above 100% would just overflow it; the lightbox is
+  // the tool for seeing an image bigger, not this.
   var imgZoom = 100;
   function applyImgZoom() {
     document.documentElement.style.setProperty('--dita-img-zoom', String(imgZoom / 100));
@@ -353,7 +358,7 @@ function getWebviewScript(): string {
   }
 
   var imgZoomDown = document.createElement('button');
-  imgZoomDown.innerHTML = '&#128247;−';
+  imgZoomDown.textContent = ${L.imgSizeLabel} + '−';
   imgZoomDown.title = ${L.decreaseImgZoom};
   imgZoomDown.style.cssText = btnStyle + 'font-size:11px;';
   imgZoomDown.addEventListener('click', function() {
@@ -373,11 +378,11 @@ function getWebviewScript(): string {
   toolbar.appendChild(imgZoomLabel);
 
   var imgZoomUp = document.createElement('button');
-  imgZoomUp.innerHTML = '&#128247;+';
+  imgZoomUp.textContent = ${L.imgSizeLabel} + '+';
   imgZoomUp.title = ${L.increaseImgZoom};
   imgZoomUp.style.cssText = btnStyle + 'font-size:11px;';
   imgZoomUp.addEventListener('click', function() {
-    imgZoom = Math.min(150, imgZoom + 10);
+    imgZoom = Math.min(100, imgZoom + 10);
     applyImgZoom();
   });
   toolbar.appendChild(imgZoomUp);
