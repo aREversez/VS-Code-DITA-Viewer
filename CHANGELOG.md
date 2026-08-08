@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Bug Fixes
+
+- **Fixed a source ↔ preview scroll-sync feedback loop that could hijack the editor cursor while typing** — editing the source could sometimes make the preview jump, immediately followed by the source cursor itself jumping to an unrelated line, making it impossible to keep typing normally. Root cause: the preview's own scroll listener didn't distinguish "the user manually scrolled the preview" from "the extension just told the preview to scroll itself" (e.g. right after a source edit re-renders the preview and syncs it back to the source's current view). The latter was being echoed straight back out as if it were a real scroll, which could then move the *editor's* cursor. The preview now suppresses its own scroll-sync signal for the duration of any scroll it triggered itself, and scroll-following no longer moves the editor selection at all (only double-clicking an element in the preview does that, since that's an explicit navigation action, unlike continuous scroll-follow).
+
 ### Preview UX
 
 - **Font size and family now persist** — previously the preview always reopened with the default sans-serif font at 100%, discarding any size/serif choice made in an earlier session; both are now remembered (stored globally, applying to every DITA file you preview) and a new reset button restores the default in one click

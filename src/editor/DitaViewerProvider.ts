@@ -97,6 +97,13 @@ function getWebviewScript(): string {
   }
 
   function onScrollEnd() {
+    // A scroll that we ourselves triggered (revealLine / highlightLine
+    // below) must not be echoed back out as 'scrollSync', or every source
+    // edit that causes the extension to reveal a line in the preview loops
+    // straight back into the extension moving the *editor's* cursor —
+    // which corrupts whatever the user is mid-typing. Only genuine
+    // user-driven scrolling in the preview should ever reach the extension.
+    if (Date.now() < suppressScrollSyncUntil) return;
     try {
       var els = document.querySelectorAll('[data-line]');
       if (!els.length) return;
@@ -110,12 +117,22 @@ function getWebviewScript(): string {
     } catch(e) {}
   }
 
+  // Smooth-scroll animations (scrollIntoView/scrollTo with behavior:
+  // 'smooth') take a few hundred ms to settle; anything above the ~150ms
+  // scroll debounce plus a comfortable margin keeps onScrollEnd suppressed
+  // for the whole animation instead of firing on an intermediate frame.
+  var suppressScrollSyncUntil = 0;
+  function suppressScrollSyncBriefly() {
+    suppressScrollSyncUntil = Date.now() + 700;
+  }
+
   function scrollToLine(targetLine) {
-    if (targetLine <= 0) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    if (targetLine <= 0) { suppressScrollSyncBriefly(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
     var best = findClosest(targetLine);
     if (!best) return;
     var rect = best.getBoundingClientRect();
     if (rect.top < -5 || rect.top > 5) {
+      suppressScrollSyncBriefly();
       best.scrollIntoView({ block: 'start', behavior: 'smooth' });
     }
   }
@@ -230,7 +247,10 @@ function getWebviewScript(): string {
       var best = findContaining(e.data.line, e.data.col || 0);
       if (best) {
         highlightElement(best);
-        if (!isElementVisible(best)) best.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        if (!isElementVisible(best)) {
+          suppressScrollSyncBriefly();
+          best.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
       }
     }
   });
@@ -449,6 +469,14 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
         updateWebview();
         setTimeout(doSyncSourceToWebview, 200);
       } else if (message.type === 'scrollSync') {
+        // Reveal the matching source line as the user scrolls the preview,
+        // but deliberately do NOT move editor.selection here — unlike
+        // navigateToLine (an explicit double-click, i.e. real navigation
+        // intent), continuous scroll-follow shouldn't relocate the actual
+        // typing cursor. Besides being surprising on its own, it's also
+        // what made the webview-echo race above so damaging: it wasn't
+        // just the preview flickering, it was the *editor selection*
+        // jumping mid-keystroke.
         const editor = findSourceEditor();
         if (editor) {
           const currentTopLine = editor.visibleRanges[0]?.start.line;
@@ -458,7 +486,6 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
               skipVisibleUntil = Date.now() + 250;
               const line = Math.max(0, Math.min(message.line, document.lineCount - 1));
               editor.revealRange(new vscode.Range(line, 0, line, 0), vscode.TextEditorRevealType.AtTop);
-              editor.selection = new vscode.Selection(new vscode.Position(line, 0), new vscode.Position(line, 0));
             }
           }
         }
