@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeFileTitleResolver, findTextMatches, decodeHrefPart } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, findTextMatches, decodeHrefPart } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -461,6 +461,95 @@ describe('makeConrefResolver', () => {
     assert.ok(html.includes('.fscript'), 'should contain filepath text');
     assert.ok(html.includes('class="filepath"'), 'filepath element should be rendered');
     assert.ok(!html.includes('conref'), 'conref attribute should be stripped');
+  });
+});
+
+describe('makeConrefRangeResolver', () => {
+  let dir: string;
+
+  before(() => {
+    dir = mkdtempSync(join(tmpdir(), 'dita-conrefend-'));
+    // Mirrors the reported real-world case: a repair topic with several
+    // sibling <section> elements, referenced as a range from the first
+    // through a later one (not the last), by id path.
+    writeFileSync(join(dir, 'surface.dita'), `<topic id="repair">
+  <title>Repair</title>
+  <body>
+    <section id="section_uph_nys_jgc"><title>Remove cover</title><p>Step one text</p></section>
+    <section id="section_mid"><title>Replace part</title><p>Step two text</p></section>
+    <section id="section_4rf_hyf_o9j"><title>Reattach cover</title><p>Step three text</p></section>
+    <section id="section_after"><title>Not in range</title><p>Should not appear</p></section>
+  </body>
+</topic>`);
+  });
+
+  after(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('should resolve the full run of siblings from conref through conrefend, inclusive', () => {
+    const resolver = makeConrefRangeResolver(dir);
+    const range = resolver(
+      'surface.dita#repair/section_uph_nys_jgc',
+      'surface.dita#repair/section_4rf_hyf_o9j',
+    );
+    assert.ok(range, 'should resolve a range');
+    assert.strictEqual(range!.length, 3, 'should include start, middle, and end sections');
+    assert.strictEqual(range![0].attributes?.id, 'section_uph_nys_jgc');
+    assert.strictEqual(range![1].attributes?.id, 'section_mid');
+    assert.strictEqual(range![2].attributes?.id, 'section_4rf_hyf_o9j');
+  });
+
+  it('should return undefined when conref and conrefend are not siblings under the same parent', () => {
+    writeFileSync(join(dir, 'mismatched.dita'), `<topic id="mismatched">
+  <title>Mismatched</title>
+  <body>
+    <section id="outer_a"><p id="inner_b">nested</p></section>
+    <section id="outer_c"><p>other</p></section>
+  </body>
+</topic>`);
+    const resolver = makeConrefRangeResolver(dir);
+    // inner_b's parent is the first <section>, not <body> -- not a sibling
+    // of outer_c, which sits directly under <body>.
+    const range = resolver('mismatched.dita#mismatched/inner_b', 'mismatched.dita#mismatched/outer_c');
+    assert.strictEqual(range, undefined);
+  });
+
+  it('should return undefined when conrefend appears before conref in document order', () => {
+    const resolver = makeConrefRangeResolver(dir);
+    const range = resolver(
+      'surface.dita#repair/section_4rf_hyf_o9j',
+      'surface.dita#repair/section_uph_nys_jgc',
+    );
+    assert.strictEqual(range, undefined);
+  });
+
+  it('should render the full conrefend range end-to-end, matching only the first element to the referencing element', () => {
+    const rangeResolver = makeConrefRangeResolver(dir);
+    const sourceXml = `<topic id="main">
+  <title>Main</title>
+  <body>
+    <section id="ref-local-id" conref="surface.dita#repair/section_uph_nys_jgc" conrefend="surface.dita#repair/section_4rf_hyf_o9j"/>
+  </body>
+</topic>`;
+    const doc = parseDita(preprocessEntities(sourceXml));
+    const html = renderDocument(doc.root, {
+      headingLevel: 1,
+      asWebviewUri: (p: string) => `vscode-resource:${p}`,
+      documentDir: dir,
+      resolveConrefRange: (conref: string, conrefend: string) => rangeResolver(conref, conrefend),
+    });
+    assert.ok(html.includes('Step one text'), 'first section in range should render');
+    assert.ok(html.includes('Step two text'), 'middle section in range should render');
+    assert.ok(html.includes('Step three text'), 'last section in range should render');
+    assert.ok(!html.includes('Should not appear'), 'section after conrefend must not be included');
+    assert.ok(!html.includes('conref='), 'conref/conrefend attributes should be stripped from the rendered output');
+    // Only the referencing element's own local id should appear once (on
+    // the first range member); it must not be duplicated across every
+    // element in the range, and the range targets' own ids (section_mid
+    // etc.) must not leak through on a same-type merge either.
+    const occurrences = (html.match(/ref-local-id/g) || []).length;
+    assert.strictEqual(occurrences, 1, 'ref-local-id should appear exactly once, on the first range member only');
   });
 });
 

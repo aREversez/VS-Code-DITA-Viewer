@@ -857,6 +857,65 @@ describe('renderer', () => {
     assert.ok(html.includes('inner-fallback'), 'cyclic conref should fall back to literal content');
   });
 
+  // ── conrefend range tests (unit-level; see ditaRenderUtils.test.ts for
+  // the real-file sibling/parent resolution logic behind resolveConrefRange) ──
+
+  it('should render every element resolveConrefRange returns, not just the first', () => {
+    const s1 = makeEl('topic/section', [makeText('One')], { id: 's1' });
+    const s2 = makeEl('topic/section', [makeText('Two')], { id: 's2' });
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveConrefRange: (_conref, _conrefend) => [s1, s2],
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/section', [], { conref: 'x.dita#r/s1', conrefend: 'x.dita#r/s2' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('One'));
+    assert.ok(html.includes('Two'));
+  });
+
+  it('should fall back to normal single-target conref when the range cannot be resolved', () => {
+    const target = makeEl('topic/section', [makeText('Single target only')], { id: 's1' });
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      // Range resolution fails (e.g. not siblings) -- normal conref should
+      // still take over rather than rendering nothing.
+      resolveConrefRange: (_conref, _conrefend) => undefined,
+      resolveConref: (_conref: string) => target,
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/section', [], { conref: 'x.dita#r/s1', conrefend: 'x.dita#r/s2' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('Single target only'), 'should degrade to the single conref target, not render nothing');
+  });
+
+  it('should apply the referencing element\'s own attributes only to the first range member', () => {
+    const s1 = makeEl('topic/section', [makeText('First')], { id: 's1' });
+    const s2 = makeEl('topic/section', [makeText('Second')], { id: 's2' });
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveConrefRange: (_conref, _conrefend) => [s1, s2],
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/section', [], {
+          conref: 'x.dita#r/s1',
+          conrefend: 'x.dita#r/s2',
+          id: 'ref-local-id',
+        }),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    const occurrences = (html.match(/ref-local-id/g) || []).length;
+    assert.strictEqual(occurrences, 1, 'referencing element\'s local attribute must not leak onto every range member');
+  });
+
   // ── Keyref resolution tests ──
 
   it('should resolve varname keyref to key value', () => {

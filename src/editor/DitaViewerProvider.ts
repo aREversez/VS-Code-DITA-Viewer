@@ -5,7 +5,7 @@ import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { dirname, isAbsolute, join, resolve, basename } from 'path';
 import { randomBytes } from 'crypto';
 import { DitaNode } from '../parser/domTypes';
-import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeFileTitleResolver, getSearchOverlayScript, decodeHrefPart, FileReader } from './ditaRenderUtils';
+import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, decodeHrefPart, FileReader } from './ditaRenderUtils';
 
 // Test-only hook: @vscode/test-electron integration tests can't read a
 // webview's rendered HTML directly (VS Code doesn't expose the WebviewPanel
@@ -621,6 +621,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
 
       // Build conref resolver
       const conrefResolver = makeConrefResolver(docRootDir);
+      const conrefRangeResolver = makeConrefRangeResolver(docRootDir);
       const fileTitleResolver = makeFileTitleResolver(docRootDir);
 
       const resolveTitle = (id: string): string | undefined => {
@@ -638,6 +639,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
         resolveTitle,
         resolveKey: (key: string) => keyMap.get(key),
         resolveConref: (conref: string) => conrefResolver(conref),
+        resolveConrefRange: (conref: string, conrefend: string) => conrefRangeResolver(conref, conrefend),
         noteLabels,
       });
 

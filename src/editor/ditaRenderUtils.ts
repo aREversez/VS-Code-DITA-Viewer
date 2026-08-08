@@ -97,6 +97,63 @@ export function makeConrefResolver(docDir: string): (conref: string) => DitaNode
   };
 }
 
+// conrefend extends a conref reference from a single element to a run of
+// elements: everything from the conref target through the conrefend target,
+// inclusive, in source-document order. Per the DITA spec this only applies
+// when both ids resolve to elements that are siblings under the same
+// parent — Oxygen's own conrefend support has the same restriction — so
+// this returns undefined (letting the caller fall back to normal
+// single-target conref handling) rather than guessing at some other
+// relationship when that's not the case.
+export function makeConrefRangeResolver(docDir: string): (conref: string, conrefend: string) => DitaNode[] | undefined {
+  const cache = makeFileCache(docDir);
+
+  function resolveRef(ref: string): { root: DitaNode; id: string } | undefined {
+    const hashIdx = ref.indexOf('#');
+    if (hashIdx < 0) return undefined;
+    const filePath = ref.substring(0, hashIdx);
+    const idPart = ref.substring(hashIdx + 1);
+    const parts = idPart.split('/');
+    const id = parts.length > 1 ? parts[1] : parts[0];
+    const root = cache.loadFile(filePath);
+    if (!root) return undefined;
+    return { root, id };
+  }
+
+  function findWithParent(node: DitaNode, targetId: string, parent: DitaNode | undefined): { el: DitaNode; parent: DitaNode } | undefined {
+    if (node.attributes?.id === targetId && parent) return { el: node, parent };
+    for (const child of node.children || []) {
+      const found = findWithParent(child, targetId, node);
+      if (found) return found;
+    }
+    return undefined;
+  }
+
+  return (conref: string, conrefend: string): DitaNode[] | undefined => {
+    const start = resolveRef(conref);
+    const end = resolveRef(conrefend);
+    if (!start || !end) return undefined;
+
+    const startFound = findWithParent(start.root, start.id, undefined);
+    const endFound = findWithParent(end.root, end.id, undefined);
+    if (!startFound || !endFound) return undefined;
+    if (startFound.parent !== endFound.parent) return undefined;
+
+    // Filter to element children before indexing: the parser preserves
+    // whitespace-only text nodes between sibling elements (parsed with
+    // trim:false), which would otherwise get swept into the slice and
+    // thrown into the returned range as extra, attribute-less entries.
+    // "Sibling" here means sibling *element*, matching what conref/
+    // conrefend actually identify (elements with ids), not raw text runs.
+    const siblings = (startFound.parent.children || []).filter((c) => c.type === 'element');
+    const startIdx = siblings.indexOf(startFound.el);
+    const endIdx = siblings.indexOf(endFound.el);
+    if (startIdx < 0 || endIdx < 0 || endIdx < startIdx) return undefined;
+
+    return siblings.slice(startIdx, endIdx + 1);
+  };
+}
+
 export function makeFileTitleResolver(docDir: string): (href: string) => string | undefined {
   const cache = makeFileCache(docDir);
 
@@ -363,6 +420,7 @@ export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
     const docDir = dirname(filePath);
 
     const conrefResolver = makeConrefResolver(docDir);
+    const conrefRangeResolver = makeConrefRangeResolver(docDir);
     const fileTitleResolver = makeFileTitleResolver(docDir);
 
     const resolveTitle = (id: string): string | undefined => {
@@ -379,6 +437,7 @@ export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
       resolveTitle,
       resolveKey: (key: string) => keyMap.get(key),
       resolveConref: (conref: string) => conrefResolver(conref),
+      resolveConrefRange: (conref: string, conrefend: string) => conrefRangeResolver(conref, conrefend),
       noteLabels,
     });
 

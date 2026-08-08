@@ -13,6 +13,8 @@ export interface RenderContext {
   resolveTitle?: (id: string) => string | undefined;
   resolveKey?: (key: string) => string | undefined;
   resolveConref?: (conref: string) => DitaNode | undefined;
+  /** conrefend range support — see renderConrefRange below */
+  resolveConrefRange?: (conref: string, conrefend: string) => DitaNode[] | undefined;
   noteLabels?: Record<string, string>;
 }
 
@@ -58,6 +60,26 @@ function injectAttributes(html: string, tagName: string, range: SourceRange): st
   );
 }
 
+// Shared by both a normal single-target conref and the first member of a
+// conrefend range: the referencing element's own attributes (minus
+// conref/conrefend) take precedence, and its tag/baseType is kept when the
+// target is the same baseType (DITA's "same-type" conref semantics) —
+// otherwise the target's tag/baseType wins instead, since a same-shaped
+// substitution isn't possible.
+function mergeConrefTarget(node: DitaNode, target: DitaNode): DitaNode {
+  const restAttrs = Object.fromEntries(
+    Object.entries(node.attributes || {}).filter(([k]) => k !== 'conref' && k !== 'conrefend')
+  );
+  if (target.baseType && target.baseType === node.baseType) {
+    return { ...node, children: target.children || [], attributes: restAttrs };
+  }
+  const targetAttrs = Object.fromEntries(
+    Object.entries(target.attributes || {})
+      .filter(([k]) => k !== 'conref' && k !== 'conrefend' && k !== 'id')
+  );
+  return { ...target, attributes: { ...targetAttrs, ...restAttrs } };
+}
+
 function resolveConrefForNode(node: DitaNode, context: RenderContext): DitaNode {
   const conref = node.attributes?.conref;
   if (!conref || !context.resolveConref) return node;
@@ -66,29 +88,7 @@ function resolveConrefForNode(node: DitaNode, context: RenderContext): DitaNode 
   if (context.conrefChain?.has(conref)) return node;
   const target = context.resolveConref(conref);
   if (!target) return node;
-
-  // Strip conref from the referencing element's attributes
-  const restAttrs = Object.fromEntries(
-    Object.entries(node.attributes || {}).filter(([k]) => k !== 'conref')
-  );
-
-  // When the target element has the same baseType as the referencing
-  // element, preserve the referencing element's tag/attributes and only
-  // replace its children with the target's children (DITA conref
-  // semantics for same-type references).
-  if (target.baseType && target.baseType === node.baseType) {
-    return { ...node, children: target.children || [], attributes: restAttrs };
-  }
-
-  // When the target element has a DIFFERENT type (e.g. <ph conref> that
-  // references a <filepath>), replace the entire element with the target
-  // so its tag and baseType are preserved. Attributes on the referencing
-  // element (except conref) take precedence per the DITA spec.
-  const targetAttrs = Object.fromEntries(
-    Object.entries(target.attributes || {})
-      .filter(([k]) => k !== 'conref' && k !== 'id')
-  );
-  return { ...target, attributes: { ...targetAttrs, ...restAttrs } };
+  return mergeConrefTarget(node, target);
 }
 
 function resolveKeyrefForNode(node: DitaNode, context: RenderContext): DitaNode {
@@ -113,15 +113,11 @@ function resolveKeyrefForNode(node: DitaNode, context: RenderContext): DitaNode 
   };
 }
 
-function renderElement(node: DitaNode, context: RenderContext): string {
-  if (node.type === 'text') {
-    return escapeHtml(node.text || '');
-  }
-
-  let effectiveNode = resolveConrefForNode(node, context);
-  const resolvedConref =
-    effectiveNode !== node ? node.attributes?.conref : undefined;
-  effectiveNode = resolveKeyrefForNode(effectiveNode, context);
+// The "given a fully-resolved node, actually render it" half of
+// renderElement — factored out so the conrefend range path below can reuse
+// it for the merged first range member without re-running conref/keyref
+// resolution on something that's already resolved.
+function renderEffectiveNode(effectiveNode: DitaNode, context: RenderContext, resolvedConref: string | undefined): string {
   const baseType = effectiveNode.baseType;
   const renderer = baseType ? BASE_TYPE_RENDERERS[baseType] : undefined;
 
@@ -149,6 +145,60 @@ function renderElement(node: DitaNode, context: RenderContext): string {
   }
 
   return renderChildren(effectiveNode, childCtx);
+}
+
+// conrefend replaces a *single* referencing element with a *run* of
+// elements pulled from the target document (the conref target through the
+// conrefend target, inclusive) — a fundamentally different shape from
+// normal conref's one-for-one substitution, so it's handled as its own
+// path rather than folded into resolveConrefForNode. Only the first
+// element in the range takes on the referencing element's own
+// tag/attributes (mergeConrefTarget, same rule as normal conref) — the
+// rest render as themselves, straight from the target document, since
+// there's no second referencing element for them to inherit from.
+//
+// Known limitation: range members after the first carry the target
+// document's own sourceRange (line numbers in *that* file), not the
+// referencing document's — so data-line-based scroll-sync/highlighting
+// for those elements will point at the wrong file. Flagging rather than
+// working around, since a real fix (rewriting sourceRange to something
+// meaningful in a file those lines don't belong to) would be inventing
+// numbers, not fixing a bug.
+function renderConrefRange(node: DitaNode, range: DitaNode[], context: RenderContext, conref: string): string {
+  return range
+    .map((rangeNode, i) => {
+      if (i === 0) {
+        const merged = mergeConrefTarget(node, rangeNode);
+        return renderEffectiveNode(merged, context, conref);
+      }
+      return renderElement(rangeNode, context);
+    })
+    .join('');
+}
+
+function renderElement(node: DitaNode, context: RenderContext): string {
+  if (node.type === 'text') {
+    return escapeHtml(node.text || '');
+  }
+
+  const conref = node.attributes?.conref;
+  const conrefend = node.attributes?.conrefend;
+  if (conref && conrefend && context.resolveConrefRange && !context.conrefChain?.has(conref)) {
+    const range = context.resolveConrefRange(conref, conrefend);
+    // A range that fails to resolve (e.g. the two ids aren't siblings, or
+    // one doesn't exist) falls through to normal single-target conref
+    // handling below instead — showing the conref target alone is a more
+    // useful degradation than showing nothing.
+    if (range && range.length > 0) {
+      return renderConrefRange(node, range, context, conref);
+    }
+  }
+
+  let effectiveNode = resolveConrefForNode(node, context);
+  const resolvedConref =
+    effectiveNode !== node ? node.attributes?.conref : undefined;
+  effectiveNode = resolveKeyrefForNode(effectiveNode, context);
+  return renderEffectiveNode(effectiveNode, context, resolvedConref);
 }
 
 function renderChildren(node: DitaNode, context: RenderContext): string {
