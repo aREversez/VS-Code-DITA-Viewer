@@ -33,6 +33,17 @@ function escapeAttr(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// Recursively flattens an element's descendants to plain text, dropping all
+// markup. Used for attribute-value contexts (alt/title) where HTML tags
+// would just show up as literal escaped text if renderChildren() were used
+// instead. Local to this module rather than imported from the editor/map
+// layers' own copies of the same idea (extractTextFromNode/plainText) — see
+// FALLBACK_NOTE_LABELS above for why src/render/ keeps its own copies.
+function extractPlainText(node: DitaNode): string {
+  if (node.type === 'text') return node.text || '';
+  return (node.children || []).map(extractPlainText).join('');
+}
+
 function safeAttr(name: string, value: string | undefined | null): string {
   if (value == null) return '';
   return ` ${name}="${escapeAttr(value)}"`;
@@ -236,14 +247,50 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
   'topic/image': (node, ctx) => {
     const href = getAttr(node, 'href') || '';
-    const alt = getAttr(node, 'alt') || '';
     const placement = getAttr(node, 'placement') || 'inline';
     const width = getAttr(node, 'width');
     const height = getAttr(node, 'height');
+    const scale = getAttr(node, 'scale');
+    const scalefit = getAttr(node, 'scalefit');
+
+    // DITA allows alt text as both the @alt attribute and a richer <alt>
+    // child element (topic/alt) — the child can carry formatted content
+    // (ph, draft-comment, etc.) and takes precedence when present. Neither
+    // present -> alt stays undefined so safeAttr omits the attribute
+    // entirely, rather than always emitting alt="" regardless of whether
+    // the author gave any alt info at all.
+    const altChild = (node.children || []).find(
+      (c) => c.type === 'element' && c.baseType === 'topic/alt',
+    );
+    const altFromChild = altChild ? extractPlainText(altChild).trim() : '';
+    const alt = altFromChild || getAttr(node, 'alt');
+
     const extra = `${safeAttr('width', width)}${safeAttr('height', height)}`;
     const imgSrc = href ? ctx.asWebviewUri(href) : '';
     const cls = placement === 'break' ? ' class="image-break"' : '';
-    return `<img src="${escapeAttr(imgSrc)}"${safeAttr('alt', alt)}${extra}${cls} loading="lazy" data-dita-src="${escapeAttr(href)}">`;
+
+    // @scale sizes the image relative to its OWN natural dimensions, not
+    // the container — expressed via the CSS custom property --dita-scale,
+    // which styles.css combines with the toolbar's preview-only zoom via
+    // the CSS 'zoom' property (reflows the box, unlike transform:scale).
+    // Explicit width/height are a more specific instruction and win over
+    // scale when given. @scalefit="yes" means "prioritize fitting the
+    // available width", which this project already does by default for
+    // every image (img{max-width:100%}); so scalefit=yes just needs to
+    // suppress scale/width/height rather than actively doing anything.
+    let scaleStyle: string | undefined;
+    if (scalefit !== 'yes' && scale && !width && !height) {
+      const pct = parseFloat(scale);
+      if (!isNaN(pct) && pct > 0) {
+        scaleStyle = `--dita-scale:${pct / 100}`;
+      }
+    }
+
+    const altAttr = alt !== undefined ? safeAttr('alt', alt) : '';
+    const titleAttr = alt ? safeAttr('title', alt) : '';
+    const styleAttr = safeAttr('style', scaleStyle);
+
+    return `<img src="${escapeAttr(imgSrc)}"${altAttr}${titleAttr}${extra}${cls}${styleAttr} loading="lazy" data-dita-src="${escapeAttr(href)}">`;
   },
 
   'topic/fig': (node, ctx, renderChildren) => {

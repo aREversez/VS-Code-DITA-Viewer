@@ -42,9 +42,19 @@ function escapeHtml(text: string): string {
 }
 
 function injectAttributes(html: string, tagName: string, range: SourceRange): string {
+  // A renderer's own `title=` (checked only within its opening tag, not
+  // inside any nested children's markup) wins over the generic
+  // tag-name-as-tooltip fallback — otherwise the generic one lands first
+  // in the tag and, per HTML5's first-duplicate-wins parsing rule, silently
+  // shadows whatever the renderer intended (e.g. topic/image using the
+  // resolved alt text as its tooltip instead of the literal word "image").
+  const openTagEnd = html.indexOf('>');
+  const openTag = openTagEnd >= 0 ? html.slice(0, openTagEnd) : html;
+  const hasOwnTitle = / title="/.test(openTag);
+  const titlePart = hasOwnTitle ? '' : ` title="${tagName}"`;
   return html.replace(
     /^<([a-zA-Z][a-zA-Z0-9]*)/,
-    `<$1 title="${tagName}" data-line="${range.startLine}" data-end-line="${range.endLine}" data-start-col="${range.startCol}" data-end-col="${range.endCol}"`,
+    `<$1${titlePart} data-line="${range.startLine}" data-end-line="${range.endLine}" data-start-col="${range.startCol}" data-end-col="${range.endCol}"`,
   );
 }
 

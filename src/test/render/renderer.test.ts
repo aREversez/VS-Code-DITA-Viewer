@@ -368,6 +368,76 @@ describe('renderer', () => {
     assert.ok(html.includes('alt="A picture"'));
   });
 
+  it('should prefer <alt> child element text over the @alt attribute', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [
+        makeEl('topic/alt', [makeText('Child alt wins')]),
+      ], { href: 'pic.png', alt: 'Attribute alt loses' }),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('alt="Child alt wins"'));
+    assert.ok(!html.includes('Attribute alt loses'));
+    // Also surfaced as a hover tooltip
+    assert.ok(html.includes('title="Child alt wins"'));
+  });
+
+  it('should fall back to the @alt attribute when there is no <alt> child', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [], { href: 'pic.png', alt: 'From attribute' }),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('alt="From attribute"'));
+    assert.ok(html.includes('title="From attribute"'));
+  });
+
+  it('should omit a fabricated alt="" but keep the generic title="image" tooltip when no alt info is provided', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [], { href: 'pic.png' }),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    const imgTag = html.slice(html.indexOf('<img'), html.indexOf('>', html.indexOf('<img')) + 1);
+    assert.ok(!imgTag.includes('alt='), 'should not fabricate an empty alt="" on the <img> tag');
+    // injectAttributes' generic tagName-as-tooltip fallback still applies
+    // here since the renderer itself has nothing more specific to offer.
+    assert.ok(imgTag.includes('title="image"'));
+  });
+
+  it('should not duplicate the title attribute: alt-derived title wins over the generic tagName tooltip', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [], { href: 'pic.png', alt: 'Real description' }),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    const imgTag = html.slice(html.indexOf('<img'), html.indexOf('>', html.indexOf('<img')) + 1);
+    const titleMatches = imgTag.match(/ title="/g) || [];
+    assert.strictEqual(titleMatches.length, 1, 'the <img> tag should carry exactly one title attribute, not two');
+    assert.ok(imgTag.includes('title="Real description"'));
+  });
+
+  it('should apply @scale as a --dita-scale style hint when width/height are absent', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [], { href: 'pic.png', scale: '70' }),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('style="--dita-scale:0.7"'));
+  });
+
+  it('should let explicit width/height override @scale', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [], { href: 'pic.png', scale: '70', width: '300' }),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('--dita-scale'));
+    assert.ok(html.includes('width="300"'));
+  });
+
+  it('should suppress @scale when @scalefit="yes"', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [], { href: 'pic.png', scale: '70', scalefit: 'yes' }),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('--dita-scale'));
+  });
+
   it('should render fig with figcaption', () => {
     const doc = makeEl('topic/topic', [
       makeEl('topic/fig', [

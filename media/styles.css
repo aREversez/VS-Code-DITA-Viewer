@@ -112,8 +112,9 @@ table th { background: var(--color-code-bg); color: var(--vscode-editor-foregrou
 .simple-table th { background: transparent; border-bottom-width: 2px; }
 
 /* Images */
-img { max-width: 100%; height: auto; border-radius: 4px; margin: 1rem 0; }
-.image-break { display: block; }
+img { max-width: 100%; height: auto; border-radius: 4px; vertical-align: middle; cursor: zoom-in; zoom: calc(var(--dita-scale, 1) * var(--dita-img-zoom, 1)); }
+.image-break { display: block; margin: 1rem 0; }
+img[data-load-error] { cursor: default; }
 
 /* Figures */
 figure { margin: 1.5rem 0; text-align: center; }

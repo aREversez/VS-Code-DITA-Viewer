@@ -6,6 +6,14 @@
 
 - **Font size and family now persist** — previously the preview always reopened with the default sans-serif font at 100%, discarding any size/serif choice made in an earlier session; both are now remembered (stored globally, applying to every DITA file you preview) and a new reset button restores the default in one click
 - **`note/@type` label coverage completed** — 5 of the 13 DITA 1.3 note types (`attention`, `caution`, `fastpath`, `remember`, `trouble`) previously fell through to displaying the raw, untranslated attribute value (visually capitalized by CSS, which is why e.g. `type="attention"` showed as "Attention" in English regardless of document language); all 13 types now have proper English/Chinese labels, matching DITA-OT's own strings bundles. Also added support for `@spectitle` (overrides the label for any note type) and `@othertype` (supplies the label when `type="other"`), neither of which were read before.
+- **Image rendering: alt text, `@scale`/`@scalefit`, `placement="inline"` layout, and a new zoom/lightbox toolbar**
+  - Alt text is now read from the `<alt>` child element (preferred, since it can hold formatted content) or the `@alt` attribute (fallback), and surfaced as both `alt` and a hover `title` — previously the `<alt>` child was silently dropped and only the (largely unused) `@alt` attribute path worked.
+  - `@scale` (image size relative to its own natural dimensions) is now honored via CSS `zoom`, so the preview matches what actually gets published; explicit `width`/`height` still take precedence, and `@scalefit="yes"` suppresses scale/width/height in favor of the existing responsive default.
+  - Fixed `placement="inline"` images inflating the line height they sit in — the vertical `margin` that belongs on block (`placement="break"`) images was being applied to inline ones too.
+  - New toolbar zoom control (30–150%, session-only, preview-only — doesn't touch source or HTML export) for temporarily shrinking distracting screenshots while reading.
+  - Click any image for a fullscreen lightbox (Esc or click-outside to close).
+  - Fixed the broken-image error handler clobbering a real alt with the failure message; it now only falls back to that when no alt was ever provided, and always surfaces the failure via the hover title.
+  - Along the way, fixed a latent bug in the shared `injectAttributes` helper: it unconditionally stamped every element with `title="<tagName>"`, which would have silently shadowed the new alt-derived `title` on `<img>` (HTML5 keeps the first of two duplicate attributes) — it now defers to a renderer-supplied `title` when present.
 
 ## 1.0.7 (2026-08-01)
 

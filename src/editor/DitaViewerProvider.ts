@@ -34,6 +34,9 @@ function getWebviewScript(): string {
     fontCurrentSans: JSON.stringify(vscode.l10n.t('Current: Sans-serif. Click to switch to Serif')),
     fontCurrentSerif: JSON.stringify(vscode.l10n.t('Current: Serif. Click to switch to Sans-serif')),
     resetFont: JSON.stringify(vscode.l10n.t('Reset font size and family to default')),
+    decreaseImgZoom: JSON.stringify(vscode.l10n.t('Decrease image display size (preview only)')),
+    increaseImgZoom: JSON.stringify(vscode.l10n.t('Increase image display size (preview only)')),
+    resetImgZoomTitle: JSON.stringify(vscode.l10n.t('Click to reset image display size to 100%')),
     pageWidth: JSON.stringify(vscode.l10n.t('Page width')),
     widthAuto: JSON.stringify(vscode.l10n.t('Auto')),
     widthFull: JSON.stringify(vscode.l10n.t('Full')),
@@ -143,10 +146,48 @@ function getWebviewScript(): string {
     if (img.tagName !== 'IMG' || !img.hasAttribute('data-dita-src')) return;
     var src = img.getAttribute('data-dita-src') || 'unknown';
     var msg = 'Image fail: ' + src;
-    img.alt = msg;
+    // Only use the failure text as alt if the author never supplied one —
+    // a real DITA <alt>/@alt is more useful than a load-failure string and
+    // shouldn't be overwritten by it. The failure is still surfaced via
+    // title (hover) and the red outline either way.
+    if (!img.getAttribute('alt')) img.alt = msg;
+    img.title = msg;
+    img.setAttribute('data-load-error', 'true');
     img.style.outline = '3px solid red';
     img.style.outlineOffset = '-1px';
   }, true);
+
+  // Click-to-enlarge lightbox. Deliberately makes the whole image the
+  // click target (cursor:zoom-in hints this) rather than a separate corner
+  // button, to avoid wrapping every <img> in an extra positioning element —
+  // simpler and just as discoverable. Broken images are excluded.
+  var lightboxOverlay = null;
+  function onLightboxKeydown(e) { if (e.key === 'Escape') closeLightbox(); }
+  function closeLightbox() {
+    if (!lightboxOverlay) return;
+    lightboxOverlay.remove();
+    lightboxOverlay = null;
+    document.removeEventListener('keydown', onLightboxKeydown);
+  }
+  function openLightbox(img) {
+    closeLightbox();
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;cursor:zoom-out;';
+    var big = document.createElement('img');
+    big.src = img.src;
+    big.alt = img.alt || '';
+    big.style.cssText = 'max-width:92vw;max-height:92vh;object-fit:contain;box-shadow:0 4px 24px rgba(0,0,0,0.5);border-radius:4px;';
+    overlay.appendChild(big);
+    overlay.addEventListener('click', closeLightbox);
+    document.addEventListener('keydown', onLightboxKeydown);
+    document.body.appendChild(overlay);
+    lightboxOverlay = overlay;
+  }
+  document.addEventListener('click', function(e) {
+    var img = e.target.closest ? e.target.closest('img[data-dita-src]') : null;
+    if (!img || img.getAttribute('data-load-error') === 'true') return;
+    openLightbox(img);
+  });
 
   function highlightElement(el) {
     if (!el) return;
@@ -279,6 +320,47 @@ function getWebviewScript(): string {
     saveFontPrefs();
   });
   toolbar.appendChild(fontResetBtn);
+
+  // Image display zoom — preview-only reading aid (does not touch the DITA
+  // source, and is independent of @scale below, which *is* source-driven).
+  // Session-only by design, unlike font prefs: this is meant as a quick
+  // "shrink distracting screenshots while I read the text" toggle, not a
+  // standing preference — reopening the preview goes back to 100%.
+  var imgZoom = 100;
+  function applyImgZoom() {
+    document.documentElement.style.setProperty('--dita-img-zoom', String(imgZoom / 100));
+    imgZoomLabel.textContent = imgZoom + '%';
+  }
+
+  var imgZoomDown = document.createElement('button');
+  imgZoomDown.innerHTML = '&#128247;−';
+  imgZoomDown.title = ${L.decreaseImgZoom};
+  imgZoomDown.style.cssText = btnStyle + 'font-size:11px;';
+  imgZoomDown.addEventListener('click', function() {
+    imgZoom = Math.max(30, imgZoom - 10);
+    applyImgZoom();
+  });
+  toolbar.appendChild(imgZoomDown);
+
+  var imgZoomLabel = document.createElement('button');
+  imgZoomLabel.textContent = '100%';
+  imgZoomLabel.title = ${L.resetImgZoomTitle};
+  imgZoomLabel.style.cssText = btnStyle + 'font-size:11px;min-width:34px;justify-content:center;';
+  imgZoomLabel.addEventListener('click', function() {
+    imgZoom = 100;
+    applyImgZoom();
+  });
+  toolbar.appendChild(imgZoomLabel);
+
+  var imgZoomUp = document.createElement('button');
+  imgZoomUp.innerHTML = '&#128247;+';
+  imgZoomUp.title = ${L.increaseImgZoom};
+  imgZoomUp.style.cssText = btnStyle + 'font-size:11px;';
+  imgZoomUp.addEventListener('click', function() {
+    imgZoom = Math.min(150, imgZoom + 10);
+    applyImgZoom();
+  });
+  toolbar.appendChild(imgZoomUp);
 
   // Page width dropdown
   var widths = [
