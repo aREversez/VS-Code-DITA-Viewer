@@ -438,6 +438,62 @@ describe('renderer', () => {
     assert.ok(!html.includes('--dita-scale'));
   });
 
+  // ── topic/foreign (DITA <foreign>/<mathml>, this project's svg-container) ──
+  // Descendants of <mathml> are raw, non-DITA XML (real MathML markup, not
+  // DITA elements), so they have no baseType of their own -- makeRaw below
+  // constructs nodes the way the real parser would for genuinely foreign
+  // content: an actual tagName, but baseType left undefined.
+  function makeRaw(tagName: string, children: DitaNode[], attrs?: Record<string, string>): DitaNode {
+    return {
+      type: 'element',
+      tagName,
+      attributes: attrs,
+      children,
+      sourceRange: { startLine: 0, startCol: 0, endLine: 0, endCol: 0 },
+    };
+  }
+
+  it('should preserve real MathML structure instead of flattening it to bare text', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/foreign', [
+        makeRaw('math', [
+          makeRaw('mfrac', [
+            makeRaw('mn', [makeText('1')]),
+            makeRaw('mn', [makeText('2')]),
+          ]),
+        ]),
+      ], undefined, 'mathml'),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('<math'), 'should emit a live <math> element for the browser to render natively');
+    assert.ok(html.includes('<mfrac><mn>1</mn><mn>2</mn></mfrac>'), 'should preserve the fraction structure, not flatten to "12"');
+  });
+
+  it('should drop a tag not on the MathML allowlist but keep its text', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/foreign', [
+        makeRaw('math', [makeRaw('evil-tag', [makeText('oops')])]),
+      ], undefined, 'mathml'),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('<evil-tag'), 'non-MathML tag names must not be emitted as live elements');
+    assert.ok(html.includes('oops'), 'text content should still come through even when its wrapping tag is dropped');
+  });
+
+  it('should strip event-handler and URL-bearing attributes from MathML elements but keep legitimate ones', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/foreign', [
+        makeRaw('math', [
+          makeRaw('mi', [makeText('x')], { onerror: 'alert(1)', mathvariant: 'bold', href: 'javascript:alert(1)' }),
+        ]),
+      ], undefined, 'mathml'),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('onerror'), 'event-handler attributes must be stripped even on an allowlisted tag');
+    assert.ok(!html.includes('javascript:'), 'href must be stripped regardless of value');
+    assert.ok(html.includes('mathvariant="bold"'), 'legitimate MathML presentation attributes should pass through');
+  });
+
   it('should render fig with figcaption', () => {
     const doc = makeEl('topic/topic', [
       makeEl('topic/fig', [

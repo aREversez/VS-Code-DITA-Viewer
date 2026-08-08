@@ -44,12 +44,82 @@ function extractPlainText(node: DitaNode): string {
   return (node.children || []).map(extractPlainText).join('');
 }
 
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// topic/foreign covers DITA's generic <foreign> element plus the MathML
+// domain's <mathml> (and this project's own 'svg-container' convenience
+// mapping) — see standardTagMap.ts. Its content is arbitrary raw markup
+// from OUTSIDE the DITA vocabulary, so unlike every other renderer here
+// (which maps a *specific known* DITA element to a *specific known* HTML
+// shape), this one has to decide what to do with tag names it can't
+// otherwise account for. Chromium (what VS Code's webview runs on) has
+// supported MathML Core natively since Chrome 109 (Jan 2023), so real
+// MathML markup — which is what DITA-OT/Oxygen actually emit here, per
+// https://www.oxygenxml.com/dita/1.3/specs/langRef/technicalContent/mathml.html
+// — can simply be serialized back out verbatim and left to the browser's
+// own MathML renderer, rather than DITA Viewer needing to implement math
+// typesetting itself.
+//
+// "Verbatim" is deliberately bounded, though: this is the one place in the
+// renderer that takes a tag name and attribute set straight from the
+// source XML and writes it into the HTML output without mapping it to a
+// controlled shape first. Restricting to a real MathML tag allowlist, and
+// stripping event-handler-shaped/URL-bearing attribute names regardless of
+// tag, keeps a malformed or hand-edited <mathml> block from doing anything
+// beyond "render as MathML (or not at all)" — it can't smuggle through an
+// arbitrary tag the browser would treat as active content.
+const MATHML_TAGS = new Set([
+  'math', 'mrow', 'mi', 'mn', 'mo', 'mtext', 'mspace', 'ms', 'mglyph',
+  'mfrac', 'msqrt', 'mroot', 'mstyle', 'merror', 'mpadded', 'mphantom',
+  'mfenced', 'menclose', 'msub', 'msup', 'msubsup', 'munder', 'mover',
+  'munderover', 'mmultiscripts', 'mprescripts', 'none', 'mtable', 'mtr',
+  'mtd', 'mlabeledtr', 'maligngroup', 'malignmark', 'mstack', 'mlongdiv',
+  'msgroup', 'msrow', 'mscarries', 'mscarry', 'msline', 'maction',
+  'semantics', 'annotation', 'annotation-xml',
+]);
+
+function isUnsafeForeignAttr(name: string): boolean {
+  const n = name.toLowerCase();
+  return n.startsWith('on') || n === 'href' || n === 'src' || n === 'style' || n === 'xlink:href';
+}
+
+function serializeForeignContent(node: DitaNode): string {
+  if (node.type === 'text') return escapeHtml(node.text || '');
+  const tag = (node.tagName || '').toLowerCase();
+  if (!MATHML_TAGS.has(tag)) {
+    // Not a tag we recognize as real MathML — don't trust it enough to
+    // emit as a live element, but keep any visible text rather than
+    // silently dropping the whole subtree.
+    return (node.children || []).map(serializeForeignContent).join('');
+  }
+  const attrs = Object.entries(node.attributes || {})
+    .filter(([name]) => !isUnsafeForeignAttr(name))
+    .map(([name, value]) => safeAttr(name, value))
+    .join('');
+  const inner = (node.children || []).map(serializeForeignContent).join('');
+  return `<${tag}${attrs}>${inner}</${tag}>`;
+}
+
+
 function safeAttr(name: string, value: string | undefined | null): string {
   if (value == null) return '';
   return ` ${name}="${escapeAttr(value)}"`;
 }
 
 export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
+  'topic/foreign': (node) => {
+    // No renderChildren() here — that would fall through to the generic
+    // "no handler for this baseType" path for every MathML tag underneath
+    // (none of them have a DITA baseType of their own), stripping all
+    // structure and leaving only flattened text. serializeForeignContent
+    // recurses on its own, bypassing the normal per-node baseType dispatch
+    // entirely for this subtree.
+    const inner = (node.children || []).map(serializeForeignContent).join('');
+    return `<span class="foreign-content">${inner}</span>`;
+  },
+
   'topic/topic': (node, ctx, renderChildren) => {
     const id = getAttr(node, 'id');
     return `<article${safeAttr('id', id)} class="topic">${renderChildren(node, ctx)}</article>`;

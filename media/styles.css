@@ -111,6 +111,12 @@ table th { background: var(--color-code-bg); color: var(--vscode-editor-foregrou
 .simple-table th, .simple-table td { padding: 0.4rem 0.6rem; }
 .simple-table th { background: transparent; border-bottom-width: 2px; }
 
+/* Foreign content (MathML, embedded SVG) — DITA doesn't signal whether a
+   <mathml>/<foreign> block is meant inline or as its own line the way
+   <image>'s @placement does, so this stays in normal inline flow by
+   default; a small margin just keeps it from crowding adjacent text. */
+.foreign-content { margin: 0 0.15em; }
+
 /* Images */
 /* --dita-scale (from @scale) and --dita-img-zoom (toolbar reading control)
    are deliberately different mechanisms, not multiplied together as a
