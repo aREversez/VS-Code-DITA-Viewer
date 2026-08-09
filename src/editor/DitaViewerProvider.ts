@@ -5,7 +5,7 @@ import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { dirname, isAbsolute, join, resolve, basename } from 'path';
 import { randomBytes } from 'crypto';
 import { DitaNode } from '../parser/domTypes';
-import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, decodeHrefPart, FileReader } from './ditaRenderUtils';
+import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart, FileReader } from './ditaRenderUtils';
 
 // Test-only hook: @vscode/test-electron integration tests can't read a
 // webview's rendered HTML directly (VS Code doesn't expose the WebviewPanel
@@ -55,6 +55,10 @@ function getWebviewScript(): string {
     searchMatchCase: vscode.l10n.t('Match case'),
     searchUseRegex: vscode.l10n.t('Use regex'),
     searchInvalidRegex: vscode.l10n.t('Invalid regex'),
+    filterLabel: vscode.l10n.t('Filter'),
+    filterTitle: vscode.l10n.t('Show/hide content by profiling attribute value (actually hides matching content, unlike the Flags toggle which only shows/hides the highlight)'),
+    filterClose: vscode.l10n.t('Close'),
+    filterEmpty: vscode.l10n.t('No profiling attributes in this document'),
   };
   return `
 (function() {
@@ -454,6 +458,13 @@ function getWebviewScript(): string {
     matchCase: L.searchMatchCase,
     useRegex: L.searchUseRegex,
     invalidRegex: L.searchInvalidRegex,
+  })}
+
+  ${getProfilingFilterScript({
+    buttonLabel: L.filterLabel,
+    buttonTitle: L.filterTitle,
+    closeLabel: L.filterClose,
+    emptyLabel: L.filterEmpty,
   })}
 })();
 `;

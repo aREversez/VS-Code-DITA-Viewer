@@ -149,6 +149,13 @@ body.hide-profiling .profiled {
 body.hide-profiling .profiled--inline { display: inline; }
 body.hide-profiling .profiling-label { display: none; }
 
+/* Phase 2 (the filter panel): actually hides content, unlike the toggle
+   above which only hides the highlight decoration. !important because
+   this needs to override whatever display value .profiled/.profiled--inline
+   set, and nothing else in this stylesheet should ever legitimately want
+   to re-show something the person explicitly filtered out. */
+.profile-filtered-out { display: none !important; }
+
 /* Lists */
 ul, ol { padding-left: 1.5em; }
 li { margin: 0.25em 0; }

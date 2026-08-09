@@ -1019,6 +1019,35 @@ describe('renderer', () => {
     }
   });
 
+  it('should emit a machine-readable data-profile-keys attribute the filter panel can key off of', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/p', [makeText('x')], { audience: 'expert', otherprops: 'prop1' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    const match = html.match(/data-profile-keys="([^"]*)"/);
+    assert.ok(match, 'should emit data-profile-keys');
+    const keys = match![1].split(',').map((k) => k.split(':').map(decodeURIComponent));
+    assert.deepStrictEqual(keys, [['audience', 'expert'], ['otherprops', 'prop1']]);
+  });
+
+  it('should URL-encode profiling attribute values in data-profile-keys so ":"/"," in a value can\'t be mistaken for the delimiter', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/p', [makeText('x')], { otherprops: 'weird:value,with-delims' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    const match = html.match(/data-profile-keys="([^"]*)"/);
+    assert.ok(match);
+    // Raw attribute text must not contain a literal ':' or ',' beyond the
+    // one real delimiter -- decoding should still recover the exact value.
+    const [attr, encodedValue] = match![1].split(':');
+    assert.strictEqual(attr, 'otherprops');
+    assert.strictEqual(decodeURIComponent(encodedValue), 'weird:value,with-delims');
+  });
+
   // ── Keyref resolution tests ──
 
   it('should resolve varname keyref to key value', () => {

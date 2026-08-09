@@ -90,7 +90,15 @@ function wrapProfilingHighlight(html: string, node: DitaNode): string {
     .map((c) => `<span class="profiling-chip">${escapeHtml(profilingAttrLabel(c.attr))} <span class="profiling-chip__value">[${escapeHtml(c.value)}]</span></span>`)
     .join('');
   const cls = inline ? 'profiled profiled--inline' : 'profiled';
-  return `<span class="${cls}">${html}<span class="profiling-label">${labelHtml}</span></span>`;
+  // Machine-readable twin of the human-readable chips above, for the
+  // toolbar's filter panel (webview-side) to key visibility off of without
+  // re-parsing chip text. encodeURIComponent on each part keeps the ':'/','
+  // delimiters unambiguous regardless of what characters appear in a real
+  // attribute value (DITA doesn't restrict these to a safe token charset).
+  const keysAttr = chips
+    .map((c) => `${encodeURIComponent(c.attr)}:${encodeURIComponent(c.value)}`)
+    .join(',');
+  return `<span class="${cls}" data-profile-keys="${escapeHtml(keysAttr)}">${html}<span class="profiling-label">${labelHtml}</span></span>`;
 }
 
 function escapeHtml(text: string): string {
