@@ -4,6 +4,11 @@
 
 ### Bug Fixes
 
+- **Fixed the per-image zoom controls shrinking images instead of enlarging them, and the shrink button doing nothing at the default zoom level.** Two related issues in the per-image −/+/maximize toolbar added for image zoom:
+  - The zoom steps started at 100% with nothing below it, so clicking "−" at the default level was a no-op.
+  - Clicking "+" (or "−") before a lazily-loaded image had actually finished loading could permanently cache a bogus baseline width (0, or a 300px fallback) for that image — DITA `<image>` renders `loading="lazy"` with no `@width`/`@height` reserved in the common case, so there's a real window where the image hasn't decoded yet. Once cached, every later zoom step for that image computed from the wrong baseline, so "+" would shrink the image to a fraction of its already-displayed size instead of enlarging it, and the image never recovered until the preview was reopened.
+  - Added shrink steps (50%/75%) below 100%, only cache the measured baseline once the image has actually finished loading (`img.complete && naturalWidth > 0`), and added a `load` listener that re-applies the current zoom level once a still-loading image finishes, so a click that lands mid-load self-corrects instead of sticking.
+
 - **Fixed a source ↔ preview scroll-sync feedback loop that could hijack the editor cursor while typing** — editing the source could sometimes make the preview jump, immediately followed by the source cursor itself jumping to an unrelated line, making it impossible to keep typing normally. Root cause: the preview's own scroll listener didn't distinguish "the user manually scrolled the preview" from "the extension just told the preview to scroll itself" (e.g. right after a source edit re-renders the preview and syncs it back to the source's current view). The latter was being echoed straight back out as if it were a real scroll, which could then move the *editor's* cursor. The preview now suppresses its own scroll-sync signal for the duration of any scroll it triggered itself, and scroll-following no longer moves the editor selection at all (only double-clicking an element in the preview does that, since that's an explicit navigation action, unlike continuous scroll-follow).
 
 ### Preview UX

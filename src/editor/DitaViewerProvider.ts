@@ -257,7 +257,15 @@ function getWebviewScript(): string {
   // etc.), captured lazily on first use rather than assumed to be the
   // image's raw pixel width, since that's what "zoom in/out from here"
   // should mean to someone looking at the rendered page.
-  var IMG_ZOOM_STEPS = [100, 125, 150, 175, 200];
+  //
+  // Includes steps below 100 so "−" actually shrinks the image (previously
+  // 100 was the floor, so − was a no-op at the default zoom level — the
+  // reported "clicking shrink does nothing" bug). DEFAULT_ZOOM_IDX is the
+  // index new/never-zoomed images implicitly start at (100%, i.e. no
+  // zoom-idx attribute yet) — the click handlers below fall back to this
+  // instead of a bare 0 now that index 0 no longer means 100%.
+  var IMG_ZOOM_STEPS = [50, 75, 100, 125, 150, 175, 200];
+  var DEFAULT_ZOOM_IDX = IMG_ZOOM_STEPS.indexOf(100);
 
   function imgBaseWidth(img) {
     var cached = img.getAttribute('data-dita-base-width');
@@ -268,8 +276,31 @@ function getWebviewScript(): string {
     var w = img.getBoundingClientRect().width || img.naturalWidth || 300;
     img.style.width = prevWidth;
     img.style.maxWidth = prevMaxWidth;
-    img.setAttribute('data-dita-base-width', String(w));
+    // Only cache once the image has actually finished loading. DITA
+    // <image> renders as loading="lazy" with no @width/@height reserved
+    // in the common case (source doesn't specify them), so a zoom click
+    // that lands before the image has decoded can measure a near-zero (or
+    // the "|| 300" fallback) box. Caching that permanently -- this
+    // attribute is never otherwise invalidated -- would lock every later
+    // zoom step to that bogus baseline, so clicking "+" would shrink the
+    // image to a fraction of what was already on screen instead of
+    // enlarging it. Leaving it uncached means the next call re-measures,
+    // picking up the real size once the image has loaded.
+    if (img.complete && img.naturalWidth > 0) {
+      img.setAttribute('data-dita-base-width', String(w));
+    }
     return w;
+  }
+
+  // Reads the image's current zoom-level index, defaulting to
+  // DEFAULT_ZOOM_IDX (100%) for a never-zoomed image rather than a bare 0
+  // -- index 0 is now the 50% step, not 100%, now that IMG_ZOOM_STEPS has
+  // shrink steps below it.
+  function currentZoomIdx(img) {
+    var raw = img.getAttribute('data-dita-zoom-idx');
+    if (raw === null) return DEFAULT_ZOOM_IDX;
+    var idx = parseInt(raw, 10);
+    return isNaN(idx) ? DEFAULT_ZOOM_IDX : idx;
   }
 
   function setImgZoom(img, idx) {
@@ -334,14 +365,26 @@ function getWebviewScript(): string {
     img.parentNode.insertBefore(wrap, img);
     wrap.appendChild(img);
 
+    // If a zoom button gets clicked while this image is still loading
+    // (loading="lazy", usually no @width/@height reserved), imgBaseWidth()
+    // won't have cached a base yet (see the img.complete guard there), so
+    // the click applies a size computed from an unreliable in-flight
+    // measurement. Once the image actually finishes loading, snap it to
+    // whatever zoom level is currently set so it settles on the correct
+    // size instead of staying at that first, unreliable guess.
+    img.addEventListener('load', function() {
+      var idx = currentZoomIdx(img);
+      if (idx !== DEFAULT_ZOOM_IDX) setImgZoom(img, idx);
+    });
+
     var tb = document.createElement('span');
     tb.className = 'dita-img-toolbar';
     tb.appendChild(makeImgToolbarBtn('\u2212', ${L.imgZoomOutTitle}, function() {
-      var i2 = parseInt(img.getAttribute('data-dita-zoom-idx') || '0', 10);
+      var i2 = currentZoomIdx(img);
       setImgZoom(img, i2 - 1);
     }));
     tb.appendChild(makeImgToolbarBtn('+', ${L.imgZoomInTitle}, function() {
-      var i2 = parseInt(img.getAttribute('data-dita-zoom-idx') || '0', 10);
+      var i2 = currentZoomIdx(img);
       setImgZoom(img, i2 + 1);
     }));
     tb.appendChild(makeImgToolbarBtn('\u2922', ${L.imgMaximizeTitle}, function() {
