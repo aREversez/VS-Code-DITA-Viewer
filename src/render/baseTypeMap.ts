@@ -85,9 +85,24 @@ function isUnsafeForeignAttr(name: string): boolean {
   return n.startsWith('on') || n === 'href' || n === 'src' || n === 'style' || n === 'xlink:href';
 }
 
+// Namespace-prefixed MathML (<mml:math>, <mml:msup>, ...) is extremely
+// common in practice -- Oxygen's equation editor and MathType both export
+// this shape by default -- but only the *local* part of the name is a real
+// MathML tag; "mml:msup" itself will never match MATHML_TAGS. Browsers also
+// don't recognize prefixed tags for the HTML math-integration point at
+// all, so the prefix has to come off both for the allowlist check and for
+// what actually gets written into the output, or the element silently
+// falls through to the "unrecognized tag" branch below (dropping structure
+// exactly like the un-fixed flatten-to-text bug this renderer exists to
+// avoid).
+function localName(tag: string): string {
+  const i = tag.indexOf(':');
+  return i === -1 ? tag : tag.slice(i + 1);
+}
+
 function serializeForeignContent(node: DitaNode): string {
   if (node.type === 'text') return escapeHtml(node.text || '');
-  const tag = (node.tagName || '').toLowerCase();
+  const tag = localName((node.tagName || '').toLowerCase());
   if (!MATHML_TAGS.has(tag)) {
     // Not a tag we recognize as real MathML — don't trust it enough to
     // emit as a live element, but keep any visible text rather than
@@ -95,8 +110,15 @@ function serializeForeignContent(node: DitaNode): string {
     return (node.children || []).map(serializeForeignContent).join('');
   }
   const attrs = Object.entries(node.attributes || {})
-    .filter(([name]) => !isUnsafeForeignAttr(name))
-    .map(([name, value]) => safeAttr(name, value))
+    // xmlns / xmlns:* declarations are what produced the mml: prefix in
+    // the first place; now that the prefix is stripped from the tag name
+    // itself they're meaningless (and on re-serialized <math> would just
+    // be inert clutter), so drop them rather than carrying them through.
+    .filter(([name]) => {
+      const n = name.toLowerCase();
+      return n !== 'xmlns' && !n.startsWith('xmlns:') && !isUnsafeForeignAttr(localName(n));
+    })
+    .map(([name, value]) => safeAttr(localName(name), value))
     .join('');
   const inner = (node.children || []).map(serializeForeignContent).join('');
   return `<${tag}${attrs}>${inner}</${tag}>`;

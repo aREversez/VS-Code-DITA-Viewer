@@ -1,5 +1,8 @@
 import * as assert from 'assert';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { renderDocument, RenderContext } from '../../render/renderer';
+import { parseDita } from '../../parser/ditaParser';
 import { DitaNode } from '../../parser/domTypes';
 
 function makeText(text: string): DitaNode {
@@ -492,6 +495,51 @@ describe('renderer', () => {
     assert.ok(!html.includes('onerror'), 'event-handler attributes must be stripped even on an allowlisted tag');
     assert.ok(!html.includes('javascript:'), 'href must be stripped regardless of value');
     assert.ok(html.includes('mathvariant="bold"'), 'legitimate MathML presentation attributes should pass through');
+  });
+
+  it('should strip the namespace prefix from namespace-prefixed MathML (Oxygen/MathType export shape) instead of dropping the tags entirely', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/foreign', [
+        makeRaw('mml:math', [
+          makeRaw('mml:msqrt', [
+            makeRaw('mml:mrow', [
+              makeRaw('mml:msup', [makeRaw('mml:mi', [makeText('a')]), makeRaw('mml:mn', [makeText('2')])]),
+              makeRaw('mml:mo', [makeText('+')]),
+              makeRaw('mml:msup', [makeRaw('mml:mi', [makeText('b')]), makeRaw('mml:mn', [makeText('2')])]),
+            ]),
+          ]),
+        ], { 'xmlns:mml': 'http://www.w3.org/1998/Math/MathML' }),
+      ], undefined, 'mathml'),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('mml:'), 'prefixed tag/attribute names must not leak into the output -- browsers only recognize bare MathML tags');
+    assert.ok(html.includes('<msqrt>'), 'should recognize mml:msqrt as real MathML, not drop it as an unknown tag');
+    assert.ok(
+      html.includes('<msup><mi>a</mi><mn>2</mn></msup><mo>+</mo><msup><mi>b</mi><mn>2</mn></msup>'),
+      'should preserve full nested structure, not flatten to "a 2 + b 2"',
+    );
+    assert.ok(!html.includes('xmlns'), 'xmlns/xmlns:* declarations are meaningless once the prefix is stripped and should not be carried through');
+  });
+
+  it('should preserve namespace-prefixed MathML end-to-end through the real sax parser, not just the unit-level tree builder', () => {
+    // mathml_prefixed_test.dita is authored in the mml:-prefixed shape that
+    // Oxygen's equation editor / MathType actually export, as opposed to
+    // mathml_test.dita's hand-written unprefixed shape. Going through the
+    // real parseDita() here (rather than the makeRaw()/makeEl() synthetic
+    // tree above) catches any surprises from how sax hands tagNames back,
+    // which the unit-level test can't see.
+    const fixturePath = join(__dirname, '..', '..', '..', 'test-dita-file', 'topics', 'mathml_prefixed_test.dita');
+    const xml = readFileSync(fixturePath, 'utf-8');
+    const doc = parseDita(xml);
+    const html = renderDocument(doc.root, defaultCtx);
+    const foreignStart = html.indexOf('class="foreign-content"');
+    const foreignSpan = html.slice(foreignStart, html.indexOf('</span>', foreignStart));
+    assert.ok(!foreignSpan.includes('mml:'), 'no prefixed tag/attribute names should leak into the real parser output');
+    assert.ok(foreignSpan.includes('<msqrt>'), 'msqrt should survive end-to-end through the real parser, not just the synthetic unit test');
+    assert.ok(
+      foreignSpan.includes('<msup><mi>a</mi><mn>2</mn></msup>') && foreignSpan.includes('<msup><mi>b</mi><mn>2</mn></msup>'),
+      'superscripts should survive end-to-end, not flatten to "a 2 + b 2"',
+    );
   });
 
   it('should render fig with figcaption', () => {
