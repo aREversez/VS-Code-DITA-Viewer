@@ -916,6 +916,109 @@ describe('renderer', () => {
     assert.strictEqual(occurrences, 1, 'referencing element\'s local attribute must not leak onto every range member');
   });
 
+  // ── Profiling / conditional-attribute highlighting ──
+
+  it('should wrap an element carrying a profiling attribute in a highlight box with a labeled chip', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/p', [makeText('Flagged content')], { otherprops: 'only_for_HUBI' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('class="profiled"'), 'should wrap in the highlight box');
+    assert.ok(html.includes('Flagged content'), 'original content should still render');
+    assert.ok(html.includes('profiling-chip'), 'should include a chip');
+    assert.ok(html.includes('Other'), 'otherprops should display as "Other", matching Oxygen\'s convention');
+    assert.ok(html.includes('[only_for_HUBI]'), 'should show the actual value');
+  });
+
+  it('should not wrap an element with no profiling attributes', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/p', [makeText('Plain content')], {}),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('class="profiled"'));
+    assert.ok(!html.includes('profiling-chip'));
+  });
+
+  it('should render one chip per profiling attribute when several are set on the same element', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/p', [makeText('x')], { audience: 'expert', otherprops: 'prop1' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('Audience'));
+    assert.ok(html.includes('[expert]'));
+    assert.ok(html.includes('Other'));
+    assert.ok(html.includes('[prop1]'));
+    assert.strictEqual((html.match(/profiling-chip"/g) || []).length, 2);
+  });
+
+  it('should render one chip per space-separated value within a single profiling attribute', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/p', [makeText('x')], { otherprops: 'only_for_HUBI only_for_XYZ' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('[only_for_HUBI]'));
+    assert.ok(html.includes('[only_for_XYZ]'));
+    assert.strictEqual((html.match(/profiling-chip"/g) || []).length, 2);
+  });
+
+  it('should use the inline-flavored wrapper for commonly-inline elements, not the full block box', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/p', [
+          makeText('Some '),
+          makeEl('topic/ph', [makeText('flagged phrase')], { audience: 'expert' }),
+          makeText(' inline.'),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('profiled profiled--inline'), 'inline elements should get the inline variant');
+  });
+
+  it('should use the block wrapper (no inline variant) for a profiled block-level element', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/p', [makeText('x')], { audience: 'expert' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('class="profiled"'));
+    assert.ok(!html.includes('profiled--inline'));
+  });
+
+  it('should highlight nested profiled elements independently (parent and child both flagged)', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/section', [
+          makeEl('topic/p', [makeText('inner')], { audience: 'novice' }),
+        ], { otherprops: 'section_flag' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.strictEqual((html.match(/class="profiled/g) || []).length, 2, 'both the section and the inner p should each get their own highlight wrapper');
+  });
+
+  it('should recognize all nine select-atts profiling attributes from the DITA 1.3 spec', () => {
+    const attrs = ['props', 'platform', 'product', 'audience', 'otherprops', 'base', 'importance', 'rev', 'status'];
+    for (const attr of attrs) {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [
+          makeEl('topic/p', [makeText('x')], { [attr]: 'somevalue' }),
+        ]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(html.includes('class="profiled"'), `${attr} should trigger highlighting`);
+    }
+  });
+
   // ── Keyref resolution tests ──
 
   it('should resolve varname keyref to key value', () => {

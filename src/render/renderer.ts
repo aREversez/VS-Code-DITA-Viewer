@@ -35,6 +35,64 @@ function isContainerBaseType(baseType: string): boolean {
   return CONTAINER_BASETYPES.has(baseType);
 }
 
+// ── Profiling / conditional-processing attribute highlighting ──
+// Per the OASIS DITA 1.3 select-atts entity (commonElements.mod): the full
+// set of attributes conditional-processing tools (Oxygen's "Conditional
+// Text" / DITA-OT's .ditaval) act on is props, platform, product, audience,
+// otherprops (the filter-atts subgroup), plus base, importance, rev, and
+// status. This only *highlights* profiled content (matches it visually, the
+// way Oxygen shows profiling by default) — it does not hide anything; that
+// would be a real conditional-processing engine (a .ditaval-driven filter),
+// which is a separate, larger feature this doesn't attempt.
+const PROFILING_ATTRS = ['props', 'platform', 'product', 'audience', 'otherprops', 'base', 'importance', 'rev', 'status'];
+
+const PROFILING_ATTR_LABELS: Record<string, string> = {
+  otherprops: 'Other',
+};
+
+function profilingAttrLabel(attr: string): string {
+  return PROFILING_ATTR_LABELS[attr] || attr.charAt(0).toUpperCase() + attr.slice(1);
+}
+
+// Elements commonly authored inline, within a sentence — highlighting these
+// as a full-width block would break the surrounding text flow, so they get
+// an inline-flavored wrapper instead. Not an exhaustive classification (the
+// renderer has no general block/inline taxonomy to draw on); anything not
+// listed here defaults to the block treatment, which matches the more
+// common case of profiling applied at paragraph/step/section granularity
+// (as in the reported example) rather than to individual inline phrases.
+const INLINE_PROFILING_BASETYPES = new Set([
+  'topic/ph', 'topic/b', 'topic/i', 'topic/u', 'topic/sup', 'topic/sub',
+  'topic/term', 'topic/keyword', 'topic/tm', 'topic/xref', 'topic/cite',
+  'topic/q', 'topic/filepath', 'topic/userinput', 'topic/systemoutput',
+  'topic/varname', 'topic/cmdname', 'topic/wintitle', 'topic/uicontrol',
+  'topic/menucascade', 'topic/shortcut',
+]);
+
+function getProfilingChips(node: DitaNode): { attr: string; value: string }[] {
+  const attrs = node.attributes || {};
+  const chips: { attr: string; value: string }[] = [];
+  for (const name of PROFILING_ATTRS) {
+    const raw = attrs[name];
+    if (!raw) continue;
+    for (const token of raw.trim().split(/\s+/)) {
+      if (token) chips.push({ attr: name, value: token });
+    }
+  }
+  return chips;
+}
+
+function wrapProfilingHighlight(html: string, node: DitaNode): string {
+  const chips = getProfilingChips(node);
+  if (chips.length === 0) return html;
+  const inline = node.baseType ? INLINE_PROFILING_BASETYPES.has(node.baseType) : false;
+  const labelHtml = chips
+    .map((c) => `<span class="profiling-chip">${escapeHtml(profilingAttrLabel(c.attr))} <span class="profiling-chip__value">[${escapeHtml(c.value)}]</span></span>`)
+    .join('');
+  const cls = inline ? 'profiled profiled--inline' : 'profiled';
+  return `<span class="${cls}">${html}<span class="profiling-label">${labelHtml}</span></span>`;
+}
+
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
@@ -140,11 +198,12 @@ function renderEffectiveNode(effectiveNode: DitaNode, context: RenderContext, re
     if (baseType && !PASS_THROUGH_BASETYPES.has(baseType)) {
       const tagName = effectiveNode.tagName || baseType.split('/').pop() || baseType;
       html = injectAttributes(html, tagName, effectiveNode.sourceRange);
+      html = wrapProfilingHighlight(html, effectiveNode);
     }
     return html;
   }
 
-  return renderChildren(effectiveNode, childCtx);
+  return wrapProfilingHighlight(renderChildren(effectiveNode, childCtx), effectiveNode);
 }
 
 // conrefend replaces a *single* referencing element with a *run* of

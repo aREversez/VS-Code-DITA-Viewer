@@ -38,6 +38,9 @@ function getWebviewScript(): string {
     increaseImgZoom: JSON.stringify(vscode.l10n.t('Increase image display size (preview only)')),
     resetImgZoomTitle: JSON.stringify(vscode.l10n.t('Click to reset image display size to 100%')),
     imgSizeLabel: JSON.stringify(vscode.l10n.t('Img')),
+    profilingLabel: JSON.stringify(vscode.l10n.t('Flags')),
+    profilingOnTitle: JSON.stringify(vscode.l10n.t('Profiling attributes (props/otherprops/audience/...) are highlighted. Click to hide the highlighting.')),
+    profilingOffTitle: JSON.stringify(vscode.l10n.t('Profiling attribute highlighting is hidden. Click to show which content is flagged and with what.')),
     pageWidth: JSON.stringify(vscode.l10n.t('Page width')),
     widthAuto: JSON.stringify(vscode.l10n.t('Auto')),
     widthFull: JSON.stringify(vscode.l10n.t('Full')),
@@ -386,6 +389,29 @@ function getWebviewScript(): string {
     applyImgZoom();
   });
   toolbar.appendChild(imgZoomUp);
+
+  // Profiling / conditional-attribute highlight toggle. Purely a CSS class
+  // flip (body.hide-profiling, see styles.css) -- the highlight markup is
+  // always present in the rendered HTML, so toggling is instant and needs
+  // no message round-trip to the extension or re-render. Defaults on: the
+  // point of this feature is surfacing profiled content, so it should be
+  // visible without the user having to discover the toggle first.
+  var profilingOn = true;
+  var profilingBtn = document.createElement('button');
+  profilingBtn.textContent = ${L.profilingLabel};
+  profilingBtn.style.cssText = btnStyle + 'font-size:11px;';
+  function applyProfilingToggle() {
+    document.body.classList.toggle('hide-profiling', !profilingOn);
+    profilingBtn.style.background = profilingOn ? 'var(--color-profiling-label-bg)' : '';
+    profilingBtn.style.color = profilingOn ? 'var(--color-profiling-label-text)' : '';
+    profilingBtn.title = profilingOn ? ${L.profilingOnTitle} : ${L.profilingOffTitle};
+  }
+  profilingBtn.addEventListener('click', function() {
+    profilingOn = !profilingOn;
+    applyProfilingToggle();
+  });
+  applyProfilingToggle();
+  toolbar.appendChild(profilingBtn);
 
   // Page width dropdown
   var widths = [

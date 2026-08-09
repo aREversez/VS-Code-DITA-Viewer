@@ -22,6 +22,10 @@
   --color-code-bg: var(--vscode-textCodeBlock-background, #f8f8f8);
   --color-link: #2b6cb0;
   --color-code-lang-bg: var(--vscode-textPreformat-background, #e8e8e8);
+  --color-profiling-bg: #eaf7c9;
+  --color-profiling-border: #b8d878;
+  --color-profiling-label-bg: #8fb84e;
+  --color-profiling-label-text: #2a3a12;
 }
 
 .vscode-dark {
@@ -35,6 +39,10 @@
   --color-link: #6ab0f3;
   --color-code-bg: var(--vscode-textCodeBlock-background, #555);
   --color-code-lang-bg: var(--vscode-textPreformat-background, #666);
+  --color-profiling-bg: #3a4a1f;
+  --color-profiling-border: #5a7530;
+  --color-profiling-label-bg: #6b8f39;
+  --color-profiling-label-text: #eef7dc;
 }
 
 body {
@@ -90,6 +98,56 @@ p { margin: 0.75em 0; }
 .note--danger { border-left-color: var(--color-danger-border); background: var(--color-danger-bg); }
 .note--important { border-left-color: var(--color-important-border); background: var(--color-important-bg); }
 .note--tip { border-left-color: var(--color-tip-border); background: var(--color-tip-bg); }
+
+/* Profiling / conditional-processing attribute highlighting (props,
+   otherprops, audience, platform, product, base, importance, rev, status).
+   Mirrors Oxygen's default "show profiling" style: a tinted box around the
+   profiled content with a small label naming the attribute/value that
+   matched, rather than hiding anything. Toggled off via body.hide-profiling
+   (see the toolbar button in DitaViewerProvider.ts) -- pure CSS, no
+   re-render needed. */
+.profiled {
+  display: block;
+  position: relative;
+  background: var(--color-profiling-bg);
+  border: 1px solid var(--color-profiling-border);
+  border-radius: 3px;
+  padding: 0.4rem 0.6rem 1.3rem;
+  margin: 0.5rem 0;
+}
+.profiled--inline {
+  display: inline;
+  padding: 0 0.2rem;
+  margin: 0;
+  border-radius: 2px;
+}
+.profiled--inline .profiling-label { position: static; display: inline-flex; margin-left: 0.3em; vertical-align: middle; }
+.profiling-label {
+  position: absolute;
+  right: 0.4rem;
+  bottom: 0.25rem;
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+.profiling-chip {
+  background: var(--color-profiling-label-bg);
+  color: var(--color-profiling-label-text);
+  font-size: 0.7em;
+  font-weight: 600;
+  padding: 0.05rem 0.4rem;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.profiling-chip__value { font-weight: 400; }
+body.hide-profiling .profiled {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+body.hide-profiling .profiled--inline { display: inline; }
+body.hide-profiling .profiling-label { display: none; }
 
 /* Lists */
 ul, ol { padding-left: 1.5em; }
