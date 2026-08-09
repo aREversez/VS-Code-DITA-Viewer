@@ -62,10 +62,6 @@
   "Prev/Next page + collapsible sections": "上一页/下一页 + 折叠/展开章节",
   "Reload DITA content": "重新加载 DITA 内容",
   "Reset font size and family to default": "重置字体大小和字体样式为默认值",
-  "Decrease image display size (preview only)": "缩小图片显示尺寸（仅预览，不影响源文件）",
-  "Increase image display size (preview only)": "放大图片显示尺寸（仅预览，不影响源文件）",
-  "Click to reset image display size to 100%": "点击重置图片显示尺寸为 100%",
-  "Img": "图",
   "Flags": "标记",
   "Profiling attributes (props/otherprops/audience/...) are highlighted. Click to hide the highlighting.": "已高亮显示 profiling 属性（props/otherprops/audience 等）标记的内容。点击可隐藏高亮。",
   "Profiling attribute highlighting is hidden. Click to show which content is flagged and with what.": "已隐藏 profiling 属性高亮。点击可查看哪些内容被标记、标记的属性和值是什么。",
@@ -98,5 +94,8 @@
   "\n[DITA-OT] Process exited with code: {0}": "\n[DITA-OT] 进程退出，退出码：{0}",
   "\n[DITA-OT] Site enhancements injected.": "\n[DITA-OT] 站点增强已注入。",
   "\n[DITA-OT] Transformation cancelled by user.": "\n[DITA-OT] 转换已被用户取消。",
-  "\n[DITA-OT] Transformation complete. Output directory: {0}": "\n[DITA-OT] 转换完成。输出目录：{0}"
+  "\n[DITA-OT] Transformation complete. Output directory: {0}": "\n[DITA-OT] 转换完成。输出目录：{0}",
+  "Zoom out this image (preview only)": "缩小此图片（仅预览，不影响源文件）",
+  "Zoom in this image (preview only)": "放大此图片（仅预览，不影响源文件）",
+  "View full-screen (use ←/→ to switch images)": "全屏查看（使用 ←/→ 切换图片）"
 }

@@ -34,10 +34,9 @@ function getWebviewScript(): string {
     fontCurrentSans: JSON.stringify(vscode.l10n.t('Current: Sans-serif. Click to switch to Serif')),
     fontCurrentSerif: JSON.stringify(vscode.l10n.t('Current: Serif. Click to switch to Sans-serif')),
     resetFont: JSON.stringify(vscode.l10n.t('Reset font size and family to default')),
-    decreaseImgZoom: JSON.stringify(vscode.l10n.t('Decrease image display size (preview only)')),
-    increaseImgZoom: JSON.stringify(vscode.l10n.t('Increase image display size (preview only)')),
-    resetImgZoomTitle: JSON.stringify(vscode.l10n.t('Click to reset image display size to 100%')),
-    imgSizeLabel: JSON.stringify(vscode.l10n.t('Img')),
+    imgZoomOutTitle: JSON.stringify(vscode.l10n.t('Zoom out this image (preview only)')),
+    imgZoomInTitle: JSON.stringify(vscode.l10n.t('Zoom in this image (preview only)')),
+    imgMaximizeTitle: JSON.stringify(vscode.l10n.t('View full-screen (use ←/→ to switch images)')),
     profilingLabel: JSON.stringify(vscode.l10n.t('Flags')),
     profilingOnTitle: JSON.stringify(vscode.l10n.t('Profiling attributes (props/otherprops/audience/...) are highlighted. Click to hide the highlighting.')),
     profilingOffTitle: JSON.stringify(vscode.l10n.t('Profiling attribute highlighting is hidden. Click to show which content is flagged and with what.')),
@@ -182,37 +181,184 @@ function getWebviewScript(): string {
     img.style.outlineOffset = '-1px';
   }, true);
 
-  // Click-to-enlarge lightbox. Deliberately makes the whole image the
-  // click target (cursor:zoom-in hints this) rather than a separate corner
-  // button, to avoid wrapping every <img> in an extra positioning element —
-  // simpler and just as discoverable. Broken images are excluded.
+  // Click-to-enlarge lightbox. The whole image is still a click target
+  // (cursor:zoom-in hints this) in addition to the per-image maximize
+  // button below — either way opens the same lightbox. Broken images are
+  // excluded from both. While the lightbox is open, ←/→ step through every
+  // eligible image on the page in document order without closing the
+  // overlay, so browsing a page of screenshots doesn't require reopening
+  // the lightbox for each one.
   var lightboxOverlay = null;
-  function onLightboxKeydown(e) { if (e.key === 'Escape') closeLightbox(); }
+  var lightboxBigImg = null;
+  var lightboxImgs = [];
+  var lightboxIdx = -1;
+
+  function lightboxCandidates() {
+    return Array.prototype.slice.call(document.querySelectorAll('img[data-dita-src]:not([data-load-error])'));
+  }
+
+  function onLightboxKeydown(e) {
+    if (e.key === 'Escape') { closeLightbox(); return; }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); lightboxStep(-1); return; }
+    if (e.key === 'ArrowRight') { e.preventDefault(); lightboxStep(1); return; }
+  }
+
   function closeLightbox() {
     if (!lightboxOverlay) return;
     lightboxOverlay.remove();
     lightboxOverlay = null;
+    lightboxBigImg = null;
+    lightboxImgs = [];
+    lightboxIdx = -1;
     document.removeEventListener('keydown', onLightboxKeydown);
   }
+
+  function showLightboxImage() {
+    if (!lightboxBigImg || lightboxIdx < 0 || lightboxIdx >= lightboxImgs.length) return;
+    var img = lightboxImgs[lightboxIdx];
+    lightboxBigImg.src = img.src;
+    lightboxBigImg.alt = img.alt || '';
+  }
+
+  function lightboxStep(delta) {
+    if (lightboxImgs.length < 2) return;
+    lightboxIdx = (lightboxIdx + delta + lightboxImgs.length) % lightboxImgs.length;
+    showLightboxImage();
+  }
+
   function openLightbox(img) {
     closeLightbox();
+    lightboxImgs = lightboxCandidates();
+    lightboxIdx = lightboxImgs.indexOf(img);
+    if (lightboxIdx === -1) { lightboxImgs = [img]; lightboxIdx = 0; }
     var overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;cursor:zoom-out;';
     var big = document.createElement('img');
-    big.src = img.src;
-    big.alt = img.alt || '';
     big.style.cssText = 'max-width:92vw;max-height:92vh;object-fit:contain;box-shadow:0 4px 24px rgba(0,0,0,0.5);border-radius:4px;';
     overlay.appendChild(big);
     overlay.addEventListener('click', closeLightbox);
     document.addEventListener('keydown', onLightboxKeydown);
     document.body.appendChild(overlay);
     lightboxOverlay = overlay;
+    lightboxBigImg = big;
+    showLightboxImage();
   }
   document.addEventListener('click', function(e) {
     var img = e.target.closest ? e.target.closest('img[data-dita-src]') : null;
     if (!img || img.getAttribute('data-load-error') === 'true') return;
     openLightbox(img);
   });
+
+  // Per-image zoom controls: a small hover toolbar pinned to each image's
+  // own top-right corner (−, +, maximize), replacing the old page-wide
+  // toolbar zoom control — each image now scales independently instead of
+  // all images shrinking together. "100%" here means the image's own
+  // CSS-natural on-screen width (after @scale, container constraints,
+  // etc.), captured lazily on first use rather than assumed to be the
+  // image's raw pixel width, since that's what "zoom in/out from here"
+  // should mean to someone looking at the rendered page.
+  var IMG_ZOOM_STEPS = [100, 125, 150, 175, 200];
+
+  function imgBaseWidth(img) {
+    var cached = img.getAttribute('data-dita-base-width');
+    if (cached) return parseFloat(cached);
+    var prevWidth = img.style.width, prevMaxWidth = img.style.maxWidth;
+    img.style.width = '';
+    img.style.maxWidth = '';
+    var w = img.getBoundingClientRect().width || img.naturalWidth || 300;
+    img.style.width = prevWidth;
+    img.style.maxWidth = prevMaxWidth;
+    img.setAttribute('data-dita-base-width', String(w));
+    return w;
+  }
+
+  function setImgZoom(img, idx) {
+    idx = Math.max(0, Math.min(IMG_ZOOM_STEPS.length - 1, idx));
+    img.setAttribute('data-dita-zoom-idx', String(idx));
+    var pct = IMG_ZOOM_STEPS[idx];
+    var wrap = img.closest('.dita-img-wrap');
+    if (pct === 100) {
+      img.style.width = '';
+      img.style.maxWidth = '';
+      if (wrap) wrap.style.overflow = '';
+    } else {
+      var base = imgBaseWidth(img);
+      img.style.width = Math.round(base * pct / 100) + 'px';
+      img.style.maxWidth = 'none';
+      if (wrap) wrap.style.overflow = 'auto';
+    }
+  }
+
+  function makeImgToolbarBtn(label, title, onClick) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'dita-img-btn';
+    btn.textContent = label;
+    btn.title = title;
+    btn.addEventListener('click', function(e) {
+      // Buttons sit inside the same wrapper as the image but are not
+      // themselves the image, so the document-level click-to-lightbox
+      // delegation above wouldn't fire for them anyway — stopPropagation
+      // here is just future-proofing against any other ancestor click
+      // handler, not strictly required by the current listener.
+      e.stopPropagation();
+      onClick();
+    });
+    return btn;
+  }
+
+  // Wraps each <img data-dita-src> in a positioning container with its own
+  // hover toolbar. Runs once per image (data-dita-enhanced guards against
+  // re-wrapping); safe to call again after content is re-rendered since
+  // webview.html is replaced wholesale on document changes, which reruns
+  // this whole script from scratch against a fresh, unmarked DOM.
+  function enhanceImages() {
+    var imgs = document.querySelectorAll('img[data-dita-src]:not([data-dita-enhanced])');
+    for (var i = 0; i < imgs.length; i++) {
+      enhanceOneImage(imgs[i]);
+    }
+  }
+
+  // Split out of enhanceImages() as its own function (rather than an inline
+  // loop body) specifically so each image gets its own function scope for
+  // 'img' — a 'var img = imgs[i]' declared directly inside the for-loop
+  // body would be a single variable shared by every iteration's closures,
+  // so all three buttons on every image would end up operating on
+  // whichever image happened to be enhanced last.
+  function enhanceOneImage(img) {
+    img.setAttribute('data-dita-enhanced', '1');
+    if (img.getAttribute('data-load-error') === 'true' || !img.parentNode) return;
+
+    var wrap = document.createElement('span');
+    wrap.className = 'dita-img-wrap';
+    img.parentNode.insertBefore(wrap, img);
+    wrap.appendChild(img);
+
+    var tb = document.createElement('span');
+    tb.className = 'dita-img-toolbar';
+    tb.appendChild(makeImgToolbarBtn('\u2212', ${L.imgZoomOutTitle}, function() {
+      var i2 = parseInt(img.getAttribute('data-dita-zoom-idx') || '0', 10);
+      setImgZoom(img, i2 - 1);
+    }));
+    tb.appendChild(makeImgToolbarBtn('+', ${L.imgZoomInTitle}, function() {
+      var i2 = parseInt(img.getAttribute('data-dita-zoom-idx') || '0', 10);
+      setImgZoom(img, i2 + 1);
+    }));
+    tb.appendChild(makeImgToolbarBtn('\u2922', ${L.imgMaximizeTitle}, function() {
+      openLightbox(img);
+    }));
+    wrap.appendChild(tb);
+  }
+  enhanceImages();
+  // Images that error out asynchronously (after enhanceImages already ran)
+  // should lose their now-pointless zoom/maximize toolbar rather than
+  // leave working-looking controls on a broken image.
+  document.addEventListener('error', function(e) {
+    var img = e.target;
+    if (img.tagName !== 'IMG' || !img.hasAttribute('data-dita-src')) return;
+    var tb = img.closest('.dita-img-wrap') && img.closest('.dita-img-wrap').querySelector('.dita-img-toolbar');
+    if (tb) tb.remove();
+  }, true);
 
   function highlightElement(el) {
     if (!el) return;
@@ -349,50 +495,9 @@ function getWebviewScript(): string {
   });
   toolbar.appendChild(fontResetBtn);
 
-  // Image display zoom — preview-only reading aid (does not touch the DITA
-  // source, and is independent of @scale, which *is* source-driven — see
-  // the --dita-scale / --dita-img-zoom split in styles.css). Session-only
-  // by design, unlike font prefs: this is meant as a quick "shrink
-  // distracting screenshots while I read the text" toggle, not a standing
-  // preference — reopening the preview goes back to 100%. Capped at 100%
-  // (pure shrink, no enlarge) since this drives max-width as a percentage
-  // of the pane — going above 100% would just overflow it; the lightbox is
-  // the tool for seeing an image bigger, not this.
-  var imgZoom = 100;
-  function applyImgZoom() {
-    document.documentElement.style.setProperty('--dita-img-zoom', String(imgZoom / 100));
-    imgZoomLabel.textContent = imgZoom + '%';
-  }
-
-  var imgZoomDown = document.createElement('button');
-  imgZoomDown.textContent = ${L.imgSizeLabel} + '−';
-  imgZoomDown.title = ${L.decreaseImgZoom};
-  imgZoomDown.style.cssText = btnStyle + 'font-size:11px;';
-  imgZoomDown.addEventListener('click', function() {
-    imgZoom = Math.max(30, imgZoom - 10);
-    applyImgZoom();
-  });
-  toolbar.appendChild(imgZoomDown);
-
-  var imgZoomLabel = document.createElement('button');
-  imgZoomLabel.textContent = '100%';
-  imgZoomLabel.title = ${L.resetImgZoomTitle};
-  imgZoomLabel.style.cssText = btnStyle + 'font-size:11px;min-width:34px;justify-content:center;';
-  imgZoomLabel.addEventListener('click', function() {
-    imgZoom = 100;
-    applyImgZoom();
-  });
-  toolbar.appendChild(imgZoomLabel);
-
-  var imgZoomUp = document.createElement('button');
-  imgZoomUp.textContent = ${L.imgSizeLabel} + '+';
-  imgZoomUp.title = ${L.increaseImgZoom};
-  imgZoomUp.style.cssText = btnStyle + 'font-size:11px;';
-  imgZoomUp.addEventListener('click', function() {
-    imgZoom = Math.min(100, imgZoom + 10);
-    applyImgZoom();
-  });
-  toolbar.appendChild(imgZoomUp);
+  // Image display zoom is no longer a page-wide toolbar control — see
+  // enhanceImages()/setImgZoom() above, which attach a per-image hover
+  // toolbar (−/+/maximize) directly to each <img> instead.
 
   // Profiling / conditional-attribute highlight toggle. Purely a CSS class
   // flip (body.hide-profiling, see styles.css) -- the highlight markup is

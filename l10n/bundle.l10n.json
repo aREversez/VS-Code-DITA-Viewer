@@ -62,10 +62,6 @@
   "Prev/Next page + collapsible sections": "Prev/Next page + collapsible sections",
   "Reload DITA content": "Reload DITA content",
   "Reset font size and family to default": "Reset font size and family to default",
-  "Decrease image display size (preview only)": "Decrease image display size (preview only)",
-  "Increase image display size (preview only)": "Increase image display size (preview only)",
-  "Click to reset image display size to 100%": "Click to reset image display size to 100%",
-  "Img": "Img",
   "Flags": "Flags",
   "Profiling attributes (props/otherprops/audience/...) are highlighted. Click to hide the highlighting.": "Profiling attributes (props/otherprops/audience/...) are highlighted. Click to hide the highlighting.",
   "Profiling attribute highlighting is hidden. Click to show which content is flagged and with what.": "Profiling attribute highlighting is hidden. Click to show which content is flagged and with what.",
@@ -98,5 +94,8 @@
   "\n[DITA-OT] Process exited with code: {0}": "\n[DITA-OT] Process exited with code: {0}",
   "\n[DITA-OT] Site enhancements injected.": "\n[DITA-OT] Site enhancements injected.",
   "\n[DITA-OT] Transformation cancelled by user.": "\n[DITA-OT] Transformation cancelled by user.",
-  "\n[DITA-OT] Transformation complete. Output directory: {0}": "\n[DITA-OT] Transformation complete. Output directory: {0}"
+  "\n[DITA-OT] Transformation complete. Output directory: {0}": "\n[DITA-OT] Transformation complete. Output directory: {0}",
+  "Zoom out this image (preview only)": "Zoom out this image (preview only)",
+  "Zoom in this image (preview only)": "Zoom in this image (preview only)",
+  "View full-screen (use ←/→ to switch images)": "View full-screen (use ←/→ to switch images)"
 }

@@ -183,23 +183,40 @@ table th { background: var(--color-code-bg); color: var(--vscode-editor-foregrou
 .foreign-content { margin: 0 0.15em; }
 
 /* Images */
-/* --dita-scale (from @scale) and --dita-img-zoom (toolbar reading control)
-   are deliberately different mechanisms, not multiplied together as a
-   single zoom factor: @scale is meant to size the image relative to its
-   OWN natural pixel dimensions, so it stays on 'zoom'. The toolbar control
-   is meant to cap how much of the reading column an image is *allowed* to
-   take up, so it drives max-width as a percentage of the container instead.
-   Combining them via zoom alone made the toolbar control behave very
-   unevenly: for any image whose natural width already exceeded the preview
-   pane, max-width:100% was the binding constraint across most of the zoom
-   range, so nothing visibly changed until zoom dropped low enough to finally
-   fall under that constraint — at which point the image would suddenly
-   shrink all at once. Driving max-width directly makes each step change
-   the rendered width by exactly that amount, regardless of the image's
-   natural size. */
-img { max-width: calc(var(--dita-img-zoom, 1) * 100%); height: auto; border-radius: 4px; vertical-align: middle; cursor: zoom-in; zoom: var(--dita-scale, 1); }
+/* --dita-scale is the only remaining size hint here, driven by the DITA
+   source's own @scale attribute -- it sizes the image relative to its OWN
+   natural pixel dimensions via 'zoom'. Per-image display sizing (separate
+   from @scale, and not tied to the DITA source at all) is applied at
+   runtime as an inline width/max-width on the specific <img>, via the
+   per-image zoom controls injected by the webview script -- see
+   .dita-img-wrap / .dita-img-toolbar below. */
+img { max-width: 100%; height: auto; border-radius: 4px; vertical-align: middle; cursor: zoom-in; zoom: var(--dita-scale, 1); }
 .image-break { display: block; margin: 1rem 0; }
 img[data-load-error] { cursor: default; }
+
+/* Per-image zoom/maximize toolbar: a small overlay pinned to the image's
+   own top-right corner, shown on hover (or keyboard focus-within, for
+   accessibility) rather than a page-wide toolbar, since the control now
+   only ever affects the one image it's attached to. Wrapper is an inline
+   <span>, not a <div>, so it stays validly nestable inside inline DITA
+   contexts like <p> without forcing a block break. */
+.dita-img-wrap { position: relative; display: inline-block; max-width: 100%; line-height: 0; }
+.dita-img-toolbar {
+  position: absolute; top: 4px; right: 4px; z-index: 10;
+  display: flex; gap: 2px;
+  opacity: 0; pointer-events: none; transition: opacity 0.15s;
+}
+.dita-img-wrap:hover .dita-img-toolbar,
+.dita-img-wrap:focus-within .dita-img-toolbar {
+  opacity: 1; pointer-events: auto;
+}
+.dita-img-btn {
+  padding: 1px 5px; border-radius: 3px; line-height: 1.5; font-size: 12px; cursor: pointer;
+  border: 1px solid var(--vscode-dropdown-border, var(--vscode-widget-border, #555));
+  background: var(--vscode-editor-background, rgba(30, 30, 30, 0.85));
+  color: var(--vscode-dropdown-foreground, #eee);
+}
+.dita-img-btn:hover { opacity: 0.85; }
 
 /* Figures */
 figure { margin: 1.5rem 0; text-align: center; }
