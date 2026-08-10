@@ -54,6 +54,54 @@ function profilingAttrLabel(attr: string): string {
   return PROFILING_ATTR_LABELS[attr] || attr.charAt(0).toUpperCase() + attr.slice(1);
 }
 
+// ── Shared with the ditamap renderer (mapTypeMap.ts) ──
+// A topicref's profiling attributes cascade to every descendant topicref
+// that doesn't set its own value for the same attribute (own value replaces
+// the inherited one wholesale, it doesn't merge token-by-token — this
+// matches real .ditaval/Oxygen conditional-processing semantics, and is
+// also how DITA-OT itself resolves the same attribute set at different
+// levels of a map). mapTypeMap.ts calls this while walking the map tree so
+// each topicref/topichead/topicgroup gets the correctly cascaded effective
+// set, including through map-of-maps (expandDitamapRefs has already
+// flattened those into the same tree by the time this runs).
+export function mergeProfilingAttrs(
+  own: Record<string, string> | undefined,
+  inherited: Record<string, string>,
+): Record<string, string> {
+  const effective: Record<string, string> = { ...inherited };
+  const attrs = own || {};
+  for (const name of PROFILING_ATTRS) {
+    const v = attrs[name];
+    if (v && v.trim()) effective[name] = v;
+  }
+  return effective;
+}
+
+/** The data-profile-keys attribute value the webview's filter panel keys off of. */
+export function profilingKeysAttr(effective: Record<string, string>): string {
+  const chips = getProfilingChipsFromEffective(effective);
+  return chips.map((c) => `${encodeURIComponent(c.attr)}:${encodeURIComponent(c.value)}`).join(',');
+}
+
+/** Human-readable "Attr [value]" chip spans, for visual display next to a map entry. */
+export function profilingChipsHtml(effective: Record<string, string>): string {
+  return getProfilingChipsFromEffective(effective)
+    .map((c) => `<span class="profiling-chip">${escapeHtml(profilingAttrLabel(c.attr))} <span class="profiling-chip__value">[${escapeHtml(c.value)}]</span></span>`)
+    .join('');
+}
+
+function getProfilingChipsFromEffective(effective: Record<string, string>): { attr: string; value: string }[] {
+  const chips: { attr: string; value: string }[] = [];
+  for (const name of PROFILING_ATTRS) {
+    const raw = effective[name];
+    if (!raw) continue;
+    for (const token of raw.trim().split(/\s+/)) {
+      if (token) chips.push({ attr: name, value: token });
+    }
+  }
+  return chips;
+}
+
 // Elements commonly authored inline, within a sentence — highlighting these
 // as a full-width block would break the surrounding text flow, so they get
 // an inline-flavored wrapper instead. Not an exhaustive classification (the
@@ -70,16 +118,7 @@ const INLINE_PROFILING_BASETYPES = new Set([
 ]);
 
 function getProfilingChips(node: DitaNode): { attr: string; value: string }[] {
-  const attrs = node.attributes || {};
-  const chips: { attr: string; value: string }[] = [];
-  for (const name of PROFILING_ATTRS) {
-    const raw = attrs[name];
-    if (!raw) continue;
-    for (const token of raw.trim().split(/\s+/)) {
-      if (token) chips.push({ attr: name, value: token });
-    }
-  }
-  return chips;
+  return getProfilingChipsFromEffective(node.attributes || {});
 }
 
 function wrapProfilingHighlight(html: string, node: DitaNode): string {

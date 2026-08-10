@@ -387,6 +387,73 @@ describe('mapRenderer', () => {
     assert.strictEqual(ch2Count, 2, 'Chapter 2 should appear 2 times (c2, c1-2)');
   });
 
+  // ── ditamap-level profiling (Flags/Filter for topicref, not topic content) ──
+  // A topicref's audience/platform/product/otherprops/etc. cascade down to
+  // every descendant topicref that doesn't set its own value for the same
+  // attribute -- reported scenario: a.dita has b.dita, c.dita, d.dita as
+  // children; profiling a.dita's topicref should mark all three as
+  // filterable too, not just a.dita itself.
+  describe('ditamap-level profiling inheritance', () => {
+    it('should stamp data-profile-keys on a topicref carrying its own profiling attribute', () => {
+      const xml = `<map><topicref href="a.dita" audience="internal"/></map>`;
+      const html = parseAndRender(xml);
+      assert.ok(html.includes('data-profile-keys="audience:internal"'), 'a.dita\'s own audience should be encoded into data-profile-keys');
+    });
+
+    it('should NOT stamp data-profile-keys on a topicref with no profiling attribute and no inherited one', () => {
+      const xml = `<map><topicref href="a.dita"/></map>`;
+      const html = parseAndRender(xml);
+      assert.ok(!html.includes('data-profile-keys'), 'a plain topicref should carry no filter marker at all');
+    });
+
+    it('should cascade a parent topicref\'s profiling attribute to child topicrefs that set nothing of their own (a > b, c, d)', () => {
+      const xml = `<map>
+        <topicref href="a.dita" audience="internal">
+          <topicref href="b.dita"/>
+          <topicref href="c.dita"/>
+          <topicref href="d.dita"/>
+        </topicref>
+      </map>`;
+      const html = parseAndRender(xml);
+      const matchCount = (html.match(/data-profile-keys="audience:internal"/g) || []).length;
+      assert.strictEqual(matchCount, 4, 'a, b, c, and d should all carry the inherited audience:internal key');
+    });
+
+    it('should let a child topicref\'s own value override (not merge with) the inherited value for the same attribute', () => {
+      const xml = `<map>
+        <topicref href="a.dita" audience="internal">
+          <topicref href="b.dita" audience="external"/>
+        </topicref>
+      </map>`;
+      const html = parseAndRender(xml);
+      assert.ok(html.includes('data-profile-keys="audience:internal"'), 'a.dita keeps its own audience:internal');
+      assert.ok(html.includes('data-profile-keys="audience:external"'), 'b.dita\'s own audience:external should win, not be merged with the inherited value');
+      assert.ok(!html.includes('audience:internal,audience:external') && !html.includes('audience:external,audience:internal'), 'b.dita should not carry both values -- own replaces inherited entirely');
+    });
+
+    it('should cascade through topicgroup and bookmap-structural containers even though they render no entry of their own', () => {
+      const xml = `<bookmap>
+        <frontmatter product="pro">
+          <notices/>
+        </frontmatter>
+      </bookmap>`;
+      const html = parseAndRender(xml);
+      assert.ok(html.includes('data-profile-keys="product:pro"'), 'notices (nested inside frontmatter, a bookmap-structural container) should inherit frontmatter\'s product attribute');
+    });
+
+    it('should merge multiple distinct attributes from different ancestor levels rather than only keeping the nearest one', () => {
+      const xml = `<map>
+        <topicref href="a.dita" audience="internal">
+          <topicref href="b.dita" platform="windows"/>
+        </topicref>
+      </map>`;
+      const html = parseAndRender(xml);
+      const bEntry = html.slice(html.indexOf('b.dita') - 400, html.indexOf('b.dita') + 200);
+      assert.ok(bEntry.includes('audience:internal'), 'b.dita should still carry the inherited audience from a.dita');
+      assert.ok(bEntry.includes('platform:windows'), 'b.dita should carry its own platform in addition, not instead of, the inherited audience');
+    });
+  });
+
   describe('getMapTitleText', () => {
     it('returns the plain map title', () => {
       const doc = parseDitamap(preprocessEntities(`<map><title>My Map</title></map>`));

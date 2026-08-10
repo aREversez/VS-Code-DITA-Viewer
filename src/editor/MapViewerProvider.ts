@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderTopicToHtml, renderBookPlaceholder, renderBookError, renderBookSkipMessage, escapeHtml, expandDitamapRefs, getSearchOverlayScript, decodeHrefPart } from './ditaRenderUtils';
+import { renderTopicToHtml, renderBookPlaceholder, renderBookError, renderBookSkipMessage, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart } from './ditaRenderUtils';
 import { buildKeyMap } from './DitaViewerProvider';
 import { formatLocalizedRole } from '../language/bookRoleL10n';
 import { dirname, join, resolve } from 'path';
@@ -39,6 +39,13 @@ function getMapWebviewScript(): string {
     searchMatchCase: vscode.l10n.t('Match case'),
     searchUseRegex: vscode.l10n.t('Use regex'),
     searchInvalidRegex: vscode.l10n.t('Invalid regex'),
+    profilingLabel: JSON.stringify(vscode.l10n.t('Flags')),
+    profilingOnTitle: JSON.stringify(vscode.l10n.t('Profiling attributes (props/otherprops/audience/...) are highlighted. Click to hide the highlighting.')),
+    profilingOffTitle: JSON.stringify(vscode.l10n.t('Profiling attribute highlighting is hidden. Click to show which content is flagged and with what.')),
+    filterLabel: vscode.l10n.t('Filter'),
+    filterTitle: vscode.l10n.t('Show/hide content by profiling attribute value (actually hides matching content, unlike the Flags toggle which only shows/hides the highlight)'),
+    filterClose: vscode.l10n.t('Close'),
+    filterEmpty: vscode.l10n.t('No profiling attributes in this document'),
   };
   return `
 (function() {
@@ -144,6 +151,40 @@ function getMapWebviewScript(): string {
     vscode.postMessage({ type: 'switchMode', mode: newMode });
   });
   toolbar.appendChild(modeBtn);
+
+  // Profiling / conditional-attribute highlight toggle, same as the topic
+  // viewer's Flags button -- purely a CSS class flip (body.hide-profiling),
+  // no re-render needed. Defaults on for the same reason: the point is
+  // surfacing what's flagged without the person having to discover the
+  // toggle first.
+  var profilingOn = true;
+  var profilingBtn = document.createElement('button');
+  profilingBtn.textContent = ${L.profilingLabel};
+  profilingBtn.style.cssText = btnStyle + 'font-size:11px;';
+  function applyProfilingToggle() {
+    document.body.classList.toggle('hide-profiling', !profilingOn);
+    profilingBtn.style.background = profilingOn ? 'var(--color-profiling-label-bg)' : '';
+    profilingBtn.style.color = profilingOn ? 'var(--color-profiling-label-text)' : '';
+    profilingBtn.title = profilingOn ? ${L.profilingOnTitle} : ${L.profilingOffTitle};
+  }
+  profilingBtn.addEventListener('click', function() {
+    profilingOn = !profilingOn;
+    applyProfilingToggle();
+  });
+  applyProfilingToggle();
+  toolbar.appendChild(profilingBtn);
+
+  // Filter button goes immediately next to Flags, same pairing as the
+  // topic viewer -- here it hides whole map entries (topicref-level
+  // profiling from the ditamap source) as well as any profiled spans
+  // inside a book-mode topic's own content, since both stamp the same
+  // data-profile-keys attribute.
+  ${getProfilingFilterScript({
+    buttonLabel: L.filterLabel,
+    buttonTitle: L.filterTitle,
+    closeLabel: L.filterClose,
+    emptyLabel: L.filterEmpty,
+  })}
 
   // Refresh button
   var refreshBtn = document.createElement('button');
@@ -322,7 +363,7 @@ ${content}
         // entries by expandDitamapRefs — render a section heading only
         // instead of parsing the map file as a topic.
         if (entry.href.split('#')[0].toLowerCase().endsWith('.ditamap')) {
-          parts.push(renderBookPlaceholder(entry.displayName, entry.depth));
+          parts.push(renderBookPlaceholder(entry.displayName, entry.depth, entry.profileKeys, entry.profileChipsHtml));
           continue;
         }
         const absPath = resolve(docDir, decodeHrefPart(entry.href.split('#')[0]));
@@ -352,12 +393,22 @@ ${content}
         });
 
         if (result.error) {
-          parts.push(renderBookError(entry.displayName, result.error, entry.depth));
+          parts.push(renderBookError(entry.displayName, result.error, entry.depth, entry.profileKeys, entry.profileChipsHtml));
         } else {
-          parts.push(`<div class="book-entry">${result.html}</div>`);
+          // The whole topic's rendered content -- entry.profileKeys is the
+          // *topicref's* map-level profiling (from the ditamap source),
+          // kept separate from whatever profiled spans exist inside
+          // result.html from the topic's own DITA source. Both carry
+          // data-profile-keys, so the same Filter panel controls both, but
+          // they hide independently: excluding a map-level key here hides
+          // this whole book-entry div; excluding a topic-internal key only
+          // hides the specific paragraph/step that set it.
+          const profileAttr = entry.profileKeys ? ` data-profile-keys="${escapeAttr(entry.profileKeys)}"` : '';
+          const profileBadges = entry.profileChipsHtml ? `<span class="map-profiling-badges">${entry.profileChipsHtml}</span>` : '';
+          parts.push(`<div class="book-entry"${profileAttr}>${profileBadges}${result.html}</div>`);
         }
       } else {
-        parts.push(renderBookPlaceholder(entry.displayName, entry.depth));
+        parts.push(renderBookPlaceholder(entry.displayName, entry.depth, entry.profileKeys, entry.profileChipsHtml));
       }
     }
 

@@ -1,4 +1,5 @@
 import { DitaNode } from '../parser/domTypes';
+import { mergeProfilingAttrs, profilingKeysAttr, profilingChipsHtml } from './renderer';
 
 function escapeAttr(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -250,10 +251,19 @@ function renderRef(node: DitaNode, ctx: MapRenderContext, renderChildren: (node:
     : node.tagName
       ? BOOKMAP_REF_ROLES[node.tagName]
       : undefined;
+  // This topicref's own profiling attributes, merged on top of whatever
+  // cascaded down from its ancestors -- own values win over inherited ones
+  // for the same attribute name. Children inherit this merged result, not
+  // just this node's own attributes, so a.dita's rule reaches grandchildren
+  // through b.dita even if b.dita sets nothing of its own.
+  const effectiveProfiling = mergeProfilingAttrs(node.attributes, ctx.inheritedProfiling || {});
   // Children of a topicref are one level deeper
-  const childCtx: MapRenderContext = { ...ctx, depth: depth + 1 };
+  const childCtx: MapRenderContext = { ...ctx, depth: depth + 1, inheritedProfiling: effectiveProfiling };
   const childrenHtml = renderChildrenForNode(node, childCtx, renderChildren);
   const badge = role ? `<span class="map-tree-badge">${escapeAttr(role)}</span>` : '';
+  const profileKeys = profilingKeysAttr(effectiveProfiling);
+  const profileAttr = profileKeys ? safeAttr('data-profile-keys', profileKeys) : '';
+  const profileBadges = profileKeys ? `<span class="map-profiling-badges">${profilingChipsHtml(effectiveProfiling)}</span>` : '';
 
   const icon = nav
     ? '<span class="map-tree-icon map-tree-icon--file">\u{1F4C4}</span>'
@@ -264,14 +274,14 @@ function renderRef(node: DitaNode, ctx: MapRenderContext, renderChildren: (node:
   const hrefAttr = href ? safeAttr('data-href', href) : '';
 
   if (nav) {
-    return `<li class="map-tree-item map-tree-item--nav"${keyAttr}${hrefAttr}>
-      <a href="#" class="map-tree-link" data-href="${escapeAttr(href)}">${icon}${badge}<span class="map-tree-label">${nameAttr}</span></a>
+    return `<li class="map-tree-item map-tree-item--nav"${keyAttr}${hrefAttr}${profileAttr}>
+      <a href="#" class="map-tree-link" data-href="${escapeAttr(href)}">${icon}${badge}<span class="map-tree-label">${nameAttr}</span>${profileBadges}</a>
       ${childrenHtml ? `<ul class="map-tree">${childrenHtml}</ul>` : ''}
     </li>`;
   }
 
-  return `<li class="map-tree-item map-tree-item--keydef"${keyAttr}${hrefAttr}>
-    ${icon}${badge}<span class="map-tree-label map-tree-label--keydef">${nameAttr}</span>
+  return `<li class="map-tree-item map-tree-item--keydef"${keyAttr}${hrefAttr}${profileAttr}>
+    ${icon}${badge}<span class="map-tree-label map-tree-label--keydef">${nameAttr}</span>${profileBadges}
     ${childrenHtml ? `<ul class="map-tree">${childrenHtml}</ul>` : ''}
   </li>`;
 }
@@ -287,6 +297,15 @@ export interface MapRenderContext {
   roleLabel?: RoleLabeler;
   /** Current nesting depth (for depth-aware role numbering) */
   depth?: number;
+  /**
+   * The effective (already-cascaded) profiling/conditional-processing
+   * attributes inherited from this node's ancestor topicrefs in the map --
+   * NOT anything from the referenced topic's own DITA source, which is a
+   * separate, unrelated scope (see mergeProfilingAttrs in renderer.ts).
+   * Each renderer merges its own node's attributes on top of this before
+   * passing it down to its children.
+   */
+  inheritedProfiling?: Record<string, string>;
 }
 
 /**
@@ -321,9 +340,13 @@ const MAP_BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     const bodyChildren = node.children.filter(
       (c) => c.type !== 'element' || c.baseType !== 'map/map-title',
     );
+    // A select-att set directly on <map> (rare, but valid DITA) applies as
+    // the baseline every top-level topicref inherits from.
+    const effectiveProfiling = mergeProfilingAttrs(node.attributes, ctx.inheritedProfiling || {});
+    const bodyCtx: MapRenderContext = { ...ctx, inheritedProfiling: effectiveProfiling };
     const bodyHtml = bodyChildren
       .filter((c) => c.type === 'element')
-      .map((c) => renderChildren(c, ctx))
+      .map((c) => renderChildren(c, bodyCtx))
       .join('');
     return `<div class="ditamap-container">
       ${titleHtml}
@@ -337,15 +360,23 @@ const MAP_BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   'map/topicref': renderRef,
   'map/topichead': (node, ctx, renderChildren) => {
     const displayName = getDisplayName(node, ctx.resolveKey);
-    const childCtx: MapRenderContext = { ...ctx, depth: (ctx.depth ?? 0) + 1 };
+    const effectiveProfiling = mergeProfilingAttrs(node.attributes, ctx.inheritedProfiling || {});
+    const childCtx: MapRenderContext = { ...ctx, depth: (ctx.depth ?? 0) + 1, inheritedProfiling: effectiveProfiling };
     const childrenHtml = renderChildrenForNode(node, childCtx, renderChildren);
-    return `<li class="map-tree-item map-tree-item--head">
-      <span class="map-tree-label map-tree-label--head">${escapeAttr(displayName)}</span>
+    const profileKeys = profilingKeysAttr(effectiveProfiling);
+    const profileAttr = profileKeys ? safeAttr('data-profile-keys', profileKeys) : '';
+    const profileBadges = profileKeys ? `<span class="map-profiling-badges">${profilingChipsHtml(effectiveProfiling)}</span>` : '';
+    return `<li class="map-tree-item map-tree-item--head"${profileAttr}>
+      <span class="map-tree-label map-tree-label--head">${escapeAttr(displayName)}</span>${profileBadges}
       ${childrenHtml ? `<ul class="map-tree">${childrenHtml}</ul>` : ''}
     </li>`;
   },
   'map/topicgroup': (node, ctx, renderChildren) => {
-    const childrenHtml = renderChildrenForNode(node, ctx, renderChildren);
+    // topicgroup has no navtitle/entry of its own, but it can still carry
+    // select-atts that its topicref children should inherit.
+    const effectiveProfiling = mergeProfilingAttrs(node.attributes, ctx.inheritedProfiling || {});
+    const childCtx: MapRenderContext = { ...ctx, inheritedProfiling: effectiveProfiling };
+    const childrenHtml = renderChildrenForNode(node, childCtx, renderChildren);
     return `<li class="map-tree-item map-tree-item--group">
       <ul class="map-tree">${childrenHtml}</ul>
     </li>`;
@@ -356,9 +387,14 @@ const MAP_BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     const displayName = node.tagName
       ? node.tagName.charAt(0).toUpperCase() + node.tagName.slice(1)
       : '(unnamed)';
-    const childrenHtml = renderChildrenForNode(node, ctx, renderChildren);
-    return `<li class="map-tree-item map-tree-item--structural">
-      <span class="map-tree-label map-tree-label--structural">${escapeAttr(displayName)}</span>
+    const effectiveProfiling = mergeProfilingAttrs(node.attributes, ctx.inheritedProfiling || {});
+    const childCtx: MapRenderContext = { ...ctx, inheritedProfiling: effectiveProfiling };
+    const childrenHtml = renderChildrenForNode(node, childCtx, renderChildren);
+    const profileKeys = profilingKeysAttr(effectiveProfiling);
+    const profileAttr = profileKeys ? safeAttr('data-profile-keys', profileKeys) : '';
+    const profileBadges = profileKeys ? `<span class="map-profiling-badges">${profilingChipsHtml(effectiveProfiling)}</span>` : '';
+    return `<li class="map-tree-item map-tree-item--structural"${profileAttr}>
+      <span class="map-tree-label map-tree-label--structural">${escapeAttr(displayName)}</span>${profileBadges}
       ${childrenHtml ? `<ul class="map-tree">${childrenHtml}</ul>` : ''}
     </li>`;
   },
@@ -415,6 +451,17 @@ export interface MapEntry {
   keys?: string;
   /** BookMap structural role, numbered in document order ("Chapter 1", "Appendix A", …) */
   role?: string;
+  /**
+   * data-profile-keys value for this topicref's own profiling attributes,
+   * cascaded from ancestor topicrefs in the map (own value wins over an
+   * inherited one for the same attribute name). This is map-level
+   * profiling only, not anything from the referenced topic's own DITA
+   * source -- book mode composites both into the same page, but they are
+   * two independent scopes that just happen to share one filter panel.
+   */
+  profileKeys?: string;
+  /** Pre-rendered "Attr [value]" chip HTML matching profileKeys, for display. */
+  profileChipsHtml?: string;
 }
 
 function collectEntriesRecursive(
@@ -423,6 +470,7 @@ function collectEntriesRecursive(
   result: MapEntry[],
   resolveKey: ResolveKey | undefined,
   roleLabel: RoleLabeler,
+  inheritedProfiling: Record<string, string>,
 ): void {
   if (node.type !== 'element') return;
   const baseType = node.baseType;
@@ -433,25 +481,30 @@ function collectEntriesRecursive(
   if (baseType === 'map/topicref' || baseType === 'map/keydef' || baseType === 'map/mapref' || baseType === 'map/topichead') {
     const href = getAttr(node, 'href');
     const keys = getAttr(node, 'keys');
+    const effectiveProfiling = mergeProfilingAttrs(node.attributes, inheritedProfiling);
     result.push({
       href,
       displayName: getDisplayName(node, resolveKey),
       depth,
       keys,
       role: roleLabel(node.tagName, depth),
+      profileKeys: profilingKeysAttr(effectiveProfiling) || undefined,
+      profileChipsHtml: profilingChipsHtml(effectiveProfiling) || undefined,
     });
     // Recurse children at depth+1
     for (const child of node.children || []) {
-      collectEntriesRecursive(child, depth + 1, result, resolveKey, roleLabel);
+      collectEntriesRecursive(child, depth + 1, result, resolveKey, roleLabel, effectiveProfiling);
     }
   } else if (baseType === 'map/topicgroup' || baseType === 'map/bookmap-structural') {
-    // topicgroup / bookmap-structural: no entry itself, but recurse at same depth
+    // topicgroup / bookmap-structural: no entry itself, but they can still
+    // carry select-atts that their descendants should inherit.
+    const effectiveProfiling = mergeProfilingAttrs(node.attributes, inheritedProfiling);
     for (const child of node.children || []) {
-      collectEntriesRecursive(child, depth, result, resolveKey, roleLabel);
+      collectEntriesRecursive(child, depth, result, resolveKey, roleLabel, effectiveProfiling);
     }
   } else {
     for (const child of node.children || []) {
-      collectEntriesRecursive(child, depth, result, resolveKey, roleLabel);
+      collectEntriesRecursive(child, depth, result, resolveKey, roleLabel, inheritedProfiling);
     }
   }
 }
@@ -463,9 +516,12 @@ export function collectMapEntries(
 ): MapEntry[] {
   const result: MapEntry[] = [];
   const roleLabel = createBookRoleLabeler(roleFormat);
+  // A select-att set directly on <map> (rare, but valid DITA) applies as
+  // the baseline every top-level topicref inherits from.
+  const rootProfiling = mergeProfilingAttrs(root.attributes, {});
   // Start from map's children at depth 0
   for (const child of root.children || []) {
-    collectEntriesRecursive(child, 0, result, resolveKey, roleLabel);
+    collectEntriesRecursive(child, 0, result, resolveKey, roleLabel, rootProfiling);
   }
   return result;
 }

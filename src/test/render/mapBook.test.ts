@@ -1,7 +1,18 @@
 import * as assert from 'assert';
 import { collectMapEntries } from '../../render/mapTypeMap';
 import { parseDitamap, preprocessEntities } from '../../parser/ditaParser';
-import { renderBookPlaceholder, renderBookError, renderBookSkipMessage } from '../../editor/ditaRenderUtils';
+import { renderBookPlaceholder, renderBookError, renderBookSkipMessage, expandDitamapRefs } from '../../editor/ditaRenderUtils';
+import type { DitaNode } from '../../parser/domTypes';
+
+function makeMapNode(baseType: string, attrs: Record<string, string>, children: DitaNode[] = []): DitaNode {
+  return {
+    type: 'element',
+    baseType,
+    attributes: attrs,
+    children,
+    sourceRange: { startLine: 0, startCol: 0, endLine: 0, endCol: 0 },
+  };
+}
 
 const TEST_MAP_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
@@ -292,6 +303,89 @@ describe('collectMapEntries', () => {
     // c2 at depth 0: Chapter 3, nested c2-1 at depth 1: Chapter 1 (restarts)
     assert.strictEqual(entries[3].role, 'Chapter 3');
     assert.strictEqual(entries[4].role, 'Chapter 1');
+  });
+});
+
+// ── ditamap-level profiling for book mode ──
+describe('collectMapEntries profiling', () => {
+  it('should attach profileKeys/profileChipsHtml for a topicref carrying its own profiling attribute', () => {
+    const doc = parseMap(`<map><topicref href="a.dita" audience="internal"/></map>`);
+    const entries = collectMapEntries(doc.root);
+    assert.strictEqual(entries[0].profileKeys, 'audience:internal');
+    assert.ok(entries[0].profileChipsHtml?.includes('Audience'));
+    assert.ok(entries[0].profileChipsHtml?.includes('[internal]'));
+  });
+
+  it('should leave profileKeys undefined for an entry with no profiling attribute and nothing inherited', () => {
+    const doc = parseMap(`<map><topicref href="a.dita"/></map>`);
+    const entries = collectMapEntries(doc.root);
+    assert.strictEqual(entries[0].profileKeys, undefined);
+  });
+
+  it('should cascade a.dita\'s profiling attribute to child entries b.dita, c.dita, and d.dita', () => {
+    const doc = parseMap(`<map>
+      <topicref href="a.dita" audience="internal">
+        <topicref href="b.dita"/>
+        <topicref href="c.dita"/>
+        <topicref href="d.dita"/>
+      </topicref>
+    </map>`);
+    const entries = collectMapEntries(doc.root);
+    assert.strictEqual(entries.length, 4);
+    for (const e of entries) {
+      assert.strictEqual(e.profileKeys, 'audience:internal', `${e.href} should inherit audience:internal from a.dita`);
+    }
+  });
+
+  it('should let a topicref\'s own value override an inherited value for the same attribute rather than merging', () => {
+    const doc = parseMap(`<map>
+      <topicref href="a.dita" audience="internal">
+        <topicref href="b.dita" audience="external"/>
+      </topicref>
+    </map>`);
+    const entries = collectMapEntries(doc.root);
+    assert.strictEqual(entries[0].profileKeys, 'audience:internal');
+    assert.strictEqual(entries[1].profileKeys, 'audience:external');
+  });
+
+  it('should cascade through a map-of-maps: expandDitamapRefs flattens the submap first, then profiling inheritance runs over the merged tree', () => {
+    // Reproduces the reported "all-in-one.ditamap only contains refs to
+    // other ditamaps" scenario: the outer topicref that points at the
+    // submap carries audience="internal", and b.dita (which only exists
+    // inside the submap, injected as a child by expandDitamapRefs) must
+    // still pick up that inherited attribute even though it was never
+    // physically written next to it in any single file.
+    const SUBMAP_XML = `<map><topicref href="b.dita"/></map>`;
+    const outerNode = makeMapNode('map/topicref', { href: 'sub.ditamap', audience: 'internal' });
+    expandDitamapRefs(outerNode, '/project', () => SUBMAP_XML);
+    assert.strictEqual(outerNode.children.length, 1, 'sub.ditamap\'s topicref should have been spliced in as a child');
+
+    const rootNode = makeMapNode('map/map', {}, [outerNode]);
+    const entries = collectMapEntries(rootNode);
+    // entries[0] = the sub.ditamap reference itself, entries[1] = b.dita from inside it
+    assert.strictEqual(entries[0].href, 'sub.ditamap');
+    assert.strictEqual(entries[0].profileKeys, 'audience:internal');
+    assert.strictEqual(entries[1].href, 'b.dita');
+    assert.strictEqual(entries[1].profileKeys, 'audience:internal', 'b.dita, injected from the submap, should still inherit the outer topicref\'s audience');
+  });
+});
+
+describe('bookRendering profiling', () => {
+  it('should attach data-profile-keys and chip markup to a placeholder entry', () => {
+    const html = renderBookPlaceholder('Sub Map', 0, 'audience:internal', '<span class="profiling-chip">Audience [internal]</span>');
+    assert.ok(html.includes('data-profile-keys="audience:internal"'));
+    assert.ok(html.includes('map-profiling-badges'));
+  });
+
+  it('should omit data-profile-keys entirely from a placeholder when no profiling attribute applies', () => {
+    const html = renderBookPlaceholder('Plain Section', 0);
+    assert.ok(!html.includes('data-profile-keys'));
+    assert.ok(!html.includes('map-profiling-badges'));
+  });
+
+  it('should attach data-profile-keys to an error entry too', () => {
+    const html = renderBookError('Broken', 'File not found', 0, 'platform:windows', '<span class="profiling-chip">Platform [windows]</span>');
+    assert.ok(html.includes('data-profile-keys="platform:windows"'));
   });
 });
 

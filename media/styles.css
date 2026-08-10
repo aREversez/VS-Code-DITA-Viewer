@@ -153,6 +153,17 @@ body.hide-profiling .profiled {
 body.hide-profiling .profiled--inline { display: inline; }
 body.hide-profiling .profiling-label { display: none; }
 
+/* Ditamap tree/book view profiling badges (see mapTypeMap.ts /
+   MapViewerProvider.ts) -- same "Attr [value]" chips as .profiling-label
+   above, but attached to a map tree row or book-entry section rather than
+   wrapping inline body content, so they don't need .profiled's absolute
+   positioning (which assumes a single block of prose, not a row that may
+   have a nested <ul> of child entries directly beneath it). Reuses
+   .profiling-chip for the individual chip look and the same
+   body.hide-profiling toggle as the topic viewer's Flags button. */
+.map-profiling-badges { display: inline-flex; gap: 0.3rem; margin-left: 0.5em; vertical-align: middle; flex-wrap: wrap; }
+body.hide-profiling .map-profiling-badges { display: none; }
+
 /* Phase 2 (the filter panel): actually hides content, unlike the toggle
    above which only hides the highlight decoration. !important because
    this needs to override whatever display value .profiled/.profiled--inline

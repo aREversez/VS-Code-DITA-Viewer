@@ -270,17 +270,34 @@ export function escapeAttr(s: string): string {
 
 // ── Book rendering helpers (pure, no vscode dependency) ──
 
-export function renderBookPlaceholder(displayName: string, depth: number): string {
+// A book-entry that carries map-level profiling attributes (its topicref's
+// own, cascaded from ancestor topicrefs -- see MapEntry.profileKeys) gets
+// the same data-profile-keys + chip markup the topic renderer stamps on
+// profiled content, so the same Filter panel that hides a profiled
+// paragraph inside a topic can also hide an entire topicref's book
+// section, and the same Flags toggle shows/hides both kinds of chip
+// together.
+function profilingMarkup(profileKeys: string | undefined, profileChipsHtml: string | undefined): { attr: string; badges: string } {
+  if (!profileKeys) return { attr: '', badges: '' };
+  return {
+    attr: ` data-profile-keys="${escapeAttr(profileKeys)}"`,
+    badges: profileChipsHtml ? `<span class="map-profiling-badges">${profileChipsHtml}</span>` : '',
+  };
+}
+
+export function renderBookPlaceholder(displayName: string, depth: number, profileKeys?: string, profileChipsHtml?: string): string {
   const level = Math.min(1 + depth, 6);
-  return `<div class="book-entry book-entry--placeholder">
-  <h${level} class="book-section-heading">${escapeAttr(displayName)}</h${level}>
+  const { attr, badges } = profilingMarkup(profileKeys, profileChipsHtml);
+  return `<div class="book-entry book-entry--placeholder"${attr}>
+  <h${level} class="book-section-heading">${escapeAttr(displayName)}</h${level}>${badges}
 </div>`;
 }
 
-export function renderBookError(displayName: string, errorMsg: string, depth: number): string {
+export function renderBookError(displayName: string, errorMsg: string, depth: number, profileKeys?: string, profileChipsHtml?: string): string {
   const level = Math.min(1 + depth, 6);
-  return `<div class="book-entry book-entry--error">
-  <h${level} class="book-entry-title">${escapeHtml(displayName)}</h${level}>
+  const { attr, badges } = profilingMarkup(profileKeys, profileChipsHtml);
+  return `<div class="book-entry book-entry--error"${attr}>
+  <h${level} class="book-entry-title">${escapeHtml(displayName)}</h${level}>${badges}
   <p class="book-error">${escapeHtml(errorMsg)}</p>
 </div>`;
 }
