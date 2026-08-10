@@ -133,14 +133,15 @@ function getWebviewScript(): string {
     suppressScrollSyncUntil = Date.now() + 700;
   }
 
-  function scrollToLine(targetLine) {
-    if (targetLine <= 0) { suppressScrollSyncBriefly(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+  function scrollToLine(targetLine, instant) {
+    var behavior = instant ? 'auto' : 'smooth';
+    if (targetLine <= 0) { suppressScrollSyncBriefly(); window.scrollTo({ top: 0, behavior: behavior }); return; }
     var best = findClosest(targetLine);
     if (!best) return;
     var rect = best.getBoundingClientRect();
     if (rect.top < -5 || rect.top > 5) {
       suppressScrollSyncBriefly();
-      best.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      best.scrollIntoView({ block: 'start', behavior: behavior });
     }
   }
 
@@ -618,6 +619,19 @@ function getWebviewScript(): string {
     useRegex: L.searchUseRegex,
     invalidRegex: L.searchInvalidRegex,
   })}
+
+  // Restores whatever the source editor's scroll position was at the
+  // moment this HTML was generated (see updateWebview -- every re-render
+  // reassigns webview.html wholesale, which is a full page reload and
+  // resets scroll to 0). Baking the target line into the page and jumping
+  // there instantly, before the person ever sees the reset frame, replaces
+  // the old "reset to top, then 200ms later animate back down" round trip
+  // -- which was the actual visible jump on every pause while typing --
+  // with a single non-animated correction. window.__initialScrollLine is
+  // set in the small inline script in <head>, ahead of this one.
+  if (typeof window.__initialScrollLine === 'number') {
+    scrollToLine(window.__initialScrollLine, true);
+  }
 })();
 `;
 }
@@ -661,7 +675,6 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     webviewPanel.webview.onDidReceiveMessage((message) => {
       if (message.type === 'refresh') {
         updateWebview();
-        setTimeout(doSyncSourceToWebview, 200);
       } else if (message.type === 'scrollSync') {
         // Reveal the matching source line as the user scrolls the preview,
         // but deliberately do NOT move editor.selection here — unlike
@@ -712,14 +725,6 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       webviewPanel.webview.postMessage({ type: 'highlightLine', line: sel.start.line, col: sel.start.character });
     });
 
-    const doSyncSourceToWebview = () => {
-      const editor = findSourceEditor();
-      if (editor) {
-        const topLine = editor.visibleRanges[0]?.start.line;
-        if (topLine !== undefined) postRevealLine(topLine);
-      }
-    };
-
     let visibleRangeTimer: ReturnType<typeof setTimeout> | undefined;
     const editorSub = vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
       if (e.textEditor.document.uri.toString() !== document.uri.toString()) return;
@@ -737,7 +742,6 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
       renderDebounceTimer = setTimeout(() => {
         updateWebview();
-        setTimeout(doSyncSourceToWebview, 200);
       }, 300);
     });
 
@@ -751,18 +755,23 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
 
     const updateWebview = () => {
       if (disposed) return;
-      const html = this.generateHtml(document, webviewPanel.webview);
+      // Every re-render replaces webview.html wholesale (a full page
+      // reload), which resets scroll to 0 -- baking in the source editor's
+      // current top line lets the fresh page jump there instantly on load
+      // instead of the extension separately posting a scroll correction
+      // afterward (which visibly showed as "reset to top, then animate
+      // back down" on every re-render while typing).
+      const editor = findSourceEditor();
+      const initialScrollLine = editor?.visibleRanges[0]?.start.line;
+      const html = this.generateHtml(document, webviewPanel.webview, initialScrollLine);
       webviewPanel.webview.html = html;
       lastRenderedHtmlByUri.set(document.uri.toString(), html);
     };
 
     updateWebview();
 
-    const initialSyncTimer = setTimeout(doSyncSourceToWebview, 300);
-
     webviewPanel.onDidDispose(() => {
       disposed = true;
-      clearTimeout(initialSyncTimer);
       if (visibleRangeTimer) clearTimeout(visibleRangeTimer);
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
       changeSubscription.dispose();
@@ -776,6 +785,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
   private generateHtml(
     document: vscode.TextDocument,
     webview: vscode.Webview,
+    initialScrollLine?: number,
   ): string {
     const stylesUri = webview.asWebviewUri(
       vscode.Uri.file(join(this.context.extensionPath, 'media', 'styles.css')),
@@ -843,6 +853,9 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       const defaultNameJson = escapeJson(JSON.stringify(defaultName));
       const fontPrefs = this.context.globalState.get(FONT_PREFS_KEY, DEFAULT_FONT_PREFS);
       const fontPrefsJson = escapeJson(JSON.stringify(fontPrefs));
+      const initialScrollLineJs = typeof initialScrollLine === 'number' && Number.isFinite(initialScrollLine)
+        ? String(Math.max(0, Math.floor(initialScrollLine)))
+        : 'null';
 
       // CSP nonce for defense-in-depth against XSS
       const nonce = randomBytes(16).toString('base64');
@@ -856,7 +869,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
 <link rel="stylesheet" href="${stylesUri}">
 ${defaultContent ? `<style>\n${defaultContent}\n</style>` : ''}
 <title>${document.fileName}</title>
-<script nonce="${nonce}">window.__cssFiles=${cssFilesJson};window.__defaultCss=${defaultNameJson};window.__fontPrefs=${fontPrefsJson};</script>
+<script nonce="${nonce}">window.__cssFiles=${cssFilesJson};window.__defaultCss=${defaultNameJson};window.__fontPrefs=${fontPrefsJson};window.__initialScrollLine=${initialScrollLineJs};</script>
 </head>
 <body>
 ${content}
