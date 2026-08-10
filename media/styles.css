@@ -109,8 +109,12 @@ p { margin: 0.75em 0; }
 .profiled {
   display: block;
   position: relative;
-  background: var(--color-profiling-bg);
-  border: 1px solid var(--color-profiling-border);
+  /* Outline only, no fill -- matches Oxygen's default profiling display
+     (a stroked box around the matched content) rather than tinting the
+     background, so the profiled text renders exactly as it would
+     unprofiled and the box reads as metadata, not as styled content. */
+  background: none;
+  border: 1.5px solid var(--color-profiling-border);
   border-radius: 3px;
   padding: 0.4rem 0.6rem 1.3rem;
   margin: 0.5rem 0;
@@ -219,7 +223,12 @@ img[data-load-error] { cursor: default; }
 .dita-img-btn:hover { opacity: 0.85; }
 
 /* Figures */
-figure { margin: 1.5rem 0; text-align: center; }
+/* Left-aligned rather than centered: a fig's image should sit flush with
+   the surrounding body text's left edge (and, inside a list item, with the
+   li's text rather than its marker), matching how DITA authors read
+   figures in Oxygen. figure has no left/right margin of its own, so this
+   naturally follows whatever indent its containing block already has. */
+figure { margin: 1.5rem 0; text-align: left; }
 figcaption { font-style: italic; margin-top: 0.5rem; font-size: 0.95em; text-align: left; }
 
 /* Code blocks */

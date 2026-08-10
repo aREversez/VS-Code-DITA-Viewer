@@ -565,6 +565,17 @@ function getWebviewScript(): string {
   applyProfilingToggle();
   toolbar.appendChild(profilingBtn);
 
+  // Filter button goes immediately next to Flags -- "show me what's
+  // flagged" and "actually hide what's flagged" are closely related
+  // controls and read as a pair, so they sit adjacent in the toolbar
+  // rather than being separated by the width/refresh controls.
+  ${getProfilingFilterScript({
+    buttonLabel: L.filterLabel,
+    buttonTitle: L.filterTitle,
+    closeLabel: L.filterClose,
+    emptyLabel: L.filterEmpty,
+  })}
+
   // Page width dropdown
   var widths = [
     { label: ${L.widthAuto}, value: '' },
@@ -606,13 +617,6 @@ function getWebviewScript(): string {
     matchCase: L.searchMatchCase,
     useRegex: L.searchUseRegex,
     invalidRegex: L.searchInvalidRegex,
-  })}
-
-  ${getProfilingFilterScript({
-    buttonLabel: L.filterLabel,
-    buttonTitle: L.filterTitle,
-    closeLabel: L.filterClose,
-    emptyLabel: L.filterEmpty,
   })}
 })();
 `;

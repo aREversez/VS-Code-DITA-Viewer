@@ -768,6 +768,19 @@ export function getProfilingFilterScript(opts: {
   var pfPanel = null;
   var pfExcluded = {};
 
+  // Whether the Filter button itself reflects "something is actually being
+  // hidden right now" -- mirrors the Flags button's own highlight-on-active
+  // treatment (applyProfilingToggle above) so the two controls read the
+  // same way. Computed from pfExcluded rather than from panel-open state:
+  // the person should still see the button lit up after closing the panel
+  // if a filter is still in effect.
+  function pfUpdateButtonState() {
+    var active = false;
+    for (var k in pfExcluded) { if (pfExcluded.hasOwnProperty(k)) { active = true; break; } }
+    pfFilterBtn.style.background = active ? 'var(--color-profiling-label-bg)' : '';
+    pfFilterBtn.style.color = active ? 'var(--color-profiling-label-text)' : '';
+  }
+
   function pfApplyFilter() {
     var els = document.querySelectorAll('[data-profile-keys]');
     for (var i = 0; i < els.length; i++) {
@@ -778,6 +791,7 @@ export function getProfilingFilterScript(opts: {
       }
       els[i].classList.toggle('profile-filtered-out', hide);
     }
+    pfUpdateButtonState();
   }
 
   function pfBuildPanel() {
@@ -796,9 +810,16 @@ export function getProfilingFilterScript(opts: {
     }
     groupOrder.sort();
 
+    // Anchored to the toolbar's own bottom-right corner (computed from its
+    // live rect, not a hardcoded offset, so it stays correct if the
+    // toolbar's height/width ever changes) rather than the fixed
+    // top:40px;left:8px it used to use. Popping up right under the button
+    // that opened it, on the same side as the toolbar, means the person
+    // never has to move their eyes across the window to find it.
+    var toolbarRect = toolbar.getBoundingClientRect();
     var panel = document.createElement('div');
     panel.id = '__profiling_filter_panel';
-    panel.style.cssText = 'position:fixed;top:40px;left:8px;z-index:10000;max-height:70vh;overflow:auto;padding:8px 10px;border-radius:5px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;background:var(--vscode-editor-background,rgba(30,30,30,0.95));border:1px solid var(--vscode-widget-border,rgba(255,255,255,0.12));backdrop-filter:blur(4px);box-shadow:0 2px 8px rgba(0,0,0,0.2);color:var(--vscode-foreground,#ccc);min-width:160px;';
+    panel.style.cssText = 'position:fixed;top:' + (toolbarRect.bottom + 6) + 'px;right:8px;z-index:10000;max-height:70vh;overflow:auto;padding:8px 10px;border-radius:5px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;background:var(--vscode-editor-background,rgba(30,30,30,0.95));border:1px solid var(--vscode-widget-border,rgba(255,255,255,0.12));backdrop-filter:blur(4px);box-shadow:0 2px 8px rgba(0,0,0,0.2);color:var(--vscode-foreground,#ccc);min-width:160px;';
 
     if (groupOrder.length === 0) {
       var empty = document.createElement('div');
@@ -863,6 +884,7 @@ export function getProfilingFilterScript(opts: {
   pfFilterBtn.title = ${btnTitle};
   pfFilterBtn.style.cssText = btnStyle + 'font-size:11px;';
   pfFilterBtn.addEventListener('click', pfTogglePanel);
+  pfUpdateButtonState();
   toolbar.appendChild(pfFilterBtn);
 `;
 }
