@@ -542,6 +542,119 @@ describe('renderer', () => {
     );
   });
 
+  // ── <mfenced> -- real MathML 3, but dropped entirely by MathML Core ──
+  // (what Chromium/VS Code's webview and every "open in browser" WebHelp
+  // reader actually implement). Oxygen's equation editor emits mfenced by
+  // default for every parenthesized group and every |...| absolute-value
+  // bar, so this is the single most common cause of "brackets/absolute
+  // value missing" reports. It must be expanded into <mo> fence characters
+  // rather than passed through as a live <mfenced> tag.
+  it('should expand mfenced with default open/close into explicit parenthesis <mo> characters (Chromium/MathML Core does not implement <mfenced>)', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/foreign', [
+        makeRaw('math', [
+          makeRaw('mfenced', [makeRaw('mi', [makeText('x')])]),
+        ]),
+      ], undefined, 'mathml'),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('<mfenced'), 'mfenced must never reach the output as a live tag -- Chromium silently drops it and everything inside');
+    assert.ok(html.includes('<mrow><mo>(</mo><mi>x</mi><mo>)</mo></mrow>'), 'should default to ( and ) per the MathML 3 spec default');
+  });
+
+  it('should expand mfenced open/close attributes into matching <mo> fence characters, e.g. |x| for absolute value', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/foreign', [
+        makeRaw('math', [
+          makeRaw('mfenced', [makeRaw('mi', [makeText('x')])], { open: '|', close: '|' }),
+        ]),
+      ], undefined, 'mathml'),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('<mrow><mo>|</mo><mi>x</mi><mo>|</mo></mrow>'), 'open="|" close="|" is the standard MathML shape for absolute value and must render as literal | bars');
+  });
+
+  it('should join multiple mfenced children with the separators attribute, repeating the last character for extra gaps', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/foreign', [
+        makeRaw('math', [
+          makeRaw('mfenced', [
+            makeRaw('mi', [makeText('a')]),
+            makeRaw('mi', [makeText('b')]),
+            makeRaw('mi', [makeText('c')]),
+          ], { separators: ';' }),
+        ]),
+      ], undefined, 'mathml'),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(
+      html.includes('<mrow><mo>(</mo><mi>a</mi><mo>;</mo><mi>b</mi><mo>;</mo><mi>c</mi><mo>)</mo></mrow>'),
+      'a single-character separators value should repeat between every pair of children',
+    );
+  });
+
+  it('should render the real aspectRatio formula (Oxygen-exported, prefixed mfenced with separators="|") with visible parentheses instead of silently dropping them', () => {
+    // This is the exact shape Oxygen's equation editor exported for a real
+    // reported bug: <m:mfenced separators="|"> wrapping a single summation
+    // term. Before the fix, this rendered with the sum visible but no
+    // surrounding parentheses at all -- not wrong parentheses, none.
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/foreign', [
+        makeRaw('m:math', [
+          makeRaw('m:mfenced', [
+            makeRaw('m:mrow', [
+              makeRaw('m:munderover', [
+                makeRaw('m:mo', [makeText('∑')]),
+                makeRaw('m:mrow', [makeRaw('m:mi', [makeText('j')])]),
+                makeRaw('m:mrow', [makeRaw('m:mi', [makeText('N')])]),
+              ]),
+              makeRaw('m:msub', [makeRaw('m:mi', [makeText('A')]), makeRaw('m:mi', [makeText('j')])]),
+            ]),
+          ], { separators: '|' }),
+        ], { 'xmlns:m': 'http://www.w3.org/1998/Math/MathML' }),
+      ], undefined, 'mathml'),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('<mfenced'), 'the prefixed m:mfenced must be expanded, not passed through under any tag name');
+    assert.ok(html.includes('<mo>(</mo>') && html.includes('<mo>)</mo>'), 'default open/close parentheses must appear as explicit <mo> characters');
+    assert.ok(html.includes('<mo>∑</mo>'), 'the wrapped summation content must still be preserved inside the expansion');
+  });
+
+  it('should render the real OrthQual formula absolute-value bars (open="|" close="|" separators="|") instead of dropping them', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/foreign', [
+        makeRaw('m:math', [
+          makeRaw('m:mfenced', [
+            makeRaw('m:msub', [makeRaw('m:mi', [makeText('angle')]), makeRaw('m:mi', [makeText('j')])]),
+          ], { close: '|', open: '|', separators: '|' }),
+        ], { 'xmlns:m': 'http://www.w3.org/1998/Math/MathML' }),
+      ], undefined, 'mathml'),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    const barCount = (html.match(/<mo>\|<\/mo>/g) || []).length;
+    assert.strictEqual(barCount, 2, 'both the open and close | bars must render as explicit <mo> characters, matching Oxygen\'s absolute-value rendering');
+  });
+
+  it('should expand mfenced end-to-end through the real sax parser using the actual reported fixture (aspectRatio + OrthQual)', () => {
+    // mathml_mfenced_test.dita reproduces both formulas from the real bug
+    // report byte-for-byte (same prefixed m: shape Oxygen exported). Going
+    // through parseDita() here, not just the synthetic makeRaw() tree,
+    // catches anything the sax parser does differently with mfenced's
+    // attributes (e.g. attribute name casing/ordering) that the unit-level
+    // tests above can't see.
+    const fixturePath = join(__dirname, '..', '..', '..', 'test-dita-file', 'topics', 'mathml_mfenced_test.dita');
+    const xml = readFileSync(fixturePath, 'utf-8');
+    const doc = parseDita(xml);
+    const html = renderDocument(doc.root, defaultCtx);
+    assert.ok(!html.includes('<mfenced'), 'no live <mfenced> tag should survive to the real output');
+    const parenOpenCount = (html.match(/<mo>\(<\/mo>/g) || []).length;
+    const parenCloseCount = (html.match(/<mo>\)<\/mo>/g) || []).length;
+    assert.strictEqual(parenOpenCount, 2, 'aspectRatio has two mfenced groups, each should produce one explicit ( <mo>');
+    assert.strictEqual(parenCloseCount, 2, 'aspectRatio has two mfenced groups, each should produce one explicit ) <mo>');
+    const barCount = (html.match(/<mo>\|<\/mo>/g) || []).length;
+    assert.strictEqual(barCount, 2, 'OrthQual\'s open="|" close="|" mfenced should produce exactly two literal | <mo> characters');
+  });
+
   it('should render fig with figcaption', () => {
     const doc = makeEl('topic/topic', [
       makeEl('topic/fig', [

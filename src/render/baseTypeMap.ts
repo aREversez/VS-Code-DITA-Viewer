@@ -85,6 +85,21 @@ function isUnsafeForeignAttr(name: string): boolean {
   return n.startsWith('on') || n === 'href' || n === 'src' || n === 'style' || n === 'xlink:href';
 }
 
+// Looks up a MathML attribute by its local (prefix-stripped) name -- the
+// same tolerance serializeForeignContent's general attribute pass already
+// applies, needed here too since <mfenced> (like everything else in this
+// tree) may arrive as <m:mfenced separators="|" .../> with every attribute
+// name unprefixed but the tag itself prefixed, or occasionally with a
+// prefixed attribute as well.
+function getForeignAttr(node: DitaNode, name: string): string | undefined {
+  const attrs = node.attributes || {};
+  if (attrs[name] !== undefined) return attrs[name];
+  for (const [k, v] of Object.entries(attrs)) {
+    if (localName(k) === name) return v;
+  }
+  return undefined;
+}
+
 // Namespace-prefixed MathML (<mml:math>, <mml:msup>, ...) is extremely
 // common in practice -- Oxygen's equation editor and MathType both export
 // this shape by default -- but only the *local* part of the name is a real
@@ -100,6 +115,58 @@ function localName(tag: string): string {
   return i === -1 ? tag : tag.slice(i + 1);
 }
 
+// <mfenced> is real MathML 3, and it's how Oxygen/MathType export every
+// parenthesized group and every |...| absolute-value bar -- but MathML
+// Core (what Chromium, and therefore this webview and every "open in
+// browser" WebHelp reader, actually implements) dropped it entirely.
+// Passing it through verbatim renders as nothing: not "wrong brackets",
+// the whole element and its fences silently disappear, which is exactly
+// the "brackets and absolute values missing" symptom. The fix used by
+// every engine that still wants mfenced to work under Core (MathJax
+// included) is to expand it at serialization time into the primitives
+// Core does support: an <mrow> with explicit <mo> fence/separator
+// characters around the children, rather than relying on the browser to
+// synthesize them from the mfenced attributes.
+function expandMfenced(node: DitaNode): string {
+  const openAttr = getForeignAttr(node, 'open');
+  const closeAttr = getForeignAttr(node, 'close');
+  const sepAttr = getForeignAttr(node, 'separators');
+  // Per the MathML 3 spec, an absent attribute gets the default fence/
+  // separator; an attribute present but explicitly empty (open="") means
+  // "no fence on this side" (used for one-sided constructs) and must stay
+  // empty rather than falling back to the default.
+  const open = openAttr !== undefined ? openAttr : '(';
+  const close = closeAttr !== undefined ? closeAttr : ')';
+  const separators = sepAttr !== undefined ? sepAttr : ',';
+
+  // Whitespace-only text nodes between tags (from source indentation/
+  // newlines, which the sax parser preserves as real text-node children)
+  // are not semantic arguments of mfenced -- only its element children
+  // (or text nodes with actual visible content) count as "items" that
+  // get fence/separator characters between them. Without this filter, a
+  // single-child mfenced formatted across multiple lines would pick up
+  // spurious extra separator characters for the whitespace "children"
+  // surrounding the real one.
+  const items = (node.children || [])
+    .filter((c) => c.type !== 'text' || (c.text || '').trim() !== '')
+    .map(serializeForeignContent);
+
+  let inner = '';
+  if (open !== '') inner += `<mo>${escapeHtml(open)}</mo>`;
+  for (let i = 0; i < items.length; i++) {
+    inner += items[i];
+    if (i < items.length - 1 && separators !== '') {
+      // Fewer separator characters than gaps: the last one repeats for
+      // the rest, per spec. More than needed: the extras are unused.
+      const sepChar = separators[Math.min(i, separators.length - 1)];
+      inner += `<mo>${escapeHtml(sepChar)}</mo>`;
+    }
+  }
+  if (close !== '') inner += `<mo>${escapeHtml(close)}</mo>`;
+
+  return `<mrow>${inner}</mrow>`;
+}
+
 function serializeForeignContent(node: DitaNode): string {
   if (node.type === 'text') return escapeHtml(node.text || '');
   const tag = localName((node.tagName || '').toLowerCase());
@@ -109,6 +176,7 @@ function serializeForeignContent(node: DitaNode): string {
     // silently dropping the whole subtree.
     return (node.children || []).map(serializeForeignContent).join('');
   }
+  if (tag === 'mfenced') return expandMfenced(node);
   const attrs = Object.entries(node.attributes || {})
     // xmlns / xmlns:* declarations are what produced the mml: prefix in
     // the first place; now that the prefix is stripped from the tag name
