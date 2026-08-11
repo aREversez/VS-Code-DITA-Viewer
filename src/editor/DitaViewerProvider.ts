@@ -110,7 +110,7 @@ function getWebviewScript(): string {
     // straight back into the extension moving the *editor's* cursor —
     // which corrupts whatever the user is mid-typing. Only genuine
     // user-driven scrolling in the preview should ever reach the extension.
-    if (Date.now() < suppressScrollSyncUntil) return;
+    if (programmaticScroll) return;
     try {
       var els = document.querySelectorAll('[data-line]');
       if (!els.length) return;
@@ -124,23 +124,55 @@ function getWebviewScript(): string {
     } catch(e) {}
   }
 
-  // Smooth-scroll animations (scrollIntoView/scrollTo with behavior:
-  // 'smooth') take a few hundred ms to settle; anything above the ~150ms
-  // scroll debounce plus a comfortable margin keeps onScrollEnd suppressed
-  // for the whole animation instead of firing on an intermediate frame.
-  var suppressScrollSyncUntil = 0;
-  function suppressScrollSyncBriefly() {
-    suppressScrollSyncUntil = Date.now() + 700;
+  // Whether the scroll currently in progress (or about to start) was
+  // commanded by us (scrollToLine / the top-of-doc case below) rather than
+  // the person's own mouse/trackpad/keyboard. A programmatic smooth-scroll
+  // over a long distance (e.g. clicking near the end of a long source file
+  // while the preview happens to be scrolled near the top) can run well
+  // past a fixed guess at "how long should this take" -- scrollend fires
+  // exactly when the browser itself considers scrolling (including easing/
+  // momentum) to have actually settled, so there's no duration to guess at
+  // all. This replaced an earlier fixed ~700ms suppression window: on a
+  // long enough programmatic scroll, that window could expire before the
+  // animation visually finished, letting an intermediate (not yet final)
+  // scroll position leak out as a real 'scrollSync' -- which the extension
+  // would act on by force-revealing that line in the *source* editor,
+  // visibly snapping the source's viewport out from under a click that had
+  // nothing to do with scrolling in the first place.
+  var programmaticScroll = false;
+  var programmaticScrollFallbackTimer = null;
+  var supportsScrollend = 'onscrollend' in window;
+  function beginProgrammaticScroll() {
+    programmaticScroll = true;
+    if (!supportsScrollend) {
+      // Old-webview fallback only -- current VS Code's Chromium has
+      // supported scrollend since well before this was written. Generous
+      // on purpose, since the only failure mode of guessing too long here
+      // is a brief window where a genuine user scroll right on the heels
+      // of a programmatic one doesn't get reported -- much less disruptive
+      // than the AtTop-reveal jump guessing too short used to cause.
+      if (programmaticScrollFallbackTimer) clearTimeout(programmaticScrollFallbackTimer);
+      programmaticScrollFallbackTimer = setTimeout(function() { programmaticScroll = false; }, 2000);
+    }
+  }
+  if (supportsScrollend) {
+    window.addEventListener('scrollend', function() {
+      // Checked and cleared together, synchronously, in the one place that
+      // both this flag and the resulting report are decided -- no separate
+      // timer racing against the real scroll to get the order wrong.
+      if (programmaticScroll) { programmaticScroll = false; return; }
+      onScrollEnd();
+    });
   }
 
   function scrollToLine(targetLine, instant) {
     var behavior = instant ? 'auto' : 'smooth';
-    if (targetLine <= 0) { suppressScrollSyncBriefly(); window.scrollTo({ top: 0, behavior: behavior }); return; }
+    if (targetLine <= 0) { beginProgrammaticScroll(); window.scrollTo({ top: 0, behavior: behavior }); return; }
     var best = findClosest(targetLine);
     if (!best) return;
     var rect = best.getBoundingClientRect();
     if (rect.top < -5 || rect.top > 5) {
-      suppressScrollSyncBriefly();
+      beginProgrammaticScroll();
       best.scrollIntoView({ block: 'start', behavior: behavior });
     }
   }
@@ -416,10 +448,17 @@ function getWebviewScript(): string {
     return rect.top < window.innerHeight && rect.bottom > 0;
   }
 
-  window.addEventListener('scroll', function() {
-    if (scrollTimer) clearTimeout(scrollTimer);
-    scrollTimer = setTimeout(onScrollEnd, 150);
-  });
+  // Only needed as the fallback debounce for environments without
+  // scrollend support (see beginProgrammaticScroll above) -- when scrollend
+  // is available, onScrollEnd is invoked directly from that listener
+  // instead, so this generic scroll+timeout guess isn't in the loop at all
+  // for the common case.
+  if (!supportsScrollend) {
+    window.addEventListener('scroll', function() {
+      if (scrollTimer) clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(onScrollEnd, 150);
+    });
+  }
 
   window.addEventListener('click', function(e) {
     var a = e.target.closest ? e.target.closest('a.xref') : null;
@@ -446,7 +485,7 @@ function getWebviewScript(): string {
       if (best) {
         highlightElement(best);
         if (!isElementVisible(best)) {
-          suppressScrollSyncBriefly();
+          beginProgrammaticScroll();
           best.scrollIntoView({ block: 'center', behavior: 'smooth' });
         }
       }
