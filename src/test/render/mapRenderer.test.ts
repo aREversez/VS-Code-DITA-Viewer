@@ -1,6 +1,8 @@
 import * as assert from 'assert';
 import { getMapTitleText, renderMapDocument } from '../../render/mapTypeMap';
 import { parseDitamap, preprocessEntities } from '../../parser/ditaParser';
+import { expandDitamapRefs } from '../../editor/ditaRenderUtils';
+import type { DitaNode } from '../../parser/domTypes';
 
 function parseAndRender(xml: string): string {
   const doc = parseDitamap(preprocessEntities(xml));
@@ -458,6 +460,46 @@ describe('mapRenderer', () => {
       assert.ok(bLi.includes('Product') && bLi.includes('[pro]'), 'b.dita\'s chip should show its own product attribute');
       assert.ok(!bLi.includes('Audience') && !bLi.includes('[internal]'), 'b.dita\'s chip should NOT also show the inherited audience -- that\'s already shown once by a\'s own box');
       assert.ok(bLi.includes('data-profile-keys="product:pro,audience:internal"') || bLi.includes('data-profile-keys="audience:internal,product:pro"'), 'data-profile-keys (for filtering) should still be the full cascaded set regardless of what the visible chip shows');
+    });
+
+    it('should cascade through a map-of-maps in Outline/tree view: expandDitamapRefs flattens the submap first, then profiling inheritance runs over the merged tree', () => {
+      // Reproduces the reported "all-in-one.ditamap only contains refs to
+      // other ditamaps" scenario for Outline mode specifically -- this is
+      // the mode the reported screenshot is about (a tree of topicrefs, as
+      // opposed to Book mode, which composites topic content and does not
+      // show topicref-level profiling at all). The outer topicref pointing
+      // at the submap carries audience="internal"; b.dita only exists
+      // inside the submap, spliced in by expandDitamapRefs, and must still
+      // pick up that inherited attribute even though it was never
+      // physically written next to it in any single file. Mirrors exactly
+      // what MapViewerProvider.generateHtml does in production: run
+      // expandDitamapRefs once, then hand the flattened tree to
+      // renderMapDocument.
+      const SUBMAP_XML = `<map><topicref href="b.dita"/></map>`;
+      const outerNode: DitaNode = {
+        type: 'element',
+        baseType: 'map/topicref',
+        attributes: { href: 'sub.ditamap', audience: 'internal' },
+        children: [],
+        sourceRange: { startLine: 0, startCol: 0, endLine: 0, endCol: 0 },
+      };
+      expandDitamapRefs(outerNode, '/project', () => SUBMAP_XML);
+      assert.strictEqual(outerNode.children.length, 1, 'sub.ditamap\'s topicref should have been spliced in as a child');
+
+      const rootNode: DitaNode = {
+        type: 'element',
+        baseType: 'map/map',
+        attributes: {},
+        children: [outerNode],
+        sourceRange: { startLine: 0, startCol: 0, endLine: 0, endCol: 0 },
+      };
+      const html = renderMapDocument(rootNode, { docDir: '/test' });
+      const bIdx = html.indexOf('data-href="b.dita"');
+      assert.ok(bIdx !== -1, 'b.dita, injected from the submap, should appear in the rendered tree');
+      const bCloseIdx = html.indexOf('</li>', bIdx);
+      const bLi = html.slice(Math.max(0, bIdx - 50), bCloseIdx);
+      assert.ok(bLi.includes('data-profile-keys="audience:internal"'), 'b.dita should inherit audience:internal through the flattened submap, for filtering purposes');
+      assert.ok(!bLi.includes(' profiled'), 'b.dita only inherited the attribute -- should not get its own box (that lives on sub.ditamap\'s own entry, which declared it)');
     });
 
     it('should let a child topicref\'s own value override (not merge with) the inherited value for the same attribute', () => {

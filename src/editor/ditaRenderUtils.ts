@@ -269,35 +269,28 @@ export function escapeAttr(s: string): string {
 }
 
 // ── Book rendering helpers (pure, no vscode dependency) ──
+//
+// Book mode is deliberately just "every referenced topic's own content,
+// one after another" -- it composites topics for reading, the same way
+// opening one of those topics directly would render it, profiling
+// included (each topic's own inline profiling markup already renders
+// correctly via renderTopicToHtml, unaffected by anything here). It does
+// NOT layer in topicref-level (ditamap-source) profiling/filtering on top
+// of that; that scope stays exclusive to Outline mode's tree, matching
+// how a topic opened directly never reflects what any ditamap referencing
+// it says either.
 
-// A book-entry that carries map-level profiling attributes (its topicref's
-// own, cascaded from ancestor topicrefs -- see MapEntry.profileKeys) gets
-// the same data-profile-keys + chip markup the topic renderer stamps on
-// profiled content, so the same Filter panel that hides a profiled
-// paragraph inside a topic can also hide an entire topicref's book
-// section, and the same Flags toggle shows/hides both kinds of chip
-// together.
-function profilingMarkup(profileKeys: string | undefined, profileChipsHtml: string | undefined): { attr: string; badges: string } {
-  if (!profileKeys) return { attr: '', badges: '' };
-  return {
-    attr: ` data-profile-keys="${escapeAttr(profileKeys)}"`,
-    badges: profileChipsHtml ? `<span class="map-profiling-badges">${profileChipsHtml}</span>` : '',
-  };
-}
-
-export function renderBookPlaceholder(displayName: string, depth: number, profileKeys?: string, profileChipsHtml?: string): string {
+export function renderBookPlaceholder(displayName: string, depth: number): string {
   const level = Math.min(1 + depth, 6);
-  const { attr, badges } = profilingMarkup(profileKeys, profileChipsHtml);
-  return `<div class="book-entry book-entry--placeholder"${attr}>
-  <h${level} class="book-section-heading">${escapeAttr(displayName)}</h${level}>${badges}
+  return `<div class="book-entry book-entry--placeholder">
+  <h${level} class="book-section-heading">${escapeAttr(displayName)}</h${level}>
 </div>`;
 }
 
-export function renderBookError(displayName: string, errorMsg: string, depth: number, profileKeys?: string, profileChipsHtml?: string): string {
+export function renderBookError(displayName: string, errorMsg: string, depth: number): string {
   const level = Math.min(1 + depth, 6);
-  const { attr, badges } = profilingMarkup(profileKeys, profileChipsHtml);
-  return `<div class="book-entry book-entry--error"${attr}>
-  <h${level} class="book-entry-title">${escapeHtml(displayName)}</h${level}>${badges}
+  return `<div class="book-entry book-entry--error">
+  <h${level} class="book-entry-title">${escapeHtml(displayName)}</h${level}>
   <p class="book-error">${escapeHtml(errorMsg)}</p>
 </div>`;
 }

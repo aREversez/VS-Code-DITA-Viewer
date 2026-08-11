@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderTopicToHtml, renderBookPlaceholder, renderBookError, renderBookSkipMessage, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart } from './ditaRenderUtils';
+import { renderTopicToHtml, renderBookPlaceholder, renderBookError, renderBookSkipMessage, escapeHtml, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart } from './ditaRenderUtils';
 import { buildKeyMap } from './DitaViewerProvider';
 import { formatLocalizedRole } from '../language/bookRoleL10n';
 import { dirname, join, resolve } from 'path';
@@ -363,7 +363,7 @@ ${content}
         // entries by expandDitamapRefs — render a section heading only
         // instead of parsing the map file as a topic.
         if (entry.href.split('#')[0].toLowerCase().endsWith('.ditamap')) {
-          parts.push(renderBookPlaceholder(entry.displayName, entry.depth, entry.profileKeys, entry.profileChipsHtml));
+          parts.push(renderBookPlaceholder(entry.displayName, entry.depth));
           continue;
         }
         const absPath = resolve(docDir, decodeHrefPart(entry.href.split('#')[0]));
@@ -393,22 +393,18 @@ ${content}
         });
 
         if (result.error) {
-          parts.push(renderBookError(entry.displayName, result.error, entry.depth, entry.profileKeys, entry.profileChipsHtml));
+          parts.push(renderBookError(entry.displayName, result.error, entry.depth));
         } else {
-          // The whole topic's rendered content -- entry.profileKeys is the
-          // *topicref's* map-level profiling (from the ditamap source),
-          // kept separate from whatever profiled spans exist inside
-          // result.html from the topic's own DITA source. Both carry
-          // data-profile-keys, so the same Filter panel controls both, but
-          // they hide independently: excluding a map-level key here hides
-          // this whole book-entry div; excluding a topic-internal key only
-          // hides the specific paragraph/step that set it.
-          const profileAttr = entry.profileKeys ? ` data-profile-keys="${escapeAttr(entry.profileKeys)}"` : '';
-          const profileBadges = entry.profileChipsHtml ? `<span class="map-profiling-badges">${entry.profileChipsHtml}</span>` : '';
-          parts.push(`<div class="book-entry"${profileAttr}>${profileBadges}${result.html}</div>`);
+          // Book mode is just each referenced topic's own content, one
+          // after another -- the same profiling/highlighting a topic
+          // already renders when opened directly (via renderTopicToHtml
+          // above) carries straight through here unchanged. No separate
+          // topicref-level (ditamap-source) profiling layered on top of
+          // it; that scope is exclusive to Outline mode's tree.
+          parts.push(`<div class="book-entry">${result.html}</div>`);
         }
       } else {
-        parts.push(renderBookPlaceholder(entry.displayName, entry.depth, entry.profileKeys, entry.profileChipsHtml));
+        parts.push(renderBookPlaceholder(entry.displayName, entry.depth));
       }
     }
 

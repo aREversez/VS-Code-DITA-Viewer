@@ -482,17 +482,6 @@ export interface MapEntry {
   keys?: string;
   /** BookMap structural role, numbered in document order ("Chapter 1", "Appendix A", …) */
   role?: string;
-  /**
-   * data-profile-keys value for this topicref's own profiling attributes,
-   * cascaded from ancestor topicrefs in the map (own value wins over an
-   * inherited one for the same attribute name). This is map-level
-   * profiling only, not anything from the referenced topic's own DITA
-   * source -- book mode composites both into the same page, but they are
-   * two independent scopes that just happen to share one filter panel.
-   */
-  profileKeys?: string;
-  /** Pre-rendered "Attr [value]" chip HTML matching profileKeys, for display. */
-  profileChipsHtml?: string;
 }
 
 function collectEntriesRecursive(
@@ -501,7 +490,6 @@ function collectEntriesRecursive(
   result: MapEntry[],
   resolveKey: ResolveKey | undefined,
   roleLabel: RoleLabeler,
-  inheritedProfiling: Record<string, string>,
 ): void {
   if (node.type !== 'element') return;
   const baseType = node.baseType;
@@ -512,40 +500,25 @@ function collectEntriesRecursive(
   if (baseType === 'map/topicref' || baseType === 'map/keydef' || baseType === 'map/mapref' || baseType === 'map/topichead') {
     const href = getAttr(node, 'href');
     const keys = getAttr(node, 'keys');
-    const effectiveProfiling = mergeProfilingAttrs(node.attributes, inheritedProfiling);
-    // profileKeys (drives whether the Filter panel hides this entry) uses
-    // the full cascaded set -- an inherited-only entry still has to hide
-    // when that value is excluded. profileChipsHtml, the *visible* chip,
-    // only reflects this node's own declared attributes: showing the full
-    // cascaded set here repeated the same ancestor chip on every single
-    // descendant entry (see the matching fix in renderRef for tree mode,
-    // which additionally wraps the whole subtree in one shared box --
-    // book mode's entries are a flat list rather than a nested tree, so
-    // that part isn't replicated here yet).
-    const ownProfiling = mergeProfilingAttrs(node.attributes, {});
     result.push({
       href,
       displayName: getDisplayName(node, resolveKey),
       depth,
       keys,
       role: roleLabel(node.tagName, depth),
-      profileKeys: profilingKeysAttr(effectiveProfiling) || undefined,
-      profileChipsHtml: profilingChipsHtml(ownProfiling) || undefined,
     });
     // Recurse children at depth+1
     for (const child of node.children || []) {
-      collectEntriesRecursive(child, depth + 1, result, resolveKey, roleLabel, effectiveProfiling);
+      collectEntriesRecursive(child, depth + 1, result, resolveKey, roleLabel);
     }
   } else if (baseType === 'map/topicgroup' || baseType === 'map/bookmap-structural') {
-    // topicgroup / bookmap-structural: no entry itself, but they can still
-    // carry select-atts that their descendants should inherit.
-    const effectiveProfiling = mergeProfilingAttrs(node.attributes, inheritedProfiling);
+    // topicgroup / bookmap-structural: no entry itself, but recurse at same depth
     for (const child of node.children || []) {
-      collectEntriesRecursive(child, depth, result, resolveKey, roleLabel, effectiveProfiling);
+      collectEntriesRecursive(child, depth, result, resolveKey, roleLabel);
     }
   } else {
     for (const child of node.children || []) {
-      collectEntriesRecursive(child, depth, result, resolveKey, roleLabel, inheritedProfiling);
+      collectEntriesRecursive(child, depth, result, resolveKey, roleLabel);
     }
   }
 }
@@ -557,12 +530,9 @@ export function collectMapEntries(
 ): MapEntry[] {
   const result: MapEntry[] = [];
   const roleLabel = createBookRoleLabeler(roleFormat);
-  // A select-att set directly on <map> (rare, but valid DITA) applies as
-  // the baseline every top-level topicref inherits from.
-  const rootProfiling = mergeProfilingAttrs(root.attributes, {});
   // Start from map's children at depth 0
   for (const child of root.children || []) {
-    collectEntriesRecursive(child, 0, result, resolveKey, roleLabel, rootProfiling);
+    collectEntriesRecursive(child, 0, result, resolveKey, roleLabel);
   }
   return result;
 }
