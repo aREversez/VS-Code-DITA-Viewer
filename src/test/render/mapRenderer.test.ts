@@ -419,6 +419,47 @@ describe('mapRenderer', () => {
       assert.strictEqual(matchCount, 4, 'a, b, c, and d should all carry the inherited audience:internal key');
     });
 
+    // Matches Oxygen's own display: a box (and its chip label) is only
+    // drawn once, around the topicref that actually declares the
+    // attribute, enclosing its whole subtree -- not repeated on every
+    // descendant that merely inherited it. Reported: a compact tree
+    // showing "Audience [internal]" on a AND on every one of b/c/d was
+    // unreadable clutter for maps with any real depth.
+    it('should draw the profiled box + chip label only on the topicref that declares its own attribute, not on children that only inherited it', () => {
+      const xml = `<map>
+        <topicref href="a.dita" audience="internal">
+          <topicref href="b.dita"/>
+        </topicref>
+      </map>`;
+      const html = parseAndRender(xml);
+      const aIdx = html.indexOf('data-href="a.dita"');
+      const bIdx = html.indexOf('data-href="b.dita"');
+      const bCloseIdx = html.indexOf('</li>', bIdx);
+      const aLi = html.slice(Math.max(0, aIdx - 200), bCloseIdx + 400);
+      const bLi = html.slice(Math.max(0, bIdx - 50), bCloseIdx);
+      assert.ok(aLi.includes(' profiled'), 'a.dita declares its own audience -- should get the .profiled box');
+      assert.ok(aLi.includes('profiling-label') && aLi.includes('Audience') && aLi.includes('[internal]'), 'a.dita should show the chip label');
+      assert.ok(!bLi.includes(' profiled'), 'b.dita only inherited audience -- should NOT get its own .profiled box (it\'s visually inside a\'s box already)');
+      assert.ok(!bLi.includes('profiling-label'), 'b.dita should not repeat a\'s chip label');
+      assert.ok(bLi.includes('data-profile-keys="audience:internal"'), 'b.dita must still carry data-profile-keys so the Filter panel can hide it too');
+    });
+
+    it('should give a child its own box + chip for an attribute it declares itself, without repeating the parent\'s inherited attribute in that chip', () => {
+      const xml = `<map>
+        <topicref href="a.dita" audience="internal">
+          <topicref href="b.dita" product="pro"/>
+        </topicref>
+      </map>`;
+      const html = parseAndRender(xml);
+      const bIdx = html.indexOf('data-href="b.dita"');
+      const bCloseIdx = html.indexOf('</li>', bIdx);
+      const bLi = html.slice(Math.max(0, bIdx - 50), bCloseIdx);
+      assert.ok(bLi.includes(' profiled'), 'b.dita declares its own product -- should get its own .profiled box');
+      assert.ok(bLi.includes('Product') && bLi.includes('[pro]'), 'b.dita\'s chip should show its own product attribute');
+      assert.ok(!bLi.includes('Audience') && !bLi.includes('[internal]'), 'b.dita\'s chip should NOT also show the inherited audience -- that\'s already shown once by a\'s own box');
+      assert.ok(bLi.includes('data-profile-keys="product:pro,audience:internal"') || bLi.includes('data-profile-keys="audience:internal,product:pro"'), 'data-profile-keys (for filtering) should still be the full cascaded set regardless of what the visible chip shows');
+    });
+
     it('should let a child topicref\'s own value override (not merge with) the inherited value for the same attribute', () => {
       const xml = `<map>
         <topicref href="a.dita" audience="internal">
@@ -448,7 +489,8 @@ describe('mapRenderer', () => {
         </topicref>
       </map>`;
       const html = parseAndRender(xml);
-      const bEntry = html.slice(html.indexOf('b.dita') - 400, html.indexOf('b.dita') + 200);
+      const bIdx = html.indexOf('b.dita');
+      const bEntry = html.slice(Math.max(0, bIdx - 400), bIdx + 200);
       assert.ok(bEntry.includes('audience:internal'), 'b.dita should still carry the inherited audience from a.dita');
       assert.ok(bEntry.includes('platform:windows'), 'b.dita should carry its own platform in addition, not instead of, the inherited audience');
     });

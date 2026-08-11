@@ -337,6 +337,22 @@ describe('collectMapEntries profiling', () => {
     }
   });
 
+  it('should only put a visible chip (profileChipsHtml) on the entry that declares its own attribute, not on children that merely inherited it', () => {
+    // profileKeys (filtering) still needs the full cascaded set on every
+    // entry; profileChipsHtml (what's actually shown) should not repeat
+    // the same inherited chip on every descendant -- matches the same fix
+    // in tree mode's box+label display.
+    const doc = parseMap(`<map>
+      <topicref href="a.dita" audience="internal">
+        <topicref href="b.dita"/>
+      </topicref>
+    </map>`);
+    const entries = collectMapEntries(doc.root);
+    assert.ok(entries[0].profileChipsHtml?.includes('Audience') && entries[0].profileChipsHtml?.includes('[internal]'), 'a.dita declares its own audience -- should show the chip');
+    assert.strictEqual(entries[1].profileKeys, 'audience:internal', 'b.dita must still carry profileKeys so the Filter panel can hide it');
+    assert.strictEqual(entries[1].profileChipsHtml, undefined, 'b.dita only inherited the attribute -- should not show its own chip');
+  });
+
   it('should let a topicref\'s own value override an inherited value for the same attribute rather than merging', () => {
     const doc = parseMap(`<map>
       <topicref href="a.dita" audience="internal">

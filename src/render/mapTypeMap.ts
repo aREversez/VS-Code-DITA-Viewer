@@ -229,6 +229,25 @@ function isNavigable(node: DitaNode): boolean {
   return !!href;
 }
 
+/**
+ * Own-attribute-only box+label for a map tree row, matching Oxygen: a box
+ * is only drawn (once) around a topicref that itself declares a profiling
+ * attribute, enclosing that topicref's whole subtree (nested <ul> included,
+ * since .profiled wraps the whole <li>), with the label appearing once at
+ * the bottom of that box -- not repeated on every descendant that merely
+ * inherited the same attribute. data-profile-keys still needs the full
+ * cascaded set for the Filter panel to hide inherited-only rows too; only
+ * the visible chrome is scoped to what a node declares for itself.
+ */
+function ownProfilingMarkup(node: DitaNode): { boxClass: string; label: string } {
+  const own = mergeProfilingAttrs(node.attributes, {});
+  const ownKeys = profilingKeysAttr(own);
+  return {
+    boxClass: ownKeys ? ' profiled' : '',
+    label: ownKeys ? `<span class="profiling-label">${profilingChipsHtml(own)}</span>` : '',
+  };
+}
+
 function renderChildrenForNode(
   node: DitaNode,
   ctx: MapRenderContext,
@@ -261,9 +280,17 @@ function renderRef(node: DitaNode, ctx: MapRenderContext, renderChildren: (node:
   const childCtx: MapRenderContext = { ...ctx, depth: depth + 1, inheritedProfiling: effectiveProfiling };
   const childrenHtml = renderChildrenForNode(node, childCtx, renderChildren);
   const badge = role ? `<span class="map-tree-badge">${escapeAttr(role)}</span>` : '';
+  // data-profile-keys (for the Filter panel to actually hide this row) uses
+  // the full cascaded set, same as always -- excluding an inherited
+  // attribute's value still has to hide this row even if the row itself
+  // never declared it. The visible box+label is scoped to what this node
+  // declares for itself (see ownProfilingMarkup): Oxygen draws one box
+  // around a topicref's own attribute, enclosing its whole subtree with
+  // the label appearing once at the bottom, rather than re-labeling every
+  // descendant with the same inherited chip.
   const profileKeys = profilingKeysAttr(effectiveProfiling);
   const profileAttr = profileKeys ? safeAttr('data-profile-keys', profileKeys) : '';
-  const profileBadges = profileKeys ? `<span class="map-profiling-badges">${profilingChipsHtml(effectiveProfiling)}</span>` : '';
+  const { boxClass, label: profileLabel } = ownProfilingMarkup(node);
 
   const icon = nav
     ? '<span class="map-tree-icon map-tree-icon--file">\u{1F4C4}</span>'
@@ -274,15 +301,17 @@ function renderRef(node: DitaNode, ctx: MapRenderContext, renderChildren: (node:
   const hrefAttr = href ? safeAttr('data-href', href) : '';
 
   if (nav) {
-    return `<li class="map-tree-item map-tree-item--nav"${keyAttr}${hrefAttr}${profileAttr}>
-      <a href="#" class="map-tree-link" data-href="${escapeAttr(href)}">${icon}${badge}<span class="map-tree-label">${nameAttr}</span>${profileBadges}</a>
+    return `<li class="map-tree-item map-tree-item--nav${boxClass}"${keyAttr}${hrefAttr}${profileAttr}>
+      <a href="#" class="map-tree-link" data-href="${escapeAttr(href)}">${icon}${badge}<span class="map-tree-label">${nameAttr}</span></a>
       ${childrenHtml ? `<ul class="map-tree">${childrenHtml}</ul>` : ''}
+      ${profileLabel}
     </li>`;
   }
 
-  return `<li class="map-tree-item map-tree-item--keydef"${keyAttr}${hrefAttr}${profileAttr}>
-    ${icon}${badge}<span class="map-tree-label map-tree-label--keydef">${nameAttr}</span>${profileBadges}
+  return `<li class="map-tree-item map-tree-item--keydef${boxClass}"${keyAttr}${hrefAttr}${profileAttr}>
+    ${icon}${badge}<span class="map-tree-label map-tree-label--keydef">${nameAttr}</span>
     ${childrenHtml ? `<ul class="map-tree">${childrenHtml}</ul>` : ''}
+    ${profileLabel}
   </li>`;
 }
 
@@ -365,10 +394,11 @@ const MAP_BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     const childrenHtml = renderChildrenForNode(node, childCtx, renderChildren);
     const profileKeys = profilingKeysAttr(effectiveProfiling);
     const profileAttr = profileKeys ? safeAttr('data-profile-keys', profileKeys) : '';
-    const profileBadges = profileKeys ? `<span class="map-profiling-badges">${profilingChipsHtml(effectiveProfiling)}</span>` : '';
-    return `<li class="map-tree-item map-tree-item--head"${profileAttr}>
-      <span class="map-tree-label map-tree-label--head">${escapeAttr(displayName)}</span>${profileBadges}
+    const { boxClass, label: profileLabel } = ownProfilingMarkup(node);
+    return `<li class="map-tree-item map-tree-item--head${boxClass}"${profileAttr}>
+      <span class="map-tree-label map-tree-label--head">${escapeAttr(displayName)}</span>
       ${childrenHtml ? `<ul class="map-tree">${childrenHtml}</ul>` : ''}
+      ${profileLabel}
     </li>`;
   },
   'map/topicgroup': (node, ctx, renderChildren) => {
@@ -392,10 +422,11 @@ const MAP_BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     const childrenHtml = renderChildrenForNode(node, childCtx, renderChildren);
     const profileKeys = profilingKeysAttr(effectiveProfiling);
     const profileAttr = profileKeys ? safeAttr('data-profile-keys', profileKeys) : '';
-    const profileBadges = profileKeys ? `<span class="map-profiling-badges">${profilingChipsHtml(effectiveProfiling)}</span>` : '';
-    return `<li class="map-tree-item map-tree-item--structural"${profileAttr}>
-      <span class="map-tree-label map-tree-label--structural">${escapeAttr(displayName)}</span>${profileBadges}
+    const { boxClass, label: profileLabel } = ownProfilingMarkup(node);
+    return `<li class="map-tree-item map-tree-item--structural${boxClass}"${profileAttr}>
+      <span class="map-tree-label map-tree-label--structural">${escapeAttr(displayName)}</span>
       ${childrenHtml ? `<ul class="map-tree">${childrenHtml}</ul>` : ''}
+      ${profileLabel}
     </li>`;
   },
   'map/keydef': renderRef,
@@ -482,6 +513,16 @@ function collectEntriesRecursive(
     const href = getAttr(node, 'href');
     const keys = getAttr(node, 'keys');
     const effectiveProfiling = mergeProfilingAttrs(node.attributes, inheritedProfiling);
+    // profileKeys (drives whether the Filter panel hides this entry) uses
+    // the full cascaded set -- an inherited-only entry still has to hide
+    // when that value is excluded. profileChipsHtml, the *visible* chip,
+    // only reflects this node's own declared attributes: showing the full
+    // cascaded set here repeated the same ancestor chip on every single
+    // descendant entry (see the matching fix in renderRef for tree mode,
+    // which additionally wraps the whole subtree in one shared box --
+    // book mode's entries are a flat list rather than a nested tree, so
+    // that part isn't replicated here yet).
+    const ownProfiling = mergeProfilingAttrs(node.attributes, {});
     result.push({
       href,
       displayName: getDisplayName(node, resolveKey),
@@ -489,7 +530,7 @@ function collectEntriesRecursive(
       keys,
       role: roleLabel(node.tagName, depth),
       profileKeys: profilingKeysAttr(effectiveProfiling) || undefined,
-      profileChipsHtml: profilingChipsHtml(effectiveProfiling) || undefined,
+      profileChipsHtml: profilingChipsHtml(ownProfiling) || undefined,
     });
     // Recurse children at depth+1
     for (const child of node.children || []) {
