@@ -1155,6 +1155,80 @@ describe('renderer', () => {
     assert.ok(!html.includes('profiled--inline'));
   });
 
+  // A profiled <li> can't be wrapped in a synthetic <span class="profiled">
+  // the way inline content (ph/b/i/...) is: the browser positions a list
+  // marker relative to the li's real containing block (the <ul>/<ol>), and
+  // introducing a wrapper element between them makes the wrapper's own
+  // padding/border the effective reference point instead -- visually
+  // overlapping the marker and leaving a profiled li's indent not matching
+  // its plain siblings. The class/data-profile-keys attribute must land on
+  // the li's own tag, and the DOM shape must otherwise be identical to an
+  // unprofiled li (no extra wrapping element at all).
+  it('should apply profiling class/data-attribute directly onto a profiled <li>\'s own tag rather than wrapping it in a synthetic <span>', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/ul', [
+          makeEl('topic/li', [makeText('plain')]),
+          makeEl('topic/li', [makeText('profiled')], { audience: 'expert' }),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('<span class="profiled"'), 'no synthetic <span> should wrap the profiled <li> -- that would break the browser\'s list-marker positioning for it');
+    assert.ok(!/<span class="profiled"[^>]*><li/.test(html), 'the li must not be nested inside a wrapping span');
+    const liMatch = html.match(/<li\b[^>]*>profiled/);
+    assert.ok(liMatch, 'the li\'s own opening tag should be immediately followed by its text content, not a wrapping element');
+    assert.ok(liMatch![0].includes('class="profiled"'), 'class="profiled" must be an attribute on the li\'s own opening tag');
+    assert.ok(liMatch![0].includes('data-profile-keys="audience:expert"'), 'data-profile-keys must be an attribute on the li\'s own opening tag');
+  });
+
+  it('should insert the profiling label as the last child inside a profiled <li>, closing before the li\'s own closing tag', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/ul', [
+          makeEl('topic/li', [makeText('profiled')], { audience: 'expert' }),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    const liOpenEnd = html.indexOf('>', html.indexOf('<li'));
+    const liClose = html.indexOf('</li>', liOpenEnd);
+    const liInner = html.slice(liOpenEnd + 1, liClose);
+    assert.ok(liInner.startsWith('profiled'), 'the li\'s own text content should come first');
+    assert.ok(liInner.trim().endsWith('</span>'), 'the profiling-label span should be the very last thing before </li>, not appended after it');
+    assert.ok(liInner.includes('class="profiling-label"'));
+  });
+
+  it('should still correctly place each label at its own nesting level for a profiled li containing a nested profiled li', () => {
+    // Regression case for the "last closing tag" matching logic: a naive
+    // implementation could confuse the outer li's closing tag with the
+    // inner one, either duplicating a label at the wrong depth or losing
+    // one entirely.
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/ol', [
+          makeEl('topic/li', [
+            makeText('outer'),
+            makeEl('topic/ol', [
+              makeEl('topic/li', [makeText('inner')], { platform: 'windows' }),
+            ]),
+          ], { audience: 'expert' }),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    const labelCount = (html.match(/class="profiling-label"/g) || []).length;
+    assert.strictEqual(labelCount, 2, 'both the outer and inner profiled li should get exactly one label each');
+    assert.ok(html.includes('data-profile-keys="audience:expert"'));
+    assert.ok(html.includes('data-profile-keys="platform:windows"'));
+    // The inner li's own closing </li> must come before the outer li's
+    // label (which belongs to the outer li, appended right before the
+    // outer li's own closing tag, after the whole nested <ol> is done).
+    const innerLabelIdx = html.indexOf('[windows]');
+    const outerLabelIdx = html.indexOf('[expert]');
+    assert.ok(innerLabelIdx < outerLabelIdx, 'the inner (nested) li\'s label should appear before the outer li\'s label in document order');
+  });
+
   it('should highlight nested profiled elements independently (parent and child both flagged)', () => {
     const doc = makeEl('topic/topic', [
       makeEl('topic/body', [

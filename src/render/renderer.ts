@@ -121,23 +121,60 @@ function getProfilingChips(node: DitaNode): { attr: string; value: string }[] {
   return getProfilingChipsFromEffective(node.attributes || {});
 }
 
-function wrapProfilingHighlight(html: string, node: DitaNode): string {
+// li (and other block content whose own layout/marker position depends on
+// its *real* parent -- ul/ol for li, but block content generally shouldn't
+// gain a synthetic intermediate parent either) can't just be wrapped in an
+// extra <span>: the browser positions a list marker relative to the li's
+// own containing block, and wrapping it in a block-level .profiled <span>
+// makes that wrapper the containing block instead of the real <ul>/<ol> --
+// the marker ends up offset by .profiled's own padding/border, both
+// visually overlapping the marker and making a profiled <li>'s indent not
+// match its plain siblings. injectBlockProfiling adds the class/data
+// attribute onto the block element's own tag in place, and the label just
+// before its own closing tag, instead of introducing a wrapper element at
+// all -- the DOM shape for a profiled block element ends up identical to
+// an unprofiled one, just with two extra attributes and one extra child.
+function injectBlockProfiling(html: string, tagName: string, keysAttr: string, labelHtml: string): string {
+  const openTagEnd = html.indexOf('>');
+  const openTag = openTagEnd >= 0 ? html.slice(0, openTagEnd) : html;
+  const hasClass = / class="/.test(openTag);
+  let out = hasClass
+    ? html.replace(/ class="([^"]*)"/, (_m, existing) => ` class="${existing ? `${existing} profiled` : 'profiled'}"`)
+    : html.replace(/^<([a-zA-Z][a-zA-Z0-9]*)/, '<$1 class="profiled"');
+  out = out.replace(/^<([a-zA-Z][a-zA-Z0-9]*)/, `<$1 data-profile-keys="${keysAttr}"`);
+  // html is always exactly one complete element at this point in the
+  // pipeline (possibly with same-named descendants nested inside, e.g. a
+  // <li> containing a nested <ul><li>...) -- proper nesting guarantees any
+  // child's closing tag appears before its parent's, so the *last*
+  // occurrence of this tag's own closing tag in the string is always the
+  // outermost (real) one, letting the label be inserted as the true last
+  // child without needing a full tag-depth parser.
+  const closeTag = `</${tagName}>`;
+  const closeIdx = out.lastIndexOf(closeTag);
+  if (closeIdx === -1) return out;
+  return `${out.slice(0, closeIdx)}<span class="profiling-label">${labelHtml}</span>${out.slice(closeIdx)}`;
+}
+
+function wrapProfilingHighlight(html: string, node: DitaNode, tagName?: string): string {
   const chips = getProfilingChips(node);
   if (chips.length === 0) return html;
   const inline = node.baseType ? INLINE_PROFILING_BASETYPES.has(node.baseType) : false;
   const labelHtml = chips
     .map((c) => `<span class="profiling-chip">${escapeHtml(profilingAttrLabel(c.attr))} <span class="profiling-chip__value">[${escapeHtml(c.value)}]</span></span>`)
     .join('');
-  const cls = inline ? 'profiled profiled--inline' : 'profiled';
   // Machine-readable twin of the human-readable chips above, for the
   // toolbar's filter panel (webview-side) to key visibility off of without
   // re-parsing chip text. encodeURIComponent on each part keeps the ':'/','
   // delimiters unambiguous regardless of what characters appear in a real
   // attribute value (DITA doesn't restrict these to a safe token charset).
-  const keysAttr = chips
-    .map((c) => `${encodeURIComponent(c.attr)}:${encodeURIComponent(c.value)}`)
-    .join(',');
-  return `<span class="${cls}" data-profile-keys="${escapeHtml(keysAttr)}">${html}<span class="profiling-label">${labelHtml}</span></span>`;
+  const keysAttr = escapeHtml(
+    chips.map((c) => `${encodeURIComponent(c.attr)}:${encodeURIComponent(c.value)}`).join(','),
+  );
+  if (!inline && tagName) {
+    return injectBlockProfiling(html, tagName, keysAttr, labelHtml);
+  }
+  const cls = inline ? 'profiled profiled--inline' : 'profiled';
+  return `<span class="${cls}" data-profile-keys="${keysAttr}">${html}<span class="profiling-label">${labelHtml}</span></span>`;
 }
 
 function escapeHtml(text: string): string {
@@ -245,7 +282,7 @@ function renderEffectiveNode(effectiveNode: DitaNode, context: RenderContext, re
     if (baseType && !PASS_THROUGH_BASETYPES.has(baseType)) {
       const tagName = effectiveNode.tagName || baseType.split('/').pop() || baseType;
       html = injectAttributes(html, tagName, effectiveNode.sourceRange);
-      html = wrapProfilingHighlight(html, effectiveNode);
+      html = wrapProfilingHighlight(html, effectiveNode, tagName);
     }
     return html;
   }
