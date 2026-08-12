@@ -390,6 +390,7 @@ ${content}
           keyMap,
           asWebviewUri,
           headingLevel,
+          uiLanguage: vscode.env.language,
         });
 
         if (result.error) {

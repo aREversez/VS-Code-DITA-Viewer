@@ -249,8 +249,8 @@ export const ZH_NOTE_LABELS: Record<string, string> = {
   remember: '切记', trouble: '故障',
 };
 
-export function detectNoteLabels(root: DitaNode): Record<string, string> {
-  const lang = root.attributes?.['xml:lang'] || '';
+export function detectNoteLabels(root: DitaNode, uiLanguage?: string): Record<string, string> {
+  const lang = root.attributes?.['xml:lang'] || uiLanguage || '';
   return lang.startsWith('zh') ? ZH_NOTE_LABELS : DEFAULT_NOTE_LABELS;
 }
 
@@ -306,6 +306,17 @@ export interface TopicRenderInput {
   keyMap: Map<string, string>;
   asWebviewUri: (relPath: string) => string;
   headingLevel: number;
+  /**
+   * Fallback language (e.g. from vscode.env.language) used to pick note
+   * labels (Warning/Attention/...) when the topic itself has no xml:lang
+   * of its own to go by -- see detectNoteLabels. Most individual topic
+   * files don't repeat xml:lang on every file (it's commonly set once,
+   * at the ditamap or bookmap level, and left implicit on topics), so
+   * relying on the topic's own root attribute alone left those topics
+   * permanently defaulting to English regardless of the editor's own
+   * display language.
+   */
+  uiLanguage?: string;
 }
 
 export interface TopicRenderResult {
@@ -417,7 +428,7 @@ export function expandDitamapRefs(
 }
 
 export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
-  const { filePath, keyMap, asWebviewUri, headingLevel } = input;
+  const { filePath, keyMap, asWebviewUri, headingLevel, uiLanguage } = input;
   try {
     if (!existsSync(filePath)) {
       return { html: '', error: `File not found: ${filePath}` };
@@ -426,7 +437,7 @@ export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
     const preprocessedXml = preprocessEntities(rawXml);
     const ditaDoc = parseDita(preprocessedXml);
     const titleMap = buildTitleMap(ditaDoc.root);
-    const noteLabels = detectNoteLabels(ditaDoc.root);
+    const noteLabels = detectNoteLabels(ditaDoc.root, uiLanguage);
     const docDir = dirname(filePath);
 
     const conrefResolver = makeConrefResolver(docDir);

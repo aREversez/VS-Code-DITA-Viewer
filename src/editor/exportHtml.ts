@@ -25,6 +25,7 @@ function buildTopicExport(fsPath: string): { title: string; bodyHtml: string; er
     keyMap,
     asWebviewUri: makeDataUriInliner(dirname(fsPath)),
     headingLevel: 1,
+    uiLanguage: vscode.env.language,
   });
   return {
     title: result.title || basename(fsPath),
@@ -58,6 +59,7 @@ function buildMapExport(fsPath: string): { title: string; bodyHtml: string; erro
         keyMap,
         asWebviewUri: makeDataUriInliner(dirname(absPath)),
         headingLevel: Math.min(1 + entry.depth, 6),
+        uiLanguage: vscode.env.language,
       });
       if (result.error) {
         parts.push(heading(entry.displayName, entry.depth, entry.role));

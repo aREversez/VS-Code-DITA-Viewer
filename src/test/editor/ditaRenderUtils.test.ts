@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, findTextMatches, decodeHrefPart } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, findTextMatches, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -39,6 +39,45 @@ const KEYDEF_XML = `<?xml version="1.0" encoding="UTF-8"?>
     </topicmeta>
   </keydef>
 </map>`;
+
+describe('detectNoteLabels', () => {
+  function makeRoot(attrs: Record<string, string>): DitaNode {
+    return { type: 'element', attributes: attrs, children: [], sourceRange: { startLine: 0, startCol: 0, endLine: 0, endCol: 0 } };
+  }
+
+  it('should use the topic\'s own xml:lang when present', () => {
+    const labels = detectNoteLabels(makeRoot({ 'xml:lang': 'zh-CN' }));
+    assert.strictEqual(labels, ZH_NOTE_LABELS);
+  });
+
+  it('should default to English when neither xml:lang nor a uiLanguage fallback is available', () => {
+    const labels = detectNoteLabels(makeRoot({}));
+    assert.strictEqual(labels, DEFAULT_NOTE_LABELS);
+  });
+
+  // Most individual topic files don't repeat xml:lang on every file --
+  // it's commonly set once, at the ditamap/bookmap level, and left
+  // implicit on topics -- so a topic with no xml:lang of its own should
+  // fall back to the editor's own display language rather than being
+  // permanently stuck in English regardless of locale.
+  it('should fall back to the uiLanguage parameter when the topic has no xml:lang of its own', () => {
+    const labels = detectNoteLabels(makeRoot({}), 'zh-cn');
+    assert.strictEqual(labels, ZH_NOTE_LABELS);
+  });
+
+  it('should prefer the topic\'s own xml:lang over the uiLanguage fallback when both are present', () => {
+    const labels = detectNoteLabels(makeRoot({ 'xml:lang': 'en-US' }), 'zh-cn');
+    assert.strictEqual(labels, DEFAULT_NOTE_LABELS);
+  });
+
+  it('should cover every DITA note/@type value in both languages, not just a partial subset', () => {
+    const allTypes = ['note', 'notice', 'warning', 'danger', 'important', 'tip', 'restriction', 'attention', 'caution', 'fastpath', 'remember', 'trouble'];
+    for (const t of allTypes) {
+      assert.ok(DEFAULT_NOTE_LABELS[t], `DEFAULT_NOTE_LABELS is missing "${t}"`);
+      assert.ok(ZH_NOTE_LABELS[t], `ZH_NOTE_LABELS is missing "${t}"`);
+    }
+  });
+});
 
 describe('decodeHrefPart', () => {
   it('should decode %20 to a space', () => {

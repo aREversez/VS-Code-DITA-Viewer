@@ -5,7 +5,7 @@ import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { dirname, isAbsolute, join, resolve, basename } from 'path';
 import { randomBytes } from 'crypto';
 import { DitaNode } from '../parser/domTypes';
-import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart, FileReader } from './ditaRenderUtils';
+import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart, detectNoteLabels, FileReader } from './ditaRenderUtils';
 
 // Test-only hook: @vscode/test-electron integration tests can't read a
 // webview's rendered HTML directly (VS Code doesn't expose the WebviewPanel
@@ -23,6 +23,20 @@ export function getLastRenderedHtmlForTesting(uriString: string): string | undef
 // they describe how the user likes to read, not something tied to one file.
 const FONT_PREFS_KEY = 'ditaViewer.fontPrefs';
 const DEFAULT_FONT_PREFS = { size: 100, serif: false };
+
+// CSS theme and page-width choices, unlike font prefs, ARE tied to one
+// document -- discoverCssFiles() scans relative to each document's own
+// directory, so a different file may not even have the same set of custom
+// CSS files available. Persisted per-uri rather than globally so opening
+// a different project doesn't inherit a selection that might not apply
+// (or might silently mean something else) there. Without this, both
+// dropdowns silently reset on every re-render: webview.html is reassigned
+// wholesale on every edit, which reruns generateHtml() from scratch, and
+// discoverCssFiles()'s own always-recomputed default was the only thing
+// ever fed back in -- whatever the person had picked at runtime lived
+// only in the old page's now-discarded JS state.
+const CSS_SELECTION_KEY = 'ditaViewer.cssSelectionByUri';
+const WIDTH_SELECTION_KEY = 'ditaViewer.widthSelectionByUri';
 
 function getWebviewScript(): string {
   const L = {
@@ -522,7 +536,10 @@ function getWebviewScript(): string {
       if (cssKeys[i] === defaultCss) opt.selected = true;
       sel.appendChild(opt);
     }
-    sel.addEventListener('change', function() { styleEl.textContent = cssFiles[sel.value] || ''; });
+    sel.addEventListener('change', function() {
+      styleEl.textContent = cssFiles[sel.value] || '';
+      vscode.postMessage({ type: 'setCssSelection', value: sel.value });
+    });
     toolbar.appendChild(sel);
   }
 
@@ -627,15 +644,22 @@ function getWebviewScript(): string {
   var wSel = document.createElement('select');
   wSel.title = ${L.pageWidth};
   wSel.style.cssText = 'max-width:72px;' + ddStyle;
+  var restoredWidth = window.__widthSelection || '';
   for (var i = 0; i < widths.length; i++) {
     var opt = document.createElement('option');
     opt.value = widths[i].value;
     opt.textContent = widths[i].label;
+    if (widths[i].value === restoredWidth) opt.selected = true;
     wSel.appendChild(opt);
   }
+  function applyWidth(value) {
+    document.body.style.maxWidth = value;
+    document.body.style.margin = value ? '0 auto' : '';
+  }
+  if (restoredWidth) applyWidth(restoredWidth);
   wSel.addEventListener('change', function() {
-    document.body.style.maxWidth = wSel.value;
-    document.body.style.margin = wSel.value ? '0 auto' : '';
+    applyWidth(wSel.value);
+    vscode.postMessage({ type: 'setWidthSelection', value: wSel.value });
   });
   toolbar.appendChild(wSel);
 
@@ -752,6 +776,22 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
         const size = typeof message.size === 'number' ? message.size : DEFAULT_FONT_PREFS.size;
         const serif = message.serif === true;
         this.context.globalState.update(FONT_PREFS_KEY, { size, serif });
+      } else if (message.type === 'setCssSelection') {
+        // Persisted per-document (see CSS_SELECTION_KEY above) so the next
+        // re-render (every edit reassigns webview.html wholesale, which
+        // otherwise silently reset this back to discoverCssFiles()'s own
+        // always-recomputed default) picks the same file back up.
+        if (typeof message.value === 'string') {
+          const map = this.context.globalState.get<Record<string, string>>(CSS_SELECTION_KEY, {});
+          map[document.uri.toString()] = message.value;
+          this.context.globalState.update(CSS_SELECTION_KEY, map);
+        }
+      } else if (message.type === 'setWidthSelection') {
+        if (typeof message.value === 'string') {
+          const map = this.context.globalState.get<Record<string, string>>(WIDTH_SELECTION_KEY, {});
+          map[document.uri.toString()] = message.value;
+          this.context.globalState.update(WIDTH_SELECTION_KEY, map);
+        }
       }
     });
 
@@ -847,12 +887,15 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       const ditaDoc = parseDita(preprocessedXml);
       const titleMap = buildTitleMap(ditaDoc.root);
 
-      // Detect locale from xml:lang
-      const lang = ditaDoc.root.attributes?.['xml:lang'] || '';
-      const isZh = lang.startsWith('zh');
-      const noteLabels = isZh
-        ? { note: '注', notice: '注意', warning: '警告', danger: '危险', important: '重要', tip: '提示', restriction: '限制' }
-        : { note: 'Note', notice: 'Notice', warning: 'Warning', danger: 'Danger', important: 'Important', tip: 'Tip', restriction: 'Restriction' };
+      // Note-type labels (Warning/Attention/...): prefer the topic's own
+      // xml:lang, but most individual topic files don't repeat it on every
+      // file (commonly set once at the map/bookmap level and left implicit
+      // on topics), so fall back to the editor's own display language
+      // rather than leaving those topics stuck in English regardless of
+      // locale. Uses the shared, complete (all 13 DITA note/@type values)
+      // implementation from ditaRenderUtils.ts instead of the separate,
+      // partial (7 of 13 types) local copy this used to carry.
+      const noteLabels = detectNoteLabels(ditaDoc.root, vscode.env.language);
 
       // Build key map from DITAMAP
       const keyMap = buildKeyMap(document.uri);
@@ -881,8 +924,17 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
         noteLabels,
       });
 
-      const { files, defaultName } = discoverCssFiles(document.uri);
+      const { files, defaultName: discoveredDefaultName } = discoverCssFiles(document.uri);
+      // A previously-selected CSS file (persisted per-document, see
+      // CSS_SELECTION_KEY above) takes priority over discoverCssFiles()'s
+      // own always-recomputed default, but only if that file still exists
+      // in this document's discovered set -- it may not (e.g. the file
+      // was deleted, or this is actually a different document that
+      // happens to reuse a stale uri-keyed entry).
+      const persistedCssSelection = this.context.globalState.get<Record<string, string>>(CSS_SELECTION_KEY, {})[document.uri.toString()];
+      const defaultName = persistedCssSelection && files[persistedCssSelection] ? persistedCssSelection : discoveredDefaultName;
       const defaultContent = files[defaultName] || '';
+      const widthSelection = this.context.globalState.get<Record<string, string>>(WIDTH_SELECTION_KEY, {})[document.uri.toString()] || '';
 
       const theme = vscode.window.activeColorTheme;
       const isDark = theme.kind === vscode.ColorThemeKind.Dark || theme.kind === vscode.ColorThemeKind.HighContrast;
@@ -890,6 +942,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       const script = getWebviewScript();
       const cssFilesJson = escapeJson(JSON.stringify(files));
       const defaultNameJson = escapeJson(JSON.stringify(defaultName));
+      const widthSelectionJson = escapeJson(JSON.stringify(widthSelection));
       const fontPrefs = this.context.globalState.get(FONT_PREFS_KEY, DEFAULT_FONT_PREFS);
       const fontPrefsJson = escapeJson(JSON.stringify(fontPrefs));
       const initialScrollLineJs = typeof initialScrollLine === 'number' && Number.isFinite(initialScrollLine)
@@ -908,7 +961,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
 <link rel="stylesheet" href="${stylesUri}">
 ${defaultContent ? `<style>\n${defaultContent}\n</style>` : ''}
 <title>${document.fileName}</title>
-<script nonce="${nonce}">window.__cssFiles=${cssFilesJson};window.__defaultCss=${defaultNameJson};window.__fontPrefs=${fontPrefsJson};window.__initialScrollLine=${initialScrollLineJs};</script>
+<script nonce="${nonce}">window.__cssFiles=${cssFilesJson};window.__defaultCss=${defaultNameJson};window.__widthSelection=${widthSelectionJson};window.__fontPrefs=${fontPrefsJson};window.__initialScrollLine=${initialScrollLineJs};</script>
 </head>
 <body>
 ${content}
