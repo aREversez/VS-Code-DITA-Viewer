@@ -17,6 +17,7 @@ A VS Code extension that renders **`.dita`** and **`.ditamap`** files as a forma
 - **DITA Map Explorer** — persistent sidebar tree of the map associated with the active editor, with click-to-open navigation and numbered book divisions
 - **Export as HTML** — render any topic or full map to a single self-contained `.html` file (styles inlined, images embedded) without DITA-OT
 - **Full DITA element coverage** — topic, sections, notes (all types), lists, tables, figures, code blocks with language labels, images, cross-references (with title resolution), quotes, related links, inline formatting, keydef/keyword display; specialization modules (task/concept/reference, troubleshooting, glossary, taskreq, highlight/programming/software/UI domains) are audited against the DITA-OT 1.3 DTDs and render correctly even without explicit `@class` attributes in the source
+- **Profiling / conditional-processing support** — content carrying `props`/`platform`/`product`/`audience`/`otherprops`/`base`/`importance`/`rev`/`status` is highlighted (toggleable via **Flags**) and can be hidden by value (**Filter**), matching Oxygen's own conditional-processing display; available both within topic content and, independently, at the ditamap `topicref` level in map/book view, where a topicref's profiling attributes cascade down to its descendant topicrefs
 - **Reltable and topicgroup support** — reltables are skipped from the tree; topicgroups render children without adding their own entry
 - **Theme-aware** — automatically adapts background and border colors to the current VS Code theme
 - **Custom CSS support** — override or extend the default styling with an in-preview theme switcher
@@ -60,6 +61,15 @@ Duplicate topics (same file referenced multiple times) are shown with a skip mes
 
 - `keyref` elements display the value from the matching `keydef`. The keydef map does **not** need to sit next to the root map or be named `keys.ditamap` — any local `.ditamap` referenced via `topicref`, `keydef`, or `mapref` (or found in an ancestor directory) is scanned, and the nearest definition wins.
 - Maps that reference other maps (including “all-in-one” maps whose children live in nested sub-folders) are merged recursively; relative hrefs inside referenced maps are rebased automatically so topics and images resolve correctly.
+
+### Profiling / Conditional Content
+
+Content carrying DITA's `select-atts` group (`props`, `platform`, `product`, `audience`, `otherprops`, `base`, `importance`, `rev`, `status`) is highlighted with a small label naming the attribute/value that matched, mirroring Oxygen's own conditional-processing display. Two toolbar buttons control this, available in both topic and map/book preview:
+
+- **Flags** (on by default) — toggles the highlighting on/off without a re-render.
+- **Filter** — opens a panel listing every attribute/value combination found in the document as checkboxes; unchecking one actually hides the matching content, for previewing what a given build/audience would see.
+
+In map/book view, a `topicref`'s own profiling attributes (set directly in the ditamap source) cascade down to every descendant `topicref` that doesn't set its own value for the same attribute — a child's own value replaces, rather than merges with, an inherited one. This is a separate scope from a topic's own inline profiling: opening a `.dita` file directly only ever reads that file's own markup, regardless of what any ditamap referencing it says.
 
 ## Custom CSS
 

@@ -1,8 +1,145 @@
-import { existsSync, readFileSync } from 'fs';
-import { resolve, dirname, relative, isAbsolute } from 'path';
+import { existsSync, readFileSync, openSync, readSync, closeSync } from 'fs';
+import { resolve, dirname, relative, isAbsolute, extname } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
+
+// ── Image dimensions (for reserving layout space before the image loads) ──
+//
+// <img loading="lazy"> with no width/height reserves zero space until the
+// browser actually decodes the file, then snaps the surrounding content
+// down to make room -- barely noticeable for a single image in the topic
+// preview, but Book mode composites many topics' worth of images into one
+// long page, so scrolling through it means repeatedly landing on a fresh
+// batch of not-yet-loaded images and watching everything below them lurch
+// as each one finally loads. Reading real width/height from the file
+// (only the header, not the whole image -- a bounded 64KB read handles
+// every format below even for a multi-MB JPEG with a large EXIF/ICC
+// profile before its SOF marker) lets width/height attributes go on the
+// <img> tag, which combined with this project's existing img{height:auto}
+// makes the browser reserve the correct *aspect ratio* box immediately,
+// still scaling responsively via max-width -- not a fixed pixel size.
+// This only fills a gap: an explicit @width/@height on the DITA <image>
+// element itself always wins (see the image renderer in baseTypeMap.ts).
+
+const IMAGE_HEADER_READ_BYTES = 65536;
+
+function readHeaderBytes(filePath: string, maxBytes: number): Buffer | undefined {
+  let fd: number | undefined;
+  try {
+    fd = openSync(filePath, 'r');
+    const buf = Buffer.alloc(maxBytes);
+    const bytesRead = readSync(fd, buf, 0, maxBytes, 0);
+    return buf.subarray(0, bytesRead);
+  } catch {
+    return undefined;
+  } finally {
+    if (fd !== undefined) {
+      try { closeSync(fd); } catch { /* already closed / never opened */ }
+    }
+  }
+}
+
+function readPngDimensions(buf: Buffer): { width: number; height: number } | undefined {
+  // 8-byte signature, then a 4-byte chunk length + "IHDR" + width (4B BE) + height (4B BE)
+  if (buf.length < 24) return undefined;
+  if (buf.readUInt32BE(0) !== 0x89504e47 || buf.readUInt32BE(4) !== 0x0d0a1a0a) return undefined;
+  if (buf.toString('ascii', 12, 16) !== 'IHDR') return undefined;
+  return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+}
+
+function readGifDimensions(buf: Buffer): { width: number; height: number } | undefined {
+  if (buf.length < 10) return undefined;
+  const sig = buf.toString('ascii', 0, 6);
+  if (sig !== 'GIF87a' && sig !== 'GIF89a') return undefined;
+  return { width: buf.readUInt16LE(6), height: buf.readUInt16LE(8) };
+}
+
+function readBmpDimensions(buf: Buffer): { width: number; height: number } | undefined {
+  if (buf.length < 26) return undefined;
+  if (buf.toString('ascii', 0, 2) !== 'BM') return undefined;
+  const width = buf.readInt32LE(18);
+  const height = buf.readInt32LE(22);
+  // A negative height means a top-down (rather than the default
+  // bottom-up) bitmap -- the magnitude is still the real pixel height.
+  return { width: Math.abs(width), height: Math.abs(height) };
+}
+
+function readJpegDimensions(buf: Buffer): { width: number; height: number } | undefined {
+  if (buf.length < 4 || buf.readUInt16BE(0) !== 0xffd8) return undefined;
+  let offset = 2;
+  while (offset + 4 <= buf.length) {
+    if (buf[offset] !== 0xff) { offset++; continue; }
+    const marker = buf[offset + 1];
+    // Markers with no payload to skip over
+    if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      offset += 2;
+      continue;
+    }
+    if (offset + 4 > buf.length) break;
+    const segmentLength = buf.readUInt16BE(offset + 2);
+    const isSof = marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
+    if (isSof) {
+      if (offset + 9 > buf.length) return undefined; // truncated read -- header didn't fit in what we sampled
+      return { height: buf.readUInt16BE(offset + 5), width: buf.readUInt16BE(offset + 7) };
+    }
+    if (marker === 0xda) return undefined; // Start of Scan reached with no SOF found
+    offset += 2 + segmentLength;
+  }
+  return undefined;
+}
+
+function readSvgDimensions(buf: Buffer): { width: number; height: number } | undefined {
+  const text = buf.toString('utf-8');
+  const svgTagMatch = text.match(/<svg\b[^>]*>/);
+  if (!svgTagMatch) return undefined;
+  const tag = svgTagMatch[0];
+  const widthMatch = tag.match(/\bwidth="([\d.]+)(?:px)?"/);
+  const heightMatch = tag.match(/\bheight="([\d.]+)(?:px)?"/);
+  if (widthMatch && heightMatch) {
+    const width = parseFloat(widthMatch[1]);
+    const height = parseFloat(heightMatch[1]);
+    if (width > 0 && height > 0) return { width, height };
+  }
+  // Percentage/unitless width+height, or neither present -- fall back to
+  // viewBox, which every real-world SVG has anyway and gives an aspect
+  // ratio even when absolute pixel dimensions weren't authored at all.
+  const viewBoxMatch = tag.match(/\bviewBox="\s*[\d.-]+\s+[\d.-]+\s+([\d.]+)\s+([\d.]+)\s*"/);
+  if (viewBoxMatch) {
+    const width = parseFloat(viewBoxMatch[1]);
+    const height = parseFloat(viewBoxMatch[2]);
+    if (width > 0 && height > 0) return { width, height };
+  }
+  return undefined;
+}
+
+const IMAGE_DIMENSION_READERS: Record<string, (buf: Buffer) => { width: number; height: number } | undefined> = {
+  '.png': readPngDimensions,
+  '.gif': readGifDimensions,
+  '.bmp': readBmpDimensions,
+  '.jpg': readJpegDimensions,
+  '.jpeg': readJpegDimensions,
+  '.svg': readSvgDimensions,
+};
+
+/**
+ * Reads just enough of an image file to determine its natural pixel
+ * dimensions, without loading or decoding the whole file. Returns
+ * undefined for anything unreadable, unrecognized, or corrupt -- callers
+ * treat that as "no dimensions available" and fall back to the previous
+ * behavior (no width/height reserved), never an error.
+ */
+export function readImageDimensions(filePath: string): { width: number; height: number } | undefined {
+  const reader = IMAGE_DIMENSION_READERS[extname(filePath).toLowerCase()];
+  if (!reader) return undefined;
+  const buf = readHeaderBytes(filePath, IMAGE_HEADER_READ_BYTES);
+  if (!buf) return undefined;
+  try {
+    return reader(buf);
+  } catch {
+    return undefined;
+  }
+}
 
 // ── Text extraction ──
 
@@ -97,6 +234,63 @@ export function makeConrefResolver(docDir: string): (conref: string) => DitaNode
   };
 }
 
+// conrefend extends a conref reference from a single element to a run of
+// elements: everything from the conref target through the conrefend target,
+// inclusive, in source-document order. Per the DITA spec this only applies
+// when both ids resolve to elements that are siblings under the same
+// parent — Oxygen's own conrefend support has the same restriction — so
+// this returns undefined (letting the caller fall back to normal
+// single-target conref handling) rather than guessing at some other
+// relationship when that's not the case.
+export function makeConrefRangeResolver(docDir: string): (conref: string, conrefend: string) => DitaNode[] | undefined {
+  const cache = makeFileCache(docDir);
+
+  function resolveRef(ref: string): { root: DitaNode; id: string } | undefined {
+    const hashIdx = ref.indexOf('#');
+    if (hashIdx < 0) return undefined;
+    const filePath = ref.substring(0, hashIdx);
+    const idPart = ref.substring(hashIdx + 1);
+    const parts = idPart.split('/');
+    const id = parts.length > 1 ? parts[1] : parts[0];
+    const root = cache.loadFile(filePath);
+    if (!root) return undefined;
+    return { root, id };
+  }
+
+  function findWithParent(node: DitaNode, targetId: string, parent: DitaNode | undefined): { el: DitaNode; parent: DitaNode } | undefined {
+    if (node.attributes?.id === targetId && parent) return { el: node, parent };
+    for (const child of node.children || []) {
+      const found = findWithParent(child, targetId, node);
+      if (found) return found;
+    }
+    return undefined;
+  }
+
+  return (conref: string, conrefend: string): DitaNode[] | undefined => {
+    const start = resolveRef(conref);
+    const end = resolveRef(conrefend);
+    if (!start || !end) return undefined;
+
+    const startFound = findWithParent(start.root, start.id, undefined);
+    const endFound = findWithParent(end.root, end.id, undefined);
+    if (!startFound || !endFound) return undefined;
+    if (startFound.parent !== endFound.parent) return undefined;
+
+    // Filter to element children before indexing: the parser preserves
+    // whitespace-only text nodes between sibling elements (parsed with
+    // trim:false), which would otherwise get swept into the slice and
+    // thrown into the returned range as extra, attribute-less entries.
+    // "Sibling" here means sibling *element*, matching what conref/
+    // conrefend actually identify (elements with ids), not raw text runs.
+    const siblings = (startFound.parent.children || []).filter((c) => c.type === 'element');
+    const startIdx = siblings.indexOf(startFound.el);
+    const endIdx = siblings.indexOf(endFound.el);
+    if (startIdx < 0 || endIdx < 0 || endIdx < startIdx) return undefined;
+
+    return siblings.slice(startIdx, endIdx + 1);
+  };
+}
+
 export function makeFileTitleResolver(docDir: string): (href: string) => string | undefined {
   const cache = makeFileCache(docDir);
 
@@ -164,19 +358,36 @@ export function findTextMatches(
 }
 
 // ── Default note labels ──
+// Values follow DITA-OT's own strings-en-us.xml / strings-zh-cn.xml bundles
+// (org.dita.base/xsl/common) so the preview matches what a real DITA-OT
+// publish would show. Two intentional deviations from DITA-OT's exact
+// casing, kept for visual consistency across the 13 note types in this
+// project's own UI (DITA-OT itself is inconsistent here — only Caution and
+// Danger are upper-cased there, Warning is not):
+//   - Caution/Danger are title case here, not DITA-OT's "CAUTION"/"DANGER"
+//   - zh-cn "Notice" is left untranslated even in DITA-OT's own bundle
+//     (literally has a `<!--TODO:Notice-->` in the source); this project
+//     already ships '注意' for it, kept as-is here.
+// Covers the full DITA 1.3 note/@type enumeration (13 values); 'other' is
+// handled separately via @othertype in the topic/note renderer, since its
+// label isn't a fixed string.
 
 export const DEFAULT_NOTE_LABELS: Record<string, string> = {
   note: 'Note', notice: 'Notice', warning: 'Warning', danger: 'Danger',
   important: 'Important', tip: 'Tip', restriction: 'Restriction',
+  attention: 'Attention', caution: 'Caution', fastpath: 'Fastpath',
+  remember: 'Remember', trouble: 'Trouble',
 };
 
 export const ZH_NOTE_LABELS: Record<string, string> = {
   note: '注', notice: '注意', warning: '警告', danger: '危险',
   important: '重要', tip: '提示', restriction: '限制',
+  attention: '注意', caution: '警告', fastpath: '捷径',
+  remember: '切记', trouble: '故障',
 };
 
-export function detectNoteLabels(root: DitaNode): Record<string, string> {
-  const lang = root.attributes?.['xml:lang'] || '';
+export function detectNoteLabels(root: DitaNode, uiLanguage?: string): Record<string, string> {
+  const lang = root.attributes?.['xml:lang'] || uiLanguage || '';
   return lang.startsWith('zh') ? ZH_NOTE_LABELS : DEFAULT_NOTE_LABELS;
 }
 
@@ -195,6 +406,16 @@ export function escapeAttr(s: string): string {
 }
 
 // ── Book rendering helpers (pure, no vscode dependency) ──
+//
+// Book mode is deliberately just "every referenced topic's own content,
+// one after another" -- it composites topics for reading, the same way
+// opening one of those topics directly would render it, profiling
+// included (each topic's own inline profiling markup already renders
+// correctly via renderTopicToHtml, unaffected by anything here). It does
+// NOT layer in topicref-level (ditamap-source) profiling/filtering on top
+// of that; that scope stays exclusive to Outline mode's tree, matching
+// how a topic opened directly never reflects what any ditamap referencing
+// it says either.
 
 export function renderBookPlaceholder(displayName: string, depth: number): string {
   const level = Math.min(1 + depth, 6);
@@ -222,6 +443,17 @@ export interface TopicRenderInput {
   keyMap: Map<string, string>;
   asWebviewUri: (relPath: string) => string;
   headingLevel: number;
+  /**
+   * Fallback language (e.g. from vscode.env.language) used to pick note
+   * labels (Warning/Attention/...) when the topic itself has no xml:lang
+   * of its own to go by -- see detectNoteLabels. Most individual topic
+   * files don't repeat xml:lang on every file (it's commonly set once,
+   * at the ditamap or bookmap level, and left implicit on topics), so
+   * relying on the topic's own root attribute alone left those topics
+   * permanently defaulting to English regardless of the editor's own
+   * display language.
+   */
+  uiLanguage?: string;
 }
 
 export interface TopicRenderResult {
@@ -333,7 +565,7 @@ export function expandDitamapRefs(
 }
 
 export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
-  const { filePath, keyMap, asWebviewUri, headingLevel } = input;
+  const { filePath, keyMap, asWebviewUri, headingLevel, uiLanguage } = input;
   try {
     if (!existsSync(filePath)) {
       return { html: '', error: `File not found: ${filePath}` };
@@ -342,10 +574,11 @@ export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
     const preprocessedXml = preprocessEntities(rawXml);
     const ditaDoc = parseDita(preprocessedXml);
     const titleMap = buildTitleMap(ditaDoc.root);
-    const noteLabels = detectNoteLabels(ditaDoc.root);
+    const noteLabels = detectNoteLabels(ditaDoc.root, uiLanguage);
     const docDir = dirname(filePath);
 
     const conrefResolver = makeConrefResolver(docDir);
+    const conrefRangeResolver = makeConrefRangeResolver(docDir);
     const fileTitleResolver = makeFileTitleResolver(docDir);
 
     const resolveTitle = (id: string): string | undefined => {
@@ -362,7 +595,15 @@ export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
       resolveTitle,
       resolveKey: (key: string) => keyMap.get(key),
       resolveConref: (conref: string) => conrefResolver(conref),
+      resolveConrefRange: (conref: string, conrefend: string) => conrefRangeResolver(conref, conrefend),
       noteLabels,
+      getImageDimensions: (relPath: string) => {
+        try {
+          return readImageDimensions(resolve(docDir, decodeHrefPart(relPath)));
+        } catch {
+          return undefined;
+        }
+      },
     });
 
     const titleNode = (ditaDoc.root.children || []).find(
@@ -665,5 +906,150 @@ export function getSearchOverlayScript(opts: {
   searchPrev.addEventListener('click', gotoPrevMatch);
   searchNext.addEventListener('click', gotoNextMatch);
   searchClose.addEventListener('click', closeSearchBar);
+`;
+}
+
+export function getProfilingFilterScript(opts: {
+  buttonLabel: string;
+  buttonTitle: string;
+  closeLabel: string;
+  emptyLabel: string;
+}): string {
+  const btnLabel = JSON.stringify(opts.buttonLabel);
+  const btnTitle = JSON.stringify(opts.buttonTitle);
+  const closeLabel = JSON.stringify(opts.closeLabel);
+  const emptyLabel = JSON.stringify(opts.emptyLabel);
+  return `
+  // ── Profiling filter panel ──
+  // Phase 2 of profiling support: the highlight toggle (built earlier in
+  // this script) only ever shows/hides the *decoration* -- the content
+  // stays visible either way. This panel actually hides content, scoped to
+  // whichever attribute/value combinations the person unchecks, using the
+  // data-profile-keys the renderer stamped on every .profiled element.
+  // Deliberately a separate control from the highlight toggle: "show me
+  // what's flagged" and "show me what this would look like built for X"
+  // are different questions, and conflating them into one button would
+  // make neither easy to reach.
+  var pfPanel = null;
+  var pfExcluded = {};
+
+  // Whether the Filter button itself reflects "something is actually being
+  // hidden right now" -- mirrors the Flags button's own highlight-on-active
+  // treatment (applyProfilingToggle above) so the two controls read the
+  // same way. Computed from pfExcluded rather than from panel-open state:
+  // the person should still see the button lit up after closing the panel
+  // if a filter is still in effect.
+  function pfUpdateButtonState() {
+    var active = false;
+    for (var k in pfExcluded) { if (pfExcluded.hasOwnProperty(k)) { active = true; break; } }
+    pfFilterBtn.style.background = active ? 'var(--color-profiling-label-bg)' : '';
+    pfFilterBtn.style.color = active ? 'var(--color-profiling-label-text)' : '';
+  }
+
+  function pfApplyFilter() {
+    var els = document.querySelectorAll('[data-profile-keys]');
+    for (var i = 0; i < els.length; i++) {
+      var keys = els[i].getAttribute('data-profile-keys').split(',');
+      var hide = false;
+      for (var j = 0; j < keys.length; j++) {
+        if (pfExcluded[keys[j]]) { hide = true; break; }
+      }
+      els[i].classList.toggle('profile-filtered-out', hide);
+    }
+    pfUpdateButtonState();
+  }
+
+  function pfBuildPanel() {
+    var groups = {};
+    var groupOrder = [];
+    var els = document.querySelectorAll('[data-profile-keys]');
+    for (var i = 0; i < els.length; i++) {
+      var keys = els[i].getAttribute('data-profile-keys').split(',');
+      for (var j = 0; j < keys.length; j++) {
+        var parts = keys[j].split(':');
+        var attr = decodeURIComponent(parts[0]);
+        var val = decodeURIComponent(parts[1]);
+        if (!groups[attr]) { groups[attr] = {}; groupOrder.push(attr); }
+        groups[attr][val] = keys[j];
+      }
+    }
+    groupOrder.sort();
+
+    // Anchored to the toolbar's own bottom-right corner (computed from its
+    // live rect, not a hardcoded offset, so it stays correct if the
+    // toolbar's height/width ever changes) rather than the fixed
+    // top:40px;left:8px it used to use. Popping up right under the button
+    // that opened it, on the same side as the toolbar, means the person
+    // never has to move their eyes across the window to find it.
+    var toolbarRect = toolbar.getBoundingClientRect();
+    var panel = document.createElement('div');
+    panel.id = '__profiling_filter_panel';
+    panel.style.cssText = 'position:fixed;top:' + (toolbarRect.bottom + 6) + 'px;right:8px;z-index:10000;max-height:70vh;overflow:auto;padding:8px 10px;border-radius:5px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;background:var(--vscode-editor-background,rgba(30,30,30,0.95));border:1px solid var(--vscode-widget-border,rgba(255,255,255,0.12));backdrop-filter:blur(4px);box-shadow:0 2px 8px rgba(0,0,0,0.2);color:var(--vscode-foreground,#ccc);min-width:160px;';
+
+    if (groupOrder.length === 0) {
+      var empty = document.createElement('div');
+      empty.textContent = ${emptyLabel};
+      empty.style.cssText = 'color:var(--vscode-descriptionForeground,#999);';
+      panel.appendChild(empty);
+    }
+
+    for (var g = 0; g < groupOrder.length; g++) {
+      var attrName = groupOrder[g];
+      var heading = document.createElement('div');
+      heading.textContent = attrName.charAt(0).toUpperCase() + attrName.slice(1);
+      heading.style.cssText = 'font-weight:600;margin:6px 0 2px;';
+      if (g === 0) heading.style.marginTop = '0';
+      panel.appendChild(heading);
+
+      var values = Object.keys(groups[attrName]).sort();
+      for (var v = 0; v < values.length; v++) {
+        var val = values[v];
+        var rawKey = groups[attrName][val];
+        var row = document.createElement('label');
+        row.style.cssText = 'display:flex;align-items:center;gap:5px;padding:1px 0;cursor:pointer;white-space:nowrap;';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = !pfExcluded[rawKey];
+        (function(key) {
+          cb.addEventListener('change', function(e) {
+            if (e.target.checked) { delete pfExcluded[key]; } else { pfExcluded[key] = true; }
+            pfApplyFilter();
+          });
+        })(rawKey);
+        row.appendChild(cb);
+        var txt = document.createElement('span');
+        txt.textContent = val;
+        row.appendChild(txt);
+        panel.appendChild(row);
+      }
+    }
+
+    var closeLink = document.createElement('a');
+    closeLink.href = '#';
+    closeLink.textContent = ${closeLabel};
+    closeLink.style.cssText = 'display:block;margin-top:8px;color:var(--vscode-textLink-foreground,#3794ff);cursor:pointer;';
+    closeLink.addEventListener('click', function(e) { e.preventDefault(); pfTogglePanel(); });
+    panel.appendChild(closeLink);
+
+    return panel;
+  }
+
+  function pfTogglePanel() {
+    if (pfPanel) {
+      pfPanel.remove();
+      pfPanel = null;
+      return;
+    }
+    pfPanel = pfBuildPanel();
+    document.body.appendChild(pfPanel);
+  }
+
+  var pfFilterBtn = document.createElement('button');
+  pfFilterBtn.textContent = ${btnLabel};
+  pfFilterBtn.title = ${btnTitle};
+  pfFilterBtn.style.cssText = btnStyle + 'font-size:11px;';
+  pfFilterBtn.addEventListener('click', pfTogglePanel);
+  pfUpdateButtonState();
+  toolbar.appendChild(pfFilterBtn);
 `;
 }

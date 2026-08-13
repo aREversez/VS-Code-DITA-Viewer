@@ -31,6 +31,10 @@
   "Full": "Full",
   "Glossary": "Glossary",
   "Invalid regex": "Invalid regex",
+  "Filter": "Filter",
+  "Show/hide content by profiling attribute value (actually hides matching content, unlike the Flags toggle which only shows/hides the highlight)": "Show/hide content by profiling attribute value (actually hides matching content, unlike the Flags toggle which only shows/hides the highlight)",
+  "Close": "Close",
+  "No profiling attributes in this document": "No profiling attributes in this document",
   "Key \"{0}\" is not defined in any DITA map.": "Key \"{0}\" is not defined in any DITA map.",
   "HTML5 (default)": "HTML5 (default)",
   "Increase font size": "Increase font size",
@@ -57,6 +61,10 @@
   "Preface": "Preface",
   "Prev/Next page + collapsible sections": "Prev/Next page + collapsible sections",
   "Reload DITA content": "Reload DITA content",
+  "Reset font size and family to default": "Reset font size and family to default",
+  "Flags": "Flags",
+  "Profiling attributes (props/otherprops/audience/...) are highlighted. Click to hide the highlighting.": "Profiling attributes (props/otherprops/audience/...) are highlighted. Click to hide the highlighting.",
+  "Profiling attribute highlighting is hidden. Click to show which content is flagged and with what.": "Profiling attribute highlighting is hidden. Click to show which content is flagged and with what.",
   "Reveal in File Explorer": "Reveal in File Explorer",
   "Right-hand navigation for headings on the current page": "Right-hand navigation for headings on the current page",
   "Close search": "Close search",
@@ -86,5 +94,8 @@
   "\n[DITA-OT] Process exited with code: {0}": "\n[DITA-OT] Process exited with code: {0}",
   "\n[DITA-OT] Site enhancements injected.": "\n[DITA-OT] Site enhancements injected.",
   "\n[DITA-OT] Transformation cancelled by user.": "\n[DITA-OT] Transformation cancelled by user.",
-  "\n[DITA-OT] Transformation complete. Output directory: {0}": "\n[DITA-OT] Transformation complete. Output directory: {0}"
+  "\n[DITA-OT] Transformation complete. Output directory: {0}": "\n[DITA-OT] Transformation complete. Output directory: {0}",
+  "Zoom out this image (preview only)": "Zoom out this image (preview only)",
+  "Zoom in this image (preview only)": "Zoom in this image (preview only)",
+  "View full-screen (use ←/→ to switch images)": "View full-screen (use ←/→ to switch images)"
 }

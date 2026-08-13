@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="profiling_test" xml:lang="zh-CN">
+    <title>Profiling 高亮测试</title>
+    <shortdesc>用于人工确认预览能否像 Oxygen 一样，把带有 profiling 属性（props/otherprops/audience 等）的内容用高亮框标出来，并在角落显示是哪个属性、哪个值命中的——而不是把内容隐藏掉。</shortdesc>
+    <body>
+        <section id="section_steps">
+            <title>喷漆步骤（对照 Oxygen 截图示例）</title>
+            <steps>
+                <step><cmd otherprops="only_for_HUBI">将车移出车库，避免油漆沾到车上</cmd></step>
+                <step><cmd audience="novice">在车库地面铺上报纸、纸板或防尘布</cmd></step>
+                <step><cmd audience="expert">把要喷漆的物体放在铺好的区域上</cmd></step>
+                <step><cmd audience="expert" otherprops="prop1">按照油漆罐上的说明喷涂物体</cmd></step>
+                <step><cmd audience="novice" otherprops="prop1">在挪动物体之前，让油漆彻底晾干</cmd></step>
+            </steps>
+        </section>
+        <section id="section_inline">
+            <title>行内 profiling 示例</title>
+            <p>这一段大部分是普通文字，其中只有<ph audience="expert">这一小段带 audience="expert" 属性的行内短语</ph>会被单独高亮，不应该把整段话都框起来、也不应该把这段话挤到单独一行。</p>
+        </section>
+        <section id="section_nested" otherprops="section_flag">
+            <title>嵌套 profiling 示例</title>
+            <p audience="novice">这个 section 本身带 otherprops="section_flag"，下面这段 p 又单独带了 audience="novice"——两层高亮应该都能看到，一层套一层。</p>
+        </section>
+        <section id="section_multivalue">
+            <title>单个属性多个值的示例</title>
+            <p otherprops="only_for_HUBI only_for_XYZ">这段内容的 otherprops 属性里有两个用空格分开的值，右下角应该出现两个独立的标签，而不是挤成一个。</p>
+        </section>
+        <section id="section_checklist">
+            <title>验证要点</title>
+            <ul>
+                <li>带 profiling 属性的内容应该正常显示，只是外面多一个浅绿色高亮框</li>
+                <li>高亮框右下角/尾部应该显示"属性名 [值]"的小标签，比如 Audience [expert]、Other [prop1]</li>
+                <li>行内短语（第二节）不应该被撑成单独一行</li>
+                <li>嵌套的两层（第三节）应该都能看到各自的高亮和标签</li>
+                <li>工具栏应该有一个开关按钮（默认高亮为绿色底色的"标记"按钮），点击后所有高亮应该消失，内容本身依然完整显示，再点一次恢复</li>
+            </ul>
+        </section>
+    </body>
+</topic>

@@ -22,6 +22,10 @@
   --color-code-bg: var(--vscode-textCodeBlock-background, #f8f8f8);
   --color-link: #2b6cb0;
   --color-code-lang-bg: var(--vscode-textPreformat-background, #e8e8e8);
+  --color-profiling-bg: #eaf7c9;
+  --color-profiling-border: #b8d878;
+  --color-profiling-label-bg: #8fb84e;
+  --color-profiling-label-text: #2a3a12;
 }
 
 .vscode-dark {
@@ -35,6 +39,10 @@
   --color-link: #6ab0f3;
   --color-code-bg: var(--vscode-textCodeBlock-background, #555);
   --color-code-lang-bg: var(--vscode-textPreformat-background, #666);
+  --color-profiling-bg: #3a4a1f;
+  --color-profiling-border: #5a7530;
+  --color-profiling-label-bg: #6b8f39;
+  --color-profiling-label-text: #eef7dc;
 }
 
 body {
@@ -91,6 +99,74 @@ p { margin: 0.75em 0; }
 .note--important { border-left-color: var(--color-important-border); background: var(--color-important-bg); }
 .note--tip { border-left-color: var(--color-tip-border); background: var(--color-tip-bg); }
 
+/* Profiling / conditional-processing attribute highlighting (props,
+   otherprops, audience, platform, product, base, importance, rev, status).
+   Mirrors Oxygen's default "show profiling" style: a tinted box around the
+   profiled content with a small label naming the attribute/value that
+   matched, rather than hiding anything. Toggled off via body.hide-profiling
+   (see the toolbar button in DitaViewerProvider.ts) -- pure CSS, no
+   re-render needed. */
+.profiled {
+  /* No forced display -- .profiled now applies directly to the real
+     element (see injectBlockProfiling in renderer.ts), not to a synthetic
+     wrapper <span> that needed forcing to block to look like a box.
+     Forcing display:block here would strip list-item/table-cell/etc. off
+     an <li>/<td>/... that legitimately needs to keep its native display
+     (an <li> stuck at display:block loses its marker entirely). Every
+     block-level DITA content type this applies to already renders as a
+     real block-ish tag on its own. */
+  position: relative;
+  /* Outline only, no fill -- matches Oxygen's default profiling display
+     (a stroked box around the matched content) rather than tinting the
+     background, so the profiled text renders exactly as it would
+     unprofiled and the box reads as metadata, not as styled content. */
+  background: none;
+  border: 1.5px solid var(--color-profiling-border);
+  border-radius: 3px;
+  padding: 0.4rem 0.6rem 1.3rem;
+  margin: 0.5rem 0;
+}
+.profiled--inline {
+  display: inline;
+  padding: 0 0.2rem;
+  margin: 0;
+  border-radius: 2px;
+}
+.profiled--inline .profiling-label { position: static; display: inline-flex; margin-left: 0.3em; vertical-align: middle; }
+.profiling-label {
+  position: absolute;
+  right: 0.4rem;
+  bottom: 0.25rem;
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+.profiling-chip {
+  background: var(--color-profiling-label-bg);
+  color: var(--color-profiling-label-text);
+  font-size: 0.7em;
+  font-weight: 600;
+  padding: 0.05rem 0.4rem;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.profiling-chip__value { font-weight: 400; }
+body.hide-profiling .profiled {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+body.hide-profiling .profiled--inline { display: inline; }
+body.hide-profiling .profiling-label { display: none; }
+
+/* Phase 2 (the filter panel): actually hides content, unlike the toggle
+   above which only hides the highlight decoration. !important because
+   this needs to override whatever display value .profiled/.profiled--inline
+   set, and nothing else in this stylesheet should ever legitimately want
+   to re-show something the person explicitly filtered out. */
+.profile-filtered-out { display: none !important; }
+
 /* Lists */
 ul, ol { padding-left: 1.5em; }
 li { margin: 0.25em 0; }
@@ -111,12 +187,55 @@ table th { background: var(--color-code-bg); color: var(--vscode-editor-foregrou
 .simple-table th, .simple-table td { padding: 0.4rem 0.6rem; }
 .simple-table th { background: transparent; border-bottom-width: 2px; }
 
+/* Foreign content (MathML, embedded SVG) — DITA doesn't signal whether a
+   <mathml>/<foreign> block is meant inline or as its own line the way
+   <image>'s @placement does, so this stays in normal inline flow by
+   default; a small margin just keeps it from crowding adjacent text. */
+.foreign-content { margin: 0 0.15em; }
+
 /* Images */
-img { max-width: 100%; height: auto; border-radius: 4px; margin: 1rem 0; }
-.image-break { display: block; }
+/* --dita-scale is the only remaining size hint here, driven by the DITA
+   source's own @scale attribute -- it sizes the image relative to its OWN
+   natural pixel dimensions via 'zoom'. Per-image display sizing (separate
+   from @scale, and not tied to the DITA source at all) is applied at
+   runtime as an inline width/max-width on the specific <img>, via the
+   per-image zoom controls injected by the webview script -- see
+   .dita-img-wrap / .dita-img-toolbar below. */
+img { max-width: 100%; height: auto; border-radius: 4px; vertical-align: middle; cursor: zoom-in; zoom: var(--dita-scale, 1); }
+.image-break { display: block; margin: 1rem 0; }
+img[data-load-error] { cursor: default; }
+
+/* Per-image zoom/maximize toolbar: a small overlay pinned to the image's
+   own top-right corner, shown on hover (or keyboard focus-within, for
+   accessibility) rather than a page-wide toolbar, since the control now
+   only ever affects the one image it's attached to. Wrapper is an inline
+   <span>, not a <div>, so it stays validly nestable inside inline DITA
+   contexts like <p> without forcing a block break. */
+.dita-img-wrap { position: relative; display: inline-block; max-width: 100%; line-height: 0; }
+.dita-img-toolbar {
+  position: absolute; top: 4px; right: 4px; z-index: 10;
+  display: flex; gap: 2px;
+  opacity: 0; pointer-events: none; transition: opacity 0.15s;
+}
+.dita-img-wrap:hover .dita-img-toolbar,
+.dita-img-wrap:focus-within .dita-img-toolbar {
+  opacity: 1; pointer-events: auto;
+}
+.dita-img-btn {
+  padding: 1px 5px; border-radius: 3px; line-height: 1.5; font-size: 12px; cursor: pointer;
+  border: 1px solid var(--vscode-dropdown-border, var(--vscode-widget-border, #555));
+  background: var(--vscode-editor-background, rgba(30, 30, 30, 0.85));
+  color: var(--vscode-dropdown-foreground, #eee);
+}
+.dita-img-btn:hover { opacity: 0.85; }
 
 /* Figures */
-figure { margin: 1.5rem 0; text-align: center; }
+/* Left-aligned rather than centered: a fig's image should sit flush with
+   the surrounding body text's left edge (and, inside a list item, with the
+   li's text rather than its marker), matching how DITA authors read
+   figures in Oxygen. figure has no left/right margin of its own, so this
+   naturally follows whatever indent its containing block already has. */
+figure { margin: 1.5rem 0; text-align: left; }
 figcaption { font-style: italic; margin-top: 0.5rem; font-size: 0.95em; text-align: left; }
 
 /* Code blocks */

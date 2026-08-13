@@ -18,9 +18,180 @@ function getAttr(node: DitaNode, name: string): string | undefined {
   return node.attributes?.[name];
 }
 
+// Mirrors DEFAULT_NOTE_LABELS in src/editor/ditaRenderUtils.ts. Duplicated
+// rather than imported to keep this module free of editor-layer
+// dependencies (it's also used by the HTML export pipeline); update both
+// if the label set changes.
+const FALLBACK_NOTE_LABELS: Record<string, string> = {
+  note: 'Note', notice: 'Notice', warning: 'Warning', danger: 'Danger',
+  important: 'Important', tip: 'Tip', restriction: 'Restriction',
+  attention: 'Attention', caution: 'Caution', fastpath: 'Fastpath',
+  remember: 'Remember', trouble: 'Trouble',
+};
+
 function escapeAttr(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
+
+// Recursively flattens an element's descendants to plain text, dropping all
+// markup. Used for attribute-value contexts (alt/title) where HTML tags
+// would just show up as literal escaped text if renderChildren() were used
+// instead. Local to this module rather than imported from the editor/map
+// layers' own copies of the same idea (extractTextFromNode/plainText) — see
+// FALLBACK_NOTE_LABELS above for why src/render/ keeps its own copies.
+function extractPlainText(node: DitaNode): string {
+  if (node.type === 'text') return node.text || '';
+  return (node.children || []).map(extractPlainText).join('');
+}
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// topic/foreign covers DITA's generic <foreign> element plus the MathML
+// domain's <mathml> (and this project's own 'svg-container' convenience
+// mapping) — see standardTagMap.ts. Its content is arbitrary raw markup
+// from OUTSIDE the DITA vocabulary, so unlike every other renderer here
+// (which maps a *specific known* DITA element to a *specific known* HTML
+// shape), this one has to decide what to do with tag names it can't
+// otherwise account for. Chromium (what VS Code's webview runs on) has
+// supported MathML Core natively since Chrome 109 (Jan 2023), so real
+// MathML markup — which is what DITA-OT/Oxygen actually emit here, per
+// https://www.oxygenxml.com/dita/1.3/specs/langRef/technicalContent/mathml.html
+// — can simply be serialized back out verbatim and left to the browser's
+// own MathML renderer, rather than DITA Viewer needing to implement math
+// typesetting itself.
+//
+// "Verbatim" is deliberately bounded, though: this is the one place in the
+// renderer that takes a tag name and attribute set straight from the
+// source XML and writes it into the HTML output without mapping it to a
+// controlled shape first. Restricting to a real MathML tag allowlist, and
+// stripping event-handler-shaped/URL-bearing attribute names regardless of
+// tag, keeps a malformed or hand-edited <mathml> block from doing anything
+// beyond "render as MathML (or not at all)" — it can't smuggle through an
+// arbitrary tag the browser would treat as active content.
+const MATHML_TAGS = new Set([
+  'math', 'mrow', 'mi', 'mn', 'mo', 'mtext', 'mspace', 'ms', 'mglyph',
+  'mfrac', 'msqrt', 'mroot', 'mstyle', 'merror', 'mpadded', 'mphantom',
+  'mfenced', 'menclose', 'msub', 'msup', 'msubsup', 'munder', 'mover',
+  'munderover', 'mmultiscripts', 'mprescripts', 'none', 'mtable', 'mtr',
+  'mtd', 'mlabeledtr', 'maligngroup', 'malignmark', 'mstack', 'mlongdiv',
+  'msgroup', 'msrow', 'mscarries', 'mscarry', 'msline', 'maction',
+  'semantics', 'annotation', 'annotation-xml',
+]);
+
+function isUnsafeForeignAttr(name: string): boolean {
+  const n = name.toLowerCase();
+  return n.startsWith('on') || n === 'href' || n === 'src' || n === 'style' || n === 'xlink:href';
+}
+
+// Looks up a MathML attribute by its local (prefix-stripped) name -- the
+// same tolerance serializeForeignContent's general attribute pass already
+// applies, needed here too since <mfenced> (like everything else in this
+// tree) may arrive as <m:mfenced separators="|" .../> with every attribute
+// name unprefixed but the tag itself prefixed, or occasionally with a
+// prefixed attribute as well.
+function getForeignAttr(node: DitaNode, name: string): string | undefined {
+  const attrs = node.attributes || {};
+  if (attrs[name] !== undefined) return attrs[name];
+  for (const [k, v] of Object.entries(attrs)) {
+    if (localName(k) === name) return v;
+  }
+  return undefined;
+}
+
+// Namespace-prefixed MathML (<mml:math>, <mml:msup>, ...) is extremely
+// common in practice -- Oxygen's equation editor and MathType both export
+// this shape by default -- but only the *local* part of the name is a real
+// MathML tag; "mml:msup" itself will never match MATHML_TAGS. Browsers also
+// don't recognize prefixed tags for the HTML math-integration point at
+// all, so the prefix has to come off both for the allowlist check and for
+// what actually gets written into the output, or the element silently
+// falls through to the "unrecognized tag" branch below (dropping structure
+// exactly like the un-fixed flatten-to-text bug this renderer exists to
+// avoid).
+function localName(tag: string): string {
+  const i = tag.indexOf(':');
+  return i === -1 ? tag : tag.slice(i + 1);
+}
+
+// <mfenced> is real MathML 3, and it's how Oxygen/MathType export every
+// parenthesized group and every |...| absolute-value bar -- but MathML
+// Core (what Chromium, and therefore this webview and every "open in
+// browser" WebHelp reader, actually implements) dropped it entirely.
+// Passing it through verbatim renders as nothing: not "wrong brackets",
+// the whole element and its fences silently disappear, which is exactly
+// the "brackets and absolute values missing" symptom. The fix used by
+// every engine that still wants mfenced to work under Core (MathJax
+// included) is to expand it at serialization time into the primitives
+// Core does support: an <mrow> with explicit <mo> fence/separator
+// characters around the children, rather than relying on the browser to
+// synthesize them from the mfenced attributes.
+function expandMfenced(node: DitaNode): string {
+  const openAttr = getForeignAttr(node, 'open');
+  const closeAttr = getForeignAttr(node, 'close');
+  const sepAttr = getForeignAttr(node, 'separators');
+  // Per the MathML 3 spec, an absent attribute gets the default fence/
+  // separator; an attribute present but explicitly empty (open="") means
+  // "no fence on this side" (used for one-sided constructs) and must stay
+  // empty rather than falling back to the default.
+  const open = openAttr !== undefined ? openAttr : '(';
+  const close = closeAttr !== undefined ? closeAttr : ')';
+  const separators = sepAttr !== undefined ? sepAttr : ',';
+
+  // Whitespace-only text nodes between tags (from source indentation/
+  // newlines, which the sax parser preserves as real text-node children)
+  // are not semantic arguments of mfenced -- only its element children
+  // (or text nodes with actual visible content) count as "items" that
+  // get fence/separator characters between them. Without this filter, a
+  // single-child mfenced formatted across multiple lines would pick up
+  // spurious extra separator characters for the whitespace "children"
+  // surrounding the real one.
+  const items = (node.children || [])
+    .filter((c) => c.type !== 'text' || (c.text || '').trim() !== '')
+    .map(serializeForeignContent);
+
+  let inner = '';
+  if (open !== '') inner += `<mo>${escapeHtml(open)}</mo>`;
+  for (let i = 0; i < items.length; i++) {
+    inner += items[i];
+    if (i < items.length - 1 && separators !== '') {
+      // Fewer separator characters than gaps: the last one repeats for
+      // the rest, per spec. More than needed: the extras are unused.
+      const sepChar = separators[Math.min(i, separators.length - 1)];
+      inner += `<mo>${escapeHtml(sepChar)}</mo>`;
+    }
+  }
+  if (close !== '') inner += `<mo>${escapeHtml(close)}</mo>`;
+
+  return `<mrow>${inner}</mrow>`;
+}
+
+function serializeForeignContent(node: DitaNode): string {
+  if (node.type === 'text') return escapeHtml(node.text || '');
+  const tag = localName((node.tagName || '').toLowerCase());
+  if (!MATHML_TAGS.has(tag)) {
+    // Not a tag we recognize as real MathML — don't trust it enough to
+    // emit as a live element, but keep any visible text rather than
+    // silently dropping the whole subtree.
+    return (node.children || []).map(serializeForeignContent).join('');
+  }
+  if (tag === 'mfenced') return expandMfenced(node);
+  const attrs = Object.entries(node.attributes || {})
+    // xmlns / xmlns:* declarations are what produced the mml: prefix in
+    // the first place; now that the prefix is stripped from the tag name
+    // itself they're meaningless (and on re-serialized <math> would just
+    // be inert clutter), so drop them rather than carrying them through.
+    .filter(([name]) => {
+      const n = name.toLowerCase();
+      return n !== 'xmlns' && !n.startsWith('xmlns:') && !isUnsafeForeignAttr(localName(n));
+    })
+    .map(([name, value]) => safeAttr(localName(name), value))
+    .join('');
+  const inner = (node.children || []).map(serializeForeignContent).join('');
+  return `<${tag}${attrs}>${inner}</${tag}>`;
+}
+
 
 function safeAttr(name: string, value: string | undefined | null): string {
   if (value == null) return '';
@@ -28,6 +199,17 @@ function safeAttr(name: string, value: string | undefined | null): string {
 }
 
 export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
+  'topic/foreign': (node) => {
+    // No renderChildren() here — that would fall through to the generic
+    // "no handler for this baseType" path for every MathML tag underneath
+    // (none of them have a DITA baseType of their own), stripping all
+    // structure and leaving only flattened text. serializeForeignContent
+    // recurses on its own, bypassing the normal per-node baseType dispatch
+    // entirely for this subtree.
+    const inner = (node.children || []).map(serializeForeignContent).join('');
+    return `<span class="foreign-content">${inner}</span>`;
+  },
+
   'topic/topic': (node, ctx, renderChildren) => {
     const id = getAttr(node, 'id');
     return `<article${safeAttr('id', id)} class="topic">${renderChildren(node, ctx)}</article>`;
@@ -66,8 +248,22 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
   'topic/note': (node, ctx, renderChildren) => {
     const type = getAttr(node, 'type') || 'note';
-    const labels = ctx.noteLabels || { note: 'Note', notice: 'Notice', warning: 'Warning', danger: 'Danger', important: 'Important', tip: 'Tip', restriction: 'Restriction' };
-    const label = labels[type] || type;
+    const spectitle = getAttr(node, 'spectitle');
+    const othertype = getAttr(node, 'othertype');
+    const labels = ctx.noteLabels || FALLBACK_NOTE_LABELS;
+    // spectitle always wins when present (DITA lets any note override its
+    // default title); otherwise type="other" falls back to @othertype
+    // (its label isn't a fixed string, unlike the other 12 note types);
+    // otherwise look up the type in the label map, or fall back to the
+    // raw attribute value for anything outside the known enumeration.
+    let label: string;
+    if (spectitle) {
+      label = spectitle;
+    } else if (type === 'other' && othertype) {
+      label = othertype;
+    } else {
+      label = labels[type] || type;
+    }
     return `<div class="note note--${escapeAttr(type)}"><span class="note__label">${escapeAttr(label)}:</span> ${renderChildren(node, ctx)}</div>`;
   },
 
@@ -211,14 +407,66 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
   'topic/image': (node, ctx) => {
     const href = getAttr(node, 'href') || '';
-    const alt = getAttr(node, 'alt') || '';
     const placement = getAttr(node, 'placement') || 'inline';
-    const width = getAttr(node, 'width');
-    const height = getAttr(node, 'height');
+    let width = getAttr(node, 'width');
+    let height = getAttr(node, 'height');
+    const scale = getAttr(node, 'scale');
+    const scalefit = getAttr(node, 'scalefit');
+
+    // Author-specified @width/@height on the <image> element always wins;
+    // only fall back to the file's own natural dimensions (read from disk,
+    // not decoded from the loaded image — see readImageDimensions) when
+    // neither is given, purely to reserve the right aspect-ratio box
+    // before the browser has actually loaded the image (this project's
+    // own img{height:auto} means a bare width/height attribute doesn't
+    // force a fixed pixel size, it just informs the aspect ratio while
+    // max-width:100% still scales the box down responsively as usual).
+    if (!width && !height && href && ctx.getImageDimensions) {
+      const natural = ctx.getImageDimensions(href);
+      if (natural) {
+        width = String(natural.width);
+        height = String(natural.height);
+      }
+    }
+
+    // DITA allows alt text as both the @alt attribute and a richer <alt>
+    // child element (topic/alt) — the child can carry formatted content
+    // (ph, draft-comment, etc.) and takes precedence when present. Neither
+    // present -> alt stays undefined so safeAttr omits the attribute
+    // entirely, rather than always emitting alt="" regardless of whether
+    // the author gave any alt info at all.
+    const altChild = (node.children || []).find(
+      (c) => c.type === 'element' && c.baseType === 'topic/alt',
+    );
+    const altFromChild = altChild ? extractPlainText(altChild).trim() : '';
+    const alt = altFromChild || getAttr(node, 'alt');
+
     const extra = `${safeAttr('width', width)}${safeAttr('height', height)}`;
     const imgSrc = href ? ctx.asWebviewUri(href) : '';
     const cls = placement === 'break' ? ' class="image-break"' : '';
-    return `<img src="${escapeAttr(imgSrc)}"${safeAttr('alt', alt)}${extra}${cls} loading="lazy" data-dita-src="${escapeAttr(href)}">`;
+
+    // @scale sizes the image relative to its OWN natural dimensions, not
+    // the container — expressed via the CSS custom property --dita-scale,
+    // which styles.css combines with the toolbar's preview-only zoom via
+    // the CSS 'zoom' property (reflows the box, unlike transform:scale).
+    // Explicit width/height are a more specific instruction and win over
+    // scale when given. @scalefit="yes" means "prioritize fitting the
+    // available width", which this project already does by default for
+    // every image (img{max-width:100%}); so scalefit=yes just needs to
+    // suppress scale/width/height rather than actively doing anything.
+    let scaleStyle: string | undefined;
+    if (scalefit !== 'yes' && scale && !width && !height) {
+      const pct = parseFloat(scale);
+      if (!isNaN(pct) && pct > 0) {
+        scaleStyle = `--dita-scale:${pct / 100}`;
+      }
+    }
+
+    const altAttr = alt !== undefined ? safeAttr('alt', alt) : '';
+    const titleAttr = alt ? safeAttr('title', alt) : '';
+    const styleAttr = safeAttr('style', scaleStyle);
+
+    return `<img src="${escapeAttr(imgSrc)}"${altAttr}${titleAttr}${extra}${cls}${styleAttr} loading="lazy" data-dita-src="${escapeAttr(href)}">`;
   },
 
   'topic/fig': (node, ctx, renderChildren) => {

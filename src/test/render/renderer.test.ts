@@ -1,5 +1,8 @@
 import * as assert from 'assert';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { renderDocument, RenderContext } from '../../render/renderer';
+import { parseDita } from '../../parser/ditaParser';
 import { DitaNode } from '../../parser/domTypes';
 
 function makeText(text: string): DitaNode {
@@ -92,6 +95,43 @@ describe('renderer', () => {
     const html = renderDocument(doc, defaultCtx);
     assert.ok(html.includes('class="note note--warning"'));
     assert.ok(html.includes('Warning:'));
+  });
+
+  it('should render labels for all 13 DITA 1.3 note/@type values (except other)', () => {
+    // Full enumeration per OASIS DITA 1.3 commonElements.mod note.attributes,
+    // minus 'other' which is covered separately below (its label comes from
+    // @othertype, not a fixed string).
+    const expected: Record<string, string> = {
+      note: 'Note:', notice: 'Notice:', warning: 'Warning:', danger: 'Danger:',
+      important: 'Important:', tip: 'Tip:', restriction: 'Restriction:',
+      attention: 'Attention:', caution: 'Caution:', fastpath: 'Fastpath:',
+      remember: 'Remember:', trouble: 'Trouble:',
+    };
+    for (const [type, label] of Object.entries(expected)) {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/note', [makeText('x')], { type }),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(html.includes(label), `type="${type}" should render label "${label}", got: ${html}`);
+    }
+  });
+
+  it('should use @othertype as the label when type="other"', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/note', [makeText('x')], { type: 'other', othertype: 'Best Practice' }),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('Best Practice:'));
+    assert.ok(!html.includes('>other:'));
+  });
+
+  it('should let @spectitle override the label for any note type', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/note', [makeText('x')], { type: 'tip', spectitle: 'Pro Tip' }),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('Pro Tip:'));
+    assert.ok(!html.includes('>Tip:'));
   });
 
   it('should render ordered and unordered lists', () => {
@@ -329,6 +369,290 @@ describe('renderer', () => {
     const html = renderDocument(doc, defaultCtx);
     assert.ok(html.includes('src="vscode-resource:images/pic.png"'));
     assert.ok(html.includes('alt="A picture"'));
+  });
+
+  it('should prefer <alt> child element text over the @alt attribute', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [
+        makeEl('topic/alt', [makeText('Child alt wins')]),
+      ], { href: 'pic.png', alt: 'Attribute alt loses' }),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('alt="Child alt wins"'));
+    assert.ok(!html.includes('Attribute alt loses'));
+    // Also surfaced as a hover tooltip
+    assert.ok(html.includes('title="Child alt wins"'));
+  });
+
+  it('should fall back to the @alt attribute when there is no <alt> child', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [], { href: 'pic.png', alt: 'From attribute' }),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('alt="From attribute"'));
+    assert.ok(html.includes('title="From attribute"'));
+  });
+
+  it('should omit a fabricated alt="" but keep the generic title="image" tooltip when no alt info is provided', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [], { href: 'pic.png' }),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    const imgTag = html.slice(html.indexOf('<img'), html.indexOf('>', html.indexOf('<img')) + 1);
+    assert.ok(!imgTag.includes('alt='), 'should not fabricate an empty alt="" on the <img> tag');
+    // injectAttributes' generic tagName-as-tooltip fallback still applies
+    // here since the renderer itself has nothing more specific to offer.
+    assert.ok(imgTag.includes('title="image"'));
+  });
+
+  it('should not duplicate the title attribute: alt-derived title wins over the generic tagName tooltip', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [], { href: 'pic.png', alt: 'Real description' }),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    const imgTag = html.slice(html.indexOf('<img'), html.indexOf('>', html.indexOf('<img')) + 1);
+    const titleMatches = imgTag.match(/ title="/g) || [];
+    assert.strictEqual(titleMatches.length, 1, 'the <img> tag should carry exactly one title attribute, not two');
+    assert.ok(imgTag.includes('title="Real description"'));
+  });
+
+  it('should apply @scale as a --dita-scale style hint when width/height are absent', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [], { href: 'pic.png', scale: '70' }),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('style="--dita-scale:0.7"'));
+  });
+
+  it('should let explicit width/height override @scale', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [], { href: 'pic.png', scale: '70', width: '300' }),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('--dita-scale'));
+    assert.ok(html.includes('width="300"'));
+  });
+
+  it('should suppress @scale when @scalefit="yes"', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [], { href: 'pic.png', scale: '70', scalefit: 'yes' }),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('--dita-scale'));
+  });
+
+  // ── topic/foreign (DITA <foreign>/<mathml>, this project's svg-container) ──
+  // Descendants of <mathml> are raw, non-DITA XML (real MathML markup, not
+  // DITA elements), so they have no baseType of their own -- makeRaw below
+  // constructs nodes the way the real parser would for genuinely foreign
+  // content: an actual tagName, but baseType left undefined.
+  function makeRaw(tagName: string, children: DitaNode[], attrs?: Record<string, string>): DitaNode {
+    return {
+      type: 'element',
+      tagName,
+      attributes: attrs,
+      children,
+      sourceRange: { startLine: 0, startCol: 0, endLine: 0, endCol: 0 },
+    };
+  }
+
+  it('should preserve real MathML structure instead of flattening it to bare text', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/foreign', [
+        makeRaw('math', [
+          makeRaw('mfrac', [
+            makeRaw('mn', [makeText('1')]),
+            makeRaw('mn', [makeText('2')]),
+          ]),
+        ]),
+      ], undefined, 'mathml'),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('<math'), 'should emit a live <math> element for the browser to render natively');
+    assert.ok(html.includes('<mfrac><mn>1</mn><mn>2</mn></mfrac>'), 'should preserve the fraction structure, not flatten to "12"');
+  });
+
+  it('should drop a tag not on the MathML allowlist but keep its text', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/foreign', [
+        makeRaw('math', [makeRaw('evil-tag', [makeText('oops')])]),
+      ], undefined, 'mathml'),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('<evil-tag'), 'non-MathML tag names must not be emitted as live elements');
+    assert.ok(html.includes('oops'), 'text content should still come through even when its wrapping tag is dropped');
+  });
+
+  it('should strip event-handler and URL-bearing attributes from MathML elements but keep legitimate ones', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/foreign', [
+        makeRaw('math', [
+          makeRaw('mi', [makeText('x')], { onerror: 'alert(1)', mathvariant: 'bold', href: 'javascript:alert(1)' }),
+        ]),
+      ], undefined, 'mathml'),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('onerror'), 'event-handler attributes must be stripped even on an allowlisted tag');
+    assert.ok(!html.includes('javascript:'), 'href must be stripped regardless of value');
+    assert.ok(html.includes('mathvariant="bold"'), 'legitimate MathML presentation attributes should pass through');
+  });
+
+  it('should strip the namespace prefix from namespace-prefixed MathML (Oxygen/MathType export shape) instead of dropping the tags entirely', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/foreign', [
+        makeRaw('mml:math', [
+          makeRaw('mml:msqrt', [
+            makeRaw('mml:mrow', [
+              makeRaw('mml:msup', [makeRaw('mml:mi', [makeText('a')]), makeRaw('mml:mn', [makeText('2')])]),
+              makeRaw('mml:mo', [makeText('+')]),
+              makeRaw('mml:msup', [makeRaw('mml:mi', [makeText('b')]), makeRaw('mml:mn', [makeText('2')])]),
+            ]),
+          ]),
+        ], { 'xmlns:mml': 'http://www.w3.org/1998/Math/MathML' }),
+      ], undefined, 'mathml'),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('mml:'), 'prefixed tag/attribute names must not leak into the output -- browsers only recognize bare MathML tags');
+    assert.ok(html.includes('<msqrt>'), 'should recognize mml:msqrt as real MathML, not drop it as an unknown tag');
+    assert.ok(
+      html.includes('<msup><mi>a</mi><mn>2</mn></msup><mo>+</mo><msup><mi>b</mi><mn>2</mn></msup>'),
+      'should preserve full nested structure, not flatten to "a 2 + b 2"',
+    );
+    assert.ok(!html.includes('xmlns'), 'xmlns/xmlns:* declarations are meaningless once the prefix is stripped and should not be carried through');
+  });
+
+  it('should preserve namespace-prefixed MathML end-to-end through the real sax parser, not just the unit-level tree builder', () => {
+    // mathml_prefixed_test.dita is authored in the mml:-prefixed shape that
+    // Oxygen's equation editor / MathType actually export, as opposed to
+    // mathml_test.dita's hand-written unprefixed shape. Going through the
+    // real parseDita() here (rather than the makeRaw()/makeEl() synthetic
+    // tree above) catches any surprises from how sax hands tagNames back,
+    // which the unit-level test can't see.
+    const fixturePath = join(__dirname, '..', '..', '..', 'test-dita-file', 'topics', 'mathml_prefixed_test.dita');
+    const xml = readFileSync(fixturePath, 'utf-8');
+    const doc = parseDita(xml);
+    const html = renderDocument(doc.root, defaultCtx);
+    const foreignStart = html.indexOf('class="foreign-content"');
+    const foreignSpan = html.slice(foreignStart, html.indexOf('</span>', foreignStart));
+    assert.ok(!foreignSpan.includes('mml:'), 'no prefixed tag/attribute names should leak into the real parser output');
+    assert.ok(foreignSpan.includes('<msqrt>'), 'msqrt should survive end-to-end through the real parser, not just the synthetic unit test');
+    assert.ok(
+      foreignSpan.includes('<msup><mi>a</mi><mn>2</mn></msup>') && foreignSpan.includes('<msup><mi>b</mi><mn>2</mn></msup>'),
+      'superscripts should survive end-to-end, not flatten to "a 2 + b 2"',
+    );
+  });
+
+  // ── <mfenced> -- real MathML 3, but dropped entirely by MathML Core ──
+  // (what Chromium/VS Code's webview and every "open in browser" WebHelp
+  // reader actually implement). Oxygen's equation editor emits mfenced by
+  // default for every parenthesized group and every |...| absolute-value
+  // bar, so this is the single most common cause of "brackets/absolute
+  // value missing" reports. It must be expanded into <mo> fence characters
+  // rather than passed through as a live <mfenced> tag.
+  it('should expand mfenced with default open/close into explicit parenthesis <mo> characters (Chromium/MathML Core does not implement <mfenced>)', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/foreign', [
+        makeRaw('math', [
+          makeRaw('mfenced', [makeRaw('mi', [makeText('x')])]),
+        ]),
+      ], undefined, 'mathml'),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('<mfenced'), 'mfenced must never reach the output as a live tag -- Chromium silently drops it and everything inside');
+    assert.ok(html.includes('<mrow><mo>(</mo><mi>x</mi><mo>)</mo></mrow>'), 'should default to ( and ) per the MathML 3 spec default');
+  });
+
+  it('should expand mfenced open/close attributes into matching <mo> fence characters, e.g. |x| for absolute value', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/foreign', [
+        makeRaw('math', [
+          makeRaw('mfenced', [makeRaw('mi', [makeText('x')])], { open: '|', close: '|' }),
+        ]),
+      ], undefined, 'mathml'),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('<mrow><mo>|</mo><mi>x</mi><mo>|</mo></mrow>'), 'open="|" close="|" is the standard MathML shape for absolute value and must render as literal | bars');
+  });
+
+  it('should join multiple mfenced children with the separators attribute, repeating the last character for extra gaps', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/foreign', [
+        makeRaw('math', [
+          makeRaw('mfenced', [
+            makeRaw('mi', [makeText('a')]),
+            makeRaw('mi', [makeText('b')]),
+            makeRaw('mi', [makeText('c')]),
+          ], { separators: ';' }),
+        ]),
+      ], undefined, 'mathml'),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(
+      html.includes('<mrow><mo>(</mo><mi>a</mi><mo>;</mo><mi>b</mi><mo>;</mo><mi>c</mi><mo>)</mo></mrow>'),
+      'a single-character separators value should repeat between every pair of children',
+    );
+  });
+
+  it('should render the real aspectRatio formula (Oxygen-exported, prefixed mfenced with separators="|") with visible parentheses instead of silently dropping them', () => {
+    // This is the exact shape Oxygen's equation editor exported for a real
+    // reported bug: <m:mfenced separators="|"> wrapping a single summation
+    // term. Before the fix, this rendered with the sum visible but no
+    // surrounding parentheses at all -- not wrong parentheses, none.
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/foreign', [
+        makeRaw('m:math', [
+          makeRaw('m:mfenced', [
+            makeRaw('m:mrow', [
+              makeRaw('m:munderover', [
+                makeRaw('m:mo', [makeText('∑')]),
+                makeRaw('m:mrow', [makeRaw('m:mi', [makeText('j')])]),
+                makeRaw('m:mrow', [makeRaw('m:mi', [makeText('N')])]),
+              ]),
+              makeRaw('m:msub', [makeRaw('m:mi', [makeText('A')]), makeRaw('m:mi', [makeText('j')])]),
+            ]),
+          ], { separators: '|' }),
+        ], { 'xmlns:m': 'http://www.w3.org/1998/Math/MathML' }),
+      ], undefined, 'mathml'),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('<mfenced'), 'the prefixed m:mfenced must be expanded, not passed through under any tag name');
+    assert.ok(html.includes('<mo>(</mo>') && html.includes('<mo>)</mo>'), 'default open/close parentheses must appear as explicit <mo> characters');
+    assert.ok(html.includes('<mo>∑</mo>'), 'the wrapped summation content must still be preserved inside the expansion');
+  });
+
+  it('should render the real OrthQual formula absolute-value bars (open="|" close="|" separators="|") instead of dropping them', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/foreign', [
+        makeRaw('m:math', [
+          makeRaw('m:mfenced', [
+            makeRaw('m:msub', [makeRaw('m:mi', [makeText('angle')]), makeRaw('m:mi', [makeText('j')])]),
+          ], { close: '|', open: '|', separators: '|' }),
+        ], { 'xmlns:m': 'http://www.w3.org/1998/Math/MathML' }),
+      ], undefined, 'mathml'),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    const barCount = (html.match(/<mo>\|<\/mo>/g) || []).length;
+    assert.strictEqual(barCount, 2, 'both the open and close | bars must render as explicit <mo> characters, matching Oxygen\'s absolute-value rendering');
+  });
+
+  it('should expand mfenced end-to-end through the real sax parser using the actual reported fixture (aspectRatio + OrthQual)', () => {
+    // mathml_mfenced_test.dita reproduces both formulas from the real bug
+    // report byte-for-byte (same prefixed m: shape Oxygen exported). Going
+    // through parseDita() here, not just the synthetic makeRaw() tree,
+    // catches anything the sax parser does differently with mfenced's
+    // attributes (e.g. attribute name casing/ordering) that the unit-level
+    // tests above can't see.
+    const fixturePath = join(__dirname, '..', '..', '..', 'test-dita-file', 'topics', 'mathml_mfenced_test.dita');
+    const xml = readFileSync(fixturePath, 'utf-8');
+    const doc = parseDita(xml);
+    const html = renderDocument(doc.root, defaultCtx);
+    assert.ok(!html.includes('<mfenced'), 'no live <mfenced> tag should survive to the real output');
+    const parenOpenCount = (html.match(/<mo>\(<\/mo>/g) || []).length;
+    const parenCloseCount = (html.match(/<mo>\)<\/mo>/g) || []).length;
+    assert.strictEqual(parenOpenCount, 2, 'aspectRatio has two mfenced groups, each should produce one explicit ( <mo>');
+    assert.strictEqual(parenCloseCount, 2, 'aspectRatio has two mfenced groups, each should produce one explicit ) <mo>');
+    const barCount = (html.match(/<mo>\|<\/mo>/g) || []).length;
+    assert.strictEqual(barCount, 2, 'OrthQual\'s open="|" close="|" mfenced should produce exactly two literal | <mo> characters');
   });
 
   it('should render fig with figcaption', () => {
@@ -694,6 +1018,271 @@ describe('renderer', () => {
     assert.ok(html.includes('inner-fallback'), 'cyclic conref should fall back to literal content');
   });
 
+  // ── conrefend range tests (unit-level; see ditaRenderUtils.test.ts for
+  // the real-file sibling/parent resolution logic behind resolveConrefRange) ──
+
+  it('should render every element resolveConrefRange returns, not just the first', () => {
+    const s1 = makeEl('topic/section', [makeText('One')], { id: 's1' });
+    const s2 = makeEl('topic/section', [makeText('Two')], { id: 's2' });
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveConrefRange: (_conref, _conrefend) => [s1, s2],
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/section', [], { conref: 'x.dita#r/s1', conrefend: 'x.dita#r/s2' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('One'));
+    assert.ok(html.includes('Two'));
+  });
+
+  it('should fall back to normal single-target conref when the range cannot be resolved', () => {
+    const target = makeEl('topic/section', [makeText('Single target only')], { id: 's1' });
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      // Range resolution fails (e.g. not siblings) -- normal conref should
+      // still take over rather than rendering nothing.
+      resolveConrefRange: (_conref, _conrefend) => undefined,
+      resolveConref: (_conref: string) => target,
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/section', [], { conref: 'x.dita#r/s1', conrefend: 'x.dita#r/s2' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('Single target only'), 'should degrade to the single conref target, not render nothing');
+  });
+
+  it('should apply the referencing element\'s own attributes only to the first range member', () => {
+    const s1 = makeEl('topic/section', [makeText('First')], { id: 's1' });
+    const s2 = makeEl('topic/section', [makeText('Second')], { id: 's2' });
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveConrefRange: (_conref, _conrefend) => [s1, s2],
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/section', [], {
+          conref: 'x.dita#r/s1',
+          conrefend: 'x.dita#r/s2',
+          id: 'ref-local-id',
+        }),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    const occurrences = (html.match(/ref-local-id/g) || []).length;
+    assert.strictEqual(occurrences, 1, 'referencing element\'s local attribute must not leak onto every range member');
+  });
+
+  // ── Profiling / conditional-attribute highlighting ──
+
+  it('should wrap an element carrying a profiling attribute in a highlight box with a labeled chip', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/p', [makeText('Flagged content')], { otherprops: 'only_for_HUBI' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('class="profiled"'), 'should wrap in the highlight box');
+    assert.ok(html.includes('Flagged content'), 'original content should still render');
+    assert.ok(html.includes('profiling-chip'), 'should include a chip');
+    assert.ok(html.includes('Other'), 'otherprops should display as "Other", matching Oxygen\'s convention');
+    assert.ok(html.includes('[only_for_HUBI]'), 'should show the actual value');
+  });
+
+  it('should not wrap an element with no profiling attributes', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/p', [makeText('Plain content')], {}),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('class="profiled"'));
+    assert.ok(!html.includes('profiling-chip'));
+  });
+
+  it('should render one chip per profiling attribute when several are set on the same element', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/p', [makeText('x')], { audience: 'expert', otherprops: 'prop1' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('Audience'));
+    assert.ok(html.includes('[expert]'));
+    assert.ok(html.includes('Other'));
+    assert.ok(html.includes('[prop1]'));
+    assert.strictEqual((html.match(/profiling-chip"/g) || []).length, 2);
+  });
+
+  it('should render one chip per space-separated value within a single profiling attribute', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/p', [makeText('x')], { otherprops: 'only_for_HUBI only_for_XYZ' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('[only_for_HUBI]'));
+    assert.ok(html.includes('[only_for_XYZ]'));
+    assert.strictEqual((html.match(/profiling-chip"/g) || []).length, 2);
+  });
+
+  it('should use the inline-flavored wrapper for commonly-inline elements, not the full block box', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/p', [
+          makeText('Some '),
+          makeEl('topic/ph', [makeText('flagged phrase')], { audience: 'expert' }),
+          makeText(' inline.'),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('profiled profiled--inline'), 'inline elements should get the inline variant');
+  });
+
+  it('should use the block wrapper (no inline variant) for a profiled block-level element', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/p', [makeText('x')], { audience: 'expert' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('class="profiled"'));
+    assert.ok(!html.includes('profiled--inline'));
+  });
+
+  // A profiled <li> can't be wrapped in a synthetic <span class="profiled">
+  // the way inline content (ph/b/i/...) is: the browser positions a list
+  // marker relative to the li's real containing block (the <ul>/<ol>), and
+  // introducing a wrapper element between them makes the wrapper's own
+  // padding/border the effective reference point instead -- visually
+  // overlapping the marker and leaving a profiled li's indent not matching
+  // its plain siblings. The class/data-profile-keys attribute must land on
+  // the li's own tag, and the DOM shape must otherwise be identical to an
+  // unprofiled li (no extra wrapping element at all).
+  it('should apply profiling class/data-attribute directly onto a profiled <li>\'s own tag rather than wrapping it in a synthetic <span>', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/ul', [
+          makeEl('topic/li', [makeText('plain')]),
+          makeEl('topic/li', [makeText('profiled')], { audience: 'expert' }),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('<span class="profiled"'), 'no synthetic <span> should wrap the profiled <li> -- that would break the browser\'s list-marker positioning for it');
+    assert.ok(!/<span class="profiled"[^>]*><li/.test(html), 'the li must not be nested inside a wrapping span');
+    const liMatch = html.match(/<li\b[^>]*>profiled/);
+    assert.ok(liMatch, 'the li\'s own opening tag should be immediately followed by its text content, not a wrapping element');
+    assert.ok(liMatch![0].includes('class="profiled"'), 'class="profiled" must be an attribute on the li\'s own opening tag');
+    assert.ok(liMatch![0].includes('data-profile-keys="audience:expert"'), 'data-profile-keys must be an attribute on the li\'s own opening tag');
+  });
+
+  it('should insert the profiling label as the last child inside a profiled <li>, closing before the li\'s own closing tag', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/ul', [
+          makeEl('topic/li', [makeText('profiled')], { audience: 'expert' }),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    const liOpenEnd = html.indexOf('>', html.indexOf('<li'));
+    const liClose = html.indexOf('</li>', liOpenEnd);
+    const liInner = html.slice(liOpenEnd + 1, liClose);
+    assert.ok(liInner.startsWith('profiled'), 'the li\'s own text content should come first');
+    assert.ok(liInner.trim().endsWith('</span>'), 'the profiling-label span should be the very last thing before </li>, not appended after it');
+    assert.ok(liInner.includes('class="profiling-label"'));
+  });
+
+  it('should still correctly place each label at its own nesting level for a profiled li containing a nested profiled li', () => {
+    // Regression case for the "last closing tag" matching logic: a naive
+    // implementation could confuse the outer li's closing tag with the
+    // inner one, either duplicating a label at the wrong depth or losing
+    // one entirely.
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/ol', [
+          makeEl('topic/li', [
+            makeText('outer'),
+            makeEl('topic/ol', [
+              makeEl('topic/li', [makeText('inner')], { platform: 'windows' }),
+            ]),
+          ], { audience: 'expert' }),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    const labelCount = (html.match(/class="profiling-label"/g) || []).length;
+    assert.strictEqual(labelCount, 2, 'both the outer and inner profiled li should get exactly one label each');
+    assert.ok(html.includes('data-profile-keys="audience:expert"'));
+    assert.ok(html.includes('data-profile-keys="platform:windows"'));
+    // The inner li's own closing </li> must come before the outer li's
+    // label (which belongs to the outer li, appended right before the
+    // outer li's own closing tag, after the whole nested <ol> is done).
+    const innerLabelIdx = html.indexOf('[windows]');
+    const outerLabelIdx = html.indexOf('[expert]');
+    assert.ok(innerLabelIdx < outerLabelIdx, 'the inner (nested) li\'s label should appear before the outer li\'s label in document order');
+  });
+
+  it('should highlight nested profiled elements independently (parent and child both flagged)', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/section', [
+          makeEl('topic/p', [makeText('inner')], { audience: 'novice' }),
+        ], { otherprops: 'section_flag' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.strictEqual((html.match(/class="profiled/g) || []).length, 2, 'both the section and the inner p should each get their own highlight wrapper');
+  });
+
+  it('should recognize all nine select-atts profiling attributes from the DITA 1.3 spec', () => {
+    const attrs = ['props', 'platform', 'product', 'audience', 'otherprops', 'base', 'importance', 'rev', 'status'];
+    for (const attr of attrs) {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [
+          makeEl('topic/p', [makeText('x')], { [attr]: 'somevalue' }),
+        ]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(html.includes('class="profiled"'), `${attr} should trigger highlighting`);
+    }
+  });
+
+  it('should emit a machine-readable data-profile-keys attribute the filter panel can key off of', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/p', [makeText('x')], { audience: 'expert', otherprops: 'prop1' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    const match = html.match(/data-profile-keys="([^"]*)"/);
+    assert.ok(match, 'should emit data-profile-keys');
+    const keys = match![1].split(',').map((k) => k.split(':').map(decodeURIComponent));
+    assert.deepStrictEqual(keys, [['audience', 'expert'], ['otherprops', 'prop1']]);
+  });
+
+  it('should URL-encode profiling attribute values in data-profile-keys so ":"/"," in a value can\'t be mistaken for the delimiter', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/p', [makeText('x')], { otherprops: 'weird:value,with-delims' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    const match = html.match(/data-profile-keys="([^"]*)"/);
+    assert.ok(match);
+    // Raw attribute text must not contain a literal ':' or ',' beyond the
+    // one real delimiter -- decoding should still recover the exact value.
+    const [attr, encodedValue] = match![1].split(':');
+    assert.strictEqual(attr, 'otherprops');
+    assert.strictEqual(decodeURIComponent(encodedValue), 'weird:value,with-delims');
+  });
+
   // ── Keyref resolution tests ──
 
   it('should resolve varname keyref to key value', () => {
@@ -789,6 +1378,53 @@ describe('renderer', () => {
     const html = renderDocument(doc, ctx);
     assert.ok(!html.includes('onerror="alert(1)"'), 'src must not break out of its attribute');
     assert.ok(html.includes('&quot;'), 'quote in the URI should be escaped');
+  });
+
+  // Reserving the right aspect-ratio box before the browser has actually
+  // loaded the image (see readImageDimensions/getImageDimensions in
+  // ditaRenderUtils.ts) is what prevents layout shift as lazy-loaded
+  // images finish loading -- most pronounced scrolling through Book mode,
+  // which composites many topics' worth of images into one long page.
+  it('should fill in width/height from getImageDimensions when the DITA source has neither', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      getImageDimensions: (relPath: string) => (relPath === 'img.png' ? { width: 300, height: 200 } : undefined),
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/image', [], { href: 'img.png' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('width="300"'));
+    assert.ok(html.includes('height="200"'));
+  });
+
+  it('should let an explicit @width/@height on the DITA image element win over getImageDimensions', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      getImageDimensions: () => ({ width: 300, height: 200 }),
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/image', [], { href: 'img.png', width: '50', height: '50' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('width="50"'));
+    assert.ok(html.includes('height="50"'));
+    assert.ok(!html.includes('300') && !html.includes('200'), 'getImageDimensions must not override an explicit author-specified size');
+  });
+
+  it('should render without width/height when getImageDimensions is absent or returns nothing, same as before this feature existed', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/image', [], { href: 'img.png' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('width='));
+    assert.ok(!html.includes('height='));
   });
 
   // ── Prolog suppression tests ──

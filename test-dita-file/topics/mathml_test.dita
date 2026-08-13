@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="mathml_test" xml:lang="zh-CN">
+    <title>MathML 公式渲染测试</title>
+    <shortdesc>用于人工确认 VS Code 预览能否原生渲染真实的 MathML 结构（分数、根号、上标），而不是把公式压扁成一串没有格式的文字。</shortdesc>
+    <body>
+        <section id="section_quadratic">
+            <title>一元二次方程求根公式</title>
+            <p>下面这行公式应该显示为标准的分数、正负号和根号排版，
+                <mathml>
+                    <math xmlns="http://www.w3.org/1998/Math/MathML">
+                        <mi>x</mi>
+                        <mo>=</mo>
+                        <mfrac>
+                            <mrow>
+                                <mo>-</mo><mi>b</mi><mo>&#177;</mo>
+                                <msqrt>
+                                    <mrow>
+                                        <msup><mi>b</mi><mn>2</mn></msup>
+                                        <mo>-</mo><mn>4</mn><mi>a</mi><mi>c</mi>
+                                    </mrow>
+                                </msqrt>
+                            </mrow>
+                            <mrow><mn>2</mn><mi>a</mi></mrow>
+                        </mfrac>
+                    </math>
+                </mathml>
+                而不是一行没有结构、挤在一起的 "x=-b±√(b^2-4ac)/2a" 纯文字。</p>
+        </section>
+        <section id="section_einstein">
+            <title>质能方程（带上标）</title>
+            <p>这个更简单的例子应该能看到清晰的上标 2：
+                <mathml>
+                    <math xmlns="http://www.w3.org/1998/Math/MathML">
+                        <mi>E</mi>
+                        <mo>=</mo>
+                        <mi>m</mi>
+                        <msup><mi>c</mi><mn>2</mn></msup>
+                    </math>
+                </mathml>
+            </p>
+        </section>
+        <section id="section_checklist">
+            <title>验证要点</title>
+            <ul>
+                <li>公式应显示为真正的分数/根号/上标排版，不是纯文字堆在一起</li>
+                <li>公式前后的中文正文应该正常显示，不受影响</li>
+                <li>如果看到的还是一行压扁的文字（比如 "x=-b±√b2-4ac2a" 这种没有分数线、没有根号的样子），说明这台机器上 VS Code 内置的 Chromium 版本可能过旧，需要另外处理</li>
+            </ul>
+        </section>
+    </body>
+</topic>
