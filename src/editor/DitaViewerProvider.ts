@@ -504,6 +504,27 @@ function getWebviewScript(): string {
         }
       }
     }
+    if (e.data.type === 'updateContent') {
+      var contentRoot = document.getElementById('dita-content-root');
+      if (contentRoot) {
+        // No page reload happened -- window.scrollY is left exactly where
+        // it was by the browser automatically, the same as any other
+        // in-place DOM update, with nothing here to explicitly restore.
+        // Whatever depends on the *previous* content's DOM needs a nudge
+        // to pick up the new one, though:
+        contentRoot.innerHTML = e.data.html;
+        enhanceImages(); // per-image zoom toolbars -- idempotent, only wraps images not already wrapped
+        if (typeof pfApplyFilter === 'function') pfApplyFilter(); // re-apply the current filter selection to the new content's [data-profile-keys] elements
+        if (typeof pfPanel !== 'undefined' && pfPanel) { // filter panel was open -- refresh its checkbox list against the new content rather than leaving it showing stale attribute/value options
+          pfPanel.remove();
+          pfPanel = pfBuildPanel();
+          document.body.appendChild(pfPanel);
+        }
+        if (typeof sb !== 'undefined' && sb.style.display !== 'none' && searchInput.value) { // search was active -- old marks were just wiped out along with the content that contained them
+          performSearch(searchInput.value);
+        }
+      }
+    }
   });
 
   // Toolbar
@@ -820,14 +841,16 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       if (e.document.uri.toString() !== document.uri.toString()) return;
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
       renderDebounceTimer = setTimeout(() => {
-        updateWebview();
+        postContentUpdate();
       }, 300);
     });
 
     // Re-render on theme switch so the manually-computed light/dark class
     // (used for DITA-specific colors that have no direct VS Code theme
     // equivalent, e.g. note backgrounds) never goes stale relative to the
-    // actual active theme.
+    // actual active theme. A genuine full reload, unlike postContentUpdate
+    // below -- the CSS class lives on <html>, outside the content div a
+    // content-only update touches.
     const themeSubscription = vscode.window.onDidChangeActiveColorTheme(() => {
       updateWebview();
     });
@@ -839,12 +862,39 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       // current top line lets the fresh page jump there instantly on load
       // instead of the extension separately posting a scroll correction
       // afterward (which visibly showed as "reset to top, then animate
-      // back down" on every re-render while typing).
+      // back down" on every re-render while typing). Reserved now for the
+      // genuinely-rare cases that need a real reload (initial open, theme
+      // switch, manual refresh) -- see postContentUpdate for the common
+      // case of a regular source edit, which no longer reloads at all.
       const editor = findSourceEditor();
       const initialScrollLine = editor?.visibleRanges[0]?.start.line;
       const html = this.generateHtml(document, webviewPanel.webview, initialScrollLine);
       webviewPanel.webview.html = html;
       lastRenderedHtmlByUri.set(document.uri.toString(), html);
+    };
+
+    // The common case: a regular source edit. Sends just the freshly
+    // rendered DITA content as a message instead of reassigning
+    // webview.html -- the page itself is never destroyed and recreated,
+    // so there's no reload to visibly flash/reset, no scroll position to
+    // restore (the browser preserves it automatically, the same way it
+    // would for any other in-place DOM update), and no window for a
+    // scroll-correction message from an unrelated cause (a source click,
+    // the editor's own visible-range-follow, ...) to race an in-flight
+    // page reload and land on the wrong content -- the exact failure mode
+    // reported ("jumps to the right spot, then immediately somewhere
+    // else"), since there is no longer a reload for anything to race
+    // against. Falls back to a full reload only if rendering itself
+    // failed (malformed XML mid-edit, etc.), to show the error page --
+    // an error has no "content" to patch in.
+    const postContentUpdate = () => {
+      if (disposed) return;
+      const result = this.renderTopicContent(document, webviewPanel.webview);
+      if (result.error !== undefined) {
+        updateWebview();
+        return;
+      }
+      webviewPanel.webview.postMessage({ type: 'updateContent', html: result.html });
     };
 
     updateWebview();
@@ -861,15 +911,18 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     });
   }
 
-  private generateHtml(
+  /**
+   * Renders just the DITA content (not the surrounding page chrome) --
+   * shared by generateHtml (full page, used for initial load/theme switch/
+   * refresh) and the incremental content-only update path used for every
+   * regular source edit. Pulled out specifically so a content edit no
+   * longer needs webview.html reassigned wholesale (a full page reload)
+   * just to get fresh content onto the page -- see postContentUpdate.
+   */
+  private renderTopicContent(
     document: vscode.TextDocument,
     webview: vscode.Webview,
-    initialScrollLine?: number,
-  ): string {
-    const stylesUri = webview.asWebviewUri(
-      vscode.Uri.file(join(this.context.extensionPath, 'media', 'styles.css')),
-    );
-
+  ): { html: string; error?: undefined } | { html?: undefined; error: string } {
     const docRootDir = dirname(document.uri.fsPath);
     const docRoot = vscode.Uri.file(docRootDir);
     const asWebviewUri = (relPath: string): string => {
@@ -931,6 +984,39 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
         },
       });
 
+      return { html: content };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { error: message };
+    }
+  }
+
+  private generateHtml(
+    document: vscode.TextDocument,
+    webview: vscode.Webview,
+    initialScrollLine?: number,
+  ): string {
+    const stylesUri = webview.asWebviewUri(
+      vscode.Uri.file(join(this.context.extensionPath, 'media', 'styles.css')),
+    );
+
+    const result = this.renderTopicContent(document, webview);
+    if (result.error !== undefined) {
+      const message = result.error;
+      return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Error</title></head>
+<body>
+<div style="padding:2rem;color:#c0392b;">
+<h2>Render Error</h2>
+<pre>${escapeHtml(message)}</pre>
+</div>
+</body>
+</html>`;
+    }
+    const content = result.html;
+
+    try {
       const { files, defaultName: discoveredDefaultName } = discoverCssFiles(document.uri);
       // A previously-selected CSS file (persisted per-document, see
       // CSS_SELECTION_KEY above) takes priority over discoverCssFiles()'s
@@ -971,7 +1057,7 @@ ${defaultContent ? `<style>\n${defaultContent}\n</style>` : ''}
 <script nonce="${nonce}">window.__cssFiles=${cssFilesJson};window.__defaultCss=${defaultNameJson};window.__widthSelection=${widthSelectionJson};window.__fontPrefs=${fontPrefsJson};window.__initialScrollLine=${initialScrollLineJs};</script>
 </head>
 <body>
-${content}
+<div id="dita-content-root">${content}</div>
 <script nonce="${nonce}">${script}</script>
 </body>
 </html>`;
