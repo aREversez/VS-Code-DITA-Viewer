@@ -1380,6 +1380,53 @@ describe('renderer', () => {
     assert.ok(html.includes('&quot;'), 'quote in the URI should be escaped');
   });
 
+  // Reserving the right aspect-ratio box before the browser has actually
+  // loaded the image (see readImageDimensions/getImageDimensions in
+  // ditaRenderUtils.ts) is what prevents layout shift as lazy-loaded
+  // images finish loading -- most pronounced scrolling through Book mode,
+  // which composites many topics' worth of images into one long page.
+  it('should fill in width/height from getImageDimensions when the DITA source has neither', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      getImageDimensions: (relPath: string) => (relPath === 'img.png' ? { width: 300, height: 200 } : undefined),
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/image', [], { href: 'img.png' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('width="300"'));
+    assert.ok(html.includes('height="200"'));
+  });
+
+  it('should let an explicit @width/@height on the DITA image element win over getImageDimensions', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      getImageDimensions: () => ({ width: 300, height: 200 }),
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/image', [], { href: 'img.png', width: '50', height: '50' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('width="50"'));
+    assert.ok(html.includes('height="50"'));
+    assert.ok(!html.includes('300') && !html.includes('200'), 'getImageDimensions must not override an explicit author-specified size');
+  });
+
+  it('should render without width/height when getImageDimensions is absent or returns nothing, same as before this feature existed', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/image', [], { href: 'img.png' }),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('width='));
+    assert.ok(!html.includes('height='));
+  });
+
   // ── Prolog suppression tests ──
 
   it('should not render prolog metadata content in the body', () => {

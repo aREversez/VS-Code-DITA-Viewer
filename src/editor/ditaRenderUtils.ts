@@ -1,8 +1,145 @@
-import { existsSync, readFileSync } from 'fs';
-import { resolve, dirname, relative, isAbsolute } from 'path';
+import { existsSync, readFileSync, openSync, readSync, closeSync } from 'fs';
+import { resolve, dirname, relative, isAbsolute, extname } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
+
+// ── Image dimensions (for reserving layout space before the image loads) ──
+//
+// <img loading="lazy"> with no width/height reserves zero space until the
+// browser actually decodes the file, then snaps the surrounding content
+// down to make room -- barely noticeable for a single image in the topic
+// preview, but Book mode composites many topics' worth of images into one
+// long page, so scrolling through it means repeatedly landing on a fresh
+// batch of not-yet-loaded images and watching everything below them lurch
+// as each one finally loads. Reading real width/height from the file
+// (only the header, not the whole image -- a bounded 64KB read handles
+// every format below even for a multi-MB JPEG with a large EXIF/ICC
+// profile before its SOF marker) lets width/height attributes go on the
+// <img> tag, which combined with this project's existing img{height:auto}
+// makes the browser reserve the correct *aspect ratio* box immediately,
+// still scaling responsively via max-width -- not a fixed pixel size.
+// This only fills a gap: an explicit @width/@height on the DITA <image>
+// element itself always wins (see the image renderer in baseTypeMap.ts).
+
+const IMAGE_HEADER_READ_BYTES = 65536;
+
+function readHeaderBytes(filePath: string, maxBytes: number): Buffer | undefined {
+  let fd: number | undefined;
+  try {
+    fd = openSync(filePath, 'r');
+    const buf = Buffer.alloc(maxBytes);
+    const bytesRead = readSync(fd, buf, 0, maxBytes, 0);
+    return buf.subarray(0, bytesRead);
+  } catch {
+    return undefined;
+  } finally {
+    if (fd !== undefined) {
+      try { closeSync(fd); } catch { /* already closed / never opened */ }
+    }
+  }
+}
+
+function readPngDimensions(buf: Buffer): { width: number; height: number } | undefined {
+  // 8-byte signature, then a 4-byte chunk length + "IHDR" + width (4B BE) + height (4B BE)
+  if (buf.length < 24) return undefined;
+  if (buf.readUInt32BE(0) !== 0x89504e47 || buf.readUInt32BE(4) !== 0x0d0a1a0a) return undefined;
+  if (buf.toString('ascii', 12, 16) !== 'IHDR') return undefined;
+  return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+}
+
+function readGifDimensions(buf: Buffer): { width: number; height: number } | undefined {
+  if (buf.length < 10) return undefined;
+  const sig = buf.toString('ascii', 0, 6);
+  if (sig !== 'GIF87a' && sig !== 'GIF89a') return undefined;
+  return { width: buf.readUInt16LE(6), height: buf.readUInt16LE(8) };
+}
+
+function readBmpDimensions(buf: Buffer): { width: number; height: number } | undefined {
+  if (buf.length < 26) return undefined;
+  if (buf.toString('ascii', 0, 2) !== 'BM') return undefined;
+  const width = buf.readInt32LE(18);
+  const height = buf.readInt32LE(22);
+  // A negative height means a top-down (rather than the default
+  // bottom-up) bitmap -- the magnitude is still the real pixel height.
+  return { width: Math.abs(width), height: Math.abs(height) };
+}
+
+function readJpegDimensions(buf: Buffer): { width: number; height: number } | undefined {
+  if (buf.length < 4 || buf.readUInt16BE(0) !== 0xffd8) return undefined;
+  let offset = 2;
+  while (offset + 4 <= buf.length) {
+    if (buf[offset] !== 0xff) { offset++; continue; }
+    const marker = buf[offset + 1];
+    // Markers with no payload to skip over
+    if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      offset += 2;
+      continue;
+    }
+    if (offset + 4 > buf.length) break;
+    const segmentLength = buf.readUInt16BE(offset + 2);
+    const isSof = marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
+    if (isSof) {
+      if (offset + 9 > buf.length) return undefined; // truncated read -- header didn't fit in what we sampled
+      return { height: buf.readUInt16BE(offset + 5), width: buf.readUInt16BE(offset + 7) };
+    }
+    if (marker === 0xda) return undefined; // Start of Scan reached with no SOF found
+    offset += 2 + segmentLength;
+  }
+  return undefined;
+}
+
+function readSvgDimensions(buf: Buffer): { width: number; height: number } | undefined {
+  const text = buf.toString('utf-8');
+  const svgTagMatch = text.match(/<svg\b[^>]*>/);
+  if (!svgTagMatch) return undefined;
+  const tag = svgTagMatch[0];
+  const widthMatch = tag.match(/\bwidth="([\d.]+)(?:px)?"/);
+  const heightMatch = tag.match(/\bheight="([\d.]+)(?:px)?"/);
+  if (widthMatch && heightMatch) {
+    const width = parseFloat(widthMatch[1]);
+    const height = parseFloat(heightMatch[1]);
+    if (width > 0 && height > 0) return { width, height };
+  }
+  // Percentage/unitless width+height, or neither present -- fall back to
+  // viewBox, which every real-world SVG has anyway and gives an aspect
+  // ratio even when absolute pixel dimensions weren't authored at all.
+  const viewBoxMatch = tag.match(/\bviewBox="\s*[\d.-]+\s+[\d.-]+\s+([\d.]+)\s+([\d.]+)\s*"/);
+  if (viewBoxMatch) {
+    const width = parseFloat(viewBoxMatch[1]);
+    const height = parseFloat(viewBoxMatch[2]);
+    if (width > 0 && height > 0) return { width, height };
+  }
+  return undefined;
+}
+
+const IMAGE_DIMENSION_READERS: Record<string, (buf: Buffer) => { width: number; height: number } | undefined> = {
+  '.png': readPngDimensions,
+  '.gif': readGifDimensions,
+  '.bmp': readBmpDimensions,
+  '.jpg': readJpegDimensions,
+  '.jpeg': readJpegDimensions,
+  '.svg': readSvgDimensions,
+};
+
+/**
+ * Reads just enough of an image file to determine its natural pixel
+ * dimensions, without loading or decoding the whole file. Returns
+ * undefined for anything unreadable, unrecognized, or corrupt -- callers
+ * treat that as "no dimensions available" and fall back to the previous
+ * behavior (no width/height reserved), never an error.
+ */
+export function readImageDimensions(filePath: string): { width: number; height: number } | undefined {
+  const reader = IMAGE_DIMENSION_READERS[extname(filePath).toLowerCase()];
+  if (!reader) return undefined;
+  const buf = readHeaderBytes(filePath, IMAGE_HEADER_READ_BYTES);
+  if (!buf) return undefined;
+  try {
+    return reader(buf);
+  } catch {
+    return undefined;
+  }
+}
 
 // ── Text extraction ──
 
@@ -460,6 +597,13 @@ export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
       resolveConref: (conref: string) => conrefResolver(conref),
       resolveConrefRange: (conref: string, conrefend: string) => conrefRangeResolver(conref, conrefend),
       noteLabels,
+      getImageDimensions: (relPath: string) => {
+        try {
+          return readImageDimensions(resolve(docDir, decodeHrefPart(relPath)));
+        } catch {
+          return undefined;
+        }
+      },
     });
 
     const titleNode = (ditaDoc.root.children || []).find(

@@ -408,10 +408,26 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   'topic/image': (node, ctx) => {
     const href = getAttr(node, 'href') || '';
     const placement = getAttr(node, 'placement') || 'inline';
-    const width = getAttr(node, 'width');
-    const height = getAttr(node, 'height');
+    let width = getAttr(node, 'width');
+    let height = getAttr(node, 'height');
     const scale = getAttr(node, 'scale');
     const scalefit = getAttr(node, 'scalefit');
+
+    // Author-specified @width/@height on the <image> element always wins;
+    // only fall back to the file's own natural dimensions (read from disk,
+    // not decoded from the loaded image — see readImageDimensions) when
+    // neither is given, purely to reserve the right aspect-ratio box
+    // before the browser has actually loaded the image (this project's
+    // own img{height:auto} means a bare width/height attribute doesn't
+    // force a fixed pixel size, it just informs the aspect ratio while
+    // max-width:100% still scales the box down responsively as usual).
+    if (!width && !height && href && ctx.getImageDimensions) {
+      const natural = ctx.getImageDimensions(href);
+      if (natural) {
+        width = String(natural.width);
+        height = String(natural.height);
+      }
+    }
 
     // DITA allows alt text as both the @alt attribute and a richer <alt>
     // child element (topic/alt) — the child can carry formatted content

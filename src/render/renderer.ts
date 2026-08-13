@@ -16,6 +16,14 @@ export interface RenderContext {
   /** conrefend range support — see renderConrefRange below */
   resolveConrefRange?: (conref: string, conrefend: string) => DitaNode[] | undefined;
   noteLabels?: Record<string, string>;
+  /**
+   * Reads an image's natural pixel dimensions from disk (relative to
+   * documentDir, same as asWebviewUri) so the renderer can reserve the
+   * right aspect-ratio box via width/height attributes before the browser
+   * has loaded the actual image data -- only consulted when the DITA
+   * source itself has no @width/@height, which always wins when present.
+   */
+  getImageDimensions?: (relPath: string) => { width: number; height: number } | undefined;
 }
 
 const CONTAINER_BASETYPES = new Set([

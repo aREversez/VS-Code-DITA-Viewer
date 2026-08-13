@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, findTextMatches, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, findTextMatches, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -76,6 +76,131 @@ describe('detectNoteLabels', () => {
       assert.ok(DEFAULT_NOTE_LABELS[t], `DEFAULT_NOTE_LABELS is missing "${t}"`);
       assert.ok(ZH_NOTE_LABELS[t], `ZH_NOTE_LABELS is missing "${t}"`);
     }
+  });
+});
+
+describe('readImageDimensions', () => {
+  let dir: string;
+  before(() => {
+    dir = mkdtempSync(join(tmpdir(), 'dita-viewer-img-dims-'));
+  });
+  after(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  function writePng(path: string, width: number, height: number) {
+    const sig = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const ihdrData = Buffer.alloc(13);
+    ihdrData.writeUInt32BE(width, 0);
+    ihdrData.writeUInt32BE(height, 4);
+    ihdrData.writeUInt8(8, 8); // bit depth
+    ihdrData.writeUInt8(2, 9); // color type
+    // The reader here never validates the CRC, so a real one isn't needed
+    // for this test -- only the length/tag/data layout it actually reads.
+    const chunk = (tag: string, data: Buffer) => {
+      const tagBuf = Buffer.from(tag, 'ascii');
+      const lenBuf = Buffer.alloc(4);
+      lenBuf.writeUInt32BE(data.length, 0);
+      const crcBuf = Buffer.alloc(4);
+      return Buffer.concat([lenBuf, tagBuf, data, crcBuf]);
+    };
+    writeFileSync(path, Buffer.concat([sig, chunk('IHDR', ihdrData), chunk('IEND', Buffer.alloc(0))]));
+  }
+
+  function writeGif(path: string, width: number, height: number) {
+    const buf = Buffer.alloc(13);
+    buf.write('GIF89a', 0, 'ascii');
+    buf.writeUInt16LE(width, 6);
+    buf.writeUInt16LE(height, 8);
+    writeFileSync(path, buf);
+  }
+
+  function writeBmp(path: string, width: number, height: number) {
+    const buf = Buffer.alloc(26);
+    buf.write('BM', 0, 'ascii');
+    buf.writeUInt32LE(40, 14); // DIB header size
+    buf.writeInt32LE(width, 18);
+    buf.writeInt32LE(height, 22);
+    writeFileSync(path, buf);
+  }
+
+  function writeJpeg(path: string, width: number, height: number) {
+    // SOI, then an APP0/JFIF segment (to verify marker-skipping works),
+    // then SOF0 carrying the real dimensions, then SOS + EOI.
+    const app0 = Buffer.from('JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00', 'binary');
+    const app0Header = Buffer.from([0xff, 0xe0, 0, 0]);
+    app0Header.writeUInt16BE(app0.length + 2, 2);
+    const sofPayload = Buffer.alloc(6);
+    sofPayload.writeUInt8(8, 0);
+    sofPayload.writeUInt16BE(height, 1);
+    sofPayload.writeUInt16BE(width, 3);
+    sofPayload.writeUInt8(1, 5);
+    const sofHeader = Buffer.from([0xff, 0xc0, 0, 0]);
+    sofHeader.writeUInt16BE(sofPayload.length + 2, 2);
+    writeFileSync(path, Buffer.concat([
+      Buffer.from([0xff, 0xd8]),
+      app0Header, app0,
+      sofHeader, sofPayload,
+      Buffer.from([0xff, 0xd9]),
+    ]));
+  }
+
+  it('should read width/height from a real PNG file header', () => {
+    const p = join(dir, 'a.png');
+    writePng(p, 300, 200);
+    assert.deepStrictEqual(readImageDimensions(p), { width: 300, height: 200 });
+  });
+
+  it('should read width/height from a real GIF file header', () => {
+    const p = join(dir, 'a.gif');
+    writeGif(p, 150, 100);
+    assert.deepStrictEqual(readImageDimensions(p), { width: 150, height: 100 });
+  });
+
+  it('should read width/height from a real BMP file header, taking the absolute value of a top-down (negative) height', () => {
+    const p = join(dir, 'a.bmp');
+    writeBmp(p, 640, -480);
+    assert.deepStrictEqual(readImageDimensions(p), { width: 640, height: 480 });
+  });
+
+  it('should read width/height from a real JPEG file, skipping past a JFIF/APP0 segment to find the SOF0 marker', () => {
+    const p = join(dir, 'a.jpg');
+    writeJpeg(p, 1024, 768);
+    assert.deepStrictEqual(readImageDimensions(p), { width: 1024, height: 768 });
+  });
+
+  it('should read explicit width/height attributes from an SVG root element', () => {
+    const p = join(dir, 'a.svg');
+    writeFileSync(p, '<svg xmlns="http://www.w3.org/2000/svg" width="250" height="180" viewBox="0 0 250 180"><rect/></svg>');
+    assert.deepStrictEqual(readImageDimensions(p), { width: 250, height: 180 });
+  });
+
+  it('should fall back to viewBox for an SVG with no explicit width/height attributes', () => {
+    const p = join(dir, 'b.svg');
+    writeFileSync(p, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><rect/></svg>');
+    assert.deepStrictEqual(readImageDimensions(p), { width: 400, height: 300 });
+  });
+
+  it('should return undefined for a nonexistent file rather than throwing', () => {
+    assert.strictEqual(readImageDimensions(join(dir, 'does-not-exist.png')), undefined);
+  });
+
+  it('should return undefined for an unsupported extension rather than throwing', () => {
+    const p = join(dir, 'a.webp');
+    writeFileSync(p, Buffer.from('RIFF....WEBPVP8 '));
+    assert.strictEqual(readImageDimensions(p), undefined);
+  });
+
+  it('should return undefined for a truncated/corrupt PNG rather than throwing', () => {
+    const p = join(dir, 'corrupt.png');
+    writeFileSync(p, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    assert.strictEqual(readImageDimensions(p), undefined);
+  });
+
+  it('should return undefined for a JPEG with no SOF marker (e.g. truncated before it) rather than throwing', () => {
+    const p = join(dir, 'nosof.jpg');
+    writeFileSync(p, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+    assert.strictEqual(readImageDimensions(p), undefined);
   });
 });
 

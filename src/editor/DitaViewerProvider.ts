@@ -5,7 +5,7 @@ import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { dirname, isAbsolute, join, resolve, basename } from 'path';
 import { randomBytes } from 'crypto';
 import { DitaNode } from '../parser/domTypes';
-import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart, detectNoteLabels, FileReader } from './ditaRenderUtils';
+import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart, detectNoteLabels, readImageDimensions, FileReader } from './ditaRenderUtils';
 
 // Test-only hook: @vscode/test-electron integration tests can't read a
 // webview's rendered HTML directly (VS Code doesn't expose the WebviewPanel
@@ -922,6 +922,13 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
         resolveConref: (conref: string) => conrefResolver(conref),
         resolveConrefRange: (conref: string, conrefend: string) => conrefRangeResolver(conref, conrefend),
         noteLabels,
+        getImageDimensions: (relPath: string) => {
+          try {
+            return readImageDimensions(resolve(docRootDir, decodeHrefPart(relPath)));
+          } catch {
+            return undefined;
+          }
+        },
       });
 
       const { files, defaultName: discoveredDefaultName } = discoverCssFiles(document.uri);
