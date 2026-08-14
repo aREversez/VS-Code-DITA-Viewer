@@ -55,6 +55,26 @@ body {
   color: var(--vscode-editor-foreground);
 }
 
+/* Every source edit swaps this div's entire innerHTML in one mutation
+   (see #dita-content-root's message handler in DitaViewerProvider.ts) --
+   not a small, targeted change the browser's default CSS Scroll Anchoring
+   is designed for (it tries to auto-compensate scrollTop to keep whatever
+   it picks as the "anchor node" visually fixed when content changes near
+   the viewport). When virtually the entire subtree is replaced at once,
+   the previous anchor node is gone and whatever the browser picks as a
+   replacement has no reliable relationship to what was actually on
+   screen, so its compensation can shift scroll position in ways that
+   don't correspond to anything real -- consistent with the reported
+   "typing edits far from the current scroll position occasionally causes
+   an unexplained extra scroll shift" behavior. Turning it off here means
+   scrollTop simply stays exactly where it was as a fixed number across
+   the swap, which is what postContentUpdate's design already assumes;
+   the extension's own explicit logic (applyHighlightLine, scrollToLine)
+   is the only thing that should ever intentionally move it. */
+#dita-content-root {
+  overflow-anchor: none;
+}
+
 /* Topic article */
 .topic > h1:first-child { margin-top: 0; }
 
