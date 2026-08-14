@@ -127,22 +127,16 @@ p { margin: 0.75em 0; }
    (see the toolbar button in DitaViewerProvider.ts) -- pure CSS, no
    re-render needed. */
 .profiled {
-  /* No forced display -- .profiled now applies directly to the real
-     element (see injectBlockProfiling in renderer.ts), not to a synthetic
-     wrapper <span> that needed forcing to block to look like a box.
-     Forcing display:block here would strip list-item/table-cell/etc. off
-     an <li>/<td>/... that legitimately needs to keep its native display
-     (an <li> stuck at display:block loses its marker entirely). Every
-     block-level DITA content type this applies to already renders as a
-     real block-ish tag on its own. */
-  position: relative;
-  /* Outline only, no fill -- matches Oxygen's default profiling display
-     (a stroked box around the matched content) rather than tinting the
-     background, so the profiled text renders exactly as it would
-     unprofiled and the box reads as metadata, not as styled content. */
-  background: none;
-  border: 1.5px solid var(--color-profiling-border);
+  /* .profiled applies directly to the real element (see injectBlockProfiling
+     in renderer.ts), not a synthetic wrapper -- so we must NOT use border or
+     padding on the left side: border takes box-model space shifting content
+     and nested list markers, and any decoration on <li>/<ul>/<ol> visually
+     interferes with the browser's list-marker positioning. box-shadow paints
+     outward from the border-box edge without affecting layout, so the green
+     highlight ring never pushes content or covers nested bullets/numbers. */
+  box-shadow: 0 0 0 1.5px var(--color-profiling-border);
   border-radius: 3px;
+  background: none;
   padding: 0.4rem 0.6rem 1.3rem;
   margin: 0.5rem 0;
 }
@@ -173,7 +167,7 @@ p { margin: 0.75em 0; }
 .profiling-chip__value { font-weight: 400; }
 body.hide-profiling .profiled {
   background: none;
-  border: none;
+  box-shadow: none;
   padding: 0;
   margin: 0;
 }
@@ -190,6 +184,14 @@ body.hide-profiling .profiling-label { display: none; }
 /* Lists */
 ul, ol { padding-left: 1.5em; }
 li { margin: 0.25em 0; }
+/* Profiling on list elements: box-shadow doesn't affect layout, but the
+   generic .profiled padding still adds left space that shifts text and
+   nested list markers rightward vs. un-profiled siblings. Zero out the
+   left side so a profiled li/ul/ol aligns identically to its plain ones.
+   The top/bottom padding is kept so the box-shadow ring has breathing
+   room above and below the content. */
+li.profiled { padding-left: 0; }
+ul.profiled, ol.profiled { padding-left: 0; }
 .simple-list { list-style: none; padding-left: 1.5em; }
 
 /* Definition lists */
