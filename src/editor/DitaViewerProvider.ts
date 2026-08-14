@@ -853,6 +853,24 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       if (Date.now() < skipVisibleUntil) return;
       const sel = e.selections[0];
       if (!sel || sel.start.line !== sel.end.line) return;
+      // Moving the cursor somewhere not currently on screen (e.g. clicking
+      // near the end of a long file while the editor happens to be
+      // scrolled elsewhere) very often also moves the editor's own visible
+      // range as a side effect -- VS Code reveals the cursor into view on
+      // its own. That would otherwise fire editorSub below shortly after
+      // this, telling the preview to align a *different* line (the
+      // editor's new visible-range top, from simple continuous scroll-
+      // follow) at the *top* of its viewport, fighting the highlightLine
+      // this posts, which centers the exact cursor line instead -- visibly
+      // the preview correctly centering the edit position, then abruptly
+      // sliding to a completely different alignment for what was actually
+      // the same underlying cursor move, before a later correction snaps
+      // it back. Suppressing editorSub for a beat after a selection change
+      // lets highlightLine's centering stand uncontested for what's almost
+      // always the same event; a genuine independent source scroll (mouse
+      // wheel, no cursor movement) never touches this path at all, since
+      // it never fires onDidChangeTextEditorSelection to begin with.
+      skipVisibleUntil = Date.now() + 400;
       webviewPanel.webview.postMessage({ type: 'highlightLine', line: sel.start.line, col: sel.start.character });
     });
 
@@ -862,6 +880,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       if (Date.now() < skipVisibleUntil) return;
       if (visibleRangeTimer) clearTimeout(visibleRangeTimer);
       visibleRangeTimer = setTimeout(() => {
+        if (Date.now() < skipVisibleUntil) return;
         const topLine = e.textEditor.visibleRanges[0]?.start.line;
         if (topLine !== undefined) postRevealLine(topLine);
       }, 120);
