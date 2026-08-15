@@ -127,6 +127,14 @@ p { margin: 0.75em 0; }
    (see the toolbar button in DitaViewerProvider.ts) -- pure CSS, no
    re-render needed. */
 .profiled {
+  /* .profiling-label (the "Attr [value]" chip) is position:absolute,
+     anchored to bottom/right -- it needs this as its positioned ancestor
+     or it resolves against the page's own initial containing block
+     instead, landing fixed near the bottom-right of the whole document
+     rather than at the bottom of whichever box it actually belongs to
+     (every profiled element's label ends up stacked on top of each
+     other in the same spot, nowhere near the content it's labeling). */
+  position: relative;
   /* .profiled applies directly to the real element (see injectBlockProfiling
      in renderer.ts), not a synthetic wrapper -- so we must NOT use border or
      padding on the left side: border takes box-model space shifting content
@@ -171,6 +179,17 @@ body.hide-profiling .profiled {
   padding: 0;
   margin: 0;
 }
+/* The general reset above zeroes padding on every side, including left --
+   correct for everything else profiling touches, but a profiled ul/ol
+   relies on that left padding for its own children's marker gutter (see
+   ul.profiled/ol.profiled above), not just for the now-hidden box. Without
+   restoring it here, turning Flags off would silently break nested-list
+   indentation for exactly the same reason it broke with the box visible,
+   just conditionally instead of always. */
+body.hide-profiling ul.profiled,
+body.hide-profiling ol.profiled {
+  padding-left: 1.5em;
+}
 body.hide-profiling .profiled--inline { display: inline; }
 body.hide-profiling .profiling-label { display: none; }
 
@@ -185,13 +204,20 @@ body.hide-profiling .profiling-label { display: none; }
 ul, ol { padding-left: 1.5em; }
 li { margin: 0.25em 0; }
 /* Profiling on list elements: box-shadow doesn't affect layout, but the
-   generic .profiled padding still adds left space that shifts text and
-   nested list markers rightward vs. un-profiled siblings. Zero out the
-   left side so a profiled li/ul/ol aligns identically to its plain ones.
-   The top/bottom padding is kept so the box-shadow ring has breathing
-   room above and below the content. */
+   generic .profiled padding still overrides the base padding-left both
+   rules above rely on. li's own padding-left is normally 0 (a plain li's
+   marker-gutter comes entirely from its *parent* ul/ol's padding, not
+   from the li itself) -- .profiled's shorthand would otherwise add
+   0.6rem there, shifting a profiled li's text right of its plain
+   siblings, so it's zeroed back out. ul/ol are the opposite case: their
+   own padding-left of 1.5em IS the marker gutter their own <li> children
+   need, so when the ul/ol itself is profiled, that 1.5em has to be
+   restored (not just zeroed) or its children's markers lose their
+   reserved space entirely and the whole nested list stops looking nested
+   at all. The top/bottom padding is kept so the box-shadow ring has
+   breathing room above and below the content either way. */
 li.profiled { padding-left: 0; }
-ul.profiled, ol.profiled { padding-left: 0; }
+ul.profiled, ol.profiled { padding-left: 1.5em; }
 .simple-list { list-style: none; padding-left: 1.5em; }
 
 /* Definition lists */
