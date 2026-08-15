@@ -127,14 +127,6 @@ p { margin: 0.75em 0; }
    (see the toolbar button in DitaViewerProvider.ts) -- pure CSS, no
    re-render needed. */
 .profiled {
-  /* .profiling-label (the "Attr [value]" chip) is position:absolute,
-     anchored to bottom/right -- it needs this as its positioned ancestor
-     or it resolves against the page's own initial containing block
-     instead, landing fixed near the bottom-right of the whole document
-     rather than at the bottom of whichever box it actually belongs to
-     (every profiled element's label ends up stacked on top of each
-     other in the same spot, nowhere near the content it's labeling). */
-  position: relative;
   /* .profiled applies directly to the real element (see injectBlockProfiling
      in renderer.ts), not a synthetic wrapper -- so we must NOT use border or
      padding on the left side: border takes box-model space shifting content
@@ -145,7 +137,7 @@ p { margin: 0.75em 0; }
   box-shadow: 0 0 0 1.5px var(--color-profiling-border);
   border-radius: 3px;
   background: none;
-  padding: 0.4rem 0.6rem 1.3rem;
+  padding: 0.4rem 0.6rem;
   margin: 0.5rem 0;
 }
 .profiled--inline {
@@ -154,14 +146,27 @@ p { margin: 0.75em 0; }
   margin: 0;
   border-radius: 2px;
 }
-.profiled--inline .profiling-label { position: static; display: inline-flex; margin-left: 0.3em; vertical-align: middle; }
+.profiled--inline .profiling-label { float: none; position: static; display: inline-flex; margin-left: 0.3em; vertical-align: middle; }
+/* float rather than a dedicated bottom-padding + position:absolute slot:
+   the box no longer has to reserve a fixed amount of vertical space for
+   the label regardless of how little content actually needs it (a
+   single-line profiled step/bullet used to look disproportionately tall,
+   with a big empty gap between the text and the label sitting below it).
+   Floating right lets the label sit on the *same* line as short content
+   for free, while still correctly dropping to its own line -- and staying
+   right-aligned there, matching Oxygen's convention and the ditamap tree
+   view's own box (see mapTypeMap.ts) -- whenever the preceding content is
+   itself block-level (a nested list, a wrapped multi-line paragraph) and
+   doesn't leave room on the same line. .profiled--inline above overrides
+   this back to float:none, since a label attached to an inline phrase
+   (ph/b/i/xref/...) needs to sit immediately next to that phrase
+   mid-sentence, not escape to the edge of the whole paragraph. */
 .profiling-label {
-  position: absolute;
-  right: 0.4rem;
-  bottom: 0.25rem;
+  float: right;
   display: flex;
   gap: 0.3rem;
   flex-wrap: wrap;
+  margin-left: 0.5em;
 }
 .profiling-chip {
   background: var(--color-profiling-label-bg);
