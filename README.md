@@ -259,6 +259,27 @@ You can optionally select a `.ditaval` filter file during the transform flow. Wh
 
 For `html5` / `xhtml` output, the extension automatically injects a **navigation toolbar**, **sidebar TOC**, **on-page heading navigation**, **code language labels with click-to-copy**, **back-to-top button**, and a **dark mode toggle**. All features are opt-out — deselect any you don't need during the QuickPick step, or re-enable them on subsequent transforms. The enhancements are written directly into the DITA-OT output directory as `dita-viewer-chrome.js`, `dita-viewer-chrome.css`, and (if dark mode is enabled) `dita-viewer-dark.css`, then linked into every HTML file.
 
+## Localization
+
+The extension ships in **English** and **Simplified Chinese** (zh-cn). There is no language setting — the UI language automatically follows your VS Code display language (which itself defaults to your system language). If VS Code runs in a language this extension doesn't ship, everything falls back to English.
+
+Two layers are localized, both driven by the standard VS Code l10n mechanism:
+
+| Layer | What | Files |
+|---|---|---|
+| Manifest | Command titles, view names, configuration descriptions | `package.nls.json` + `package.nls.<locale>.json` |
+| Runtime | Notifications, QuickPicks, webview toolbar/search UI | `l10n/bundle.l10n.json` + `l10n/bundle.l10n.<locale>.json` |
+
+One deliberate exception: **note labels** (`<note type="warning">` → "Warning" / "警告") follow the *document's* `xml:lang` attribute, falling back to the UI language when the document declares none — matching how DITA-OT itself picks note labels at publish time.
+
+### Adding a language
+
+1. Copy `l10n/bundle.l10n.json` to `l10n/bundle.l10n.<locale>.json` and translate the values (keys are the English source strings; keep `{0}`/`{1}` placeholders intact).
+2. Copy `package.nls.json` to `package.nls.<locale>.json` and translate the values.
+3. Run `npm run check:l10n` to verify the new catalog covers every string used in the source, then reload VS Code with the matching display language installed.
+
+No code changes are needed — catalogs are discovered by file name.
+
 ## Installation
 
 ### From VSIX
@@ -288,6 +309,7 @@ npm test               # Run unit tests
 npm run test:e2e       # Run end-to-end tests
 npm run lint           # Lint source
 npm run format         # Format with Prettier
+npm run check:l10n     # Verify i18n catalogs match strings used in source
 ```
 
 ### Packaging

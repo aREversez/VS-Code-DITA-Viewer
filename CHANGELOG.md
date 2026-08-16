@@ -56,6 +56,16 @@
 
 - **Images default to left-aligned instead of centered** — a standalone `<fig>`'s image now aligns flush with the surrounding body text's left edge, and an image inside a list item aligns with the item's own text rather than centering across the whole preview width, matching how figures read in Oxygen. No layout-detection logic needed: removing the forced centering lets each image fall back to the natural left edge of whatever block already contains it.
 
+### Localization
+
+- **Full English/Simplified Chinese localization of every user-facing string, with automatic language detection** — the extension follows the VS Code display language (itself system-language by default) with no language setting to configure; any other display language falls back to English. Built on the standard VS Code l10n mechanism across three layers, each extensible by adding a catalog file with no code change:
+  - Manifest strings (command titles, the map-explorer view name, configuration descriptions) via `package.nls.json` / `package.nls.zh-cn.json`.
+  - Extension-host strings (notifications, QuickPick labels/placeholders, DITA-OT progress and output-log lines, diagnostics) via `vscode.l10n.t()` with `l10n/bundle.l10n.*.json` catalogs — 99 strings, English source text as key, `{0}`-style placeholders.
+  - Webview strings (toolbar tooltips, search box, profiling Flags/Filter panel, font/width controls) — the webview can't call `vscode.l10n` itself, so the extension host translates every label up front and injects them as a JSON object the inline script reads; nothing user-visible is hardcoded in the webview.
+  - Bookmap role badges (第 1 章 / 附录 A / 前言 / …) translate through the same mechanism at render time; the render layer stays pure of VS Code imports by receiving already-translated labels.
+  - One deliberate exception: note-type labels (Warning/警告, Danger/危险, …) follow the *document's* `xml:lang`, falling back to the display language when the document declares none — matching how DITA-OT itself picks strings at publish time (labels mirror DITA-OT's own `strings-en-us.xml` / `strings-zh-cn.xml`).
+- **`npm run check:l10n`** — consistency guard (`scripts/check-l10n.cjs`) cross-checking every `vscode.l10n.t()` string in the source against both catalogs (missing keys, untranslated keys, stale keys, en/zh drift) and every `package.json` `%key%` against both `package.nls` files, with an allowlist for the book-role labels resolved by runtime key.
+
 ## 1.0.7 (2026-08-01)
 
 ### Rendering Completeness (new)

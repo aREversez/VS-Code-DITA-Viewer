@@ -284,6 +284,7 @@
     "watch": "node esbuild.config.js --watch",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
+    "check:l10n": "node scripts/check-l10n.cjs",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "pretest": "tsc -p tsconfig.test.json",
     "test": "mocha --config .mocharc.json",
