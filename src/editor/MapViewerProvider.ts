@@ -175,10 +175,11 @@ function getMapWebviewScript(): string {
   toolbar.appendChild(profilingBtn);
 
   // Filter button goes immediately next to Flags, same pairing as the
-  // topic viewer -- here it hides whole map entries (topicref-level
-  // profiling from the ditamap source) as well as any profiled spans
-  // inside a book-mode topic's own content, since both stamp the same
-  // data-profile-keys attribute.
+  // topic viewer -- in Outline mode this hides whole map entries by their
+  // topicref-level profiling; in Book mode there's no topicref-level
+  // profiling to speak of (see MapViewerProvider.renderBookContent), only
+  // whatever profiled spans exist inside each composited topic's own
+  // content, same as opening that topic directly.
   ${getProfilingFilterScript({
     buttonLabel: L.filterLabel,
     buttonTitle: L.filterTitle,
@@ -205,6 +206,34 @@ function getMapWebviewScript(): string {
     useRegex: L.searchUseRegex,
     invalidRegex: L.searchInvalidRegex,
   })}
+
+  // Every source edit (a topicref's profiling attributes, reordering
+  // entries, ...) sends just the freshly rendered content as a message
+  // instead of the extension reassigning webview.html wholesale -- see
+  // postContentUpdate in MapViewerProvider.ts for why (same reasoning as
+  // the topic viewer's own content-only update). Content-dependent setup
+  // that only ran once at initial load, because a full reload used to
+  // rerun this entire script from scratch every time, needs to re-run
+  // after each swap instead. Map view has no per-image zoom toolbar and
+  // no source-editor scroll-sync of its own to re-apply (unlike the topic
+  // viewer), so this is a shorter list.
+  window.addEventListener('message', function(e) {
+    if (e.data.type === 'updateContent') {
+      var contentRoot = document.getElementById('dita-content-root');
+      if (contentRoot) {
+        contentRoot.innerHTML = e.data.html;
+        if (typeof pfApplyFilter === 'function') pfApplyFilter();
+        if (typeof pfPanel !== 'undefined' && pfPanel) {
+          pfPanel.remove();
+          pfPanel = pfBuildPanel();
+          document.body.appendChild(pfPanel);
+        }
+        if (typeof sb !== 'undefined' && sb.style.display !== 'none' && searchInput.value) {
+          performSearch(searchInput.value);
+        }
+      }
+    }
+  });
 })();
 `;
 }
@@ -254,11 +283,13 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     const changeSubscription = vscode.workspace.onDidChangeTextDocument((e) => {
       if (e.document.uri.toString() !== document.uri.toString()) return;
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
-      renderDebounceTimer = setTimeout(updateWebview, 300);
+      renderDebounceTimer = setTimeout(postContentUpdate, 300);
     });
 
     // Re-render on theme switch so the manually-computed light/dark class
-    // never goes stale relative to the actual active theme.
+    // never goes stale relative to the actual active theme. A genuine full
+    // reload, unlike postContentUpdate below -- the class lives on <html>,
+    // outside the content div a content-only update touches.
     const themeSubscription = vscode.window.onDidChangeActiveColorTheme(() => {
       updateWebview();
     });
@@ -267,6 +298,23 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       const html = this.generateHtml(document, webviewPanel.webview, currentMode);
       webviewPanel.webview.html = html;
       lastRenderedHtmlByUri.set(document.uri.toString(), html);
+    };
+
+    // The common case: a regular source edit (topicref profiling, adding/
+    // reordering entries, ...). Sends just the freshly rendered content as
+    // a message instead of reassigning webview.html -- same reasoning, and
+    // the same fix, as DitaViewerProvider.ts's postContentUpdate: no full
+    // page reload means no images re-requesting/re-decoding, no scroll
+    // position lost, and nothing for an in-flight scroll correction to
+    // race against. Falls back to a full reload only if rendering itself
+    // failed, to show the error page.
+    const postContentUpdate = () => {
+      const result = this.renderMapContent(document, webviewPanel.webview, currentMode);
+      if (result.error !== undefined) {
+        updateWebview();
+        return;
+      }
+      webviewPanel.webview.postMessage({ type: 'updateContent', html: result.html });
     };
 
     updateWebview();
@@ -279,17 +327,12 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     });
   }
 
-  private generateHtml(
+  private renderMapContent(
     document: vscode.TextDocument,
     webview: vscode.Webview,
     mode: 'tree' | 'book',
-  ): string {
-    const stylesUri = webview.asWebviewUri(
-      vscode.Uri.file(join(this.context.extensionPath, 'media', 'styles.css')),
-    );
-
+  ): { html: string; error?: undefined } | { html?: undefined; error: string } {
     const docDir = dirname(document.uri.fsPath);
-
     try {
       const rawXml = document.getText();
       const preprocessedXml = preprocessEntities(rawXml);
@@ -307,28 +350,25 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         const keyMap = buildKeyMap(document.uri);
         content = renderMapDocument(mapDoc.root, { docDir, resolveKey: (k) => keyMap.get(k), roleFormat: formatLocalizedRole });
       }
-
-      const script = getMapWebviewScript();
-      const nonce = randomBytes(16).toString('base64');
-      const theme = vscode.window.activeColorTheme;
-      const isDark = theme.kind === vscode.ColorThemeKind.Dark || theme.kind === vscode.ColorThemeKind.HighContrast;
-
-      return `<!DOCTYPE html>
-<html lang="en"${isDark ? ' class="vscode-dark"' : ''}>
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
-<link rel="stylesheet" href="${stylesUri}">
-<title>${document.fileName}</title>
-</head>
-<body class="mode-${mode}">
-${content}
-<script nonce="${nonce}">${script}</script>
-</body>
-</html>`;
+      return { html: content };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      return { error: message };
+    }
+  }
+
+  private generateHtml(
+    document: vscode.TextDocument,
+    webview: vscode.Webview,
+    mode: 'tree' | 'book',
+  ): string {
+    const stylesUri = webview.asWebviewUri(
+      vscode.Uri.file(join(this.context.extensionPath, 'media', 'styles.css')),
+    );
+
+    const result = this.renderMapContent(document, webview, mode);
+    if (result.error !== undefined) {
+      const message = result.error;
       return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><title>Error</title></head>
@@ -340,6 +380,26 @@ ${content}
 </body>
 </html>`;
     }
+
+    const script = getMapWebviewScript();
+    const nonce = randomBytes(16).toString('base64');
+    const theme = vscode.window.activeColorTheme;
+    const isDark = theme.kind === vscode.ColorThemeKind.Dark || theme.kind === vscode.ColorThemeKind.HighContrast;
+
+    return `<!DOCTYPE html>
+<html lang="en"${isDark ? ' class="vscode-dark"' : ''}>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
+<link rel="stylesheet" href="${stylesUri}">
+<title>${document.fileName}</title>
+</head>
+<body class="mode-${mode}">
+<div id="dita-content-root">${result.html}</div>
+<script nonce="${nonce}">${script}</script>
+</body>
+</html>`;
   }
 
   private renderBookContent(
