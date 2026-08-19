@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { mkdtempSync, writeFileSync, rmSync } from 'fs';
+import { mkdtempSync, writeFileSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
 import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, findTextMatches, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions } from '../../editor/ditaRenderUtils';
@@ -201,6 +201,65 @@ describe('readImageDimensions', () => {
     const p = join(dir, 'nosof.jpg');
     writeFileSync(p, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
     assert.strictEqual(readImageDimensions(p), undefined);
+  });
+
+  // Cache correctness: every source edit re-renders the whole topic, which
+  // calls readImageDimensions again for every image in it -- most of which
+  // had nothing to do with what was just typed. Caching by path + mtime
+  // means those unrelated images should not need re-reading from disk.
+  describe('caching', () => {
+    it('should return a cached result for a file whose mtime has not changed, even if its on-disk content has (proving the cache, not a fresh read, is what answered)', () => {
+      const p = join(dir, 'cache-a.png');
+      // A single fixed reference timestamp applied identically both times,
+      // rather than reading it back via statSync() in between -- fs.Stats'
+      // mtimeMs can carry sub-millisecond precision on filesystems that
+      // support it, but a JS Date (what statSync().mtime returns, and what
+      // utimesSync ultimately applies) cannot represent that fraction, so
+      // a read-then-reapply round trip can silently drift by a fraction of
+      // a millisecond and never hit the cache at all -- flaky for reasons
+      // that have nothing to do with whether the cache logic is correct.
+      const fixedMtime = new Date('2024-01-01T00:00:00.000Z');
+      writePng(p, 100, 80);
+      utimesSync(p, fixedMtime, fixedMtime);
+      const first = readImageDimensions(p);
+      assert.deepStrictEqual(first, { width: 100, height: 80 });
+
+      writePng(p, 999, 888); // different content, same file path
+      utimesSync(p, fixedMtime, fixedMtime); // reapply the exact same Date value, not a re-read one
+
+      const second = readImageDimensions(p);
+      assert.deepStrictEqual(second, { width: 100, height: 80 }, 'mtime did not change, so the cached (old) dimensions should be returned rather than re-reading the (now different) file content');
+    });
+
+    it('should re-read and return fresh dimensions once mtime actually changes', () => {
+      const p = join(dir, 'cache-b.png');
+      writePng(p, 100, 80);
+      assert.deepStrictEqual(readImageDimensions(p), { width: 100, height: 80 });
+
+      writePng(p, 200, 160);
+      const laterMtime = new Date(statSync(p).mtime.getTime() + 1000);
+      utimesSync(p, laterMtime, laterMtime); // force a distinct, later mtime
+
+      assert.deepStrictEqual(readImageDimensions(p), { width: 200, height: 160 }, 'a genuinely changed mtime should invalidate the cache and pick up the new content');
+    });
+
+    it('should not return a stale cached result for a file that has since been deleted', () => {
+      const p = join(dir, 'cache-c.png');
+      writePng(p, 100, 80);
+      assert.deepStrictEqual(readImageDimensions(p), { width: 100, height: 80 });
+
+      rmSync(p);
+      assert.strictEqual(readImageDimensions(p), undefined, 'a deleted file must not keep returning its last-cached dimensions');
+    });
+
+    it('should cache a negative result (unreadable/unrecognized) too, not just successful reads', () => {
+      const p = join(dir, 'cache-d.webp');
+      writeFileSync(p, Buffer.from('not a real image'));
+      assert.strictEqual(readImageDimensions(p), undefined);
+      // Second call should also cleanly return undefined (from cache this
+      // time) rather than erroring on a second attempt to parse garbage.
+      assert.strictEqual(readImageDimensions(p), undefined);
+    });
   });
 });
 

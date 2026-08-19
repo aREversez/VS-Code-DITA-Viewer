@@ -2,7 +2,7 @@
   "name": "dita-viewer",
   "displayName": "DITA Viewer",
   "description": "%extension.description%",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "publisher": "dita-viewer",
   "license": "MIT",
   "repository": {
@@ -284,6 +284,7 @@
     "watch": "node esbuild.config.js --watch",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
+    "check:l10n": "node scripts/check-l10n.cjs",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "pretest": "tsc -p tsconfig.test.json",
     "test": "mocha --config .mocharc.json",

@@ -492,17 +492,40 @@ function getWebviewScript(): string {
     if (!isNaN(line)) vscode.postMessage({ type: 'navigateToLine', line: line });
   });
 
+  // Tracked so a content swap (updateContent below) that lands mid-flight
+  // of an in-progress highlight/scroll can re-apply it against the fresh
+  // DOM, instead of abandoning it. The scrollIntoView triggered here can
+  // still be animating when the very next edit's debounced content update
+  // arrives (300ms is often shorter than a long smooth-scroll across a
+  // large document) -- replacing #dita-content-root's contents mid-
+  // animation orphans whatever element the browser was interpolating
+  // toward, since it's a brand new DOM node after the swap, not the one
+  // the animation was actually tracking. Without re-applying it here, that
+  // looked like the preview overshooting past the edit position and only
+  // correcting itself on the *next* keystroke's highlightLine, rather than
+  // the same one settling smoothly -- most visible on a source edit far
+  // from wherever the preview happened to already be scrolled, since
+  // that's when the initial scroll has the most distance (and time) left
+  // to still be animating when the first content update lands.
+  var lastHighlightLine = null;
+  var lastHighlightCol = 0;
+  function applyHighlightLine(line, col) {
+    var best = findContaining(line, col || 0);
+    if (best) {
+      highlightElement(best);
+      if (!isElementVisible(best)) {
+        beginProgrammaticScroll();
+        best.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    }
+  }
+
   window.addEventListener('message', function(e) {
     if (e.data.type === 'revealLine') scrollToLine(e.data.line);
     if (e.data.type === 'highlightLine') {
-      var best = findContaining(e.data.line, e.data.col || 0);
-      if (best) {
-        highlightElement(best);
-        if (!isElementVisible(best)) {
-          beginProgrammaticScroll();
-          best.scrollIntoView({ block: 'center', behavior: 'smooth' });
-        }
-      }
+      lastHighlightLine = e.data.line;
+      lastHighlightCol = e.data.col || 0;
+      applyHighlightLine(lastHighlightLine, lastHighlightCol);
     }
     if (e.data.type === 'updateContent') {
       var contentRoot = document.getElementById('dita-content-root');
@@ -522,6 +545,14 @@ function getWebviewScript(): string {
         }
         if (typeof sb !== 'undefined' && sb.style.display !== 'none' && searchInput.value) { // search was active -- old marks were just wiped out along with the content that contained them
           performSearch(searchInput.value);
+        }
+        if (lastHighlightLine !== null) {
+          // Re-target the still-current cursor position against the new
+          // DOM. If the earlier scroll had already settled and the spot
+          // is still on screen, applyHighlightLine's own isElementVisible
+          // check is a no-op here -- this only actually re-scrolls when
+          // there was real unfinished business to pick back up.
+          applyHighlightLine(lastHighlightLine, lastHighlightCol);
         }
       }
     }
@@ -822,6 +853,24 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       if (Date.now() < skipVisibleUntil) return;
       const sel = e.selections[0];
       if (!sel || sel.start.line !== sel.end.line) return;
+      // Moving the cursor somewhere not currently on screen (e.g. clicking
+      // near the end of a long file while the editor happens to be
+      // scrolled elsewhere) very often also moves the editor's own visible
+      // range as a side effect -- VS Code reveals the cursor into view on
+      // its own. That would otherwise fire editorSub below shortly after
+      // this, telling the preview to align a *different* line (the
+      // editor's new visible-range top, from simple continuous scroll-
+      // follow) at the *top* of its viewport, fighting the highlightLine
+      // this posts, which centers the exact cursor line instead -- visibly
+      // the preview correctly centering the edit position, then abruptly
+      // sliding to a completely different alignment for what was actually
+      // the same underlying cursor move, before a later correction snaps
+      // it back. Suppressing editorSub for a beat after a selection change
+      // lets highlightLine's centering stand uncontested for what's almost
+      // always the same event; a genuine independent source scroll (mouse
+      // wheel, no cursor movement) never touches this path at all, since
+      // it never fires onDidChangeTextEditorSelection to begin with.
+      skipVisibleUntil = Date.now() + 400;
       webviewPanel.webview.postMessage({ type: 'highlightLine', line: sel.start.line, col: sel.start.character });
     });
 
@@ -831,6 +880,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       if (Date.now() < skipVisibleUntil) return;
       if (visibleRangeTimer) clearTimeout(visibleRangeTimer);
       visibleRangeTimer = setTimeout(() => {
+        if (Date.now() < skipVisibleUntil) return;
         const topLine = e.textEditor.visibleRanges[0]?.start.line;
         if (topLine !== undefined) postRevealLine(topLine);
       }, 120);

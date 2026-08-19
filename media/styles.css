@@ -55,6 +55,28 @@ body {
   color: var(--vscode-editor-foreground);
 }
 
+/* Every source edit swaps this div's entire innerHTML in one mutation
+   (see #dita-content-root's 'updateContent' message handler, shared by
+   DitaViewerProvider.ts and MapViewerProvider.ts) -- not a small, targeted
+   change the browser's default CSS Scroll Anchoring is designed for (it
+   tries to auto-compensate scrollTop to keep whatever it picks as the
+   "anchor node" visually fixed when content changes near the viewport).
+   When virtually the entire subtree is replaced at once, the previous
+   anchor node is gone and whatever the browser picks as a replacement has
+   no reliable relationship to what was actually on screen, so its
+   compensation can shift scroll position in ways that don't correspond to
+   anything real -- consistent with the reported "typing edits far from
+   the current scroll position occasionally causes an unexplained extra
+   scroll shift" behavior. Turning it off here means scrollTop simply
+   stays exactly where it was as a fixed number across the swap, which is
+   what both providers' content-only update already assumes; the
+   extension's own explicit logic (applyHighlightLine, scrollToLine -- the
+   topic viewer only, map view has no scroll-sync of its own) is the only
+   thing that should ever intentionally move it. */
+#dita-content-root {
+  overflow-anchor: none;
+}
+
 /* Topic article */
 .topic > h1:first-child { margin-top: 0; }
 
@@ -107,23 +129,17 @@ p { margin: 0.75em 0; }
    (see the toolbar button in DitaViewerProvider.ts) -- pure CSS, no
    re-render needed. */
 .profiled {
-  /* No forced display -- .profiled now applies directly to the real
-     element (see injectBlockProfiling in renderer.ts), not to a synthetic
-     wrapper <span> that needed forcing to block to look like a box.
-     Forcing display:block here would strip list-item/table-cell/etc. off
-     an <li>/<td>/... that legitimately needs to keep its native display
-     (an <li> stuck at display:block loses its marker entirely). Every
-     block-level DITA content type this applies to already renders as a
-     real block-ish tag on its own. */
-  position: relative;
-  /* Outline only, no fill -- matches Oxygen's default profiling display
-     (a stroked box around the matched content) rather than tinting the
-     background, so the profiled text renders exactly as it would
-     unprofiled and the box reads as metadata, not as styled content. */
-  background: none;
-  border: 1.5px solid var(--color-profiling-border);
+  /* .profiled applies directly to the real element (see injectBlockProfiling
+     in renderer.ts), not a synthetic wrapper -- so we must NOT use border or
+     padding on the left side: border takes box-model space shifting content
+     and nested list markers, and any decoration on <li>/<ul>/<ol> visually
+     interferes with the browser's list-marker positioning. box-shadow paints
+     outward from the border-box edge without affecting layout, so the green
+     highlight ring never pushes content or covers nested bullets/numbers. */
+  box-shadow: 0 0 0 1.5px var(--color-profiling-border);
   border-radius: 3px;
-  padding: 0.4rem 0.6rem 1.3rem;
+  background: none;
+  padding: 0.4rem 0.6rem;
   margin: 0.5rem 0;
 }
 .profiled--inline {
@@ -132,14 +148,27 @@ p { margin: 0.75em 0; }
   margin: 0;
   border-radius: 2px;
 }
-.profiled--inline .profiling-label { position: static; display: inline-flex; margin-left: 0.3em; vertical-align: middle; }
+.profiled--inline .profiling-label { float: none; position: static; display: inline-flex; margin-left: 0.3em; vertical-align: middle; }
+/* float rather than a dedicated bottom-padding + position:absolute slot:
+   the box no longer has to reserve a fixed amount of vertical space for
+   the label regardless of how little content actually needs it (a
+   single-line profiled step/bullet used to look disproportionately tall,
+   with a big empty gap between the text and the label sitting below it).
+   Floating right lets the label sit on the *same* line as short content
+   for free, while still correctly dropping to its own line -- and staying
+   right-aligned there, matching Oxygen's convention and the ditamap tree
+   view's own box (see mapTypeMap.ts) -- whenever the preceding content is
+   itself block-level (a nested list, a wrapped multi-line paragraph) and
+   doesn't leave room on the same line. .profiled--inline above overrides
+   this back to float:none, since a label attached to an inline phrase
+   (ph/b/i/xref/...) needs to sit immediately next to that phrase
+   mid-sentence, not escape to the edge of the whole paragraph. */
 .profiling-label {
-  position: absolute;
-  right: 0.4rem;
-  bottom: 0.25rem;
+  float: right;
   display: flex;
   gap: 0.3rem;
   flex-wrap: wrap;
+  margin-left: 0.5em;
 }
 .profiling-chip {
   background: var(--color-profiling-label-bg);
@@ -153,9 +182,20 @@ p { margin: 0.75em 0; }
 .profiling-chip__value { font-weight: 400; }
 body.hide-profiling .profiled {
   background: none;
-  border: none;
+  box-shadow: none;
   padding: 0;
   margin: 0;
+}
+/* The general reset above zeroes padding on every side, including left --
+   correct for everything else profiling touches, but a profiled ul/ol
+   relies on that left padding for its own children's marker gutter (see
+   ul.profiled/ol.profiled above), not just for the now-hidden box. Without
+   restoring it here, turning Flags off would silently break nested-list
+   indentation for exactly the same reason it broke with the box visible,
+   just conditionally instead of always. */
+body.hide-profiling ul.profiled,
+body.hide-profiling ol.profiled {
+  padding-left: 1.5em;
 }
 body.hide-profiling .profiled--inline { display: inline; }
 body.hide-profiling .profiling-label { display: none; }
@@ -170,6 +210,21 @@ body.hide-profiling .profiling-label { display: none; }
 /* Lists */
 ul, ol { padding-left: 1.5em; }
 li { margin: 0.25em 0; }
+/* Profiling on list elements: box-shadow doesn't affect layout, but the
+   generic .profiled padding still overrides the base padding-left both
+   rules above rely on. li's own padding-left is normally 0 (a plain li's
+   marker-gutter comes entirely from its *parent* ul/ol's padding, not
+   from the li itself) -- .profiled's shorthand would otherwise add
+   0.6rem there, shifting a profiled li's text right of its plain
+   siblings, so it's zeroed back out. ul/ol are the opposite case: their
+   own padding-left of 1.5em IS the marker gutter their own <li> children
+   need, so when the ul/ol itself is profiled, that 1.5em has to be
+   restored (not just zeroed) or its children's markers lose their
+   reserved space entirely and the whole nested list stops looking nested
+   at all. The top/bottom padding is kept so the box-shadow ring has
+   breathing room above and below the content either way. */
+li.profiled { padding-left: 0; }
+ul.profiled, ol.profiled { padding-left: 1.5em; }
 .simple-list { list-style: none; padding-left: 1.5em; }
 
 /* Definition lists */

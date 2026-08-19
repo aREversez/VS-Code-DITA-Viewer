@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, openSync, readSync, closeSync } from 'fs';
+import { existsSync, readFileSync, openSync, readSync, closeSync, statSync } from 'fs';
 import { resolve, dirname, relative, isAbsolute, extname } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
@@ -128,17 +128,51 @@ const IMAGE_DIMENSION_READERS: Record<string, (buf: Buffer) => { width: number; 
  * undefined for anything unreadable, unrecognized, or corrupt -- callers
  * treat that as "no dimensions available" and fall back to the previous
  * behavior (no width/height reserved), never an error.
+ *
+ * Cached by path + mtime: every source edit re-renders the whole topic
+ * (see postContentUpdate in DitaViewerProvider.ts/MapViewerProvider.ts),
+ * which calls this again for every image in it regardless of whether that
+ * particular image had anything to do with what was just typed. A cheap
+ * stat() to check mtime, versus re-opening and re-parsing the header, is
+ * the difference that matters for a topic with a lot of images -- the
+ * common case is the same unchanged images on every keystroke, not new
+ * ones. Unbounded on purpose: entries are tiny (a path plus two numbers),
+ * and a documentation project's total distinct image count is nowhere
+ * near where that would matter in practice for a long-running extension
+ * host process.
  */
+const imageDimensionsCache = new Map<string, { mtimeMs: number; dimensions: { width: number; height: number } | undefined }>();
+
 export function readImageDimensions(filePath: string): { width: number; height: number } | undefined {
-  const reader = IMAGE_DIMENSION_READERS[extname(filePath).toLowerCase()];
-  if (!reader) return undefined;
-  const buf = readHeaderBytes(filePath, IMAGE_HEADER_READ_BYTES);
-  if (!buf) return undefined;
+  let mtimeMs: number;
   try {
-    return reader(buf);
+    mtimeMs = statSync(filePath).mtimeMs;
   } catch {
+    // Not statable (doesn't exist, permissions, ...) -- nothing to read,
+    // and any previous cache entry for this path is now stale.
+    imageDimensionsCache.delete(filePath);
     return undefined;
   }
+
+  const cached = imageDimensionsCache.get(filePath);
+  if (cached && cached.mtimeMs === mtimeMs) {
+    return cached.dimensions;
+  }
+
+  const reader = IMAGE_DIMENSION_READERS[extname(filePath).toLowerCase()];
+  let dimensions: { width: number; height: number } | undefined;
+  if (reader) {
+    const buf = readHeaderBytes(filePath, IMAGE_HEADER_READ_BYTES);
+    if (buf) {
+      try {
+        dimensions = reader(buf);
+      } catch {
+        dimensions = undefined;
+      }
+    }
+  }
+  imageDimensionsCache.set(filePath, { mtimeMs, dimensions });
+  return dimensions;
 }
 
 // ── Text extraction ──
