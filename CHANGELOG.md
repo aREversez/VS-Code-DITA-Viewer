@@ -2,7 +2,11 @@
 
 ## Unreleased
 
+## 1.0.8 (2026-08-19)
+
 ### Bug Fixes
+
+- **Ported the incremental content-update architecture to Outline/Book (map) view.** `MapViewerProvider.ts` never received the reload-vs-incremental-update fix described below for the topic preview — every edit to a `.ditamap` (toggling a topicref's profiling attributes, reordering entries, adding a new topicref, …) still reassigned `webview.html` wholesale, with no scroll-restore attempt at all, so editing a map while Outline/Book view was open meant every image in the composited content re-requesting and re-decoding (Book mode especially, which can be a very long page) and scroll position simply resetting to the top on every edit. Map rendering now goes into the same dedicated `#dita-content-root` div the topic viewer uses, and an edit posts just the freshly-rendered HTML instead of reloading the page; Filter panel re-application/rebuild and an active search re-run the same way the topic viewer's do. Genuine full reloads remain for opening the file, a theme switch, the manual refresh button, and switching between Outline/Book mode itself (a fundamentally different content structure each time, not an incremental edit).
 
 - **Fixed the per-image zoom controls shrinking images instead of enlarging them, and the shrink button doing nothing at the default zoom level.** Two related issues in the per-image −/+/maximize toolbar added for image zoom:
   - The zoom steps started at 100% with nothing below it, so clicking "−" at the default level was a no-op.
@@ -30,6 +34,10 @@
   - The label ("Attr [value]") no longer reserves a fixed block of space below the content regardless of how little the content actually needs — it now floats to the right, sitting on the same line as short content for free, and only drops to its own (still right-aligned) line when the content above it is itself block-level and doesn't leave room on the same line.
 
 - **Fixed a source ↔ preview scroll-sync feedback loop that could hijack the editor cursor while typing** — editing the source could sometimes make the preview jump, immediately followed by the source cursor itself jumping to an unrelated line, making it impossible to keep typing normally. Root cause: the preview's own scroll listener didn't distinguish "the user manually scrolled the preview" from "the extension just told the preview to scroll itself" (e.g. right after a source edit re-renders the preview and syncs it back to the source's current view). The latter was being echoed straight back out as if it were a real scroll, which could then move the *editor's* cursor. The preview now suppresses its own scroll-sync signal for the duration of any scroll it triggered itself, and scroll-following no longer moves the editor selection at all (only double-clicking an element in the preview does that, since that's an explicit navigation action, unlike continuous scroll-follow).
+
+### Performance
+
+- **Image dimension reads are now cached by file path + modification time.** Every source edit re-renders the whole topic, which calls the image-header-reading logic behind the aspect-ratio-reservation fix below again for every image in it — most of which have nothing to do with what was just typed. For a topic with a lot of images, that was a full header read (open + read + close, up to 64KB) per image on every single edit-triggered update. A cheap `stat()` now checks the file's mtime first; if it matches what's cached, the previously-read dimensions are returned without touching the file's content at all, so only a genuinely new or changed image pays for the full read. Unreadable/unrecognized files are cached too, so a broken image reference isn't re-parsed on every render either.
 
 ### Preview UX
 
