@@ -14,6 +14,17 @@ export function getLastRenderedMapHtmlForTesting(uriString: string): string | un
   return lastRenderedHtmlByUri.get(uriString);
 }
 
+/**
+ * Clears the cached rendered map HTML. Entries are already removed
+ * individually as each webview panel disposes; this is a defensive full
+ * reset for extension deactivation, not a fix for an actual leak. Called
+ * from clearAllCaches() in DitaViewerProvider.ts via extension.ts's
+ * deactivate().
+ */
+export function clearMapCache(): void {
+  lastRenderedHtmlByUri.clear();
+}
+
 function getMapWebviewScript(): string {
   const L = {
     decreaseFontSize: JSON.stringify(vscode.l10n.t('Decrease font size')),

@@ -19,6 +19,20 @@ export function getLastRenderedHtmlForTesting(uriString: string): string | undef
   return lastRenderedHtmlByUri.get(uriString);
 }
 
+/**
+ * Clears every in-memory cache owned by this module (the test-only render
+ * cache above and the keymap cache below). lastRenderedHtmlByUri entries are
+ * already removed individually as each webview panel disposes (see
+ * onDidDispose in resolveCustomTextEditor), and keyMapCache is already
+ * bounded by KEY_MAP_CACHE_MAX -- this is a defensive full reset for
+ * extension deactivation, not a fix for an actual leak in either cache.
+ * Wired into extension.ts's deactivate().
+ */
+export function clearAllCaches(): void {
+  lastRenderedHtmlByUri.clear();
+  keyMapCache.clear();
+}
+
 // Font preferences (size % + serif toggle) are global rather than per-document:
 // they describe how the user likes to read, not something tied to one file.
 const FONT_PREFS_KEY = 'ditaViewer.fontPrefs';

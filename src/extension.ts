@@ -2,8 +2,8 @@ import * as vscode from 'vscode';
 import { spawn } from 'child_process';
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs';
 import { basename, dirname, isAbsolute, join, resolve } from 'path';
-import { DitaViewerProvider, findDitamapFiles, getLastRenderedHtmlForTesting } from './editor/DitaViewerProvider';
-import { MapViewerProvider, getLastRenderedMapHtmlForTesting } from './editor/MapViewerProvider';
+import { DitaViewerProvider, findDitamapFiles, getLastRenderedHtmlForTesting, clearAllCaches } from './editor/DitaViewerProvider';
+import { MapViewerProvider, getLastRenderedMapHtmlForTesting, clearMapCache } from './editor/MapViewerProvider';
 import {
   resolveDitaOtExecutable,
   buildDitaOtArgs,
@@ -619,4 +619,16 @@ async function resolveMapFile(): Promise<vscode.Uri | undefined> {
   }
 
   return undefined;
+}
+
+// Module-level caches in DitaViewerProvider/MapViewerProvider are already
+// self-bounded (keyMapCache has a hard cap; the render caches are cleaned
+// per webview panel as it disposes -- see each provider's onDidDispose), so
+// this isn't fixing a leak. It's a defensive reset for the case VS Code
+// deactivates the extension without disposing every panel first (window
+// close, extension host restart, manual disable), so nothing from this
+// session's caches lingers into whatever runs next in the same process.
+export function deactivate(): void {
+  clearAllCaches();
+  clearMapCache();
 }
