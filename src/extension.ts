@@ -210,7 +210,9 @@ export function activate(context: vscode.ExtensionContext) {
             );
             if (overwrite !== overwriteLabel) return;
           }
-        } catch {}
+        } catch (e) {
+          console.warn(`Failed to check output directory contents: ${outputDir}`, e instanceof Error ? e.message : e);
+        }
       }
 
       // 5. Pick optional CSS (html5/xhtml only)
@@ -317,12 +319,20 @@ export function activate(context: vscode.ExtensionContext) {
               if (process.platform === 'win32' && child.pid) {
                 // Kill the whole tree — terminating the cmd.exe wrapper alone
                 // leaves the DITA-OT Java process running.
-                try { spawn('taskkill', ['/pid', String(child.pid), '/t', '/f']); } catch {}
+                try {
+                  spawn('taskkill', ['/pid', String(child.pid), '/t', '/f']);
+                } catch (e) {
+                  console.warn('Failed to kill Windows process tree:', e instanceof Error ? e.message : e);
+                }
               } else {
                 child.kill('SIGTERM');
                 // Give it a moment, then SIGKILL
                 killTimer = setTimeout(() => {
-                  try { child.kill('SIGKILL'); } catch {}
+                  try {
+                    child.kill('SIGKILL');
+                  } catch (e) {
+                    console.warn('Failed to send SIGKILL:', e instanceof Error ? e.message : e);
+                  }
                 }, 3000);
               }
             });
@@ -439,7 +449,11 @@ export function activate(context: vscode.ExtensionContext) {
       }
     } finally {
       for (const d of disposables) {
-        try { d.dispose(); } catch {}
+        try {
+          d.dispose();
+        } catch (e) {
+          console.warn('Failed to dispose disposable:', e instanceof Error ? e.message : e);
+        }
       }
     }
   });
@@ -536,7 +550,9 @@ function scanCssFiles(mapDir: string): string[] {
         if (existsSync(abs)) dirs.add(abs);
       }
     }
-  } catch {}
+  } catch (e) {
+    console.warn('Failed to read CSS directory configuration:', e instanceof Error ? e.message : e);
+  }
 
   for (const d of dirs) {
     try {
@@ -545,7 +561,9 @@ function scanCssFiles(mapDir: string): string[] {
           files.set(entry, join(d, entry));
         }
       }
-    } catch {}
+    } catch (e) {
+      console.warn(`Failed to read CSS directory ${d}:`, e instanceof Error ? e.message : e);
+    }
   }
 
   try {
@@ -559,7 +577,9 @@ function scanCssFiles(mapDir: string): string[] {
         }
       }
     }
-  } catch {}
+  } catch (e) {
+    console.warn('Failed to read custom CSS configuration:', e instanceof Error ? e.message : e);
+  }
 
   return [...files.values()];
 }

@@ -135,7 +135,8 @@ function listReferenceableFiles(baseDir: string, maxDepth = 3): string[] {
     let entries: string[];
     try {
       entries = readdirSync(dir);
-    } catch {
+    } catch (e) {
+      console.warn(`Failed to read directory ${dir}:`, e instanceof Error ? e.message : e);
       return;
     }
     for (const entry of entries) {
@@ -147,7 +148,9 @@ function listReferenceableFiles(baseDir: string, maxDepth = 3): string[] {
         } else if (/\.(dita|ditamap|xml)$/i.test(entry)) {
           results.push(relative(baseDir, full).replace(/\\/g, '/'));
         }
-      } catch {}
+      } catch (e) {
+        console.warn(`Failed to process file ${full}:`, e instanceof Error ? e.message : e);
+      }
     }
   }
   walk(baseDir, 0);

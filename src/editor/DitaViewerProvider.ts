@@ -1151,7 +1151,9 @@ export function findDitamapFiles(docUri: vscode.Uri, stopAtFirstMatch = true): s
       for (const entry of readdirSync(dir)) {
         if (entry.toLowerCase().endsWith('.ditamap')) results.push(join(dir, entry));
       }
-    } catch {}
+    } catch (e) {
+      console.warn(`Failed to read directory ${dir}:`, e instanceof Error ? e.message : e);
+    }
     if (stopAtFirstMatch && results.length > 0) return results;
     const parent = dirname(dir);
     if (parent === dir) break;
@@ -1271,7 +1273,9 @@ export function buildKeyMap(docUri: vscode.Uri): Map<string, string> {
         for (const child of node.children || []) walk(child);
       }
       for (const child of mapRoot.children || []) walk(child);
-    } catch {}
+    } catch (e) {
+      console.warn(`Failed to parse keymap from ${mf}:`, e instanceof Error ? e.message : e);
+    }
   }
 
   if (keyMapCache.size >= KEY_MAP_CACHE_MAX && !keyMapCache.has(docDir)) {
@@ -1301,7 +1305,9 @@ function discoverCssFiles(docUri: vscode.Uri): { files: Record<string, string>; 
       try {
         files[name] = readFileSync(filePath, 'utf-8');
         loadedNames.add(name);
-      } catch {}
+      } catch (e) {
+        console.warn(`Failed to load file ${filePath}:`, e instanceof Error ? e.message : e);
+      }
     }
   };
 
@@ -1325,14 +1331,18 @@ function discoverCssFiles(docUri: vscode.Uri): { files: Record<string, string>; 
         }
       }
     }
-  } catch {}
+  } catch (e) {
+    console.warn('Failed to read CSS directory configuration:', e instanceof Error ? e.message : e);
+  }
 
   for (const sd of scanDirs) {
     try {
       for (const entry of readdirSync(sd)) {
         if (entry.toLowerCase().endsWith('.css')) addFile(join(sd, entry));
       }
-    } catch {}
+    } catch (e) {
+      console.warn(`Failed to read CSS directory ${sd}:`, e instanceof Error ? e.message : e);
+    }
   }
 
   // Add explicitly configured CSS files
@@ -1345,7 +1355,9 @@ function discoverCssFiles(docUri: vscode.Uri): { files: Record<string, string>; 
         if (resolvedPath) addFile(resolvedPath);
       }
     }
-  } catch {}
+  } catch (e) {
+    console.warn('Failed to read custom CSS configuration:', e instanceof Error ? e.message : e);
+  }
 
   const defaultName = files['custom.css'] ? 'custom.css' : (Object.keys(files)[0] || '');
   return { files, defaultName };

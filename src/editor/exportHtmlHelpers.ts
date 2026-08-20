@@ -47,7 +47,9 @@ export function makeDataUriInliner(baseDir: string): (relPath: string) => string
         const mime = IMAGE_MIME[ext] || 'application/octet-stream';
         return `data:${mime};base64,${readFileSync(abs).toString('base64')}`;
       }
-    } catch {}
+    } catch (e) {
+      console.warn(`Failed to inline image ${relPath}:`, e instanceof Error ? e.message : e);
+    }
     return '';
   };
 }
