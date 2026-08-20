@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, openSync, readSync, closeSync, statSync } from 'fs';
-import { resolve, dirname, relative, isAbsolute, extname } from 'path';
+import { resolve, dirname, relative, isAbsolute, extname, normalize } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
@@ -551,7 +551,7 @@ function rebaseHrefs(node: DitaNode, fromDir: string, toDir: string): void {
     const fragment = hashIdx >= 0 ? href.substring(hashIdx) : '';
     if (pathPart) {
       const abs = resolve(fromDir, pathPart);
-      node.attributes.href = relative(toDir, abs).replace(/\\/g, '/') + fragment;
+      node.attributes.href = normalize(relative(toDir, abs)).replace(/\\/g, '/') + fragment;
     }
   }
   for (const child of node.children || []) rebaseHrefs(child, fromDir, toDir);

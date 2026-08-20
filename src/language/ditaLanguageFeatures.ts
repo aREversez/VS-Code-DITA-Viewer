@@ -4,7 +4,7 @@
 
 import * as vscode from 'vscode';
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
-import { dirname, isAbsolute, join, relative, resolve } from 'path';
+import { dirname, isAbsolute, join, relative, resolve, normalize } from 'path';
 import { formatLocalizedRole } from './bookRoleL10n';
 import {
   collectIds,
@@ -146,7 +146,7 @@ function listReferenceableFiles(baseDir: string, maxDepth = 3): string[] {
         if (statSync(full).isDirectory()) {
           walk(full, depth + 1);
         } else if (/\.(dita|ditamap|xml)$/i.test(entry)) {
-          results.push(relative(baseDir, full).replace(/\\/g, '/'));
+          results.push(normalize(relative(baseDir, full)).replace(/\\/g, '/'));
         }
       } catch (e) {
         console.warn(`Failed to process file ${full}:`, e instanceof Error ? e.message : e);
