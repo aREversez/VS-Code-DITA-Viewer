@@ -13,5 +13,8 @@
   "config.customCss.description": "Custom CSS file paths to apply to the preview. Supports absolute paths, paths relative to workspace root, and paths relative to the DITA file directory.",
   "config.cssDirectory.description": "Directories to scan for available CSS files. Supports absolute paths, workspace-relative paths, and document-relative paths. CSS files found here appear in the preview theme dropdown.",
   "config.ditaOtPath.description": "Absolute path to the DITA-OT installation directory (should contain bin/dita or bin\\dita.bat). Leave empty to auto-detect via the DITA_HOME environment variable and PATH.",
-  "config.ditaOtInjectNavToolbar.description": "(Deprecated) Inject site-enhancement features (navigation, sidebar, etc.) after transform. Newer versions use a QuickPick during the transform flow to choose specific features instead; this setting is kept only for backward compatibility."
+  "config.ditaOtInjectNavToolbar.description": "(Deprecated) Inject site-enhancement features (navigation, sidebar, etc.) after transform. Newer versions use a QuickPick during the transform flow to choose specific features instead; this setting is kept only for backward compatibility.",
+  "icon.ditaPreview.description": "DITA Viewer: preview icon",
+  "icon.ditaMapPreview.description": "DITA Viewer: map preview icon",
+  "icon.ditaTransform.description": "DITA Viewer: transform icon"
 }

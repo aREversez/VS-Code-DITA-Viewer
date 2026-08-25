@@ -78,10 +78,7 @@
       {
         "command": "ditaViewer.showRendered",
         "title": "%command.showRendered.title%",
-        "icon": {
-          "light": "media/icons/preview.svg",
-          "dark": "media/icons/preview~dark.svg"
-        }
+        "icon": "$(dita-preview)"
       },
       {
         "command": "ditaViewer.showSource",
@@ -91,10 +88,7 @@
       {
         "command": "ditaViewer.showMapRendered",
         "title": "%command.showMapRendered.title%",
-        "icon": {
-          "light": "media/icons/map-preview.svg",
-          "dark": "media/icons/map-preview~dark.svg"
-        }
+        "icon": "$(dita-map-preview)"
       },
       {
         "command": "ditaViewer.showMapSource",
@@ -104,10 +98,7 @@
       {
         "command": "ditaViewer.transformWithDitaOt",
         "title": "%command.transformWithDitaOt.title%",
-        "icon": {
-          "light": "media/icons/transform.svg",
-          "dark": "media/icons/transform~dark.svg"
-        }
+        "icon": "$(dita-transform)"
       },
       {
         "command": "ditaViewer.exportHtml",
@@ -120,6 +111,29 @@
         "icon": "$(refresh)"
       }
     ],
+    "icons": {
+      "dita-preview": {
+        "description": "%icon.ditaPreview.description%",
+        "default": {
+          "fontPath": "media/fonts/dita-viewer-icons.woff",
+          "fontCharacter": "\\E900"
+        }
+      },
+      "dita-map-preview": {
+        "description": "%icon.ditaMapPreview.description%",
+        "default": {
+          "fontPath": "media/fonts/dita-viewer-icons.woff",
+          "fontCharacter": "\\E901"
+        }
+      },
+      "dita-transform": {
+        "description": "%icon.ditaTransform.description%",
+        "default": {
+          "fontPath": "media/fonts/dita-viewer-icons.woff",
+          "fontCharacter": "\\E902"
+        }
+      }
+    },
     "keybindings": [
       {
         "command": "ditaViewer.showRendered",
@@ -285,6 +299,7 @@
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "check:l10n": "node scripts/check-l10n.cjs",
+    "build:icons": "node scripts/build-icon-font.js",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "pretest": "tsc -p tsconfig.test.json",
     "test": "mocha --config .mocharc.json",
@@ -298,14 +313,18 @@
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
     "@vscode/test-electron": "^3.1.0",
+    "cheerio": "^1.2.0",
     "esbuild": "^0.28.2",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
     "mocha": "^11.8.0",
+    "opentype.js": "^2.0.0",
     "pngjs": "^7.0.0",
     "prettier": "^3.4.0",
     "sax": "^1.4.1",
     "sharp": "^0.35.3",
+    "svgpath": "^2.6.0",
+    "ttf2woff": "^3.0.0",
     "typescript": "^5.7.0"
   },
   "overrides": {
