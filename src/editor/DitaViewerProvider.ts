@@ -613,7 +613,7 @@ function getWebviewScript(): string {
   var fsDown = document.createElement('button');
   fsDown.innerHTML = 'A−';
   fsDown.title = ${L.decreaseFontSize};
-  fsDown.style.cssText = btnStyle + 'font-weight:bold;';
+  fsDown.style.cssText = btnStyle;
   fsDown.addEventListener('click', function() {
     fontSize = Math.max(60, fontSize - 10);
     document.body.style.fontSize = fontSize + '%';
@@ -624,7 +624,7 @@ function getWebviewScript(): string {
   var fsUp = document.createElement('button');
   fsUp.innerHTML = 'A+';
   fsUp.title = ${L.increaseFontSize};
-  fsUp.style.cssText = btnStyle + 'font-weight:bold;';
+  fsUp.style.cssText = btnStyle;
   fsUp.addEventListener('click', function() {
     fontSize = Math.min(200, fontSize + 10);
     document.body.style.fontSize = fontSize + '%';
