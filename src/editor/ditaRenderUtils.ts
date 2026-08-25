@@ -405,6 +405,15 @@ export function findTextMatches(
 // Covers the full DITA 1.3 note/@type enumeration (13 values); 'other' is
 // handled separately via @othertype in the topic/note renderer, since its
 // label isn't a fixed string.
+//
+// zh-cn deviations from a literal DITA-OT mirror (both fixes, not stylistic):
+//   - attention/caution previously collided with notice/warning (all four
+//     rendered '注意'/'警告'), making the two pairs visually indistinguishable
+//     in the preview. attention -> '留意', caution -> '小心' to disambiguate;
+//     '小心'/'警告'/'危险' also matches the conventional CN safety-signage
+//     triad for Caution/Warning/Danger.
+//   - trouble -> '故障排除' ("troubleshooting"), not '故障' ("fault"); the
+//     DITA semantic is remedy guidance, which '故障' alone doesn't convey.
 
 export const DEFAULT_NOTE_LABELS: Record<string, string> = {
   note: 'Note', notice: 'Notice', warning: 'Warning', danger: 'Danger',
@@ -416,8 +425,8 @@ export const DEFAULT_NOTE_LABELS: Record<string, string> = {
 export const ZH_NOTE_LABELS: Record<string, string> = {
   note: '注', notice: '注意', warning: '警告', danger: '危险',
   important: '重要', tip: '提示', restriction: '限制',
-  attention: '注意', caution: '警告', fastpath: '捷径',
-  remember: '切记', trouble: '故障',
+  attention: '留意', caution: '小心', fastpath: '捷径',
+  remember: '切记', trouble: '故障排除',
 };
 
 export function detectNoteLabels(root: DitaNode, uiLanguage?: string): Record<string, string> {
