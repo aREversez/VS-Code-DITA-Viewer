@@ -35,9 +35,30 @@ const ICONS = ['preview', 'map-preview', 'transform'];
 const PUA_START = 0xe900;
 
 const UNITS_PER_EM = 1000;
-const ASCENDER = 850;
-const DESCENDER = -150;
+// Match @vscode/codicons' own font metrics convention exactly. Verified by
+// loading codicon.ttf directly and dumping its tables:
+//   hhea:           ascender=300, descender=0        (unitsPerEm=300)
+//   OS/2 typo:      sTypoAscender=300, sTypoDescender=0
+//   OS/2 win:       usWinAscent=327, usWinDescent=4
+//   OS/2 selection: fsSelection=192 (0x40 REGULAR | 0x80 USE_TYPO_METRICS)
+// The baseline sits at the very bottom of the glyph's em box (descender=0),
+// and USE_TYPO_METRICS tells renderers to use the typo metrics rather than
+// the (here slightly different) win metrics for line-height/positioning.
+//
+// Both of these need to be set explicitly -- opentype.js's Font constructor
+// only feeds ascender/descender into hhea and OS/2's sTypoAscender/
+// sTypoDescender. OS/2's usWinAscent/usWinDescent are auto-computed from
+// the actual glyph ink bounding box (max/min y across all glyphs) no
+// matter what's passed to the constructor, and fsSelection defaults to 0
+// (no USE_TYPO_METRICS). Without both fixed, browsers keep using the
+// auto-computed win metrics for layout and the icons render smaller and
+// shifted upward relative to sibling codicons, even though hhea/typo look
+// correct on paper. See the font.tables.os2 override below.
+const ASCENDER = UNITS_PER_EM;
+const DESCENDER = 0;
 const SVG_SIZE = 16;
+// Inset ~6% on each side, matching codicon's own glyphs (e.g. 'preview' in
+// codicon.ttf sits at y:[19,281] of a 300-unit em -- a 6.3% margin).
 const MARGIN = 60;
 const SCALE = (UNITS_PER_EM - 2 * MARGIN) / SVG_SIZE;
 
@@ -155,7 +176,7 @@ function svgToGlyphPath(svgFile) {
     const d = $(el).attr('d');
     const sub = svgPathToGlyphPath(d, ({ x, y }) => ({
       x: MARGIN + x * SCALE,
-      y: UNITS_PER_EM - MARGIN - y * SCALE - (UNITS_PER_EM - ASCENDER + DESCENDER) / 2,
+      y: UNITS_PER_EM - MARGIN - y * SCALE,
     }));
     for (const cmd of sub.commands) glyphPath.commands.push(cmd);
   });
@@ -195,6 +216,17 @@ function main() {
     ascender: ASCENDER,
     descender: DESCENDER,
     glyphs,
+  });
+
+  // See the comment on ASCENDER/DESCENDER above: opentype.js does not
+  // derive OS/2's usWinAscent/usWinDescent from those constructor options,
+  // it auto-computes them from actual glyph ink extents. font.tables.os2
+  // (if present) is merged over those computed defaults at serialization
+  // time, so setting it here is how we override them.
+  font.tables.os2 = Object.assign({}, font.tables.os2, {
+    usWinAscent: UNITS_PER_EM,
+    usWinDescent: 0,
+    fsSelection: 0xc0, // REGULAR (0x40) | USE_TYPO_METRICS (0x80)
   });
 
   fs.mkdirSync(OUT_DIR, { recursive: true });
