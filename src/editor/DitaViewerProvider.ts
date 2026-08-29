@@ -1114,10 +1114,10 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; base-uri 'none';">
 <link rel="stylesheet" href="${stylesUri}">
 ${defaultContent ? `<style>\n${defaultContent}\n</style>` : ''}
-<title>${document.fileName}</title>
+<title>${escapeHtml(document.fileName)}</title>
 <script nonce="${nonce}">window.__cssFiles=${cssFilesJson};window.__defaultCss=${defaultNameJson};window.__widthSelection=${widthSelectionJson};window.__fontPrefs=${fontPrefsJson};window.__initialScrollLine=${initialScrollLineJs};</script>
 </head>
 <body>
