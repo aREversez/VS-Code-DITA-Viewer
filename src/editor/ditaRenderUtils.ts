@@ -136,12 +136,21 @@ const IMAGE_DIMENSION_READERS: Record<string, (buf: Buffer) => { width: number; 
  * stat() to check mtime, versus re-opening and re-parsing the header, is
  * the difference that matters for a topic with a lot of images -- the
  * common case is the same unchanged images on every keystroke, not new
- * ones. Unbounded on purpose: entries are tiny (a path plus two numbers),
- * and a documentation project's total distinct image count is nowhere
- * near where that would matter in practice for a long-running extension
- * host process.
+ * ones. Bounded by IMAGE_DIMENSIONS_CACHE_MAX with oldest-unused-first
+ * eviction (a cache hit re-inserts the entry, so it counts as recently
+ * used), keeping long sessions that preview many distinct images from
+ * growing the Map without limit -- entries are tiny (a path plus two
+ * numbers), but the project's rule is that every cache stays bounded and
+ * clearable, and this one is cleared alongside the rest on deactivation.
  */
 const imageDimensionsCache = new Map<string, { mtimeMs: number; dimensions: { width: number; height: number } | undefined }>();
+// One entry per distinct image file ever previewed; bound it the same way
+// keyMapCache is bounded in DitaViewerProvider.ts.
+export const IMAGE_DIMENSIONS_CACHE_MAX = 1000;
+
+export function clearImageDimensionsCache(): void {
+  imageDimensionsCache.clear();
+}
 
 export function readImageDimensions(filePath: string): { width: number; height: number } | undefined {
   let mtimeMs: number;
@@ -156,6 +165,10 @@ export function readImageDimensions(filePath: string): { width: number; height: 
 
   const cached = imageDimensionsCache.get(filePath);
   if (cached && cached.mtimeMs === mtimeMs) {
+    // Re-insert so a cache hit keeps the entry from being the oldest
+    // (and therefore first-evicted) candidate.
+    imageDimensionsCache.delete(filePath);
+    imageDimensionsCache.set(filePath, cached);
     return cached.dimensions;
   }
 
@@ -170,6 +183,10 @@ export function readImageDimensions(filePath: string): { width: number; height: 
         dimensions = undefined;
       }
     }
+  }
+  if (imageDimensionsCache.size >= IMAGE_DIMENSIONS_CACHE_MAX) {
+    const oldest = imageDimensionsCache.keys().next().value;
+    if (oldest !== undefined) imageDimensionsCache.delete(oldest);
   }
   imageDimensionsCache.set(filePath, { mtimeMs, dimensions });
   return dimensions;

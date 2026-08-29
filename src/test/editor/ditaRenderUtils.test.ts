@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, findTextMatches, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, findTextMatches, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -259,6 +259,43 @@ describe('readImageDimensions', () => {
       // Second call should also cleanly return undefined (from cache this
       // time) rather than erroring on a second attempt to parse garbage.
       assert.strictEqual(readImageDimensions(p), undefined);
+    });
+
+    it('should evict the least-recently-used entry once the cache fills past its cap, rather than growing without limit', () => {
+      const p = join(dir, 'lru-victim.png');
+      const fixedMtime = new Date('2024-01-01T00:00:00.000Z');
+      writePng(p, 100, 80);
+      utimesSync(p, fixedMtime, fixedMtime);
+      assert.deepStrictEqual(readImageDimensions(p), { width: 100, height: 80 });
+
+      // Push the victim out by reading enough distinct other images to
+      // fill the cache past its cap (entries are tiny, so this is cheap).
+      for (let i = 0; i < IMAGE_DIMENSIONS_CACHE_MAX; i++) {
+        const q = join(dir, `lru-fill-${i}.png`);
+        writePng(q, i + 1, i + 1);
+        readImageDimensions(q);
+      }
+
+      // Same path, same mtime, but rewritten content: if the entry were
+      // still cached the old dimensions would come back (see the mtime
+      // test above), so fresh on-disk dimensions prove it was evicted.
+      writePng(p, 320, 240);
+      utimesSync(p, fixedMtime, fixedMtime);
+      assert.deepStrictEqual(readImageDimensions(p), { width: 320, height: 240 }, 'the oldest entry should have been evicted once the cache filled past its cap, so a re-read from disk is what answers');
+    });
+
+    it('should re-read from disk after clearImageDimensionsCache(), even when mtime alone would not invalidate', () => {
+      const p = join(dir, 'cache-clear.png');
+      const fixedMtime = new Date('2024-06-01T00:00:00.000Z');
+      writePng(p, 100, 80);
+      utimesSync(p, fixedMtime, fixedMtime);
+      assert.deepStrictEqual(readImageDimensions(p), { width: 100, height: 80 });
+
+      writePng(p, 500, 400);
+      utimesSync(p, fixedMtime, fixedMtime);
+      clearImageDimensionsCache();
+
+      assert.deepStrictEqual(readImageDimensions(p), { width: 500, height: 400 }, 'clearing the cache (the deactivation path) must force a fresh read even when mtime alone would not invalidate');
     });
   });
 });

@@ -5,7 +5,7 @@ import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { dirname, isAbsolute, join, resolve, basename } from 'path';
 import { randomBytes } from 'crypto';
 import { DitaNode } from '../parser/domTypes';
-import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart, detectNoteLabels, readImageDimensions, FileReader } from './ditaRenderUtils';
+import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart, detectNoteLabels, readImageDimensions, clearImageDimensionsCache, FileReader } from './ditaRenderUtils';
 
 // Test-only hook: @vscode/test-electron integration tests can't read a
 // webview's rendered HTML directly (VS Code doesn't expose the WebviewPanel
@@ -20,17 +20,19 @@ export function getLastRenderedHtmlForTesting(uriString: string): string | undef
 }
 
 /**
- * Clears every in-memory cache owned by this module (the test-only render
- * cache above and the keymap cache below). lastRenderedHtmlByUri entries are
- * already removed individually as each webview panel disposes (see
- * onDidDispose in resolveCustomTextEditor), and keyMapCache is already
- * bounded by KEY_MAP_CACHE_MAX -- this is a defensive full reset for
- * extension deactivation, not a fix for an actual leak in either cache.
+ * Clears every in-memory cache the extension keeps (the test-only render
+ * cache above, the keymap cache below, and the image-dimensions cache in
+ * ditaRenderUtils.ts). lastRenderedHtmlByUri entries are already removed
+ * individually as each webview panel disposes (see onDidDispose in
+ * resolveCustomTextEditor), and keyMapCache/imageDimensionsCache are
+ * already bounded by their own caps -- this is a defensive full reset for
+ * extension deactivation, not a fix for an actual leak in any of them.
  * Wired into extension.ts's deactivate().
  */
 export function clearAllCaches(): void {
   lastRenderedHtmlByUri.clear();
   keyMapCache.clear();
+  clearImageDimensionsCache();
 }
 
 // Font preferences (size % + serif toggle) are global rather than per-document:
