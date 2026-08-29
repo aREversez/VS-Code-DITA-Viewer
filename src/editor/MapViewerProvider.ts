@@ -290,12 +290,37 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       }
     });
 
+    let disposed = false;
     let renderDebounceTimer: ReturnType<typeof setTimeout> | undefined;
     const changeSubscription = vscode.workspace.onDidChangeTextDocument((e) => {
       if (e.document.uri.toString() !== document.uri.toString()) return;
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
       renderDebounceTimer = setTimeout(postContentUpdate, 300);
     });
+
+    // Same rationale as DitaViewerProvider's referencedFilesWatcher: a
+    // ditamap's topicrefs/keydefs/maprefs and each inlined topic's own
+    // conref/image references routinely point outside this document, so
+    // only watching this document itself (above) misses edits to the very
+    // files book/outline mode is built from. Watches the containing
+    // workspace folder broadly rather than the resolved reference set for
+    // the same reason given there: that set isn't currently surfaced by
+    // the renderer, and DITA projects commonly reach across folders.
+    const watchBase =
+      vscode.workspace.getWorkspaceFolder(document.uri)?.uri ??
+      vscode.Uri.file(dirname(document.uri.fsPath));
+    const referencedFilesWatcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(watchBase, '**/*.{dita,ditamap,css,png,jpg,jpeg,gif,svg,webp}'),
+    );
+    const onReferencedFileChanged = (uri: vscode.Uri) => {
+      if (disposed) return;
+      if (uri.toString() === document.uri.toString()) return; // already handled above
+      if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
+      renderDebounceTimer = setTimeout(postContentUpdate, 300);
+    };
+    referencedFilesWatcher.onDidChange(onReferencedFileChanged);
+    referencedFilesWatcher.onDidCreate(onReferencedFileChanged);
+    referencedFilesWatcher.onDidDelete(onReferencedFileChanged);
 
     // Re-render on theme switch so the manually-computed light/dark class
     // never goes stale relative to the actual active theme. A genuine full
@@ -331,8 +356,10 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     updateWebview();
 
     webviewPanel.onDidDispose(() => {
+      disposed = true;
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
       changeSubscription.dispose();
+      referencedFilesWatcher.dispose();
       themeSubscription.dispose();
       lastRenderedHtmlByUri.delete(document.uri.toString());
     });

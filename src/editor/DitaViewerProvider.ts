@@ -911,6 +911,41 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       }, 300);
     });
 
+    // Refresh on changes to files this topic may reference (conref/keyref
+    // targets, other .dita/.ditamap files, images, custom CSS) that live
+    // outside this document and therefore never fire onDidChangeTextDocument
+    // above -- previously the only way to pick these up was the manual
+    // reload button. This intentionally watches the whole containing
+    // workspace folder rather than precisely tracking this document's own
+    // resolved dependency set: the renderer doesn't currently surface which
+    // files a given render actually touched, and workspace-wide DITA
+    // projects commonly pull conrefs/keydefs from ancestor or sibling
+    // directories, so a scoped watch would risk silently missing exactly
+    // the cross-folder references this is meant to catch. The tradeoff is
+    // a refresh check firing for edits unrelated to this document; that's
+    // a cheap no-op for a single topic, though for a large open book-mode
+    // map it re-runs the same full-book render the reload button already
+    // did on demand (see the book-mode render cost note in
+    // scripts/bench-book-render.js) -- worth revisiting with real
+    // dependency tracking if that proves noisy in practice.
+    const watchBase =
+      vscode.workspace.getWorkspaceFolder(document.uri)?.uri ??
+      vscode.Uri.file(dirname(document.uri.fsPath));
+    const referencedFilesWatcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(watchBase, '**/*.{dita,ditamap,css,png,jpg,jpeg,gif,svg,webp}'),
+    );
+    const onReferencedFileChanged = (uri: vscode.Uri) => {
+      if (disposed) return;
+      if (uri.toString() === document.uri.toString()) return; // already handled above
+      if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
+      renderDebounceTimer = setTimeout(() => {
+        postContentUpdate();
+      }, 300);
+    };
+    referencedFilesWatcher.onDidChange(onReferencedFileChanged);
+    referencedFilesWatcher.onDidCreate(onReferencedFileChanged);
+    referencedFilesWatcher.onDidDelete(onReferencedFileChanged);
+
     // Re-render on theme switch so the manually-computed light/dark class
     // (used for DITA-specific colors that have no direct VS Code theme
     // equivalent, e.g. note backgrounds) never goes stale relative to the
@@ -970,6 +1005,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       if (visibleRangeTimer) clearTimeout(visibleRangeTimer);
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
       changeSubscription.dispose();
+      referencedFilesWatcher.dispose();
       editorSub.dispose();
       selectionSub.dispose();
       themeSubscription.dispose();
