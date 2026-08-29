@@ -14,17 +14,27 @@
     "url": "https://github.com/aREversez/VS-Code-DITA-Viewer/issues"
   },
   "icon": "media/icons/extension-icon.png",
+  "galleryBanner": {
+    "color": "#1E1E1E",
+    "theme": "dark"
+  },
   "keywords": [
     "dita",
     "xml",
+    "ditamap",
     "documentation",
     "preview",
-    "ditamap"
+    "docs-as-code",
+    "technical writing",
+    "dita-ot",
+    "oasis",
+    "bookmap"
   ],
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
+    "Visualization",
     "Other"
   ],
   "main": "./dist/extension.js",

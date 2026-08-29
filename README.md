@@ -23,6 +23,19 @@ A VS Code extension that renders **`.dita`** and **`.ditamap`** files as a forma
 - **Custom CSS support** — override or extend the default styling with an in-preview theme switcher
 - **DITA-OT Transform** — run formal publishing transforms (`html5`, `pdf`, `xhtml`, `markdown`) using a local DITA-OT installation with live log output, cancellable progress, CSS/DITAVAL support, and automatic injection of site-chrome enhancements (sidebar TOC, on-page navigation, code language labels, back-to-top, dark mode)
 
+## Screenshots
+
+_Coming soon — this section is a placeholder pending capture on a real VS Code instance (not producible in a headless sandbox). Suggested shots, in priority order:_
+
+1. Topic reading view next to source, default theme
+2. BookMap outline (tree) mode showing numbered chapter/part/appendix badges
+3. Book mode with profiling **Flags** highlighting visible
+4. Profiling **Filter** panel with a value unchecked (content hidden)
+5. Theme dropdown open showing a custom CSS theme applied
+6. DITA-OT Transform progress notification + output channel
+
+To add these yourself: open a representative `.dita`/`.ditamap` project, trigger each view, and use VS Code's own screenshot/GIF tooling (or the OS screenshot tool) at a standard width (~1280px) so images stay legible when scaled down in the README.
+
 ## Usage
 
 ### Open a DITA Topic Preview
