@@ -450,7 +450,11 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
           try {
             const resolvedPath = resolve(topicDir, decodeHrefPart(relPath));
             return webview.asWebviewUri(vscode.Uri.file(resolvedPath)).toString();
-          } catch {
+          } catch (e) {
+            // The empty src still surfaces as a visibly broken image (the
+            // webview script's document-level error listener marks it);
+            // log the cause so path-resolution failures are debuggable.
+            console.warn(`Failed to resolve webview URI for ${relPath}:`, e instanceof Error ? e.message : e);
             return '';
           }
         };
