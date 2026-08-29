@@ -23,6 +23,9 @@ jobs:
       - run: npm run build
       - run: npm test
       - run: npm run lint
+      # l10n consistency guard (source strings vs l10n/package.nls catalogs);
+      # a pure source scan, so it needs neither a build nor a display server
+      - run: npm run check:l10n
       # VS Code integration tests need a display server on Linux;
       # @vscode/test-electron 3.x requires Node >= 22
       - name: E2E tests (Linux)
