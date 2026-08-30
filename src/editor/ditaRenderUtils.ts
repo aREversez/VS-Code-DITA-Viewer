@@ -451,6 +451,15 @@ export function detectNoteLabels(root: DitaNode, uiLanguage?: string): Record<st
   return lang.startsWith('zh') ? ZH_NOTE_LABELS : DEFAULT_NOTE_LABELS;
 }
 
+/** Same xml:lang-first, uiLanguage-fallback resolution as detectNoteLabels,
+ *  for the "Index" label shown in indexterm chip tooltips. Kept separate
+ *  rather than folded into noteLabels since it isn't a note type and has
+ *  its own (much smaller) two-language set. */
+export function detectIndexLabel(root: DitaNode, uiLanguage?: string): string {
+  const lang = root.attributes?.['xml:lang'] || uiLanguage || '';
+  return lang.startsWith('zh') ? '\u7d22\u5f15' : 'Index';
+}
+
 // ── Escaping (single source of truth for non-renderer code) ──
 
 export function escapeHtml(text: string): string {
@@ -647,6 +656,7 @@ export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
     const ditaDoc = parseDita(preprocessedXml);
     const titleMap = buildTitleMap(ditaDoc.root);
     const noteLabels = detectNoteLabels(ditaDoc.root, uiLanguage);
+    const indexLabel = detectIndexLabel(ditaDoc.root, uiLanguage);
 
     const conrefResolver = makeConrefResolver(docDir);
     const conrefRangeResolver = makeConrefRangeResolver(docDir);
@@ -667,6 +677,7 @@ export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
       resolveConref: (conref: string) => conrefResolver(conref),
       resolveConrefRange: (conref: string, conrefend: string) => conrefRangeResolver(conref, conrefend),
       noteLabels,
+      indexLabel,
       getImageDimensions: (relPath: string) => {
         try {
           return readImageDimensions(resolve(docDir, decodeHrefPart(relPath)));

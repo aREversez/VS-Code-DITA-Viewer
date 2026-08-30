@@ -26,6 +26,8 @@
   --color-profiling-border: #b8d878;
   --color-profiling-label-bg: #8fb84e;
   --color-profiling-label-text: #2a3a12;
+  --color-indexterm-chip-bg: #e6f0fa;
+  --color-indexterm-chip-text: #2c5282;
 }
 
 .vscode-dark {
@@ -43,6 +45,8 @@
   --color-profiling-border: #5a7530;
   --color-profiling-label-bg: #6b8f39;
   --color-profiling-label-text: #eef7dc;
+  --color-indexterm-chip-bg: #1f2f42;
+  --color-indexterm-chip-text: #9dc4ea;
 }
 
 body {
@@ -180,6 +184,28 @@ p { margin: 0.75em 0; }
   white-space: nowrap;
 }
 .profiling-chip__value { font-weight: 400; }
+/* Index term chips: small inline markers showing an authored <indexterm>'s
+   term path right where it appears in the running text -- not a compiled,
+   sorted back-of-book index (see the comment on topic/indexterm's renderer
+   in baseTypeMap.ts for why: sorting only makes sense for scripts with a
+   stable alphabetic/stroke order, so a generated index page would be
+   meaningless for e.g. Chinese content). Deliberately understated (smaller,
+   lower-contrast than profiling-chip) since these appear far more densely
+   in typical content than profiling markers do, and shouldn't compete with
+   the actual text for attention. */
+.indexterm-chip {
+  display: inline-block;
+  background: var(--color-indexterm-chip-bg);
+  color: var(--color-indexterm-chip-text);
+  font-size: 0.72em;
+  padding: 0.02rem 0.35rem;
+  border-radius: 3px;
+  white-space: nowrap;
+  margin: 0 0.15em;
+  cursor: default;
+}
+.indexterm-chip--ref { font-style: italic; }
+.indexterm-chip__see { font-style: italic; opacity: 0.85; }
 body.hide-profiling .profiled {
   background: none;
   box-shadow: none;

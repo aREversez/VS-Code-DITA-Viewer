@@ -1461,4 +1461,102 @@ describe('renderer', () => {
     assert.ok(!html.includes('class="keyword"'), 'prolog keyword span must not render');
     assert.ok(html.includes('Visible'), 'body content should still render');
   });
+
+  describe('indexterm', () => {
+    it('renders a single-level term as a visible chip (was previously invisible)', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [
+          makeEl('topic/p', [makeText('See the '), makeEl('topic/indexterm', [makeText('glossary')]), makeText(' for more.')]),
+        ]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(html.includes('indexterm-chip'), 'expected a visible indexterm chip');
+      assert.ok(html.includes('glossary'));
+      assert.ok(html.includes('See the '), 'surrounding text must be preserved');
+    });
+
+    it('joins nested indexterm levels into one chip (primary, secondary)', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [
+          makeEl('topic/p', [
+            makeEl('topic/indexterm', [makeText('Database'), makeEl('topic/indexterm', [makeText('backup')])]),
+          ]),
+        ]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      // Exactly one chip -- the intermediate "Database" level alone must
+      // NOT also render as its own separate chip (that would be the
+      // double-render bug this structure is specifically at risk of).
+      const chipCount = (html.match(/indexterm-chip"/g) || []).length;
+      assert.strictEqual(chipCount, 1, `expected exactly 1 chip, got ${chipCount} in: ${html}`);
+      assert.ok(html.includes('Database'));
+      assert.ok(html.includes('backup'));
+    });
+
+    it('emits one chip per sibling sub-entry sharing the same prefix', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [
+          makeEl('topic/p', [
+            makeEl('topic/indexterm', [
+              makeText('Database'),
+              makeEl('topic/indexterm', [makeText('backup')]),
+              makeEl('topic/indexterm', [makeText('restore')]),
+            ]),
+          ]),
+        ]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      const chipCount = (html.match(/indexterm-chip"/g) || []).length;
+      assert.strictEqual(chipCount, 2, `expected 2 sibling chips, got ${chipCount} in: ${html}`);
+      assert.ok(html.includes('backup'));
+      assert.ok(html.includes('restore'));
+    });
+
+    it('renders an index-see annotation attached to its chip', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [
+          makeEl('topic/p', [
+            makeEl('topic/indexterm', [
+              makeText('DB'),
+              makeEl('topic/index-see', [makeEl('topic/indexterm', [makeText('Database')])]),
+            ]),
+          ]),
+        ]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(html.includes('see: Database') || html.includes('see:'), `expected a see annotation in: ${html}`);
+    });
+
+    it('renders indextermref with its keyref value', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [makeEl('topic/indextermref', [], { keyref: 'shared-index-entry' })]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(html.includes('shared-index-entry'));
+    });
+
+    it('renders nothing for an indexterm with no text content at all (no crash, no empty chip noise)', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [makeEl('topic/p', [makeEl('topic/indexterm', [])])]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(!html.includes('indexterm-chip'), `expected no chip for an empty indexterm, got: ${html}`);
+    });
+
+    it('falls back to the English "Index" label when indexLabel is not supplied', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [makeEl('topic/p', [makeEl('topic/indexterm', [makeText('term')])])]),
+      ]);
+      const html = renderDocument(doc, defaultCtx); // no indexLabel in defaultCtx
+      assert.ok(html.includes('title="Index:'), `expected default Index label in: ${html}`);
+    });
+
+    it('uses the supplied localized indexLabel instead of the default', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [makeEl('topic/p', [makeEl('topic/indexterm', [makeText('term')])])]),
+      ]);
+      const html = renderDocument(doc, { ...defaultCtx, indexLabel: '索引' });
+      assert.ok(html.includes('title="索引:'), `expected localized label in: ${html}`);
+    });
+  });
 });

@@ -44,6 +44,77 @@ function extractPlainText(node: DitaNode): string {
   return (node.children || []).map(extractPlainText).join('');
 }
 
+// ── Index term extraction ──
+//
+// <indexterm> nesting encodes index levels: <indexterm>A<indexterm>B
+// <indexterm>C</indexterm></indexterm></indexterm> is a three-level entry
+// "A, B, C". Sibling nested indexterms under the same parent are separate
+// entries sharing the same prefix, e.g. <indexterm>A<indexterm>B</indexterm>
+// <indexterm>C</indexterm></indexterm> means "A, B" and "A, C". This walks
+// that structure directly (not via the generic renderChildren dispatch --
+// see the topic/indexterm renderer below) and produces one chip per leaf
+// path, each with own text plus any index-see/index-see-also attached at
+// that level.
+interface IndextermChip {
+  /** Term levels from outermost to innermost, e.g. ['Database', 'backup']. */
+  path: string[];
+  /** Rendered "see: X" / "see also: X" annotations attached at this level. */
+  seeAnnotations: string[];
+}
+
+function directTermText(node: DitaNode): string {
+  return (node.children || [])
+    .filter((c) => c.type === 'text')
+    .map((c) => c.text || '')
+    .join('')
+    .trim();
+}
+
+function collectIndextermChips(node: DitaNode, ancestorPath: string[] = []): IndextermChip[] {
+  const ownTerm = directTermText(node);
+  const path = ownTerm ? [...ancestorPath, ownTerm] : ancestorPath;
+  const children = node.children || [];
+  const nestedTerms = children.filter((c) => c.type === 'element' && c.baseType === 'topic/indexterm');
+  const seeNodes = children.filter(
+    (c) => c.type === 'element' && (c.baseType === 'topic/index-see' || c.baseType === 'topic/index-see-also'),
+  );
+
+  const seeAnnotations = seeNodes
+    .map((s) => {
+      // index-see/index-see-also's own content is itself indexterm(s)
+      // naming the target entry, not plain text -- reuse the same
+      // extraction rather than a separate plain-text read so a
+      // multi-level "see" target (rare but valid) still reads correctly.
+      const targets = collectIndextermChips(s).map((c) => c.path.join(', '));
+      const label = s.baseType === 'topic/index-see-also' ? 'see also' : 'see';
+      return targets.length ? `${label}: ${targets.join('; ')}` : '';
+    })
+    .filter(Boolean);
+
+  if (nestedTerms.length === 0) {
+    return path.length > 0 ? [{ path, seeAnnotations }] : [];
+  }
+
+  const childChips = nestedTerms.flatMap((child) => collectIndextermChips(child, path));
+  // A see-annotation attached at an intermediate level (this node has both
+  // its own term text AND nested sub-entries) would otherwise be silently
+  // dropped -- surface it as its own chip alongside the leaf chips rather
+  // than losing it.
+  if (seeAnnotations.length > 0 && path.length > 0) {
+    return [{ path, seeAnnotations }, ...childChips];
+  }
+  return childChips;
+}
+
+function renderIndextermChip(chip: IndextermChip, ctx: RenderContext): string {
+  const pathText = chip.path.map(escapeAttr).join(' \u203A ');
+  const seeText = chip.seeAnnotations.length
+    ? ` <span class="indexterm-chip__see">(${chip.seeAnnotations.map(escapeAttr).join('; ')})</span>`
+    : '';
+  const label = ctx.indexLabel || 'Index';
+  return `<span class="indexterm-chip" title="${escapeAttr(label)}: ${pathText}">\u{1F4D1} ${pathText}${seeText}</span>`;
+}
+
 function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
@@ -665,8 +736,35 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   },
   'topic/tm': (_node, ctx, renderChildren) =>
     `<span class="tm">${renderChildren(_node, ctx)}</span>`,
-  'topic/indexterm': () => '',
-  'topic/indextermref': () => '',
+  // Index terms carried no visual representation at all before this --
+  // <indexterm> rendered to '', so authored index entries were invisible
+  // in preview even though they're routinely used to check placement and
+  // wording while writing. This renders each indexterm as a small inline
+  // chip showing its full term path (indexterm nesting encodes
+  // primary/secondary/tertiary levels: <indexterm>A<indexterm>B</indexterm>
+  // </indexterm> means "A, B" as a two-level entry), plus any index-see/
+  // index-see-also cross-reference. Deliberately NOT a compiled, sorted
+  // index page the way a printed book's back-of-book index works --
+  // sorting only makes sense for scripts with a stable alphabetic/stroke
+  // order, and silently doing nothing useful (or something arbitrary) for
+  // e.g. Chinese content would be worse than not having a generated index
+  // at all. Showing the term(s) inline, right where they're authored, is
+  // useful in every language and needs no sort-order decision.
+  'topic/indexterm': (node, ctx) => collectIndextermChips(node).map((chip) => renderIndextermChip(chip, ctx)).join(''),
+  'topic/indextermref': (node) => {
+    const key = getAttr(node, 'keyref');
+    return key ? `<span class="indexterm-chip indexterm-chip--ref" title="indextermref">\u{1F4D1} ${escapeAttr(key)}</span>` : '';
+  },
+  // index-see / index-see-also / index-sort-as are only ever meaningful as
+  // children consumed directly by their parent topic/indexterm's own
+  // renderer above (collectIndextermChips walks node.children itself
+  // rather than going through the generic renderChildren dispatch for
+  // these) -- if one of these somehow gets visited on its own (malformed
+  // markup with the referencing indexterm parent missing, or ctx.uiLanguage
+  // paths hitting some node.children traversal outside indexterm's own
+  // renderer), rendering empty is right: there is no sensible standalone
+  // presentation for "the target of a see-reference" with no surrounding
+  // indexterm chip to attach it to.
   'topic/index-see': () => '',
   'topic/index-see-also': () => '',
   'topic/index-sort-as': () => '',

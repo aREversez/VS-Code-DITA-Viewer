@@ -24,6 +24,11 @@ export interface RenderContext {
    * source itself has no @width/@height, which always wins when present.
    */
   getImageDimensions?: (relPath: string) => { width: number; height: number } | undefined;
+  /** Localized "Index" label used in indexterm chip tooltips -- resolved
+   *  upstream (see detectIndexLabel in ditaRenderUtils.ts) the same way
+   *  noteLabels is, so this module stays free of any locale logic of its
+   *  own. Falls back to 'Index' when not supplied. */
+  indexLabel?: string;
 }
 
 const CONTAINER_BASETYPES = new Set([

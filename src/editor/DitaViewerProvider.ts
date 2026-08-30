@@ -5,7 +5,7 @@ import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { dirname, isAbsolute, join, resolve, basename } from 'path';
 import { randomBytes } from 'crypto';
 import { DitaNode } from '../parser/domTypes';
-import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart, detectNoteLabels, readImageDimensions, clearImageDimensionsCache, FileReader } from './ditaRenderUtils';
+import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart, detectNoteLabels, detectIndexLabel, readImageDimensions, clearImageDimensionsCache, FileReader } from './ditaRenderUtils';
 
 // Test-only hook: @vscode/test-electron integration tests can't read a
 // webview's rendered HTML directly (VS Code doesn't expose the WebviewPanel
@@ -1069,6 +1069,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       // implementation from ditaRenderUtils.ts instead of the separate,
       // partial (7 of 13 types) local copy this used to carry.
       const noteLabels = detectNoteLabels(ditaDoc.root, vscode.env.language);
+      const indexLabel = detectIndexLabel(ditaDoc.root, vscode.env.language);
 
       // Build key map from DITAMAP
       const keyMap = buildKeyMap(document.uri);
@@ -1095,6 +1096,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
         resolveConref: (conref: string) => conrefResolver(conref),
         resolveConrefRange: (conref: string, conrefend: string) => conrefRangeResolver(conref, conrefend),
         noteLabels,
+        indexLabel,
         getImageDimensions: (relPath: string) => {
           try {
             return readImageDimensions(resolve(docRootDir, decodeHrefPart(relPath)));
