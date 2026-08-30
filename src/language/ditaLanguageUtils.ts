@@ -128,6 +128,70 @@ export function findConrefTargetOffset(text: string, fragment: string): number {
   return findId(elementId, topicOff);
 }
 
+// ── Reverse lookup (Find All References) ──
+//
+// Go-to-definition above answers "what does this reference point at?"
+// These two answer the opposite question for the two things DITA content
+// can be "the definition of": an element's id="..." (targeted by
+// conref/href fragments) and a keydef's keys="..." (targeted by
+// keyref/conkeyref). The actual workspace scan that uses these to find
+// callers lives in ditaLanguageFeatures.ts's DitaReferenceProvider --
+// kept here, offset-based and file-agnostic, so it stays unit-testable.
+
+export interface IdAttrHit {
+  id: string;
+  valueStart: number;
+  valueEnd: number;
+}
+
+/** If the offset falls inside an id="..." attribute value, returns that id
+ *  and the value's span; otherwise undefined. */
+export function findIdAttrAt(text: string, offset: number): IdAttrHit | undefined {
+  const re = /\bid\s*=\s*"([^"]*)"/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const valueStart = m.index + m[0].indexOf('"') + 1;
+    const valueEnd = valueStart + m[1].length;
+    if (offset >= valueStart && offset <= valueEnd) {
+      return { id: m[1], valueStart, valueEnd };
+    }
+  }
+  return undefined;
+}
+
+export interface KeysAttrHit {
+  /** The single key token the offset lands on (keys="a b c" can hold several). */
+  key: string;
+  valueStart: number;
+  valueEnd: number;
+}
+
+/** If the offset falls inside one key of a keydef's keys="..." attribute
+ *  value, returns that specific key token (not the whole space-separated
+ *  list) and its span; otherwise undefined. Only matches on a <keydef> (or
+ *  <topicref>/<mapref> carrying its own keys attribute) tag, not any other
+ *  element that happens to have a "keys" attribute. */
+export function findKeysAttrAt(text: string, offset: number): KeysAttrHit | undefined {
+  const re = /\bkeys\s*=\s*"([^"]*)"/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const listStart = m.index + m[0].indexOf('"') + 1;
+    const listEnd = listStart + m[1].length;
+    if (offset < listStart || offset > listEnd) continue;
+    const relOffset = offset - listStart;
+    let tokenStart = 0;
+    for (const token of m[1].split(/(\s+)/)) {
+      const tokenEnd = tokenStart + token.length;
+      if (!/^\s*$/.test(token) && relOffset >= tokenStart && relOffset <= tokenEnd) {
+        return { key: token, valueStart: listStart + tokenStart, valueEnd: listStart + tokenEnd };
+      }
+      tokenStart = tokenEnd;
+    }
+    return undefined;
+  }
+  return undefined;
+}
+
 /** Collects all id="..." values declared in a document text. */
 export function collectIds(text: string): string[] {
   const ids: string[] = [];

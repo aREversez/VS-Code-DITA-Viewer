@@ -108,4 +108,73 @@ describe('DITA/DITAMAP preview rendering', () => {
 
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
   });
+
+  describe('Find All References', () => {
+    it('finds keyref/conkeyref usages of a key from its keydef', async () => {
+      const mapUri = vscode.Uri.file(path.join(fixturesDir, 'common', 'keys.ditamap'));
+      const doc = await vscode.workspace.openTextDocument(mapUri);
+      const text = doc.getText();
+      const keyOffset = text.indexOf('product_name') + 2; // inside the token
+      const position = doc.positionAt(keyOffset);
+
+      const locations = (await vscode.commands.executeCommand(
+        'vscode.executeReferenceProvider',
+        mapUri,
+        position,
+      )) as vscode.Location[];
+
+      const paths = locations.map((l) => path.basename(l.uri.fsPath));
+      // Known usages of the product_name key in the fixture set (see
+      // test-dita-file/topics/db_ui_test.dita and both relative_test maps).
+      assert.ok(paths.includes('db_ui_test.dita'), `expected db_ui_test.dita among: ${paths.join(', ')}`);
+      assert.ok(
+        paths.includes('relative_path_test.ditamap'),
+        `expected relative_path_test.ditamap among: ${paths.join(', ')}`,
+      );
+      assert.ok(
+        paths.includes('relative_path_test-book.ditamap'),
+        `expected relative_path_test-book.ditamap among: ${paths.join(', ')}`,
+      );
+    });
+
+    it('finds conref usages of an id from its declaration', async () => {
+      const topicUri = vscode.Uri.file(path.join(fixturesDir, 'topics', 'db_overview.dita'));
+      const doc = await vscode.workspace.openTextDocument(topicUri);
+      const text = doc.getText();
+      const idOffset = text.indexOf('shared_note') + 2;
+      const position = doc.positionAt(idOffset);
+
+      const locations = (await vscode.commands.executeCommand(
+        'vscode.executeReferenceProvider',
+        topicUri,
+        position,
+      )) as vscode.Location[];
+
+      // db_ui_test.dita has: conref="db_overview.dita#db_overview/shared_note"
+      const paths = locations.map((l) => path.basename(l.uri.fsPath));
+      assert.ok(paths.includes('db_ui_test.dita'), `expected db_ui_test.dita among: ${paths.join(', ')}`);
+    });
+
+    it('resolves references from a reference site (not just a declaration site)', async () => {
+      // Put the cursor ON the keyref usage itself, not on the keydef --
+      // should resolve to the same key and find the OTHER usages.
+      const uiUri = vscode.Uri.file(path.join(fixturesDir, 'topics', 'db_ui_test.dita'));
+      const doc = await vscode.workspace.openTextDocument(uiUri);
+      const text = doc.getText();
+      const keyrefOffset = text.indexOf('keyref="product_name"') + 10;
+      const position = doc.positionAt(keyrefOffset);
+
+      const locations = (await vscode.commands.executeCommand(
+        'vscode.executeReferenceProvider',
+        uiUri,
+        position,
+      )) as vscode.Location[];
+
+      const paths = locations.map((l) => path.basename(l.uri.fsPath));
+      assert.ok(
+        paths.includes('relative_path_test.ditamap'),
+        `expected to find sibling usages, got: ${paths.join(', ')}`,
+      );
+    });
+  });
 });

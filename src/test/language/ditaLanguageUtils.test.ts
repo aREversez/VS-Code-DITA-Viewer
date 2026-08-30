@@ -5,7 +5,9 @@ import {
   collectRefEntries,
   collectTopicSymbols,
   findConrefTargetOffset,
+  findIdAttrAt,
   findKeyDefinitionOffset,
+  findKeysAttrAt,
   findRefAttrAt,
   findUnclosedTag,
   getAttributesForTag,
@@ -140,6 +142,62 @@ describe('ditaLanguageUtils', () => {
       assert.deepStrictEqual(offsetToLineCol(text, 0), { line: 0, col: 0 });
       assert.deepStrictEqual(offsetToLineCol(text, 4), { line: 1, col: 1 });
       assert.deepStrictEqual(offsetToLineCol(text, 6), { line: 2, col: 0 });
+    });
+  });
+
+  describe('findIdAttrAt', () => {
+    const text = '<topic id="intro"><p id="p1">x</p></topic>';
+
+    it('returns the id when the offset is inside the value', () => {
+      const off = text.indexOf('"intro"') + 3; // middle of "intro"
+      assert.deepStrictEqual(findIdAttrAt(text, off)?.id, 'intro');
+    });
+
+    it('matches at both the start and end boundary of the value', () => {
+      const start = text.indexOf('intro');
+      const end = start + 'intro'.length;
+      assert.strictEqual(findIdAttrAt(text, start)?.id, 'intro');
+      assert.strictEqual(findIdAttrAt(text, end)?.id, 'intro');
+    });
+
+    it('returns undefined outside any id value', () => {
+      assert.strictEqual(findIdAttrAt(text, 0), undefined);
+      assert.strictEqual(findIdAttrAt(text, text.indexOf('<p')), undefined);
+    });
+
+    it('finds the second id, not just the first', () => {
+      const off = text.indexOf('"p1"') + 2;
+      assert.strictEqual(findIdAttrAt(text, off)?.id, 'p1');
+    });
+  });
+
+  describe('findKeysAttrAt', () => {
+    const text = '<keydef keys="alpha beta gamma" href="a.dita"/>';
+
+    it('returns just the single token the offset lands on, not the whole list', () => {
+      const betaStart = text.indexOf('beta');
+      assert.strictEqual(findKeysAttrAt(text, betaStart)?.key, 'beta');
+      assert.strictEqual(findKeysAttrAt(text, betaStart + 2)?.key, 'beta');
+    });
+
+    it('resolves the first and last token correctly (boundary check)', () => {
+      assert.strictEqual(findKeysAttrAt(text, text.indexOf('alpha'))?.key, 'alpha');
+      const gammaStart = text.indexOf('gamma');
+      assert.strictEqual(findKeysAttrAt(text, gammaStart + 'gamma'.length)?.key, 'gamma');
+    });
+
+    it('returns undefined when the offset lands on the whitespace between tokens', () => {
+      const text2 = '<keydef keys="alpha  beta" href="a.dita"/>'; // two spaces: a genuine interior gap position exists
+      const gapOffset = text2.indexOf('alpha') + 'alpha'.length + 1; // strictly inside the 2-space gap
+      assert.strictEqual(findKeysAttrAt(text2, gapOffset), undefined);
+    });
+
+    it('returns undefined for an unrelated keys-less attribute value', () => {
+      assert.strictEqual(findKeysAttrAt(text, text.indexOf('a.dita')), undefined);
+    });
+
+    it('returns undefined when there is no keys attribute at all', () => {
+      assert.strictEqual(findKeysAttrAt('<topicref href="a.dita"/>', 5), undefined);
     });
   });
 

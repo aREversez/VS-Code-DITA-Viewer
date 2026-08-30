@@ -13,7 +13,9 @@ import {
   collectTopicSymbols,
   DocSymbolSpec,
   findConrefTargetOffset,
+  findIdAttrAt,
   findKeyDefinitionOffset,
+  findKeysAttrAt,
   findRefAttrAt,
   findUnclosedTag,
   getAttributesForTag,
@@ -122,6 +124,154 @@ class DitaDefinitionProvider implements vscode.DefinitionProvider {
     }
     const { line, col } = offsetToLineCol(targetText, targetOff);
     return new vscode.Location(vscode.Uri.file(targetPath), new vscode.Position(line, col));
+  }
+}
+
+// ── Reference provider (Find All References) ──
+//
+// The reverse of go-to-definition: given a definition site (an id="..." or
+// a keydef's keys="...") or a reference site (href/conref/keyref/conkeyref
+// value), finds every OTHER place in the workspace that points at the same
+// thing. Unlike go-to-definition, which only needs the current document's
+// text, this has to scan every .dita/.ditamap file in the workspace --
+// there's no index, so every invocation is a fresh read+regex pass over
+// each candidate file. That's the same cost class as VS Code's built-in
+// text search and is fine for an on-demand (not automatic) action, but
+// will get slower, not faster, as a workspace grows into the tens of
+// thousands of files; there's no artificial result cap here on purpose --
+// silently truncating "Find All References" results would be worse than
+// a slow-but-complete answer.
+const REFERENCE_SCAN_GLOB = '**/*.{dita,ditamap}';
+const REFERENCE_SCAN_EXCLUDE = '**/{node_modules,out,dist}/**';
+
+interface ReferenceTarget {
+  kind: 'key' | 'id' | 'file';
+  /** For kind 'key': the key name. For kind 'id': the target topic id. */
+  name?: string;
+  /** For kind 'id' | 'file': absolute path of the target file. */
+  filePath?: string;
+  /** Location of the definition/declaration itself, if resolvable, so it
+   *  can be included in results when the caller asked for it. */
+  declaration?: vscode.Location;
+}
+
+/** Figures out what the cursor is "on" in reference-search terms: a key
+ *  definition, an id declaration, a reference to either of those (resolved
+ *  to its target the same way go-to-definition would), or -- falling all
+ *  the way back -- nothing specific, in which case the whole containing
+ *  file becomes the target ("who references this topic"). */
+function resolveReferenceTarget(document: vscode.TextDocument, text: string, offset: number): ReferenceTarget {
+  const keysHit = findKeysAttrAt(text, offset);
+  if (keysHit) {
+    return {
+      kind: 'key',
+      name: keysHit.key,
+      declaration: new vscode.Location(document.uri, document.positionAt(keysHit.valueStart)),
+    };
+  }
+
+  const idHit = findIdAttrAt(text, offset);
+  if (idHit) {
+    return {
+      kind: 'id',
+      name: idHit.id,
+      filePath: document.uri.fsPath,
+      declaration: new vscode.Location(document.uri, document.positionAt(idHit.valueStart)),
+    };
+  }
+
+  // Cursor on a reference value itself (not a declaration) -- resolve it to
+  // its target the same way DitaDefinitionProvider does, then search for
+  // OTHER referencers of that same target rather than of this document.
+  const refHit = findRefAttrAt(text, offset);
+  if (refHit && refHit.value) {
+    if (refHit.attr === 'keyref' || refHit.attr === 'conkeyref') {
+      const key = refHit.value.split('/')[0];
+      if (key) {
+        const declLoc = findKeyDefinitionLocation(document.uri, key);
+        return { kind: 'key', name: key, declaration: declLoc };
+      }
+    } else if (!isExternalRef(refHit.value, refHit.scope)) {
+      const hashIdx = refHit.value.indexOf('#');
+      const filePart = hashIdx >= 0 ? refHit.value.substring(0, hashIdx) : refHit.value;
+      const fragment = hashIdx >= 0 ? refHit.value.substring(hashIdx + 1) : '';
+      const docDir = dirname(document.uri.fsPath);
+      const targetPath = filePart ? resolve(docDir, decodeHrefPart(filePart)) : document.uri.fsPath;
+      if (existsSync(targetPath)) {
+        const topicId = fragment.split('/')[0];
+        if (topicId) {
+          return { kind: 'id', name: topicId, filePath: targetPath };
+        }
+        return { kind: 'file', filePath: targetPath };
+      }
+    }
+  }
+
+  // Nothing specific under the cursor -- fall back to "who references this
+  // file", which is the most common ask ("what points at this topic?").
+  return { kind: 'file', filePath: document.uri.fsPath };
+}
+
+class DitaReferenceProvider implements vscode.ReferenceProvider {
+  async provideReferences(
+    document: vscode.TextDocument,
+    position: vscode.Position,
+    context: vscode.ReferenceContext,
+    token: vscode.CancellationToken,
+  ): Promise<vscode.Location[]> {
+    const text = document.getText();
+    const offset = document.offsetAt(position);
+    const target = resolveReferenceTarget(document, text, offset);
+
+    const results: vscode.Location[] = [];
+    if (context.includeDeclaration && target.declaration) {
+      results.push(target.declaration);
+    }
+
+    const docFsPath = document.uri.fsPath;
+    let candidateUris: vscode.Uri[];
+    try {
+      candidateUris = await vscode.workspace.findFiles(REFERENCE_SCAN_GLOB, REFERENCE_SCAN_EXCLUDE);
+    } catch (e) {
+      console.warn('Find All References: workspace file scan failed:', e instanceof Error ? e.message : e);
+      return results;
+    }
+
+    for (const uri of candidateUris) {
+      if (token.isCancellationRequested) break;
+      let candidateText: string;
+      try {
+        candidateText = uri.fsPath === docFsPath ? text : readFileSync(uri.fsPath, 'utf-8');
+      } catch (e) {
+        console.warn(`Find All References: could not read ${uri.fsPath}:`, e instanceof Error ? e.message : e);
+        continue;
+      }
+
+      const candidateDir = dirname(uri.fsPath);
+      for (const entry of collectRefEntries(candidateText)) {
+        if (isExternalRef(entry.value, entry.scope)) continue;
+
+        if (target.kind === 'key') {
+          if (entry.attr !== 'keyref' && entry.attr !== 'conkeyref') continue;
+          if (entry.value.split('/')[0] !== target.name) continue;
+        } else {
+          if (entry.attr !== 'href' && entry.attr !== 'conref') continue;
+          const hashIdx = entry.value.indexOf('#');
+          const filePart = hashIdx >= 0 ? entry.value.substring(0, hashIdx) : entry.value;
+          const fragment = hashIdx >= 0 ? entry.value.substring(hashIdx + 1) : '';
+          const resolvedPath = filePart ? resolve(candidateDir, decodeHrefPart(filePart)) : uri.fsPath;
+          if (normalize(resolvedPath) !== normalize(target.filePath || '')) continue;
+          if (target.kind === 'id' && fragment.split('/')[0] !== target.name) continue;
+          // target.kind === 'file': any href/conref resolving to the file
+          // counts, fragment or not.
+        }
+
+        const { line, col } = offsetToLineCol(candidateText, entry.valueStart);
+        results.push(new vscode.Location(uri, new vscode.Position(line, col)));
+      }
+    }
+
+    return results;
   }
 }
 
@@ -420,6 +570,7 @@ function registerAutoCloseTag(context: vscode.ExtensionContext): void {
 export function registerLanguageFeatures(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.languages.registerDefinitionProvider(DITA_SELECTOR, new DitaDefinitionProvider()),
+    vscode.languages.registerReferenceProvider(DITA_SELECTOR, new DitaReferenceProvider()),
     vscode.languages.registerCompletionItemProvider(
       DITA_SELECTOR,
       new DitaCompletionProvider(),
