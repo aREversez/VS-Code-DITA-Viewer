@@ -718,40 +718,48 @@ export function getSearchOverlayScript(opts: {
 
   var sb = document.createElement('div');
   sb.id = '__search_bar';
+  sb.setAttribute('role', 'search');
   sb.style.cssText = sbStyle;
 
   var searchInput = document.createElement('input');
   searchInput.type = 'text';
   searchInput.placeholder = ${ph};
+  searchInput.setAttribute('aria-label', ${ph});
   searchInput.style.cssText = sbInputStyle;
 
   var searchCount = document.createElement('span');
   searchCount.style.cssText = sbCountStyle;
   searchCount.textContent = '';
+  searchCount.setAttribute('aria-live', 'polite');
 
   var caseBtn = document.createElement('button');
   caseBtn.textContent = 'Aa';
   caseBtn.title = ${mc};
+  caseBtn.setAttribute('aria-label', ${mc});
   caseBtn.style.cssText = sbToggleStyleOff;
 
   var regexBtn = document.createElement('button');
   regexBtn.textContent = '.*';
   regexBtn.title = ${re};
+  regexBtn.setAttribute('aria-label', ${re});
   regexBtn.style.cssText = sbToggleStyleOff + 'font-family:monospace;';
 
   var searchPrev = document.createElement('button');
   searchPrev.innerHTML = '&uarr;';
   searchPrev.title = ${prev};
+  searchPrev.setAttribute('aria-label', ${prev});
   searchPrev.style.cssText = sbBtnStyle;
 
   var searchNext = document.createElement('button');
   searchNext.innerHTML = '&darr;';
   searchNext.title = ${next};
+  searchNext.setAttribute('aria-label', ${next});
   searchNext.style.cssText = sbBtnStyle;
 
   var searchClose = document.createElement('button');
   searchClose.innerHTML = '&times;';
   searchClose.title = ${cls};
+  searchClose.setAttribute('aria-label', ${cls});
   searchClose.style.cssText = sbBtnStyle + 'font-size:16px;';
 
   sb.appendChild(searchInput);
@@ -1044,6 +1052,8 @@ export function getProfilingFilterScript(opts: {
     var toolbarRect = toolbar.getBoundingClientRect();
     var panel = document.createElement('div');
     panel.id = '__profiling_filter_panel';
+    panel.setAttribute('role', 'region');
+    panel.setAttribute('aria-label', ${btnLabel});
     panel.style.cssText = 'position:fixed;top:' + (toolbarRect.bottom + 6) + 'px;right:8px;z-index:10000;max-height:70vh;overflow:auto;padding:8px 10px;border-radius:5px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;background:var(--vscode-editor-background,rgba(30,30,30,0.95));border:1px solid var(--vscode-widget-border,rgba(255,255,255,0.12));backdrop-filter:blur(4px);box-shadow:0 2px 8px rgba(0,0,0,0.2);color:var(--vscode-foreground,#ccc);min-width:160px;';
 
     if (groupOrder.length === 0) {
@@ -1086,6 +1096,7 @@ export function getProfilingFilterScript(opts: {
 
     var closeLink = document.createElement('a');
     closeLink.href = '#';
+    closeLink.setAttribute('role', 'button');
     closeLink.textContent = ${closeLabel};
     closeLink.style.cssText = 'display:block;margin-top:8px;color:var(--vscode-textLink-foreground,#3794ff);cursor:pointer;';
     closeLink.addEventListener('click', function(e) { e.preventDefault(); pfTogglePanel(); });
@@ -1107,6 +1118,7 @@ export function getProfilingFilterScript(opts: {
   var pfFilterBtn = document.createElement('button');
   pfFilterBtn.textContent = ${btnLabel};
   pfFilterBtn.title = ${btnTitle};
+  pfFilterBtn.setAttribute('aria-label', ${btnTitle});
   pfFilterBtn.style.cssText = btnStyle + 'font-size:11px;';
   pfFilterBtn.addEventListener('click', pfTogglePanel);
   pfUpdateButtonState();

@@ -293,24 +293,24 @@ function renderRef(node: DitaNode, ctx: MapRenderContext, renderChildren: (node:
   const { boxClass, label: profileLabel } = ownProfilingMarkup(node);
 
   const icon = nav
-    ? '<span class="map-tree-icon map-tree-icon--file">\u{1F4C4}</span>'
-    : '<span class="map-tree-icon map-tree-icon--key">\u{1F511}</span>';
+    ? '<span class="map-tree-icon map-tree-icon--file" aria-hidden="true">\u{1F4C4}</span>'
+    : '<span class="map-tree-icon map-tree-icon--key" aria-hidden="true">\u{1F511}</span>';
 
   const nameAttr = escapeAttr(displayName);
   const keyAttr = safeAttr('data-keys', keys);
   const hrefAttr = href ? safeAttr('data-href', href) : '';
 
   if (nav) {
-    return `<li class="map-tree-item map-tree-item--nav${boxClass}"${keyAttr}${hrefAttr}${profileAttr}>
+    return `<li class="map-tree-item map-tree-item--nav${boxClass}" role="treeitem"${keyAttr}${hrefAttr}${profileAttr}>
       <a href="#" class="map-tree-link" data-href="${escapeAttr(href)}">${icon}${badge}<span class="map-tree-label">${nameAttr}</span></a>
-      ${childrenHtml ? `<ul class="map-tree">${childrenHtml}</ul>` : ''}
+      ${childrenHtml ? `<ul class="map-tree" role="group">${childrenHtml}</ul>` : ''}
       ${profileLabel}
     </li>`;
   }
 
-  return `<li class="map-tree-item map-tree-item--keydef${boxClass}"${keyAttr}${hrefAttr}${profileAttr}>
+  return `<li class="map-tree-item map-tree-item--keydef${boxClass}" role="treeitem"${keyAttr}${hrefAttr}${profileAttr}>
     ${icon}${badge}<span class="map-tree-label map-tree-label--keydef">${nameAttr}</span>
-    ${childrenHtml ? `<ul class="map-tree">${childrenHtml}</ul>` : ''}
+    ${childrenHtml ? `<ul class="map-tree" role="group">${childrenHtml}</ul>` : ''}
     ${profileLabel}
   </li>`;
 }
@@ -326,6 +326,10 @@ export interface MapRenderContext {
   roleLabel?: RoleLabeler;
   /** Current nesting depth (for depth-aware role numbering) */
   depth?: number;
+  /** Localized aria-label for the root outline tree (role="tree"); falls
+   *  back to a plain English default when the caller doesn't supply one
+   *  (e.g. in pure-function tests) so this stays vscode-free. */
+  treeLabel?: string;
   /**
    * The effective (already-cascaded) profiling/conditional-processing
    * attributes inherited from this node's ancestor topicrefs in the map --
@@ -379,7 +383,7 @@ const MAP_BASE_TYPE_RENDERERS: Record<string, Renderer> = {
       .join('');
     return `<div class="ditamap-container">
       ${titleHtml}
-      <ul class="map-tree">${bodyHtml}</ul>
+      <ul class="map-tree" role="tree" aria-label="${escapeAttr(ctx.treeLabel || 'Document outline')}">${bodyHtml}</ul>
     </div>`;
   },
 
@@ -395,9 +399,9 @@ const MAP_BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     const profileKeys = profilingKeysAttr(effectiveProfiling);
     const profileAttr = profileKeys ? safeAttr('data-profile-keys', profileKeys) : '';
     const { boxClass, label: profileLabel } = ownProfilingMarkup(node);
-    return `<li class="map-tree-item map-tree-item--head${boxClass}"${profileAttr}>
+    return `<li class="map-tree-item map-tree-item--head${boxClass}" role="treeitem"${profileAttr}>
       <span class="map-tree-label map-tree-label--head">${escapeAttr(displayName)}</span>
-      ${childrenHtml ? `<ul class="map-tree">${childrenHtml}</ul>` : ''}
+      ${childrenHtml ? `<ul class="map-tree" role="group">${childrenHtml}</ul>` : ''}
       ${profileLabel}
     </li>`;
   },
@@ -407,8 +411,12 @@ const MAP_BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     const effectiveProfiling = mergeProfilingAttrs(node.attributes, ctx.inheritedProfiling || {});
     const childCtx: MapRenderContext = { ...ctx, inheritedProfiling: effectiveProfiling };
     const childrenHtml = renderChildrenForNode(node, childCtx, renderChildren);
-    return `<li class="map-tree-item map-tree-item--group">
-      <ul class="map-tree">${childrenHtml}</ul>
+    // No visible label of its own (topicgroup is purely a profiling
+    // grouping), so it isn't a distinct treeitem -- role="group" alone,
+    // wrapping its children as if they were direct siblings of whatever
+    // contains this topicgroup.
+    return `<li class="map-tree-item map-tree-item--group" role="none">
+      <ul class="map-tree" role="group">${childrenHtml}</ul>
     </li>`;
   },
   'map/bookmap-structural': (node, ctx, renderChildren) => {
@@ -423,9 +431,9 @@ const MAP_BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     const profileKeys = profilingKeysAttr(effectiveProfiling);
     const profileAttr = profileKeys ? safeAttr('data-profile-keys', profileKeys) : '';
     const { boxClass, label: profileLabel } = ownProfilingMarkup(node);
-    return `<li class="map-tree-item map-tree-item--structural${boxClass}"${profileAttr}>
+    return `<li class="map-tree-item map-tree-item--structural${boxClass}" role="treeitem"${profileAttr}>
       <span class="map-tree-label map-tree-label--structural">${escapeAttr(displayName)}</span>
-      ${childrenHtml ? `<ul class="map-tree">${childrenHtml}</ul>` : ''}
+      ${childrenHtml ? `<ul class="map-tree" role="group">${childrenHtml}</ul>` : ''}
       ${profileLabel}
     </li>`;
   },
@@ -539,7 +547,7 @@ export function collectMapEntries(
 
 export function renderMapDocument(
   root: DitaNode,
-  options: { docDir: string; resolveKey?: ResolveKey; roleFormat?: RoleLabelFormatter },
+  options: { docDir: string; resolveKey?: ResolveKey; roleFormat?: RoleLabelFormatter; treeLabel?: string },
 ): string {
   function renderElement(node: DitaNode, ctx: MapRenderContext): string {
     if (node.type === 'text') return '';
@@ -556,6 +564,7 @@ export function renderMapDocument(
     resolveKey: options.resolveKey,
     roleLabel: createBookRoleLabeler(options.roleFormat),
     depth: 0,
+    treeLabel: options.treeLabel,
   };
 
   return renderElement(root, ctx);

@@ -56,6 +56,7 @@ const WIDTH_SELECTION_KEY = 'ditaViewer.widthSelectionByUri';
 
 function getWebviewScript(): string {
   const L = {
+    previewToolbar: JSON.stringify(vscode.l10n.t('Preview toolbar')),
     selectThemeCss: JSON.stringify(vscode.l10n.t('Select theme CSS')),
     decreaseFontSize: JSON.stringify(vscode.l10n.t('Decrease font size')),
     increaseFontSize: JSON.stringify(vscode.l10n.t('Increase font size')),
@@ -389,6 +390,7 @@ function getWebviewScript(): string {
     btn.className = 'dita-img-btn';
     btn.textContent = label;
     btn.title = title;
+    btn.setAttribute('aria-label', title);
     btn.addEventListener('click', function(e) {
       // Buttons sit inside the same wrapper as the image but are not
       // themselves the image, so the document-level click-to-lightbox
@@ -581,6 +583,8 @@ function getWebviewScript(): string {
 
   var toolbar = document.createElement('div');
   toolbar.id = '__toolbar';
+  toolbar.setAttribute('role', 'toolbar');
+  toolbar.setAttribute('aria-label', ${L.previewToolbar});
   toolbar.style.cssText = tbStyle;
   toolbar.addEventListener('mouseenter', function() { toolbar.style.opacity = '1'; });
   toolbar.addEventListener('mouseleave', function() { toolbar.style.opacity = '0.75'; });
@@ -596,6 +600,7 @@ function getWebviewScript(): string {
     document.head.appendChild(styleEl);
     var sel = document.createElement('select');
     sel.title = ${L.selectThemeCss};
+    sel.setAttribute('aria-label', ${L.selectThemeCss});
     sel.style.cssText = 'max-width:130px;' + ddStyle;
     for (var i = 0; i < cssKeys.length; i++) {
       var opt = document.createElement('option');
@@ -615,6 +620,7 @@ function getWebviewScript(): string {
   var fsDown = document.createElement('button');
   fsDown.innerHTML = 'A−';
   fsDown.title = ${L.decreaseFontSize};
+  fsDown.setAttribute('aria-label', ${L.decreaseFontSize});
   fsDown.style.cssText = btnStyle;
   fsDown.addEventListener('click', function() {
     fontSize = Math.max(60, fontSize - 10);
@@ -626,6 +632,7 @@ function getWebviewScript(): string {
   var fsUp = document.createElement('button');
   fsUp.innerHTML = 'A+';
   fsUp.title = ${L.increaseFontSize};
+  fsUp.setAttribute('aria-label', ${L.increaseFontSize});
   fsUp.style.cssText = btnStyle;
   fsUp.addEventListener('click', function() {
     fontSize = Math.min(200, fontSize + 10);
@@ -638,11 +645,13 @@ function getWebviewScript(): string {
   var fontBtn = document.createElement('button');
   fontBtn.textContent = isSerif ? ${L.fontSerif} : ${L.fontSans};
   fontBtn.title = isSerif ? ${L.fontCurrentSerif} : ${L.fontCurrentSans};
+  fontBtn.setAttribute('aria-label', isSerif ? ${L.fontCurrentSerif} : ${L.fontCurrentSans});
   fontBtn.style.cssText = btnStyle + 'font-size:11px;';
   fontBtn.addEventListener('click', function() {
     isSerif = !isSerif;
     fontBtn.textContent = isSerif ? ${L.fontSerif} : ${L.fontSans};
     fontBtn.title = isSerif ? ${L.fontCurrentSerif} : ${L.fontCurrentSans};
+    fontBtn.setAttribute('aria-label', isSerif ? ${L.fontCurrentSerif} : ${L.fontCurrentSans});
     document.body.style.fontFamily = isSerif ? SERIF_STACK : '';
     saveFontPrefs();
   });
@@ -652,6 +661,7 @@ function getWebviewScript(): string {
   var fontResetBtn = document.createElement('button');
   fontResetBtn.innerHTML = '&#8635;';
   fontResetBtn.title = ${L.resetFont};
+  fontResetBtn.setAttribute('aria-label', ${L.resetFont});
   fontResetBtn.style.cssText = btnStyle + 'font-size:12px;';
   fontResetBtn.addEventListener('click', function() {
     fontSize = 100;
@@ -659,6 +669,7 @@ function getWebviewScript(): string {
     applyFontPrefs();
     fontBtn.textContent = ${L.fontSans};
     fontBtn.title = ${L.fontCurrentSans};
+    fontBtn.setAttribute('aria-label', ${L.fontCurrentSans});
     saveFontPrefs();
   });
   toolbar.appendChild(fontResetBtn);
@@ -682,6 +693,7 @@ function getWebviewScript(): string {
     profilingBtn.style.background = profilingOn ? 'var(--color-profiling-label-bg)' : '';
     profilingBtn.style.color = profilingOn ? 'var(--color-profiling-label-text)' : '';
     profilingBtn.title = profilingOn ? ${L.profilingOnTitle} : ${L.profilingOffTitle};
+    profilingBtn.setAttribute('aria-label', profilingOn ? ${L.profilingOnTitle} : ${L.profilingOffTitle});
   }
   profilingBtn.addEventListener('click', function() {
     profilingOn = !profilingOn;
@@ -711,6 +723,7 @@ function getWebviewScript(): string {
   ];
   var wSel = document.createElement('select');
   wSel.title = ${L.pageWidth};
+  wSel.setAttribute('aria-label', ${L.pageWidth});
   wSel.style.cssText = 'max-width:72px;' + ddStyle;
   var restoredWidth = window.__widthSelection || '';
   for (var i = 0; i < widths.length; i++) {
@@ -735,6 +748,7 @@ function getWebviewScript(): string {
   var refreshBtn = document.createElement('button');
   refreshBtn.innerHTML = '&#x21bb;';
   refreshBtn.title = ${L.reloadContent};
+  refreshBtn.setAttribute('aria-label', ${L.reloadContent});
   refreshBtn.style.cssText = btnStyle;
   refreshBtn.addEventListener('click', function() { vscode.postMessage({ type: 'refresh' }); });
   toolbar.appendChild(refreshBtn);

@@ -27,6 +27,7 @@ export function clearMapCache(): void {
 
 function getMapWebviewScript(): string {
   const L = {
+    previewToolbar: JSON.stringify(vscode.l10n.t('Preview toolbar')),
     decreaseFontSize: JSON.stringify(vscode.l10n.t('Decrease font size')),
     increaseFontSize: JSON.stringify(vscode.l10n.t('Increase font size')),
     fontSans: JSON.stringify(vscode.l10n.t('Sans')),
@@ -84,6 +85,8 @@ function getMapWebviewScript(): string {
 
   var toolbar = document.createElement('div');
   toolbar.id = '__toolbar';
+  toolbar.setAttribute('role', 'toolbar');
+  toolbar.setAttribute('aria-label', ${L.previewToolbar});
   toolbar.style.cssText = tbStyle;
   toolbar.addEventListener('mouseenter', function() { toolbar.style.opacity = '1'; });
   toolbar.addEventListener('mouseleave', function() { toolbar.style.opacity = '0.75'; });
@@ -92,6 +95,7 @@ function getMapWebviewScript(): string {
   var fsDown = document.createElement('button');
   fsDown.innerHTML = 'A\u2212';
   fsDown.title = ${L.decreaseFontSize};
+  fsDown.setAttribute('aria-label', ${L.decreaseFontSize});
   fsDown.style.cssText = btnStyle + 'font-weight:bold;';
   fsDown.addEventListener('click', function() {
     fontSize = Math.max(60, fontSize - 10);
@@ -102,6 +106,7 @@ function getMapWebviewScript(): string {
   var fsUp = document.createElement('button');
   fsUp.innerHTML = 'A+';
   fsUp.title = ${L.increaseFontSize};
+  fsUp.setAttribute('aria-label', ${L.increaseFontSize});
   fsUp.style.cssText = btnStyle + 'font-weight:bold;';
   fsUp.addEventListener('click', function() {
     fontSize = Math.min(200, fontSize + 10);
@@ -114,11 +119,13 @@ function getMapWebviewScript(): string {
   var fontBtn = document.createElement('button');
   fontBtn.textContent = ${L.fontSans};
   fontBtn.title = ${L.fontCurrentSans};
+  fontBtn.setAttribute('aria-label', ${L.fontCurrentSans});
   fontBtn.style.cssText = btnStyle + 'font-size:11px;';
   fontBtn.addEventListener('click', function() {
     isSerif = !isSerif;
     fontBtn.textContent = isSerif ? ${L.fontSerif} : ${L.fontSans};
     fontBtn.title = isSerif ? ${L.fontCurrentSerif} : ${L.fontCurrentSans};
+    fontBtn.setAttribute('aria-label', isSerif ? ${L.fontCurrentSerif} : ${L.fontCurrentSans});
     document.body.style.fontFamily = isSerif ? "Georgia,'Times New Roman','Noto Serif SC','Songti SC',STSong,SimSun,serif" : '';
   });
   toolbar.appendChild(fontBtn);
@@ -134,6 +141,7 @@ function getMapWebviewScript(): string {
   var ddStyle = 'padding:1px 4px;border-radius:3px;border:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));background:var(--vscode-dropdown-background,#333);color:var(--vscode-dropdown-foreground,#eee);font-size:11px;outline:none;cursor:pointer;';
   var wSel = document.createElement('select');
   wSel.title = ${L.pageWidth};
+  wSel.setAttribute('aria-label', ${L.pageWidth});
   wSel.style.cssText = 'max-width:72px;' + ddStyle;
   for (var i = 0; i < widths.length; i++) {
     var opt = document.createElement('option');
@@ -150,6 +158,7 @@ function getMapWebviewScript(): string {
   // Mode toggle button
   var modeBtn = document.createElement('button');
   modeBtn.title = ${L.switchModeTitle};
+  modeBtn.setAttribute('aria-label', ${L.switchModeTitle});
   modeBtn.style.cssText = btnStyle + 'font-size:11px;';
   function updateModeLabel() {
     modeBtn.textContent = currentMode === 'tree' ? ${L.modeBook} : ${L.modeOutline};
@@ -177,6 +186,7 @@ function getMapWebviewScript(): string {
     profilingBtn.style.background = profilingOn ? 'var(--color-profiling-label-bg)' : '';
     profilingBtn.style.color = profilingOn ? 'var(--color-profiling-label-text)' : '';
     profilingBtn.title = profilingOn ? ${L.profilingOnTitle} : ${L.profilingOffTitle};
+    profilingBtn.setAttribute('aria-label', profilingOn ? ${L.profilingOnTitle} : ${L.profilingOffTitle});
   }
   profilingBtn.addEventListener('click', function() {
     profilingOn = !profilingOn;
@@ -202,6 +212,7 @@ function getMapWebviewScript(): string {
   var refreshBtn = document.createElement('button');
   refreshBtn.innerHTML = '&#x21bb;';
   refreshBtn.title = ${L.reloadContent};
+  refreshBtn.setAttribute('aria-label', ${L.reloadContent});
   refreshBtn.style.cssText = btnStyle;
   refreshBtn.addEventListener('click', function() { vscode.postMessage({ type: 'refresh' }); });
   toolbar.appendChild(refreshBtn);
@@ -386,7 +397,12 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       } else {
         // Resolve <ph keyref="..."/> etc. in the map title and navtitles
         const keyMap = buildKeyMap(document.uri);
-        content = renderMapDocument(mapDoc.root, { docDir, resolveKey: (k) => keyMap.get(k), roleFormat: formatLocalizedRole });
+        content = renderMapDocument(mapDoc.root, {
+          docDir,
+          resolveKey: (k) => keyMap.get(k),
+          roleFormat: formatLocalizedRole,
+          treeLabel: vscode.l10n.t('Document outline'),
+        });
       }
       return { html: content };
     } catch (err) {

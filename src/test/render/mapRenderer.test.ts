@@ -85,7 +85,7 @@ describe('mapRenderer', () => {
     assert.ok(html.includes('Parent'));
     assert.ok(html.includes('Child'));
     // Nested ul should exist
-    const nestedUlIndex = html.indexOf('<ul class="map-tree">', html.indexOf('Parent') + 10);
+    const nestedUlIndex = html.indexOf('<ul class="map-tree" role="group">', html.indexOf('Parent') + 10);
     assert.ok(nestedUlIndex >= 0, 'should have nested tree for child');
   });
 
@@ -231,7 +231,7 @@ describe('mapRenderer', () => {
     // Toc is empty — should not have a nested ul under it
     const tocIdx = html.indexOf('Toc');
     const afterToc = html.substring(tocIdx);
-    assert.ok(!afterToc.includes('<ul class="map-tree">'), 'Toc should not have children');
+    assert.ok(!afterToc.includes('<ul class="map-tree" role="group">'), 'Toc should not have children');
   });
 
   it('should render frontmatter with structural labels and nested chapter', () => {
@@ -282,7 +282,7 @@ describe('mapRenderer', () => {
     assert.ok(html.includes('Chapter 2'), 'chapter 2 should appear');
     // Nested ul for chapters inside part
     const partIdx = html.indexOf('Part I');
-    const nestedUlIdx = html.indexOf('<ul class="map-tree">', partIdx + 10);
+    const nestedUlIdx = html.indexOf('<ul class="map-tree" role="group">', partIdx + 10);
     assert.ok(nestedUlIdx >= 0, 'should have nested tree for chapters inside part');
   });
 
