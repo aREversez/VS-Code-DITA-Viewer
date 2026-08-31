@@ -13,6 +13,7 @@ import {
   collectTopicSymbols,
   DocSymbolSpec,
   findConrefTargetOffset,
+  findEnclosingKeydefKeys,
   findIdAttrAt,
   findKeyDefinitionOffset,
   findKeysAttrAt,
@@ -146,8 +147,12 @@ const REFERENCE_SCAN_EXCLUDE = '**/{node_modules,out,dist}/**';
 
 interface ReferenceTarget {
   kind: 'key' | 'id' | 'file';
-  /** For kind 'key': the key name. For kind 'id': the target topic id. */
-  name?: string;
+  /** For kind 'key': every key name to search for (a keydef's keys="a b c"
+   *  declares several aliases for the same target -- clicking anywhere in
+   *  that keydef other than one specific key token should search for
+   *  usages of ALL of them, not just the first). For kind 'id': the
+   *  target topic id (always exactly one). */
+  names?: string[];
   /** For kind 'id' | 'file': absolute path of the target file. */
   filePath?: string;
   /** Location of the definition/declaration itself, if resolvable, so it
@@ -165,16 +170,28 @@ function resolveReferenceTarget(document: vscode.TextDocument, text: string, off
   if (keysHit) {
     return {
       kind: 'key',
-      name: keysHit.key,
+      names: [keysHit.key],
       declaration: new vscode.Location(document.uri, document.positionAt(keysHit.valueStart)),
     };
+  }
+
+  // Broader than the exact-token match above: cursor anywhere else inside
+  // the enclosing <keydef> element (its <keyword> display text, href,
+  // topicmeta, whitespace) -- see findEnclosingKeydefKeys' own comment for
+  // why this matters. Falls through to the generic "file" case below
+  // otherwise, which technically returns results but answers a different,
+  // confusing question ("who references this ditamap") for someone who
+  // clicked the key's human-readable label expecting "who uses this key".
+  const keydefHit = findEnclosingKeydefKeys(text, offset);
+  if (keydefHit) {
+    return { kind: 'key', names: keydefHit.keys };
   }
 
   const idHit = findIdAttrAt(text, offset);
   if (idHit) {
     return {
       kind: 'id',
-      name: idHit.id,
+      names: [idHit.id],
       filePath: document.uri.fsPath,
       declaration: new vscode.Location(document.uri, document.positionAt(idHit.valueStart)),
     };
@@ -189,7 +206,7 @@ function resolveReferenceTarget(document: vscode.TextDocument, text: string, off
       const key = refHit.value.split('/')[0];
       if (key) {
         const declLoc = findKeyDefinitionLocation(document.uri, key);
-        return { kind: 'key', name: key, declaration: declLoc };
+        return { kind: 'key', names: [key], declaration: declLoc };
       }
     } else if (!isExternalRef(refHit.value, refHit.scope)) {
       const hashIdx = refHit.value.indexOf('#');
@@ -200,7 +217,7 @@ function resolveReferenceTarget(document: vscode.TextDocument, text: string, off
       if (existsSync(targetPath)) {
         const topicId = fragment.split('/')[0];
         if (topicId) {
-          return { kind: 'id', name: topicId, filePath: targetPath };
+          return { kind: 'id', names: [topicId], filePath: targetPath };
         }
         return { kind: 'file', filePath: targetPath };
       }
@@ -253,7 +270,7 @@ class DitaReferenceProvider implements vscode.ReferenceProvider {
 
         if (target.kind === 'key') {
           if (entry.attr !== 'keyref' && entry.attr !== 'conkeyref') continue;
-          if (entry.value.split('/')[0] !== target.name) continue;
+          if (!target.names?.includes(entry.value.split('/')[0])) continue;
         } else {
           if (entry.attr !== 'href' && entry.attr !== 'conref') continue;
           const hashIdx = entry.value.indexOf('#');
@@ -261,7 +278,7 @@ class DitaReferenceProvider implements vscode.ReferenceProvider {
           const fragment = hashIdx >= 0 ? entry.value.substring(hashIdx + 1) : '';
           const resolvedPath = filePart ? resolve(candidateDir, decodeHrefPart(filePart)) : uri.fsPath;
           if (normalize(resolvedPath) !== normalize(target.filePath || '')) continue;
-          if (target.kind === 'id' && fragment.split('/')[0] !== target.name) continue;
+          if (target.kind === 'id' && fragment.split('/')[0] !== target.names?.[0]) continue;
           // target.kind === 'file': any href/conref resolving to the file
           // counts, fragment or not.
         }

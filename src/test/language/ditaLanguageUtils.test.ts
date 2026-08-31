@@ -5,6 +5,7 @@ import {
   collectRefEntries,
   collectTopicSymbols,
   findConrefTargetOffset,
+  findEnclosingKeydefKeys,
   findIdAttrAt,
   findKeyDefinitionOffset,
   findKeysAttrAt,
@@ -198,6 +199,47 @@ describe('ditaLanguageUtils', () => {
 
     it('returns undefined when there is no keys attribute at all', () => {
       assert.strictEqual(findKeysAttrAt('<topicref href="a.dita"/>', 5), undefined);
+    });
+  });
+
+  describe('findEnclosingKeydefKeys', () => {
+    it('finds the key(s) when the cursor is on the href, not the keys attribute itself', () => {
+      const text = '<keydef keys="product_name" href="a.dita"/>';
+      const hrefOffset = text.indexOf('a.dita');
+      assert.deepStrictEqual(findEnclosingKeydefKeys(text, hrefOffset)?.keys, ['product_name']);
+    });
+
+    it('finds the key(s) when the cursor is on a nested <keyword> display text -- the case a user unfamiliar with the extension is likely to click', () => {
+      const text = '<keydef keys="product_name"><topicmeta><keywords><keyword>Acme Widget</keyword></keywords></topicmeta></keydef>';
+      const keywordTextOffset = text.indexOf('Acme Widget') + 2;
+      assert.deepStrictEqual(findEnclosingKeydefKeys(text, keywordTextOffset)?.keys, ['product_name']);
+    });
+
+    it('returns every alias when a keydef declares multiple keys', () => {
+      const text = '<keydef keys="a b c" href="x.dita"/>';
+      const hrefOffset = text.indexOf('x.dita');
+      assert.deepStrictEqual(findEnclosingKeydefKeys(text, hrefOffset)?.keys, ['a', 'b', 'c']);
+    });
+
+    it('returns undefined outside any keydef element', () => {
+      const text = '<map><keydef keys="a" href="x.dita"/></map>';
+      assert.strictEqual(findEnclosingKeydefKeys(text, 0), undefined); // on <map>, before the keydef
+      const afterEnd = text.indexOf('</map>') + 3;
+      assert.strictEqual(findEnclosingKeydefKeys(text, afterEnd), undefined);
+    });
+
+    it('does not treat a DIFFERENT, later keydef as the enclosing one', () => {
+      const text = '<map><keydef keys="first" href="a.dita"/><keydef keys="second" href="b.dita"/></map>';
+      const secondHrefOffset = text.indexOf('b.dita');
+      assert.deepStrictEqual(findEnclosingKeydefKeys(text, secondHrefOffset)?.keys, ['second']);
+    });
+
+    it('handles a non-self-closing keydef with a closing tag', () => {
+      const text = '<keydef keys="k1"><topicmeta><keywords><keyword>Label</keyword></keywords></topicmeta></keydef><p>outside</p>';
+      const insideOffset = text.indexOf('Label');
+      const outsideOffset = text.indexOf('outside');
+      assert.deepStrictEqual(findEnclosingKeydefKeys(text, insideOffset)?.keys, ['k1']);
+      assert.strictEqual(findEnclosingKeydefKeys(text, outsideOffset), undefined);
     });
   });
 

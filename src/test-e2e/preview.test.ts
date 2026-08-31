@@ -176,5 +176,27 @@ describe('DITA/DITAMAP preview rendering', () => {
         `expected to find sibling usages, got: ${paths.join(', ')}`,
       );
     });
+
+    it('finds keyref usages when the cursor is on the keydef\'s <keyword> display text, not the keys attribute itself', async () => {
+      // Regression/UX fix: clicking the human-readable label inside a
+      // keydef (rather than the keys="..." attribute value itself) used to
+      // silently fall through to "who references this ditamap file" --
+      // technically valid results, but not an answer to what someone
+      // clicking the visible product name text was actually asking.
+      const mapUri = vscode.Uri.file(path.join(fixturesDir, 'common', 'keys.ditamap'));
+      const doc = await vscode.workspace.openTextDocument(mapUri);
+      const text = doc.getText();
+      const keywordTextOffset = text.indexOf('DatabaseX Pro v3.0') + 2;
+      const position = doc.positionAt(keywordTextOffset);
+
+      const locations = (await vscode.commands.executeCommand(
+        'vscode.executeReferenceProvider',
+        mapUri,
+        position,
+      )) as vscode.Location[];
+
+      const paths = locations.map((l) => path.basename(l.uri.fsPath));
+      assert.ok(paths.includes('db_ui_test.dita'), `expected keyref usages, got: ${paths.join(', ')}`);
+    });
   });
 });

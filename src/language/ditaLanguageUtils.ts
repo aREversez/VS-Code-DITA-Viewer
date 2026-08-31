@@ -192,6 +192,56 @@ export function findKeysAttrAt(text: string, offset: number): KeysAttrHit | unde
   return undefined;
 }
 
+export interface KeydefHit {
+  /** All key names declared via keys="..." on the enclosing keydef, in
+   *  document order. Usually one, but keys="a b c" declares several
+   *  aliases for the same target -- all of them are valid search targets
+   *  since they all resolve to the same content. */
+  keys: string[];
+}
+
+/** If the offset falls ANYWHERE inside a <keydef> element -- not just
+ *  literally inside its keys="..." attribute value the way findKeysAttrAt
+ *  above requires -- returns every key that keydef declares.
+ *
+ *  This exists specifically for Find All References: clicking on some
+ *  OTHER part of a keydef (its <keyword> display text, its href, its
+ *  topicmeta, whitespace inside a multi-line keydef) is an easy mistake
+ *  for someone unfamiliar with the extension to make when trying to find
+ *  where a key is used -- especially the keyword text, which is the
+ *  human-readable label a reader would naturally click on. Silently
+ *  falling through to the generic "who references this ditamap file"
+ *  answer in that case is actively confusing: it still returns results,
+ *  so it looks like it worked, but it answers a different question than
+ *  the one being asked. findKeysAttrAt's narrower, attribute-value-only
+ *  match still takes priority when it hits (see ditaLanguageFeatures.ts'
+ *  resolveReferenceTarget) so clicking the exact key name still resolves
+ *  to just that one key rather than every alias on the keydef. */
+export function findEnclosingKeydefKeys(text: string, offset: number): KeydefHit | undefined {
+  const tagRe = /<keydef\b[^>]*>/g;
+  let m: RegExpExecArray | null;
+  while ((m = tagRe.exec(text)) !== null) {
+    const tagStart = m.index;
+    const tagText = m[0];
+    const selfClosing = /\/\s*>$/.test(tagText);
+    let elementEnd: number;
+    if (selfClosing) {
+      elementEnd = tagStart + tagText.length;
+    } else {
+      const closeTag = '</keydef>';
+      const closeIdx = text.indexOf(closeTag, tagStart + tagText.length);
+      elementEnd = closeIdx >= 0 ? closeIdx + closeTag.length : tagStart + tagText.length;
+    }
+    if (offset < tagStart || offset > elementEnd) continue;
+
+    const keysMatch = /\bkeys\s*=\s*"([^"]*)"/.exec(tagText);
+    if (!keysMatch) return undefined;
+    const keys = keysMatch[1].split(/\s+/).filter(Boolean);
+    return keys.length ? { keys } : undefined;
+  }
+  return undefined;
+}
+
 /** Collects all id="..." values declared in a document text. */
 export function collectIds(text: string): string[] {
   const ids: string[] = [];
