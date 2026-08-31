@@ -116,6 +116,11 @@
         "icon": "$(export)"
       },
       {
+        "command": "ditaViewer.compareWithGit",
+        "title": "%command.compareWithGit.title%",
+        "icon": "$(diff)"
+      },
+      {
         "command": "ditaViewer.mapExplorer.refresh",
         "title": "%command.mapExplorerRefresh.title%",
         "icon": "$(refresh)"
@@ -237,6 +242,11 @@
           "command": "ditaViewer.exportHtml",
           "when": "resourceExtname == .dita || resourceExtname == .ditamap",
           "group": "1_export"
+        },
+        {
+          "command": "ditaViewer.compareWithGit",
+          "when": "resourceExtname == .dita",
+          "group": "1_export"
         }
       ],
       "commandPalette": [
@@ -263,6 +273,10 @@
         {
           "command": "ditaViewer.exportHtml",
           "when": "resourceExtname == .dita || resourceExtname == .ditamap || activeCustomEditorId == ditaViewer.preview || activeCustomEditorId == ditaViewer.mapPreview"
+        },
+        {
+          "command": "ditaViewer.compareWithGit",
+          "when": "resourceExtname == .dita"
         },
         {
           "command": "ditaViewer.mapExplorer.refresh",

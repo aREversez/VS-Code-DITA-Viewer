@@ -99,5 +99,21 @@
   "\n[DITA-OT] Transformation complete. Output directory: {0}": "\n[DITA-OT] Transformation complete. Output directory: {0}",
   "Zoom out this image (preview only)": "Zoom out this image (preview only)",
   "Zoom in this image (preview only)": "Zoom in this image (preview only)",
-  "View full-screen (use ←/→ to switch images)": "View full-screen (use ←/→ to switch images)"
+  "View full-screen (use ←/→ to switch images)": "View full-screen (use ←/→ to switch images)",
+  "Please open a .dita file first.": "Please open a .dita file first.",
+  "Not a Git repository: {0}": "Not a Git repository: {0}",
+  "includes unsaved changes": "includes unsaved changes",
+  "Working copy": "Working copy",
+  "Select the base (older) version": "Select the base (older) version",
+  "Compare with Git Version": "Compare with Git Version",
+  "Could not read the selected version.": "Could not read the selected version.",
+  "Could not compute the difference: {0}": "Could not compute the difference: {0}",
+  "Select the version to compare against": "Select the version to compare against",
+  "Computing differences…": "Computing differences…",
+  "This file has no committed history yet.": "This file has no committed history yet.",
+  "Select a commit": "Select a commit",
+  "Swap sides": "Swap sides",
+  "Previous change": "Previous change",
+  "Next change": "Next change",
+  "Show word-level changes": "Show word-level changes"
 }

@@ -327,7 +327,7 @@ function renderConrefRange(node: DitaNode, range: DitaNode[], context: RenderCon
     .join('');
 }
 
-function renderElement(node: DitaNode, context: RenderContext): string {
+export function renderElement(node: DitaNode, context: RenderContext): string {
   if (node.type === 'text') {
     return escapeHtml(node.text || '');
   }

@@ -6,6 +6,7 @@
   "command.showMapSource.title": "返回 DITA Map 源码",
   "command.transformWithDitaOt.title": "DITA-OT：转换 Map…",
   "command.exportHtml.title": "DITA：导出为 HTML…",
+  "command.compareWithGit.title": "DITA：与 Git 版本比较…",
   "command.mapExplorerRefresh.title": "刷新 DITA Map",
   "view.mapExplorer.name": "DITA Map",
   "view.mapExplorer.welcome": "当前文件没有关联的 DITA Map。\n打开一个 .dita 或 .ditamap 文件即可在此查看其结构。",

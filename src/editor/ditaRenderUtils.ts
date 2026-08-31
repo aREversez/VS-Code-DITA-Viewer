@@ -522,6 +522,22 @@ export interface TopicRenderResult {
   error?: string;
 }
 
+export interface TopicXmlRenderInput {
+  xml: string;
+  docDir: string;
+  keyMap: Map<string, string>;
+  asWebviewUri: (relPath: string) => string;
+  headingLevel: number;
+  uiLanguage?: string;
+}
+
+export interface ParsedTopicResult {
+  doc?: import('../parser/domTypes').DitaDocument;
+  html: string;
+  title?: string;
+  error?: string;
+}
+
 // ── Ditamap reference expansion ──
 // Walks the map tree and inlines children from referenced .ditamap files
 // so key-value pairs appear inline in tree/book view.
@@ -624,18 +640,13 @@ export function expandDitamapRefs(
   }
 }
 
-export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
-  const { filePath, keyMap, asWebviewUri, headingLevel, uiLanguage } = input;
+export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
+  const { xml, docDir, keyMap, asWebviewUri, headingLevel, uiLanguage } = input;
   try {
-    if (!existsSync(filePath)) {
-      return { html: '', error: `File not found: ${filePath}` };
-    }
-    const rawXml = readFileSync(filePath, 'utf-8');
-    const preprocessedXml = preprocessEntities(rawXml);
+    const preprocessedXml = preprocessEntities(xml);
     const ditaDoc = parseDita(preprocessedXml);
     const titleMap = buildTitleMap(ditaDoc.root);
     const noteLabels = detectNoteLabels(ditaDoc.root, uiLanguage);
-    const docDir = dirname(filePath);
 
     const conrefResolver = makeConrefResolver(docDir);
     const conrefRangeResolver = makeConrefRangeResolver(docDir);
@@ -644,7 +655,6 @@ export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
     const resolveTitle = (id: string): string | undefined => {
       const local = titleMap.get(id);
       if (local) return local;
-      // Cross-file: id may be "file.dita#topicId" or just "file.dita"
       return fileTitleResolver(id);
     };
 
@@ -670,7 +680,29 @@ export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
       (c) => c.type === 'element' && c.baseType === 'topic/title',
     );
     const title = titleNode ? collectText(titleNode) : undefined;
-   return { html, title };
+    return { doc: ditaDoc, html, title };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { html: '', error: `Error rendering topic: ${message}` };
+  }
+}
+
+export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
+  const { filePath, keyMap, asWebviewUri, headingLevel, uiLanguage } = input;
+  try {
+    if (!existsSync(filePath)) {
+      return { html: '', error: `File not found: ${filePath}` };
+    }
+    const rawXml = readFileSync(filePath, 'utf-8');
+    const result = renderTopicXml({
+      xml: rawXml,
+      docDir: dirname(filePath),
+      keyMap,
+      asWebviewUri,
+      headingLevel,
+      uiLanguage,
+    });
+    return { html: result.html, title: result.title, error: result.error };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { html: '', error: `Error rendering ${filePath}: ${message}` };

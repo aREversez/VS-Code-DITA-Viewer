@@ -1,0 +1,731 @@
+// Structural diff engine for DITA topics — pure functions, no vscode dependency.
+// Compares two parsed topic trees at block level (paragraphs, sections, lists…)
+// using LCS alignment, pairs wording-level changes as "modified", and injects
+// word-level inline diff marks into rendered HTML.
+
+import { DitaNode, DitaDocument } from '../parser/domTypes';
+import { parseDita, preprocessEntities } from '../parser/ditaParser';
+import { collectText, escapeHtml } from './ditaRenderUtils';
+
+// ── Public types ──
+
+export type DiffChangeType = 'unchanged' | 'modified' | 'added' | 'removed';
+
+export interface DiffPart {
+  value: string;
+  added?: boolean;
+  removed?: boolean;
+}
+
+export interface RenderedBlock {
+  key: string;
+  baseType?: string;
+  tagName?: string;
+  html: string;
+  text: string;
+  sourceLine?: number;
+}
+
+export interface AlignedRow {
+  left?: RenderedBlock;
+  right?: RenderedBlock;
+  changeType: DiffChangeType;
+  children?: AlignedRow[];
+  /** Word-level diff between left.text and right.text, computed only for
+   *  'modified' rows. Was read/written throughout this file and by
+   *  ditaDiffProvider.ts without ever being declared here -- worked at
+   *  runtime purely because JS doesn't enforce object shapes, but nothing
+   *  was actually type-checking this file at all until it got added to
+   *  tsconfig.test.json (see the note there), which is how this went
+   *  unnoticed. */
+  inlineDiff?: DiffPart[];
+}
+
+export interface TopicDiffResult {
+  leftTitle?: string;
+  rightTitle?: string;
+  rows: AlignedRow[];
+  stats: { added: number; removed: number; modified: number };
+  errorLeft?: string;
+  errorRight?: string;
+}
+
+// ── Block extraction ──
+
+export interface BlockExtractOptions {
+  renderBlock: (node: DitaNode, parentBaseType: string, headingLevel: number) => string;
+}
+
+const SKIP_BASETYPES = new Set(['topic/prolog', 'topic/title', 'topic/shortdesc']);
+
+function blockKey(node: DitaNode, text: string): string {
+  const id = node.attributes?.id;
+  if (id) return `id:${id}`;
+  return `fp:${node.baseType || node.tagName || ''}:${simpleHash(text)}`;
+}
+
+function simpleHash(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  }
+  return h >>> 0;
+}
+
+export function normalizeText(text: string): string {
+  return text.replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function makeBlock(
+  node: DitaNode,
+  opts: BlockExtractOptions,
+  parentBaseType: string,
+  headingLevel: number,
+): RenderedBlock {
+  const text = normalizeText(collectText(node));
+  return {
+    key: blockKey(node, text),
+    baseType: node.baseType,
+    tagName: node.tagName,
+    html: opts.renderBlock(node, parentBaseType, headingLevel),
+    text,
+    sourceLine: node.sourceRange?.startLine,
+  };
+}
+
+export function extractChildBlocks(
+  scope: DitaNode,
+  opts: BlockExtractOptions,
+  parentBaseType: string,
+  headingLevel: number,
+): RenderedBlock[] {
+  const blocks: RenderedBlock[] = [];
+  for (const child of scope.children || []) {
+    if (child.type !== 'element') continue;
+    if (SKIP_BASETYPES.has(child.baseType || '')) continue;
+    blocks.push(makeBlock(child, opts, parentBaseType, headingLevel));
+  }
+  return blocks;
+}
+
+export function extractTopicBlocks(root: DitaNode, opts: BlockExtractOptions): RenderedBlock[] {
+  const blocks: RenderedBlock[] = [];
+  const children = root.children || [];
+
+  for (const child of children) {
+    if (child.type !== 'element') continue;
+    if (child.baseType === 'topic/title') {
+      blocks.push(makeBlock(child, opts, 'topic', 1));
+    } else if (child.baseType === 'topic/shortdesc') {
+      blocks.push(makeBlock(child, opts, 'topic', 1));
+    }
+  }
+
+  const body = children.find((c) => c.type === 'element' && c.baseType === 'topic/body');
+  if (body) {
+    for (const child of body.children || []) {
+      if (child.type !== 'element') continue;
+      if (SKIP_BASETYPES.has(child.baseType || '')) continue;
+      const hl = child.baseType === 'topic/section' || child.baseType === 'topic/example' ? 2 : 1;
+      blocks.push(makeBlock(child, opts, 'topic/body', hl));
+    }
+  }
+
+  return blocks;
+}
+
+// ── LCS alignment ──
+
+interface LcsOp<T> {
+  op: 'same' | 'removed' | 'added';
+  left?: T;
+  right?: T;
+}
+
+const LCS_CELL_LIMIT = 4_000_000;
+
+export function lcsAlign<T>(
+  a: T[],
+  b: T[],
+  equals: (x: T, y: T) => boolean,
+  keyOf: (item: T) => string,
+): LcsOp<T>[] {
+  const m = a.length;
+  const n = b.length;
+
+  if (m * n > LCS_CELL_LIMIT) {
+    return idOnlyAlign(a, b, equals, keyOf);
+  }
+
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (equals(a[i - 1], b[j - 1])) {
+        dp[i][j] = dp[i - 1][j - 1] + 1;
+      } else {
+        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+  }
+
+  const ops: LcsOp<T>[] = [];
+  let i = m, j = n;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && equals(a[i - 1], b[j - 1])) {
+      ops.push({ op: 'same', left: a[i - 1], right: b[j - 1] });
+      i--; j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      ops.push({ op: 'added', right: b[j - 1] });
+      j--;
+    } else {
+      ops.push({ op: 'removed', left: a[i - 1] });
+      i--;
+    }
+  }
+  ops.reverse();
+  return ops;
+}
+
+/**
+ * O(n) fallback for when the full O(mn) DP table (above) would exceed
+ * LCS_CELL_LIMIT -- matches items by an identity key instead of a full
+ * alignment, so it's less precise about *where* an unmatched item sits
+ * relative to others, but doesn't blow up memory on huge documents.
+ *
+ * Takes an explicit keyOf function rather than requiring T to structurally
+ * have a .key field: lcsAlign is called with RenderedBlock[] (which does
+ * have .key) AND with plain string[] token arrays from diffTokens (which
+ * don't and can't reasonably be forced to) -- a `T extends { key: string }`
+ * constraint on lcsAlign itself would reject that second, entirely
+ * legitimate caller. This was actually broken by an earlier version of
+ * this fix that added exactly that constraint without checking every call
+ * site first; caught by actually running tsc against this file rather
+ * than assuming a plausible-looking type change was correct.
+ */
+function idOnlyAlign<T>(
+  a: T[],
+  b: T[],
+  equals: (x: T, y: T) => boolean,
+  keyOf: (item: T) => string,
+): LcsOp<T>[] {
+  const bByKey = new Map<string, T>();
+  for (const item of b) {
+    bByKey.set(keyOf(item), item);
+  }
+  const ops: LcsOp<T>[] = [];
+  const usedB = new Set<string>();
+
+  for (const itemA of a) {
+    const key = keyOf(itemA);
+    const match = bByKey.get(key);
+    if (match && !usedB.has(key) && equals(itemA, match)) {
+      ops.push({ op: 'same', left: itemA, right: match });
+      usedB.add(key);
+      continue;
+    }
+    ops.push({ op: 'removed', left: itemA });
+  }
+
+  for (const itemB of b) {
+    if (!usedB.has(keyOf(itemB))) {
+      ops.push({ op: 'added', right: itemB });
+    }
+  }
+
+  return ops;
+}
+
+// ── Similarity ──
+
+function tokenize(s: string): string[] {
+  return s.split(/\s+/).filter(Boolean);
+}
+
+function diceSimilarity(a: string, b: string): number {
+  const tokensA = tokenize(a);
+  const tokensB = tokenize(b);
+  if (tokensA.length === 0 && tokensB.length === 0) return 1;
+  if (tokensA.length === 0 || tokensB.length === 0) return 0;
+
+  const bagA = new Map<string, number>();
+  for (const t of tokensA) bagA.set(t, (bagA.get(t) || 0) + 1);
+  const bagB = new Map<string, number>();
+  for (const t of tokensB) bagB.set(t, (bagB.get(t) || 0) + 1);
+
+  let intersection = 0;
+  for (const [t, countA] of bagA) {
+    const countB = bagB.get(t) || 0;
+    intersection += Math.min(countA, countB);
+  }
+  return (2 * intersection) / (tokensA.length + tokensB.length);
+}
+
+const SIMILARITY_THRESHOLD = 0.45;
+
+// ── Pairing adjacent removed+added as "modified" ──
+
+function pairAdjacentChanges<T extends RenderedBlock>(ops: LcsOp<T>[]): AlignedRow[] {
+  const rows: AlignedRow[] = [];
+  let idx = 0;
+
+  while (idx < ops.length) {
+    const op = ops[idx];
+
+    if (op.op === 'same') {
+      rows.push({ left: op.left, right: op.right, changeType: 'unchanged' });
+      idx++;
+      continue;
+    }
+
+    if (op.op === 'removed') {
+      const removedRun: T[] = [];
+      while (idx < ops.length && ops[idx].op === 'removed') {
+        removedRun.push(ops[idx].left!);
+        idx++;
+      }
+      const addedRun: T[] = [];
+      while (idx < ops.length && ops[idx].op === 'added') {
+        addedRun.push(ops[idx].right!);
+        idx++;
+      }
+
+      const pairCount = Math.min(removedRun.length, addedRun.length);
+      for (let p = 0; p < pairCount; p++) {
+        const left = removedRun[p];
+        const right = addedRun[p];
+        if (
+          left.baseType === right.baseType &&
+          diceSimilarity(left.text, right.text) >= SIMILARITY_THRESHOLD
+        ) {
+          rows.push({ left, right, changeType: 'modified' });
+        } else {
+          rows.push({ left, changeType: 'removed' });
+          rows.push({ right, changeType: 'added' });
+        }
+      }
+      for (let p = pairCount; p < removedRun.length; p++) {
+        rows.push({ left: removedRun[p], changeType: 'removed' });
+      }
+      for (let p = pairCount; p < addedRun.length; p++) {
+        rows.push({ right: addedRun[p], changeType: 'added' });
+      }
+      continue;
+    }
+
+    if (op.op === 'added') {
+      rows.push({ right: op.right, changeType: 'added' });
+      idx++;
+    }
+  }
+
+  return rows;
+}
+
+// ── Section recursion ──
+
+function alignSectionChildren(
+  leftSection: DitaNode,
+  rightSection: DitaNode,
+  leftOpts: BlockExtractOptions,
+  rightOpts: BlockExtractOptions,
+  headingLevel: number,
+): AlignedRow[] {
+  const leftBlocks = extractChildBlocks(leftSection, leftOpts, 'topic/section', headingLevel);
+  const rightBlocks = extractChildBlocks(rightSection, rightOpts, 'topic/section', headingLevel);
+
+  const ops = lcsAlign(leftBlocks, rightBlocks, (a, b) => a.key === b.key && a.text === b.text, (item) => item.key);
+  const rows = pairAdjacentChanges(ops);
+
+  for (const row of rows) {
+    if (row.changeType === 'modified' && row.left && row.right) {
+      row.inlineDiff = diffTokens(tokenizeForDiff(row.left.text), tokenizeForDiff(row.right.text));
+    }
+  }
+
+  return rows;
+}
+
+// ── Inline word-level diff ──
+
+const CJK_RANGES = /[\u4e00-\u9fff\u3400-\u4dbf\u3040-\u30ff\uac00-\ud7af]/;
+
+export function tokenizeForDiff(text: string): string[] {
+  const tokens: string[] = [];
+  const chars = [...text];
+  let i = 0;
+
+  while (i < chars.length) {
+    const ch = chars[i];
+    if (/\s/.test(ch)) {
+      i++;
+      continue;
+    }
+    if (CJK_RANGES.test(ch)) {
+      tokens.push(ch);
+      i++;
+    } else if (/[a-zA-Z0-9\u00c0-\u024f]/.test(ch)) {
+      let word = '';
+      while (i < chars.length && /[a-zA-Z0-9\u00c0-\u024f]/.test(chars[i])) {
+        word += chars[i];
+        i++;
+      }
+      tokens.push(word);
+    } else {
+      tokens.push(ch);
+      i++;
+    }
+  }
+  return tokens;
+}
+
+const INLINE_TOKEN_CAP = 2000;
+
+export function diffTokens(oldTokens: string[], newTokens: string[]): DiffPart[] {
+  if (oldTokens.length > INLINE_TOKEN_CAP || newTokens.length > INLINE_TOKEN_CAP) {
+    return [];
+  }
+
+  const ops = lcsAlign(oldTokens, newTokens, (a, b) => a === b, (item) => item);
+  const parts: DiffPart[] = [];
+
+  for (const op of ops) {
+    if (op.op === 'same') {
+      mergePart(parts, op.left!, false, false);
+    } else if (op.op === 'removed') {
+      mergePart(parts, op.left!, false, true);
+    } else {
+      mergePart(parts, op.right!, true, false);
+    }
+  }
+
+  return parts;
+}
+
+function mergePart(parts: DiffPart[], value: string, added: boolean, removed: boolean): void {
+  const last = parts[parts.length - 1];
+  if (last && last.added === added && last.removed === removed) {
+    last.value += value + ' ';
+  } else {
+    parts.push({ value: value + ' ', added: added || undefined, removed: removed || undefined });
+  }
+}
+
+// ── Inline mark injection into rendered HTML ──
+
+const XML_ENTITY_MAP: Record<string, string> = {
+  '&amp;': '&',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&quot;': '"',
+  '&apos;': "'",
+};
+const XML_ENTITY_RE = /&(?:amp|lt|gt|quot|apos);/g;
+
+function unescapeXml(s: string): string {
+  return s.replace(XML_ENTITY_RE, (m) => XML_ENTITY_MAP[m] || m);
+}
+
+interface HtmlSegment {
+  kind: 'tag' | 'text';
+  raw: string;
+  decoded?: string;
+}
+
+function scanHtmlSegments(html: string): HtmlSegment[] {
+  const segments: HtmlSegment[] = [];
+  let i = 0;
+
+  while (i < html.length) {
+    if (html[i] === '<') {
+      let end = i + 1;
+      let inQuote: string | null = null;
+      while (end < html.length) {
+        const ch = html[end];
+        if (inQuote) {
+          if (ch === inQuote) inQuote = null;
+        } else if (ch === '"' || ch === "'") {
+          inQuote = ch;
+        } else if (ch === '>') {
+          break;
+        }
+        end++;
+      }
+      end = Math.min(end + 1, html.length);
+      segments.push({ kind: 'tag', raw: html.slice(i, end) });
+      i = end;
+    } else {
+      let end = html.indexOf('<', i);
+      if (end === -1) end = html.length;
+      const raw = html.slice(i, end);
+      segments.push({ kind: 'text', raw, decoded: unescapeXml(raw) });
+      i = end;
+    }
+  }
+  return segments;
+}
+
+export function applyInlineMarksToHtml(
+  html: string,
+  parts: DiffPart[],
+  side: 'left' | 'right',
+): string {
+  if (!parts.length) return html;
+
+  const segments = scanHtmlSegments(html);
+  const textSegments = segments.filter((s) => s.kind === 'text');
+  const fullText = textSegments.map((s) => s.decoded || '').join('');
+
+  const projection = parts
+    .filter((p) => side === 'left' ? !p.added : !p.removed)
+    .map((p) => p.value)
+    .join('');
+
+  if (normalizeText(projection) !== normalizeText(fullText)) {
+    return html;
+  }
+
+  const className = side === 'left' ? 'diff-inline-del' : 'diff-inline-add';
+  let offset = 0;
+  const partIdx = { i: 0, charInPart: 0 };
+
+  for (const seg of segments) {
+    if (seg.kind !== 'text') continue;
+    const segStart = offset;
+    const segLen = (seg.decoded || '').length;
+    const segEnd = segStart + segLen;
+
+    const marks: Array<{ start: number; end: number }> = [];
+    let pos = segStart;
+
+    while (pos < segEnd && partIdx.i < parts.length) {
+      const part = parts[partIdx.i];
+      const isHighlight = side === 'left' ? part.removed : part.added;
+      const partLen = part.value.length;
+      const remainingInPart = partLen - partIdx.charInPart;
+      const remainingInSeg = segEnd - pos;
+      const span = Math.min(remainingInPart, remainingInSeg);
+
+      if (isHighlight) {
+        if (marks.length > 0 && marks[marks.length - 1].end === pos) {
+          marks[marks.length - 1].end = pos + span;
+        } else {
+          marks.push({ start: pos, end: pos + span });
+        }
+      }
+
+      pos += span;
+      partIdx.charInPart += span;
+      if (partIdx.charInPart >= partLen) {
+        partIdx.i++;
+        partIdx.charInPart = 0;
+      }
+    }
+
+    if (marks.length > 0) {
+      const decoded = seg.decoded!;
+      let newRaw = '';
+      let cursor = 0;
+      for (const mark of marks) {
+        const mStart = mark.start - segStart;
+        const mEnd = mark.end - segStart;
+        newRaw += decoded.slice(cursor, mStart);
+        newRaw += `<span class="${className}">${escapeHtml(decoded.slice(mStart, mEnd))}</span>`;
+        cursor = mEnd;
+      }
+      newRaw += decoded.slice(cursor);
+      seg.raw = newRaw;
+    }
+
+    offset = segEnd;
+  }
+
+  return segments.map((s) => s.raw).join('');
+}
+
+// ── Swap helper ──
+
+export function swapAlignedRows(rows: AlignedRow[]): AlignedRow[] {
+  return rows.map((row) => {
+    const swapped: AlignedRow = {
+      left: row.right,
+      right: row.left,
+      changeType: row.changeType === 'added' ? 'removed'
+        : row.changeType === 'removed' ? 'added'
+        : row.changeType,
+    };
+    if (row.children) {
+      swapped.children = swapAlignedRows(row.children);
+    }
+    if (swapped.left && swapped.right && row.changeType === 'modified') {
+      swapped.inlineDiff = row.inlineDiff?.map((p) => ({
+        value: p.value,
+        added: p.removed,
+        removed: p.added,
+      }));
+    }
+    return swapped;
+  });
+}
+
+// ── Top-level entry ──
+
+export interface DiffTopicsInput {
+  leftXml: string;
+  rightXml: string;
+  leftDocDir: string;
+  rightDocDir: string;
+  /**
+   * Factory rather than a single pre-built function: note-label (and any
+   * other document-language-derived) resolution needs the actual parsed
+   * root of EACH side, and left/right can in principle come from different
+   * directories (leftDocDir/rightDocDir are already separate fields) or --
+   * across git history -- have different xml:lang declarations. Building
+   * one renderBlock closure up front, before either side is parsed, was
+   * the root cause of a real crash here previously: there was no parsed
+   * root yet at that point, so note-label detection was passed a fake
+   * placeholder root and threw. Calling the factory once per side, after
+   * parsing, with that side's own root and docDir removes the possibility
+   * of that class of bug rather than just patching the one symptom.
+   */
+  renderBlockFactory: (root: DitaNode, docDir: string) => (node: DitaNode, parentBaseType: string, headingLevel: number) => string;
+}
+
+export function diffTopics(input: DiffTopicsInput): TopicDiffResult {
+  const { leftXml, rightXml, leftDocDir, rightDocDir, renderBlockFactory } = input;
+
+  let leftDoc: DitaDocument | undefined;
+  let rightDoc: DitaDocument | undefined;
+  let errorLeft: string | undefined;
+  let errorRight: string | undefined;
+
+  try {
+    leftDoc = parseDita(preprocessEntities(leftXml));
+  } catch (err) {
+    errorLeft = err instanceof Error ? err.message : String(err);
+  }
+
+  try {
+    rightDoc = parseDita(preprocessEntities(rightXml));
+  } catch (err) {
+    errorRight = err instanceof Error ? err.message : String(err);
+  }
+
+  if (!leftDoc && !rightDoc) {
+    return { rows: [], stats: { added: 0, removed: 0, modified: 0 }, errorLeft, errorRight };
+  }
+
+  if (!leftDoc) {
+    const renderBlock = renderBlockFactory(rightDoc!.root, rightDocDir);
+    const rightBlocks = extractTopicBlocks(rightDoc!.root, { renderBlock });
+    return {
+      rightTitle: extractTitle(rightDoc!),
+      rows: rightBlocks.map((b) => ({ right: b, changeType: 'added' as const })),
+      stats: { added: rightBlocks.length, removed: 0, modified: 0 },
+      errorLeft,
+    };
+  }
+
+  if (!rightDoc) {
+    const renderBlock = renderBlockFactory(leftDoc.root, leftDocDir);
+    const leftBlocks = extractTopicBlocks(leftDoc.root, { renderBlock });
+    return {
+      leftTitle: extractTitle(leftDoc),
+      rows: leftBlocks.map((b) => ({ left: b, changeType: 'removed' as const })),
+      stats: { added: 0, removed: leftBlocks.length, modified: 0 },
+      errorRight,
+    };
+  }
+
+  const leftRenderBlock = renderBlockFactory(leftDoc.root, leftDocDir);
+  const rightRenderBlock = renderBlockFactory(rightDoc.root, rightDocDir);
+  const leftBlocks = extractTopicBlocks(leftDoc.root, { renderBlock: leftRenderBlock });
+  const rightBlocks = extractTopicBlocks(rightDoc.root, { renderBlock: rightRenderBlock });
+
+  const equals = (a: RenderedBlock, b: RenderedBlock) =>
+    a.key === b.key && a.text === b.text;
+  const ops = lcsAlign(leftBlocks, rightBlocks, equals, (item) => item.key);
+  const rows = pairAdjacentChanges(ops);
+
+  for (const row of rows) {
+    if (row.changeType === 'modified' && row.left && row.right) {
+      row.inlineDiff = diffTokens(tokenizeForDiff(row.left.text), tokenizeForDiff(row.right.text));
+
+      const isSection = (b: RenderedBlock) =>
+        b.baseType === 'topic/section' || b.baseType === 'topic/example';
+      if (isSection(row.left) && isSection(row.right)) {
+        const leftNode = findNodeByBlock(leftDoc.root, row.left);
+        const rightNode = findNodeByBlock(rightDoc.root, row.right);
+        if (leftNode && rightNode) {
+          row.children = alignSectionChildren(
+            leftNode,
+            rightNode,
+            { renderBlock: leftRenderBlock },
+            { renderBlock: rightRenderBlock },
+            2,
+          );
+        }
+      }
+    }
+  }
+
+  const stats = { added: 0, removed: 0, modified: 0 };
+  countStats(rows, stats);
+
+  return {
+    leftTitle: extractTitle(leftDoc),
+    rightTitle: extractTitle(rightDoc),
+    rows,
+    stats,
+  };
+}
+
+function findNodeByBlock(root: DitaNode, block: RenderedBlock): DitaNode | undefined {
+  const id = block.key.startsWith('id:') ? block.key.slice(3) : undefined;
+  if (id) return findById(root, id);
+
+  // Search the full subtree, not just root's direct children -- a
+  // <section> block always lives inside <body>, never directly under
+  // <topic>, so a direct-children-only search here would silently never
+  // find it for any real document and the "recurse into a modified
+  // section's own children for finer-grained diffing" feature this
+  // supports would quietly do nothing on every actual topic. Caught by
+  // writing a test with a realistic <topic><body><section>...</section>
+  // </body></topic> shape rather than a flattened one.
+  function search(node: DitaNode): DitaNode | undefined {
+    for (const child of node.children || []) {
+      if (child.type !== 'element') continue;
+      if (child.baseType === block.baseType && normalizeText(collectText(child)) === block.text) {
+        return child;
+      }
+      const nested = search(child);
+      if (nested) return nested;
+    }
+    return undefined;
+  }
+  return search(root);
+}
+
+function findById(node: DitaNode, id: string): DitaNode | undefined {
+  if (node.attributes?.id === id) return node;
+  for (const child of node.children || []) {
+    const found = findById(child, id);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+function extractTitle(doc: DitaDocument): string | undefined {
+  const titleNode = (doc.root.children || []).find(
+    (c) => c.type === 'element' && c.baseType === 'topic/title',
+  );
+  return titleNode ? collectText(titleNode) : undefined;
+}
+
+function countStats(rows: AlignedRow[], stats: { added: number; removed: number; modified: number }): void {
+  for (const row of rows) {
+    if (row.changeType === 'added') stats.added++;
+    else if (row.changeType === 'removed') stats.removed++;
+    else if (row.changeType === 'modified') stats.modified++;
+    if (row.children) countStats(row.children, stats);
+  }
+}

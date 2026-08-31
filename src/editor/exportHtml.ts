@@ -78,7 +78,7 @@ function buildMapExport(fsPath: string): { title: string; bodyHtml: string; erro
 
 // ── Command ──
 
-function getActiveDitaUri(): vscode.Uri | undefined {
+export function getActiveDitaUri(): vscode.Uri | undefined {
   const editor = vscode.window.activeTextEditor;
   if (editor && /\.(dita|ditamap)$/i.test(editor.document.uri.fsPath)) {
     return editor.document.uri;

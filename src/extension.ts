@@ -17,6 +17,7 @@ import {
 import { registerLanguageFeatures } from './language/ditaLanguageFeatures';
 import { registerMapTreeView } from './language/ditaMapTreeProvider';
 import { registerExportHtmlCommand } from './editor/exportHtml';
+import { registerCompareCommand } from './editor/ditaDiffProvider';
 
 const TRANSFORM_CMD = 'ditaViewer.transformWithDitaOt';
 
@@ -30,6 +31,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   // "Export as HTML" command (self-contained file, no DITA-OT needed)
   registerExportHtmlCommand(context);
+
+  // "Compare with Git Version" — rendered diff view for .dita files
+  registerCompareCommand(context);
 
   // DITA topic preview (.dita)
   context.subscriptions.push(

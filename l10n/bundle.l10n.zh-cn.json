@@ -99,5 +99,21 @@
   "\n[DITA-OT] Transformation complete. Output directory: {0}": "\n[DITA-OT] 转换完成。输出目录：{0}",
   "Zoom out this image (preview only)": "缩小此图片（仅预览，不影响源文件）",
   "Zoom in this image (preview only)": "放大此图片（仅预览，不影响源文件）",
-  "View full-screen (use ←/→ to switch images)": "全屏查看（使用 ←/→ 切换图片）"
+  "View full-screen (use ←/→ to switch images)": "全屏查看（使用 ←/→ 切换图片）",
+  "Please open a .dita file first.": "请先打开一个 .dita 文件。",
+  "Not a Git repository: {0}": "不是 Git 仓库：{0}",
+  "includes unsaved changes": "包含未保存的更改",
+  "Working copy": "工作副本",
+  "Select the base (older) version": "选择基准（较旧）版本",
+  "Compare with Git Version": "与 Git 版本比较",
+  "Could not read the selected version.": "无法读取所选版本。",
+  "Could not compute the difference: {0}": "无法计算差异：{0}",
+  "Select the version to compare against": "选择要对比的版本",
+  "Computing differences…": "正在计算差异…",
+  "This file has no committed history yet.": "此文件尚无提交历史。",
+  "Select a commit": "选择提交",
+  "Swap sides": "交换左右",
+  "Previous change": "上一处变更",
+  "Next change": "下一处变更",
+  "Show word-level changes": "显示词级变更"
 }
