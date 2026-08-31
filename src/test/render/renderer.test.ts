@@ -1558,5 +1558,43 @@ describe('renderer', () => {
       const html = renderDocument(doc, { ...defaultCtx, indexLabel: '索引' });
       assert.ok(html.includes('title="索引:'), `expected localized label in: ${html}`);
     });
+
+    it('surfaces indexterm declared inside prolog/metadata/keywords (regression: the whole prolog subtree used to be suppressed unconditionally, silently dropping this very common topic-level index-entry placement)', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/title', [makeText('T')]),
+        makeEl('topic/prolog', [
+          makeEl('topic/metadata', [
+            makeEl('topic/keywords', [
+              makeEl('topic/indexterm', [makeText('glossary')]),
+            ], undefined, 'keywords'),
+          ], undefined, 'metadata'),
+        ], undefined, 'prolog'),
+        makeEl('topic/body', [makeEl('topic/p', [makeText('Body text.')])]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(html.includes('indexterm-chip'), `expected an indexterm chip surfaced from prolog in: ${html}`);
+      assert.ok(html.includes('glossary'));
+    });
+
+    it('still suppresses every OTHER prolog descendant even when an indexterm is present alongside it', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/title', [makeText('T')]),
+        makeEl('topic/prolog', [
+          makeText('Jane Secret Author'),
+          makeEl('topic/keyword', [makeText('SECRET_KEYWORD_TOKEN')], undefined, 'keyword'),
+          makeEl('topic/metadata', [
+            makeEl('topic/keywords', [
+              makeEl('topic/indexterm', [makeText('glossary')]),
+            ], undefined, 'keywords'),
+          ], undefined, 'metadata'),
+        ], undefined, 'prolog'),
+        makeEl('topic/body', [makeEl('topic/p', [makeText('Visible')])]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(!html.includes('Jane Secret Author'), 'prolog author text must still not leak');
+      assert.ok(!html.includes('SECRET_KEYWORD_TOKEN'), 'prolog keyword must still not leak');
+      assert.ok(html.includes('indexterm-chip'), 'indexterm chip should still surface');
+      assert.ok(html.includes('Visible'), 'body content should still render');
+    });
   });
 });

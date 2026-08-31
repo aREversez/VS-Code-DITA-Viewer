@@ -106,6 +106,26 @@ function collectIndextermChips(node: DitaNode, ancestorPath: string[] = []): Ind
   return childChips;
 }
 
+/** Finds every topic/indexterm node in a subtree, but does NOT recurse
+ *  into an indexterm's own children once found -- collectIndextermChips
+ *  already walks that internal nesting (primary/secondary/... levels)
+ *  itself, so recursing here too would double-collect the same entries.
+ *  Used to pull indexterm chips out of <prolog><metadata><keywords>
+ *  without also rendering the other, genuinely-private prolog content
+ *  that happens to be a sibling of the keywords container. */
+function findTopLevelIndextermsInSubtree(node: DitaNode): DitaNode[] {
+  const results: DitaNode[] = [];
+  for (const child of node.children || []) {
+    if (child.type !== 'element') continue;
+    if (child.baseType === 'topic/indexterm') {
+      results.push(child);
+      continue;
+    }
+    results.push(...findTopLevelIndextermsInSubtree(child));
+  }
+  return results;
+}
+
 function renderIndextermChip(chip: IndextermChip, ctx: RenderContext): string {
   const pathText = chip.path.map(escapeAttr).join(' \u203A ');
   const seeText = chip.seeAnnotations.length
@@ -847,7 +867,26 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   // "- topic/prolog " — appears between title and body in topic/concept/
   // task/reference. Without this entry the fallback renderer recurses into
   // children, causing author/keyword content to appear in the body.
-  'topic/prolog': () => '',
+  //
+  // EXCEPT <indexterm>: declaring topic-level index entries inside
+  // <prolog><metadata><keywords> (rather than as an inline marker inside
+  // <body>) is a very common, arguably more common, real-world authoring
+  // pattern -- and blanket-suppressing all of prolog meant those index
+  // entries were silently invisible in preview for exactly that pattern,
+  // even though the whole point of adding indexterm rendering (see
+  // topic/indexterm below) was to make them visible. Every OTHER prolog
+  // descendant (author, critdates, plain keyword text meant only for
+  // search metadata, etc.) is still fully suppressed -- only indexterm
+  // chips get pulled out.
+  'topic/prolog': (node, ctx) => {
+    const topLevelTerms = findTopLevelIndextermsInSubtree(node);
+    if (topLevelTerms.length === 0) return '';
+    const chips = topLevelTerms
+      .flatMap((termNode) => collectIndextermChips(termNode))
+      .map((chip) => renderIndextermChip(chip, ctx))
+      .join('');
+    return chips ? `<div class="indexterm-chip-group" title="${escapeAttr(ctx.indexLabel || 'Index')}">${chips}</div>` : '';
+  },
 
   // These three (topic/keywords, topic/metadata, topic/publisher) are always
   // nested inside <prolog> in valid DITA — topic/prolog already suppresses
