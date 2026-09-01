@@ -196,7 +196,7 @@ function computeDiff(
   // passing a placeholder in its place, which crashed on every use. Called
   // once per side, after diffTopics has actually parsed that side's XML.
   const buildRenderBlock = (root: DitaNode, sideDocDir: string) => {
-    const conrefResolver = makeConrefResolver(sideDocDir);
+    const conrefResolver = makeConrefResolver(sideDocDir, root);
     const conrefRangeResolver = makeConrefRangeResolver(sideDocDir);
     const fileTitleResolver = makeFileTitleResolver(sideDocDir);
     const titleMap = new Map<string, string>();

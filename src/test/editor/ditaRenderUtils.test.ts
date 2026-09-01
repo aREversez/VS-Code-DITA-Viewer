@@ -629,6 +629,28 @@ describe('makeConrefResolver', () => {
     assert.strictEqual(el, undefined);
   });
 
+  it('should resolve a same-document bare-id conref against the passed-in root, without touching the filesystem', () => {
+    const ownDoc = parseDita(`<topic id="t1"><body><note id="note_xxx">Own-file note</note><p conref="#note_xxx"/></body></topic>`);
+    const resolver = makeConrefResolver(dir, ownDoc.root);
+    const el = resolver('#note_xxx');
+    assert.ok(el, 'should resolve same-document conref');
+    assert.strictEqual(el!.attributes?.id, 'note_xxx');
+  });
+
+  it('should resolve the "#./id" same-document shorthand some authors use', () => {
+    const ownDoc = parseDita(`<topic id="t1"><body><note id="note_xxx">Own-file note</note><p conref="#./note_xxx"/></body></topic>`);
+    const resolver = makeConrefResolver(dir, ownDoc.root);
+    const el = resolver('#./note_xxx');
+    assert.ok(el, 'should resolve "#./id" shorthand');
+    assert.strictEqual(el!.attributes?.id, 'note_xxx');
+  });
+
+  it('should return undefined for a same-document conref when no root was passed in (rather than throwing)', () => {
+    const resolver = makeConrefResolver(dir);
+    assert.doesNotThrow(() => resolver('#note_xxx'));
+    assert.strictEqual(resolver('#note_xxx'), undefined);
+  });
+
   it('should render ph conref with filepath child as span.filepath (end-to-end)', () => {
     // Create a target file with <ph id="note_script"><filepath>.fscript</filepath></ph>
     writeFileSync(join(dir, 'conref.dita'), `<topic id="conref">

@@ -263,7 +263,10 @@ export function makeFileCache(docDir: string) {
   return { loadFile, findElementById, findTitleOfElement };
 }
 
-export function makeConrefResolver(docDir: string): (conref: string) => DitaNode | undefined {
+export function makeConrefResolver(
+  docDir: string,
+  ownRoot?: DitaNode,
+): (conref: string) => DitaNode | undefined {
   const cache = makeFileCache(docDir);
 
   return (conref: string): DitaNode | undefined => {
@@ -273,6 +276,19 @@ export function makeConrefResolver(docDir: string): (conref: string) => DitaNode
     const idPart = conref.substring(hashIdx + 1);
     const parts = idPart.split('/');
     const elementId = parts.length > 1 ? parts[1] : parts[0];
+    if (!elementId) return undefined;
+
+    // No file path before "#" -- a same-document reference, e.g.
+    // conref="#noteId" or the "#./noteId" shorthand some authors use
+    // (treating the current file as if it were "./" of itself). docDir on
+    // its own resolves to a *directory*, not a file, so handing an empty
+    // filePath to loadFile always failed here: existsSync passed (the
+    // directory exists), but reading a directory as a file then threw and
+    // got silently cached as "not found". Search the document already
+    // being rendered instead of touching the filesystem at all.
+    if (!filePath) {
+      return ownRoot ? cache.findElementById(ownRoot, elementId) : undefined;
+    }
 
     const root = cache.loadFile(filePath);
     if (!root) return undefined;
@@ -658,7 +674,7 @@ export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
     const noteLabels = detectNoteLabels(ditaDoc.root, uiLanguage);
     const indexLabel = detectIndexLabel(ditaDoc.root, uiLanguage);
 
-    const conrefResolver = makeConrefResolver(docDir);
+    const conrefResolver = makeConrefResolver(docDir, ditaDoc.root);
     const conrefRangeResolver = makeConrefRangeResolver(docDir);
     const fileTitleResolver = makeFileTitleResolver(docDir);
 

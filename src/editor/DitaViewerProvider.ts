@@ -1123,7 +1123,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       const keyMap = buildKeyMap(document.uri);
 
       // Build conref resolver
-      const conrefResolver = makeConrefResolver(docRootDir);
+      const conrefResolver = makeConrefResolver(docRootDir, ditaDoc.root);
       const conrefRangeResolver = makeConrefRangeResolver(docRootDir);
       const fileTitleResolver = makeFileTitleResolver(docRootDir);
 
