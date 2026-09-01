@@ -245,3 +245,30 @@ body:not(.show-inline) .diff-inline-add {
 
 .diff-cell p:first-child { margin-top: 0; }
 .diff-cell p:last-child { margin-bottom: 0; }
+
+/* ── Narrow layout: stack cells instead of side-by-side ──
+ *
+ * This panel is its own webview, so @media here measures the panel's own
+ * width, not the whole VS Code window -- exactly what we want. Was
+ * previously a fixed two-column flex row regardless of width, unreadable
+ * once the panel got narrow (split editors, small windows). Mirrors VS
+ * Code's own diff editor, which falls back to a stacked/inline layout
+ * below a similar width instead of forcing side-by-side.
+ */
+@media (max-width: 700px) {
+  .diff-row {
+    flex-direction: column;
+  }
+
+  .diff-cell {
+    /* Let each stacked cell size to its own content instead of splitting
+       the row's height evenly, which `flex: 1` (the side-by-side default)
+       would otherwise do once the direction is column. */
+    flex: none;
+  }
+
+  .diff-cell:first-child {
+    border-right: none;
+    border-bottom: 1px solid var(--diff-gutter);
+  }
+}
