@@ -114,17 +114,31 @@ export function findKeyDefinitionOffset(mapText: string, key: string): number {
  * offset of the target id="..." attribute in the target file's text, or -1.
  */
 export function findConrefTargetOffset(text: string, fragment: string): number {
-  const [topicId, elementId] = fragment.split('/');
-  if (!topicId) return -1;
+  const slashIdx = fragment.indexOf('/');
+  const topicId = slashIdx >= 0 ? fragment.substring(0, slashIdx) : undefined;
+  const elementId = slashIdx >= 0 ? fragment.substring(slashIdx + 1) : fragment;
+  if (!elementId) return -1;
+
   const findId = (id: string, from: number): number => {
     const re = new RegExp(`\\bid\\s*=\\s*"${escapeRegExp(id)}"`, 'g');
     re.lastIndex = from;
     const m = re.exec(text);
     return m ? m.index : -1;
   };
+
+  // A bare elementId (no "/" at all), or a same-document self-reference
+  // marker before the "/" (e.g. conref="#./noteId", written by authors
+  // used to relative-path "./" prefixes), has no real topic to scope the
+  // search by. Treating "." as a literal topic id sent this straight to
+  // findId('.', 0), which can never match a real id="..." and always
+  // reported the target as missing -- search the whole document for the
+  // element id directly instead.
+  if (topicId === undefined || topicId === '' || topicId === '.') {
+    return findId(elementId, 0);
+  }
+
   const topicOff = findId(topicId, 0);
   if (topicOff < 0) return -1;
-  if (!elementId) return topicOff;
   return findId(elementId, topicOff);
 }
 

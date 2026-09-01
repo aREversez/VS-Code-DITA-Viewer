@@ -131,6 +131,13 @@ describe('ditaLanguageUtils', () => {
       assert.strictEqual(findConrefTargetOffset(text, 'missing'), -1);
       assert.strictEqual(findConrefTargetOffset(text, 't1/missing'), -1);
     });
+
+    it('resolves the "./elementId" same-document shorthand instead of treating "." as a literal (unmatchable) topic id', () => {
+      const selfRefText = '<topic id="t1"><body><note id="note_xxx">x</note></body></topic>';
+      const off = findConrefTargetOffset(selfRefText, './note_xxx');
+      assert.ok(off >= 0, 'should find note_xxx despite the "./" prefix');
+      assert.ok(selfRefText.substring(off).startsWith('id="note_xxx"'));
+    });
   });
 
   describe('collectIds / offsetToLineCol', () => {
