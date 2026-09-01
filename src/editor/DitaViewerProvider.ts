@@ -532,7 +532,19 @@ function getWebviewScript(): string {
     var el = e.target.closest ? e.target.closest('[data-line]') : null;
     if (!el) return;
     var line = parseInt(el.getAttribute('data-line'), 10);
-    if (!isNaN(line)) vscode.postMessage({ type: 'navigateToLine', line: line });
+    if (isNaN(line)) return;
+    // el is already the innermost [data-line] element under the cursor
+    // (closest() searches from the click target outward), so its own
+    // data-start-col is exactly where its content begins on that line --
+    // e.g. an inline <uicontrol> nested in a <p> that starts on the same
+    // source line. Without this, the source cursor always lands at column
+    // 0, which for a same-line inline element falls *before* its column
+    // range -- so the highlightLine echo that follows (see
+    // onDidChangeTextEditorSelection below) picks the <p> back up instead
+    // of the <uicontrol> that was actually double-clicked.
+    var col = parseInt(el.getAttribute('data-start-col'), 10);
+    if (isNaN(col)) col = 0;
+    vscode.postMessage({ type: 'navigateToLine', line: line, col: col });
   });
 
   // Tracked so a content swap (updateContent below) that lands mid-flight
@@ -875,7 +887,18 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
           if (!inView) {
             editor.revealRange(new vscode.Range(line, 0, line, 0), vscode.TextEditorRevealType.AtTop);
           }
-          editor.selection = new vscode.Selection(new vscode.Position(line, 0), new vscode.Position(line, 0));
+          // Column matters here, not just the line: an inline element (e.g.
+          // <uicontrol>) sharing its source line with its containing block
+          // (e.g. <p>) is only distinguished by column range, and the
+          // selection change below is what triggers the highlightLine echo
+          // back to the webview (see onDidChangeTextEditorSelection) that
+          // re-picks the element to highlight. Always landing on column 0
+          // meant that echo re-picked the containing <p> instead of
+          // whichever inline element was actually double-clicked.
+          const col = Math.max(0, typeof message.col === 'number' ? message.col : 0);
+          const lineLength = document.lineAt(line).text.length;
+          const character = Math.min(col, lineLength);
+          editor.selection = new vscode.Selection(new vscode.Position(line, character), new vscode.Position(line, character));
         }
       } else if (message.type === 'setFontPrefs') {
         // Persist across webview reopens/reloads — same size/family applies
