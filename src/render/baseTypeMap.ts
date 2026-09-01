@@ -578,8 +578,17 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   'topic/codeblock': (node, ctx, renderChildren) => {
     const outputClass = getAttr(node, 'outputclass') || '';
     const lang = outputClass.replace(/^language-/, '');
-    const langLabel = lang ? `<div class="codeblock-lang">${escapeAttr(lang)}</div>` : '';
-    return `<pre class="codeblock ${escapeAttr(outputClass)}"><code>${renderChildren(node, ctx)}</code>${langLabel}</pre>`;
+    const pre = `<pre class="codeblock ${escapeAttr(outputClass)}"><code>${renderChildren(node, ctx)}</code></pre>`;
+    if (!lang) return pre;
+    // The label used to live *inside* <pre>, which has overflow-x:auto for
+    // wide code -- an absolutely-positioned child of a scrolling element
+    // scrolls along with that element's content, so the label drifted off
+    // to the left as soon as the user scrolled the code horizontally
+    // instead of staying pinned to the corner. Moving it to a sibling of
+    // <pre>, wrapped in a non-scrolling container, keeps it fixed in place;
+    // .codeblock-wrap in styles.css supplies the positioning context.
+    const langLabel = `<div class="codeblock-lang">${escapeAttr(lang)}</div>`;
+    return `<div class="codeblock-wrap">${pre}${langLabel}</div>`;
   },
 
   'topic/pre': (_node, ctx, renderChildren) =>

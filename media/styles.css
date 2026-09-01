@@ -333,6 +333,17 @@ pre.codeblock, pre.preformatted {
   position: relative;
 }
 
+/* Wraps a codeblock that has a language label. This element -- not the
+   <pre> itself -- is what .codeblock-lang is positioned against: <pre>
+   has overflow-x:auto for wide code, and an absolutely-positioned child of
+   a scrolling box scrolls along with its content, so the label used to
+   drift out of view as soon as the code was scrolled horizontally.
+   .codeblock-wrap sits outside that scrolling area, so the label stays
+   pinned to the visible top-right corner regardless of scroll position. */
+.codeblock-wrap {
+  position: relative;
+}
+
 .codeblock-lang {
   font-family: var(--code-font);
   font-size: 0.72em;
@@ -343,6 +354,7 @@ pre.codeblock, pre.preformatted {
   position: absolute;
   top: 0;
   right: 0;
+  pointer-events: none;
 }
 
 code {
