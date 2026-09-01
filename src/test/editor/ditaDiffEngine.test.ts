@@ -129,6 +129,34 @@ describe('ditaDiffEngine', () => {
       assert.strictEqual(result.stats.added, 0);
     });
 
+    it('surfaces an indexterm newly added to prolog/metadata/keywords as its own diff row (regression: topic/prolog was unconditionally skipped during block extraction, so an added indexterm there produced no row at all)', () => {
+      const left = `<?xml version="1.0"?><topic id="t"><title>T</title>
+        <prolog><metadata><keywords></keywords></metadata></prolog>
+        <body><p>Unrelated body content.</p></body></topic>`;
+      const right = `<?xml version="1.0"?><topic id="t"><title>T</title>
+        <prolog><metadata><keywords><indexterm>Database</indexterm></keywords></metadata></prolog>
+        <body><p>Unrelated body content.</p></body></topic>`;
+
+      const result = runDiff(left, right);
+      const prologRows = result.rows.filter((r) => (r.left || r.right)?.baseType === 'topic/prolog');
+      assert.strictEqual(prologRows.length, 1, `expected exactly one prolog row, got: ${JSON.stringify(result.rows.map((r) => r.changeType))}`);
+      assert.strictEqual(prologRows[0].changeType, 'added');
+      assert.strictEqual(prologRows[0].left, undefined, 'left side had no indexterm, so there should be nothing to show there');
+    });
+
+    it('does not add a prolog row when prolog changes but contains no indexterm (avoids leaking private prolog content like author/critdates into the diff)', () => {
+      const left = `<?xml version="1.0"?><topic id="t"><title>T</title>
+        <prolog><author>Alice</author></prolog>
+        <body><p>Body.</p></body></topic>`;
+      const right = `<?xml version="1.0"?><topic id="t"><title>T</title>
+        <prolog><author>Bob</author></prolog>
+        <body><p>Body.</p></body></topic>`;
+
+      const result = runDiff(left, right);
+      const prologRows = result.rows.filter((r) => (r.left || r.right)?.baseType === 'topic/prolog');
+      assert.strictEqual(prologRows.length, 0, `expected no prolog row since neither side has an indexterm, got: ${JSON.stringify(prologRows)}`);
+    });
+
     it('recurses into a changed <parml> to show only the actually-changed <plentry> as modified, leaving unrelated entries unchanged (regression: only topic/section and topic/example recursed, so any other change inside a large parml/list marked the WHOLE container "modified")', () => {
       const left = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
         <section><title>Sec</title>

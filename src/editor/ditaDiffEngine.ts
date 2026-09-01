@@ -6,6 +6,7 @@
 import { DitaNode, DitaDocument } from '../parser/domTypes';
 import { parseDita, preprocessEntities } from '../parser/ditaParser';
 import { collectText, escapeHtml } from './ditaRenderUtils';
+import { findTopLevelIndextermsInSubtree } from '../render/baseTypeMap';
 
 // ── Public types ──
 
@@ -114,6 +115,36 @@ function makeBlock(
   };
 }
 
+// <prolog> is otherwise fully skipped (SKIP_BASETYPES) since almost all of
+// it -- author, critdates, permissions -- is non-visible bookkeeping that
+// shouldn't ever show up in a rendered diff. But topic/prolog's own
+// renderer (baseTypeMap.ts) carves out one exception: indexterm entries
+// nested under <prolog><metadata><keywords> DO render, as chips. This diff
+// engine's skip-list was never updated to match that exception, so an
+// indexterm added there had nothing to extract into a block and silently
+// never appeared in the diff. Text/key are derived from just the indexterm
+// nodes (not the whole prolog) so an unrelated prolog edit -- e.g. author
+// name -- doesn't make this block spuriously look "modified" when the
+// actually-rendered chip content hasn't changed.
+function makeProlgIndextermBlock(
+  node: DitaNode,
+  opts: BlockExtractOptions,
+  parentBaseType: string,
+  headingLevel: number,
+): RenderedBlock | undefined {
+  const idxNodes = findTopLevelIndextermsInSubtree(node);
+  if (idxNodes.length === 0) return undefined;
+  const text = normalizeText(idxNodes.map((n) => collectText(n)).join(' | '));
+  return {
+    key: `fp:topic/prolog-indexterm:${simpleHash(text)}`,
+    baseType: node.baseType,
+    tagName: node.tagName,
+    html: opts.renderBlock(node, parentBaseType, headingLevel),
+    text,
+    sourceLine: node.sourceRange?.startLine,
+  };
+}
+
 export function extractChildBlocks(
   scope: DitaNode,
   opts: BlockExtractOptions,
@@ -139,6 +170,9 @@ export function extractTopicBlocks(root: DitaNode, opts: BlockExtractOptions): R
       blocks.push(makeBlock(child, opts, 'topic', 1));
     } else if (child.baseType === 'topic/shortdesc') {
       blocks.push(makeBlock(child, opts, 'topic', 1));
+    } else if (child.baseType === 'topic/prolog') {
+      const block = makeProlgIndextermBlock(child, opts, 'topic', 1);
+      if (block) blocks.push(block);
     }
   }
 

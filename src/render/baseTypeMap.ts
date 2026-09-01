@@ -113,7 +113,7 @@ function collectIndextermChips(node: DitaNode, ancestorPath: string[] = []): Ind
  *  Used to pull indexterm chips out of <prolog><metadata><keywords>
  *  without also rendering the other, genuinely-private prolog content
  *  that happens to be a sibling of the keywords container. */
-function findTopLevelIndextermsInSubtree(node: DitaNode): DitaNode[] {
+export function findTopLevelIndextermsInSubtree(node: DitaNode): DitaNode[] {
   const results: DitaNode[] = [];
   for (const child of node.children || []) {
     if (child.type !== 'element') continue;
