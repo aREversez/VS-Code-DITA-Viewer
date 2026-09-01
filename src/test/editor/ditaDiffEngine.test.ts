@@ -129,6 +129,36 @@ describe('ditaDiffEngine', () => {
       assert.strictEqual(result.stats.added, 0);
     });
 
+    it('recurses into a changed <parml> to show only the actually-changed <plentry> as modified, leaving unrelated entries unchanged (regression: only topic/section and topic/example recursed, so any other change inside a large parml/list marked the WHOLE container "modified")', () => {
+      const left = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
+        <section><title>Sec</title>
+          <parml>
+            <plentry><pt>Alpha</pt><pd>First definition, unchanged.</pd></plentry>
+            <plentry><pt>Beta</pt><pd>Second definition, will change.</pd></plentry>
+            <plentry><pt>Gamma</pt><pd>Third definition, unchanged.</pd></plentry>
+          </parml>
+        </section>
+      </body></topic>`;
+      const right = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
+        <section><title>Sec</title>
+          <parml>
+            <plentry><pt>Alpha</pt><pd>First definition, unchanged.</pd></plentry>
+            <plentry><pt>Beta</pt><pd>Second definition, has changed.</pd></plentry>
+            <plentry><pt>Gamma</pt><pd>Third definition, unchanged.</pd></plentry>
+          </parml>
+        </section>
+      </body></topic>`;
+
+      const result = runDiff(left, right);
+      const sectionRow = result.rows.find((r) => r.left?.baseType === 'topic/section');
+      assert.ok(sectionRow, 'expected a section row');
+      assert.strictEqual(sectionRow!.changeType, 'modified');
+      const parmlRow = sectionRow!.children?.find((r) => r.left?.baseType === 'topic/parml');
+      assert.ok(parmlRow, `expected a recursed parml row among section children: ${JSON.stringify(sectionRow!.children?.map((r) => r.changeType))}`);
+      const plentryTypes = (parmlRow!.children || []).map((r) => r.changeType);
+      assert.deepStrictEqual(plentryTypes, ['unchanged', 'modified', 'unchanged'], `expected only the middle plentry to be modified, got: ${plentryTypes.join(',')}`);
+    });
+
     it('recurses into matched sections with their own per-side render calls (regression: alignSectionChildren used to share one side\'s renderBlock for both sides)', () => {
       const left = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
         <section><title>Sec</title><p>the quick brown fox jumps over left-marker-AAA the lazy dog</p></section>

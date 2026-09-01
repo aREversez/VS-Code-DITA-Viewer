@@ -58,6 +58,27 @@ export interface BlockExtractOptions {
 
 const SKIP_BASETYPES = new Set(['topic/prolog', 'topic/title', 'topic/shortdesc']);
 
+// Container types whose children get diffed individually (LCS + recursion)
+// rather than the container being treated as one opaque block. Previously
+// only topic/section and topic/example recursed this way -- a <parml> or
+// <ul> with 20 children and one real edit was compared as a single block,
+// so its whole (mostly-unchanged) text just squeaked over the
+// SIMILARITY_THRESHOLD and the entire container rendered as one big
+// "modified" row instead of 19 unchanged rows + 1 modified row.
+const DIFFABLE_CONTAINER_TYPES = new Set([
+  'topic/section',
+  'topic/example',
+  'topic/parml',
+  'topic/ul',
+  'topic/ol',
+  'topic/sl',
+  'topic/simpletable',
+]);
+
+function isDiffableContainer(b: RenderedBlock): boolean {
+  return !!b.baseType && DIFFABLE_CONTAINER_TYPES.has(b.baseType);
+}
+
 function blockKey(node: DitaNode, text: string): string {
   const id = node.attributes?.id;
   if (id) return `id:${id}`;
@@ -324,14 +345,16 @@ function pairAdjacentChanges<T extends RenderedBlock>(ops: LcsOp<T>[]): AlignedR
 // ── Section recursion ──
 
 function alignSectionChildren(
-  leftSection: DitaNode,
-  rightSection: DitaNode,
+  leftParent: DitaNode,
+  rightParent: DitaNode,
   leftOpts: BlockExtractOptions,
   rightOpts: BlockExtractOptions,
   headingLevel: number,
+  leftRoot: DitaNode,
+  rightRoot: DitaNode,
 ): AlignedRow[] {
-  const leftBlocks = extractChildBlocks(leftSection, leftOpts, 'topic/section', headingLevel);
-  const rightBlocks = extractChildBlocks(rightSection, rightOpts, 'topic/section', headingLevel);
+  const leftBlocks = extractChildBlocks(leftParent, leftOpts, 'topic/section', headingLevel);
+  const rightBlocks = extractChildBlocks(rightParent, rightOpts, 'topic/section', headingLevel);
 
   const ops = lcsAlign(leftBlocks, rightBlocks, (a, b) => a.key === b.key && a.text === b.text, (item) => item.key);
   const rows = pairAdjacentChanges(ops);
@@ -339,6 +362,22 @@ function alignSectionChildren(
   for (const row of rows) {
     if (row.changeType === 'modified' && row.left && row.right) {
       row.inlineDiff = diffTokens(tokenizeForDiff(row.left.text), tokenizeForDiff(row.right.text));
+
+      // Recurse for as many levels as the document actually nests diffable
+      // containers (a <parml> inside a <section>, a <ul> inside a
+      // <parml>...), not just one level below the topic body -- see
+      // DIFFABLE_CONTAINER_TYPES above.
+      if (
+        isDiffableContainer(row.left) &&
+        isDiffableContainer(row.right) &&
+        row.left.baseType === row.right.baseType
+      ) {
+        const leftNode = findNodeByBlock(leftRoot, row.left);
+        const rightNode = findNodeByBlock(rightRoot, row.right);
+        if (leftNode && rightNode) {
+          row.children = alignSectionChildren(leftNode, rightNode, leftOpts, rightOpts, headingLevel, leftRoot, rightRoot);
+        }
+      }
     }
   }
 
@@ -673,9 +712,11 @@ export function diffTopics(input: DiffTopicsInput): TopicDiffResult {
     if (row.changeType === 'modified' && row.left && row.right) {
       row.inlineDiff = diffTokens(tokenizeForDiff(row.left.text), tokenizeForDiff(row.right.text));
 
-      const isSection = (b: RenderedBlock) =>
-        b.baseType === 'topic/section' || b.baseType === 'topic/example';
-      if (isSection(row.left) && isSection(row.right)) {
+      if (
+        isDiffableContainer(row.left) &&
+        isDiffableContainer(row.right) &&
+        row.left.baseType === row.right.baseType
+      ) {
         const leftNode = findNodeByBlock(leftDoc.root, row.left);
         const rightNode = findNodeByBlock(rightDoc.root, row.right);
         if (leftNode && rightNode) {
@@ -685,6 +726,8 @@ export function diffTopics(input: DiffTopicsInput): TopicDiffResult {
             { renderBlock: leftRenderBlock },
             { renderBlock: rightRenderBlock },
             2,
+            leftDoc.root,
+            rightDoc.root,
           );
         }
       }
