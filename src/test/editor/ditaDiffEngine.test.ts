@@ -8,6 +8,7 @@ import {
   diffTokens,
   applyInlineMarksToHtml,
   swapAlignedRows,
+  buildQuickCommitChoices,
   DiffTopicsInput,
 } from '../../editor/ditaDiffEngine';
 
@@ -241,6 +242,43 @@ describe('ditaDiffEngine', () => {
         else if (original === 'removed') assert.strictEqual(flipped, 'added');
         else assert.strictEqual(flipped, original);
       }
+    });
+  });
+
+  describe('buildQuickCommitChoices', () => {
+    it('returns empty for a file with no commit history', () => {
+      assert.deepStrictEqual(buildQuickCommitChoices([]), []);
+    });
+
+    it('returns just the one shortcut for a file with exactly one commit', () => {
+      const commits = [{ hash: 'aaaa1111', shortHash: 'aaaa111', subject: 'Initial' }];
+      const choices = buildQuickCommitChoices(commits);
+      assert.strictEqual(choices.length, 1);
+      assert.strictEqual(choices[0].refHash, 'aaaa1111');
+    });
+
+    it('the refHash for each shortcut is the SAME commit its own subject/shortHash describes (regression: labels used to describe one commit while the content came from an unrelated repo-wide HEAD/HEAD~1 ref)', () => {
+      const commits = [
+        { hash: 'full-hash-of-most-recent', shortHash: 'recent1', subject: 'Most recent edit to this file' },
+        { hash: 'full-hash-of-second-most-recent', shortHash: 'older22', subject: 'Second most recent edit' },
+        { hash: 'full-hash-of-third', shortHash: 'oldest3', subject: 'Should not appear -- only first 2 are shortcuts' },
+      ];
+      const choices = buildQuickCommitChoices(commits);
+      assert.strictEqual(choices.length, 2);
+
+      assert.strictEqual(choices[0].refHash, 'full-hash-of-most-recent');
+      assert.strictEqual(choices[0].shortHash, 'recent1');
+      assert.strictEqual(choices[0].subject, 'Most recent edit to this file');
+
+      assert.strictEqual(choices[1].refHash, 'full-hash-of-second-most-recent');
+      assert.strictEqual(choices[1].shortHash, 'older22');
+      assert.strictEqual(choices[1].subject, 'Second most recent edit');
+
+      // Neither shortcut should ever silently point at a third, later
+      // commit's hash -- each one's content source must match its own
+      // label, not drift to some other entry in the list.
+      assert.notStrictEqual(choices[0].refHash, choices[1].refHash);
+      assert.ok(!choices.some((c) => c.refHash === 'full-hash-of-third'));
     });
   });
 });

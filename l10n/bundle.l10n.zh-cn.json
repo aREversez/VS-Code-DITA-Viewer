@@ -52,6 +52,8 @@
   "Open in Browser": "在浏览器中打开",
   "Outline": "大纲",
   "Previous match": "上一个匹配",
+  "Last commit to this file": "此文件的最近一次提交",
+  "Previous commit to this file": "此文件的上一次提交",
   "Overwrite": "覆盖",
   "Page width": "页面宽度",
   "Part {0}": "第 {0} 部分",

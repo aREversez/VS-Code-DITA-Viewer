@@ -729,3 +729,52 @@ function countStats(rows: AlignedRow[], stats: { added: number; removed: number;
     if (row.children) countStats(row.children, stats);
   }
 }
+
+// ── Quick commit-choice descriptors (for the "Compare with Git Version"
+// QuickPick's built-in shortcuts) ──
+
+/** Minimal shape this needs from a commit -- matches ditaGitUtils.ts's
+ *  GitCommitInfo without importing that file's vscode-touching runtime
+ *  code, just its data shape. */
+export interface CommitLike {
+  hash: string;
+  shortHash: string;
+  subject: string;
+}
+
+export interface QuickCommitChoice {
+  /** Full hash to actually fetch file content at (git show <hash>:path). */
+  refHash: string;
+  /** Short hash, for compact display. */
+  shortHash: string;
+  /** Commit subject line, for display. */
+  subject: string;
+}
+
+/**
+ * Builds the "last commit to this file" / "previous commit to this file"
+ * shortcut descriptors from a file's own commit history.
+ *
+ * Regression this guards: an earlier version labeled these shortcuts
+ * "HEAD" / "HEAD~1" using commits[0]/commits[1] (this FILE's own most
+ * recent modifying commits) for the LABEL, but fetched content using the
+ * literal git refs 'HEAD' / 'HEAD~1' (the repository's overall most
+ * recent commits, regardless of whether they touched this file at all).
+ * Those only coincide when this file happened to be touched in the
+ * single most recent commit to the whole repo -- otherwise the label and
+ * the actual diffed content silently disagreed, which is exactly the
+ * kind of thing that looks like "the diff doesn't seem right" without an
+ * obvious cause. This function's job is narrow: given this file's own
+ * commit list, return descriptors whose refHash is the SAME commit the
+ * label describes, so there's no way for the two to drift apart again.
+ */
+export function buildQuickCommitChoices(commits: CommitLike[]): QuickCommitChoice[] {
+  const choices: QuickCommitChoice[] = [];
+  if (commits.length > 0) {
+    choices.push({ refHash: commits[0].hash, shortHash: commits[0].shortHash, subject: commits[0].subject });
+  }
+  if (commits.length > 1) {
+    choices.push({ refHash: commits[1].hash, shortHash: commits[1].shortHash, subject: commits[1].subject });
+  }
+  return choices;
+}

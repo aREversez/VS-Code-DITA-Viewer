@@ -24,6 +24,7 @@ import {
   TopicDiffResult,
   applyInlineMarksToHtml,
   swapAlignedRows,
+  buildQuickCommitChoices,
 } from './ditaDiffEngine';
 import {
   getRepoRoot,
@@ -77,24 +78,28 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
         resolve: async () => ({ xml: await getLocalContent(uri), label: vscode.l10n.t('Working copy') }),
       });
 
-      if (commits.length > 0) {
+      const quickChoices = buildQuickCommitChoices(commits);
+
+      if (quickChoices[0]) {
+        const c = quickChoices[0];
         choices.push({
-          label: `$(git-commit) HEAD — ${commits[0].shortHash}`,
-          description: commits[0].subject,
+          label: `$(git-commit) ${vscode.l10n.t('Last commit to this file')} — ${c.shortHash}`,
+          description: c.subject,
           resolve: async () => {
-            const xml = await getFileAtRef(repoRoot, relPath, 'HEAD');
-            return xml ? { xml, label: `HEAD (${commits[0].shortHash})` } : undefined;
+            const xml = await getFileAtRef(repoRoot, relPath, c.refHash);
+            return xml ? { xml, label: `${c.shortHash} ${c.subject}` } : undefined;
           },
         });
       }
 
-      if (commits.length > 1) {
+      if (quickChoices[1]) {
+        const c = quickChoices[1];
         choices.push({
-          label: `$(git-commit) HEAD~1 — ${commits[1].shortHash}`,
-          description: commits[1].subject,
+          label: `$(git-commit) ${vscode.l10n.t('Previous commit to this file')} — ${c.shortHash}`,
+          description: c.subject,
           resolve: async () => {
-            const xml = await getFileAtRef(repoRoot, relPath, 'HEAD~1');
-            return xml ? { xml, label: `HEAD~1 (${commits[1].shortHash})` } : undefined;
+            const xml = await getFileAtRef(repoRoot, relPath, c.refHash);
+            return xml ? { xml, label: `${c.shortHash} ${c.subject}` } : undefined;
           },
         });
       }
