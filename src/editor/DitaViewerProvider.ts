@@ -223,9 +223,12 @@ function getWebviewScript(): string {
     vscode.postMessage({ type: 'setFontPrefs', size: fontSize, serif: isSerif });
   }
 
-  // Static highlight (no animation)
+  // Highlight box, with a fade-out transition -- highlightElement() above
+  // adds '__hl-fade' shortly before removing '__hl' entirely, so the box
+  // eases out instead of just vanishing or (the actual bug) never going
+  // away at all.
   var hlStyle = document.createElement('style');
-  hlStyle.textContent = '.__hl{outline:2px solid var(--vscode-textLink-foreground,#4a90d9);outline-offset:2px;border-radius:3px;background:color-mix(in srgb,var(--vscode-textLink-foreground,#4a90d9) 12%,transparent);}';
+  hlStyle.textContent = '.__hl{outline:2px solid var(--vscode-textLink-foreground,#4a90d9);outline-offset:2px;border-radius:3px;background:color-mix(in srgb,var(--vscode-textLink-foreground,#4a90d9) 12%,transparent);transition:outline-color 0.6s ease,background-color 0.6s ease;}.__hl.__hl-fade{outline-color:transparent;background-color:transparent;}';
   document.head.appendChild(hlStyle);
 
   // Image error handling (event delegation, nonce-safe)
@@ -468,11 +471,33 @@ function getWebviewScript(): string {
     if (tb) tb.remove();
   }, true);
 
+  // A highlight is meant to be a momentary "here's where the cursor is"
+  // cue, not a permanent marker -- previously nothing ever removed the
+  // '__hl' class except a *later* highlight replacing it, so if the user
+  // stopped moving the source cursor (or switched away from the editor)
+  // the box stayed on screen indefinitely. hlClearTimer/hlFadeTimer below
+  // give it a lifetime: it sits fully visible briefly, then CSS-fades out
+  // over HL_FADE_MS, then the class is removed entirely so a stale
+  // reference to el isn't left sitting in a closure.
+  var HL_VISIBLE_MS = 1500;
+  var HL_FADE_MS = 600;
+  var hlFadeTimer = null;
+  var hlClearTimer = null;
   function highlightElement(el) {
     if (!el) return;
+    if (hlFadeTimer) { clearTimeout(hlFadeTimer); hlFadeTimer = null; }
+    if (hlClearTimer) { clearTimeout(hlClearTimer); hlClearTimer = null; }
     var prev = document.querySelector('.__hl');
-    if (prev) prev.classList.remove('__hl');
+    if (prev) { prev.classList.remove('__hl'); prev.classList.remove('__hl-fade'); }
+    el.classList.remove('__hl-fade');
     el.classList.add('__hl');
+    hlFadeTimer = setTimeout(function() {
+      el.classList.add('__hl-fade');
+      hlClearTimer = setTimeout(function() {
+        el.classList.remove('__hl');
+        el.classList.remove('__hl-fade');
+      }, HL_FADE_MS);
+    }, HL_VISIBLE_MS);
   }
 
   function isElementVisible(el) {
