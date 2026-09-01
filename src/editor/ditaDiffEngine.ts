@@ -567,6 +567,29 @@ export function swapAlignedRows(rows: AlignedRow[]): AlignedRow[] {
   });
 }
 
+// ── Recency-based left/right placement ──
+
+/**
+ * Arranges two resolved versions so the older one is always `left` and the
+ * newer one is always `right`, regardless of which one the caller picked
+ * first. `order` is a recency rank where lower = newer (e.g. -1 for the
+ * ever-current "Working copy", 0/1/2... for commits by how far back they
+ * are in `git log`).
+ *
+ * ditaDiffProvider.ts's "Compare with Git Version" flow used to place
+ * whichever version the user picked *first* on the left and the second on
+ * the right, on the assumption the first QuickPick ("base (older)
+ * version") would naturally be the older one. In practice Working copy is
+ * both the newest version and the most natural first pick (it's the file
+ * already open), so picking it first put the newest content on the left
+ * and an older commit on the right -- backwards from the original/modified
+ * convention every other diff view (VS Code's own included) uses. This
+ * removes that dependency on pick order entirely.
+ */
+export function arrangeByRecency<T extends { order: number }>(a: T, b: T): { left: T; right: T } {
+  return a.order >= b.order ? { left: a, right: b } : { left: b, right: a };
+}
+
 // ── Top-level entry ──
 
 export interface DiffTopicsInput {

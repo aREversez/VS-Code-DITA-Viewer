@@ -9,6 +9,7 @@ import {
   applyInlineMarksToHtml,
   swapAlignedRows,
   buildQuickCommitChoices,
+  arrangeByRecency,
   DiffTopicsInput,
 } from '../../editor/ditaDiffEngine';
 
@@ -242,6 +243,21 @@ describe('ditaDiffEngine', () => {
         else if (original === 'removed') assert.strictEqual(flipped, 'added');
         else assert.strictEqual(flipped, original);
       }
+    });
+  });
+
+  describe('arrangeByRecency', () => {
+    it('puts the newer version on the right no matter which one is passed first (regression: ditaDiffProvider.ts used to place whichever version the user picked first on the left, so picking "Working copy" -- always the newest -- as the first QuickPick answer put new content on the left and old on the right)', () => {
+      const older = { order: 3, label: 'older' };
+      const newer = { order: -1, label: 'Working copy' };
+
+      const pickedOlderFirst = arrangeByRecency(older, newer);
+      assert.strictEqual(pickedOlderFirst.left.label, 'older');
+      assert.strictEqual(pickedOlderFirst.right.label, 'Working copy');
+
+      const pickedNewerFirst = arrangeByRecency(newer, older);
+      assert.strictEqual(pickedNewerFirst.left.label, 'older');
+      assert.strictEqual(pickedNewerFirst.right.label, 'Working copy');
     });
   });
 

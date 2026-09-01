@@ -25,6 +25,7 @@ import {
   applyInlineMarksToHtml,
   swapAlignedRows,
   buildQuickCommitChoices,
+  arrangeByRecency,
 } from './ditaDiffEngine';
 import {
   getRepoRoot,
@@ -67,7 +68,10 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
       interface VersionChoice {
         label: string;
         description?: string;
-        resolve: () => Promise<{ xml: string; label: string } | undefined>;
+        // Recency rank, lower = newer -- see arrangeByRecency. Working copy
+        // is always the newest possible content; commit-backed choices use
+        // their position in `commits` (git log order: index 0 is newest).
+        resolve: () => Promise<{ xml: string; label: string; order: number } | undefined>;
       }
 
       const choices: VersionChoice[] = [];
@@ -75,7 +79,7 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
       choices.push({
         label: '$(file) Working copy' + (hasLocal ? ' •' : ''),
         description: vscode.l10n.t('includes unsaved changes'),
-        resolve: async () => ({ xml: await getLocalContent(uri), label: vscode.l10n.t('Working copy') }),
+        resolve: async () => ({ xml: await getLocalContent(uri), label: vscode.l10n.t('Working copy'), order: -1 }),
       });
 
       const quickChoices = buildQuickCommitChoices(commits);
@@ -87,7 +91,7 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
           description: c.subject,
           resolve: async () => {
             const xml = await getFileAtRef(repoRoot, relPath, c.refHash);
-            return xml ? { xml, label: `${c.shortHash} ${c.subject}` } : undefined;
+            return xml ? { xml, label: `${c.shortHash} ${c.subject}`, order: 0 } : undefined;
           },
         });
       }
@@ -99,7 +103,7 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
           description: c.subject,
           resolve: async () => {
             const xml = await getFileAtRef(repoRoot, relPath, c.refHash);
-            return xml ? { xml, label: `${c.shortHash} ${c.subject}` } : undefined;
+            return xml ? { xml, label: `${c.shortHash} ${c.subject}`, order: 1 } : undefined;
           },
         });
       }
@@ -110,7 +114,9 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
           const picked = await pickCommit(commits);
           if (!picked) return undefined;
           const xml = await getFileAtRef(repoRoot, relPath, picked.hash);
-          return xml ? { xml, label: `${picked.shortHash} ${picked.subject}` } : undefined;
+          if (!xml) return undefined;
+          const order = commits.findIndex((c) => c.hash === picked.hash);
+          return { xml, label: `${picked.shortHash} ${picked.subject}`, order: order >= 0 ? order : commits.length };
         },
       });
 
@@ -139,12 +145,17 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
         return;
       }
 
+      // Place the older version on the left and the newer on the right
+      // regardless of which the user actually picked first -- see
+      // arrangeByRecency for why pick order alone isn't reliable here.
+      const { left: finalLeft, right: finalRight } = arrangeByRecency(leftResult, rightResult);
+
       await vscode.window.withProgress(
         { location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('Computing differences…') },
         async () => {
           try {
-            const result = computeDiff(leftResult.xml, rightResult.xml, docDir, uri);
-            openDiffPanel(context, uri, result, leftResult.label, rightResult.label);
+            const result = computeDiff(finalLeft.xml, finalRight.xml, docDir, uri);
+            openDiffPanel(context, uri, result, finalLeft.label, finalRight.label);
           } catch (err) {
             // Defense-in-depth, not a substitute for fixing known failure
             // causes at their source: computeDiff/openDiffPanel are pure
