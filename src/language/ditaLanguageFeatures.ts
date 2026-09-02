@@ -25,6 +25,7 @@ import {
   getCompletionContext,
   isExternalRef,
   offsetToLineCol,
+  stripSameDocumentFragmentPrefix,
 } from './ditaLanguageUtils';
 import { buildKeyMap, findDitamapFiles } from '../editor/DitaViewerProvider';
 import { decodeHrefPart } from '../editor/ditaRenderUtils';
@@ -215,7 +216,10 @@ function resolveReferenceTarget(document: vscode.TextDocument, text: string, off
       const docDir = dirname(document.uri.fsPath);
       const targetPath = filePart ? resolve(docDir, decodeHrefPart(filePart)) : document.uri.fsPath;
       if (existsSync(targetPath)) {
-        const topicId = fragment.split('/')[0];
+        // stripSameDocumentFragmentPrefix so a same-document self-reference
+        // written as "#./id" scopes on the real id instead of the literal
+        // "." that a raw split('/')[0] would pull out.
+        const topicId = stripSameDocumentFragmentPrefix(fragment).split('/')[0];
         if (topicId) {
           return { kind: 'id', names: [topicId], filePath: targetPath };
         }
@@ -278,7 +282,12 @@ class DitaReferenceProvider implements vscode.ReferenceProvider {
           const fragment = hashIdx >= 0 ? entry.value.substring(hashIdx + 1) : '';
           const resolvedPath = filePart ? resolve(candidateDir, decodeHrefPart(filePart)) : uri.fsPath;
           if (normalize(resolvedPath) !== normalize(target.filePath || '')) continue;
-          if (target.kind === 'id' && fragment.split('/')[0] !== target.names?.[0]) continue;
+          if (
+            target.kind === 'id' &&
+            stripSameDocumentFragmentPrefix(fragment).split('/')[0] !== target.names?.[0]
+          ) {
+            continue;
+          }
           // target.kind === 'file': any href/conref resolving to the file
           // counts, fragment or not.
         }

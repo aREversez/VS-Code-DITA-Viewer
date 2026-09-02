@@ -18,6 +18,7 @@ import {
   getMapRefName,
   isExternalRef,
   offsetToLineCol,
+  stripSameDocumentFragmentPrefix,
 } from '../../language/ditaLanguageUtils';
 import { parseDita, parseDitamap } from '../../parser/ditaParser';
 import { collectMapEntries, createBookRoleLabeler } from '../../render/mapTypeMap';
@@ -114,6 +115,19 @@ describe('ditaLanguageUtils', () => {
     });
   });
 
+  describe('stripSameDocumentFragmentPrefix', () => {
+    it('strips a leading "./" marker', () => {
+      assert.strictEqual(stripSameDocumentFragmentPrefix('./note_xxx'), 'note_xxx');
+      assert.strictEqual(stripSameDocumentFragmentPrefix('./t2/p1'), 't2/p1');
+    });
+
+    it('leaves fragments without the marker unchanged', () => {
+      assert.strictEqual(stripSameDocumentFragmentPrefix('note_xxx'), 'note_xxx');
+      assert.strictEqual(stripSameDocumentFragmentPrefix('t2/p1'), 't2/p1');
+      assert.strictEqual(stripSameDocumentFragmentPrefix(''), '');
+    });
+  });
+
   describe('findConrefTargetOffset', () => {
     const text = '<topic id="t1"><body><p id="p1">x</p></body></topic><topic id="t2"><p id="p1">y</p></topic>';
 
@@ -137,6 +151,15 @@ describe('ditaLanguageUtils', () => {
       const off = findConrefTargetOffset(selfRefText, './note_xxx');
       assert.ok(off >= 0, 'should find note_xxx despite the "./" prefix');
       assert.ok(selfRefText.substring(off).startsWith('id="note_xxx"'));
+    });
+
+    it('resolves the "./topicId/elementId" same-document shorthand for a topic-scoped fragment, not just the bare-id case', () => {
+      // Before stripping the "./" prefix up front, splitting on the FIRST
+      // "/" in "./t2/p1" put "." in topicId (already handled) but folded
+      // the rest -- "t2/p1" -- into a single, unmatchable elementId instead
+      // of recognizing "t2" as the topic scope.
+      const off = findConrefTargetOffset(text, './t2/p1');
+      assert.ok(off > text.indexOf('id="t2"'), 'should resolve p1 scoped to topic t2, not search for a literal "t2/p1" id');
     });
   });
 

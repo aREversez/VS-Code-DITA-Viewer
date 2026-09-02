@@ -110,13 +110,33 @@ export function findKeyDefinitionOffset(mapText: string, key: string): number {
 }
 
 /**
+ * Strips the same-document marker some authors prefix onto a conref/href
+ * fragment -- the "./id" (or "./topicId/elementId") shorthand, carried over
+ * from relative-file-path conventions, that some tools accept as another
+ * way of writing a bare "#id". Once stripped, the rest of the fragment
+ * parses exactly like a plain "topicId/elementId" or bare "elementId"
+ * fragment. A fragment with no such prefix is returned unchanged.
+ *
+ * This is the single place that understands the "./" shorthand -- every
+ * caller that splits a fragment into a topic-scope part and an element-id
+ * part should normalize through here first, rather than special-casing
+ * "." locally, so the same-document marker is handled consistently
+ * wherever fragments are parsed (go-to-definition, find-references, and
+ * this file's own findConrefTargetOffset all split fragments this way).
+ */
+export function stripSameDocumentFragmentPrefix(fragment: string): string {
+  return fragment.replace(/^\.\/+/, '');
+}
+
+/**
  * Resolves a conref/href fragment ("topicId" or "topicId/elementId") to the
  * offset of the target id="..." attribute in the target file's text, or -1.
  */
 export function findConrefTargetOffset(text: string, fragment: string): number {
-  const slashIdx = fragment.indexOf('/');
-  const topicId = slashIdx >= 0 ? fragment.substring(0, slashIdx) : undefined;
-  const elementId = slashIdx >= 0 ? fragment.substring(slashIdx + 1) : fragment;
+  const normalized = stripSameDocumentFragmentPrefix(fragment);
+  const slashIdx = normalized.indexOf('/');
+  const topicId = slashIdx >= 0 ? normalized.substring(0, slashIdx) : undefined;
+  const elementId = slashIdx >= 0 ? normalized.substring(slashIdx + 1) : normalized;
   if (!elementId) return -1;
 
   const findId = (id: string, from: number): number => {
@@ -126,14 +146,14 @@ export function findConrefTargetOffset(text: string, fragment: string): number {
     return m ? m.index : -1;
   };
 
-  // A bare elementId (no "/" at all), or a same-document self-reference
-  // marker before the "/" (e.g. conref="#./noteId", written by authors
-  // used to relative-path "./" prefixes), has no real topic to scope the
-  // search by. Treating "." as a literal topic id sent this straight to
-  // findId('.', 0), which can never match a real id="..." and always
-  // reported the target as missing -- search the whole document for the
-  // element id directly instead.
-  if (topicId === undefined || topicId === '' || topicId === '.') {
+  // A bare elementId (no "/" at all) has no real topic to scope the search
+  // by. Before the stripSameDocumentFragmentPrefix normalization above, a
+  // same-document self-reference marker (e.g. conref="#./noteId") landed
+  // here as a literal "." topicId, which could never match a real
+  // id="..." and always reported the target as missing -- normalizing the
+  // fragment first means that case now falls into the same "no scope"
+  // bucket as a plain "#noteId" bare id.
+  if (topicId === undefined || topicId === '') {
     return findId(elementId, 0);
   }
 
