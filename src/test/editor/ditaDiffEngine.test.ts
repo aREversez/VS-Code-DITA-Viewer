@@ -296,6 +296,22 @@ describe('ditaDiffEngine', () => {
   });
 
   describe('applyInlineMarksToHtml', () => {
+    it('reconstructs a sentence with ordinary punctuation exactly, with no spurious inserted spaces (regression: tokenizeForDiff discarded whitespace and mergePart re-synthesized exactly one space after every token, so any punctuation directly touching a word -- "Note:", a sentence-ending period, contractions, hyphens -- came back with a phantom inserted space, breaking the exact-match this relies on for virtually any real sentence)', () => {
+      const parts = diffTokens(
+        tokenizeForDiff('Please save your work before continuing.'),
+        tokenizeForDiff('Please save your work before proceeding.'),
+      );
+      const reconstructedRight = parts.filter((p) => !p.removed).map((p) => p.value).join('');
+      assert.strictEqual(reconstructedRight, 'Please save your work before proceeding.');
+    });
+
+    it('highlights the correct word when a removed/added part is followed by unchanged trailing text (regression: the html-walking loop advanced past removed/added parts as if they existed on BOTH sides, shifting every mark after them by that part\'s length -- e.g. "...before continuing." -> "...before proceeding." highlighted the trailing "." instead of "proceeding")', () => {
+      const html = '<p>Please save your work before proceeding.</p>';
+      const parts = diffTokens(tokenizeForDiff('Please save your work before continuing.'), tokenizeForDiff('Please save your work before proceeding.'));
+      const marked = applyInlineMarksToHtml(html, parts, 'right');
+      assert.strictEqual(marked, '<p>Please save your work before <span class="diff-inline-add">proceeding</span>.</p>');
+    });
+
     it('wraps the diffed portion of matching plain text in a mark span', () => {
       const html = '<p>the quick fox</p>';
       const parts = diffTokens(tokenizeForDiff('the quick fox'), tokenizeForDiff('the slow fox'));

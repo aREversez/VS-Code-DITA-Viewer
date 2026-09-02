@@ -461,6 +461,20 @@ function alignSectionChildren(
 
 const CJK_RANGES = /[\u4e00-\u9fff\u3400-\u4dbf\u3040-\u30ff\uac00-\ud7af]/;
 
+// Tokens must partition `text` exactly -- tokens.join('') === text always --
+// with nothing dropped and nothing synthesized. This used to skip over
+// whitespace entirely (discarding it) and let mergePart glue a single
+// synthetic space after every token instead. That coincidentally
+// round-tripped single-word-then-single-space runs, but broke the instant
+// any punctuation touched a word with no space -- "Note:", "e.g.", "isn't",
+// "well-known", or simply a period at the end of a sentence all came back
+// with a spurious inserted space ("Note :", "isn ' t", "fox ."). Since
+// applyInlineMarksToHtml requires its reconstructed text to exactly equal
+// the rendered html's plain text (see makeBlock/htmlToPlainText), that
+// spurious-space drift silently discarded the inline highlighting for
+// almost any real sentence, leaving "modified" rows a flat, undifferentiated
+// amber block with no visible red/green pinpointing which words actually
+// changed.
 export function tokenizeForDiff(text: string): string[] {
   const tokens: string[] = [];
   const chars = [...text];
@@ -469,10 +483,13 @@ export function tokenizeForDiff(text: string): string[] {
   while (i < chars.length) {
     const ch = chars[i];
     if (/\s/.test(ch)) {
-      i++;
-      continue;
-    }
-    if (CJK_RANGES.test(ch)) {
+      let ws = '';
+      while (i < chars.length && /\s/.test(chars[i])) {
+        ws += chars[i];
+        i++;
+      }
+      tokens.push(ws);
+    } else if (CJK_RANGES.test(ch)) {
       tokens.push(ch);
       i++;
     } else if (/[a-zA-Z0-9\u00c0-\u024f]/.test(ch)) {
@@ -513,12 +530,15 @@ export function diffTokens(oldTokens: string[], newTokens: string[]): DiffPart[]
   return parts;
 }
 
+// No synthetic separators -- tokens (including whitespace-run tokens) are
+// concatenated verbatim, so the concatenation of a side's selected parts
+// exactly reconstructs that side's original (post-normalizeText) text.
 function mergePart(parts: DiffPart[], value: string, added: boolean, removed: boolean): void {
   const last = parts[parts.length - 1];
   if (last && last.added === added && last.removed === removed) {
-    last.value += value + ' ';
+    last.value += value;
   } else {
-    parts.push({ value: value + ' ', added: added || undefined, removed: removed || undefined });
+    parts.push({ value, added: added || undefined, removed: removed || undefined });
   }
 }
 
@@ -611,6 +631,27 @@ export function applyInlineMarksToHtml(
 
     while (pos < segEnd && partIdx.i < parts.length) {
       const part = parts[partIdx.i];
+
+      // A part not belonging to this side (removed, when rendering the
+      // right side; added, when rendering the left) contributes NOTHING to
+      // this side's text -- it must be skipped over entirely, not treated
+      // as consuming characters from the segment. It previously fell
+      // through to the same span-consuming code below as every other part,
+      // silently shifting every mark position after it by that part's
+      // length (or, if the removed/added part was long enough, consuming
+      // the rest of the segment outright and leaving NO marks at all):
+      // e.g. diffing "...before continuing." -> "...before proceeding."
+      // correctly identified "continuing" as removed and "proceeding" as
+      // added, but rendering the right side walked past "continuing" as if
+      // those characters existed in the right html too, desyncing every
+      // position after it.
+      const belongsToSide = side === 'left' ? !part.added : !part.removed;
+      if (!belongsToSide) {
+        partIdx.i++;
+        partIdx.charInPart = 0;
+        continue;
+      }
+
       const isHighlight = side === 'left' ? part.removed : part.added;
       const partLen = part.value.length;
       const remainingInPart = partLen - partIdx.charInPart;
