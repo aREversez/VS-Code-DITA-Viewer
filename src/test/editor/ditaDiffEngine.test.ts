@@ -157,6 +157,36 @@ describe('ditaDiffEngine', () => {
       assert.strictEqual(prologRows.length, 0, `expected no prolog row since neither side has an indexterm, got: ${JSON.stringify(prologRows)}`);
     });
 
+    it('derives block text from the rendered html, not the raw source node, so renderer-injected content (keyref/conref substitution, note labels, footnote markers) shows up in the diff text instead of silently diverging from what is actually shown (regression: text used to come from collectText(node) on the raw source node, which cannot see anything the renderer adds)', () => {
+      const decoratingFactory = (root: DitaNode, _docDir: string) => {
+        void root.attributes;
+        return (node: DitaNode, _parentBaseType: string, _headingLevel: number): string => {
+          const text = collectPlainText(node);
+          // Simulate a renderer decoration the source node doesn't
+          // literally contain, e.g. an injected note-type label.
+          if (node.baseType === 'topic/p') return `<p>Note ${text}</p>`;
+          return `<p>${text}</p>`;
+        };
+      };
+
+      const xml = `<?xml version="1.0"?><topic id="t"><title>T</title><body><p>please save your work</p></body></topic>`;
+      const input: DiffTopicsInput = {
+        leftXml: xml,
+        rightXml: xml,
+        leftDocDir: '/tmp/left',
+        rightDocDir: '/tmp/right',
+        renderBlockFactory: decoratingFactory,
+      };
+      const result = diffTopics(input);
+      const pRow = result.rows.find((r) => r.left?.baseType === 'topic/p');
+      assert.ok(pRow, 'expected a <p> row');
+      assert.strictEqual(
+        pRow!.left!.text,
+        'Note please save your work',
+        'expected block text to reflect what the renderer actually produced, including the injected "Note " prefix -- not just the raw source text',
+      );
+    });
+
     it('recurses into a changed <parml> to show only the actually-changed <plentry> as modified, leaving unrelated entries unchanged (regression: only topic/section and topic/example recursed, so any other change inside a large parml/list marked the WHOLE container "modified")', () => {
       const left = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
         <section><title>Sec</title>

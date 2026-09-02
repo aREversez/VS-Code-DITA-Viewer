@@ -25,6 +25,19 @@ export interface RenderedBlock {
   html: string;
   text: string;
   sourceLine?: number;
+  /**
+   * The source node this block was built from. Recursing into a modified
+   * container's own children (alignSectionChildren) used to re-find this
+   * node by searching the tree for a child matching block.baseType + text
+   * -- fragile once `text` stopped being raw source text (see makeBlock):
+   * anything rendered from a node whose visible text doesn't equal its
+   * literal source text (keyref/conref resolution, injected labels) would
+   * never match anything during that search, silently breaking recursion
+   * for exactly the blocks most likely to need it. Since every
+   * RenderedBlock is built directly from a real node to begin with, just
+   * keep the reference instead of trying to relocate it later.
+   */
+  node: DitaNode;
 }
 
 export interface AlignedRow {
@@ -98,20 +111,47 @@ export function normalizeText(text: string): string {
   return text.replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+// Diff text must come from the SAME rendered HTML that's actually shown,
+// not from the raw source node (as collectText does) -- see makeBlock.
+function htmlToPlainText(html: string): string {
+  return scanHtmlSegments(html)
+    .filter((s) => s.kind === 'text')
+    .map((s) => s.decoded || '')
+    .join('');
+}
+
 function makeBlock(
   node: DitaNode,
   opts: BlockExtractOptions,
   parentBaseType: string,
   headingLevel: number,
 ): RenderedBlock {
-  const text = normalizeText(collectText(node));
+  const html = opts.renderBlock(node, parentBaseType, headingLevel);
+  // Derived from the rendered `html`, not collectText(node) on the raw
+  // source. Rendering can add or substitute visible text that isn't in the
+  // source node itself: keyref/conref resolution fills in content the
+  // source element doesn't literally contain, note/section-type labels get
+  // injected ("Note: ", localized equivalents, etc.), footnote markers are
+  // added, and so on. When `text` came from raw source, any of these made
+  // it diverge from the plain text `html` actually renders. That mismatch
+  // silently broke word-level highlighting: applyInlineMarksToHtml
+  // requires its reconstructed text to exactly equal the html's plain
+  // text, and bails out -- with no highlighting at all, not even an
+  // approximation -- the moment they disagree. In real documents (notes,
+  // keyword/keyref use, cross-references) that was common enough that
+  // most "modified" rows rendered as a flat, undifferentiated amber block
+  // instead of pinpointing the actual changed words in red/green.
+  // Deriving text from html instead guarantees the two always agree by
+  // construction.
+  const text = normalizeText(htmlToPlainText(html));
   return {
     key: blockKey(node, text),
     baseType: node.baseType,
     tagName: node.tagName,
-    html: opts.renderBlock(node, parentBaseType, headingLevel),
+    html,
     text,
     sourceLine: node.sourceRange?.startLine,
+    node,
   };
 }
 
@@ -122,9 +162,12 @@ function makeBlock(
 // nested under <prolog><metadata><keywords> DO render, as chips. This diff
 // engine's skip-list was never updated to match that exception, so an
 // indexterm added there had nothing to extract into a block and silently
-// never appeared in the diff. Text/key are derived from just the indexterm
-// nodes (not the whole prolog) so an unrelated prolog edit -- e.g. author
-// name -- doesn't make this block spuriously look "modified" when the
+// never appeared in the diff. `idxNodes` is only used as a cheap existence
+// check (skip building a block at all when there's nothing to show);
+// text/key come from the rendered chip html itself (see makeBlock's
+// htmlToPlainText for why), not from collectText over the source
+// indexterm nodes, so an unrelated prolog edit -- e.g. author name --
+// doesn't make this block spuriously look "modified" when the
 // actually-rendered chip content hasn't changed.
 function makeProlgIndextermBlock(
   node: DitaNode,
@@ -134,14 +177,16 @@ function makeProlgIndextermBlock(
 ): RenderedBlock | undefined {
   const idxNodes = findTopLevelIndextermsInSubtree(node);
   if (idxNodes.length === 0) return undefined;
-  const text = normalizeText(idxNodes.map((n) => collectText(n)).join(' | '));
+  const html = opts.renderBlock(node, parentBaseType, headingLevel);
+  const text = normalizeText(htmlToPlainText(html));
   return {
     key: `fp:topic/prolog-indexterm:${simpleHash(text)}`,
     baseType: node.baseType,
     tagName: node.tagName,
-    html: opts.renderBlock(node, parentBaseType, headingLevel),
+    html,
     text,
     sourceLine: node.sourceRange?.startLine,
+    node,
   };
 }
 
@@ -384,8 +429,6 @@ function alignSectionChildren(
   leftOpts: BlockExtractOptions,
   rightOpts: BlockExtractOptions,
   headingLevel: number,
-  leftRoot: DitaNode,
-  rightRoot: DitaNode,
 ): AlignedRow[] {
   const leftBlocks = extractChildBlocks(leftParent, leftOpts, 'topic/section', headingLevel);
   const rightBlocks = extractChildBlocks(rightParent, rightOpts, 'topic/section', headingLevel);
@@ -406,11 +449,7 @@ function alignSectionChildren(
         isDiffableContainer(row.right) &&
         row.left.baseType === row.right.baseType
       ) {
-        const leftNode = findNodeByBlock(leftRoot, row.left);
-        const rightNode = findNodeByBlock(rightRoot, row.right);
-        if (leftNode && rightNode) {
-          row.children = alignSectionChildren(leftNode, rightNode, leftOpts, rightOpts, headingLevel, leftRoot, rightRoot);
-        }
+        row.children = alignSectionChildren(row.left.node, row.right.node, leftOpts, rightOpts, headingLevel);
       }
     }
   }
@@ -751,19 +790,13 @@ export function diffTopics(input: DiffTopicsInput): TopicDiffResult {
         isDiffableContainer(row.right) &&
         row.left.baseType === row.right.baseType
       ) {
-        const leftNode = findNodeByBlock(leftDoc.root, row.left);
-        const rightNode = findNodeByBlock(rightDoc.root, row.right);
-        if (leftNode && rightNode) {
-          row.children = alignSectionChildren(
-            leftNode,
-            rightNode,
-            { renderBlock: leftRenderBlock },
-            { renderBlock: rightRenderBlock },
-            2,
-            leftDoc.root,
-            rightDoc.root,
-          );
-        }
+        row.children = alignSectionChildren(
+          row.left.node,
+          row.right.node,
+          { renderBlock: leftRenderBlock },
+          { renderBlock: rightRenderBlock },
+          2,
+        );
       }
     }
   }
@@ -777,41 +810,6 @@ export function diffTopics(input: DiffTopicsInput): TopicDiffResult {
     rows,
     stats,
   };
-}
-
-function findNodeByBlock(root: DitaNode, block: RenderedBlock): DitaNode | undefined {
-  const id = block.key.startsWith('id:') ? block.key.slice(3) : undefined;
-  if (id) return findById(root, id);
-
-  // Search the full subtree, not just root's direct children -- a
-  // <section> block always lives inside <body>, never directly under
-  // <topic>, so a direct-children-only search here would silently never
-  // find it for any real document and the "recurse into a modified
-  // section's own children for finer-grained diffing" feature this
-  // supports would quietly do nothing on every actual topic. Caught by
-  // writing a test with a realistic <topic><body><section>...</section>
-  // </body></topic> shape rather than a flattened one.
-  function search(node: DitaNode): DitaNode | undefined {
-    for (const child of node.children || []) {
-      if (child.type !== 'element') continue;
-      if (child.baseType === block.baseType && normalizeText(collectText(child)) === block.text) {
-        return child;
-      }
-      const nested = search(child);
-      if (nested) return nested;
-    }
-    return undefined;
-  }
-  return search(root);
-}
-
-function findById(node: DitaNode, id: string): DitaNode | undefined {
-  if (node.attributes?.id === id) return node;
-  for (const child of node.children || []) {
-    const found = findById(child, id);
-    if (found) return found;
-  }
-  return undefined;
 }
 
 function extractTitle(doc: DitaDocument): string | undefined {
