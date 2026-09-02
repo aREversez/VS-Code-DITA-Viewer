@@ -309,16 +309,37 @@ export function makeConrefResolver(
 // this returns undefined (letting the caller fall back to normal
 // single-target conref handling) rather than guessing at some other
 // relationship when that's not the case.
-export function makeConrefRangeResolver(docDir: string): (conref: string, conrefend: string) => DitaNode[] | undefined {
+export function makeConrefRangeResolver(
+  docDir: string,
+  ownRoot?: DitaNode,
+): (conref: string, conrefend: string) => DitaNode[] | undefined {
   const cache = makeFileCache(docDir);
 
   function resolveRef(ref: string): { root: DitaNode; id: string } | undefined {
     const hashIdx = ref.indexOf('#');
     if (hashIdx < 0) return undefined;
     const filePath = ref.substring(0, hashIdx);
-    const idPart = ref.substring(hashIdx + 1);
+    // Strip the "./" same-document marker before splitting on "/" so a
+    // topic-scoped same-document range (e.g. "#./topicId/elementId") lands
+    // on the real topic/element pair instead of misreading "." as the
+    // topic id and folding the rest of the fragment into a single
+    // (unmatchable) id.
+    const idPart = ref.substring(hashIdx + 1).replace(/^\.\/+/, '');
     const parts = idPart.split('/');
     const id = parts.length > 1 ? parts[1] : parts[0];
+
+    // No file path before "#" -- a same-document reference, same as the
+    // single-target makeConrefResolver above. docDir on its own resolves
+    // to a *directory*, not a file, so handing an empty filePath to
+    // loadFile always failed here the same way: existsSync passed, but
+    // reading a directory as a file then threw and got silently cached as
+    // "not found". Search the document already being rendered instead of
+    // touching the filesystem at all.
+    if (!filePath) {
+      if (!ownRoot) return undefined;
+      return { root: ownRoot, id };
+    }
+
     const root = cache.loadFile(filePath);
     if (!root) return undefined;
     return { root, id };
@@ -675,7 +696,7 @@ export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
     const indexLabel = detectIndexLabel(ditaDoc.root, uiLanguage);
 
     const conrefResolver = makeConrefResolver(docDir, ditaDoc.root);
-    const conrefRangeResolver = makeConrefRangeResolver(docDir);
+    const conrefRangeResolver = makeConrefRangeResolver(docDir, ditaDoc.root);
     const fileTitleResolver = makeFileTitleResolver(docDir);
 
     const resolveTitle = (id: string): string | undefined => {

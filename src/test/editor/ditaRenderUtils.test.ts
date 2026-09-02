@@ -806,6 +806,28 @@ describe('makeConrefRangeResolver', () => {
     assert.strictEqual(range, undefined);
   });
 
+  it('should resolve a same-document conrefend range against the passed-in root, without touching the filesystem', () => {
+    const ownDoc = parseDita(`<topic id="t1"><body><section id="s1"><p>One</p></section><section id="s2"><p>Two</p></section><section id="s3"><p>Three</p></section></body></topic>`);
+    const resolver = makeConrefRangeResolver(dir, ownDoc.root);
+    const range = resolver('#s1', '#s2');
+    assert.ok(range, 'should resolve a same-document range');
+    assert.deepStrictEqual(range!.map((n) => n.attributes?.id), ['s1', 's2']);
+  });
+
+  it('should resolve the "#./id" same-document shorthand for conref/conrefend, same as makeConrefResolver does for a single conref', () => {
+    const ownDoc = parseDita(`<topic id="t1"><body><section id="s1"><p>One</p></section><section id="s2"><p>Two</p></section><section id="s3"><p>Three</p></section></body></topic>`);
+    const resolver = makeConrefRangeResolver(dir, ownDoc.root);
+    const range = resolver('#./s1', '#./s2');
+    assert.ok(range, 'should resolve a same-document range written with the "./" shorthand');
+    assert.deepStrictEqual(range!.map((n) => n.attributes?.id), ['s1', 's2']);
+  });
+
+  it('should return undefined for a same-document conrefend range when no root was passed in (rather than throwing)', () => {
+    const resolver = makeConrefRangeResolver(dir);
+    assert.doesNotThrow(() => resolver('#s1', '#s2'));
+    assert.strictEqual(resolver('#s1', '#s2'), undefined);
+  });
+
   it('should render the full conrefend range end-to-end, matching only the first element to the referencing element', () => {
     const rangeResolver = makeConrefRangeResolver(dir);
     const sourceXml = `<topic id="main">

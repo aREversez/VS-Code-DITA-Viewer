@@ -208,7 +208,7 @@ function computeDiff(
   // once per side, after diffTopics has actually parsed that side's XML.
   const buildRenderBlock = (root: DitaNode, sideDocDir: string) => {
     const conrefResolver = makeConrefResolver(sideDocDir, root);
-    const conrefRangeResolver = makeConrefRangeResolver(sideDocDir);
+    const conrefRangeResolver = makeConrefRangeResolver(sideDocDir, root);
     const fileTitleResolver = makeFileTitleResolver(sideDocDir);
     const titleMap = new Map<string, string>();
 
