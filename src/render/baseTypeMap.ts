@@ -609,11 +609,9 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     // own img{height:auto} means a bare width/height attribute doesn't
     // force a fixed pixel size, it just informs the aspect ratio while
     // max-width:100% still scales the box down responsively as usual).
-    let naturalDimensions: { width: number; height: number } | undefined;
     if (!width && !height && href && ctx.getImageDimensions) {
       const natural = ctx.getImageDimensions(href);
       if (natural) {
-        naturalDimensions = natural;
         width = String(natural.width);
         height = String(natural.height);
       }
@@ -650,23 +648,29 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
       if (!isNaN(pct) && pct > 0) {
         scaleStyle = `--dita-scale:${pct / 100}`;
       }
-    } else if (scalefit !== 'yes' && !scale && !hadAuthorSize && naturalDimensions) {
-      // Preview-default downscale: full natural size reads as oversized in
-      // the preview pane, and a portrait screenshot eats far more vertical
-      // scroll space than a landscape one at the same on-screen width, so
-      // portrait images get a steeper default reduction. Only fires when
-      // the DITA source gave no @scale/@width/@height of its own — this is
-      // a preview convenience default, never a second-guess of authored
-      // sizing.
-      const isPortrait = naturalDimensions.height > naturalDimensions.width;
-      scaleStyle = `--dita-scale:${isPortrait ? 0.5 : 0.75}`;
     }
+
+    // Preview-default downscale flag: for an image with no @scale/@width/
+    // @height of its own, the preview should start smaller than full size
+    // -- but @scale's zoom-relative-to-natural-size mechanism above is the
+    // wrong tool for this, because zoom only shrinks what's already fitting
+    // under the container's max-width:100% clamp. A large image already
+    // being clamped down to the container's width stays clamped to that
+    // same width after a zoom<1 is applied (natural-size * zoom can still
+    // exceed the container), so "shrink by X%" would visibly do nothing
+    // for exactly the images most in need of shrinking. The actual pixel
+    // width of that clamped box is only known in the browser, at layout
+    // time -- see the webview script's use of this attribute, which reads
+    // getBoundingClientRect() (the same measurement the zoom toolbar's
+    // "100%" already means) and applies the reduction from there instead.
+    const useDefaultPreviewScale = scalefit !== 'yes' && !scale && !hadAuthorSize;
 
     const altAttr = alt !== undefined ? safeAttr('alt', alt) : '';
     const titleAttr = alt ? safeAttr('title', alt) : '';
     const styleAttr = safeAttr('style', scaleStyle);
+    const defaultScaleAttr = useDefaultPreviewScale ? ' data-dita-default-scale="1"' : '';
 
-    return `<img src="${escapeAttr(imgSrc)}"${altAttr}${titleAttr}${extra}${cls}${styleAttr} loading="lazy" data-dita-src="${escapeAttr(href)}">`;
+    return `<img src="${escapeAttr(imgSrc)}"${altAttr}${titleAttr}${extra}${cls}${styleAttr}${defaultScaleAttr} loading="lazy" data-dita-src="${escapeAttr(href)}">`;
   },
 
   'topic/fig': (node, ctx, renderChildren) => {

@@ -1552,56 +1552,46 @@ describe('renderer', () => {
     assert.ok(html.includes('style="--dita-scale:0.7"'), '@scale must not be masked by the width/height fallback');
   });
 
-  it('should apply a default 75% preview scale to a landscape image with no @scale/@width/@height', () => {
-    const ctx: RenderContext = {
-      ...defaultCtx,
-      getImageDimensions: () => ({ width: 400, height: 200 }),
-    };
+  it('should apply a data-dita-default-scale marker when no @scale/@width/@height is given', () => {
     const doc = makeEl('topic/topic', [
       makeEl('topic/image', [], { href: 'pic.png' }),
     ]);
-    const html = renderDocument(doc, ctx);
-    assert.ok(html.includes('style="--dita-scale:0.75"'));
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('data-dita-default-scale="1"'));
+    // Orientation (landscape vs portrait) is only knowable once the browser
+    // has actually decoded the file, so this marker is deliberately generic
+    // -- the webview script reads img.naturalWidth/naturalHeight once
+    // loaded and picks 75%/50% from there. No --dita-scale here: that CSS
+    // 'zoom' mechanism scales relative to the image's own natural size, so
+    // it visibly does nothing once the image is already being clamped down
+    // to the container by img{max-width:100%} -- exactly the oversized
+    // images this default is meant to shrink. See applyDefaultPreviewScale
+    // in DitaViewerProvider.ts for the container-relative fix.
+    assert.ok(!html.includes('--dita-scale'));
   });
 
-  it('should apply a default 50% preview scale to a portrait image with no @scale/@width/@height', () => {
-    const ctx: RenderContext = {
-      ...defaultCtx,
-      getImageDimensions: () => ({ width: 200, height: 400 }),
-    };
+  it('should still mark for the default preview scale even when the file\'s dimensions can\'t be read server-side', () => {
+    // getImageDimensions absent/undefined entirely -- e.g. a remote image,
+    // or a format readImageDimensions doesn't parse. Eligibility no longer
+    // depends on server-side dimensions at all, since the webview measures
+    // the real loaded image itself.
     const doc = makeEl('topic/topic', [
       makeEl('topic/image', [], { href: 'pic.png' }),
     ]);
-    const html = renderDocument(doc, ctx);
-    assert.ok(html.includes('style="--dita-scale:0.5"'));
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('data-dita-default-scale="1"'));
   });
 
-  it('should treat a square image as landscape (75%) for the default preview scale', () => {
-    const ctx: RenderContext = {
-      ...defaultCtx,
-      getImageDimensions: () => ({ width: 300, height: 300 }),
-    };
-    const doc = makeEl('topic/topic', [
-      makeEl('topic/image', [], { href: 'pic.png' }),
-    ]);
-    const html = renderDocument(doc, ctx);
-    assert.ok(html.includes('style="--dita-scale:0.75"'));
-  });
-
-  it('should not apply the default preview scale when @scale is explicit', () => {
-    const ctx: RenderContext = {
-      ...defaultCtx,
-      getImageDimensions: () => ({ width: 200, height: 400 }),
-    };
+  it('should not mark for the default preview scale when @scale is explicit', () => {
     const doc = makeEl('topic/topic', [
       makeEl('topic/image', [], { href: 'pic.png', scale: '70' }),
     ]);
-    const html = renderDocument(doc, ctx);
+    const html = renderDocument(doc, defaultCtx);
     assert.ok(html.includes('--dita-scale:0.7'));
-    assert.ok(!html.includes('--dita-scale:0.5'));
+    assert.ok(!html.includes('data-dita-default-scale'));
   });
 
-  it('should not apply the default preview scale when an explicit @width/@height is given', () => {
+  it('should not mark for the default preview scale when an explicit @width/@height is given', () => {
     const ctx: RenderContext = {
       ...defaultCtx,
       getImageDimensions: () => ({ width: 200, height: 400 }),
@@ -1610,14 +1600,15 @@ describe('renderer', () => {
       makeEl('topic/image', [], { href: 'pic.png', width: '150', height: '300' }),
     ]);
     const html = renderDocument(doc, ctx);
-    assert.ok(!html.includes('--dita-scale'));
+    assert.ok(!html.includes('data-dita-default-scale'));
   });
 
-  it('should not apply the default preview scale when natural dimensions cannot be read', () => {
+  it('should not mark for the default preview scale when @scalefit="yes"', () => {
     const doc = makeEl('topic/topic', [
-      makeEl('topic/image', [], { href: 'pic.png' }),
+      makeEl('topic/image', [], { href: 'pic.png', scalefit: 'yes' }),
     ]);
     const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('data-dita-default-scale'));
     assert.ok(!html.includes('--dita-scale'));
   });
 

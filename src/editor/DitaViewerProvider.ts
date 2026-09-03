@@ -387,6 +387,35 @@ function getWebviewScript(): string {
     }
   }
 
+  // Applies the default preview-size reduction (marked server-side via
+  // data-dita-default-scale, see topic/image in baseTypeMap.ts) once the
+  // image's real dimensions are known. This deliberately reuses setImgZoom
+  // / imgBaseWidth -- the same rendered, already-max-width-clamped size the
+  // toolbar's own "100%" means -- rather than a CSS 'zoom' relative to the
+  // image's own natural pixel size. A 'zoom' scales the image relative to
+  // ITSELF: a large image already being clamped down to the container's
+  // width by img{max-width:100%} stays clamped to that same width after
+  // zoom<1 too (natural-size * zoom can still exceed the container), so it
+  // visibly does nothing for exactly the oversized images this is meant to
+  // shrink -- only images whose natural size was already small enough to
+  // escape the clamp would visibly change. Sizing off imgBaseWidth() (a
+  // getBoundingClientRect() measurement taken after the clamp) fixes that:
+  // the reduction is always relative to how large the image currently
+  // renders on the page, regardless of its file resolution.
+  //
+  // Skips images that already have an explicit zoom-idx (a real user zoom
+  // click landed before this ran) so it never clobbers deliberate input,
+  // and is idempotent per image (checks isn't re-run after its own
+  // setImgZoom call sets data-dita-zoom-idx).
+  function applyDefaultPreviewScale(img) {
+    if (img.getAttribute('data-dita-default-scale') !== '1') return;
+    if (img.getAttribute('data-dita-zoom-idx') !== null) return;
+    if (!(img.naturalWidth > 0)) return;
+    var isPortrait = img.naturalHeight > img.naturalWidth;
+    var idx = IMG_ZOOM_STEPS.indexOf(isPortrait ? 50 : 75);
+    if (idx !== -1) setImgZoom(img, idx);
+  }
+
   function makeImgToolbarBtn(label, title, onClick) {
     var btn = document.createElement('button');
     btn.type = 'button';
@@ -439,11 +468,19 @@ function getWebviewScript(): string {
     // the click applies a size computed from an unreliable in-flight
     // measurement. Once the image actually finishes loading, snap it to
     // whatever zoom level is currently set so it settles on the correct
-    // size instead of staying at that first, unreliable guess.
+    // size instead of staying at that first, unreliable guess. The default
+    // preview scale (see applyDefaultPreviewScale) needs the same real
+    // dimensions, so it's applied here too, before that reapply -- it's a
+    // no-op once a real zoom-idx exists, from either source.
     img.addEventListener('load', function() {
+      applyDefaultPreviewScale(img);
       var idx = currentZoomIdx(img);
       if (idx !== DEFAULT_ZOOM_IDX) setImgZoom(img, idx);
     });
+    // Images already decoded by the time this script runs (cached/data-URI
+    // images commonly don't fire 'load' again for a freshly created <img>
+    // in some engines) still need the same treatment immediately.
+    if (img.complete && img.naturalWidth > 0) applyDefaultPreviewScale(img);
 
     var tb = document.createElement('span');
     tb.className = 'dita-img-toolbar';
