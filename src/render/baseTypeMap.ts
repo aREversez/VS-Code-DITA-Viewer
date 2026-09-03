@@ -371,7 +371,30 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
   'topic/table': (node, ctx, renderChildren) => {
     const id = getAttr(node, 'id');
-    return `<table${safeAttr('id', id)} class="cals-table">${renderChildren(node, ctx)}</table>`;
+    // If any tgroup declares colspecs, its <colgroup> gives every column an
+    // authoritative width -- but the default 'auto' table layout treats
+    // that width as only a hint: the browser still redistributes space
+    // based on each cell's own content (a long-unbroken run of CJK text or
+    // a single wide token can force its column wider than specified, at
+    // the expense of others), which is why some tables render with columns
+    // in roughly the proportions the author specified and others don't --
+    // it depends on what that particular table's cell content happens to
+    // do to the 'auto' algorithm's per-column min/max content width, not
+    // on anything wrong with the colspec/colwidth parsing itself. Forcing
+    // 'table-layout: fixed' (see styles.css's .cals-table--fixed-layout)
+    // makes the colgroup widths authoritative instead of a mere hint. Only
+    // applied when a colgroup actually exists -- tables with no colwidth
+    // hints at all should keep sizing themselves from content as before.
+    const hasColspec = (node.children || []).some(
+      (tgroup) =>
+        tgroup.type === 'element' &&
+        tgroup.baseType === 'topic/tgroup' &&
+        (tgroup.children || []).some(
+          (c) => c.type === 'element' && c.baseType === 'topic/colspec' && !!c.attributes?.colwidth,
+        ),
+    );
+    const cls = hasColspec ? 'cals-table cals-table--fixed-layout' : 'cals-table';
+    return `<table${safeAttr('id', id)} class="${cls}">${renderChildren(node, ctx)}</table>`;
   },
 
   'topic/tgroup': (node, ctx, renderChildren) => {

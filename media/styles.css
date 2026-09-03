@@ -261,8 +261,21 @@ dd { margin-left: 1.5em; }
 
 /* Tables */
 table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.95em; border: 2px solid var(--table-border); }
-table th, table td { border: 1px solid var(--table-border); padding: 0.5rem 0.75rem; text-align: left; vertical-align: top; }
+table th, table td { border: 1px solid var(--table-border); padding: 0.5rem 0.75rem; text-align: left; vertical-align: top; overflow-wrap: break-word; }
 table th { background: var(--color-code-bg); color: var(--vscode-editor-foreground); font-weight: 600; }
+
+/* CALS tables whose <colgroup> carries real colwidth hints (see
+   baseTypeMap.ts's 'topic/table' renderer): with the default 'auto' table
+   layout those widths are only a hint, and a column with a long unbroken
+   run of CJK text (or any content wider than the column's proportional
+   share) can force the browser to redistribute space away from a
+   short-content column regardless of what colwidth says -- symptom: a
+   narrow first column with a couple characters ends up wide, and a long
+   multi-paragraph second column ends up squeezed. 'fixed' makes colgroup
+   widths authoritative and independent of content. overflow-wrap above
+   keeps long unbroken content from overflowing its now content-independent
+   column. */
+.cals-table--fixed-layout { table-layout: fixed; }
 
 /* Simpletables are meant to be lighter-weight than CALS tables */
 .simple-table th, .simple-table td { padding: 0.4rem 0.6rem; }

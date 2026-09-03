@@ -231,6 +231,35 @@ describe('ditaDiffEngine', () => {
       assert.deepStrictEqual(path, ['topic/tgroup', 'topic/tbody', 'topic/row', 'topic/entry']);
     });
 
+    it('recurses into a changed <simpletable> down to the actual changed <stentry>, leaving unrelated rows and cells unchanged (regression: topic/simpletable was in the diffable-container list, but its own row type -- topic/strow, distinct from CALS <table>\'s topic/row -- was not, so recursion stopped one level too early: a one-cell edit still marked the whole <strow> "modified", highlighting every stentry in that row instead of just the one that changed)', () => {
+      const mkTopic = (cell: string) => `<?xml version="1.0"?><topic id="t"><title>T</title><body><simpletable>
+        <strow><stentry>Row1Col1</stentry><stentry>Row1Col2</stentry></strow>
+        <strow><stentry>Row2Col1</stentry><stentry>${cell}</stentry></strow>
+        <strow><stentry>Row3Col1</stentry><stentry>Row3Col2</stentry></strow>
+      </simpletable></body></topic>`;
+
+      const result = runDiff(mkTopic('Old value here'), mkTopic('New value here'));
+      const tableRow = result.rows.find((r) => (r.left || r.right)?.baseType === 'topic/simpletable');
+      assert.ok(tableRow, 'expected a simpletable row');
+      assert.strictEqual(tableRow!.changeType, 'modified');
+
+      const rowChanges = (tableRow!.children || []).map((r) => r.changeType);
+      assert.strictEqual(
+        rowChanges.filter((c) => c === 'unchanged').length,
+        2,
+        `expected 2 unchanged strow rows, got: ${JSON.stringify(rowChanges)}`,
+      );
+      const changedRow = tableRow!.children?.find((r) => r.changeType === 'modified');
+      assert.ok(changedRow, `expected exactly one modified strow, found: ${JSON.stringify(rowChanges)}`);
+
+      const cellChanges = (changedRow!.children || []).map((r) => r.changeType);
+      assert.deepStrictEqual(
+        cellChanges,
+        ['unchanged', 'modified'],
+        `expected only the second stentry to be modified, not the whole row, got: ${JSON.stringify(cellChanges)}`,
+      );
+    });
+
     it('recurses into a changed <parml> to show only the actually-changed <plentry> as modified, leaving unrelated entries unchanged (regression: only topic/section and topic/example recursed, so any other change inside a large parml/list marked the WHOLE container "modified")', () => {
       const left = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
         <section><title>Sec</title>
@@ -368,6 +397,39 @@ describe('ditaDiffEngine', () => {
       const parts = diffTokens(tokenizeForDiff('the quick fox'), tokenizeForDiff('the slow fox'));
       const result = applyInlineMarksToHtml(html, parts, 'left');
       assert.strictEqual(result, html, 'expected safe fallback to original html on mismatch, not corrupted markup');
+    });
+
+    it('places marks on the actually-changed word, not on unrelated whitespace, when the html has pretty-printed indentation/newlines the block text does not (regression: word-level parts are tokenized from the NORMALIZED block text -- whitespace runs collapsed to one space -- but the position-walk assumed 1 normalized character == 1 raw html character; a real DITA source\'s indentation between inline elements is exactly this kind of multi-character whitespace run, so on any realistically-formatted document every mark after the first one silently drifted onto unrelated text while the actual edit went unmarked)', () => {
+      // Mirrors what the real renderer actually produces for a pretty-
+      // printed <p> with a nested <b> and a later CJK edit: raw newlines +
+      // indentation between "工作，" and "然后再", something the earlier,
+      // whitespace-naive tests (single-line, no nested tags) never
+      // exercised. leftText/rightText are derived from the html itself
+      // (stripping tags), not hand-typed separately, so they stay exactly
+      // consistent with it the same way makeBlock's real
+      // normalizeText(htmlToPlainText(html)) always is.
+      const leftHtml = '<p>\n    请先<strong>保存</strong>工作，\n    然后再继续执行下一步操作。\n</p>';
+      const rightHtml = '<p>\n    请先<strong>保存</strong>工作，\n    然后再执行下一步骤操作。\n</p>';
+      const leftText = normalizeText(leftHtml.replace(/<[^>]+>/g, ''));
+      const rightText = normalizeText(rightHtml.replace(/<[^>]+>/g, ''));
+      const parts = diffTokens(tokenizeForDiff(leftText), tokenizeForDiff(rightText));
+
+      const markedLeft = applyInlineMarksToHtml(leftHtml, parts, 'left');
+      const markedRight = applyInlineMarksToHtml(rightHtml, parts, 'right');
+      assert.ok(
+        markedLeft.includes('<span class="diff-inline-del">继续</span>'),
+        `expected the removed word "继续" to be marked on the left, got: ${markedLeft}`,
+      );
+      assert.ok(
+        markedRight.includes('<span class="diff-inline-add">骤</span>'),
+        `expected the added word "骤" to be marked on the right, got: ${markedRight}`,
+      );
+      // Nothing outside the actually-changed word should be wrapped -- the
+      // pre-fix drift wrapped unrelated whitespace/punctuation instead.
+      assert.ok(
+        !markedLeft.includes('<span class="diff-inline-del">，') && !markedLeft.includes('<span class="diff-inline-del">\n'),
+        `expected no spurious mark on the whitespace/punctuation before the real edit, got: ${markedLeft}`,
+      );
     });
   });
 

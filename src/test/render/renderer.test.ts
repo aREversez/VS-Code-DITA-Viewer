@@ -195,6 +195,43 @@ describe('renderer', () => {
     assert.ok(/<td\b[^>]*>Data<\/td>/.test(html), `body entry should render as td, got: ${html}`);
   });
 
+  it('marks a CALS table with real colwidth hints as fixed-layout so a wide colgroup width is authoritative regardless of cell content (regression: default table-layout:auto only treats colgroup widths as a hint, so a column with a long unbroken run of content could still force the browser to redistribute space away from a short-content column, leaving some tables with backwards-looking proportions while others -- with less demanding content -- happened to render fine)', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/table', [
+        makeEl('topic/tgroup', [
+          makeEl('topic/colspec', [], { colname: 'c1', colwidth: '1*' }),
+          makeEl('topic/colspec', [], { colname: 'c2', colwidth: '3*' }),
+          makeEl('topic/tbody', [
+            makeEl('topic/row', [
+              makeEl('topic/entry', [makeText('A')]),
+              makeEl('topic/entry', [makeText('B')]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(
+      html.includes('class="cals-table cals-table--fixed-layout"'),
+      `expected the table to carry the fixed-layout class when colspecs declare colwidth, got: ${html}`,
+    );
+  });
+
+  it('does NOT mark a CALS table as fixed-layout when no colspec declares a colwidth (nothing to make authoritative, so content-driven auto layout should stay the default)', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/table', [
+        makeEl('topic/tgroup', [
+          makeEl('topic/colspec', [], { colname: 'c1' }),
+          makeEl('topic/tbody', [
+            makeEl('topic/row', [makeEl('topic/entry', [makeText('A')])]),
+          ]),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('cals-table--fixed-layout'), `expected no fixed-layout class, got: ${html}`);
+  });
+
   it('should render simple table header stentry as th and row stentry as td', () => {
     const doc = makeEl('topic/topic', [
       makeEl('topic/simpletable', [

@@ -92,6 +92,17 @@ const DIFFABLE_CONTAINER_TYPES = new Set([
   'topic/thead',
   'topic/tbody',
   'topic/row',
+  // <simpletable>'s own row element generalizes to 'topic/strow', NOT
+  // 'topic/row' (that's CALS <table>'s row type) -- simpletable itself was
+  // added here so a single-cell edit no longer marked the whole table
+  // "modified", but without its row type also listed, recursion stopped
+  // one level too early: extractChildBlocks turns each <strow> into its
+  // own block, but isDiffableContainer returned false for it, so a row
+  // that scored high enough on diceSimilarity to pair as "modified" against
+  // its counterpart was never itself recursed into -- every cell in that
+  // row rendered as one flat amber block instead of pinpointing the one
+  // <stentry> that actually changed.
+  'topic/strow',
 ]);
 
 function isDiffableContainer(b: RenderedBlock): boolean {
@@ -614,6 +625,118 @@ function scanHtmlSegments(html: string): HtmlSegment[] {
   return segments;
 }
 
+// `parts` (from diffTokens) is tokenized from a block's NORMALIZED text
+// (normalizeText(htmlToPlainText(html)) -- see makeBlock): whitespace runs
+// collapsed to a single space, leading/trailing whitespace trimmed. The
+// html being annotated here still has the ORIGINAL, un-collapsed
+// whitespace from the pretty-printed XML source -- indentation, newlines
+// between sibling inline elements, and so on. A NormalizedMap re-derives
+// that same normalized string from the html's actual text, while also
+// recording, for every normalized character, which raw character range
+// (in the concatenation of the html's text nodes) it was collapsed from --
+// a single normalized space can stand in for a multi-character raw run
+// like "\n    ". This lets a position expressed in `parts`' normalized
+// coordinate space be projected back onto the html's real, un-normalized
+// offsets, instead of assuming 1 normalized character == 1 raw character.
+//
+// That assumption used to be silent and unstated: the old implementation
+// walked `parts` directly against raw segment lengths. It happened to
+// round-trip correctly whenever a block had no whitespace worth
+// collapsing, which is why this went unnoticed for plain single-line
+// content -- but the instant a block's source had ANY indentation/newline
+// between inline elements (i.e. almost any real, pretty-printed document),
+// every mark position after that whitespace silently drifted by however
+// many raw characters got collapsed into the one normalized space, showing
+// red/green highlights over unrelated, unchanged text while the actually-
+// changed words went unmarked.
+interface NormalizedMap {
+  norm: string;
+  /** rawStart[k] / rawEnd[k]: the raw-text character range (into the
+   *  concatenation of the html's own text nodes) that norm[k] was built
+   *  from -- a single raw character for an ordinary character, or the
+   *  whole collapsed run for a normalized whitespace character. */
+  rawStart: number[];
+  rawEnd: number[];
+}
+
+function buildNormalizedMap(raw: string): NormalizedMap {
+  const norm: string[] = [];
+  const rawStart: number[] = [];
+  const rawEnd: number[] = [];
+  let i = 0;
+  const n = raw.length;
+
+  while (i < n) {
+    if (/\s/.test(raw[i])) {
+      const start = i;
+      while (i < n && /\s/.test(raw[i])) i++;
+      norm.push(' ');
+      rawStart.push(start);
+      rawEnd.push(i);
+    } else {
+      norm.push(raw[i]);
+      rawStart.push(i);
+      rawEnd.push(i + 1);
+      i++;
+    }
+  }
+
+  // Mirror normalizeText's trailing .trim() so `norm` exactly matches the
+  // normalizeText(...)'d block text that `parts` was actually built from --
+  // otherwise a leading/trailing collapsed-whitespace character here with
+  // no counterpart in `parts` would misalign every position after it.
+  let startIdx = 0;
+  let endIdx = norm.length;
+  while (startIdx < endIdx && norm[startIdx] === ' ') startIdx++;
+  while (endIdx > startIdx && norm[endIdx - 1] === ' ') endIdx--;
+
+  return {
+    norm: norm.slice(startIdx, endIdx).join(''),
+    rawStart: rawStart.slice(startIdx, endIdx),
+    rawEnd: rawEnd.slice(startIdx, endIdx),
+  };
+}
+
+/** Walks `parts` in normalized-text order, keeping only this side's own
+ *  characters (mirrors the belongsToSide filtering the projection/fullText
+ *  check below also uses), and converts each highlighted span's normalized
+ *  position into a raw offset range via `normMap`. Adjacent raw ranges
+ *  that touch are merged, same as the old single-pass version did. */
+function projectPartsToRawRanges(
+  parts: DiffPart[],
+  side: 'left' | 'right',
+  normMap: NormalizedMap,
+): Array<{ start: number; end: number }> {
+  const ranges: Array<{ start: number; end: number }> = [];
+  let cursor = 0;
+
+  for (const part of parts) {
+    const belongsToSide = side === 'left' ? !part.added : !part.removed;
+    if (!belongsToSide) continue;
+
+    const len = part.value.length;
+    if (len === 0) continue;
+
+    const isHighlight = side === 'left' ? part.removed : part.added;
+    const from = cursor;
+    const to = cursor + len - 1; // inclusive last normalized index
+    cursor += len;
+
+    if (isHighlight && from < normMap.rawStart.length) {
+      const start = normMap.rawStart[from];
+      const end = normMap.rawEnd[Math.min(to, normMap.rawEnd.length - 1)];
+      const last = ranges[ranges.length - 1];
+      if (last && last.end === start) {
+        last.end = end;
+      } else {
+        ranges.push({ start, end });
+      }
+    }
+  }
+
+  return ranges;
+}
+
 export function applyInlineMarksToHtml(
   html: string,
   parts: DiffPart[],
@@ -624,79 +747,55 @@ export function applyInlineMarksToHtml(
   const segments = scanHtmlSegments(html);
   const textSegments = segments.filter((s) => s.kind === 'text');
   const fullText = textSegments.map((s) => s.decoded || '').join('');
+  const normalizedMap = buildNormalizedMap(fullText);
 
   const projection = parts
     .filter((p) => side === 'left' ? !p.added : !p.removed)
     .map((p) => p.value)
     .join('');
 
-  if (normalizeText(projection) !== normalizeText(fullText)) {
+  // Exact equality, not a fuzzy normalizeText(...) comparison: `projection`
+  // and `normalizedMap.norm` are both already fully normalized, so a real
+  // match should be byte-for-byte identical. Requiring exact equality
+  // (rather than normalizing both sides again before comparing) keeps this
+  // a genuine sanity check on the mapping above instead of one that could
+  // itself paper over a drift.
+  if (projection !== normalizedMap.norm) {
     return html;
   }
 
+  const rawMarks = projectPartsToRawRanges(parts, side, normalizedMap);
+  if (rawMarks.length === 0) return html;
+
   const className = side === 'left' ? 'diff-inline-del' : 'diff-inline-add';
   let offset = 0;
-  const partIdx = { i: 0, charInPart: 0 };
+  let markIdx = 0;
 
   for (const seg of segments) {
     if (seg.kind !== 'text') continue;
+    const decoded = seg.decoded || '';
     const segStart = offset;
-    const segLen = (seg.decoded || '').length;
-    const segEnd = segStart + segLen;
+    const segEnd = segStart + decoded.length;
 
-    const marks: Array<{ start: number; end: number }> = [];
-    let pos = segStart;
-
-    while (pos < segEnd && partIdx.i < parts.length) {
-      const part = parts[partIdx.i];
-
-      // A part not belonging to this side (removed, when rendering the
-      // right side; added, when rendering the left) contributes NOTHING to
-      // this side's text -- it must be skipped over entirely, not treated
-      // as consuming characters from the segment. It previously fell
-      // through to the same span-consuming code below as every other part,
-      // silently shifting every mark position after it by that part's
-      // length (or, if the removed/added part was long enough, consuming
-      // the rest of the segment outright and leaving NO marks at all):
-      // e.g. diffing "...before continuing." -> "...before proceeding."
-      // correctly identified "continuing" as removed and "proceeding" as
-      // added, but rendering the right side walked past "continuing" as if
-      // those characters existed in the right html too, desyncing every
-      // position after it.
-      const belongsToSide = side === 'left' ? !part.added : !part.removed;
-      if (!belongsToSide) {
-        partIdx.i++;
-        partIdx.charInPart = 0;
-        continue;
-      }
-
-      const isHighlight = side === 'left' ? part.removed : part.added;
-      const partLen = part.value.length;
-      const remainingInPart = partLen - partIdx.charInPart;
-      const remainingInSeg = segEnd - pos;
-      const span = Math.min(remainingInPart, remainingInSeg);
-
-      if (isHighlight) {
-        if (marks.length > 0 && marks[marks.length - 1].end === pos) {
-          marks[marks.length - 1].end = pos + span;
-        } else {
-          marks.push({ start: pos, end: pos + span });
-        }
-      }
-
-      pos += span;
-      partIdx.charInPart += span;
-      if (partIdx.charInPart >= partLen) {
-        partIdx.i++;
-        partIdx.charInPart = 0;
-      }
+    const marksInSeg: Array<{ start: number; end: number }> = [];
+    // A mark's raw range can span a segment boundary (e.g. two adjacent
+    // text nodes separated by an empty tag, whose trailing/leading
+    // whitespace collapsed into one normalized space) -- only advance past
+    // a mark once its full range has been consumed, so its remainder is
+    // picked up by the next text segment instead of being dropped.
+    while (markIdx < rawMarks.length && rawMarks[markIdx].start < segEnd) {
+      const m = rawMarks[markIdx];
+      const start = Math.max(m.start, segStart);
+      const end = Math.min(m.end, segEnd);
+      if (end > start) marksInSeg.push({ start, end });
+      if (m.end <= segEnd) markIdx++;
+      else break;
     }
 
-    if (marks.length > 0) {
-      const decoded = seg.decoded!;
+    if (marksInSeg.length > 0) {
       let newRaw = '';
       let cursor = 0;
-      for (const mark of marks) {
+      for (const mark of marksInSeg) {
         const mStart = mark.start - segStart;
         const mEnd = mark.end - segStart;
         newRaw += decoded.slice(cursor, mStart);
