@@ -330,7 +330,7 @@ img[data-load-error] { cursor: default; }
    figures in Oxygen. figure has no left/right margin of its own, so this
    naturally follows whatever indent its containing block already has. */
 figure { margin: 1.5rem 0; text-align: left; }
-figcaption { font-style: italic; margin-top: 0.5rem; font-size: 0.95em; text-align: left; }
+figcaption { font-style: italic; margin-top: 0.2rem; font-size: 0.95em; text-align: left; }
 
 /* Code blocks */
 pre.codeblock, pre.preformatted {
