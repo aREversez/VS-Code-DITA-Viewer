@@ -33,6 +33,28 @@ function escapeAttr(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// CALS colwidth proportional notation: "N*" (e.g. "3*"), a bare "*" (= 1*),
+// or "N.*"/"N.5*" with a decimal. A trailing dot with nothing after it
+// ("3.*") is strictly malformed CALS, but Oxygen (and most DITA-OT
+// transforms) tolerate it and just treat it as "3*" -- so this parses it
+// the same way rather than silently falling through to "no colwidth", which
+// used to make every column of a table with even ONE such colspec collapse
+// to unweighted 'auto' sizing.
+function parseColwidthStar(w: string): number | undefined {
+  const m = w.match(/^(\d+(?:\.\d*)?)?\*$/);
+  if (!m) return undefined;
+  return m[1] ? parseFloat(m[1]) : 1;
+}
+
+// Maps a CALS/DITA @align value to its direct CSS text-align equivalent.
+// "char" (align relative to a specific character, e.g. lining up decimal
+// points) has no simple CSS equivalent and is intentionally left
+// unhandled -- falls back to whatever alignment the column/browser would
+// otherwise use, rather than guessing at a character-alignment approximation.
+function mapCalsAlign(value: string | undefined): string | undefined {
+  return value === 'left' || value === 'right' || value === 'center' || value === 'justify' ? value : undefined;
+}
+
 // Recursively flattens an element's descendants to plain text, dropping all
 // markup. Used for attribute-value contexts (alt/title) where HTML tags
 // would just show up as literal escaped text if renderChildren() were used
@@ -413,11 +435,54 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
       }
     });
 
+    // Table-wide default alignment (CALS @align on <tgroup>), overridden
+    // per-column by @align on that column's own <colspec>. Resolved once,
+    // up front, into an array indexed by colnum - 1, and applied per-cell
+    // below (an entry's own @align, when present, wins over this — see the
+    // cursor-tracking pass right below). NOTE: CSS explicitly restricts
+    // <col>/<colgroup> to only 'width', 'border', 'background' and
+    // 'visibility' — a <col style="text-align:...">, which an earlier
+    // version of this fix tried, is simply ignored by every browser, so
+    // this has to be threaded onto each individual <td>/<th> instead.
+    const tgroupAlign = mapCalsAlign(getAttr(node, 'align'));
+    const colAlignByIndex: (string | undefined)[] = colspecs.map(
+      (cs) => mapCalsAlign(cs.attributes?.align) || tgroupAlign,
+    );
+
     // Pre-process entries: add colspan/rowspan attributes derived from
     // CALS namest/nameend and morerows so the entry renderer can emit
-    // them as standard HTML attributes.
+    // them as standard HTML attributes, and (when the entry has no @align
+    // of its own) fill in the alignment its column resolves to above, so
+    // the 'topic/entry' renderer's "own @align wins" check picks it up as
+    // if the source had declared it explicitly. Column position is
+    // tracked per row via a left-to-right cursor that advances by each
+    // entry's colspan -- this doesn't account for columns already
+    // occupied by an earlier row's @morerows/rowspan (CALS technically
+    // requires a full row/column occupancy grid for that), matching the
+    // same scope the existing colspan derivation below already had.
     function addSpans(el: DitaNode): DitaNode {
       if (el.type !== 'element') return el;
+
+      if (el.baseType === 'topic/row') {
+        let cursor = 1;
+        const children = (el.children || []).map((child) => {
+          const processed = addSpans(child);
+          if (processed.type !== 'element' || processed.baseType !== 'topic/entry') {
+            return processed;
+          }
+          const attrs = { ...processed.attributes };
+          const colStart = attrs.namest && colMap.has(attrs.namest) ? colMap.get(attrs.namest)! : cursor;
+          const span = attrs.colspan ? parseInt(attrs.colspan, 10) : 1;
+          if (!attrs.align) {
+            const resolved = colAlignByIndex[colStart - 1];
+            if (resolved) attrs.align = resolved;
+          }
+          cursor = colStart + (isNaN(span) || span < 1 ? 1 : span);
+          return { ...processed, attributes: attrs };
+        });
+        return { ...el, children };
+      }
+
       const processedChildren = (el.children || []).map(addSpans);
       if (el.baseType === 'topic/entry') {
         const attrs = { ...el.attributes };
@@ -440,9 +505,13 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
     const processedNode = addSpans(node);
 
-    // Generate <colgroup> with column widths
+    // Generate <colgroup> with column widths.
     // CALS colwidth can be: "5*" or "1.5*" (proportional), "*" (= 1*),
-    // "50px", "30%", "2in", or a bare number (treated as pixels).
+    // "50px", "30%", "2in", or a bare number (treated as pixels). Column
+    // alignment is handled per-cell above (in addSpans), not here -- CSS
+    // restricts <col> to only 'width', 'border', 'background', and
+    // 'visibility', so a <col style="text-align:...">, tried in an earlier
+    // version of this fix, is simply ignored by every browser.
     let colgroup = '';
     if (colspecs.length > 0) {
       // Calculate total proportional parts for "*" notation
@@ -450,12 +519,10 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
       let hasStars = false;
       for (const cs of colspecs) {
         const w = cs.attributes?.colwidth;
-        if (w) {
-          const m = w.match(/^(\d+(?:\.\d+)?)?\*$/);
-          if (m) {
-            hasStars = true;
-            totalStars += m[1] ? parseFloat(m[1]) : 1;
-          }
+        const stars = w ? parseColwidthStar(w) : undefined;
+        if (stars !== undefined) {
+          hasStars = true;
+          totalStars += stars;
         }
       }
       const cols = colspecs
@@ -463,11 +530,9 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
           const w = cs.attributes?.colwidth;
           if (!w) return '<col>';
           // Convert CALS proportional notation (N*) to percentage
-          const starMatch = w.match(/^(\d+(?:\.\d+)?)?\*$/);
-          if (starMatch && hasStars && totalStars > 0) {
-            const parts = starMatch[1] ? parseFloat(starMatch[1]) : 1;
-            const pct = (parts / totalStars) * 100;
-            return `<col style="width: ${pct.toFixed(2)}%">`;
+          const stars = parseColwidthStar(w);
+          if (stars !== undefined && hasStars && totalStars > 0) {
+            return `<col style="width: ${((stars / totalStars) * 100).toFixed(2)}%">`;
           }
           // Bare number → treat as pixels
           if (/^\d+(?:\.\d+)?$/.test(w)) {
@@ -501,7 +566,11 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     const tag = isInTableHeader(ctx) ? 'th' : 'td';
     const colspan = getAttr(node, 'colspan');
     const rowspan = getAttr(node, 'rowspan');
-    const attrs = `${safeAttr('colspan', colspan)}${safeAttr('rowspan', rowspan)}`;
+    // Overrides the column's own alignment (set via <colspec>/<tgroup>
+    // @align, see 'topic/tgroup' above) for just this cell, same as CALS
+    // precedence: entry > colspec > tgroup.
+    const align = mapCalsAlign(getAttr(node, 'align'));
+    const attrs = `${safeAttr('colspan', colspan)}${safeAttr('rowspan', rowspan)}${align ? ` style="text-align: ${align}"` : ''}`;
     return `<${tag}${attrs}>${renderChildren(node, ctx)}</${tag}>`;
   },
 

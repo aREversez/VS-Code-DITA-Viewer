@@ -5,8 +5,8 @@
   --diff-add-border: #2ea043;
   --diff-del-bg: rgba(248, 81, 73, 0.12);
   --diff-del-border: #f85149;
-  --diff-mod-bg: rgba(210, 153, 34, 0.12);
-  --diff-mod-border: #d29922;
+  --diff-mod-bg: rgba(130, 80, 223, 0.10);
+  --diff-mod-border: #8250df;
   --diff-empty-bg: repeating-linear-gradient(
     45deg,
     transparent 0 6px,
@@ -22,8 +22,8 @@
   --diff-add-border: #3fb950;
   --diff-del-bg: rgba(248, 81, 73, 0.18);
   --diff-del-border: #f85149;
-  --diff-mod-bg: rgba(210, 153, 34, 0.18);
-  --diff-mod-border: #d29922;
+  --diff-mod-bg: rgba(163, 113, 247, 0.18);
+  --diff-mod-border: #a371f7;
   --diff-empty-bg: repeating-linear-gradient(
     45deg,
     transparent 0 6px,

@@ -232,6 +232,77 @@ describe('renderer', () => {
     assert.ok(!html.includes('cals-table--fixed-layout'), `expected no fixed-layout class, got: ${html}`);
   });
 
+  it('treats a colwidth with a stray trailing dot before the star ("3.*") the same as "3*" (regression: Oxygen and most DITA-OT transforms tolerate this malformed-but-common CALS notation, but the colwidth regex required digits after any decimal point, so "3.*" silently matched neither the proportional-width branch nor the bare-pixel branch and fell through to an unweighted <col> with no width at all)', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/table', [
+        makeEl('topic/tgroup', [
+          makeEl('topic/colspec', [], { colname: 'c1', colwidth: '3.*' }),
+          makeEl('topic/colspec', [], { colname: 'c2', colwidth: '1*' }),
+          makeEl('topic/tbody', [
+            makeEl('topic/row', [
+              makeEl('topic/entry', [makeText('A')]),
+              makeEl('topic/entry', [makeText('B')]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('width: 75.00%'), `expected "3.*" to count as 3 parts out of 4, got: ${html}`);
+    assert.ok(html.includes('width: 25.00%'), `expected "1*" to count as 1 part out of 4, got: ${html}`);
+  });
+
+  it('applies tgroup @align as the default column alignment, colspec @align to override it per column, and entry @align to override that per cell (regression: CALS table alignment was parsed nowhere in the renderer, so align="center" on tgroup/colspec/entry was silently dropped and every cell rendered left-aligned; alignment is threaded onto each td/th\'s own style rather than the <col>, since CSS only lets width/border/background/visibility apply to <col>/<colgroup> -- a <col style="text-align:...">, which an earlier version of this fix tried, is silently ignored by every browser)', () => {
+    const doc = makeEl(
+      'topic/topic',
+      [
+        makeEl('topic/table', [
+          makeEl(
+            'topic/tgroup',
+            [
+              makeEl('topic/colspec', [], { colname: 'c1' }),
+              makeEl('topic/colspec', [], { colname: 'c2', align: 'right' }),
+              makeEl('topic/tbody', [
+                makeEl('topic/row', [
+                  makeEl('topic/entry', [makeText('A')]),
+                  makeEl('topic/entry', [makeText('B')]),
+                ]),
+                makeEl('topic/row', [
+                  makeEl('topic/entry', [makeText('C')], { align: 'left' }),
+                  makeEl('topic/entry', [makeText('D')]),
+                ]),
+              ]),
+            ],
+            { align: 'center' },
+          ),
+        ]),
+      ],
+    );
+    const html = renderDocument(doc, defaultCtx);
+    // Entry A has no @align of its own and sits in column 1, which has no
+    // colspec @align either, so it should inherit the tgroup's centered default.
+    assert.ok(
+      html.includes('style="text-align: center">A'),
+      `expected entry A to inherit tgroup's centered default, got: ${html}`,
+    );
+    // Entry B sits in column 2, whose own colspec @align="right" should
+    // win over the tgroup's centered default.
+    assert.ok(
+      html.includes('style="text-align: right">B'),
+      `expected entry B to use its column's own align over the tgroup default, got: ${html}`,
+    );
+    // Entry C's own @align="left" should win over its column's centered default.
+    assert.ok(
+      html.includes('style="text-align: left">C'),
+      `expected entry C's own align to override its column's default, got: ${html}`,
+    );
+    // Entry D: same column as B (right-aligned), no @align of its own.
+    assert.ok(
+      html.includes('style="text-align: right">D'),
+      `expected entry D to also use column 2's right alignment, got: ${html}`,
+    );
+  });
+
   it('should render simple table header stentry as th and row stentry as td', () => {
     const doc = makeEl('topic/topic', [
       makeEl('topic/simpletable', [
