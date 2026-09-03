@@ -526,6 +526,11 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     let height = getAttr(node, 'height');
     const scale = getAttr(node, 'scale');
     const scalefit = getAttr(node, 'scalefit');
+    // Captured before the natural-dimensions fallback below overwrites
+    // width/height for aspect-ratio reservation, so the @scale gate further
+    // down can still tell "the author actually gave a size" apart from "we
+    // filled one in ourselves" — see the bug this fixes at that gate.
+    const hadAuthorSize = !!(width || height);
 
     // Author-specified @width/@height on the <image> element always wins;
     // only fall back to the file's own natural dimensions (read from disk,
@@ -535,9 +540,11 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     // own img{height:auto} means a bare width/height attribute doesn't
     // force a fixed pixel size, it just informs the aspect ratio while
     // max-width:100% still scales the box down responsively as usual).
+    let naturalDimensions: { width: number; height: number } | undefined;
     if (!width && !height && href && ctx.getImageDimensions) {
       const natural = ctx.getImageDimensions(href);
       if (natural) {
+        naturalDimensions = natural;
         width = String(natural.width);
         height = String(natural.height);
       }
@@ -569,11 +576,21 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     // every image (img{max-width:100%}); so scalefit=yes just needs to
     // suppress scale/width/height rather than actively doing anything.
     let scaleStyle: string | undefined;
-    if (scalefit !== 'yes' && scale && !width && !height) {
+    if (scalefit !== 'yes' && scale && !hadAuthorSize) {
       const pct = parseFloat(scale);
       if (!isNaN(pct) && pct > 0) {
         scaleStyle = `--dita-scale:${pct / 100}`;
       }
+    } else if (scalefit !== 'yes' && !scale && !hadAuthorSize && naturalDimensions) {
+      // Preview-default downscale: full natural size reads as oversized in
+      // the preview pane, and a portrait screenshot eats far more vertical
+      // scroll space than a landscape one at the same on-screen width, so
+      // portrait images get a steeper default reduction. Only fires when
+      // the DITA source gave no @scale/@width/@height of its own — this is
+      // a preview convenience default, never a second-guess of authored
+      // sizing.
+      const isPortrait = naturalDimensions.height > naturalDimensions.width;
+      scaleStyle = `--dita-scale:${isPortrait ? 0.5 : 0.75}`;
     }
 
     const altAttr = alt !== undefined ? safeAttr('alt', alt) : '';

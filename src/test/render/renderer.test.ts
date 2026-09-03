@@ -1464,6 +1464,92 @@ describe('renderer', () => {
     assert.ok(!html.includes('height='));
   });
 
+  // Regression: the natural-dimensions fallback above fills in width/height
+  // for aspect-ratio reservation even when no @width/@height was authored,
+  // and the @scale gate used to check "!width && !height" -- which was
+  // always false once that fallback ran, so @scale silently stopped
+  // applying for any image whose file dimensions were readable at all.
+  it('should still apply @scale when getImageDimensions also supplies natural dimensions', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      getImageDimensions: () => ({ width: 300, height: 200 }),
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [], { href: 'pic.png', scale: '70' }),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('style="--dita-scale:0.7"'), '@scale must not be masked by the width/height fallback');
+  });
+
+  it('should apply a default 75% preview scale to a landscape image with no @scale/@width/@height', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      getImageDimensions: () => ({ width: 400, height: 200 }),
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [], { href: 'pic.png' }),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('style="--dita-scale:0.75"'));
+  });
+
+  it('should apply a default 50% preview scale to a portrait image with no @scale/@width/@height', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      getImageDimensions: () => ({ width: 200, height: 400 }),
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [], { href: 'pic.png' }),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('style="--dita-scale:0.5"'));
+  });
+
+  it('should treat a square image as landscape (75%) for the default preview scale', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      getImageDimensions: () => ({ width: 300, height: 300 }),
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [], { href: 'pic.png' }),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('style="--dita-scale:0.75"'));
+  });
+
+  it('should not apply the default preview scale when @scale is explicit', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      getImageDimensions: () => ({ width: 200, height: 400 }),
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [], { href: 'pic.png', scale: '70' }),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('--dita-scale:0.7'));
+    assert.ok(!html.includes('--dita-scale:0.5'));
+  });
+
+  it('should not apply the default preview scale when an explicit @width/@height is given', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      getImageDimensions: () => ({ width: 200, height: 400 }),
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [], { href: 'pic.png', width: '150', height: '300' }),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(!html.includes('--dita-scale'));
+  });
+
+  it('should not apply the default preview scale when natural dimensions cannot be read', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [], { href: 'pic.png' }),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('--dita-scale'));
+  });
+
   // ── Prolog suppression tests ──
 
   it('should not render prolog metadata content in the body', () => {
