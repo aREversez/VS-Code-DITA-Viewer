@@ -40,6 +40,16 @@ import { getActiveDitaUri } from './exportHtml';
 
 const DIFF_PANELS = new Map<string, vscode.WebviewPanel>();
 
+// Holds whatever the panel should currently render. A single message
+// listener (registered once per panel, in getOrCreateDiffPanel) reads
+// from this on every 'swapSides' message, instead of each render call
+// registering its own listener closed over that call's own `result` --
+// re-comparing the same file re-uses the existing panel (see
+// getOrCreateDiffPanel), and a naive listener-per-render-call would leave
+// old listeners (closed over stale results) stacking up alongside the
+// new one, firing the swap handler multiple times per click.
+const DIFF_STATE = new WeakMap<vscode.WebviewPanel, { result: TopicDiffResult; leftLabel: string; rightLabel: string }>();
+
 export function registerCompareCommand(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('ditaViewer.compareWithGit', async () => {
@@ -150,12 +160,14 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
       // arrangeByRecency for why pick order alone isn't reliable here.
       const { left: finalLeft, right: finalRight } = arrangeByRecency(leftResult, rightResult);
 
+      const panel = getOrCreateDiffPanel(context, uri, finalLeft.label, finalRight.label);
+
       await vscode.window.withProgress(
         { location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('Computing differences…') },
         async () => {
           try {
-            const result = computeDiff(finalLeft.xml, finalRight.xml, docDir, uri);
-            openDiffPanel(context, uri, result, finalLeft.label, finalRight.label);
+            const result = computeDiff(finalLeft.xml, finalRight.xml, docDir, uri, panel.webview);
+            renderDiffPanel(context, panel, result, finalLeft.label, finalRight.label);
           } catch (err) {
             // Defense-in-depth, not a substitute for fixing known failure
             // causes at their source: computeDiff/openDiffPanel are pure
@@ -195,6 +207,7 @@ function computeDiff(
   rightXml: string,
   docDir: string,
   docUri: vscode.Uri,
+  webview: vscode.Webview,
 ): TopicDiffResult {
   const keyMap = buildKeyMap(docUri);
 
@@ -214,9 +227,19 @@ function computeDiff(
 
     const ctx: RenderContext = {
       headingLevel: 1,
+      // The single-topic preview (DitaViewerProvider.ts) has always used
+      // the real webview.asWebviewUri() -- the only URI scheme a webview's
+      // CSP + localResourceRoots will actually let an <img> load from.
+      // This diff panel used a hand-rolled 'vscode-resource:' + path
+      // string instead, a scheme VS Code stopped supporting years ago;
+      // every image in the diff view failed to load, silently (broken
+      // image icon, no console error surfaced to the user). Fixed by
+      // reusing the real webview instance, which callers can now provide
+      // because the panel is created before computeDiff runs instead of
+      // after -- see getOrCreateDiffPanel.
       asWebviewUri: (relPath: string) => {
         try {
-          return 'vscode-resource:' + resolve(sideDocDir, decodeHrefPart(relPath));
+          return webview.asWebviewUri(vscode.Uri.file(resolve(sideDocDir, decodeHrefPart(relPath)))).toString();
         } catch {
           return relPath;
         }
@@ -248,20 +271,20 @@ function computeDiff(
   });
 }
 
-function openDiffPanel(
+// Split out of openDiffPanel: the panel now needs to exist (so its real
+// webview.asWebviewUri is available to computeDiff -- see above) BEFORE
+// the diff itself is computed, not after.
+function getOrCreateDiffPanel(
   context: vscode.ExtensionContext,
   uri: vscode.Uri,
-  result: TopicDiffResult,
   leftLabel: string,
   rightLabel: string,
-): void {
+): vscode.WebviewPanel {
   const key = uri.toString();
   const existing = DIFF_PANELS.get(key);
-
   if (existing) {
     existing.reveal();
-    existing.webview.html = buildDiffHtml(context, existing.webview, result, leftLabel, rightLabel);
-    return;
+    return existing;
   }
 
   const fileName = basename(uri.fsPath);
@@ -281,17 +304,35 @@ function openDiffPanel(
   );
 
   DIFF_PANELS.set(key, panel);
-  panel.onDidDispose(() => DIFF_PANELS.delete(key));
-
-  panel.webview.html = buildDiffHtml(context, panel.webview, result, leftLabel, rightLabel);
+  panel.onDidDispose(() => {
+    DIFF_PANELS.delete(key);
+    DIFF_STATE.delete(panel);
+  });
 
   panel.webview.onDidReceiveMessage((msg) => {
     if (msg.type === 'swapSides') {
-      const swapped = swapAlignedRows(result.rows);
-      const swappedResult = { ...result, rows: swapped };
-      panel.webview.html = buildDiffHtml(context, panel.webview, swappedResult, rightLabel, leftLabel);
+      const state = DIFF_STATE.get(panel);
+      if (!state) return;
+      const swapped = swapAlignedRows(state.result.rows);
+      const swappedResult = { ...state.result, rows: swapped };
+      const swappedLabels = { leftLabel: state.rightLabel, rightLabel: state.leftLabel };
+      DIFF_STATE.set(panel, { result: swappedResult, ...swappedLabels });
+      panel.webview.html = buildDiffHtml(context, panel.webview, swappedResult, swappedLabels.leftLabel, swappedLabels.rightLabel);
     }
   });
+
+  return panel;
+}
+
+function renderDiffPanel(
+  context: vscode.ExtensionContext,
+  panel: vscode.WebviewPanel,
+  result: TopicDiffResult,
+  leftLabel: string,
+  rightLabel: string,
+): void {
+  DIFF_STATE.set(panel, { result, leftLabel, rightLabel });
+  panel.webview.html = buildDiffHtml(context, panel.webview, result, leftLabel, rightLabel);
 }
 
 function buildDiffHtml(
