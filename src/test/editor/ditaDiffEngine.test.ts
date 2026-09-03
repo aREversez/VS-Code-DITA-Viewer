@@ -187,6 +187,50 @@ describe('ditaDiffEngine', () => {
       );
     });
 
+    it('classifies a lightly-edited Chinese paragraph as "modified" with word-level highlighting, not a full delete+insert (regression: the similarity check used to decide "modified" vs "delete+insert" tokenized by splitting on ASCII whitespace, which treats an entire Chinese sentence -- no whitespace between characters -- as a single token; any two non-identical Chinese sentences therefore always scored 0% similarity and were always treated as a full delete+insert, with no word-level highlighting, even for a one-character edit)', () => {
+      const left = `<?xml version="1.0"?><topic id="t" xml:lang="zh-CN"><title>T</title><body><p>请先保存工作，然后再继续执行下一步操作。</p></body></topic>`;
+      const right = `<?xml version="1.0"?><topic id="t" xml:lang="zh-CN"><title>T</title><body><p>请先保存工作，然后再执行下一步骤操作。</p></body></topic>`;
+
+      const result = runDiff(left, right);
+      const pRow = result.rows.find((r) => (r.left || r.right)?.baseType === 'topic/p');
+      assert.ok(pRow, 'expected a <p> row');
+      assert.strictEqual(
+        pRow!.changeType,
+        'modified',
+        `expected a "modified" row with word-level highlighting for a two-character edit, not a full delete+insert; got: ${pRow!.changeType}`,
+      );
+      assert.ok(pRow!.inlineDiff, 'expected inline diff parts for the modified row');
+    });
+
+    it('recurses into a changed full CALS <table> down to the actual changed <entry>, leaving unrelated rows and cells unchanged (regression: only simpletable was in the diffable-container list; a full DITA <table><tgroup><tbody><row><entry> -- the common case in real documents -- was always compared as one opaque block, so any single-cell edit marked the entire table "modified")', () => {
+      const mkTopic = (cell: string) => `<?xml version="1.0"?><topic id="t"><title>T</title><body><table><tgroup cols="2"><tbody>
+        <row><entry>Row1Col1</entry><entry>Row1Col2</entry></row>
+        <row><entry>Row2Col1</entry><entry>${cell}</entry></row>
+        <row><entry>Row3Col1</entry><entry>Row3Col2</entry></row>
+      </tbody></tgroup></table></body></topic>`;
+
+      const result = runDiff(mkTopic('Old value here'), mkTopic('New value here'));
+      const tableRow = result.rows.find((r) => (r.left || r.right)?.baseType === 'topic/table');
+      assert.ok(tableRow, 'expected a table row');
+      assert.strictEqual(tableRow!.changeType, 'modified');
+
+      // Walk down through tgroup -> tbody -> row to the single changed entry.
+      let node = tableRow;
+      const path: string[] = [];
+      while (node?.children) {
+        const changed = node.children.find((r) => r.changeType !== 'unchanged');
+        assert.ok(changed, `expected exactly one changed child at depth ${path.length}, found none among: ${JSON.stringify(node.children.map((r) => r.changeType))}`);
+        const unchangedCount = node.children.filter((r) => r.changeType === 'unchanged').length;
+        if (path.length === 2) {
+          // At the row level: 2 of 3 rows should be unchanged.
+          assert.strictEqual(unchangedCount, 2, `expected 2 unchanged rows, got ${unchangedCount}`);
+        }
+        path.push((changed!.left || changed!.right)!.baseType!);
+        node = changed;
+      }
+      assert.deepStrictEqual(path, ['topic/tgroup', 'topic/tbody', 'topic/row', 'topic/entry']);
+    });
+
     it('recurses into a changed <parml> to show only the actually-changed <plentry> as modified, leaving unrelated entries unchanged (regression: only topic/section and topic/example recursed, so any other change inside a large parml/list marked the WHOLE container "modified")', () => {
       const left = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
         <section><title>Sec</title>

@@ -87,6 +87,11 @@ const DIFFABLE_CONTAINER_TYPES = new Set([
   'topic/ol',
   'topic/sl',
   'topic/simpletable',
+  'topic/table',
+  'topic/tgroup',
+  'topic/thead',
+  'topic/tbody',
+  'topic/row',
 ]);
 
 function isDiffableContainer(b: RenderedBlock): boolean {
@@ -337,8 +342,21 @@ function idOnlyAlign<T>(
 
 // ── Similarity ──
 
+// Similarity scoring reuses tokenizeForDiff's proper CJK/word/punctuation
+// segmentation, not a naive whitespace split. Chinese (and other
+// no-whitespace-between-words text) has essentially zero ASCII whitespace,
+// so `s.split(/\s+/)` treated an ENTIRE Chinese sentence as a single
+// indivisible "word" -- any two non-identical Chinese sentences (even a
+// one-character edit) shared zero tokens, scored similarity 0, and were
+// always classified as a full delete + a full insert instead of one
+// "modified" row with word-level highlighting. Worse, since this same
+// function decides whether a changed container's children are even
+// examined (pairAdjacentChanges only recurses into 'modified' pairs), it
+// silently defeated the container-recursion fix for any mostly-Chinese
+// section/parml/list too -- the pair never got classified 'modified' in
+// the first place, so recursion into it never even ran.
 function tokenize(s: string): string[] {
-  return s.split(/\s+/).filter(Boolean);
+  return tokenizeForDiff(s).filter((t) => !/^\s+$/.test(t));
 }
 
 function diceSimilarity(a: string, b: string): number {
