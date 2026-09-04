@@ -68,10 +68,6 @@ function getWebviewScript(): string {
     imgZoomOutTitle: JSON.stringify(vscode.l10n.t('Zoom out this image (preview only)')),
     imgZoomInTitle: JSON.stringify(vscode.l10n.t('Zoom in this image (preview only)')),
     imgMaximizeTitle: JSON.stringify(vscode.l10n.t('View full-screen (use ←/→ to switch images)')),
-    imgCopyTitle: JSON.stringify(vscode.l10n.t('Copy image')),
-    imgCopyDoneTitle: JSON.stringify(vscode.l10n.t('Copied to clipboard')),
-    imgCopyFailedTitle: JSON.stringify(vscode.l10n.t('Copy failed')),
-    imgCopyUnsupportedTitle: JSON.stringify(vscode.l10n.t('Copying images is not supported here')),
     profilingLabel: JSON.stringify(vscode.l10n.t('Flags')),
     profilingOnTitle: JSON.stringify(vscode.l10n.t('Profiling attributes (props/otherprops/audience/...) are highlighted. Click to hide the highlighting.')),
     profilingOffTitle: JSON.stringify(vscode.l10n.t('Profiling attribute highlighting is hidden. Click to show which content is flagged and with what.')),
@@ -434,68 +430,9 @@ function getWebviewScript(): string {
       // here is just future-proofing against any other ancestor click
       // handler, not strictly required by the current listener.
       e.stopPropagation();
-      onClick(btn);
+      onClick();
     });
     return btn;
-  }
-
-  // Briefly swaps a toolbar button's glyph/tooltip to report an outcome
-  // (success or failure), then restores its original state -- feedback for
-  // an action (clipboard write) that has no other visible effect on the
-  // page itself, so silently doing nothing on failure would look identical
-  // to silently succeeding.
-  function flashImgBtn(btn, ok, title) {
-    var origGlyph = btn.textContent;
-    var origTitle = btn.getAttribute('aria-label') || btn.title;
-    btn.textContent = ok ? '\u2713' : '\u2715';
-    btn.title = title;
-    btn.setAttribute('aria-label', title);
-    setTimeout(function() {
-      btn.textContent = origGlyph;
-      btn.title = origTitle;
-      btn.setAttribute('aria-label', origTitle);
-    }, 1400);
-  }
-
-  // Copies the rendered image to the system clipboard. Chromium's Async
-  // Clipboard API only reliably accepts image/png for image writes, so
-  // anything else (jpg/gif/webp/svg/bmp) is decoded and re-encoded to PNG
-  // first. Decoding goes through createImageBitmap() on the bytes fetched
-  // directly from img.src -- NOT by drawing the existing <img> element onto
-  // a canvas -- because a canvas fed from a cross-origin-flagged <img> (the
-  // webview-resource: scheme this project's images load through) can come
-  // back "tainted", throwing on toBlob/getImageData; a canvas built from
-  // bytes the page fetched itself isn't subject to that.
-  function copyImageToClipboard(img, btn) {
-    if (!window.ClipboardItem || !navigator.clipboard || !navigator.clipboard.write) {
-      flashImgBtn(btn, false, ${L.imgCopyUnsupportedTitle});
-      return;
-    }
-    fetch(img.currentSrc || img.src)
-      .then(function(resp) { return resp.blob(); })
-      .then(function(sourceBlob) {
-        if (sourceBlob.type === 'image/png') return sourceBlob;
-        return createImageBitmap(sourceBlob).then(function(bitmap) {
-          var canvas = document.createElement('canvas');
-          canvas.width = bitmap.width;
-          canvas.height = bitmap.height;
-          canvas.getContext('2d').drawImage(bitmap, 0, 0);
-          return new Promise(function(resolve, reject) {
-            canvas.toBlob(function(pngBlob) {
-              if (pngBlob) resolve(pngBlob); else reject(new Error('toBlob failed'));
-            }, 'image/png');
-          });
-        });
-      })
-      .then(function(pngBlob) {
-        return navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
-      })
-      .then(function() {
-        flashImgBtn(btn, true, ${L.imgCopyDoneTitle});
-      })
-      .catch(function() {
-        flashImgBtn(btn, false, ${L.imgCopyFailedTitle});
-      });
   }
 
   // Wraps each <img data-dita-src> in a positioning container with its own
@@ -557,9 +494,6 @@ function getWebviewScript(): string {
     }));
     tb.appendChild(makeImgToolbarBtn('\u2922', ${L.imgMaximizeTitle}, function() {
       openLightbox(img);
-    }));
-    tb.appendChild(makeImgToolbarBtn('\u{1F4CB}', ${L.imgCopyTitle}, function(btn) {
-      copyImageToClipboard(img, btn);
     }));
     wrap.appendChild(tb);
   }
@@ -1323,7 +1257,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src ${webview.cspSource} data:; base-uri 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; base-uri 'none';">
 <link rel="stylesheet" href="${stylesUri}">
 ${defaultContent ? `<style>\n${defaultContent}\n</style>` : ''}
 <title>${escapeHtml(document.fileName)}</title>
