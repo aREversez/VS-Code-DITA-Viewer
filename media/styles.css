@@ -323,6 +323,46 @@ img[data-load-error] { cursor: default; }
 }
 .dita-img-btn:hover { opacity: 0.85; }
 
+/* Custom right-click "Copy Image" menu (see contextmenu handling in the
+   webview script) -- styled to read as a native-ish context menu using
+   VS Code's own menu theme tokens, since a real OS context menu isn't
+   available consistently across every host this extension runs in. */
+.dita-img-ctxmenu {
+  position: fixed; z-index: 100000;
+  background: var(--vscode-menu-background, var(--vscode-editor-background, #1e1e1e));
+  border: 1px solid var(--vscode-menu-border, var(--vscode-widget-border, #454545));
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  padding: 2px;
+  min-width: 140px;
+}
+.dita-img-ctxmenu-item {
+  display: block; width: 100%; text-align: left;
+  padding: 4px 10px; border: none; border-radius: 3px;
+  font-size: 13px; cursor: pointer;
+  background: transparent;
+  color: var(--vscode-menu-foreground, var(--vscode-editor-foreground, #ccc));
+}
+.dita-img-ctxmenu-item:hover,
+.dita-img-ctxmenu-item:focus {
+  background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground, #2a2d2e));
+  color: var(--vscode-menu-selectionForeground, var(--vscode-menu-foreground, #ccc));
+  outline: none;
+}
+.dita-img-ctxmenu-item:disabled { cursor: default; opacity: 0.7; }
+
+/* Transient feedback pill for the lightbox's Ctrl+C copy path, which has
+   no menu item of its own to update the way the right-click menu does. */
+.dita-img-toast {
+  position: fixed; left: 50%; bottom: 48px; transform: translateX(-50%);
+  z-index: 100001;
+  background: var(--vscode-notifications-background, var(--vscode-editor-background, #1e1e1e));
+  border: 1px solid var(--vscode-notifications-border, var(--vscode-widget-border, #454545));
+  color: var(--vscode-notifications-foreground, var(--vscode-editor-foreground, #ccc));
+  padding: 6px 14px; border-radius: 4px; font-size: 13px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
 /* Figures */
 /* Left-aligned rather than centered: a fig's image should sit flush with
    the surrounding body text's left edge (and, inside a list item, with the

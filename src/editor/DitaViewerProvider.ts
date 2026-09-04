@@ -68,6 +68,12 @@ function getWebviewScript(): string {
     imgZoomOutTitle: JSON.stringify(vscode.l10n.t('Zoom out this image (preview only)')),
     imgZoomInTitle: JSON.stringify(vscode.l10n.t('Zoom in this image (preview only)')),
     imgMaximizeTitle: JSON.stringify(vscode.l10n.t('View full-screen (use ←/→ to switch images)')),
+    imgCopyMenuItem: JSON.stringify(vscode.l10n.t('Copy Image')),
+    imgCopyDoneLabel: JSON.stringify(vscode.l10n.t('Copied!')),
+    imgCopyFailedLabel: JSON.stringify(vscode.l10n.t('Copy failed')),
+    imgCopyUnsupportedLabel: JSON.stringify(vscode.l10n.t('Copying images is not supported here')),
+    imgCopyToastDone: JSON.stringify(vscode.l10n.t('Image copied to clipboard')),
+    imgCopyToastFailed: JSON.stringify(vscode.l10n.t('Copy failed')),
     profilingLabel: JSON.stringify(vscode.l10n.t('Flags')),
     profilingOnTitle: JSON.stringify(vscode.l10n.t('Profiling attributes (props/otherprops/audience/...) are highlighted. Click to hide the highlighting.')),
     profilingOffTitle: JSON.stringify(vscode.l10n.t('Profiling attribute highlighting is hidden. Click to show which content is flagged and with what.')),
@@ -268,6 +274,19 @@ function getWebviewScript(): string {
     if (e.key === 'Escape') { closeLightbox(); return; }
     if (e.key === 'ArrowLeft') { e.preventDefault(); lightboxStep(-1); return; }
     if (e.key === 'ArrowRight') { e.preventDefault(); lightboxStep(1); return; }
+    // Ctrl+C / Cmd+C copies the currently-displayed image, mirroring what a
+    // user would expect from any other "enlarged preview" surface — there's
+    // no text selection to steal focus from inside the lightbox, so this
+    // doesn't collide with a real copy-text intent the way it might
+    // elsewhere on the page.
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
+      e.preventDefault();
+      if (!lightboxBigImg) return;
+      copyImageToClipboard(lightboxBigImg).then(function(ok) {
+        showCenteredToast(ok ? ${L.imgCopyToastDone} : ${L.imgCopyToastFailed});
+      });
+      return;
+    }
   }
 
   function closeLightbox() {
@@ -301,6 +320,7 @@ function getWebviewScript(): string {
     var overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;cursor:zoom-out;';
     var big = document.createElement('img');
+    big.className = 'dita-lightbox-img';
     big.style.cssText = 'max-width:92vw;max-height:92vh;object-fit:contain;box-shadow:0 4px 24px rgba(0,0,0,0.5);border-radius:4px;';
     overlay.appendChild(big);
     overlay.addEventListener('click', closeLightbox);
@@ -314,6 +334,123 @@ function getWebviewScript(): string {
     var img = e.target.closest ? e.target.closest('img[data-dita-src]') : null;
     if (!img || img.getAttribute('data-load-error') === 'true') return;
     openLightbox(img);
+  });
+
+  // Copies the rendered image to the system clipboard. Chromium's Async
+  // Clipboard API only reliably accepts image/png for image writes, so
+  // anything else (jpg/gif/webp/svg/bmp) is decoded and re-encoded to PNG
+  // first. Decoding goes through createImageBitmap() on the bytes fetched
+  // directly from img.src -- NOT by drawing the existing <img> element onto
+  // a canvas -- because a canvas fed from a cross-origin-flagged <img> (the
+  // webview-resource: scheme this project's images load through) can come
+  // back "tainted", throwing on toBlob/getImageData; a canvas built from
+  // bytes the page fetched itself isn't subject to that. Resolves to
+  // true/false rather than throwing, so every caller (right-click menu,
+  // lightbox Ctrl+C) can show its own success/failure feedback without its
+  // own try/catch.
+  function copyImageToClipboard(img) {
+    if (!window.ClipboardItem || !navigator.clipboard || !navigator.clipboard.write) {
+      return Promise.resolve(false);
+    }
+    return fetch(img.currentSrc || img.src)
+      .then(function(resp) { return resp.blob(); })
+      .then(function(sourceBlob) {
+        if (sourceBlob.type === 'image/png') return sourceBlob;
+        return createImageBitmap(sourceBlob).then(function(bitmap) {
+          var canvas = document.createElement('canvas');
+          canvas.width = bitmap.width;
+          canvas.height = bitmap.height;
+          canvas.getContext('2d').drawImage(bitmap, 0, 0);
+          return new Promise(function(resolve, reject) {
+            canvas.toBlob(function(pngBlob) {
+              if (pngBlob) resolve(pngBlob); else reject(new Error('toBlob failed'));
+            }, 'image/png');
+          });
+        });
+      })
+      .then(function(pngBlob) {
+        return navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
+      })
+      .then(function() { return true; })
+      .catch(function() { return false; });
+  }
+
+  // Small floating pill used for feedback that isn't anchored to a
+  // still-open menu item (the lightbox Ctrl+C path has no menu to update),
+  // fixed at the bottom-center of the viewport so it reads fine whether or
+  // not the lightbox overlay is open. Auto-removes itself; never
+  // accumulates if fired repeatedly, since each call removes any toast
+  // still showing before adding its own.
+  function showCenteredToast(text) {
+    var existing = document.querySelector('.dita-img-toast');
+    if (existing) existing.remove();
+    var toast = document.createElement('div');
+    toast.className = 'dita-img-toast';
+    toast.textContent = text;
+    document.body.appendChild(toast);
+    setTimeout(function() { toast.remove(); }, 1200);
+  }
+
+  // Custom right-click "Copy Image" menu for both the inline preview images
+  // and the lightbox's enlarged image. A real browser/Electron context menu
+  // isn't used here because VS Code webviews don't reliably expose a native
+  // "Copy Image" item across every host (desktop Electron vs. vscode.dev's
+  // browser-hosted iframe), so this reimplements just the one item needed,
+  // reusing the exact same copyImageToClipboard() as the lightbox's Ctrl+C.
+  var imgCtxMenu = null;
+
+  function closeImgCtxMenu() {
+    if (!imgCtxMenu) return;
+    imgCtxMenu.remove();
+    imgCtxMenu = null;
+  }
+
+  function openImgCtxMenu(img, x, y) {
+    closeImgCtxMenu();
+    var menu = document.createElement('div');
+    menu.className = 'dita-img-ctxmenu';
+    var item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'dita-img-ctxmenu-item';
+    item.textContent = ${L.imgCopyMenuItem};
+    item.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (!window.ClipboardItem || !navigator.clipboard || !navigator.clipboard.write) {
+        item.textContent = ${L.imgCopyUnsupportedLabel};
+        setTimeout(closeImgCtxMenu, 900);
+        return;
+      }
+      item.disabled = true;
+      copyImageToClipboard(img).then(function(ok) {
+        item.textContent = ok ? ${L.imgCopyDoneLabel} : ${L.imgCopyFailedLabel};
+        setTimeout(closeImgCtxMenu, 700);
+      });
+    });
+    menu.appendChild(item);
+    document.body.appendChild(menu);
+    // Positioned and clamped after insertion, once its real size is known
+    // (offsetWidth/Height are 0 before the element is in the DOM) -- clamped
+    // to the viewport so a right-click near the right/bottom edge doesn't
+    // open a menu that's partly cut off screen.
+    var menuW = menu.offsetWidth, menuH = menu.offsetHeight;
+    menu.style.left = Math.min(x, window.innerWidth - menuW - 4) + 'px';
+    menu.style.top = Math.min(y, window.innerHeight - menuH - 4) + 'px';
+    imgCtxMenu = menu;
+  }
+
+  document.addEventListener('contextmenu', function(e) {
+    var img = e.target.closest
+      ? e.target.closest('img[data-dita-src]:not([data-load-error]), img.dita-lightbox-img')
+      : null;
+    if (!img) { closeImgCtxMenu(); return; }
+    e.preventDefault();
+    openImgCtxMenu(img, e.clientX, e.clientY);
+  });
+  document.addEventListener('click', function(e) {
+    if (imgCtxMenu && !imgCtxMenu.contains(e.target)) closeImgCtxMenu();
+  });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeImgCtxMenu();
   });
 
   // Per-image zoom controls: a small hover toolbar pinned to each image's
@@ -1257,7 +1394,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; base-uri 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src ${webview.cspSource} data:; base-uri 'none';">
 <link rel="stylesheet" href="${stylesUri}">
 ${defaultContent ? `<style>\n${defaultContent}\n</style>` : ''}
 <title>${escapeHtml(document.fileName)}</title>
