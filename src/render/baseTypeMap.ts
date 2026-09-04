@@ -892,7 +892,8 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   // e.g. Chinese content would be worse than not having a generated index
   // at all. Showing the term(s) inline, right where they're authored, is
   // useful in every language and needs no sort-order decision.
-  'topic/indexterm': (node, ctx) => collectIndextermChips(node).map((chip) => renderIndextermChip(chip, ctx)).join(''),
+  'topic/indexterm': (node, ctx) =>
+    ctx.suppressIndexterm ? '' : collectIndextermChips(node).map((chip) => renderIndextermChip(chip, ctx)).join(''),
   'topic/indextermref': (node) => {
     const key = getAttr(node, 'keyref');
     return key ? `<span class="indexterm-chip indexterm-chip--ref" title="indextermref">\u{1F4D1} ${escapeAttr(key)}</span>` : '';
@@ -1001,6 +1002,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   // search metadata, etc.) is still fully suppressed -- only indexterm
   // chips get pulled out.
   'topic/prolog': (node, ctx) => {
+    if (ctx.suppressIndexterm) return '';
     const topLevelTerms = findTopLevelIndextermsInSubtree(node);
     if (topLevelTerms.length === 0) return '';
     const chips = topLevelTerms

@@ -29,6 +29,18 @@ export interface RenderContext {
    *  noteLabels is, so this module stays free of any locale logic of its
    *  own. Falls back to 'Index' when not supplied. */
   indexLabel?: string;
+  /**
+   * When true, <indexterm> content is never rendered -- neither as an
+   * inline chip in the body nor pulled out of <prolog><metadata><keywords>.
+   * Index terms are authoring metadata (an index-generation hint for a
+   * publishing toolchain), and the interactive preview surfaces them as
+   * chips only as an editing aid; a standalone "Export as HTML" file has no
+   * such editing context and no index to build, so they'd just be stray
+   * clutter in the shipped document. Left undefined/false everywhere except
+   * the export path so the interactive preview (DitaViewerProvider /
+   * MapViewerProvider) keeps showing chips exactly as before.
+   */
+  suppressIndexterm?: boolean;
 }
 
 const CONTAINER_BASETYPES = new Set([

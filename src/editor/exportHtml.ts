@@ -26,6 +26,10 @@ function buildTopicExport(fsPath: string): { title: string; bodyHtml: string; er
     asWebviewUri: makeDataUriInliner(dirname(fsPath)),
     headingLevel: 1,
     uiLanguage: vscode.env.language,
+    // Index terms are authoring/publishing metadata, not reading content --
+    // the interactive preview's indexterm chips are an editing aid that
+    // doesn't belong in a standalone shipped HTML file.
+    suppressIndexterm: true,
   });
   return {
     title: result.title || basename(fsPath),
@@ -60,6 +64,7 @@ function buildMapExport(fsPath: string): { title: string; bodyHtml: string; erro
         asWebviewUri: makeDataUriInliner(dirname(absPath)),
         headingLevel: Math.min(1 + entry.depth, 6),
         uiLanguage: vscode.env.language,
+        suppressIndexterm: true,
       });
       if (result.error) {
         parts.push(heading(entry.displayName, entry.depth, entry.role));

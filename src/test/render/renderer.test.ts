@@ -1781,5 +1781,41 @@ describe('renderer', () => {
       assert.ok(html.includes('indexterm-chip'), 'indexterm chip should still surface');
       assert.ok(html.includes('Visible'), 'body content should still render');
     });
+
+    it('suppresses an inline indexterm chip in the body when ctx.suppressIndexterm is set (Export as HTML: index entries are authoring metadata, not reading content)', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [makeEl('topic/p', [makeText('See the '), makeEl('topic/indexterm', [makeText('glossary')]), makeText(' for more.')])]),
+      ]);
+      const html = renderDocument(doc, { ...defaultCtx, suppressIndexterm: true });
+      assert.ok(!html.includes('indexterm-chip'), `expected no chip when suppressed, got: ${html}`);
+      assert.ok(!html.includes('glossary'), 'index term text itself must not leak either');
+      assert.ok(html.includes('See the'), 'surrounding body text must still render');
+    });
+
+    it('suppresses prolog/metadata/keywords indexterm chips when ctx.suppressIndexterm is set', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/title', [makeText('T')]),
+        makeEl('topic/prolog', [
+          makeEl('topic/metadata', [
+            makeEl('topic/keywords', [
+              makeEl('topic/indexterm', [makeText('glossary')]),
+            ], undefined, 'keywords'),
+          ], undefined, 'metadata'),
+        ], undefined, 'prolog'),
+        makeEl('topic/body', [makeEl('topic/p', [makeText('Body text.')])]),
+      ]);
+      const html = renderDocument(doc, { ...defaultCtx, suppressIndexterm: true });
+      assert.ok(!html.includes('indexterm-chip'), `expected no prolog-sourced chip when suppressed, got: ${html}`);
+      assert.ok(!html.includes('glossary'));
+      assert.ok(html.includes('Body text.'));
+    });
+
+    it('leaves indexterm rendering unaffected when suppressIndexterm is left unset (interactive preview default)', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [makeEl('topic/p', [makeEl('topic/indexterm', [makeText('term')])])]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(html.includes('indexterm-chip'), 'preview default must keep showing chips');
+    });
   });
 });

@@ -560,6 +560,9 @@ export interface TopicRenderInput {
    * display language.
    */
   uiLanguage?: string;
+  /** See RenderContext.suppressIndexterm (render/renderer.ts) -- passed
+   *  through untouched; only the "Export as HTML" command sets this. */
+  suppressIndexterm?: boolean;
 }
 
 export interface TopicRenderResult {
@@ -575,6 +578,8 @@ export interface TopicXmlRenderInput {
   asWebviewUri: (relPath: string) => string;
   headingLevel: number;
   uiLanguage?: string;
+  /** See TopicRenderInput.suppressIndexterm above. */
+  suppressIndexterm?: boolean;
 }
 
 export interface ParsedTopicResult {
@@ -687,7 +692,7 @@ export function expandDitamapRefs(
 }
 
 export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
-  const { xml, docDir, keyMap, asWebviewUri, headingLevel, uiLanguage } = input;
+  const { xml, docDir, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm } = input;
   try {
     const preprocessedXml = preprocessEntities(xml);
     const ditaDoc = parseDita(preprocessedXml);
@@ -715,6 +720,7 @@ export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
       resolveConrefRange: (conref: string, conrefend: string) => conrefRangeResolver(conref, conrefend),
       noteLabels,
       indexLabel,
+      suppressIndexterm,
       getImageDimensions: (relPath: string) => {
         try {
           return readImageDimensions(resolve(docDir, decodeHrefPart(relPath)));
@@ -736,7 +742,7 @@ export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
 }
 
 export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
-  const { filePath, keyMap, asWebviewUri, headingLevel, uiLanguage } = input;
+  const { filePath, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm } = input;
   try {
     if (!existsSync(filePath)) {
       return { html: '', error: `File not found: ${filePath}` };
@@ -749,6 +755,7 @@ export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
       asWebviewUri,
       headingLevel,
       uiLanguage,
+      suppressIndexterm,
     });
     return { html: result.html, title: result.title, error: result.error };
   } catch (err) {
