@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
-import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { readFileSync, existsSync, readdirSync } from 'fs';
 import { dirname, isAbsolute, join, resolve, basename } from 'path';
 import { randomBytes } from 'crypto';
 import { DitaNode } from '../parser/domTypes';
-import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart, detectNoteLabels, detectIndexLabel, readImageDimensions, clearImageDimensionsCache, FileReader } from './ditaRenderUtils';
+import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart, detectNoteLabels, detectIndexLabel, readImageDimensions, clearImageDimensionsCache, clearTopicRenderCache, stampFiles, FileReader } from './ditaRenderUtils';
 
 // Test-only hook: @vscode/test-electron integration tests can't read a
 // webview's rendered HTML directly (VS Code doesn't expose the WebviewPanel
@@ -21,18 +21,19 @@ export function getLastRenderedHtmlForTesting(uriString: string): string | undef
 
 /**
  * Clears every in-memory cache the extension keeps (the test-only render
- * cache above, the keymap cache below, and the image-dimensions cache in
- * ditaRenderUtils.ts). lastRenderedHtmlByUri entries are already removed
- * individually as each webview panel disposes (see onDidDispose in
- * resolveCustomTextEditor), and keyMapCache/imageDimensionsCache are
- * already bounded by their own caps -- this is a defensive full reset for
- * extension deactivation, not a fix for an actual leak in any of them.
+ * cache above, the keymap cache below, and the image-dimensions and
+ * book-mode topic-render caches in ditaRenderUtils.ts). lastRenderedHtmlByUri
+ * entries are already removed individually as each webview panel disposes
+ * (see onDidDispose in resolveCustomTextEditor), and the rest are already
+ * bounded by their own caps -- this is a defensive full reset for extension
+ * deactivation, not a fix for an actual leak in any of them.
  * Wired into extension.ts's deactivate().
  */
 export function clearAllCaches(): void {
   lastRenderedHtmlByUri.clear();
   keyMapCache.clear();
   clearImageDimensionsCache();
+  clearTopicRenderCache();
 }
 
 // Font preferences (size % + serif toggle) are global rather than per-document:
@@ -1558,18 +1559,9 @@ const keyMapCache = new Map<string, KeyMapCacheEntry>();
 // One entry per document directory; bound it so long sessions touching many
 // folders cannot grow the cache without limit (evicts oldest-inserted first).
 const KEY_MAP_CACHE_MAX = 50;
-
-function stampFiles(files: string[]): string {
-  return files
-    .map((f) => {
-      try {
-        return String(statSync(f).mtimeMs);
-      } catch {
-        return '?';
-      }
-    })
-    .join('|');
-}
+// stampFiles is imported from ditaRenderUtils.ts rather than defined here:
+// book-mode topic caching needs the identical mtime fingerprint, and two
+// copies of an invalidation rule drift apart silently.
 
 export function buildKeyMap(docUri: vscode.Uri): Map<string, string> {
   const docDir = dirname(docUri.fsPath);

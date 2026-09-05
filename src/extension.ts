@@ -625,14 +625,17 @@ async function resolveMapFile(): Promise<vscode.Uri | undefined> {
   return undefined;
 }
 
-// Module-level caches in DitaViewerProvider/MapViewerProvider are already
-// self-bounded (keyMapCache and imageDimensionsCache have hard caps; the
-// render caches are cleaned per webview panel as it disposes -- see each
-// provider's onDidDispose), so this isn't fixing a leak. It's a defensive
-// reset for the case VS Code deactivates the extension without disposing
-// every panel first (window close, extension host restart, manual disable),
-// so nothing from this session's caches lingers into whatever runs next in
-// the same process.
+// Module-level caches in DitaViewerProvider/MapViewerProvider/ditaRenderUtils
+// are already self-bounded (keyMapCache and imageDimensionsCache have hard
+// entry caps, and the book-mode topic render cache has a byte budget; the
+// per-panel render caches are cleaned as each webview panel disposes -- see
+// each provider's onDidDispose), so this isn't fixing a leak. It's a
+// defensive reset for the case VS Code deactivates the extension without
+// disposing every panel first (window close, extension host restart, manual
+// disable), so nothing from this session's caches lingers into whatever runs
+// next in the same process. The topic render cache is the one that outlives
+// panels deliberately -- reuse across two panels showing the same book is
+// part of what makes it worth having -- so deactivation is what clears it.
 export function deactivate(): void {
   clearAllCaches();
   clearMapCache();
