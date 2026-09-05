@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderTopicToHtml, renderBookPlaceholder, renderBookError, renderBookSkipMessage, escapeHtml, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart } from './ditaRenderUtils';
+import { renderBookEntries, escapeHtml, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart } from './ditaRenderUtils';
 import { buildKeyMap } from './DitaViewerProvider';
 import { formatLocalizedRole } from '../language/bookRoleL10n';
 import { dirname, join, resolve } from 'path';
@@ -505,72 +505,24 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     webview: vscode.Webview,
     docDir: string,
   ): string {
-    // Build key map once for all entries
+    // Build key map once for all entries. renderTopicCached compares it by
+    // identity, so one instance for the whole pass is what makes reuse work.
     const keyMap = buildKeyMap(document.uri);
     const resolveKey = (k: string) => keyMap.get(k);
     const entries = collectMapEntries(mapRoot, resolveKey);
 
-    // Track visited absolute paths to avoid duplicates
-    const visited = new Set<string>();
-
-    const parts: string[] = [];
-    for (const entry of entries) {
-      if (entry.href) {
-        // Sub-map reference: its contents were already inlined as child
-        // entries by expandDitamapRefs — render a section heading only
-        // instead of parsing the map file as a topic.
-        if (entry.href.split('#')[0].toLowerCase().endsWith('.ditamap')) {
-          parts.push(renderBookPlaceholder(entry.displayName, entry.depth));
-          continue;
-        }
-        const absPath = resolve(docDir, decodeHrefPart(entry.href.split('#')[0]));
-        if (visited.has(absPath)) {
-          parts.push(renderBookSkipMessage(entry.href));
-          continue;
-        }
-        visited.add(absPath);
-
-        // Create per-topic asWebviewUri that resolves relative to the topic's dir
-        const topicDir = dirname(absPath);
-        const asWebviewUri = (relPath: string): string => {
-          try {
-            const resolvedPath = resolve(topicDir, decodeHrefPart(relPath));
-            return webview.asWebviewUri(vscode.Uri.file(resolvedPath)).toString();
-          } catch (e) {
-            // The empty src still surfaces as a visibly broken image (the
-            // webview script's document-level error listener marks it);
-            // log the cause so path-resolution failures are debuggable.
-            console.warn(`Failed to resolve webview URI for ${relPath}:`, e instanceof Error ? e.message : e);
-            return '';
-          }
-        };
-
-        const headingLevel = Math.min(1 + entry.depth, 6);
-        const result = renderTopicToHtml({
-          filePath: absPath,
-          keyMap,
-          asWebviewUri,
-          headingLevel,
-          uiLanguage: vscode.env.language,
-        });
-
-        if (result.error) {
-          parts.push(renderBookError(entry.displayName, result.error, entry.depth));
-        } else {
-          // Book mode is just each referenced topic's own content, one
-          // after another -- the same profiling/highlighting a topic
-          // already renders when opened directly (via renderTopicToHtml
-          // above) carries straight through here unchanged. No separate
-          // topicref-level (ditamap-source) profiling layered on top of
-          // it; that scope is exclusive to Outline mode's tree.
-          parts.push(`<div class="book-entry">${result.html}</div>`);
-        }
-      } else {
-        parts.push(renderBookPlaceholder(entry.displayName, entry.depth));
-      }
-    }
-
-    return `<div class="ditamap-book">${parts.join('\n')}</div>`;
+    // The assembly loop lives in ditaRenderUtils.renderBookEntries so it can
+    // be unit-tested -- and benchmarked against the same code that ships --
+    // without a VS Code instance. This method contributes the two things
+    // that genuinely need one: the map's key definitions and the webview's
+    // resource-URI conversion.
+    return renderBookEntries({
+      entries,
+      docDir,
+      keyMap,
+      fileToWebviewUri: (absPath) => webview.asWebviewUri(vscode.Uri.file(absPath)).toString(),
+      uiLanguage: vscode.env.language,
+    });
   }
 }
 

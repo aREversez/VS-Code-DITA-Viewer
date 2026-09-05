@@ -2,9 +2,9 @@
 /**
  * Benchmark: full book-mode render of a large synthetic ditamap.
  *
- * MapViewerProvider's book mode assembles ALL referenced topics into one
- * webview.html string in a single pass (see renderBookContent in
- * src/editor/MapViewerProvider.ts) -- there's no lazy loading or
+ * Book mode assembles ALL referenced topics into one webview.html string in a
+ * single pass (renderBookEntries in src/editor/ditaRenderUtils.ts, called by
+ * MapViewerProvider.renderBookContent) -- there's no lazy loading or
  * virtualization. This script exists to answer, empirically, "does that
  * fall over at realistic-to-pathological document counts, and does it
  * scale linearly or blow up?" -- rather than guessing from reading the
@@ -18,24 +18,50 @@
  * noisy across CI runners and isn't a pass/fail correctness signal. It's a
  * manual tool, not a regression gate.
  *
- * Findings as of 2026-08 (this sandbox, single run, informational only --
+ * Findings as of 2026-09 (this machine, single runs, informational only --
  * re-run locally rather than trusting these numbers going stale):
- *   2,000 topics: ~1.3s render, ~13MB HTML, ~160MB RSS
- *   5,000 topics: ~2.5s render, ~33MB HTML, ~265MB RSS
- *   Scaling is roughly linear in topic count for both time and memory --
- *   no quadratic blowup found (the assembly path already uses an array +
- *   join() rather than repeated string +=, which is the usual culprit).
- *   The real cost isn't the one-time render itself (a few seconds for a
- *   genuinely huge book is tolerable for an explicit action) -- it's that
- *   book mode has no memoization, so every debounced re-render triggered
- *   by ANY edit to ANY referenced topic redoes the full render from
- *   scratch. For a multi-thousand-topic book left open while iterating on
- *   one topic's wording, that's a multi-second stall on every pause in
- *   typing. Worth revisiting with a per-topic render cache (keyed on file
- *   path + mtime, same pattern as ditaRenderUtils.ts's imageDimensionsCache
- *   / keyMapCache) if this proves disruptive in real use -- not attempted
- *   here since it's a real behavioral change, not something to slip in
- *   under a benchmark script.
+ *   Scaling is roughly linear in topic count for both time and memory -- no
+ *   quadratic blowup (the assembly path uses an array + join() rather than
+ *   repeated string +=, which is the usual culprit). A 2,000-topic book is
+ *   ~15MB of HTML and ~250MB RSS at the end of a pass.
+ *   The cost that actually hurt was never the one-time render -- a second or
+ *   two for a genuinely huge book is tolerable for an explicit action. It was
+ *   that book mode had no memoization, so every debounced re-render triggered
+ *   by ANY edit to ANY referenced topic redid the whole book from scratch:
+ *   a multi-second stall on every pause in typing.
+ *
+ *   That is now fixed by renderTopicCached (src/editor/ditaRenderUtils.ts),
+ *   which keys each topic's HTML on the mtime of every file the render
+ *   actually read -- the topic itself, each conref target, each file an xref
+ *   title came from, each image whose dimensions were emitted. So the
+ *   interesting measurement is no longer the cold pass but the repeats, and
+ *   this script measures three:
+ *     pass 1  cold cache -- the fix's whole overhead, and a stand-in for what
+ *             an uncached render of the same book cost before it (measured
+ *             side by side once: 1943ms cold vs 1915ms uncached at 2,000)
+ *     pass 2  nothing changed -- pure reuse
+ *     pass 3  ONE topic edited -- the real workload: typing in a book that is
+ *             already open
+ *
+ *   All three call renderBookEntries, the shipped assembly loop that
+ *   MapViewerProvider.renderBookContent also calls. This script used to keep
+ *   its own hand-copy of that loop, and it had already drifted once (it built
+ *   a fresh keyMap per topic); once rendering became cached, that drift would
+ *   have measured zero reuse and reported a working fix as a failure.
+ *
+ *     topics    cold(1)   unchanged(2)   one edit(3)   cache held
+ *        100       92ms           5.8ms         7.2ms      0.75MB
+ *        300      265ms            20ms          20ms       2.25MB
+ *       2000     1638ms           132ms         140ms      15.03MB
+ *   Re-rendering an already-open book costs roughly a tenth of what it did,
+ *   12-16x, at every size measured. Note that passes 2 and 3 land within
+ *   noise of each other everywhere: what is left is not rendering but mtime
+ *   validation -- one statSync per recorded dependency per topic -- so that is
+ *   where the next win in this path lives, not in the render itself.
+ *   A 2,000-topic book holds 15MB of the 32MB budget, i.e. the whole book
+ *   stays cached with room for a second one; the budget is bytes rather than
+ *   an entry count precisely so a book bigger than the count cap could not
+ *   fall off a cliff into zero reuse (a cyclic pass is LRU's worst case).
  */
 const fs = require('fs');
 const os = require('os');
@@ -51,10 +77,13 @@ function mem() {
   return `rss=${(m.rss / 1048576).toFixed(1)}MB heap=${(m.heapUsed / 1048576).toFixed(1)}MB`;
 }
 
+const timings = [];
+
 function time(label, fn) {
   const t0 = performance.now();
   const result = fn();
   const t1 = performance.now();
+  timings.push({ label, ms: t1 - t0 });
   console.log(`${label}: ${(t1 - t0).toFixed(1)}ms  [${mem()}]`);
   return result;
 }
@@ -124,7 +153,10 @@ function main() {
     const mapMod = require(mapTypeMapCjs);
 
     const docDir = tmpDir;
-    const asWebviewUri = (rel) => `vscode-webview://x/${rel}`;
+    // Stands in for webview.asWebviewUri, which maps an absolute path onto a
+    // fixed https authority with no panel identity in it -- so a stub of the
+    // same shape measures the same work.
+    const fileToWebviewUri = (absPath) => `https://file+.vscode-resource.vscode-cdn.net${encodeURI(absPath)}`;
 
     console.log(`--- bench start [${mem()}] ---`);
 
@@ -135,28 +167,57 @@ function main() {
     const entries = time('collectMapEntries', () => mapMod.collectMapEntries(mapDoc.root, () => undefined));
     console.log(`entries collected: ${entries.length}`);
 
-    const parts = time('renderTopicToHtml x N (book assembly)', () => {
-      const out = [];
-      const visited = new Set();
-      for (const entry of entries) {
-        if (!entry.href) continue;
-        const absPath = path.resolve(docDir, entry.href.split('#')[0]);
-        if (visited.has(absPath)) continue;
-        visited.add(absPath);
-        const result = renderMod.renderTopicToHtml({
-          filePath: absPath,
-          keyMap: new Map(),
-          asWebviewUri,
-          headingLevel: Math.min(1 + entry.depth, 6),
-          uiLanguage: 'en',
-        });
-        out.push(result.html || '');
-      }
-      return out;
-    });
+    // The shipped assembly loop, not a copy of it: renderBookEntries is what
+    // MapViewerProvider.renderBookContent calls. One keyMap instance for the
+    // whole pass, same as there -- renderTopicCached compares it by identity,
+    // so a fresh Map per pass would measure zero reuse.
+    const keyMap = new Map();
+    const renderBook = () =>
+      renderMod.renderBookEntries({ entries, docDir, keyMap, fileToWebviewUri, uiLanguage: 'en' });
 
-    const finalHtml = time('string concat', () => parts.join(''));
+    renderMod.clearTopicRenderCache();
+    time('pass 1: renderBookEntries (cold cache)', renderBook);
+    time('pass 2: renderBookEntries (nothing changed)', renderBook);
+
+    // The workload that actually matters: the book is open, the author edits
+    // one topic, the debounce fires and the whole map re-renders. Note this
+    // invalidates more than the one file -- the fixture has every topic xref
+    // the next one, so the topic pointing AT the edited one resolves its
+    // title from that file and is (correctly) re-rendered too.
+    const edited = path.join(docDir, 'topics', 'topic0.dita');
+    fs.writeFileSync(
+      edited,
+      fs.readFileSync(edited, 'utf-8').replace('Paragraph 0 of topic 0', 'Paragraph 0 of topic 0 (edited)'),
+    );
+    const finalHtml = time('pass 3: renderBookEntries (one topic edited)', renderBook);
+
     console.log(`final HTML size: ${(finalHtml.length / 1048576).toFixed(2)}MB`);
+    // Stale output is the one way this cache can actually be wrong, and the
+    // unit tests only exercise it a few topics at a time -- so fail loudly
+    // here, where the edit is one topic among thousands.
+    if (!finalHtml.includes('(edited)')) {
+      console.error('FAIL: the edited topic was served from cache -- the render cache is returning stale HTML');
+      process.exitCode = 1;
+    } else {
+      console.log('edited topic correctly re-rendered into the assembled book');
+    }
+    console.log(
+      `topic cache: ${renderMod.topicRenderCacheSize()} entries, ` +
+        `${(renderMod.topicRenderCacheBytesHeld() / 1048576).toFixed(2)}MB held of ` +
+        `${(renderMod.TOPIC_RENDER_CACHE_MAX_BYTES / 1048576).toFixed(0)}MB budget`,
+    );
+
+    const msOf = (prefix) => {
+      const found = timings.find((t) => t.label.startsWith(prefix));
+      return found ? found.ms : NaN;
+    };
+    const coldMs = msOf('pass 1');
+    const warmMs = msOf('pass 2');
+    const editMs = msOf('pass 3');
+    console.log('--- summary ---');
+    console.log(`cold pass (fills the cache): ${coldMs.toFixed(1)}ms -- this is the fix's whole overhead, and stands in for what an uncached render of the same book cost before it`);
+    console.log(`unchanged re-render: ${(coldMs / warmMs).toFixed(1)}x faster than cold (${warmMs.toFixed(1)}ms)`);
+    console.log(`after one topic edited: ${(coldMs / editMs).toFixed(1)}x faster than cold (${editMs.toFixed(1)}ms)`);
     console.log(`--- bench end [${mem()}] ---`);
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
