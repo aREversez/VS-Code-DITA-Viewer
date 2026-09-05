@@ -1030,7 +1030,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
 
     webviewPanel.webview.onDidReceiveMessage((message) => {
       if (message.type === 'refresh') {
-        updateWebview();
+        requestUpdate('full');
       } else if (message.type === 'scrollSync') {
         // Reveal the matching source line as the user scrolls the preview,
         // but deliberately do NOT move editor.selection here — unlike
@@ -1139,11 +1139,19 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     });
 
     let renderDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+    // The render a currently-hidden panel is owed, if any. 'content' is a
+    // source edit, satisfied by postContentUpdate; 'full' is a theme switch
+    // or manual refresh, which has to reassign webview.html because the
+    // light/dark class lives on <html>, outside the content div a
+    // content-only update touches. Escalates only -- a theme switch landing
+    // while an edit is already pending must not be downgraded, or the class
+    // stays stale until some later unrelated re-render.
+    let pendingUpdate: 'none' | 'content' | 'full' = 'none';
     const changeSubscription = vscode.workspace.onDidChangeTextDocument((e) => {
       if (e.document.uri.toString() !== document.uri.toString()) return;
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
       renderDebounceTimer = setTimeout(() => {
-        postContentUpdate();
+        requestUpdate('content');
       }, 300);
     });
 
@@ -1175,7 +1183,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       if (uri.toString() === document.uri.toString()) return; // already handled above
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
       renderDebounceTimer = setTimeout(() => {
-        postContentUpdate();
+        requestUpdate('content');
       }, 300);
     };
     referencedFilesWatcher.onDidChange(onReferencedFileChanged);
@@ -1189,7 +1197,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     // below -- the CSS class lives on <html>, outside the content div a
     // content-only update touches.
     const themeSubscription = vscode.window.onDidChangeActiveColorTheme(() => {
-      updateWebview();
+      requestUpdate('full');
     });
 
     const updateWebview = () => {
@@ -1234,6 +1242,39 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       webviewPanel.webview.postMessage({ type: 'updateContent', html: result.html });
     };
 
+    // A hidden panel (tabbed behind another editor, or sitting in a
+    // collapsed group) still has a live webview under
+    // retainContextWhenHidden, so without this every edit anywhere in the
+    // watched set pays for a full re-render nobody is looking at -- and the
+    // extension host is single-threaded, so that cost lands on every other
+    // extension's completions and hovers too. Record the debt instead and
+    // settle it once, when the panel comes back.
+    const requestUpdate = (kind: 'content' | 'full') => {
+      if (disposed) return;
+      if (!webviewPanel.visible) {
+        if (pendingUpdate === 'none' || kind === 'full') pendingUpdate = kind;
+        return;
+      }
+      if (kind === 'full') updateWebview();
+      else postContentUpdate();
+    };
+
+    // Only renders are deferred. The scroll-sync traffic above (editorSub
+    // -> postRevealLine) is a bare postMessage rather than a render, and
+    // suppressing it while hidden would leave the preview scrolled to
+    // wherever it sat when the panel was hidden -- pendingUpdate is 'none'
+    // in that case, so nothing would flush on reveal to correct it.
+    const viewStateSubscription = webviewPanel.onDidChangeViewState((e) => {
+      if (!e.webviewPanel.visible || pendingUpdate === 'none') return;
+      // Clear before rendering: postContentUpdate falls back to
+      // updateWebview when rendering fails, and re-entering with a stale
+      // pendingUpdate would render twice.
+      const owed = pendingUpdate;
+      pendingUpdate = 'none';
+      if (owed === 'full') updateWebview();
+      else postContentUpdate();
+    });
+
     updateWebview();
 
     webviewPanel.onDidDispose(() => {
@@ -1245,6 +1286,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       editorSub.dispose();
       selectionSub.dispose();
       themeSubscription.dispose();
+      viewStateSubscription.dispose();
       lastRenderedHtmlByUri.delete(document.uri.toString());
     });
   }

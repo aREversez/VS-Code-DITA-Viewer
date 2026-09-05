@@ -283,7 +283,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
 
     webviewPanel.webview.onDidReceiveMessage((message) => {
       if (message.type === 'refresh') {
-        updateWebview();
+        requestUpdate('full');
       } else if (message.type === 'openTopic') {
         const href = message.href as string;
         if (!href) return;
@@ -297,16 +297,25 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         vscode.commands.executeCommand('vscode.openWith', targetUri, viewType);
       } else if (message.type === 'switchMode') {
         currentMode = message.mode as 'tree' | 'book';
-        updateWebview();
+        requestUpdate('full');
       }
     });
 
     let disposed = false;
     let renderDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+    // The render a currently-hidden panel is owed, if any. 'content' is a
+    // source edit, satisfied by postContentUpdate; 'full' is a theme switch,
+    // manual refresh or tree/book mode toggle, each of which has to reassign
+    // webview.html -- the light/dark class lives on <html>, outside the
+    // content div a content-only update touches, and a mode switch replaces
+    // the whole document rather than patching it. Escalates only -- a theme
+    // switch landing while an edit is already pending must not be
+    // downgraded, or the class stays stale until some later re-render.
+    let pendingUpdate: 'none' | 'content' | 'full' = 'none';
     const changeSubscription = vscode.workspace.onDidChangeTextDocument((e) => {
       if (e.document.uri.toString() !== document.uri.toString()) return;
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
-      renderDebounceTimer = setTimeout(postContentUpdate, 300);
+      renderDebounceTimer = setTimeout(() => requestUpdate('content'), 300);
     });
 
     // Same rationale as DitaViewerProvider's referencedFilesWatcher: a
@@ -327,7 +336,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       if (disposed) return;
       if (uri.toString() === document.uri.toString()) return; // already handled above
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
-      renderDebounceTimer = setTimeout(postContentUpdate, 300);
+      renderDebounceTimer = setTimeout(() => requestUpdate('content'), 300);
     };
     referencedFilesWatcher.onDidChange(onReferencedFileChanged);
     referencedFilesWatcher.onDidCreate(onReferencedFileChanged);
@@ -338,10 +347,11 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     // reload, unlike postContentUpdate below -- the class lives on <html>,
     // outside the content div a content-only update touches.
     const themeSubscription = vscode.window.onDidChangeActiveColorTheme(() => {
-      updateWebview();
+      requestUpdate('full');
     });
 
     const updateWebview = () => {
+      if (disposed) return;
       const html = this.generateHtml(document, webviewPanel.webview, currentMode);
       webviewPanel.webview.html = html;
       lastRenderedHtmlByUri.set(document.uri.toString(), html);
@@ -356,6 +366,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     // race against. Falls back to a full reload only if rendering itself
     // failed, to show the error page.
     const postContentUpdate = () => {
+      if (disposed) return;
       const result = this.renderMapContent(document, webviewPanel.webview, currentMode);
       if (result.error !== undefined) {
         updateWebview();
@@ -363,6 +374,37 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       }
       webviewPanel.webview.postMessage({ type: 'updateContent', html: result.html });
     };
+
+    // A hidden panel (tabbed behind another editor, or sitting in a
+    // collapsed group) still has a live webview under
+    // retainContextWhenHidden, so without this every edit anywhere in the
+    // watched set pays for a full re-render nobody is looking at. That is
+    // expensive here in a way it isn't for a single topic: book mode
+    // re-renders every referenced topic from scratch (see the render cost
+    // note in scripts/bench-book-render.js), and the extension host is
+    // single-threaded, so the cost lands on every other extension's
+    // completions and hovers too. Record the debt instead and settle it
+    // once, when the panel comes back.
+    const requestUpdate = (kind: 'content' | 'full') => {
+      if (disposed) return;
+      if (!webviewPanel.visible) {
+        if (pendingUpdate === 'none' || kind === 'full') pendingUpdate = kind;
+        return;
+      }
+      if (kind === 'full') updateWebview();
+      else postContentUpdate();
+    };
+
+    const viewStateSubscription = webviewPanel.onDidChangeViewState((e) => {
+      if (!e.webviewPanel.visible || pendingUpdate === 'none') return;
+      // Clear before rendering: postContentUpdate falls back to
+      // updateWebview when rendering fails, and re-entering with a stale
+      // pendingUpdate would render twice.
+      const owed = pendingUpdate;
+      pendingUpdate = 'none';
+      if (owed === 'full') updateWebview();
+      else postContentUpdate();
+    });
 
     updateWebview();
 
@@ -372,6 +414,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       changeSubscription.dispose();
       referencedFilesWatcher.dispose();
       themeSubscription.dispose();
+      viewStateSubscription.dispose();
       lastRenderedHtmlByUri.delete(document.uri.toString());
     });
   }
