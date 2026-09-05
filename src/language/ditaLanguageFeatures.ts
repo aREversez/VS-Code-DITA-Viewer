@@ -1,10 +1,12 @@
 // VS Code glue for the DITA language features: go-to-definition,
 // completion, document symbols and broken-reference diagnostics.
-// The text/offset logic lives in ditaLanguageUtils.ts (unit-tested).
+// The text/offset logic lives in ditaLanguageUtils.ts and the folder walk
+// behind href/conref completion in referenceableFiles.ts -- both unit-tested,
+// and neither imports vscode, which is what keeps them testable that way.
 
 import * as vscode from 'vscode';
-import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
-import { dirname, isAbsolute, join, relative, resolve, normalize } from 'path';
+import { existsSync, readFileSync } from 'fs';
+import { dirname, isAbsolute, resolve, normalize } from 'path';
 import { formatLocalizedRole } from './bookRoleL10n';
 import {
   collectIds,
@@ -27,6 +29,7 @@ import {
   offsetToLineCol,
   splitRefFragment,
 } from './ditaLanguageUtils';
+import { collectReferenceableFiles, WalkEntry } from './referenceableFiles';
 import { buildKeyMap, findDitamapFiles } from '../editor/DitaViewerProvider';
 import { decodeHrefPart } from '../editor/ditaRenderUtils';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
@@ -311,41 +314,58 @@ class DitaReferenceProvider implements vscode.ReferenceProvider {
 
 // ── Completion provider ──
 
-/** Lists referenceable files under a directory (recursive, depth-limited). */
-function listReferenceableFiles(baseDir: string, maxDepth = 3): string[] {
-  const results: string[] = [];
-  function walk(dir: string, depth: number) {
-    if (depth > maxDepth || results.length >= 200) return;
-    let entries: string[];
-    try {
-      entries = readdirSync(dir);
-    } catch (e) {
-      console.warn(`Failed to read directory ${dir}:`, e instanceof Error ? e.message : e);
-      return;
-    }
-    for (const entry of entries) {
-      if (entry.startsWith('.') || entry === 'node_modules' || entry === 'out') continue;
-      const full = join(dir, entry);
-      try {
-        if (statSync(full).isDirectory()) {
-          walk(full, depth + 1);
-        } else if (/\.(dita|ditamap|xml)$/i.test(entry)) {
-          results.push(normalize(relative(baseDir, full)).replace(/\\/g, '/'));
-        }
-      } catch (e) {
-        console.warn(`Failed to process file ${full}:`, e instanceof Error ? e.message : e);
-      }
-    }
-  }
-  walk(baseDir, 0);
-  return results;
+/**
+ * Lists referenceable files under a directory (recursive, depth-limited).
+ *
+ * The rules live in referenceableFiles.ts and are unit-tested there against a
+ * synthetic tree; this is only the vscode adapter, responsible for two things.
+ *
+ * Reading directories through workspace.fs.readDirectory rather than
+ * readdirSync. That call returns names and types together, which is also why
+ * the per-entry statSync this used to do is gone: on an image-heavy document
+ * set the synchronous version measured 158ms for 43 directory reads plus 6044
+ * stats, and every one of those stats was only being asked "is this a
+ * directory". Awaiting the reads is what keeps that work off the extension
+ * host's JS thread while the user is typing.
+ *
+ * Passing the cancellation token down. VS Code abandons a completion request
+ * the moment the next character is typed, so the walk checks between
+ * directories and stops instead of finishing work nobody will see.
+ */
+async function listReferenceableFiles(
+  baseDir: string,
+  token: vscode.CancellationToken,
+): Promise<string[]> {
+  return collectReferenceableFiles(
+    baseDir,
+    async (dir: string): Promise<WalkEntry[]> => {
+      const entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dir));
+      return entries.map(([name, type]) => ({
+        name,
+        // FileType is a bitmask: a symlink to a directory reports
+        // Directory | SymbolicLink. Testing the bit rather than equality keeps
+        // the behaviour of the statSync this replaces, which followed symlinks.
+        isDirectory: (type & vscode.FileType.Directory) !== 0,
+      }));
+    },
+    { isCancelled: (): boolean => token.isCancellationRequested },
+  );
 }
 
 class DitaCompletionProvider implements vscode.CompletionItemProvider {
-  provideCompletionItems(
+  /**
+   * Async because the href/conref branch walks the folder tree. VS Code calls
+   * this on every trigger character -- '<', '"', ' ', '#' -- so a synchronous
+   * walk of a document set with a few thousand images blocks the extension
+   * host for the length of that walk on every keystroke, and the block is
+   * global: nothing else in the extension runs meanwhile either. The other
+   * branches return straight away, so awaiting costs them nothing.
+   */
+  async provideCompletionItems(
     document: vscode.TextDocument,
     position: vscode.Position,
-  ): vscode.CompletionItem[] | undefined {
+    token: vscode.CancellationToken,
+  ): Promise<vscode.CompletionItem[] | undefined> {
     const text = document.getText();
     const offset = document.offsetAt(position);
     const ctx = getCompletionContext(text, offset);
@@ -415,7 +435,8 @@ class DitaCompletionProvider implements vscode.CompletionItemProvider {
           return item;
         });
       }
-      return listReferenceableFiles(docDir).map((rel) => {
+      const files = await listReferenceableFiles(docDir, token);
+      return files.map((rel) => {
         const item = new vscode.CompletionItem(rel, vscode.CompletionItemKind.File);
         if (ctx.valueStart !== undefined) {
           item.range = new vscode.Range(document.positionAt(ctx.valueStart), position);
