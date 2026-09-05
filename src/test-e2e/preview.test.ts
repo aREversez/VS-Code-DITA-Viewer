@@ -155,6 +155,28 @@ describe('DITA/DITAMAP preview rendering', () => {
       assert.ok(paths.includes('db_ui_test.dita'), `expected db_ui_test.dita among: ${paths.join(', ')}`);
     });
 
+    it('finds conref usages of an id from the conref reference site itself', async () => {
+      // Cursor ON the conref value rather than on the id="..." declaration --
+      // the other entry into the kind:'id' path. The fragment has to resolve
+      // to the addressed element (shared_note), not to its topic scope
+      // (db_overview), or this path agrees with neither the declaration site
+      // above nor where Go to Definition actually lands.
+      const uiUri = vscode.Uri.file(path.join(fixturesDir, 'topics', 'db_ui_test.dita'));
+      const doc = await vscode.workspace.openTextDocument(uiUri);
+      const text = doc.getText();
+      const conrefOffset = text.indexOf('db_overview/shared_note') + 2;
+      const position = doc.positionAt(conrefOffset);
+
+      const locations = (await vscode.commands.executeCommand(
+        'vscode.executeReferenceProvider',
+        uiUri,
+        position,
+      )) as vscode.Location[];
+
+      const paths = locations.map((l) => path.basename(l.uri.fsPath));
+      assert.ok(paths.includes('db_ui_test.dita'), `expected db_ui_test.dita among: ${paths.join(', ')}`);
+    });
+
     it('resolves references from a reference site (not just a declaration site)', async () => {
       // Put the cursor ON the keyref usage itself, not on the keydef --
       // should resolve to the same key and find the OTHER usages.

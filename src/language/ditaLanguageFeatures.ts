@@ -25,7 +25,7 @@ import {
   getCompletionContext,
   isExternalRef,
   offsetToLineCol,
-  stripSameDocumentFragmentPrefix,
+  splitRefFragment,
 } from './ditaLanguageUtils';
 import { buildKeyMap, findDitamapFiles } from '../editor/DitaViewerProvider';
 import { decodeHrefPart } from '../editor/ditaRenderUtils';
@@ -216,12 +216,16 @@ function resolveReferenceTarget(document: vscode.TextDocument, text: string, off
       const docDir = dirname(document.uri.fsPath);
       const targetPath = filePart ? resolve(docDir, decodeHrefPart(filePart)) : document.uri.fsPath;
       if (existsSync(targetPath)) {
-        // stripSameDocumentFragmentPrefix so a same-document self-reference
-        // written as "#./id" scopes on the real id instead of the literal
-        // "." that a raw split('/')[0] would pull out.
-        const topicId = stripSameDocumentFragmentPrefix(fragment).split('/')[0];
-        if (topicId) {
-          return { kind: 'id', names: [topicId], filePath: targetPath };
+        // The addressed element id, not the topic-scope segment. This has to
+        // name the same thing the declaration site above names -- an
+        // id="..." value -- and the same thing Go to Definition lands on,
+        // since findConrefTargetOffset scopes by topicId but resolves to the
+        // element. Naming the topic here made "find references" from a conref
+        // answer the broader "who references anything in that topic", and
+        // made this path disagree with the declaration-site path below.
+        const { elementId } = splitRefFragment(fragment);
+        if (elementId) {
+          return { kind: 'id', names: [elementId], filePath: targetPath };
         }
         return { kind: 'file', filePath: targetPath };
       }
@@ -282,10 +286,14 @@ class DitaReferenceProvider implements vscode.ReferenceProvider {
           const fragment = hashIdx >= 0 ? entry.value.substring(hashIdx + 1) : '';
           const resolvedPath = filePart ? resolve(candidateDir, decodeHrefPart(filePart)) : uri.fsPath;
           if (normalize(resolvedPath) !== normalize(target.filePath || '')) continue;
-          if (
-            target.kind === 'id' &&
-            stripSameDocumentFragmentPrefix(fragment).split('/')[0] !== target.names?.[0]
-          ) {
+          // Compare the addressed element id, not the topic-scope segment.
+          // In the standard two-part "topicId/elementId" form those are
+          // different strings by definition, so matching on the first segment
+          // could never equal an id="..." value: every conref was skipped and
+          // Find All References from a declaration returned the declaration
+          // itself and nothing else. A one-part fragment addresses the topic,
+          // where the element id IS the topic id -- that case is unchanged.
+          if (target.kind === 'id' && splitRefFragment(fragment).elementId !== target.names?.[0]) {
             continue;
           }
           // target.kind === 'file': any href/conref resolving to the file
