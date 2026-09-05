@@ -3,6 +3,7 @@ import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
 import { renderBookEntries, escapeHtml, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart } from './ditaRenderUtils';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
+import { foldPendingRender, PendingRender } from './pendingRender';
 import { buildKeyMap } from './DitaViewerProvider';
 import { formatLocalizedRole } from '../language/bookRoleL10n';
 import { dirname, join, resolve } from 'path';
@@ -311,8 +312,10 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     // content div a content-only update touches, and a mode switch replaces
     // the whole document rather than patching it. Escalates only -- a theme
     // switch landing while an edit is already pending must not be
-    // downgraded, or the class stays stale until some later re-render.
-    let pendingUpdate: 'none' | 'content' | 'full' = 'none';
+    // downgraded, or the class stays stale until some later re-render. The
+    // fold itself lives in pendingRender.ts -- see foldPendingRender -- so
+    // the rule is pinned by a unit test rather than only by this comment.
+    let pendingUpdate: PendingRender = 'none';
     const changeSubscription = vscode.workspace.onDidChangeTextDocument((e) => {
       if (e.document.uri.toString() !== document.uri.toString()) return;
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
@@ -382,7 +385,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     const requestUpdate = (kind: 'content' | 'full') => {
       if (disposed) return;
       if (!webviewPanel.visible) {
-        if (pendingUpdate === 'none' || kind === 'full') pendingUpdate = kind;
+        pendingUpdate = foldPendingRender(pendingUpdate, kind);
         return;
       }
       if (kind === 'full') updateWebview();

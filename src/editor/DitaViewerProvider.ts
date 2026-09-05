@@ -7,6 +7,7 @@ import { randomBytes } from 'crypto';
 import { DitaNode } from '../parser/domTypes';
 import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart, detectNoteLabels, detectIndexLabel, readImageDimensions, clearImageDimensionsCache, clearTopicRenderCache, stampFiles, FileReader } from './ditaRenderUtils';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
+import { foldPendingRender, PendingRender } from './pendingRender';
 
 // Test-only hook: @vscode/test-electron integration tests can't read a
 // webview's rendered HTML directly (VS Code doesn't expose the WebviewPanel
@@ -1147,8 +1148,10 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     // light/dark class lives on <html>, outside the content div a
     // content-only update touches. Escalates only -- a theme switch landing
     // while an edit is already pending must not be downgraded, or the class
-    // stays stale until some later unrelated re-render.
-    let pendingUpdate: 'none' | 'content' | 'full' = 'none';
+    // stays stale until some later unrelated re-render. The fold itself
+    // lives in pendingRender.ts -- see foldPendingRender -- so the rule is
+    // pinned by a unit test rather than only by this comment.
+    let pendingUpdate: PendingRender = 'none';
     const changeSubscription = vscode.workspace.onDidChangeTextDocument((e) => {
       if (e.document.uri.toString() !== document.uri.toString()) return;
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
@@ -1249,7 +1252,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     const requestUpdate = (kind: 'content' | 'full') => {
       if (disposed) return;
       if (!webviewPanel.visible) {
-        if (pendingUpdate === 'none' || kind === 'full') pendingUpdate = kind;
+        pendingUpdate = foldPendingRender(pendingUpdate, kind);
         return;
       }
       if (kind === 'full') updateWebview();
