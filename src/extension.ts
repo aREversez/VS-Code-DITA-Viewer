@@ -16,6 +16,7 @@ import {
 } from './editor/ditaOtUtils';
 import { registerLanguageFeatures } from './language/ditaLanguageFeatures';
 import { registerMapTreeView } from './language/ditaMapTreeProvider';
+import { ditaFileWatcherCounts } from './editor/ditaFileWatcher';
 import { registerExportHtmlCommand } from './editor/exportHtml';
 import { registerCompareCommand } from './editor/ditaDiffProvider';
 
@@ -469,10 +470,15 @@ export function activate(context: vscode.ExtensionContext) {
   // content without VS Code providing a public API to read a custom
   // editor's WebviewPanel from outside its own provider. Not used by the
   // extension itself at runtime.
+  //
+  // ditaFileWatcherCounts is here for the same reason: whether N open panels
+  // really do share one FileSystemWatcher per folder is not observable from
+  // outside the extension host, and it is the whole claim of ditaFileWatcher.ts.
   return {
     _test: {
       getLastRenderedHtml: getLastRenderedHtmlForTesting,
       getLastRenderedMapHtml: getLastRenderedMapHtmlForTesting,
+      ditaFileWatcherCounts,
     },
   };
 }

@@ -6,6 +6,7 @@ import { dirname, isAbsolute, join, resolve, basename } from 'path';
 import { randomBytes } from 'crypto';
 import { DitaNode } from '../parser/domTypes';
 import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart, detectNoteLabels, detectIndexLabel, readImageDimensions, clearImageDimensionsCache, clearTopicRenderCache, stampFiles, FileReader } from './ditaRenderUtils';
+import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 
 // Test-only hook: @vscode/test-electron integration tests can't read a
 // webview's rendered HTML directly (VS Code doesn't expose the WebviewPanel
@@ -1162,34 +1163,29 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     // above -- previously the only way to pick these up was the manual
     // reload button. This intentionally watches the whole containing
     // workspace folder rather than precisely tracking this document's own
-    // resolved dependency set: the renderer doesn't currently surface which
-    // files a given render actually touched, and workspace-wide DITA
-    // projects commonly pull conrefs/keydefs from ancestor or sibling
-    // directories, so a scoped watch would risk silently missing exactly
-    // the cross-folder references this is meant to catch. The tradeoff is
-    // a refresh check firing for edits unrelated to this document; that's
-    // a cheap no-op for a single topic, though for a large open book-mode
-    // map it re-runs the same full-book render the reload button already
-    // did on demand (see the book-mode render cost note in
-    // scripts/bench-book-render.js) -- worth revisiting with real
-    // dependency tracking if that proves noisy in practice.
-    const watchBase =
-      vscode.workspace.getWorkspaceFolder(document.uri)?.uri ??
-      vscode.Uri.file(dirname(document.uri.fsPath));
-    const referencedFilesWatcher = vscode.workspace.createFileSystemWatcher(
-      new vscode.RelativePattern(watchBase, '**/*.{dita,ditamap,css,png,jpg,jpeg,gif,svg,webp}'),
-    );
-    const onReferencedFileChanged = (uri: vscode.Uri) => {
+    // resolved dependency set. That set IS knowable now -- buildKeyMap below
+    // already records every map it read so it can fingerprint them, and
+    // renderTopicCached takes a collectDependencies sink for the render's own
+    // reads -- but a per-document watcher built from either would have to be
+    // torn down and rebuilt after every render, because editing a topic changes
+    // what it references, and getting that wrong means silently missing the
+    // cross-folder conref this exists to catch. Sharing one folder-wide watcher
+    // is the cheaper half of that win: every panel used to create its own, so a
+    // map open next to three topic previews meant four watchers each matching
+    // every file event in the folder. See ditaFileWatcher.ts.
+    //
+    // The tradeoff is unchanged: a refresh check fires for edits unrelated to
+    // this document. That's a cheap no-op for a single topic, and for a large
+    // open book-mode map it re-runs the assembly pass, which is now mostly
+    // cache hits (see scripts/bench-book-render.js).
+    const referencedFilesWatcher = acquireDitaFileWatcher(ditaWatchBase(document.uri), (event) => {
       if (disposed) return;
-      if (uri.toString() === document.uri.toString()) return; // already handled above
+      if (event.uri.toString() === document.uri.toString()) return; // already handled above
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
       renderDebounceTimer = setTimeout(() => {
         requestUpdate('content');
       }, 300);
-    };
-    referencedFilesWatcher.onDidChange(onReferencedFileChanged);
-    referencedFilesWatcher.onDidCreate(onReferencedFileChanged);
-    referencedFilesWatcher.onDidDelete(onReferencedFileChanged);
+    });
 
     // Re-render on theme switch so the manually-computed light/dark class
     // (used for DITA-specific colors that have no direct VS Code theme

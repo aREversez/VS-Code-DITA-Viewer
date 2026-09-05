@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
 import { renderBookEntries, escapeHtml, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart } from './ditaRenderUtils';
+import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { buildKeyMap } from './DitaViewerProvider';
 import { formatLocalizedRole } from '../language/bookRoleL10n';
 import { dirname, join, resolve } from 'path';
@@ -324,23 +325,16 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     // only watching this document itself (above) misses edits to the very
     // files book/outline mode is built from. Watches the containing
     // workspace folder broadly rather than the resolved reference set for
-    // the same reason given there: that set isn't currently surfaced by
-    // the renderer, and DITA projects commonly reach across folders.
-    const watchBase =
-      vscode.workspace.getWorkspaceFolder(document.uri)?.uri ??
-      vscode.Uri.file(dirname(document.uri.fsPath));
-    const referencedFilesWatcher = vscode.workspace.createFileSystemWatcher(
-      new vscode.RelativePattern(watchBase, '**/*.{dita,ditamap,css,png,jpg,jpeg,gif,svg,webp}'),
-    );
-    const onReferencedFileChanged = (uri: vscode.Uri) => {
+    // the same reason given there, and shares that folder's watcher with
+    // every other panel and with the map tree -- a map open beside three
+    // topic previews is one watcher serving four consumers, not four
+    // watchers. See ditaFileWatcher.ts.
+    const referencedFilesWatcher = acquireDitaFileWatcher(ditaWatchBase(document.uri), (event) => {
       if (disposed) return;
-      if (uri.toString() === document.uri.toString()) return; // already handled above
+      if (event.uri.toString() === document.uri.toString()) return; // already handled above
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
       renderDebounceTimer = setTimeout(() => requestUpdate('content'), 300);
-    };
-    referencedFilesWatcher.onDidChange(onReferencedFileChanged);
-    referencedFilesWatcher.onDidCreate(onReferencedFileChanged);
-    referencedFilesWatcher.onDidDelete(onReferencedFileChanged);
+    });
 
     // Re-render on theme switch so the manually-computed light/dark class
     // never goes stale relative to the actual active theme. A genuine full

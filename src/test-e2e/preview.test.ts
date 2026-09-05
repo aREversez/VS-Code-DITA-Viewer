@@ -221,4 +221,71 @@ describe('DITA/DITAMAP preview rendering', () => {
       assert.ok(paths.includes('db_ui_test.dita'), `expected keyref usages, got: ${paths.join(', ')}`);
     });
   });
+
+  describe('Shared file watcher', () => {
+    const counts = (): Map<string, number> =>
+      new Map(vscode.extensions.getExtension(EXTENSION_ID)!.exports._test.ditaFileWatcherCounts());
+    const totalRefs = (m: Map<string, number>): number => [...m.values()].reduce((a, b) => a + b, 0);
+    const snapshot = (): string => JSON.stringify([...counts()].sort());
+
+    /**
+     * Waits until the consumer counts stop moving. Opening a panel also changes
+     * the active editor, which the Explorer's map tree reacts to by taking its
+     * own share of the same folder's watcher; measuring before that lands would
+     * make the "closing handed both shares back" assertion below depend on
+     * event ordering rather than on the code.
+     */
+    async function settle(timeoutMs = 6000): Promise<void> {
+      const start = Date.now();
+      let last = snapshot();
+      while (Date.now() - start < timeoutMs) {
+        await new Promise((r) => setTimeout(r, 250));
+        const now = snapshot();
+        if (now === last) return;
+        last = now;
+      }
+      throw new Error(`Timed out waiting for watcher consumers to settle: ${snapshot()}`);
+    }
+
+    it('serves a topic panel and a map panel from one folder watcher, and releases both on close', async () => {
+      const ext = vscode.extensions.getExtension(EXTENSION_ID)!;
+      await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+      await settle();
+      const baseline = totalRefs(counts());
+
+      const topic = vscode.Uri.file(path.join(fixturesDir, 'topics', 'db_overview.dita'));
+      const map = vscode.Uri.file(path.join(fixturesDir, 'test.ditamap'));
+
+      await vscode.commands.executeCommand('vscode.openWith', topic, 'ditaViewer.preview');
+      await waitFor(() => !!ext.exports._test.getLastRenderedHtml(topic.toString()));
+      await vscode.commands.executeCommand('vscode.openWith', map, 'ditaViewer.mapPreview');
+      await waitFor(() => !!ext.exports._test.getLastRenderedMapHtml(map.toString()));
+      await settle();
+
+      const withBoth = counts();
+      // test-runner.cjs opens test-dita-file as the single workspace folder, so
+      // both documents resolve to the same watch base. Each panel used to build
+      // its own createFileSystemWatcher over that base and the same glob.
+      assert.strictEqual(
+        withBoth.size,
+        1,
+        `expected one watched folder for two panels, got: ${[...withBoth.keys()].join(', ')}`,
+      );
+      assert.ok(
+        totalRefs(withBoth) >= baseline + 2,
+        `expected both panels to hold a share (baseline ${baseline}), got ${totalRefs(withBoth)}`,
+      );
+
+      await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+      await settle();
+      const afterClose = totalRefs(counts());
+      // Not necessarily zero: the sidebar tree keeps its own share for the map
+      // it is showing, which is what lets it notice a git checkout rewriting the
+      // map on disk. What must be gone is the two panels' shares.
+      assert.ok(
+        afterClose <= totalRefs(withBoth) - 2,
+        `expected both panels to release their shares: ${totalRefs(withBoth)} -> ${afterClose}`,
+      );
+    });
+  });
 });
