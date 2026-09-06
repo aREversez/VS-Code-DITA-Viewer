@@ -132,6 +132,62 @@ describe('DITA/DITAMAP preview rendering', () => {
     await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
 
+  it('renders a map preview with the same font/width preferences the topic viewer persisted', async () => {
+    // Font size and typeface are global (FONT_PREFS_KEY in
+    // DitaViewerProvider.ts, imported into MapViewerProvider.ts rather than
+    // duplicated) and page width is per-document (WIDTH_SELECTION_KEY,
+    // keyed by this ditamap's own uri). Both keys are hardcoded here rather
+    // than imported: this file is outside tsconfig.e2e.json's include list
+    // for src/editor, and the point of the assertion is that the provider
+    // and this test agree on the storage key independently, the same
+    // reason the MSG_ constants test above checks literal message-name
+    // strings rather than importing the constant that names them.
+    const ext = vscode.extensions.getExtension(EXTENSION_ID)!;
+    const uri = vscode.Uri.file(path.join(fixturesDir, 'test.ditamap'));
+
+    const globalState = ext.exports._test.globalState as vscode.Memento;
+    const previousFontPrefs = globalState.get('ditaViewer.fontPrefs');
+    const previousWidthMap = globalState.get<Record<string, string>>('ditaViewer.widthSelectionByUri', {});
+    try {
+      await globalState.update('ditaViewer.fontPrefs', { size: 140, serif: true });
+      await globalState.update('ditaViewer.widthSelectionByUri', {
+        ...previousWidthMap,
+        [uri.toString()]: '1280px',
+      });
+
+      await vscode.commands.executeCommand('vscode.openWith', uri, 'ditaViewer.mapPreview');
+
+      const getHtml = () => ext.exports._test.getLastRenderedMapHtml(uri.toString());
+      await waitFor(() => !!getHtml());
+
+      const page = getHtml();
+      // The values a globally-set topic preference and a uri-keyed width
+      // selection would produce, read back exactly as generateHtml would
+      // serialize them -- see the escapeJson(JSON.stringify(...)) calls in
+      // MapViewerProvider.ts.
+      assert.ok(
+        page.includes('window.__fontPrefs={"size":140,"serif":true}'),
+        'expected the map preview to bootstrap from the persisted font preference, not a hardcoded default',
+      );
+      assert.ok(
+        page.includes('window.__widthSelection="1280px"'),
+        'expected the map preview to bootstrap from the persisted width selection for this document',
+      );
+      // The write side of the round trip: the shipped script has to ask the
+      // extension to persist a change, or the bootstrap values above would
+      // only ever reflect whatever a previous manual test.ditamap edit left
+      // behind, not something the toolbar itself is capable of saving.
+      assert.ok(page.includes("type: 'setFontPrefs'"), 'expected the toolbar to persist font changes back');
+      assert.ok(page.includes("type: 'setWidthSelection'"), 'expected the toolbar to persist width changes back');
+      assert.ok(!page.includes('${MSG_'), 'an un-interpolated MSG_ constant would leave the message type unmatched');
+
+      await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+    } finally {
+      await globalState.update('ditaViewer.fontPrefs', previousFontPrefs);
+      await globalState.update('ditaViewer.widthSelectionByUri', previousWidthMap);
+    }
+  });
+
   it('toggles back to the source editor when the command runs in the reading view', async () => {
     const uri = vscode.Uri.file(path.join(fixturesDir, 'topics', 'db_overview.dita'));
 

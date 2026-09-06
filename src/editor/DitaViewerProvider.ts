@@ -40,9 +40,14 @@ export function clearAllCaches(): void {
 }
 
 // Font preferences (size % + serif toggle) are global rather than per-document:
-// they describe how the user likes to read, not something tied to one file.
-const FONT_PREFS_KEY = 'ditaViewer.fontPrefs';
-const DEFAULT_FONT_PREFS = { size: 100, serif: false };
+// they describe how the user likes to read, not something tied to one file --
+// and not to which kind of preview is showing it either, which is why
+// MapViewerProvider.ts imports these two rather than declaring its own copy.
+// A person who has already picked a size and a typeface for reading DITA
+// content does not have a second, unrelated preference for reading it
+// assembled into a book; there is one reading experience, in two providers.
+export const FONT_PREFS_KEY = 'ditaViewer.fontPrefs';
+export const DEFAULT_FONT_PREFS = { size: 100, serif: false };
 
 // CSS theme and page-width choices, unlike font prefs, ARE tied to one
 // document -- discoverCssFiles() scans relative to each document's own
@@ -55,8 +60,16 @@ const DEFAULT_FONT_PREFS = { size: 100, serif: false };
 // discoverCssFiles()'s own always-recomputed default was the only thing
 // ever fed back in -- whatever the person had picked at runtime lived
 // only in the old page's now-discarded JS state.
+//
+// WIDTH_SELECTION_KEY is exported for the same reason FONT_PREFS_KEY is: a
+// ditamap has its own uri, distinct from any topic's, so the two providers
+// sharing this map's key space costs nothing and avoids a second constant
+// that could name a different globalState key by a future typo.
+// CSS_SELECTION_KEY stays private -- discoverCssFiles() and the dropdown it
+// feeds are specific to a single topic's own directory and have no map-mode
+// counterpart to share it with.
 const CSS_SELECTION_KEY = 'ditaViewer.cssSelectionByUri';
-const WIDTH_SELECTION_KEY = 'ditaViewer.widthSelectionByUri';
+export const WIDTH_SELECTION_KEY = 'ditaViewer.widthSelectionByUri';
 
 function getWebviewScript(): string {
   const L = {
@@ -1452,7 +1465,11 @@ function escapeHtml(text: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function escapeJson(text: string): string {
+// Exported so MapViewerProvider.ts's own <script> bootstrap (font prefs and
+// width selection, the two pieces of state it shares with this provider --
+// see FONT_PREFS_KEY and WIDTH_SELECTION_KEY above) escapes the same way
+// rather than carrying a second copy of a one-line regex to drift from.
+export function escapeJson(text: string): string {
   return text.replace(/<\/script>/gi, '<\\/script>');
 }
 

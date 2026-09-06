@@ -6,7 +6,7 @@ import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
 import { foldPendingRender, PendingRender } from './pendingRender';
 import { sharedWebviewStrings } from './webviewL10n';
-import { buildKeyMap } from './DitaViewerProvider';
+import { buildKeyMap, FONT_PREFS_KEY, DEFAULT_FONT_PREFS, WIDTH_SELECTION_KEY, escapeJson } from './DitaViewerProvider';
 import { formatLocalizedRole } from '../language/bookRoleL10n';
 import { dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
@@ -43,6 +43,13 @@ export function clearMapCache(): void {
 const MSG_UPDATE_CONTENT = 'updateContent';
 const MSG_PATCH_CONTENT = 'patchContent';
 const MSG_REQUEST_FULL_RENDER = 'requestFullRender';
+// Same treatment, same reason: a mismatch here is silent rather than loud --
+// the button still changes document.body's style locally either way, so the
+// only symptom of a typo is that the choice quietly fails to survive closing
+// the panel, which is exactly the bug this pair of message types exists to
+// fix (see FONT_PREFS_KEY / WIDTH_SELECTION_KEY above).
+const MSG_SET_FONT_PREFS = 'setFontPrefs';
+const MSG_SET_WIDTH_SELECTION = 'setWidthSelection';
 
 function getMapWebviewScript(): string {
   const L = {
@@ -90,7 +97,30 @@ function getMapWebviewScript(): string {
   toolbar.addEventListener('mouseenter', function() { toolbar.style.opacity = '1'; });
   toolbar.addEventListener('mouseleave', function() { toolbar.style.opacity = '0.75'; });
 
-  var fontSize = 100;
+  // Font size, typeface and page width are read back from the bootstrap
+  // script (window.__fontPrefs / window.__widthSelection, set in
+  // generateHtml from the same globalState keys the topic viewer reads --
+  // see FONT_PREFS_KEY and WIDTH_SELECTION_KEY in DitaViewerProvider.ts) and
+  // written back through postMessage on every change, exactly as the topic
+  // viewer's own toolbar does. Until this, the three controls here changed
+  // only document.body's inline style: nothing read them back on open and
+  // nothing told the extension they had changed, so a size, typeface or
+  // width picked in a map preview was gone the moment the panel closed.
+  var fontPrefs = window.__fontPrefs || { size: 100, serif: false };
+  var fontSize = typeof fontPrefs.size === 'number' ? fontPrefs.size : 100;
+  var isSerif = fontPrefs.serif === true;
+  var SERIF_STACK = "Georgia,'Times New Roman','Noto Serif SC','Songti SC',STSong,SimSun,serif";
+
+  function applyFontPrefs() {
+    document.body.style.fontSize = fontSize + '%';
+    document.body.style.fontFamily = isSerif ? SERIF_STACK : '';
+  }
+  applyFontPrefs();
+
+  function saveFontPrefs() {
+    vscode.postMessage({ type: '${MSG_SET_FONT_PREFS}', size: fontSize, serif: isSerif });
+  }
+
   var fsDown = document.createElement('button');
   fsDown.innerHTML = 'A\u2212';
   fsDown.title = ${L.decreaseFontSize};
@@ -99,6 +129,7 @@ function getMapWebviewScript(): string {
   fsDown.addEventListener('click', function() {
     fontSize = Math.max(60, fontSize - 10);
     document.body.style.fontSize = fontSize + '%';
+    saveFontPrefs();
   });
   toolbar.appendChild(fsDown);
 
@@ -110,22 +141,23 @@ function getMapWebviewScript(): string {
   fsUp.addEventListener('click', function() {
     fontSize = Math.min(200, fontSize + 10);
     document.body.style.fontSize = fontSize + '%';
+    saveFontPrefs();
   });
   toolbar.appendChild(fsUp);
 
-  // Font toggle (serif / sans-serif)
-  var isSerif = false;
+  // Font toggle (serif / sans-serif) -- reflects the persisted state on open
   var fontBtn = document.createElement('button');
-  fontBtn.textContent = ${L.fontSans};
-  fontBtn.title = ${L.fontCurrentSans};
-  fontBtn.setAttribute('aria-label', ${L.fontCurrentSans});
+  fontBtn.textContent = isSerif ? ${L.fontSerif} : ${L.fontSans};
+  fontBtn.title = isSerif ? ${L.fontCurrentSerif} : ${L.fontCurrentSans};
+  fontBtn.setAttribute('aria-label', isSerif ? ${L.fontCurrentSerif} : ${L.fontCurrentSans});
   fontBtn.style.cssText = btnStyle + 'font-size:11px;';
   fontBtn.addEventListener('click', function() {
     isSerif = !isSerif;
     fontBtn.textContent = isSerif ? ${L.fontSerif} : ${L.fontSans};
     fontBtn.title = isSerif ? ${L.fontCurrentSerif} : ${L.fontCurrentSans};
     fontBtn.setAttribute('aria-label', isSerif ? ${L.fontCurrentSerif} : ${L.fontCurrentSans});
-    document.body.style.fontFamily = isSerif ? "Georgia,'Times New Roman','Noto Serif SC','Songti SC',STSong,SimSun,serif" : '';
+    document.body.style.fontFamily = isSerif ? SERIF_STACK : '';
+    saveFontPrefs();
   });
   toolbar.appendChild(fontBtn);
 
@@ -142,15 +174,22 @@ function getMapWebviewScript(): string {
   wSel.title = ${L.pageWidth};
   wSel.setAttribute('aria-label', ${L.pageWidth});
   wSel.style.cssText = 'max-width:72px;' + ddStyle;
+  var restoredWidth = window.__widthSelection || '';
   for (var i = 0; i < widths.length; i++) {
     var opt = document.createElement('option');
     opt.value = widths[i].value;
     opt.textContent = widths[i].label;
+    if (widths[i].value === restoredWidth) opt.selected = true;
     wSel.appendChild(opt);
   }
+  function applyWidth(value) {
+    document.body.style.maxWidth = value;
+    document.body.style.margin = value ? '0 auto' : '';
+  }
+  if (restoredWidth) applyWidth(restoredWidth);
   wSel.addEventListener('change', function() {
-    document.body.style.maxWidth = wSel.value;
-    document.body.style.margin = wSel.value ? '0 auto' : '';
+    applyWidth(wSel.value);
+    vscode.postMessage({ type: '${MSG_SET_WIDTH_SELECTION}', value: wSel.value });
   });
   toolbar.appendChild(wSel);
 
@@ -340,6 +379,24 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         // full render also resets lastBookParts to the document just sent,
         // which is what makes the next patch trustworthy again.
         updateWebview();
+      } else if (message.type === MSG_SET_FONT_PREFS) {
+        // Same key the topic viewer writes (FONT_PREFS_KEY, imported from
+        // DitaViewerProvider.ts) -- font size and typeface describe how the
+        // person likes to read, not which provider is showing them the
+        // document, so one preference for both rather than a second copy
+        // that could silently disagree with it.
+        const size = typeof message.size === 'number' ? message.size : DEFAULT_FONT_PREFS.size;
+        const serif = message.serif === true;
+        this.context.globalState.update(FONT_PREFS_KEY, { size, serif });
+      } else if (message.type === MSG_SET_WIDTH_SELECTION) {
+        // Same map the topic viewer keeps (WIDTH_SELECTION_KEY), keyed by
+        // this document's own uri -- a ditamap's uri cannot collide with a
+        // topic's, so the two providers sharing the map costs nothing.
+        if (typeof message.value === 'string') {
+          const map = this.context.globalState.get<Record<string, string>>(WIDTH_SELECTION_KEY, {});
+          map[document.uri.toString()] = message.value;
+          this.context.globalState.update(WIDTH_SELECTION_KEY, map);
+        }
       }
     });
 
@@ -567,6 +624,16 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     const theme = vscode.window.activeColorTheme;
     const isDark = theme.kind === vscode.ColorThemeKind.Dark || theme.kind === vscode.ColorThemeKind.HighContrast;
 
+    // Font size/typeface (global, shared with the topic viewer -- see
+    // FONT_PREFS_KEY above) and page width (per-document, keyed by this
+    // map's own uri) read back the same way the topic viewer's generateHtml
+    // reads them, so a preference set in either preview survives closing
+    // and reopening this one.
+    const fontPrefs = this.context.globalState.get(FONT_PREFS_KEY, DEFAULT_FONT_PREFS);
+    const fontPrefsJson = escapeJson(JSON.stringify(fontPrefs));
+    const widthSelection = this.context.globalState.get<Record<string, string>>(WIDTH_SELECTION_KEY, {})[document.uri.toString()] || '';
+    const widthSelectionJson = escapeJson(JSON.stringify(widthSelection));
+
     return {
       html: `<!DOCTYPE html>
 <html lang="en"${isDark ? ' class="vscode-dark"' : ''}>
@@ -579,6 +646,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
 </head>
 <body class="mode-${mode}">
 <div id="dita-content-root">${result.html}</div>
+<script nonce="${nonce}">window.__fontPrefs=${fontPrefsJson};window.__widthSelection=${widthSelectionJson};</script>
 <script nonce="${nonce}">${script}</script>
 </body>
 </html>`,

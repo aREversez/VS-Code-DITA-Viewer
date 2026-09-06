@@ -479,6 +479,15 @@ export function activate(context: vscode.ExtensionContext) {
       getLastRenderedHtml: getLastRenderedHtmlForTesting,
       getLastRenderedMapHtml: getLastRenderedMapHtmlForTesting,
       ditaFileWatcherCounts,
+      // Font-size/typeface and page-width preferences are read from
+      // globalState at render time (FONT_PREFS_KEY, WIDTH_SELECTION_KEY in
+      // DitaViewerProvider.ts) and there is no command or webview click the
+      // harness can use to set them from outside -- @vscode/test-electron
+      // cannot reach into a webview to operate its toolbar. Exposing the
+      // Memento directly lets a test set a preference and then open a
+      // preview to check the bootstrap script it renders, rather than only
+      // being able to assert the default.
+      globalState: context.globalState,
     },
   };
 }
