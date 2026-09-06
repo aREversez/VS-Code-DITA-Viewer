@@ -10,8 +10,11 @@ import {
   renderBookError,
   renderBookSkipMessage,
   renderBookEntries,
+  renderBookParts,
+  wrapBookParts,
   clearTopicRenderCache,
 } from '../../editor/ditaRenderUtils';
+import type { BookPart } from '../../editor/bookPatch';
 
 const TEST_MAP_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
@@ -352,7 +355,7 @@ describe('bookRendering', () => {
 describe('renderBookEntries', () => {
   let dir: string;
   // Book mode hands ONE keyMap instance to every topic in a pass (see
-  // MapViewerProvider.renderBookContent). renderTopicCached compares it by
+  // MapViewerProvider.collectBookParts). renderTopicCached compares it by
   // identity, so a shared instance is the realistic fixture.
   const keyMap = new Map<string, string>();
   const fixedMtime = new Date('2024-01-01T00:00:00.000Z');
@@ -571,5 +574,156 @@ describe('renderBookEntries', () => {
     assert.ok(html.includes('src=""'), 'the image stays visibly broken instead of disappearing');
     assert.ok(!html.includes('panel is gone'), 'an exception message is not document content');
     assert.strictEqual(warnings.length, 1, 'and the cause is logged, since an empty src alone is not debuggable');
+  });
+
+  // renderBookParts exists so MapViewerProvider can diff two renders of the
+  // same map and send only the entries whose HTML changed (bookPatch.ts).
+  // Everything below pins the property that makes such a diff meaningful: a
+  // key says what a part is *about*, so it survives a content edit and moves
+  // only when the entry sequence itself does. Get that backwards and every
+  // keystroke looks structural -- the patch path never fires, and nothing
+  // fails. It just silently stops doing anything.
+  describe('part keys', () => {
+    function renderParts(entries: MapEntry[]): BookPart[] {
+      return renderBookParts({ entries, docDir: dir, keyMap, fileToWebviewUri, uiLanguage: 'en' });
+    }
+
+    it('should produce exactly one part per entry, in map order, which is what makes an index a valid way to address an entry', () => {
+      writeTopic('topics/count-a.dita', '<p>alpha</p>');
+      writeTopic('topics/count-b.dita', '<p>beta</p>');
+
+      const parts = renderParts([
+        topicRef('topics/count-a.dita', 'A'),
+        topicRef(undefined, 'Keydef'),
+        topicRef('topics/count-b.dita', 'B'),
+      ]);
+
+      assert.strictEqual(parts.length, 3, 'every branch of the assembly loop pushes exactly one part');
+      assert.deepStrictEqual(
+        parts.map((p) => p.key),
+        [
+          `topic:${join(dir, 'topics', 'count-a.dita')}`,
+          'struct:0:Keydef',
+          `topic:${join(dir, 'topics', 'count-b.dita')}`,
+        ],
+      );
+    });
+
+    it('should produce identical parts across two renders of an unchanged map, which is the case the diff answers with "nothing to send"', () => {
+      writeTopic('topics/stable.dita', '<p>same</p>');
+      const entries = [topicRef('topics/stable.dita', 'S'), topicRef(undefined, 'K')];
+
+      assert.deepStrictEqual(renderParts(entries), renderParts(entries));
+    });
+
+    it("should keep keys identical when a topic's content changes, so an edit reads as content and not as structure", () => {
+      const abs = writeTopic('topics/edited.dita', '<p>before</p>');
+      const entries = [topicRef('topics/edited.dita', 'E')];
+      const before = renderParts(entries);
+
+      // Rewritten AND mtime-bumped: writeTopic pins mtime precisely so that a
+      // rewrite alone is answered from the render cache, which would leave the
+      // HTML unchanged and this assertion vacuous.
+      writeFileSync(
+        abs,
+        '<?xml version="1.0" encoding="UTF-8"?>\n<topic id="edited"><title>edited</title><body><p>after</p></body></topic>',
+      );
+      bumpMtime(abs);
+      const after = renderParts(entries);
+
+      assert.notStrictEqual(before[0].html, after[0].html, 'the edit really did reach the rendered HTML');
+      assert.strictEqual(before[0].key, after[0].key, 'and it is still the same entry, so it patches in place');
+      assert.ok(after[0].html.includes('after') && !after[0].html.includes('before'));
+    });
+
+    it('should key each part by what it is about: topic path, sub-map path, or structural name', () => {
+      writeTopic('topics/kinded.dita', '<p>x</p>');
+
+      const parts = renderParts([
+        topicRef('topics/kinded.dita', 'T'),
+        topicRef('sub.ditamap', 'Sub Map'),
+        topicRef(undefined, 'Head'),
+      ]);
+
+      assert.strictEqual(parts[0].key, `topic:${join(dir, 'topics', 'kinded.dita')}`);
+      assert.strictEqual(parts[1].key, `map:${join(dir, 'sub.ditamap')}`, 'a sub-map renders as a heading but is still keyed by its own path');
+      assert.strictEqual(parts[2].key, 'struct:0:Head', 'nothing to resolve, so depth and name are all the identity there is');
+    });
+
+    it('should give colliding structural entries distinct keys, and the same distinct keys on the next render', () => {
+      // Two topicheads sharing a navtitle at the same depth are legal DITA and
+      // produce the same base key. A repeated key would let the diff read two
+      // different entries as one, so a collision earns a suffix -- derived from
+      // the collision count, so it does not drift between renders.
+      const entries = [topicRef(undefined, 'Dup'), topicRef(undefined, 'Dup')];
+
+      const first = renderParts(entries).map((p) => p.key);
+      const second = renderParts(entries).map((p) => p.key);
+
+      assert.strictEqual(new Set(first).size, 2, 'both parts stay individually addressable');
+      assert.deepStrictEqual(first, second);
+    });
+
+    it('should keep a duplicate-reference skip note keyed by the href it skipped', () => {
+      writeTopic('topics/dup-ref.dita', '<p>once</p>');
+
+      const parts = renderParts([
+        topicRef('topics/dup-ref.dita', 'D'),
+        topicRef('topics/dup-ref.dita', 'D again'),
+      ]);
+
+      assert.strictEqual(parts[0].key, `topic:${join(dir, 'topics', 'dup-ref.dita')}`);
+      assert.strictEqual(parts[1].key, 'skip:topics/dup-ref.dita', 'keyed by the href as written; there is no second file to point at');
+      assert.ok(parts[1].html.includes('book-skip'));
+    });
+
+    it('should key a failed topic exactly like the topic it stands in for, so fixing the reference patches that one entry', () => {
+      const entries = [topicRef('topics/was-missing.dita', 'W')];
+
+      clearTopicRenderCache();
+      const broken = renderParts(entries);
+      assert.ok(broken[0].html.includes('book-entry--error'), 'unreadable, so an inline error block');
+
+      // The author creates the file the map was already pointing at.
+      writeTopic('topics/was-missing.dita', '<p>now here</p>');
+      clearTopicRenderCache();
+      const fixed = renderParts(entries);
+
+      assert.strictEqual(broken[0].key, fixed[0].key, 'same entry, so this is one patched entry rather than a new document');
+      assert.ok(fixed[0].html.includes('now here') && !fixed[0].html.includes('book-entry--error'));
+    });
+
+    it('should give every part exactly one root element, so replacing one by index leaves the entry count -- and every other index -- intact', () => {
+      writeTopic('topics/rooted.dita', '<p>x</p>');
+
+      const parts = renderParts([
+        topicRef('topics/rooted.dita', 'T'),
+        topicRef(undefined, 'Head'),
+        topicRef('topics/rooted.dita', 'T twice'),
+        topicRef('sub.ditamap', 'Sub'),
+      ]);
+
+      // The webview patches with `entry.outerHTML = part.html`, which only
+      // preserves the child count while a part is a single element. Asserted
+      // rather than assumed, since a second root would shift every index after
+      // it and corrupt the rest of the book.
+      for (const part of parts) {
+        const html = part.html.trim();
+        const root = html.startsWith('<div') ? 'div' : html.startsWith('<p') ? 'p' : undefined;
+        assert.ok(root, `part ${part.key} opens with a single root element, got: ${html.slice(0, 32)}`);
+        assert.ok(html.endsWith(`</${root}>`), `part ${part.key} closes that same element and nothing follows it`);
+      }
+    });
+
+    it('should join back into byte-identical output, so going incremental changes nothing about what a full render produces', () => {
+      writeTopic('topics/wrapped.dita', '<p>x</p>');
+      const entries = [
+        topicRef('topics/wrapped.dita', 'W'),
+        topicRef(undefined, 'K'),
+        topicRef('topics/wrapped.dita', 'W again'),
+      ];
+
+      assert.strictEqual(wrapBookParts(renderParts(entries)), renderBook(entries));
+    });
   });
 });

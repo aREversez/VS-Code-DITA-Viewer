@@ -4,6 +4,7 @@ import { DitaNode } from '../parser/domTypes';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
 import type { MapEntry } from '../render/mapTypeMap';
+import type { BookPart } from './bookPatch';
 
 // ── Image dimensions (for reserving layout space before the image loads) ──
 //
@@ -1049,23 +1050,41 @@ export interface BookRenderInput {
 }
 
 /**
- * Assembles every topic a map references into one long document, which is
- * what Book mode shows. Called by MapViewerProvider's renderBookContent and
- * by scripts/bench-book-render.js.
+ * Assembles every topic a map references into the ordered parts that Book
+ * mode shows as one long document. Called by MapViewerProvider's
+ * collectBookParts and by scripts/bench-book-render.js.
  *
  * It used to be a private method on the provider, with the benchmark keeping
  * its own hand-copied version of the loop. That copy had already drifted once
  * (it built a fresh keyMap per topic), and once rendering became cached the
  * drift stopped being cosmetic: the benchmark would have measured zero reuse
  * and reported that the cache did not work. One loop, two callers.
+ *
+ * Returns the parts rather than the joined document so MapViewerProvider can
+ * diff two renders of the same map and send only the entries that changed
+ * (see bookPatch.ts). wrapBookParts turns them back into exactly the document
+ * this function used to return, byte for byte.
  */
-export function renderBookEntries(input: BookRenderInput): string {
+export function renderBookParts(input: BookRenderInput): BookPart[] {
   const { entries, docDir, keyMap, fileToWebviewUri, uiLanguage } = input;
 
   // Track visited absolute paths to avoid duplicates
   const visited = new Set<string>();
 
-  const parts: string[] = [];
+  const parts: BookPart[] = [];
+  // A key per part, so two renders of the same map can be compared part by
+  // part. Uniqueness is enforced here rather than assumed: a topic's resolved
+  // path cannot repeat (the visited set above already de-duplicates those),
+  // but two sub-maps, two skip notes or two structural headings can easily
+  // collide, and a repeated key would make the diff read two different
+  // entries as the same one. The suffix comes from the collision count, so it
+  // is itself stable across re-renders of an unchanged map.
+  const usedKeys = new Map<string, number>();
+  const push = (keyBase: string, html: string): void => {
+    const seen = usedKeys.get(keyBase) ?? 0;
+    usedKeys.set(keyBase, seen + 1);
+    parts.push({ key: seen === 0 ? keyBase : `${keyBase}~${seen + 1}`, html });
+  };
   for (const entry of entries) {
     if (entry.href) {
       // Sub-map reference: its contents were already inlined as child
@@ -1073,12 +1092,15 @@ export function renderBookEntries(input: BookRenderInput): string {
       // instead of parsing the map file as a topic.
       const refPath = entry.href.split('#')[0];
       if (refPath.toLowerCase().endsWith('.ditamap')) {
-        parts.push(renderBookPlaceholder(entry.displayName, entry.depth));
+        push(
+          `map:${resolve(docDir, decodeHrefPart(refPath))}`,
+          renderBookPlaceholder(entry.displayName, entry.depth),
+        );
         continue;
       }
       const absPath = resolve(docDir, decodeHrefPart(refPath));
       if (visited.has(absPath)) {
-        parts.push(renderBookSkipMessage(entry.href));
+        push(`skip:${entry.href}`, renderBookSkipMessage(entry.href));
         continue;
       }
       visited.add(absPath);
@@ -1114,7 +1136,10 @@ export function renderBookEntries(input: BookRenderInput): string {
       });
 
       if (result.error) {
-        parts.push(renderBookError(entry.displayName, result.error, entry.depth));
+        // Keyed like the topic it stands in for, so a topic that starts or
+        // stops failing to parse patches that one entry in place instead of
+        // forcing a whole-document replace.
+        push(`topic:${absPath}`, renderBookError(entry.displayName, result.error, entry.depth));
       } else {
         // Book mode is just each referenced topic's own content, one
         // after another -- the same profiling/highlighting a topic
@@ -1122,14 +1147,28 @@ export function renderBookEntries(input: BookRenderInput): string {
         // above) carries straight through here unchanged. No separate
         // topicref-level (ditamap-source) profiling layered on top of
         // it; that scope is exclusive to Outline mode's tree.
-        parts.push(`<div class="book-entry">${result.html}</div>`);
+        push(`topic:${absPath}`, `<div class="book-entry">${result.html}</div>`);
       }
     } else {
-      parts.push(renderBookPlaceholder(entry.displayName, entry.depth));
+      push(`struct:${entry.depth}:${entry.displayName}`, renderBookPlaceholder(entry.displayName, entry.depth));
     }
   }
 
-  return `<div class="ditamap-book">${parts.join('\n')}</div>`;
+  return parts;
+}
+
+/**
+ * Joins parts into the single container that both the stylesheet and the
+ * webview script address as .ditamap-book. Kept apart from renderBookParts so
+ * the incremental path can diff the parts and still produce exactly the same
+ * document whenever it has to fall back to sending all of them.
+ */
+export function wrapBookParts(parts: BookPart[]): string {
+  return `<div class="ditamap-book">${parts.map((part) => part.html).join('\n')}</div>`;
+}
+
+export function renderBookEntries(input: BookRenderInput): string {
+  return wrapBookParts(renderBookParts(input));
 }
 
 // ── Webview search overlay (Ctrl+F) ──
