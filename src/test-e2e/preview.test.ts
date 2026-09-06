@@ -64,6 +64,44 @@ describe('DITA/DITAMAP preview rendering', () => {
     await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
 
+  it('ships a webview script whose content-update message names match the ones the provider posts', async () => {
+    // The map preview's script is a template string inside MapViewerProvider,
+    // and the provider posts to it from TypeScript. Nothing but a running
+    // extension host can see both sides at once: getMapWebviewScript calls
+    // vscode.l10n.t, so it cannot be unit-tested, and the message names are
+    // shared through constants precisely so the two sides cannot drift.
+    //
+    // What this pins is the remaining hole -- that the interpolation actually
+    // reaches the page. An escaped \${ or a script moved out of a template
+    // literal would ship `e.data.type === '${MSG_PATCH_CONTENT}'`, every patch
+    // would be silently ignored, and the symptom would be indistinguishable
+    // from "the preview stopped updating on edit".
+    //
+    // Tree mode is enough: the script is the same in both modes, and book mode
+    // can only be entered from a button inside the webview, which the test
+    // harness cannot click.
+    const ext = vscode.extensions.getExtension(EXTENSION_ID)!;
+    const uri = vscode.Uri.file(path.join(fixturesDir, 'test.ditamap'));
+
+    await vscode.commands.executeCommand('vscode.openWith', uri, 'ditaViewer.mapPreview');
+
+    const getHtml = () => ext.exports._test.getLastRenderedMapHtml(uri.toString());
+    await waitFor(() => !!getHtml());
+
+    const page = getHtml();
+    assert.ok(page.includes('<script nonce='), 'expected the captured page to include the webview script');
+    assert.ok(!page.includes('${MSG_'), 'an un-interpolated constant would leave every message name unmatched');
+    for (const handler of [
+      "e.data.type === 'updateContent'",
+      "e.data.type === 'patchContent'",
+      "type: 'requestFullRender'",
+    ]) {
+      assert.ok(page.includes(handler), `expected the shipped script to handle ${handler}`);
+    }
+
+    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+  });
+
   it('toggles back to the source editor when the command runs in the reading view', async () => {
     const uri = vscode.Uri.file(path.join(fixturesDir, 'topics', 'db_overview.dita'));
 
