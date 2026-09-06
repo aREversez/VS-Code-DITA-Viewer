@@ -84,6 +84,7 @@
   "Sidebar Outline": "Sidebar Outline",
   "Switch between outline tree and full book view": "Switch between outline tree and full book view",
   "Target id \"{0}\" not found in {1}.": "Target id \"{0}\" not found in {1}.",
+  "Unknown element <{0}>: not a standard DITA element and has no @class specialization DITA Viewer recognizes. It will render, but its own tag is dropped and only its content shows.": "Unknown element <{0}>: not a standard DITA element and has no @class specialization DITA Viewer recognizes. It will render, but its own tag is dropped and only its content shows.",
   "this file": "this file",
   "The configured DITA-OT path is invalid: no dita executable was found under {0}.": "The configured DITA-OT path is invalid: no dita executable was found under {0}.",
   "The output directory already exists and is not empty: {0}. Overwrite it?": "The output directory already exists and is not empty: {0}. Overwrite it?",

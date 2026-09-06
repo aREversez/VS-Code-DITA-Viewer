@@ -13,6 +13,7 @@ import {
   collectMapSymbols,
   collectRefEntries,
   collectTopicSymbols,
+  collectUnknownElements,
   DocSymbolSpec,
   findConrefTargetOffset,
   findEnclosingKeydefKeys,
@@ -33,6 +34,7 @@ import { collectReferenceableFiles, WalkEntry } from './referenceableFiles';
 import { buildKeyMap, findDitamapFiles } from '../editor/DitaViewerProvider';
 import { decodeHrefPart } from '../editor/ditaRenderUtils';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
+import { DitaNode } from '../parser/domTypes';
 import { STANDARD_TAG_TO_BASETYPE } from '../parser/standardTagMap';
 import { MAP_STANDARD_TAG_TO_BASETYPE } from '../parser/mapTagMap';
 
@@ -587,7 +589,56 @@ function validateDocument(document: vscode.TextDocument, collection: vscode.Diag
     }
   }
 
+  diagnostics.push(...collectUnknownElementDiagnostics(document));
+
   collection.set(document.uri, diagnostics);
+}
+
+// renderEffectiveNode() in renderer.ts drops any element the parser could not
+// assign a base type to -- silently rendering its children in its place, no
+// visual trace the element itself existed. Parsing here is a second parse
+// of the same document provideDocumentSymbols() already does independently
+// (both run on their own VS Code-driven schedule; there is no shared cache
+// between them), which costs one document's worth of SAX parsing on this
+// validator's own 700ms debounce -- proportional to a single open file, not
+// the book-mode multi-topic assembly the render-cache work above is about.
+// A malformed document while typing is expected and not an error to
+// surface here; provideDocumentSymbols already tolerates the same failure
+// the same way, by returning nothing rather than throwing through the
+// caller.
+function collectUnknownElementDiagnostics(document: vscode.TextDocument): vscode.Diagnostic[] {
+  let root: DitaNode;
+  try {
+    const xml = preprocessEntities(document.getText());
+    const isMap = isMapDocument(document);
+    root = (isMap ? parseDitamap(xml) : parseDita(xml)).root;
+  } catch {
+    return [];
+  }
+
+  const maxLine = Math.max(0, document.lineCount - 1);
+  return collectUnknownElements(root).map((entry) => {
+    const startLine = Math.min(Math.max(entry.sourceRange.startLine, 0), maxLine);
+    const endLine = Math.min(Math.max(entry.sourceRange.endLine, startLine), maxLine);
+    let start = new vscode.Position(startLine, Math.max(0, entry.sourceRange.startCol));
+    let end = new vscode.Position(endLine, Math.max(0, entry.sourceRange.endCol));
+    if (!end.isAfter(start)) {
+      // A self-closing unknown element (sax fires onopentag/onclosetag at
+      // the same position for one) would otherwise produce a zero-width
+      // range, which VS Code will not draw a squiggle under.
+      const lineLength = document.lineAt(startLine).text.length;
+      start = new vscode.Position(startLine, Math.min(start.character, lineLength));
+      end = new vscode.Position(startLine, Math.min(start.character + entry.tagName.length + 1, lineLength));
+    }
+    const d = new vscode.Diagnostic(
+      new vscode.Range(start, end),
+      vscode.l10n.t('Unknown element <{0}>: not a standard DITA element and has no @class specialization DITA Viewer recognizes. It will render, but its own tag is dropped and only its content shows.', entry.tagName),
+      vscode.DiagnosticSeverity.Warning,
+    );
+    d.source = 'dita';
+    d.code = 'unknown-element';
+    return d;
+  });
 }
 
 // ── Tag auto-closing (mirrors VS Code's built-in HTML behaviour) ──

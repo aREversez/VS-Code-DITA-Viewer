@@ -84,6 +84,7 @@
   "Sidebar Outline": "侧边栏目录",
   "Switch between outline tree and full book view": "在大纲树和整书视图之间切换",
   "Target id \"{0}\" not found in {1}.": "在 {1} 中找不到目标 id \"{0}\"。",
+  "Unknown element <{0}>: not a standard DITA element and has no @class specialization DITA Viewer recognizes. It will render, but its own tag is dropped and only its content shows.": "未知元素 <{0}>：不是标准 DITA 元素，也没有 DITA Viewer 能识别的 @class 特化。它仍会渲染，但自身标签会被丢弃，只显示其内容。",
   "this file": "当前文件",
   "The configured DITA-OT path is invalid: no dita executable was found under {0}.": "配置的 DITA-OT 路径无效：{0} 下未找到 dita 可执行文件。",
   "The output directory already exists and is not empty: {0}. Overwrite it?": "输出目录已存在且非空：{0}。是否覆盖？",

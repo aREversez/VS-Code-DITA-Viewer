@@ -4,6 +4,7 @@ import {
   collectMapSymbols,
   collectRefEntries,
   collectTopicSymbols,
+  collectUnknownElements,
   findConrefTargetOffset,
   findEnclosingKeydefKeys,
   findIdAttrAt,
@@ -22,6 +23,7 @@ import {
   stripSameDocumentFragmentPrefix,
 } from '../../language/ditaLanguageUtils';
 import { parseDita, parseDitamap } from '../../parser/ditaParser';
+import { DitaNode } from '../../parser/domTypes';
 import { collectMapEntries, createBookRoleLabeler } from '../../render/mapTypeMap';
 
 describe('ditaLanguageUtils', () => {
@@ -598,6 +600,102 @@ describe('ditaLanguageUtils', () => {
         entries.map((e) => e.role),
         ['第 1 章', 'Appendix!'],
       );
+    });
+  });
+
+  describe('collectUnknownElements', () => {
+    it('flags an element with no known tag name and no @class specialization', () => {
+      const xml = `<topic id="t1"><title>T</title><body><mistyped-tag>x</mistyped-tag></body></topic>`;
+      const doc = parseDita(xml);
+      const unknown = collectUnknownElements(doc.root);
+      assert.strictEqual(unknown.length, 1);
+      assert.strictEqual(unknown[0].tagName, 'mistyped-tag');
+    });
+
+    it('does not flag standard DITA elements', () => {
+      const xml = `<concept id="c1"><title>T</title><conbody>
+        <p>text</p>
+        <note type="warning">careful</note>
+        <ul><li>one</li><li>two</li></ul>
+      </conbody></concept>`;
+      const doc = parseDita(xml);
+      assert.deepStrictEqual(collectUnknownElements(doc.root), []);
+    });
+
+    it('does not flag a specialized element whose @class resolves it to a known base type', () => {
+      // A specialization vocabulary can use an arbitrary tag name as long as
+      // @class states what it specializes -- parseBaseType() in
+      // ditaParser.ts falls back to this when the tag name itself is not in
+      // the standard map, and this has to agree with that or every real
+      // specialized document would light up as "unknown".
+      const xml = `<topic id="t1"><title>T</title><body>
+        <my-custom-para class="- topic/p ">hello</my-custom-para>
+      </body></topic>`;
+      const doc = parseDita(xml);
+      assert.deepStrictEqual(collectUnknownElements(doc.root), []);
+    });
+
+    it('does not descend into <mathml> content, which is deliberately non-DITA markup', () => {
+      // mathml resolves to topic/foreign (see standardTagMap.ts), whose
+      // renderer serializes its children as raw markup without consulting
+      // each one's own baseType -- see BASE_TYPE_RENDERERS['topic/foreign']
+      // in baseTypeMap.ts. Every tag under it (mi, mo, mrow, ...) correctly
+      // has no DITA baseType; that is not a typo to report.
+      const xml = `<topic id="t1"><title>T</title><body>
+        <p><mathml><mrow><mi>x</mi><mo>+</mo><mi>y</mi></mrow></mathml></p>
+      </body></topic>`;
+      const doc = parseDita(xml);
+      assert.deepStrictEqual(collectUnknownElements(doc.root), []);
+    });
+
+    it('still flags a genuine typo alongside unrelated <mathml> content in the same document', () => {
+      // The <mathml> skip must be scoped to that one subtree, not something
+      // that quietly suppresses every other diagnostic once any foreign
+      // content appears anywhere in the document.
+      const xml = `<topic id="t1"><title>T</title><body>
+        <p><mathml><mi>x</mi></mathml></p>
+        <bogus-tag>oops</bogus-tag>
+      </body></topic>`;
+      const doc = parseDita(xml);
+      const unknown = collectUnknownElements(doc.root);
+      assert.strictEqual(unknown.length, 1);
+      assert.strictEqual(unknown[0].tagName, 'bogus-tag');
+    });
+
+    it('flags nested unknown elements individually rather than only the outermost one', () => {
+      const xml = `<topic id="t1"><title>T</title><body>
+        <outer-bad><inner-bad>x</inner-bad></outer-bad>
+      </body></topic>`;
+      const doc = parseDita(xml);
+      const unknown = collectUnknownElements(doc.root);
+      assert.deepStrictEqual(
+        unknown.map((u) => u.tagName).sort(),
+        ['inner-bad', 'outer-bad'],
+      );
+    });
+
+    it('does not flag a node with no tag name of its own, such as the synthetic wrapper the parser starts from', () => {
+      // parseDita()/parseDitamap() already unwrap this before returning
+      // .root -- the returned root is always a real element with a tag
+      // name -- but collectUnknownElements() takes a DitaNode directly and
+      // has no way to enforce that at the type level, so its own guard
+      // against a tagName-less node is worth pinning on its own rather
+      // than relying on every future caller happening to pass an already-
+      // unwrapped root.
+      const wrapper: DitaNode = {
+        type: 'element',
+        children: [],
+        sourceRange: { startLine: 0, startCol: 0, endLine: 0, endCol: 0 },
+      };
+      assert.deepStrictEqual(collectUnknownElements(wrapper), []);
+    });
+
+    it('works the same way for .ditamap documents', () => {
+      const xml = `<map><title>T</title><not-a-real-map-element/></map>`;
+      const doc = parseDitamap(xml);
+      const unknown = collectUnknownElements(doc.root);
+      assert.strictEqual(unknown.length, 1);
+      assert.strictEqual(unknown[0].tagName, 'not-a-real-map-element');
     });
   });
 });

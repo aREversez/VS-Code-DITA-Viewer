@@ -643,3 +643,54 @@ export function collectMapSymbols(root: DitaNode, roleFormat?: RoleLabelFormatte
   }
   return walk(root, 0);
 }
+
+// ── Unknown-element detection ──
+
+/** An element the parser could not assign a DITA base type to. */
+export interface UnknownElementEntry {
+  tagName: string;
+  sourceRange: SourceRange;
+}
+
+// The one base type that deliberately opts a subtree out of DITA's own
+// vocabulary: <foreign>, <mathml> and this project's 'svg-container'
+// convenience mapping (see standardTagMap.ts) all resolve to this, and
+// their renderer (BASE_TYPE_RENDERERS['topic/foreign'] in baseTypeMap.ts)
+// serializes their children as raw markup without ever consulting each
+// descendant's own baseType. Every MathML/SVG tag underneath is correctly
+// unrecognized by parseBaseType() -- that is the point, it is not DITA --
+// so walking into one of these and reporting its contents here would just
+// relabel valid MathML/SVG markup as "unknown DITA elements".
+const FOREIGN_BASETYPE = 'topic/foreign';
+
+/**
+ * Walks a parsed document and collects every element the parser fell
+ * through on: neither its tag name nor an explicit @class attribute (DITA's
+ * own mechanism for a specialized element to say what it specializes)
+ * resolved to a known base type. renderEffectiveNode() in renderer.ts
+ * treats exactly this case as "render the children, drop the element" --
+ * silently, with no visual indication -- so from the reader's side a typo
+ * here looks identical to the content simply not being there. Reusing
+ * node.baseType, already computed by the same parseBaseType() the renderer
+ * itself relies on, means this can never disagree with what actually gets
+ * dropped: there is one source of truth for "does DITA Viewer recognize
+ * this element", not a second copy of the classification logic that could
+ * drift from it.
+ */
+export function collectUnknownElements(root: DitaNode): UnknownElementEntry[] {
+  const results: UnknownElementEntry[] = [];
+
+  function walk(node: DitaNode): void {
+    if (node.type !== 'element') return;
+    if (node.baseType === FOREIGN_BASETYPE) return;
+    if (!node.baseType && node.tagName) {
+      results.push({ tagName: node.tagName, sourceRange: node.sourceRange });
+    }
+    for (const child of node.children) {
+      walk(child);
+    }
+  }
+
+  walk(root);
+  return results;
+}
