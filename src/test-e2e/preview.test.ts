@@ -64,6 +64,74 @@ describe('DITA/DITAMAP preview rendering', () => {
     await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
 
+  it('ships a webview script whose content-update message names match the ones the provider posts', async () => {
+    // The map preview's script is a template string inside MapViewerProvider,
+    // and the provider posts to it from TypeScript. Nothing but a running
+    // extension host can see both sides at once: getMapWebviewScript calls
+    // vscode.l10n.t, so it cannot be unit-tested, and the message names are
+    // shared through constants precisely so the two sides cannot drift.
+    //
+    // What this pins is the remaining hole -- that the interpolation actually
+    // reaches the page. An escaped \${ or a script moved out of a template
+    // literal would ship `e.data.type === '${MSG_PATCH_CONTENT}'`, every patch
+    // would be silently ignored, and the symptom would be indistinguishable
+    // from "the preview stopped updating on edit".
+    //
+    // Tree mode is enough: the script is the same in both modes, and book mode
+    // can only be entered from a button inside the webview, which the test
+    // harness cannot click.
+    const ext = vscode.extensions.getExtension(EXTENSION_ID)!;
+    const uri = vscode.Uri.file(path.join(fixturesDir, 'test.ditamap'));
+
+    await vscode.commands.executeCommand('vscode.openWith', uri, 'ditaViewer.mapPreview');
+
+    const getHtml = () => ext.exports._test.getLastRenderedMapHtml(uri.toString());
+    await waitFor(() => !!getHtml());
+
+    const page = getHtml();
+    assert.ok(page.includes('<script nonce='), 'expected the captured page to include the webview script');
+    assert.ok(!page.includes('${MSG_'), 'an un-interpolated constant would leave every message name unmatched');
+    for (const handler of [
+      "e.data.type === 'updateContent'",
+      "e.data.type === 'patchContent'",
+      "type: 'requestFullRender'",
+    ]) {
+      assert.ok(page.includes(handler), `expected the shipped script to handle ${handler}`);
+    }
+
+    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+  });
+
+  it('ships the search overlay with its injected decision function inlined, not referenced', async () => {
+    // getSearchOverlayScript interpolates a TypeScript function's .toString()
+    // into the overlay script so the webview runs the very algorithm the unit
+    // tests cover. The unit tests can only verify that against the unminified
+    // build; the shipped bundle is minified, and that is where the arrangement
+    // has a failure mode no unit test can see. A bundler that constant-folded
+    // the .toString() call would emit `var planCurrentMarkMoveCore = Tr;` --
+    // naming a binding that exists in the bundle and not in the webview, so the
+    // overlay would throw on first use and the search bar would simply be dead.
+    //
+    // Both shapes a minifier can legitimately produce are accepted (a function
+    // declaration, or a parenthesised arrow); what must not appear is a bare
+    // identifier after the `=`.
+    const ext = vscode.extensions.getExtension(EXTENSION_ID)!;
+    const uri = vscode.Uri.file(path.join(fixturesDir, 'test.ditamap'));
+
+    await vscode.commands.executeCommand('vscode.openWith', uri, 'ditaViewer.mapPreview');
+
+    const getHtml = () => ext.exports._test.getLastRenderedMapHtml(uri.toString());
+    await waitFor(() => !!getHtml());
+
+    const page = getHtml();
+    assert.ok(
+      /var planCurrentMarkMoveCore = (?:function\b|\()/.test(page),
+      'expected the shipped overlay to inline the function body, not a reference to it',
+    );
+
+    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+  });
+
   it('toggles back to the source editor when the command runs in the reading view', async () => {
     const uri = vscode.Uri.file(path.join(fixturesDir, 'topics', 'db_overview.dita'));
 
@@ -155,6 +223,28 @@ describe('DITA/DITAMAP preview rendering', () => {
       assert.ok(paths.includes('db_ui_test.dita'), `expected db_ui_test.dita among: ${paths.join(', ')}`);
     });
 
+    it('finds conref usages of an id from the conref reference site itself', async () => {
+      // Cursor ON the conref value rather than on the id="..." declaration --
+      // the other entry into the kind:'id' path. The fragment has to resolve
+      // to the addressed element (shared_note), not to its topic scope
+      // (db_overview), or this path agrees with neither the declaration site
+      // above nor where Go to Definition actually lands.
+      const uiUri = vscode.Uri.file(path.join(fixturesDir, 'topics', 'db_ui_test.dita'));
+      const doc = await vscode.workspace.openTextDocument(uiUri);
+      const text = doc.getText();
+      const conrefOffset = text.indexOf('db_overview/shared_note') + 2;
+      const position = doc.positionAt(conrefOffset);
+
+      const locations = (await vscode.commands.executeCommand(
+        'vscode.executeReferenceProvider',
+        uiUri,
+        position,
+      )) as vscode.Location[];
+
+      const paths = locations.map((l) => path.basename(l.uri.fsPath));
+      assert.ok(paths.includes('db_ui_test.dita'), `expected db_ui_test.dita among: ${paths.join(', ')}`);
+    });
+
     it('resolves references from a reference site (not just a declaration site)', async () => {
       // Put the cursor ON the keyref usage itself, not on the keydef --
       // should resolve to the same key and find the OTHER usages.
@@ -197,6 +287,73 @@ describe('DITA/DITAMAP preview rendering', () => {
 
       const paths = locations.map((l) => path.basename(l.uri.fsPath));
       assert.ok(paths.includes('db_ui_test.dita'), `expected keyref usages, got: ${paths.join(', ')}`);
+    });
+  });
+
+  describe('Shared file watcher', () => {
+    const counts = (): Map<string, number> =>
+      new Map(vscode.extensions.getExtension(EXTENSION_ID)!.exports._test.ditaFileWatcherCounts());
+    const totalRefs = (m: Map<string, number>): number => [...m.values()].reduce((a, b) => a + b, 0);
+    const snapshot = (): string => JSON.stringify([...counts()].sort());
+
+    /**
+     * Waits until the consumer counts stop moving. Opening a panel also changes
+     * the active editor, which the Explorer's map tree reacts to by taking its
+     * own share of the same folder's watcher; measuring before that lands would
+     * make the "closing handed both shares back" assertion below depend on
+     * event ordering rather than on the code.
+     */
+    async function settle(timeoutMs = 6000): Promise<void> {
+      const start = Date.now();
+      let last = snapshot();
+      while (Date.now() - start < timeoutMs) {
+        await new Promise((r) => setTimeout(r, 250));
+        const now = snapshot();
+        if (now === last) return;
+        last = now;
+      }
+      throw new Error(`Timed out waiting for watcher consumers to settle: ${snapshot()}`);
+    }
+
+    it('serves a topic panel and a map panel from one folder watcher, and releases both on close', async () => {
+      const ext = vscode.extensions.getExtension(EXTENSION_ID)!;
+      await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+      await settle();
+      const baseline = totalRefs(counts());
+
+      const topic = vscode.Uri.file(path.join(fixturesDir, 'topics', 'db_overview.dita'));
+      const map = vscode.Uri.file(path.join(fixturesDir, 'test.ditamap'));
+
+      await vscode.commands.executeCommand('vscode.openWith', topic, 'ditaViewer.preview');
+      await waitFor(() => !!ext.exports._test.getLastRenderedHtml(topic.toString()));
+      await vscode.commands.executeCommand('vscode.openWith', map, 'ditaViewer.mapPreview');
+      await waitFor(() => !!ext.exports._test.getLastRenderedMapHtml(map.toString()));
+      await settle();
+
+      const withBoth = counts();
+      // test-runner.cjs opens test-dita-file as the single workspace folder, so
+      // both documents resolve to the same watch base. Each panel used to build
+      // its own createFileSystemWatcher over that base and the same glob.
+      assert.strictEqual(
+        withBoth.size,
+        1,
+        `expected one watched folder for two panels, got: ${[...withBoth.keys()].join(', ')}`,
+      );
+      assert.ok(
+        totalRefs(withBoth) >= baseline + 2,
+        `expected both panels to hold a share (baseline ${baseline}), got ${totalRefs(withBoth)}`,
+      );
+
+      await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+      await settle();
+      const afterClose = totalRefs(counts());
+      // Not necessarily zero: the sidebar tree keeps its own share for the map
+      // it is showing, which is what lets it notice a git checkout rewriting the
+      // map on disk. What must be gone is the two panels' shares.
+      assert.ok(
+        afterClose <= totalRefs(withBoth) - 2,
+        `expected both panels to release their shares: ${totalRefs(withBoth)} -> ${afterClose}`,
+      );
     });
   });
 });

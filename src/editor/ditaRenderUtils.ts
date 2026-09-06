@@ -3,6 +3,8 @@ import { resolve, dirname, relative, isAbsolute, extname, normalize } from 'path
 import { DitaNode } from '../parser/domTypes';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
+import type { MapEntry } from '../render/mapTypeMap';
+import type { BookPart } from './bookPatch';
 
 // ── Image dimensions (for reserving layout space before the image loads) ──
 //
@@ -260,14 +262,27 @@ export function makeFileCache(docDir: string) {
     return collectText(titleChild);
   }
 
-  return { loadFile, findElementById, findTitleOfElement };
+  /**
+   * Every absolute path this cache was asked for, including ones that turned
+   * out not to exist (those are memoized as undefined). Callers use it as the
+   * dependency set of a render: rendered HTML can only be reused for as long
+   * as none of these files changes. A missing file has to be reported as
+   * carefully as a present one, since creating it later is exactly the kind
+   * of change that must invalidate.
+   */
+  function touchedFiles(): string[] {
+    return [...cache.keys()];
+  }
+
+  return { loadFile, findElementById, findTitleOfElement, touchedFiles };
 }
 
 export function makeConrefResolver(
   docDir: string,
   ownRoot?: DitaNode,
+  sharedCache?: ReturnType<typeof makeFileCache>,
 ): (conref: string) => DitaNode | undefined {
-  const cache = makeFileCache(docDir);
+  const cache = sharedCache ?? makeFileCache(docDir);
 
   return (conref: string): DitaNode | undefined => {
     const hashIdx = conref.indexOf('#');
@@ -312,8 +327,9 @@ export function makeConrefResolver(
 export function makeConrefRangeResolver(
   docDir: string,
   ownRoot?: DitaNode,
+  sharedCache?: ReturnType<typeof makeFileCache>,
 ): (conref: string, conrefend: string) => DitaNode[] | undefined {
-  const cache = makeFileCache(docDir);
+  const cache = sharedCache ?? makeFileCache(docDir);
 
   function resolveRef(ref: string): { root: DitaNode; id: string } | undefined {
     const hashIdx = ref.indexOf('#');
@@ -379,8 +395,11 @@ export function makeConrefRangeResolver(
   };
 }
 
-export function makeFileTitleResolver(docDir: string): (href: string) => string | undefined {
-  const cache = makeFileCache(docDir);
+export function makeFileTitleResolver(
+  docDir: string,
+  sharedCache?: ReturnType<typeof makeFileCache>,
+): (href: string) => string | undefined {
+  const cache = sharedCache ?? makeFileCache(docDir);
 
   return (href: string): string | undefined => {
     // Only local relative references can be resolved from disk — never probe
@@ -443,6 +462,45 @@ export function findTextMatches(
     }
   }
   return matches;
+}
+
+// Decides which search marks have to be touched to move the '__current' class
+// from one match to another. Shared between unit tests and the webview search
+// overlay (injected there via planCurrentMarkMove.toString(), so it must stay
+// fully self-contained — no references to other module-level bindings).
+//
+// The point of this existing at all: without it, moving the highlight one step
+// means walking every mark in the document and calling classList.add or
+// .remove on each, which in book mode is tens of thousands of style
+// invalidations per arrow key. With it, the caller touches two. That trade is
+// only sound for as long as exactly one mark carries the class and the caller
+// knows which — hence `previous`, and hence the cases below where the two
+// disagree.
+//
+// Returns indices into the caller's mark list; -1 means "nothing to do".
+//   clear — the mark to remove '__current' from
+//   set   — the mark to add it to
+export function planCurrentMarkMove(
+  previous: number,
+  next: number,
+  count: number,
+): { clear: number; set: number } {
+  // An index outside the list names no mark, and an empty list puts both of them
+  // outside it, so these two guards are the entire decision -- there is no
+  // separate no-marks case that has to be kept in step with them. That they are
+  // reachable rather than theoretical: the match list shrinks whenever the
+  // document changes under an open search bar, and the index tracked from the
+  // previous, longer list outlives it by one update. Clearing "mark 7" of a
+  // 3-mark list would be a silent no-op at best, so drop it and let the caller's
+  // own bounds check be the second line of defence.
+  const previousIsValid = previous >= 0 && previous < count;
+  const nextIsValid = next >= 0 && next < count;
+  // previous === next is the mark that already carries the class. Reporting it
+  // as something to clear first would take the highlight off and put it back
+  // on within one task — invisible normally, but a flash when the browser
+  // happens to paint in between, and pointless work either way.
+  const clear = previousIsValid && previous !== next ? previous : -1;
+  return { clear, set: nextIsValid ? next : -1 };
 }
 
 // ── Default note labels ──
@@ -563,6 +621,15 @@ export interface TopicRenderInput {
   /** See RenderContext.suppressIndexterm (render/renderer.ts) -- passed
    *  through untouched; only the "Export as HTML" command sets this. */
   suppressIndexterm?: boolean;
+  /**
+   * Optional sink: absolute paths of every file this render read -- the
+   * topic itself, each conref/conrefend target, each file consulted for an
+   * xref title, and each image whose dimensions were emitted. Callers that
+   * cache rendered output use it as their invalidation set; renderTopicCached
+   * is the only caller that does. Left unset by "Export as HTML", which
+   * renders once and has nothing to invalidate.
+   */
+  collectDependencies?: Set<string>;
 }
 
 export interface TopicRenderResult {
@@ -580,6 +647,8 @@ export interface TopicXmlRenderInput {
   uiLanguage?: string;
   /** See TopicRenderInput.suppressIndexterm above. */
   suppressIndexterm?: boolean;
+  /** See TopicRenderInput.collectDependencies above. */
+  collectDependencies?: Set<string>;
 }
 
 export interface ParsedTopicResult {
@@ -692,7 +761,7 @@ export function expandDitamapRefs(
 }
 
 export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
-  const { xml, docDir, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm } = input;
+  const { xml, docDir, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, collectDependencies } = input;
   try {
     const preprocessedXml = preprocessEntities(xml);
     const ditaDoc = parseDita(preprocessedXml);
@@ -700,9 +769,16 @@ export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
     const noteLabels = detectNoteLabels(ditaDoc.root, uiLanguage);
     const indexLabel = detectIndexLabel(ditaDoc.root, uiLanguage);
 
-    const conrefResolver = makeConrefResolver(docDir, ditaDoc.root);
-    const conrefRangeResolver = makeConrefRangeResolver(docDir, ditaDoc.root);
-    const fileTitleResolver = makeFileTitleResolver(docDir);
+    // One cache shared by all three resolvers. They routinely load the same
+    // conref/title target, and three independent caches each parsed it again;
+    // sharing also gives a single place to read back the complete set of
+    // files this render touched, which is what lets renderTopicCached key its
+    // reuse on something both narrower and more correct than "some file in
+    // the workspace changed".
+    const fileCache = makeFileCache(docDir);
+    const conrefResolver = makeConrefResolver(docDir, ditaDoc.root, fileCache);
+    const conrefRangeResolver = makeConrefRangeResolver(docDir, ditaDoc.root, fileCache);
+    const fileTitleResolver = makeFileTitleResolver(docDir, fileCache);
 
     const resolveTitle = (id: string): string | undefined => {
       const local = titleMap.get(id);
@@ -723,12 +799,24 @@ export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
       suppressIndexterm,
       getImageDimensions: (relPath: string) => {
         try {
-          return readImageDimensions(resolve(docDir, decodeHrefPart(relPath)));
+          const absPath = resolve(docDir, decodeHrefPart(relPath));
+          // An image's bytes are not parsed into the output, but its
+          // dimensions are (the width/height attributes), so the file is a
+          // genuine dependency of the rendered HTML and has to be recorded
+          // alongside the conref/title targets. readImageDimensions caches
+          // dimensions on its own, so without this a replaced image would
+          // slip through an otherwise-valid topic cache entry.
+          collectDependencies?.add(absPath);
+          return readImageDimensions(absPath);
         } catch {
           return undefined;
         }
       },
     });
+
+    if (collectDependencies) {
+      for (const touched of fileCache.touchedFiles()) collectDependencies.add(touched);
+    }
 
     const titleNode = (ditaDoc.root.children || []).find(
       (c) => c.type === 'element' && c.baseType === 'topic/title',
@@ -742,11 +830,14 @@ export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
 }
 
 export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
-  const { filePath, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm } = input;
+  const { filePath, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, collectDependencies } = input;
   try {
     if (!existsSync(filePath)) {
       return { html: '', error: `File not found: ${filePath}` };
     }
+    // The topic's own file is a dependency of its own render even though it
+    // is read here rather than through the shared file cache.
+    collectDependencies?.add(filePath);
     const rawXml = readFileSync(filePath, 'utf-8');
     const result = renderTopicXml({
       xml: rawXml,
@@ -756,12 +847,367 @@ export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
       headingLevel,
       uiLanguage,
       suppressIndexterm,
+      collectDependencies,
     });
     return { html: result.html, title: result.title, error: result.error };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { html: '', error: `Error rendering ${filePath}: ${message}` };
   }
+}
+
+// ── Topic render cache (book mode) ──
+
+/**
+ * Fingerprint of a set of files' mtimes, used to decide whether a cached
+ * result derived from them is still valid. A file that cannot be statted
+ * contributes "?" rather than being dropped, so deleting a dependency
+ * invalidates exactly as a modification does -- and creating a file that was
+ * previously missing turns "?" into a real timestamp, which is the other half
+ * of the same requirement.
+ *
+ * Shared by buildKeyMap's cache (DitaViewerProvider.ts) and renderTopicCached
+ * below. It lived privately in the former until the topic cache needed the
+ * identical logic; keeping one copy is the point.
+ */
+export function stampFiles(files: string[]): string {
+  return files
+    .map((f) => {
+      try {
+        return String(statSync(f).mtimeMs);
+      } catch {
+        return '?';
+      }
+    })
+    .join('|');
+}
+
+/**
+ * Budget for the topic render cache below, in bytes of rendered HTML.
+ *
+ * Bounded and clearable like every other cache in this file, per the rule
+ * stated at imageDimensionsCache -- but bounded by bytes rather than by entry
+ * count, because count is not a meaningful unit here. The other caches hold
+ * fixed-size entries (a dimension pair, a keymap), so capping their count caps
+ * their memory; a topic's HTML varies by orders of magnitude between a stub
+ * and a full reference topic, so any count cap is either far too generous in
+ * bytes or, set low enough to be safe, far too tight in entries.
+ *
+ * Too tight in entries is the failure that matters, and it is not gradual: a
+ * book with more topics than the cap gets NO reuse at all. Each pass renders
+ * in map order, so once the cache is full every insertion evicts an entry the
+ * same pass has not reached again yet -- a cyclic access pattern, LRU's
+ * classic worst case. Budgeting by bytes puts the cliff where it belongs: a
+ * book whose entire HTML exceeds the budget is already costing at least that
+ * much to hold as one assembled string (plus the webview DOM built from it),
+ * so that is the point at which caching more stops being worth it.
+ *
+ * 32MB holds roughly 4,500 typical topics -- any realistic book, with room
+ * for several open at once. Cleared from clearAllCaches() on deactivation.
+ */
+export const TOPIC_RENDER_CACHE_MAX_BYTES = 32 * 1024 * 1024;
+
+interface TopicRenderCacheEntry {
+  html: string;
+  title: string | undefined;
+  /** Absolute paths the render read; see TopicRenderInput.collectDependencies. */
+  files: string[];
+  stamps: string;
+  /**
+   * Compared by identity, not by content: buildKeyMap hands back the same Map
+   * instance for as long as its own cache entry is valid, so identity is a
+   * cheap proxy for "the key values this HTML was rendered with". If that
+   * cache is evicted and rebuilt with identical contents the check fails and
+   * the topic re-renders -- a false invalidation, never a stale hit, which is
+   * the safe direction to be wrong in.
+   */
+  keyMap: Map<string, string>;
+  uiLanguage: string | undefined;
+  suppressIndexterm: boolean | undefined;
+  /** Retained size of html, stored so eviction can subtract it without
+   *  re-measuring every entry. */
+  bytes: number;
+}
+
+const topicRenderCache = new Map<string, TopicRenderCacheEntry>();
+let topicRenderCacheBytes = 0;
+let topicRenderCacheBudget = TOPIC_RENDER_CACHE_MAX_BYTES;
+
+export function clearTopicRenderCache(): void {
+  topicRenderCache.clear();
+  topicRenderCacheBytes = 0;
+}
+
+/** How many topic renders are currently held -- test hook for eviction/clear. */
+export function topicRenderCacheSize(): number {
+  return topicRenderCache.size;
+}
+
+/** Bytes of HTML currently held -- test hook, paired with the size above. */
+export function topicRenderCacheBytesHeld(): number {
+  return topicRenderCacheBytes;
+}
+
+/**
+ * Test hook: shrinks the budget so eviction can be exercised without first
+ * rendering 32MB of real topics. Called with no argument it restores the
+ * production budget. Nothing outside the test suite calls this.
+ */
+export function setTopicRenderCacheBudgetForTesting(bytes?: number): void {
+  topicRenderCacheBudget = bytes ?? TOPIC_RENDER_CACHE_MAX_BYTES;
+}
+
+function dropTopicEntry(key: string): void {
+  const entry = topicRenderCache.get(key);
+  if (!entry) return;
+  topicRenderCache.delete(key);
+  topicRenderCacheBytes -= entry.bytes;
+}
+
+function dropOldestTopicEntry(): void {
+  const oldest = topicRenderCache.keys().next().value;
+  if (oldest !== undefined) dropTopicEntry(oldest);
+}
+
+/**
+ * renderTopicToHtml with reuse across passes -- the difference between "one
+ * keystroke in one topic" and "the whole book again" in book mode, which
+ * otherwise re-renders every referenced topic on each debounced pass (see
+ * scripts/bench-book-render.js for the measured cost, and the budget note
+ * above for why reuse is bounded in bytes).
+ *
+ * Deliberately opt-in and separate rather than built into renderTopicToHtml:
+ * "Export as HTML" calls that one with its own asWebviewUri, and sharing a
+ * single cache between the two would hand book-mode HTML to an exported
+ * standalone file.
+ *
+ * Two assumptions worth stating, since neither is enforced by the key.
+ *
+ * asWebviewUri output depends only on the local URI and the window's remote
+ * info, never on which webview asked: VS Code builds it as
+ * `https://<scheme>+<authority>.vscode-resource.vscode-cdn.net<path>` in a
+ * module-level helper with no panel in scope, and cspSource is likewise the
+ * constant `'self' https://*.vscode-cdn.net` (both checked against the
+ * shipped extension host bundle, not assumed). So HTML built for one map
+ * panel is valid in another, and the caller's asWebviewUri closure is not
+ * part of the cache key.
+ *
+ * headingLevel is part of the key rather than a merely validated field
+ * because the same topic legitimately sits at different depths across two
+ * open books -- validating it instead would make those two entries evict each
+ * other on every pass.
+ */
+export function renderTopicCached(input: TopicRenderInput): TopicRenderResult {
+  const key = `${input.filePath}\u0000${input.headingLevel}`;
+
+  const cached = topicRenderCache.get(key);
+  if (
+    cached &&
+    cached.keyMap === input.keyMap &&
+    cached.uiLanguage === input.uiLanguage &&
+    cached.suppressIndexterm === input.suppressIndexterm &&
+    stampFiles(cached.files) === cached.stamps
+  ) {
+    // Re-insert so a hit keeps the entry from being the oldest (and therefore
+    // first-evicted) candidate -- same LRU-by-reinsertion as
+    // imageDimensionsCache above.
+    topicRenderCache.delete(key);
+    topicRenderCache.set(key, cached);
+    return { html: cached.html, title: cached.title };
+  }
+
+  // Honour a caller-supplied sink as well, so anyone who passed one still
+  // sees the dependency set instead of having it silently replaced.
+  const dependencies = input.collectDependencies ?? new Set<string>();
+  const result = renderTopicToHtml({ ...input, collectDependencies: dependencies });
+  if (result.error) {
+    // Never cache a failure. A malformed mid-edit save is exactly the
+    // transient case this path sees, and pinning it would keep serving the
+    // error page after the file was fixed -- the dependency stamps would
+    // still match, because the file that failed to parse is the very file
+    // whose mtime gets compared.
+    dropTopicEntry(key);
+    return result;
+  }
+
+  const files = [...dependencies];
+  // UTF-8 bytes, not html.length: DITA content is frequently CJK, where the
+  // character count understates what is actually retained by up to 3x.
+  const bytes = Buffer.byteLength(result.html, 'utf8');
+  if (bytes > topicRenderCacheBudget) {
+    // A single topic larger than the entire budget. Caching it would evict
+    // everything else and then be evicted itself on the next insert, so skip
+    // it: that entry alone falls back to uncached rendering.
+    dropTopicEntry(key);
+    return result;
+  }
+
+  // Make room before inserting, and account for any stale entry this key
+  // already holds -- overwriting it in place would otherwise leak its bytes
+  // out of the running total and shrink the effective budget permanently.
+  dropTopicEntry(key);
+  while (topicRenderCache.size > 0 && topicRenderCacheBytes + bytes > topicRenderCacheBudget) {
+    dropOldestTopicEntry();
+  }
+  topicRenderCache.set(key, {
+    html: result.html,
+    title: result.title,
+    files,
+    stamps: stampFiles(files),
+    keyMap: input.keyMap,
+    uiLanguage: input.uiLanguage,
+    suppressIndexterm: input.suppressIndexterm,
+    bytes,
+  });
+  topicRenderCacheBytes += bytes;
+  return result;
+}
+
+// ── Book mode assembly ──
+
+export interface BookRenderInput {
+  /** Flattened topicref list, in map order -- see collectMapEntries. */
+  entries: MapEntry[];
+  /** Directory the map itself lives in; entry hrefs resolve against it. */
+  docDir: string;
+  /**
+   * One instance for the whole pass. renderTopicCached compares it by
+   * identity, so a fresh Map per entry would defeat reuse entirely -- which
+   * is what the benchmark script used to do, and why the assembly loop now
+   * lives here where both callers share it.
+   */
+  keyMap: Map<string, string>;
+  /**
+   * Converts an absolute local path into a URI the webview can load. This is
+   * the only vscode-specific primitive in a book render; everything else
+   * (resolving hrefs against each topic's own directory, de-duplicating,
+   * heading depth, error and placeholder markup) lives here so it can be
+   * tested -- and benchmarked -- without a VS Code instance.
+   */
+  fileToWebviewUri: (absPath: string) => string;
+  uiLanguage?: string;
+}
+
+/**
+ * Assembles every topic a map references into the ordered parts that Book
+ * mode shows as one long document. Called by MapViewerProvider's
+ * collectBookParts and by scripts/bench-book-render.js.
+ *
+ * It used to be a private method on the provider, with the benchmark keeping
+ * its own hand-copied version of the loop. That copy had already drifted once
+ * (it built a fresh keyMap per topic), and once rendering became cached the
+ * drift stopped being cosmetic: the benchmark would have measured zero reuse
+ * and reported that the cache did not work. One loop, two callers.
+ *
+ * Returns the parts rather than the joined document so MapViewerProvider can
+ * diff two renders of the same map and send only the entries that changed
+ * (see bookPatch.ts). wrapBookParts turns them back into exactly the document
+ * this function used to return, byte for byte.
+ */
+export function renderBookParts(input: BookRenderInput): BookPart[] {
+  const { entries, docDir, keyMap, fileToWebviewUri, uiLanguage } = input;
+
+  // Track visited absolute paths to avoid duplicates
+  const visited = new Set<string>();
+
+  const parts: BookPart[] = [];
+  // A key per part, so two renders of the same map can be compared part by
+  // part. Uniqueness is enforced here rather than assumed: a topic's resolved
+  // path cannot repeat (the visited set above already de-duplicates those),
+  // but two sub-maps, two skip notes or two structural headings can easily
+  // collide, and a repeated key would make the diff read two different
+  // entries as the same one. The suffix comes from the collision count, so it
+  // is itself stable across re-renders of an unchanged map.
+  const usedKeys = new Map<string, number>();
+  const push = (keyBase: string, html: string): void => {
+    const seen = usedKeys.get(keyBase) ?? 0;
+    usedKeys.set(keyBase, seen + 1);
+    parts.push({ key: seen === 0 ? keyBase : `${keyBase}~${seen + 1}`, html });
+  };
+  for (const entry of entries) {
+    if (entry.href) {
+      // Sub-map reference: its contents were already inlined as child
+      // entries by expandDitamapRefs — render a section heading only
+      // instead of parsing the map file as a topic.
+      const refPath = entry.href.split('#')[0];
+      if (refPath.toLowerCase().endsWith('.ditamap')) {
+        push(
+          `map:${resolve(docDir, decodeHrefPart(refPath))}`,
+          renderBookPlaceholder(entry.displayName, entry.depth),
+        );
+        continue;
+      }
+      const absPath = resolve(docDir, decodeHrefPart(refPath));
+      if (visited.has(absPath)) {
+        push(`skip:${entry.href}`, renderBookSkipMessage(entry.href));
+        continue;
+      }
+      visited.add(absPath);
+
+      // Per-topic asWebviewUri: image hrefs inside a topic are relative to
+      // that topic's own directory, not to the map's.
+      const topicDir = dirname(absPath);
+      const asWebviewUri = (relPath: string): string => {
+        try {
+          return fileToWebviewUri(resolve(topicDir, decodeHrefPart(relPath)));
+        } catch (e) {
+          // The empty src still surfaces as a visibly broken image (the
+          // webview script's document-level error listener marks it);
+          // log the cause so path-resolution failures are debuggable.
+          console.warn(`Failed to resolve webview URI for ${relPath}:`, e instanceof Error ? e.message : e);
+          return '';
+        }
+      };
+
+      const headingLevel = Math.min(1 + entry.depth, 6);
+      // Cached, unlike the equivalent call in exportHtml.ts (which renders
+      // once into a standalone file and has nothing to invalidate). Book
+      // mode re-renders the whole map on every edit to any watched file,
+      // and reuse keyed on the set of files each render actually read
+      // turns that from "every topic again" into "the edited topic, plus
+      // whatever conrefs it".
+      const result = renderTopicCached({
+        filePath: absPath,
+        keyMap,
+        asWebviewUri,
+        headingLevel,
+        uiLanguage,
+      });
+
+      if (result.error) {
+        // Keyed like the topic it stands in for, so a topic that starts or
+        // stops failing to parse patches that one entry in place instead of
+        // forcing a whole-document replace.
+        push(`topic:${absPath}`, renderBookError(entry.displayName, result.error, entry.depth));
+      } else {
+        // Book mode is just each referenced topic's own content, one
+        // after another -- the same profiling/highlighting a topic
+        // already renders when opened directly (via renderTopicCached
+        // above) carries straight through here unchanged. No separate
+        // topicref-level (ditamap-source) profiling layered on top of
+        // it; that scope is exclusive to Outline mode's tree.
+        push(`topic:${absPath}`, `<div class="book-entry">${result.html}</div>`);
+      }
+    } else {
+      push(`struct:${entry.depth}:${entry.displayName}`, renderBookPlaceholder(entry.displayName, entry.depth));
+    }
+  }
+
+  return parts;
+}
+
+/**
+ * Joins parts into the single container that both the stylesheet and the
+ * webview script address as .ditamap-book. Kept apart from renderBookParts so
+ * the incremental path can diff the parts and still produce exactly the same
+ * document whenever it has to fall back to sending all of them.
+ */
+export function wrapBookParts(parts: BookPart[]): string {
+  return `<div class="ditamap-book">${parts.map((part) => part.html).join('\n')}</div>`;
+}
+
+export function renderBookEntries(input: BookRenderInput): string {
+  return wrapBookParts(renderBookParts(input));
 }
 
 // ── Webview search overlay (Ctrl+F) ──
@@ -789,6 +1235,10 @@ export function getSearchOverlayScript(opts: {
   // ── Search overlay (Ctrl+F) ──
   var searchMarks = [];
   var currentMatch = -1;
+  // Which mark actually carries '__current' right now, or -1 if none does.
+  // Tracked apart from currentMatch so that moving the highlight touches two
+  // marks instead of every mark in the document -- see updateCurrentMatch.
+  var highlightedMatch = -1;
   var useRegex = false;
   var caseSensitive = false;
 
@@ -886,6 +1336,7 @@ export function getSearchOverlayScript(opts: {
     }
     searchMarks = [];
     currentMatch = -1;
+    highlightedMatch = -1;
   }
 
   // Returns array of {start, end} match positions within a text string.
@@ -895,6 +1346,11 @@ export function getSearchOverlayScript(opts: {
   function findMatchesInText(text, term) {
     return findTextMatchesCore(text, term, useRegex, caseSensitive);
   }
+
+  // Which marks to touch when the current match moves. Same arrangement: the
+  // exported planCurrentMarkMove is unit-tested TS, injected here so webview
+  // and tests always run the same algorithm.
+  var planCurrentMarkMoveCore = ${planCurrentMarkMove.toString()};
 
   function performSearch(term) {
     clearSearchHighlights();
@@ -971,13 +1427,23 @@ export function getSearchOverlayScript(opts: {
   }
 
   function updateCurrentMatch() {
-    for (var i = 0; i < searchMarks.length; i++) {
-      if (i === currentMatch) {
-        searchMarks[i].classList.add('__current');
-      } else {
-        searchMarks[i].classList.remove('__current');
-      }
+    // Two marks rather than all of them, which is the whole reason
+    // highlightedMatch is tracked. That is only sound while exactly one mark
+    // carries '__current' and highlightedMatch names it; both ends hold
+    // because every mark is created fresh (performSearch) and every mark is
+    // destroyed through clearSearchHighlights, which resets the tracker.
+    // Should the two ever drift, the failure is a mark left lit rather than a
+    // crash -- classList.add and .remove are no-ops when the token is already
+    // in the wanted state, and the bounds checks below catch a stale index
+    // into a list that has since shrunk.
+    var move = planCurrentMarkMoveCore(highlightedMatch, currentMatch, searchMarks.length);
+    if (move.clear >= 0 && searchMarks[move.clear]) {
+      searchMarks[move.clear].classList.remove('__current');
     }
+    if (move.set >= 0 && searchMarks[move.set]) {
+      searchMarks[move.set].classList.add('__current');
+    }
+    highlightedMatch = move.set;
     if (currentMatch >= 0 && searchMarks[currentMatch]) {
       searchMarks[currentMatch].scrollIntoView({ block: 'center', behavior: 'smooth' });
     }

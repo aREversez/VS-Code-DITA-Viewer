@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, findTextMatches, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -39,6 +39,30 @@ const KEYDEF_XML = `<?xml version="1.0" encoding="UTF-8"?>
     </topicmeta>
   </keydef>
 </map>`;
+
+/**
+ * A minimal but structurally real PNG: signature, IHDR carrying the
+ * dimensions, IEND. The readers under test never validate the CRC, so a
+ * correct one isn't needed -- only the length/tag/data layout they read.
+ * Module-scoped because both the image-dimension tests and the topic-render
+ * cache tests need real image files on disk.
+ */
+function writePng(path: string, width: number, height: number) {
+  const sig = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const ihdrData = Buffer.alloc(13);
+  ihdrData.writeUInt32BE(width, 0);
+  ihdrData.writeUInt32BE(height, 4);
+  ihdrData.writeUInt8(8, 8); // bit depth
+  ihdrData.writeUInt8(2, 9); // color type
+  const chunk = (tag: string, data: Buffer) => {
+    const tagBuf = Buffer.from(tag, 'ascii');
+    const lenBuf = Buffer.alloc(4);
+    lenBuf.writeUInt32BE(data.length, 0);
+    const crcBuf = Buffer.alloc(4);
+    return Buffer.concat([lenBuf, tagBuf, data, crcBuf]);
+  };
+  writeFileSync(path, Buffer.concat([sig, chunk('IHDR', ihdrData), chunk('IEND', Buffer.alloc(0))]));
+}
 
 describe('detectNoteLabels', () => {
   function makeRoot(attrs: Record<string, string>): DitaNode {
@@ -87,25 +111,6 @@ describe('readImageDimensions', () => {
   after(() => {
     rmSync(dir, { recursive: true, force: true });
   });
-
-  function writePng(path: string, width: number, height: number) {
-    const sig = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-    const ihdrData = Buffer.alloc(13);
-    ihdrData.writeUInt32BE(width, 0);
-    ihdrData.writeUInt32BE(height, 4);
-    ihdrData.writeUInt8(8, 8); // bit depth
-    ihdrData.writeUInt8(2, 9); // color type
-    // The reader here never validates the CRC, so a real one isn't needed
-    // for this test -- only the length/tag/data layout it actually reads.
-    const chunk = (tag: string, data: Buffer) => {
-      const tagBuf = Buffer.from(tag, 'ascii');
-      const lenBuf = Buffer.alloc(4);
-      lenBuf.writeUInt32BE(data.length, 0);
-      const crcBuf = Buffer.alloc(4);
-      return Buffer.concat([lenBuf, tagBuf, data, crcBuf]);
-    };
-    writeFileSync(path, Buffer.concat([sig, chunk('IHDR', ihdrData), chunk('IEND', Buffer.alloc(0))]));
-  }
 
   function writeGif(path: string, width: number, height: number) {
     const buf = Buffer.alloc(13);
@@ -297,6 +302,218 @@ describe('readImageDimensions', () => {
 
       assert.deepStrictEqual(readImageDimensions(p), { width: 500, height: 400 }, 'clearing the cache (the deactivation path) must force a fresh read even when mtime alone would not invalidate');
     });
+  });
+});
+
+// Book mode re-renders every referenced topic on each pass, so this cache is
+// what stands between "one keystroke in one topic" and "the whole book again".
+// The tests below all pin mtime to a fixed timestamp (see the identical note
+// in the image-dimensions caching block above) so that a cache hit and a cache
+// miss are distinguishable by content alone -- otherwise every rewrite would
+// invalidate on mtime and none of this would prove anything.
+describe('renderTopicCached', () => {
+  let dir: string;
+  // Book mode hands the same keyMap instance to every topic in a pass, so a
+  // shared one is the realistic fixture; the identity test passes its own.
+  const keyMap = new Map<string, string>();
+  const asWebviewUri = (relPath: string) => `https://vscode-resource/${relPath}`;
+  const fixedMtime = new Date('2024-01-01T00:00:00.000Z');
+
+  /** Writes (or rewrites) a one-paragraph topic and pins its mtime. */
+  function writeTopic(name: string, body: string): string {
+    const p = join(dir, name);
+    const id = name.replace(/\.dita$/, '');
+    writeFileSync(
+      p,
+      `<?xml version="1.0" encoding="UTF-8"?>\n<topic id="${id}"><title>${id}</title><body>${body}</body></topic>`,
+    );
+    utimesSync(p, fixedMtime, fixedMtime);
+    return p;
+  }
+
+  function render(filePath: string, headingLevel = 1) {
+    return renderTopicCached({ filePath, keyMap, asWebviewUri, headingLevel });
+  }
+
+  function bumpMtime(p: string) {
+    const later = new Date(statSync(p).mtime.getTime() + 5000);
+    utimesSync(p, later, later);
+  }
+
+  before(() => {
+    dir = mkdtempSync(join(tmpdir(), 'dita-viewer-topic-cache-'));
+  });
+  after(() => {
+    rmSync(dir, { recursive: true, force: true });
+    clearTopicRenderCache();
+  });
+  // Module-level cache shared by every test in the file: start each one empty,
+  // or a hit here could be explained by another test's leftovers.
+  beforeEach(() => {
+    clearTopicRenderCache();
+  });
+  afterEach(() => {
+    setTopicRenderCacheBudgetForTesting(); // back to the production budget
+    clearTopicRenderCache();
+  });
+
+  it('should return the cached HTML for an unchanged topic even after its on-disk content changed, proving the cache rather than a fresh render answered', () => {
+    const a = writeTopic('a.dita', '<p>first</p>');
+    assert.ok(render(a).html.includes('first'));
+
+    writeTopic('a.dita', '<p>second</p>'); // new content, same pinned mtime
+
+    const again = render(a);
+    assert.ok(again.html.includes('first'), 'no dependency changed, so the stored HTML is what should answer');
+    assert.ok(!again.html.includes('second'), 'a re-render would have picked up the new content');
+  });
+
+  it('should re-render a topic once its own file mtime changes', () => {
+    const a = writeTopic('own.dita', '<p>before</p>');
+    assert.ok(render(a).html.includes('before'));
+
+    writeTopic('own.dita', '<p>after</p>');
+    bumpMtime(a);
+
+    assert.ok(render(a).html.includes('after'), 'editing the topic itself must invalidate its own entry');
+  });
+
+  it('should re-render a topic when a conref target it pulled in changed, even though the topic file itself did not', () => {
+    const shared = writeTopic('shared.dita', '<p id="sn">ORIGINAL</p>');
+    const host = writeTopic('host.dita', '<p conref="shared.dita#shared/sn">fallback</p>');
+    assert.ok(render(host).html.includes('ORIGINAL'), 'conref content is inlined into the referencing topic');
+
+    // Only the target changed. A cache keyed on the topic file alone -- the
+    // obvious design -- would serve stale HTML from here on.
+    writeTopic('shared.dita', '<p id="sn">UPDATED</p>');
+    bumpMtime(shared);
+
+    const again = render(host);
+    assert.ok(again.html.includes('UPDATED'), 'the conref target is a dependency of the referencing topic, so changing it must invalidate');
+    assert.ok(!again.html.includes('ORIGINAL'));
+  });
+
+  it('should re-render a topic when an image it emitted natural dimensions for was replaced, since those dimensions are baked into the HTML', () => {
+    const png = join(dir, 'dims.png');
+    writePng(png, 300, 200);
+    utimesSync(png, fixedMtime, fixedMtime);
+    const a = writeTopic('img.dita', '<image href="dims.png"/>');
+    assert.ok(render(a).html.includes('width="300"'), 'the natural size is emitted when the DITA source gives none');
+
+    writePng(png, 640, 480);
+    bumpMtime(png);
+
+    assert.ok(render(a).html.includes('width="640"'), 'the image bytes are not in the output but its dimensions are, so a replaced image must invalidate the topic -- which never changed itself');
+  });
+
+  it('should treat a file that did not exist at render time as a dependency, so creating it invalidates', () => {
+    const a = writeTopic('late-host.dita', '<image href="late.png"/>');
+    assert.ok(!render(a).html.includes('width='), 'nothing to measure while the file is missing');
+
+    writePng(join(dir, 'late.png'), 120, 90);
+
+    assert.ok(render(a).html.includes('width="120"'), 'a dependency recorded as missing must invalidate when the file appears, or the topic stays dimension-less until something unrelated touches it');
+  });
+
+  it('should keep separate entries per headingLevel, since the same topic sits at different depths across two open books', () => {
+    const a = writeTopic('depth.dita', '<p>x</p>');
+    const shallow = render(a, 1);
+    const deep = render(a, 2);
+
+    assert.ok(/<h1[\s>]/.test(shallow.html), 'depth 1 renders an h1');
+    assert.ok(/<h2[\s>]/.test(deep.html), 'depth 2 renders an h2');
+    assert.strictEqual(topicRenderCacheSize(), 2, 'one entry per depth -- validating headingLevel instead of keying on it would make two open books evict each other every pass');
+
+    assert.ok(render(a, 1).html.includes('<h1'), 'both entries stay independently valid');
+    assert.ok(render(a, 2).html.includes('<h2'));
+  });
+
+  it('should re-render when handed a different keyMap instance even with equal contents, trading a false invalidation for never serving stale key values', () => {
+    const a = writeTopic('keys.dita', '<p>one</p>');
+    render(a);
+    writeTopic('keys.dita', '<p>two</p>'); // new content, same pinned mtime
+
+    assert.ok(render(a).html.includes('one'), 'same instance + unchanged mtimes = a hit');
+
+    const freshMap = renderTopicCached({ filePath: a, keyMap: new Map(keyMap), asWebviewUri, headingLevel: 1 });
+    assert.ok(freshMap.html.includes('two'), 'buildKeyMap rebuilds its Map when its own cache expires; treating an equal-but-distinct instance as "keys unchanged" would be an assumption this function cannot verify, so it re-renders instead');
+  });
+
+  it('should not cache a failed render, so the next pass recovers once the file is there', () => {
+    const missing = join(dir, 'not-yet.dita');
+    const failed = render(missing);
+    assert.ok(failed.error, 'a missing topic reports an error');
+    assert.strictEqual(topicRenderCacheSize(), 0, 'a failure must not be pinned: the stamps would still match, because the file that failed is the very file whose mtime gets compared');
+
+    const created = writeTopic('not-yet.dita', '<p>here now</p>');
+    const recovered = render(created);
+    assert.strictEqual(recovered.error, undefined);
+    assert.ok(recovered.html.includes('here now'), 'a malformed or absent mid-edit save must not keep serving the error page after the file is fixed');
+  });
+
+  it('should not grow past the byte budget, evicting the oldest entry rather than growing without limit', () => {
+    // Equal-length ids and bodies, so all three topics render to the same
+    // number of bytes and the arithmetic below is exact rather than
+    // approximate. Calibrating the budget against measured entries (rather
+    // than a number guessed from the fixture markup) matters for the same
+    // reason; filling the production 32MB with real renders would take
+    // seconds and prove nothing this scale does not.
+    const victim = writeTopic('victim.dita', '<p>vvvv</p>');
+    render(victim);
+    const fill0 = writeTopic('fill-0.dita', '<p>f0f0</p>');
+    render(fill0);
+    const budget = topicRenderCacheBytesHeld(); // exactly two entries' worth
+    assert.ok(budget > 0);
+    setTopicRenderCacheBudgetForTesting(budget);
+
+    render(writeTopic('fill-1.dita', '<p>f1f1</p>'));
+
+    assert.ok(topicRenderCacheBytesHeld() <= budget, 'the running total respects the budget');
+    assert.ok(topicRenderCacheSize() < 3, 'the third entry did not simply grow the cache');
+
+    writeTopic('victim.dita', '<p>v2v2</p>'); // new content, same pinned mtime
+    assert.ok(render(victim).html.includes('v2v2'), 'only an eviction explains fresh output here, since nothing about the victim\'s stamps changed');
+  });
+
+  it('should skip caching a topic larger than the entire budget instead of evicting everything else to make room for it', () => {
+    const small = writeTopic('small.dita', '<p>s</p>');
+    render(small);
+    const smallBytes = topicRenderCacheBytesHeld();
+    const big = writeTopic('big.dita', '<p>b</p>');
+
+    setTopicRenderCacheBudgetForTesting(1); // nothing at all can fit
+
+    const result = render(big);
+    assert.ok(result.html.includes('b'), 'it still renders correctly; only the caching is skipped');
+    assert.strictEqual(topicRenderCacheSize(), 1, 'the entry that did fit survives');
+    assert.strictEqual(topicRenderCacheBytesHeld(), smallBytes, 'and an impossible insert must not disturb the accounting');
+  });
+
+  it('should keep the byte total exact when an entry is replaced, not merely when one is added', () => {
+    const a = writeTopic('acct.dita', '<p>one</p>');
+    render(a);
+
+    writeTopic('acct.dita', '<p>two, but longer</p>');
+    bumpMtime(a);
+    render(a);
+
+    assert.strictEqual(topicRenderCacheSize(), 1);
+    assert.strictEqual(
+      topicRenderCacheBytesHeld(),
+      Buffer.byteLength(render(a).html, 'utf8'),
+      'the total must equal what is actually stored: an overwrite that only ever added would shrink the effective budget on every single edit',
+    );
+  });
+
+  it('should re-render after clearTopicRenderCache(), even when mtime alone would not invalidate', () => {
+    const a = writeTopic('cleared.dita', '<p>before</p>');
+    render(a);
+    writeTopic('cleared.dita', '<p>after</p>'); // new content, same pinned mtime
+
+    clearTopicRenderCache();
+    assert.strictEqual(topicRenderCacheSize(), 0, 'the deactivation path drops every entry');
+    assert.strictEqual(topicRenderCacheBytesHeld(), 0, 'and resets the running total with them');
+    assert.ok(render(a).html.includes('after'));
   });
 });
 
@@ -908,5 +1125,145 @@ describe('findTextMatches', () => {
   it('should cap matches per text node at 1000', () => {
     const m = findTextMatches('a'.repeat(5000), 'a', false, true);
     assert.strictEqual(m!.length, 1000);
+  });
+});
+
+describe('planCurrentMarkMove', () => {
+  it('moves the highlight by naming only the mark it leaves and the mark it lands on', () => {
+    // The whole point of the function: the loop this replaced named all five.
+    assert.deepStrictEqual(planCurrentMarkMove(2, 3, 5), { clear: 2, set: 3 });
+  });
+
+  it('names nothing to clear when no mark is lit yet', () => {
+    // The state performSearch leaves behind: it has just built a fresh set of
+    // marks, none of which carries '__current', so clearing is work for nothing.
+    assert.deepStrictEqual(planCurrentMarkMove(-1, 0, 5), { clear: -1, set: 0 });
+  });
+
+  it('handles wrap-around in both directions', () => {
+    assert.deepStrictEqual(planCurrentMarkMove(4, 0, 5), { clear: 4, set: 0 });
+    assert.deepStrictEqual(planCurrentMarkMove(0, 4, 5), { clear: 0, set: 4 });
+  });
+
+  it('does not clear and re-set the mark that is already current', () => {
+    // gotoNextMatch on a single-match search lands back where it started.
+    // Clearing first would take the highlight off and put it back on within one
+    // task -- a visible flash if the browser happens to paint in between, and
+    // pointless work either way.
+    assert.deepStrictEqual(planCurrentMarkMove(2, 2, 5), { clear: -1, set: 2 });
+    assert.deepStrictEqual(planCurrentMarkMove(0, 0, 1), { clear: -1, set: 0 });
+  });
+
+  it('takes the highlight off entirely when there is no next match', () => {
+    assert.deepStrictEqual(planCurrentMarkMove(2, -1, 5), { clear: 2, set: -1 });
+  });
+
+  it('does nothing at all when there are no marks, stale index included', () => {
+    assert.deepStrictEqual(planCurrentMarkMove(-1, -1, 0), { clear: -1, set: -1 });
+    assert.deepStrictEqual(planCurrentMarkMove(3, 0, 0), { clear: -1, set: -1 });
+  });
+
+  it('drops a stale previous index rather than naming a mark that no longer exists', () => {
+    // Reachable, not theoretical: the document changed under an open search bar,
+    // so the match list shrank while the index tracked from the longer list
+    // survived it by one update.
+    assert.deepStrictEqual(planCurrentMarkMove(7, 0, 3), { clear: -1, set: 0 });
+  });
+
+  it('drops a stale next index but still clears the mark it left', () => {
+    assert.deepStrictEqual(planCurrentMarkMove(1, 9, 3), { clear: 1, set: -1 });
+  });
+
+  it('never names an index outside the list', () => {
+    // The caller uses these to index a real array, so this is the property that
+    // turns any future slip in the decision table into a no-op instead of a
+    // silent write to the wrong mark. Covers negative and past-the-end inputs on
+    // both sides, including an empty list.
+    for (let count = 0; count <= 6; count++) {
+      for (let previous = -2; previous <= 8; previous++) {
+        for (let next = -2; next <= 8; next++) {
+          const move = planCurrentMarkMove(previous, next, count);
+          for (const index of [move.clear, move.set]) {
+            assert.ok(
+              index === -1 || (index >= 0 && index < count),
+              `planCurrentMarkMove(${previous}, ${next}, ${count}) named ${index}`,
+            );
+          }
+        }
+      }
+    }
+  });
+
+  it('leaves exactly the marks lit that walking all of them would have left lit', () => {
+    // Exhaustive over a small grid rather than a hand-picked sequence, because
+    // the optimisation is only worth having if it is equivalent to the O(n) loop
+    // it replaced. `expected` is that loop's output verbatim: it lit the current
+    // match and cleared every other one. `marks` is the state the loop would
+    // have left behind on the previous move, which is what makes the two
+    // comparable -- the optimised path only ever sees one mark lit, and if that
+    // ever stopped being true the divergence would show up here.
+    const count = 4;
+    for (let previous = -1; previous < count; previous++) {
+      for (let next = -1; next < count; next++) {
+        const marks = Array.from({ length: count }, (_, i) => i === previous);
+        const expected = Array.from({ length: count }, (_, i) => i === next);
+        const move = planCurrentMarkMove(previous, next, count);
+        if (move.clear >= 0) marks[move.clear] = false;
+        if (move.set >= 0) marks[move.set] = true;
+        assert.deepStrictEqual(marks, expected, `move from ${previous} to ${next} of ${count}`);
+      }
+    }
+  });
+});
+
+describe('getSearchOverlayScript', () => {
+  const opts = {
+    placeholder: 'Find',
+    nextMatch: 'Next match',
+    prevMatch: 'Previous match',
+    close: 'Close',
+    matchCase: 'Match case',
+    useRegex: 'Use regular expression',
+    invalidRegex: 'Invalid regular expression',
+  };
+
+  it('emits a script that parses as JavaScript', () => {
+    // The overlay is one long template literal with a dozen interpolations in
+    // it, so a stray backtick or an unescaped interpolation anywhere ships a
+    // search bar that silently never runs. Nothing else in the suite would
+    // notice: there is no DOM here to execute it against, and the e2e harness
+    // cannot reach into a webview. Compiling it is the cheapest assertion that
+    // catches the whole class -- new Function parses the body without running
+    // it, so the document and NodeFilter references inside are never touched.
+    assert.doesNotThrow(() => new Function(getSearchOverlayScript(opts)));
+  });
+
+  it('injects the exported planCurrentMarkMove rather than a second copy of its rules', () => {
+    // The comment at the injection site promises webview and tests always run
+    // the same algorithm. Comparing the emitted text against the function's own
+    // source is what makes that promise load-bearing instead of decorative: it
+    // fails the moment someone hand-copies the decision table into the template,
+    // which is the natural thing to do and the natural way for the two to drift.
+    const script = getSearchOverlayScript(opts);
+    assert.ok(
+      script.includes('var planCurrentMarkMoveCore = ' + planCurrentMarkMove.toString() + ';'),
+      'expected the overlay script to inject the exported planCurrentMarkMove verbatim',
+    );
+  });
+
+  it('injects a body that still works once lifted out of this module', () => {
+    // The webview has none of this module's bindings, so an injected function
+    // that reaches for one is dead on arrival -- and it would look perfectly
+    // healthy here, where the binding is in scope. new Function builds the
+    // function against the global scope instead, which turns that free
+    // identifier into a ReferenceError the first time it is called.
+    const revived = new Function(
+      'return (' + planCurrentMarkMove.toString() + ')',
+    )() as typeof planCurrentMarkMove;
+    assert.deepStrictEqual(revived(2, 3, 5), { clear: 2, set: 3 });
+    assert.deepStrictEqual(revived(-1, 0, 5), { clear: -1, set: 0 });
+    assert.deepStrictEqual(revived(2, 2, 5), { clear: -1, set: 2 });
+    assert.deepStrictEqual(revived(7, 0, 3), { clear: -1, set: 0 });
+    assert.deepStrictEqual(revived(2, -1, 0), { clear: -1, set: -1 });
   });
 });

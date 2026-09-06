@@ -16,6 +16,7 @@ import {
 } from './editor/ditaOtUtils';
 import { registerLanguageFeatures } from './language/ditaLanguageFeatures';
 import { registerMapTreeView } from './language/ditaMapTreeProvider';
+import { ditaFileWatcherCounts } from './editor/ditaFileWatcher';
 import { registerExportHtmlCommand } from './editor/exportHtml';
 import { registerCompareCommand } from './editor/ditaDiffProvider';
 
@@ -469,10 +470,15 @@ export function activate(context: vscode.ExtensionContext) {
   // content without VS Code providing a public API to read a custom
   // editor's WebviewPanel from outside its own provider. Not used by the
   // extension itself at runtime.
+  //
+  // ditaFileWatcherCounts is here for the same reason: whether N open panels
+  // really do share one FileSystemWatcher per folder is not observable from
+  // outside the extension host, and it is the whole claim of ditaFileWatcher.ts.
   return {
     _test: {
       getLastRenderedHtml: getLastRenderedHtmlForTesting,
       getLastRenderedMapHtml: getLastRenderedMapHtmlForTesting,
+      ditaFileWatcherCounts,
     },
   };
 }
@@ -625,14 +631,17 @@ async function resolveMapFile(): Promise<vscode.Uri | undefined> {
   return undefined;
 }
 
-// Module-level caches in DitaViewerProvider/MapViewerProvider are already
-// self-bounded (keyMapCache and imageDimensionsCache have hard caps; the
-// render caches are cleaned per webview panel as it disposes -- see each
-// provider's onDidDispose), so this isn't fixing a leak. It's a defensive
-// reset for the case VS Code deactivates the extension without disposing
-// every panel first (window close, extension host restart, manual disable),
-// so nothing from this session's caches lingers into whatever runs next in
-// the same process.
+// Module-level caches in DitaViewerProvider/MapViewerProvider/ditaRenderUtils
+// are already self-bounded (keyMapCache and imageDimensionsCache have hard
+// entry caps, and the book-mode topic render cache has a byte budget; the
+// per-panel render caches are cleaned as each webview panel disposes -- see
+// each provider's onDidDispose), so this isn't fixing a leak. It's a
+// defensive reset for the case VS Code deactivates the extension without
+// disposing every panel first (window close, extension host restart, manual
+// disable), so nothing from this session's caches lingers into whatever runs
+// next in the same process. The topic render cache is the one that outlives
+// panels deliberately -- reuse across two panels showing the same book is
+// part of what makes it worth having -- so deactivation is what clears it.
 export function deactivate(): void {
   clearAllCaches();
   clearMapCache();

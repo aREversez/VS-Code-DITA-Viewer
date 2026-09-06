@@ -18,6 +18,7 @@ import {
   getMapRefName,
   isExternalRef,
   offsetToLineCol,
+  splitRefFragment,
   stripSameDocumentFragmentPrefix,
 } from '../../language/ditaLanguageUtils';
 import { parseDita, parseDitamap } from '../../parser/ditaParser';
@@ -125,6 +126,44 @@ describe('ditaLanguageUtils', () => {
       assert.strictEqual(stripSameDocumentFragmentPrefix('note_xxx'), 'note_xxx');
       assert.strictEqual(stripSameDocumentFragmentPrefix('t2/p1'), 't2/p1');
       assert.strictEqual(stripSameDocumentFragmentPrefix(''), '');
+    });
+  });
+
+  describe('splitRefFragment', () => {
+    it('splits the standard two-part form into topic scope and element id', () => {
+      assert.deepStrictEqual(splitRefFragment('db_overview/shared_note'), {
+        topicId: 'db_overview',
+        elementId: 'shared_note',
+      });
+    });
+
+    it('treats a one-part fragment as the id itself, with no topic scope', () => {
+      assert.deepStrictEqual(splitRefFragment('shared_note'), {
+        topicId: undefined,
+        elementId: 'shared_note',
+      });
+    });
+
+    it('normalizes the "./" same-document shorthand before splitting', () => {
+      assert.deepStrictEqual(splitRefFragment('./shared_note'), {
+        topicId: undefined,
+        elementId: 'shared_note',
+      });
+      assert.deepStrictEqual(splitRefFragment('./t2/p1'), { topicId: 't2', elementId: 'p1' });
+    });
+
+    it('returns an empty element id for an empty fragment', () => {
+      assert.deepStrictEqual(splitRefFragment(''), { topicId: undefined, elementId: '' });
+    });
+
+    it('yields the element id, not the topic id, for the form conrefs are actually written in', () => {
+      // The regression this helper exists to prevent: find-references used to
+      // take segment [0] of a "topicId/elementId" fragment and compare it
+      // against an id="..." value, so the two could never be equal and every
+      // cross-file conref was dropped from the results.
+      const { elementId } = splitRefFragment('db_overview/shared_note');
+      assert.strictEqual(elementId, 'shared_note');
+      assert.notStrictEqual(elementId, 'db_overview');
     });
   });
 

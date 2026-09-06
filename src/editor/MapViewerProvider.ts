@@ -1,7 +1,11 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderTopicToHtml, renderBookPlaceholder, renderBookError, renderBookSkipMessage, escapeHtml, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart } from './ditaRenderUtils';
+import { renderBookParts, wrapBookParts, escapeHtml, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart } from './ditaRenderUtils';
+import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
+import { diffBookParts, BookPart } from './bookPatch';
+import { foldPendingRender, PendingRender } from './pendingRender';
+import { sharedWebviewStrings } from './webviewL10n';
 import { buildKeyMap } from './DitaViewerProvider';
 import { formatLocalizedRole } from '../language/bookRoleL10n';
 import { dirname, join, resolve } from 'path';
@@ -25,39 +29,34 @@ export function clearMapCache(): void {
   lastRenderedHtmlByUri.clear();
 }
 
+// The content-update protocol between this provider and its webview script.
+//
+// Both sides live in this file, but the script side is a string, so no
+// compiler and no test can see that the two spellings of a message type agree.
+// A typo on either side fails silently and looks exactly like "the preview
+// stopped updating on edit" -- and patchContent is the worse case, since the
+// webview would ignore every patch and the document would simply go stale.
+// Interpolating one constant into both sides makes that unrepresentable
+// rather than tested. The script's other message types (openTopic,
+// switchMode, refresh) are left as literals: they are outside this change,
+// and each one's failure is visible rather than silent.
+const MSG_UPDATE_CONTENT = 'updateContent';
+const MSG_PATCH_CONTENT = 'patchContent';
+const MSG_REQUEST_FULL_RENDER = 'requestFullRender';
+
 function getMapWebviewScript(): string {
   const L = {
-    previewToolbar: JSON.stringify(vscode.l10n.t('Preview toolbar')),
-    decreaseFontSize: JSON.stringify(vscode.l10n.t('Decrease font size')),
-    increaseFontSize: JSON.stringify(vscode.l10n.t('Increase font size')),
-    fontSans: JSON.stringify(vscode.l10n.t('Sans')),
-    fontSerif: JSON.stringify(vscode.l10n.t('Serif')),
-    fontCurrentSans: JSON.stringify(vscode.l10n.t('Current: Sans-serif. Click to switch to Serif')),
-    fontCurrentSerif: JSON.stringify(vscode.l10n.t('Current: Serif. Click to switch to Sans-serif')),
-    pageWidth: JSON.stringify(vscode.l10n.t('Page width')),
-    widthAuto: JSON.stringify(vscode.l10n.t('Auto')),
-    widthFull: JSON.stringify(vscode.l10n.t('Full')),
-    widthWide: JSON.stringify(vscode.l10n.t('Wide')),
-    widthDesktop: JSON.stringify(vscode.l10n.t('Desktop')),
-    widthNarrow: JSON.stringify(vscode.l10n.t('Narrow')),
+    // Everything the single-topic preview's toolbar says too: the toolbar
+    // label, the font and page-width controls, the Flags toggle, and the
+    // option sets for both overlays. Kept in one table so the two previews
+    // cannot drift apart on a control they share -- see webviewL10n.ts. What
+    // follows is wording that exists only here.
+    ...sharedWebviewStrings(),
+    // The outline/book switch has no counterpart in the single-topic preview,
+    // which only ever shows one topic.
     switchModeTitle: JSON.stringify(vscode.l10n.t('Switch between outline tree and full book view')),
     modeOutline: JSON.stringify(vscode.l10n.t('Outline')),
     modeBook: JSON.stringify(vscode.l10n.t('Book')),
-    reloadContent: JSON.stringify(vscode.l10n.t('Reload DITA content')),
-    searchPlaceholder: vscode.l10n.t('Search'),
-    searchNext: vscode.l10n.t('Next match'),
-    searchPrev: vscode.l10n.t('Previous match'),
-    searchClose: vscode.l10n.t('Close search'),
-    searchMatchCase: vscode.l10n.t('Match case'),
-    searchUseRegex: vscode.l10n.t('Use regex'),
-    searchInvalidRegex: vscode.l10n.t('Invalid regex'),
-    profilingLabel: JSON.stringify(vscode.l10n.t('Flags')),
-    profilingOnTitle: JSON.stringify(vscode.l10n.t('Profiling attributes (props/otherprops/audience/...) are highlighted. Click to hide the highlighting.')),
-    profilingOffTitle: JSON.stringify(vscode.l10n.t('Profiling attribute highlighting is hidden. Click to show which content is flagged and with what.')),
-    filterLabel: vscode.l10n.t('Filter'),
-    filterTitle: vscode.l10n.t('Show/hide content by profiling attribute value (actually hides matching content, unlike the Flags toggle which only shows/hides the highlight)'),
-    filterClose: vscode.l10n.t('Close'),
-    filterEmpty: vscode.l10n.t('No profiling attributes in this document'),
   };
   return `
 (function() {
@@ -198,7 +197,7 @@ function getMapWebviewScript(): string {
   // Filter button goes immediately next to Flags, same pairing as the
   // topic viewer -- in Outline mode this hides whole map entries by their
   // topicref-level profiling; in Book mode there's no topicref-level
-  // profiling to speak of (see MapViewerProvider.renderBookContent), only
+  // profiling to speak of (see MapViewerProvider.collectBookParts), only
   // whatever profiled spans exist inside each composited topic's own
   // content, same as opening that topic directly.
   ${getProfilingFilterScript({
@@ -239,21 +238,56 @@ function getMapWebviewScript(): string {
   // after each swap instead. Map view has no per-image zoom toolbar and
   // no source-editor scroll-sync of its own to re-apply (unlike the topic
   // viewer), so this is a shorter list.
+  //
+  // Both content paths call this. Patching a handful of entries leaves the
+  // same kind of stale state behind as replacing all of them: profiling
+  // decisions computed over DOM that has since been swapped, and search
+  // highlights holding references to nodes that are no longer attached.
+  function afterContentSwap() {
+    if (typeof pfApplyFilter === 'function') pfApplyFilter();
+    if (typeof pfPanel !== 'undefined' && pfPanel) {
+      pfPanel.remove();
+      pfPanel = pfBuildPanel();
+      document.body.appendChild(pfPanel);
+    }
+    if (typeof sb !== 'undefined' && sb.style.display !== 'none' && searchInput.value) {
+      performSearch(searchInput.value);
+    }
+  }
+
   window.addEventListener('message', function(e) {
-    if (e.data.type === 'updateContent') {
+    if (e.data.type === '${MSG_UPDATE_CONTENT}') {
       var contentRoot = document.getElementById('dita-content-root');
       if (contentRoot) {
         contentRoot.innerHTML = e.data.html;
-        if (typeof pfApplyFilter === 'function') pfApplyFilter();
-        if (typeof pfPanel !== 'undefined' && pfPanel) {
-          pfPanel.remove();
-          pfPanel = pfBuildPanel();
-          document.body.appendChild(pfPanel);
-        }
-        if (typeof sb !== 'undefined' && sb.style.display !== 'none' && searchInput.value) {
-          performSearch(searchInput.value);
-        }
+        afterContentSwap();
       }
+    } else if (e.data.type === '${MSG_PATCH_CONTENT}') {
+      // Book mode's incremental update: replace only the entries whose HTML
+      // actually changed, so every other entry keeps its element -- and with
+      // it anything the browser had derived per element: its scroll anchor, its
+      // decoded images, its remembered size. See bookPatch.ts.
+      //
+      // The indices address positions among .ditamap-book's children, and
+      // that only denotes the same entry on both sides for as long as the DOM
+      // here and the list the extension diffed against are the same length.
+      // If they are not -- a webview reload this provider instance never saw,
+      // a message that landed after a mode switch -- patching would write
+      // entries into the wrong places, silently and visibly. Ask for the
+      // whole document instead; requestFullRender is handled extension-side.
+      var book = document.querySelector('#dita-content-root > .ditamap-book');
+      if (!book || book.children.length !== e.data.count) {
+        vscode.postMessage({ type: '${MSG_REQUEST_FULL_RENDER}' });
+        return;
+      }
+      var updates = e.data.updates;
+      for (var i = 0; i < updates.length; i++) {
+        var entry = book.children[updates[i].index];
+        // Every part is exactly one root element (see BookPart.html), so this
+        // swaps one child for one child and all the later indices stay valid.
+        if (entry) entry.outerHTML = updates[i].html;
+      }
+      afterContentSwap();
     }
   });
 })();
@@ -283,7 +317,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
 
     webviewPanel.webview.onDidReceiveMessage((message) => {
       if (message.type === 'refresh') {
-        updateWebview();
+        requestUpdate('full');
       } else if (message.type === 'openTopic') {
         const href = message.href as string;
         if (!href) return;
@@ -297,16 +331,44 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         vscode.commands.executeCommand('vscode.openWith', targetUri, viewType);
       } else if (message.type === 'switchMode') {
         currentMode = message.mode as 'tree' | 'book';
+        requestUpdate('full');
+      } else if (message.type === MSG_REQUEST_FULL_RENDER) {
+        // The webview declined a patch: its DOM does not match the baseline
+        // the indices were computed against. Straight to updateWebview rather
+        // than requestUpdate('full') -- the panel is visible by definition, a
+        // hidden webview is not running the script that sent this -- and a
+        // full render also resets lastBookParts to the document just sent,
+        // which is what makes the next patch trustworthy again.
         updateWebview();
       }
     });
 
     let disposed = false;
     let renderDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+    // The render a currently-hidden panel is owed, if any. 'content' is a
+    // source edit, satisfied by postContentUpdate; 'full' is a theme switch,
+    // manual refresh or tree/book mode toggle, each of which has to reassign
+    // webview.html -- the light/dark class lives on <html>, outside the
+    // content div a content-only update touches, and a mode switch replaces
+    // the whole document rather than patching it. Escalates only -- a theme
+    // switch landing while an edit is already pending must not be
+    // downgraded, or the class stays stale until some later re-render. The
+    // fold itself lives in pendingRender.ts -- see foldPendingRender -- so
+    // the rule is pinned by a unit test rather than only by this comment.
+    let pendingUpdate: PendingRender = 'none';
+    // The parts behind whatever this panel's webview is showing in book mode
+    // -- the baseline the next render gets diffed against (bookPatch.ts).
+    // A local, not a field, for the same reason pendingUpdate is: one
+    // MapViewerProvider instance resolves every map panel in the window, so a
+    // field would have two panels diffing against each other's documents.
+    // undefined means "no idea what is on screen", which is the state before
+    // the first render, after any full page render in tree mode, and after a
+    // render error -- all of which must fall back to sending the document.
+    let lastBookParts: BookPart[] | undefined;
     const changeSubscription = vscode.workspace.onDidChangeTextDocument((e) => {
       if (e.document.uri.toString() !== document.uri.toString()) return;
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
-      renderDebounceTimer = setTimeout(postContentUpdate, 300);
+      renderDebounceTimer = setTimeout(() => requestUpdate('content'), 300);
     });
 
     // Same rationale as DitaViewerProvider's referencedFilesWatcher: a
@@ -315,36 +377,34 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     // only watching this document itself (above) misses edits to the very
     // files book/outline mode is built from. Watches the containing
     // workspace folder broadly rather than the resolved reference set for
-    // the same reason given there: that set isn't currently surfaced by
-    // the renderer, and DITA projects commonly reach across folders.
-    const watchBase =
-      vscode.workspace.getWorkspaceFolder(document.uri)?.uri ??
-      vscode.Uri.file(dirname(document.uri.fsPath));
-    const referencedFilesWatcher = vscode.workspace.createFileSystemWatcher(
-      new vscode.RelativePattern(watchBase, '**/*.{dita,ditamap,css,png,jpg,jpeg,gif,svg,webp}'),
-    );
-    const onReferencedFileChanged = (uri: vscode.Uri) => {
+    // the same reason given there, and shares that folder's watcher with
+    // every other panel and with the map tree -- a map open beside three
+    // topic previews is one watcher serving four consumers, not four
+    // watchers. See ditaFileWatcher.ts.
+    const referencedFilesWatcher = acquireDitaFileWatcher(ditaWatchBase(document.uri), (event) => {
       if (disposed) return;
-      if (uri.toString() === document.uri.toString()) return; // already handled above
+      if (event.uri.toString() === document.uri.toString()) return; // already handled above
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
-      renderDebounceTimer = setTimeout(postContentUpdate, 300);
-    };
-    referencedFilesWatcher.onDidChange(onReferencedFileChanged);
-    referencedFilesWatcher.onDidCreate(onReferencedFileChanged);
-    referencedFilesWatcher.onDidDelete(onReferencedFileChanged);
+      renderDebounceTimer = setTimeout(() => requestUpdate('content'), 300);
+    });
 
     // Re-render on theme switch so the manually-computed light/dark class
     // never goes stale relative to the actual active theme. A genuine full
     // reload, unlike postContentUpdate below -- the class lives on <html>,
     // outside the content div a content-only update touches.
     const themeSubscription = vscode.window.onDidChangeActiveColorTheme(() => {
-      updateWebview();
+      requestUpdate('full');
     });
 
     const updateWebview = () => {
-      const html = this.generateHtml(document, webviewPanel.webview, currentMode);
-      webviewPanel.webview.html = html;
-      lastRenderedHtmlByUri.set(document.uri.toString(), html);
+      if (disposed) return;
+      const rendered = this.generateHtml(document, webviewPanel.webview, currentMode);
+      webviewPanel.webview.html = rendered.html;
+      lastRenderedHtmlByUri.set(document.uri.toString(), rendered.html);
+      // Reassigning webview.html replaces the DOM outright, so the baseline
+      // becomes whatever this render produced -- including nothing at all in
+      // tree mode and on the error page, where there are no parts to diff.
+      lastBookParts = rendered.parts;
     };
 
     // The common case: a regular source edit (topicref profiling, adding/
@@ -356,13 +416,68 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     // race against. Falls back to a full reload only if rendering itself
     // failed, to show the error page.
     const postContentUpdate = () => {
+      if (disposed) return;
       const result = this.renderMapContent(document, webviewPanel.webview, currentMode);
       if (result.error !== undefined) {
         updateWebview();
         return;
       }
-      webviewPanel.webview.postMessage({ type: 'updateContent', html: result.html });
+      const parts = result.parts;
+      // Tree mode produces no parts and keeps sending its whole (small)
+      // content div, exactly as before.
+      if (!parts) {
+        webviewPanel.webview.postMessage({ type: MSG_UPDATE_CONTENT, html: result.html });
+        return;
+      }
+      const patch = diffBookParts(lastBookParts, parts);
+      // Recorded before sending: the baseline describes what the webview will
+      // be showing once this message lands, whichever branch it takes.
+      lastBookParts = parts;
+      if (patch.kind === 'none') return;
+      if (patch.kind === 'patch') {
+        // count rides along so the webview can decline to patch a document it
+        // knows is not the one these indices were computed against, and ask
+        // for a full render instead.
+        webviewPanel.webview.postMessage({
+          type: MSG_PATCH_CONTENT,
+          count: parts.length,
+          updates: patch.updates,
+        });
+        return;
+      }
+      webviewPanel.webview.postMessage({ type: MSG_UPDATE_CONTENT, html: result.html });
     };
+
+    // A hidden panel (tabbed behind another editor, or sitting in a
+    // collapsed group) still has a live webview under
+    // retainContextWhenHidden, so without this every edit anywhere in the
+    // watched set pays for a full re-render nobody is looking at. That is
+    // expensive here in a way it isn't for a single topic: book mode
+    // re-renders every referenced topic from scratch (see the render cost
+    // note in scripts/bench-book-render.js), and the extension host is
+    // single-threaded, so the cost lands on every other extension's
+    // completions and hovers too. Record the debt instead and settle it
+    // once, when the panel comes back.
+    const requestUpdate = (kind: 'content' | 'full') => {
+      if (disposed) return;
+      if (!webviewPanel.visible) {
+        pendingUpdate = foldPendingRender(pendingUpdate, kind);
+        return;
+      }
+      if (kind === 'full') updateWebview();
+      else postContentUpdate();
+    };
+
+    const viewStateSubscription = webviewPanel.onDidChangeViewState((e) => {
+      if (!e.webviewPanel.visible || pendingUpdate === 'none') return;
+      // Clear before rendering: postContentUpdate falls back to
+      // updateWebview when rendering fails, and re-entering with a stale
+      // pendingUpdate would render twice.
+      const owed = pendingUpdate;
+      pendingUpdate = 'none';
+      if (owed === 'full') updateWebview();
+      else postContentUpdate();
+    });
 
     updateWebview();
 
@@ -372,6 +487,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       changeSubscription.dispose();
       referencedFilesWatcher.dispose();
       themeSubscription.dispose();
+      viewStateSubscription.dispose();
       lastRenderedHtmlByUri.delete(document.uri.toString());
     });
   }
@@ -380,7 +496,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     document: vscode.TextDocument,
     webview: vscode.Webview,
     mode: 'tree' | 'book',
-  ): { html: string; error?: undefined } | { html?: undefined; error: string } {
+  ): { html: string; parts?: BookPart[]; error?: undefined } | { html?: undefined; error: string } {
     const docDir = dirname(document.uri.fsPath);
     try {
       const rawXml = document.getText();
@@ -392,8 +508,14 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       expandDitamapRefs(mapDoc.root, docDir);
 
       let content: string;
+      // Parts are produced in book mode only. That is the one content worth
+      // patching entry by entry: it is assembled from pieces that each carry a
+      // stable identity, and it is the one that grows to megabytes. Outline
+      // mode's tree is small and still goes out whole.
+      let parts: BookPart[] | undefined;
       if (mode === 'book') {
-        content = this.renderBookContent(mapDoc.root, document, webview, docDir);
+        parts = this.collectBookParts(mapDoc.root, document, webview, docDir);
+        content = wrapBookParts(parts);
       } else {
         // Resolve <ph keyref="..."/> etc. in the map title and navtitles
         const keyMap = buildKeyMap(document.uri);
@@ -404,7 +526,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
           treeLabel: vscode.l10n.t('Document outline'),
         });
       }
-      return { html: content };
+      return { html: content, parts };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { error: message };
@@ -415,7 +537,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     document: vscode.TextDocument,
     webview: vscode.Webview,
     mode: 'tree' | 'book',
-  ): string {
+  ): { html: string; parts?: BookPart[] } {
     const stylesUri = webview.asWebviewUri(
       vscode.Uri.file(join(this.context.extensionPath, 'media', 'styles.css')),
     );
@@ -423,7 +545,11 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     const result = this.renderMapContent(document, webview, mode);
     if (result.error !== undefined) {
       const message = result.error;
-      return `<!DOCTYPE html>
+      // No parts on the error page: it is not a book, so there is nothing a
+      // later incremental update could diff against, and the caller's
+      // baseline has to drop back to "unknown".
+      return {
+        html: `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><title>Error</title></head>
 <body>
@@ -432,7 +558,8 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
 <pre>${escapeHtml(message)}</pre>
 </div>
 </body>
-</html>`;
+</html>`,
+      };
     }
 
     const script = getMapWebviewScript();
@@ -440,7 +567,8 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     const theme = vscode.window.activeColorTheme;
     const isDark = theme.kind === vscode.ColorThemeKind.Dark || theme.kind === vscode.ColorThemeKind.HighContrast;
 
-    return `<!DOCTYPE html>
+    return {
+      html: `<!DOCTYPE html>
 <html lang="en"${isDark ? ' class="vscode-dark"' : ''}>
 <head>
 <meta charset="UTF-8">
@@ -453,81 +581,35 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
 <div id="dita-content-root">${result.html}</div>
 <script nonce="${nonce}">${script}</script>
 </body>
-</html>`;
+</html>`,
+      parts: result.parts,
+    };
   }
 
-  private renderBookContent(
+  private collectBookParts(
     mapRoot: import('../parser/domTypes').DitaNode,
     document: vscode.TextDocument,
     webview: vscode.Webview,
     docDir: string,
-  ): string {
-    // Build key map once for all entries
+  ): BookPart[] {
+    // Build key map once for all entries. renderTopicCached compares it by
+    // identity, so one instance for the whole pass is what makes reuse work.
     const keyMap = buildKeyMap(document.uri);
     const resolveKey = (k: string) => keyMap.get(k);
     const entries = collectMapEntries(mapRoot, resolveKey);
 
-    // Track visited absolute paths to avoid duplicates
-    const visited = new Set<string>();
-
-    const parts: string[] = [];
-    for (const entry of entries) {
-      if (entry.href) {
-        // Sub-map reference: its contents were already inlined as child
-        // entries by expandDitamapRefs — render a section heading only
-        // instead of parsing the map file as a topic.
-        if (entry.href.split('#')[0].toLowerCase().endsWith('.ditamap')) {
-          parts.push(renderBookPlaceholder(entry.displayName, entry.depth));
-          continue;
-        }
-        const absPath = resolve(docDir, decodeHrefPart(entry.href.split('#')[0]));
-        if (visited.has(absPath)) {
-          parts.push(renderBookSkipMessage(entry.href));
-          continue;
-        }
-        visited.add(absPath);
-
-        // Create per-topic asWebviewUri that resolves relative to the topic's dir
-        const topicDir = dirname(absPath);
-        const asWebviewUri = (relPath: string): string => {
-          try {
-            const resolvedPath = resolve(topicDir, decodeHrefPart(relPath));
-            return webview.asWebviewUri(vscode.Uri.file(resolvedPath)).toString();
-          } catch (e) {
-            // The empty src still surfaces as a visibly broken image (the
-            // webview script's document-level error listener marks it);
-            // log the cause so path-resolution failures are debuggable.
-            console.warn(`Failed to resolve webview URI for ${relPath}:`, e instanceof Error ? e.message : e);
-            return '';
-          }
-        };
-
-        const headingLevel = Math.min(1 + entry.depth, 6);
-        const result = renderTopicToHtml({
-          filePath: absPath,
-          keyMap,
-          asWebviewUri,
-          headingLevel,
-          uiLanguage: vscode.env.language,
-        });
-
-        if (result.error) {
-          parts.push(renderBookError(entry.displayName, result.error, entry.depth));
-        } else {
-          // Book mode is just each referenced topic's own content, one
-          // after another -- the same profiling/highlighting a topic
-          // already renders when opened directly (via renderTopicToHtml
-          // above) carries straight through here unchanged. No separate
-          // topicref-level (ditamap-source) profiling layered on top of
-          // it; that scope is exclusive to Outline mode's tree.
-          parts.push(`<div class="book-entry">${result.html}</div>`);
-        }
-      } else {
-        parts.push(renderBookPlaceholder(entry.displayName, entry.depth));
-      }
-    }
-
-    return `<div class="ditamap-book">${parts.join('\n')}</div>`;
+    // The assembly loop lives in ditaRenderUtils.renderBookParts so it can be
+    // unit-tested -- and benchmarked against the same code that ships --
+    // without a VS Code instance. This method contributes the two things that
+    // genuinely need one: the map's key definitions and the webview's
+    // resource-URI conversion.
+    return renderBookParts({
+      entries,
+      docDir,
+      keyMap,
+      fileToWebviewUri: (absPath) => webview.asWebviewUri(vscode.Uri.file(absPath)).toString(),
+      uiLanguage: vscode.env.language,
+    });
   }
 }
 

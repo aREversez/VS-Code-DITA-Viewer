@@ -129,14 +129,33 @@ export function stripSameDocumentFragmentPrefix(fragment: string): string {
 }
 
 /**
+ * Splits a conref/href fragment into the two parts the DITA addressing
+ * grammar defines -- "topicId" or "topicId/elementId" -- after normalizing
+ * the "./" same-document shorthand. A one-part fragment addresses the topic
+ * itself, so topicId is undefined and the whole fragment is the id named.
+ *
+ * This is the single place that splits a fragment. Callers must not do their
+ * own split('/')[0]: that answers "which topic" when the question is nearly
+ * always "which element", and for the standard two-part form the two are
+ * different strings by definition. ditaRenderUtils resolves conref content
+ * this way already (parts.length > 1 ? parts[1] : parts[0]); find-references
+ * took parts[0] instead, which is why conrefs rendered fine but could not be
+ * found from their declaration.
+ */
+export function splitRefFragment(fragment: string): { topicId: string | undefined; elementId: string } {
+  const normalized = stripSameDocumentFragmentPrefix(fragment);
+  const slashIdx = normalized.indexOf('/');
+  return slashIdx >= 0
+    ? { topicId: normalized.substring(0, slashIdx), elementId: normalized.substring(slashIdx + 1) }
+    : { topicId: undefined, elementId: normalized };
+}
+
+/**
  * Resolves a conref/href fragment ("topicId" or "topicId/elementId") to the
  * offset of the target id="..." attribute in the target file's text, or -1.
  */
 export function findConrefTargetOffset(text: string, fragment: string): number {
-  const normalized = stripSameDocumentFragmentPrefix(fragment);
-  const slashIdx = normalized.indexOf('/');
-  const topicId = slashIdx >= 0 ? normalized.substring(0, slashIdx) : undefined;
-  const elementId = slashIdx >= 0 ? normalized.substring(slashIdx + 1) : normalized;
+  const { topicId, elementId } = splitRefFragment(fragment);
   if (!elementId) return -1;
 
   const findId = (id: string, from: number): number => {

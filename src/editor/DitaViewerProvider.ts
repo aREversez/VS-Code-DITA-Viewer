@@ -1,11 +1,14 @@
 import * as vscode from 'vscode';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
-import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { readFileSync, existsSync, readdirSync } from 'fs';
 import { dirname, isAbsolute, join, resolve, basename } from 'path';
 import { randomBytes } from 'crypto';
 import { DitaNode } from '../parser/domTypes';
-import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart, detectNoteLabels, detectIndexLabel, readImageDimensions, clearImageDimensionsCache, FileReader } from './ditaRenderUtils';
+import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart, detectNoteLabels, detectIndexLabel, readImageDimensions, clearImageDimensionsCache, clearTopicRenderCache, stampFiles, FileReader } from './ditaRenderUtils';
+import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
+import { foldPendingRender, PendingRender } from './pendingRender';
+import { sharedWebviewStrings } from './webviewL10n';
 
 // Test-only hook: @vscode/test-electron integration tests can't read a
 // webview's rendered HTML directly (VS Code doesn't expose the WebviewPanel
@@ -21,18 +24,19 @@ export function getLastRenderedHtmlForTesting(uriString: string): string | undef
 
 /**
  * Clears every in-memory cache the extension keeps (the test-only render
- * cache above, the keymap cache below, and the image-dimensions cache in
- * ditaRenderUtils.ts). lastRenderedHtmlByUri entries are already removed
- * individually as each webview panel disposes (see onDidDispose in
- * resolveCustomTextEditor), and keyMapCache/imageDimensionsCache are
- * already bounded by their own caps -- this is a defensive full reset for
- * extension deactivation, not a fix for an actual leak in any of them.
+ * cache above, the keymap cache below, and the image-dimensions and
+ * book-mode topic-render caches in ditaRenderUtils.ts). lastRenderedHtmlByUri
+ * entries are already removed individually as each webview panel disposes
+ * (see onDidDispose in resolveCustomTextEditor), and the rest are already
+ * bounded by their own caps -- this is a defensive full reset for extension
+ * deactivation, not a fix for an actual leak in any of them.
  * Wired into extension.ts's deactivate().
  */
 export function clearAllCaches(): void {
   lastRenderedHtmlByUri.clear();
   keyMapCache.clear();
   clearImageDimensionsCache();
+  clearTopicRenderCache();
 }
 
 // Font preferences (size % + serif toggle) are global rather than per-document:
@@ -56,15 +60,16 @@ const WIDTH_SELECTION_KEY = 'ditaViewer.widthSelectionByUri';
 
 function getWebviewScript(): string {
   const L = {
-    previewToolbar: JSON.stringify(vscode.l10n.t('Preview toolbar')),
+    // Everything the map preview's toolbar says too: the toolbar label, the
+    // font and page-width controls, the Flags toggle, and the option sets for
+    // both overlays. Kept in one table so the two previews cannot drift apart
+    // on a control they share -- see webviewL10n.ts. What follows is wording
+    // that exists only here.
+    ...sharedWebviewStrings(),
     selectThemeCss: JSON.stringify(vscode.l10n.t('Select theme CSS')),
-    decreaseFontSize: JSON.stringify(vscode.l10n.t('Decrease font size')),
-    increaseFontSize: JSON.stringify(vscode.l10n.t('Increase font size')),
-    fontSans: JSON.stringify(vscode.l10n.t('Sans')),
-    fontSerif: JSON.stringify(vscode.l10n.t('Serif')),
-    fontCurrentSans: JSON.stringify(vscode.l10n.t('Current: Sans-serif. Click to switch to Serif')),
-    fontCurrentSerif: JSON.stringify(vscode.l10n.t('Current: Serif. Click to switch to Sans-serif')),
     resetFont: JSON.stringify(vscode.l10n.t('Reset font size and family to default')),
+    // The image lightbox is a single-topic affordance; book mode renders the
+    // same images inline with no zoom, full-screen or copy control to label.
     imgZoomOutTitle: JSON.stringify(vscode.l10n.t('Zoom out this image (preview only)')),
     imgZoomInTitle: JSON.stringify(vscode.l10n.t('Zoom in this image (preview only)')),
     imgMaximizeTitle: JSON.stringify(vscode.l10n.t('View full-screen (use ←/→ to switch images)')),
@@ -74,27 +79,6 @@ function getWebviewScript(): string {
     imgCopyUnsupportedLabel: JSON.stringify(vscode.l10n.t('Copying images is not supported here')),
     imgCopyToastDone: JSON.stringify(vscode.l10n.t('Image copied to clipboard')),
     imgCopyToastFailed: JSON.stringify(vscode.l10n.t('Copy failed')),
-    profilingLabel: JSON.stringify(vscode.l10n.t('Flags')),
-    profilingOnTitle: JSON.stringify(vscode.l10n.t('Profiling attributes (props/otherprops/audience/...) are highlighted. Click to hide the highlighting.')),
-    profilingOffTitle: JSON.stringify(vscode.l10n.t('Profiling attribute highlighting is hidden. Click to show which content is flagged and with what.')),
-    pageWidth: JSON.stringify(vscode.l10n.t('Page width')),
-    widthAuto: JSON.stringify(vscode.l10n.t('Auto')),
-    widthFull: JSON.stringify(vscode.l10n.t('Full')),
-    widthWide: JSON.stringify(vscode.l10n.t('Wide')),
-    widthDesktop: JSON.stringify(vscode.l10n.t('Desktop')),
-    widthNarrow: JSON.stringify(vscode.l10n.t('Narrow')),
-    reloadContent: JSON.stringify(vscode.l10n.t('Reload DITA content')),
-    searchPlaceholder: vscode.l10n.t('Search'),
-    searchNext: vscode.l10n.t('Next match'),
-    searchPrev: vscode.l10n.t('Previous match'),
-    searchClose: vscode.l10n.t('Close search'),
-    searchMatchCase: vscode.l10n.t('Match case'),
-    searchUseRegex: vscode.l10n.t('Use regex'),
-    searchInvalidRegex: vscode.l10n.t('Invalid regex'),
-    filterLabel: vscode.l10n.t('Filter'),
-    filterTitle: vscode.l10n.t('Show/hide content by profiling attribute value (actually hides matching content, unlike the Flags toggle which only shows/hides the highlight)'),
-    filterClose: vscode.l10n.t('Close'),
-    filterEmpty: vscode.l10n.t('No profiling attributes in this document'),
   };
   return `
 (function() {
@@ -1030,7 +1014,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
 
     webviewPanel.webview.onDidReceiveMessage((message) => {
       if (message.type === 'refresh') {
-        updateWebview();
+        requestUpdate('full');
       } else if (message.type === 'scrollSync') {
         // Reveal the matching source line as the user scrolls the preview,
         // but deliberately do NOT move editor.selection here — unlike
@@ -1139,11 +1123,21 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     });
 
     let renderDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+    // The render a currently-hidden panel is owed, if any. 'content' is a
+    // source edit, satisfied by postContentUpdate; 'full' is a theme switch
+    // or manual refresh, which has to reassign webview.html because the
+    // light/dark class lives on <html>, outside the content div a
+    // content-only update touches. Escalates only -- a theme switch landing
+    // while an edit is already pending must not be downgraded, or the class
+    // stays stale until some later unrelated re-render. The fold itself
+    // lives in pendingRender.ts -- see foldPendingRender -- so the rule is
+    // pinned by a unit test rather than only by this comment.
+    let pendingUpdate: PendingRender = 'none';
     const changeSubscription = vscode.workspace.onDidChangeTextDocument((e) => {
       if (e.document.uri.toString() !== document.uri.toString()) return;
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
       renderDebounceTimer = setTimeout(() => {
-        postContentUpdate();
+        requestUpdate('content');
       }, 300);
     });
 
@@ -1153,34 +1147,29 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     // above -- previously the only way to pick these up was the manual
     // reload button. This intentionally watches the whole containing
     // workspace folder rather than precisely tracking this document's own
-    // resolved dependency set: the renderer doesn't currently surface which
-    // files a given render actually touched, and workspace-wide DITA
-    // projects commonly pull conrefs/keydefs from ancestor or sibling
-    // directories, so a scoped watch would risk silently missing exactly
-    // the cross-folder references this is meant to catch. The tradeoff is
-    // a refresh check firing for edits unrelated to this document; that's
-    // a cheap no-op for a single topic, though for a large open book-mode
-    // map it re-runs the same full-book render the reload button already
-    // did on demand (see the book-mode render cost note in
-    // scripts/bench-book-render.js) -- worth revisiting with real
-    // dependency tracking if that proves noisy in practice.
-    const watchBase =
-      vscode.workspace.getWorkspaceFolder(document.uri)?.uri ??
-      vscode.Uri.file(dirname(document.uri.fsPath));
-    const referencedFilesWatcher = vscode.workspace.createFileSystemWatcher(
-      new vscode.RelativePattern(watchBase, '**/*.{dita,ditamap,css,png,jpg,jpeg,gif,svg,webp}'),
-    );
-    const onReferencedFileChanged = (uri: vscode.Uri) => {
+    // resolved dependency set. That set IS knowable now -- buildKeyMap below
+    // already records every map it read so it can fingerprint them, and
+    // renderTopicCached takes a collectDependencies sink for the render's own
+    // reads -- but a per-document watcher built from either would have to be
+    // torn down and rebuilt after every render, because editing a topic changes
+    // what it references, and getting that wrong means silently missing the
+    // cross-folder conref this exists to catch. Sharing one folder-wide watcher
+    // is the cheaper half of that win: every panel used to create its own, so a
+    // map open next to three topic previews meant four watchers each matching
+    // every file event in the folder. See ditaFileWatcher.ts.
+    //
+    // The tradeoff is unchanged: a refresh check fires for edits unrelated to
+    // this document. That's a cheap no-op for a single topic, and for a large
+    // open book-mode map it re-runs the assembly pass, which is now mostly
+    // cache hits (see scripts/bench-book-render.js).
+    const referencedFilesWatcher = acquireDitaFileWatcher(ditaWatchBase(document.uri), (event) => {
       if (disposed) return;
-      if (uri.toString() === document.uri.toString()) return; // already handled above
+      if (event.uri.toString() === document.uri.toString()) return; // already handled above
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
       renderDebounceTimer = setTimeout(() => {
-        postContentUpdate();
+        requestUpdate('content');
       }, 300);
-    };
-    referencedFilesWatcher.onDidChange(onReferencedFileChanged);
-    referencedFilesWatcher.onDidCreate(onReferencedFileChanged);
-    referencedFilesWatcher.onDidDelete(onReferencedFileChanged);
+    });
 
     // Re-render on theme switch so the manually-computed light/dark class
     // (used for DITA-specific colors that have no direct VS Code theme
@@ -1189,7 +1178,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     // below -- the CSS class lives on <html>, outside the content div a
     // content-only update touches.
     const themeSubscription = vscode.window.onDidChangeActiveColorTheme(() => {
-      updateWebview();
+      requestUpdate('full');
     });
 
     const updateWebview = () => {
@@ -1234,6 +1223,39 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       webviewPanel.webview.postMessage({ type: 'updateContent', html: result.html });
     };
 
+    // A hidden panel (tabbed behind another editor, or sitting in a
+    // collapsed group) still has a live webview under
+    // retainContextWhenHidden, so without this every edit anywhere in the
+    // watched set pays for a full re-render nobody is looking at -- and the
+    // extension host is single-threaded, so that cost lands on every other
+    // extension's completions and hovers too. Record the debt instead and
+    // settle it once, when the panel comes back.
+    const requestUpdate = (kind: 'content' | 'full') => {
+      if (disposed) return;
+      if (!webviewPanel.visible) {
+        pendingUpdate = foldPendingRender(pendingUpdate, kind);
+        return;
+      }
+      if (kind === 'full') updateWebview();
+      else postContentUpdate();
+    };
+
+    // Only renders are deferred. The scroll-sync traffic above (editorSub
+    // -> postRevealLine) is a bare postMessage rather than a render, and
+    // suppressing it while hidden would leave the preview scrolled to
+    // wherever it sat when the panel was hidden -- pendingUpdate is 'none'
+    // in that case, so nothing would flush on reveal to correct it.
+    const viewStateSubscription = webviewPanel.onDidChangeViewState((e) => {
+      if (!e.webviewPanel.visible || pendingUpdate === 'none') return;
+      // Clear before rendering: postContentUpdate falls back to
+      // updateWebview when rendering fails, and re-entering with a stale
+      // pendingUpdate would render twice.
+      const owed = pendingUpdate;
+      pendingUpdate = 'none';
+      if (owed === 'full') updateWebview();
+      else postContentUpdate();
+    });
+
     updateWebview();
 
     webviewPanel.onDidDispose(() => {
@@ -1245,6 +1267,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       editorSub.dispose();
       selectionSub.dispose();
       themeSubscription.dispose();
+      viewStateSubscription.dispose();
       lastRenderedHtmlByUri.delete(document.uri.toString());
     });
   }
@@ -1516,18 +1539,9 @@ const keyMapCache = new Map<string, KeyMapCacheEntry>();
 // One entry per document directory; bound it so long sessions touching many
 // folders cannot grow the cache without limit (evicts oldest-inserted first).
 const KEY_MAP_CACHE_MAX = 50;
-
-function stampFiles(files: string[]): string {
-  return files
-    .map((f) => {
-      try {
-        return String(statSync(f).mtimeMs);
-      } catch {
-        return '?';
-      }
-    })
-    .join('|');
-}
+// stampFiles is imported from ditaRenderUtils.ts rather than defined here:
+// book-mode topic caching needs the identical mtime fingerprint, and two
+// copies of an invalidation rule drift apart silently.
 
 export function buildKeyMap(docUri: vscode.Uri): Map<string, string> {
   const docDir = dirname(docUri.fsPath);
