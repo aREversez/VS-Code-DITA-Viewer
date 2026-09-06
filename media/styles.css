@@ -739,5 +739,54 @@ section, .example { margin: 1.5rem 0; }
   opacity: 0.65;
 }
 
+/* Book mode composites every referenced topic into one long document, so on a
+   large map most of it is off-screen and pays for layout and paint anyway.
+   content-visibility: auto lets the browser skip that work for entries it
+   cannot see. It only became safe to turn on once entries survived a
+   re-render (see bookPatch.ts): the remembered size below is kept per
+   element, so replacing #dita-content-root's innerHTML on every keystroke
+   would have discarded it, collapsing everything above the viewport back to
+   estimates and moving the reader's scroll position.
+
+   Placeholder and error entries are excluded deliberately. They are two or
+   three lines tall, so an intrinsic-size estimate in the hundreds of pixels
+   would leave a large blank block where a topichead's label belongs --
+   visible damage in exchange for no measurable saving.
+
+   Two contain-intrinsic-size declarations rather than one. `auto <length>`
+   is the useful form: it remembers each entry's real height once it has been
+   laid out, and only falls back to the estimate for entries never rendered.
+   But a browser that understands content-visibility and not the auto keyword
+   would discard that declaration entirely and leave those entries
+   zero-height, so the plain estimate comes first as the fallback and the auto
+   form second to override it where supported. 600px is an estimate, not a
+   measurement, which is acceptable precisely because the auto form replaces
+   it after the first layout.
+
+   One accepted side effect: the layout containment this implies stops an
+   entry's last child's bottom margin from collapsing out of the entry, so
+   the gap between two topics can grow by that margin. Bounded, and confined
+   to entry boundaries. */
+.ditamap-book > .book-entry:not(.book-entry--placeholder):not(.book-entry--error) {
+  content-visibility: auto;
+  contain-intrinsic-size: 600px;
+  contain-intrinsic-size: auto 600px;
+}
+
+/* Exporting a book inlines this stylesheet wholesale into the standalone page
+   (see exportHtml.ts), and a print run that only paints what intersects the
+   viewport would silently drop every topic the reader had not scrolled to.
+
+   The selector is repeated verbatim rather than shortened to
+   .ditamap-book > .book-entry: each :not() argument counts towards
+   specificity, so the rule above sits at four classes and a shorter one here
+   at two would lose to it, print block or not. Identical selectors make
+   source order the decider, and this comes last. */
+@media print {
+  .ditamap-book > .book-entry:not(.book-entry--placeholder):not(.book-entry--error) {
+    content-visibility: visible;
+  }
+}
+
 /* Responsive */
 @media (max-width: 600px) { body { padding: 1rem; } }
