@@ -8,6 +8,7 @@ import { DitaNode } from '../parser/domTypes';
 import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart, detectNoteLabels, detectIndexLabel, readImageDimensions, clearImageDimensionsCache, clearTopicRenderCache, stampFiles, FileReader } from './ditaRenderUtils';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { foldPendingRender, PendingRender } from './pendingRender';
+import { sharedWebviewStrings } from './webviewL10n';
 
 // Test-only hook: @vscode/test-electron integration tests can't read a
 // webview's rendered HTML directly (VS Code doesn't expose the WebviewPanel
@@ -59,15 +60,16 @@ const WIDTH_SELECTION_KEY = 'ditaViewer.widthSelectionByUri';
 
 function getWebviewScript(): string {
   const L = {
-    previewToolbar: JSON.stringify(vscode.l10n.t('Preview toolbar')),
+    // Everything the map preview's toolbar says too: the toolbar label, the
+    // font and page-width controls, the Flags toggle, and the option sets for
+    // both overlays. Kept in one table so the two previews cannot drift apart
+    // on a control they share -- see webviewL10n.ts. What follows is wording
+    // that exists only here.
+    ...sharedWebviewStrings(),
     selectThemeCss: JSON.stringify(vscode.l10n.t('Select theme CSS')),
-    decreaseFontSize: JSON.stringify(vscode.l10n.t('Decrease font size')),
-    increaseFontSize: JSON.stringify(vscode.l10n.t('Increase font size')),
-    fontSans: JSON.stringify(vscode.l10n.t('Sans')),
-    fontSerif: JSON.stringify(vscode.l10n.t('Serif')),
-    fontCurrentSans: JSON.stringify(vscode.l10n.t('Current: Sans-serif. Click to switch to Serif')),
-    fontCurrentSerif: JSON.stringify(vscode.l10n.t('Current: Serif. Click to switch to Sans-serif')),
     resetFont: JSON.stringify(vscode.l10n.t('Reset font size and family to default')),
+    // The image lightbox is a single-topic affordance; book mode renders the
+    // same images inline with no zoom, full-screen or copy control to label.
     imgZoomOutTitle: JSON.stringify(vscode.l10n.t('Zoom out this image (preview only)')),
     imgZoomInTitle: JSON.stringify(vscode.l10n.t('Zoom in this image (preview only)')),
     imgMaximizeTitle: JSON.stringify(vscode.l10n.t('View full-screen (use ←/→ to switch images)')),
@@ -77,27 +79,6 @@ function getWebviewScript(): string {
     imgCopyUnsupportedLabel: JSON.stringify(vscode.l10n.t('Copying images is not supported here')),
     imgCopyToastDone: JSON.stringify(vscode.l10n.t('Image copied to clipboard')),
     imgCopyToastFailed: JSON.stringify(vscode.l10n.t('Copy failed')),
-    profilingLabel: JSON.stringify(vscode.l10n.t('Flags')),
-    profilingOnTitle: JSON.stringify(vscode.l10n.t('Profiling attributes (props/otherprops/audience/...) are highlighted. Click to hide the highlighting.')),
-    profilingOffTitle: JSON.stringify(vscode.l10n.t('Profiling attribute highlighting is hidden. Click to show which content is flagged and with what.')),
-    pageWidth: JSON.stringify(vscode.l10n.t('Page width')),
-    widthAuto: JSON.stringify(vscode.l10n.t('Auto')),
-    widthFull: JSON.stringify(vscode.l10n.t('Full')),
-    widthWide: JSON.stringify(vscode.l10n.t('Wide')),
-    widthDesktop: JSON.stringify(vscode.l10n.t('Desktop')),
-    widthNarrow: JSON.stringify(vscode.l10n.t('Narrow')),
-    reloadContent: JSON.stringify(vscode.l10n.t('Reload DITA content')),
-    searchPlaceholder: vscode.l10n.t('Search'),
-    searchNext: vscode.l10n.t('Next match'),
-    searchPrev: vscode.l10n.t('Previous match'),
-    searchClose: vscode.l10n.t('Close search'),
-    searchMatchCase: vscode.l10n.t('Match case'),
-    searchUseRegex: vscode.l10n.t('Use regex'),
-    searchInvalidRegex: vscode.l10n.t('Invalid regex'),
-    filterLabel: vscode.l10n.t('Filter'),
-    filterTitle: vscode.l10n.t('Show/hide content by profiling attribute value (actually hides matching content, unlike the Flags toggle which only shows/hides the highlight)'),
-    filterClose: vscode.l10n.t('Close'),
-    filterEmpty: vscode.l10n.t('No profiling attributes in this document'),
   };
   return `
 (function() {

@@ -5,6 +5,7 @@ import { renderBookParts, wrapBookParts, escapeHtml, expandDitamapRefs, getSearc
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
 import { foldPendingRender, PendingRender } from './pendingRender';
+import { sharedWebviewStrings } from './webviewL10n';
 import { buildKeyMap } from './DitaViewerProvider';
 import { formatLocalizedRole } from '../language/bookRoleL10n';
 import { dirname, join, resolve } from 'path';
@@ -45,37 +46,17 @@ const MSG_REQUEST_FULL_RENDER = 'requestFullRender';
 
 function getMapWebviewScript(): string {
   const L = {
-    previewToolbar: JSON.stringify(vscode.l10n.t('Preview toolbar')),
-    decreaseFontSize: JSON.stringify(vscode.l10n.t('Decrease font size')),
-    increaseFontSize: JSON.stringify(vscode.l10n.t('Increase font size')),
-    fontSans: JSON.stringify(vscode.l10n.t('Sans')),
-    fontSerif: JSON.stringify(vscode.l10n.t('Serif')),
-    fontCurrentSans: JSON.stringify(vscode.l10n.t('Current: Sans-serif. Click to switch to Serif')),
-    fontCurrentSerif: JSON.stringify(vscode.l10n.t('Current: Serif. Click to switch to Sans-serif')),
-    pageWidth: JSON.stringify(vscode.l10n.t('Page width')),
-    widthAuto: JSON.stringify(vscode.l10n.t('Auto')),
-    widthFull: JSON.stringify(vscode.l10n.t('Full')),
-    widthWide: JSON.stringify(vscode.l10n.t('Wide')),
-    widthDesktop: JSON.stringify(vscode.l10n.t('Desktop')),
-    widthNarrow: JSON.stringify(vscode.l10n.t('Narrow')),
+    // Everything the single-topic preview's toolbar says too: the toolbar
+    // label, the font and page-width controls, the Flags toggle, and the
+    // option sets for both overlays. Kept in one table so the two previews
+    // cannot drift apart on a control they share -- see webviewL10n.ts. What
+    // follows is wording that exists only here.
+    ...sharedWebviewStrings(),
+    // The outline/book switch has no counterpart in the single-topic preview,
+    // which only ever shows one topic.
     switchModeTitle: JSON.stringify(vscode.l10n.t('Switch between outline tree and full book view')),
     modeOutline: JSON.stringify(vscode.l10n.t('Outline')),
     modeBook: JSON.stringify(vscode.l10n.t('Book')),
-    reloadContent: JSON.stringify(vscode.l10n.t('Reload DITA content')),
-    searchPlaceholder: vscode.l10n.t('Search'),
-    searchNext: vscode.l10n.t('Next match'),
-    searchPrev: vscode.l10n.t('Previous match'),
-    searchClose: vscode.l10n.t('Close search'),
-    searchMatchCase: vscode.l10n.t('Match case'),
-    searchUseRegex: vscode.l10n.t('Use regex'),
-    searchInvalidRegex: vscode.l10n.t('Invalid regex'),
-    profilingLabel: JSON.stringify(vscode.l10n.t('Flags')),
-    profilingOnTitle: JSON.stringify(vscode.l10n.t('Profiling attributes (props/otherprops/audience/...) are highlighted. Click to hide the highlighting.')),
-    profilingOffTitle: JSON.stringify(vscode.l10n.t('Profiling attribute highlighting is hidden. Click to show which content is flagged and with what.')),
-    filterLabel: vscode.l10n.t('Filter'),
-    filterTitle: vscode.l10n.t('Show/hide content by profiling attribute value (actually hides matching content, unlike the Flags toggle which only shows/hides the highlight)'),
-    filterClose: vscode.l10n.t('Close'),
-    filterEmpty: vscode.l10n.t('No profiling attributes in this document'),
   };
   return `
 (function() {
