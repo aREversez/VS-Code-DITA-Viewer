@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, findTextMatches, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -1125,5 +1125,145 @@ describe('findTextMatches', () => {
   it('should cap matches per text node at 1000', () => {
     const m = findTextMatches('a'.repeat(5000), 'a', false, true);
     assert.strictEqual(m!.length, 1000);
+  });
+});
+
+describe('planCurrentMarkMove', () => {
+  it('moves the highlight by naming only the mark it leaves and the mark it lands on', () => {
+    // The whole point of the function: the loop this replaced named all five.
+    assert.deepStrictEqual(planCurrentMarkMove(2, 3, 5), { clear: 2, set: 3 });
+  });
+
+  it('names nothing to clear when no mark is lit yet', () => {
+    // The state performSearch leaves behind: it has just built a fresh set of
+    // marks, none of which carries '__current', so clearing is work for nothing.
+    assert.deepStrictEqual(planCurrentMarkMove(-1, 0, 5), { clear: -1, set: 0 });
+  });
+
+  it('handles wrap-around in both directions', () => {
+    assert.deepStrictEqual(planCurrentMarkMove(4, 0, 5), { clear: 4, set: 0 });
+    assert.deepStrictEqual(planCurrentMarkMove(0, 4, 5), { clear: 0, set: 4 });
+  });
+
+  it('does not clear and re-set the mark that is already current', () => {
+    // gotoNextMatch on a single-match search lands back where it started.
+    // Clearing first would take the highlight off and put it back on within one
+    // task -- a visible flash if the browser happens to paint in between, and
+    // pointless work either way.
+    assert.deepStrictEqual(planCurrentMarkMove(2, 2, 5), { clear: -1, set: 2 });
+    assert.deepStrictEqual(planCurrentMarkMove(0, 0, 1), { clear: -1, set: 0 });
+  });
+
+  it('takes the highlight off entirely when there is no next match', () => {
+    assert.deepStrictEqual(planCurrentMarkMove(2, -1, 5), { clear: 2, set: -1 });
+  });
+
+  it('does nothing at all when there are no marks, stale index included', () => {
+    assert.deepStrictEqual(planCurrentMarkMove(-1, -1, 0), { clear: -1, set: -1 });
+    assert.deepStrictEqual(planCurrentMarkMove(3, 0, 0), { clear: -1, set: -1 });
+  });
+
+  it('drops a stale previous index rather than naming a mark that no longer exists', () => {
+    // Reachable, not theoretical: the document changed under an open search bar,
+    // so the match list shrank while the index tracked from the longer list
+    // survived it by one update.
+    assert.deepStrictEqual(planCurrentMarkMove(7, 0, 3), { clear: -1, set: 0 });
+  });
+
+  it('drops a stale next index but still clears the mark it left', () => {
+    assert.deepStrictEqual(planCurrentMarkMove(1, 9, 3), { clear: 1, set: -1 });
+  });
+
+  it('never names an index outside the list', () => {
+    // The caller uses these to index a real array, so this is the property that
+    // turns any future slip in the decision table into a no-op instead of a
+    // silent write to the wrong mark. Covers negative and past-the-end inputs on
+    // both sides, including an empty list.
+    for (let count = 0; count <= 6; count++) {
+      for (let previous = -2; previous <= 8; previous++) {
+        for (let next = -2; next <= 8; next++) {
+          const move = planCurrentMarkMove(previous, next, count);
+          for (const index of [move.clear, move.set]) {
+            assert.ok(
+              index === -1 || (index >= 0 && index < count),
+              `planCurrentMarkMove(${previous}, ${next}, ${count}) named ${index}`,
+            );
+          }
+        }
+      }
+    }
+  });
+
+  it('leaves exactly the marks lit that walking all of them would have left lit', () => {
+    // Exhaustive over a small grid rather than a hand-picked sequence, because
+    // the optimisation is only worth having if it is equivalent to the O(n) loop
+    // it replaced. `expected` is that loop's output verbatim: it lit the current
+    // match and cleared every other one. `marks` is the state the loop would
+    // have left behind on the previous move, which is what makes the two
+    // comparable -- the optimised path only ever sees one mark lit, and if that
+    // ever stopped being true the divergence would show up here.
+    const count = 4;
+    for (let previous = -1; previous < count; previous++) {
+      for (let next = -1; next < count; next++) {
+        const marks = Array.from({ length: count }, (_, i) => i === previous);
+        const expected = Array.from({ length: count }, (_, i) => i === next);
+        const move = planCurrentMarkMove(previous, next, count);
+        if (move.clear >= 0) marks[move.clear] = false;
+        if (move.set >= 0) marks[move.set] = true;
+        assert.deepStrictEqual(marks, expected, `move from ${previous} to ${next} of ${count}`);
+      }
+    }
+  });
+});
+
+describe('getSearchOverlayScript', () => {
+  const opts = {
+    placeholder: 'Find',
+    nextMatch: 'Next match',
+    prevMatch: 'Previous match',
+    close: 'Close',
+    matchCase: 'Match case',
+    useRegex: 'Use regular expression',
+    invalidRegex: 'Invalid regular expression',
+  };
+
+  it('emits a script that parses as JavaScript', () => {
+    // The overlay is one long template literal with a dozen interpolations in
+    // it, so a stray backtick or an unescaped interpolation anywhere ships a
+    // search bar that silently never runs. Nothing else in the suite would
+    // notice: there is no DOM here to execute it against, and the e2e harness
+    // cannot reach into a webview. Compiling it is the cheapest assertion that
+    // catches the whole class -- new Function parses the body without running
+    // it, so the document and NodeFilter references inside are never touched.
+    assert.doesNotThrow(() => new Function(getSearchOverlayScript(opts)));
+  });
+
+  it('injects the exported planCurrentMarkMove rather than a second copy of its rules', () => {
+    // The comment at the injection site promises webview and tests always run
+    // the same algorithm. Comparing the emitted text against the function's own
+    // source is what makes that promise load-bearing instead of decorative: it
+    // fails the moment someone hand-copies the decision table into the template,
+    // which is the natural thing to do and the natural way for the two to drift.
+    const script = getSearchOverlayScript(opts);
+    assert.ok(
+      script.includes('var planCurrentMarkMoveCore = ' + planCurrentMarkMove.toString() + ';'),
+      'expected the overlay script to inject the exported planCurrentMarkMove verbatim',
+    );
+  });
+
+  it('injects a body that still works once lifted out of this module', () => {
+    // The webview has none of this module's bindings, so an injected function
+    // that reaches for one is dead on arrival -- and it would look perfectly
+    // healthy here, where the binding is in scope. new Function builds the
+    // function against the global scope instead, which turns that free
+    // identifier into a ReferenceError the first time it is called.
+    const revived = new Function(
+      'return (' + planCurrentMarkMove.toString() + ')',
+    )() as typeof planCurrentMarkMove;
+    assert.deepStrictEqual(revived(2, 3, 5), { clear: 2, set: 3 });
+    assert.deepStrictEqual(revived(-1, 0, 5), { clear: -1, set: 0 });
+    assert.deepStrictEqual(revived(2, 2, 5), { clear: -1, set: 2 });
+    assert.deepStrictEqual(revived(7, 0, 3), { clear: -1, set: 0 });
+    assert.deepStrictEqual(revived(2, -1, 0), { clear: -1, set: -1 });
   });
 });

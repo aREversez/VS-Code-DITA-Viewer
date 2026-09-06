@@ -464,6 +464,45 @@ export function findTextMatches(
   return matches;
 }
 
+// Decides which search marks have to be touched to move the '__current' class
+// from one match to another. Shared between unit tests and the webview search
+// overlay (injected there via planCurrentMarkMove.toString(), so it must stay
+// fully self-contained — no references to other module-level bindings).
+//
+// The point of this existing at all: without it, moving the highlight one step
+// means walking every mark in the document and calling classList.add or
+// .remove on each, which in book mode is tens of thousands of style
+// invalidations per arrow key. With it, the caller touches two. That trade is
+// only sound for as long as exactly one mark carries the class and the caller
+// knows which — hence `previous`, and hence the cases below where the two
+// disagree.
+//
+// Returns indices into the caller's mark list; -1 means "nothing to do".
+//   clear — the mark to remove '__current' from
+//   set   — the mark to add it to
+export function planCurrentMarkMove(
+  previous: number,
+  next: number,
+  count: number,
+): { clear: number; set: number } {
+  // An index outside the list names no mark, and an empty list puts both of them
+  // outside it, so these two guards are the entire decision -- there is no
+  // separate no-marks case that has to be kept in step with them. That they are
+  // reachable rather than theoretical: the match list shrinks whenever the
+  // document changes under an open search bar, and the index tracked from the
+  // previous, longer list outlives it by one update. Clearing "mark 7" of a
+  // 3-mark list would be a silent no-op at best, so drop it and let the caller's
+  // own bounds check be the second line of defence.
+  const previousIsValid = previous >= 0 && previous < count;
+  const nextIsValid = next >= 0 && next < count;
+  // previous === next is the mark that already carries the class. Reporting it
+  // as something to clear first would take the highlight off and put it back
+  // on within one task — invisible normally, but a flash when the browser
+  // happens to paint in between, and pointless work either way.
+  const clear = previousIsValid && previous !== next ? previous : -1;
+  return { clear, set: nextIsValid ? next : -1 };
+}
+
 // ── Default note labels ──
 // Values follow DITA-OT's own strings-en-us.xml / strings-zh-cn.xml bundles
 // (org.dita.base/xsl/common) so the preview matches what a real DITA-OT
@@ -1196,6 +1235,10 @@ export function getSearchOverlayScript(opts: {
   // ── Search overlay (Ctrl+F) ──
   var searchMarks = [];
   var currentMatch = -1;
+  // Which mark actually carries '__current' right now, or -1 if none does.
+  // Tracked apart from currentMatch so that moving the highlight touches two
+  // marks instead of every mark in the document -- see updateCurrentMatch.
+  var highlightedMatch = -1;
   var useRegex = false;
   var caseSensitive = false;
 
@@ -1293,6 +1336,7 @@ export function getSearchOverlayScript(opts: {
     }
     searchMarks = [];
     currentMatch = -1;
+    highlightedMatch = -1;
   }
 
   // Returns array of {start, end} match positions within a text string.
@@ -1302,6 +1346,11 @@ export function getSearchOverlayScript(opts: {
   function findMatchesInText(text, term) {
     return findTextMatchesCore(text, term, useRegex, caseSensitive);
   }
+
+  // Which marks to touch when the current match moves. Same arrangement: the
+  // exported planCurrentMarkMove is unit-tested TS, injected here so webview
+  // and tests always run the same algorithm.
+  var planCurrentMarkMoveCore = ${planCurrentMarkMove.toString()};
 
   function performSearch(term) {
     clearSearchHighlights();
@@ -1378,13 +1427,23 @@ export function getSearchOverlayScript(opts: {
   }
 
   function updateCurrentMatch() {
-    for (var i = 0; i < searchMarks.length; i++) {
-      if (i === currentMatch) {
-        searchMarks[i].classList.add('__current');
-      } else {
-        searchMarks[i].classList.remove('__current');
-      }
+    // Two marks rather than all of them, which is the whole reason
+    // highlightedMatch is tracked. That is only sound while exactly one mark
+    // carries '__current' and highlightedMatch names it; both ends hold
+    // because every mark is created fresh (performSearch) and every mark is
+    // destroyed through clearSearchHighlights, which resets the tracker.
+    // Should the two ever drift, the failure is a mark left lit rather than a
+    // crash -- classList.add and .remove are no-ops when the token is already
+    // in the wanted state, and the bounds checks below catch a stale index
+    // into a list that has since shrunk.
+    var move = planCurrentMarkMoveCore(highlightedMatch, currentMatch, searchMarks.length);
+    if (move.clear >= 0 && searchMarks[move.clear]) {
+      searchMarks[move.clear].classList.remove('__current');
     }
+    if (move.set >= 0 && searchMarks[move.set]) {
+      searchMarks[move.set].classList.add('__current');
+    }
+    highlightedMatch = move.set;
     if (currentMatch >= 0 && searchMarks[currentMatch]) {
       searchMarks[currentMatch].scrollIntoView({ block: 'center', behavior: 'smooth' });
     }

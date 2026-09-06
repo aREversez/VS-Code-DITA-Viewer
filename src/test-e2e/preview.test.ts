@@ -102,6 +102,36 @@ describe('DITA/DITAMAP preview rendering', () => {
     await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
 
+  it('ships the search overlay with its injected decision function inlined, not referenced', async () => {
+    // getSearchOverlayScript interpolates a TypeScript function's .toString()
+    // into the overlay script so the webview runs the very algorithm the unit
+    // tests cover. The unit tests can only verify that against the unminified
+    // build; the shipped bundle is minified, and that is where the arrangement
+    // has a failure mode no unit test can see. A bundler that constant-folded
+    // the .toString() call would emit `var planCurrentMarkMoveCore = Tr;` --
+    // naming a binding that exists in the bundle and not in the webview, so the
+    // overlay would throw on first use and the search bar would simply be dead.
+    //
+    // Both shapes a minifier can legitimately produce are accepted (a function
+    // declaration, or a parenthesised arrow); what must not appear is a bare
+    // identifier after the `=`.
+    const ext = vscode.extensions.getExtension(EXTENSION_ID)!;
+    const uri = vscode.Uri.file(path.join(fixturesDir, 'test.ditamap'));
+
+    await vscode.commands.executeCommand('vscode.openWith', uri, 'ditaViewer.mapPreview');
+
+    const getHtml = () => ext.exports._test.getLastRenderedMapHtml(uri.toString());
+    await waitFor(() => !!getHtml());
+
+    const page = getHtml();
+    assert.ok(
+      /var planCurrentMarkMoveCore = (?:function\b|\()/.test(page),
+      'expected the shipped overlay to inline the function body, not a reference to it',
+    );
+
+    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+  });
+
   it('toggles back to the source editor when the command runs in the reading view', async () => {
     const uri = vscode.Uri.file(path.join(fixturesDir, 'topics', 'db_overview.dita'));
 
