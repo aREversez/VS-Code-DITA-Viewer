@@ -21,6 +21,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      # esbuild reads tsconfig.json for compiler options but strips types without
+      # checking them, and the tsc invocations in pretest and test:e2e use narrower
+      # include lists that omit the webview providers -- so this is the only step
+      # that typechecks all of src/
+      - run: npm run typecheck
       - run: npm test
       - run: npm run lint
       # l10n consistency guard (source strings vs l10n/package.nls catalogs);
