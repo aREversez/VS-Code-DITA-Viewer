@@ -264,6 +264,34 @@ table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.95e
 table th, table td { border: 1px solid var(--table-border); padding: 0.5rem 0.75rem; text-align: left; vertical-align: top; overflow-wrap: break-word; }
 table th { background: var(--color-code-bg); color: var(--vscode-editor-foreground); font-weight: 600; }
 
+/* Profiling on table rows: the generic .profiled treatment below (box-
+   shadow ring + padding + margin) is built for ordinary block content and
+   doesn't fit a <tr> living inside this table's border-collapse: collapse
+   model. box-shadow paints independently of the collapsed border grid, so
+   a ring drawn straight on a row can drift out of alignment with the
+   row's actual cell edges (the "green block is offset" symptom), and two
+   separately-profiled adjacent rows each painting their own independent
+   ring don't share one continuous edge the way collapsed borders do,
+   leaving a visible gap/seam between them (the "border between rows is
+   incomplete" symptom). Coloring each cell's own border instead works
+   *with* border-collapse: a shared edge between two profiled rows merges
+   down to a single line, same as any other collapsed border, so
+   consecutive profiled rows read as one unbroken green outline. */
+tr.profiled {
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+  background: none;
+}
+tr.profiled > td,
+tr.profiled > th {
+  border-color: var(--color-profiling-border);
+}
+body.hide-profiling tr.profiled > td,
+body.hide-profiling tr.profiled > th {
+  border-color: var(--table-border);
+}
+
 /* CALS tables whose <colgroup> carries real colwidth hints (see
    baseTypeMap.ts's 'topic/table' renderer): with the default 'auto' table
    layout those widths are only a hint, and a column with a long unbroken

@@ -167,6 +167,24 @@ function injectBlockProfiling(html: string, tagName: string, keysAttr: string, l
     ? html.replace(/ class="([^"]*)"/, (_m, existing) => ` class="${existing ? `${existing} profiled` : 'profiled'}"`)
     : html.replace(/^<([a-zA-Z][a-zA-Z0-9]*)/, '<$1 class="profiled"');
   out = out.replace(/^<([a-zA-Z][a-zA-Z0-9]*)/, `<$1 data-profile-keys="${keysAttr}"`);
+
+  // `tagName` is the *DITA source* element name (e.g. "row", "entry",
+  // "stentry"), passed through from effectiveNode.tagName purely so
+  // injectAttributes can stamp the original authoring tag onto
+  // data-dita-tagname for tooltips. It is NOT reliable for finding this
+  // element's own closing tag in `html`: several base types render under a
+  // different HTML tag than their DITA element name -- a <row> renders as
+  // <tr>, and <entry>/<stentry> render as <td> or <th> depending on
+  // header context. Building the close-tag search from `tagName` in that
+  // case (`</row>`, `</entry>`) never matches anything in `html` (which
+  // actually contains `</tr>`/`</td>`/`</th>`), so the lookup below fell
+  // through its "not found" branch and silently dropped the label for
+  // every profiled table row or cell. Reading the real tag straight out of
+  // the opening tag we just edited keeps this correct regardless of what
+  // the DITA source called the element.
+  const actualTagMatch = /^<([a-zA-Z][a-zA-Z0-9]*)/.exec(out);
+  const actualTag = actualTagMatch ? actualTagMatch[1] : tagName;
+
   // html is always exactly one complete element at this point in the
   // pipeline (possibly with same-named descendants nested inside, e.g. a
   // <li> containing a nested <ul><li>...) -- proper nesting guarantees any
@@ -174,9 +192,32 @@ function injectBlockProfiling(html: string, tagName: string, keysAttr: string, l
   // occurrence of this tag's own closing tag in the string is always the
   // outermost (real) one, letting the label be inserted as the true last
   // child without needing a full tag-depth parser.
-  const closeTag = `</${tagName}>`;
+  const closeTag = `</${actualTag}>`;
   const closeIdx = out.lastIndexOf(closeTag);
   if (closeIdx === -1) return out;
+
+  if (actualTag === 'tr') {
+    // A <tr>'s only legal direct children are <td>/<th> (plus
+    // script/template) -- inserting the label <span> as the row's own
+    // last child, the way every other block element is handled below, is
+    // invalid content. The HTML parser "fixes" that by foster-parenting
+    // the span out of the table entirely (per the "in row"/"in table"
+    // insertion modes: anything that isn't a cell gets relocated to just
+    // before the <table>, not left where it was written). That relocation
+    // is exactly what produced both reported symptoms: the label render­
+    // ing detached from its own row -- so it shows up vertically offset,
+    // stacked wherever the parser moved it rather than next to its row --
+    // and the <tr>'s child list no longer matching what was authored,
+    // which breaks the shared collapsed-border edge with the row below
+    // it. The fix is to anchor the label inside the row's own last cell
+    // instead, which is valid content there.
+    const lastTd = out.lastIndexOf('</td>', closeIdx);
+    const lastTh = out.lastIndexOf('</th>', closeIdx);
+    const lastCellClose = Math.max(lastTd, lastTh);
+    if (lastCellClose === -1) return out; // no cells to anchor the label to
+    return `${out.slice(0, lastCellClose)}<span class="profiling-label">${labelHtml}</span>${out.slice(lastCellClose)}`;
+  }
+
   return `${out.slice(0, closeIdx)}<span class="profiling-label">${labelHtml}</span>${out.slice(closeIdx)}`;
 }
 

@@ -1343,6 +1343,72 @@ describe('renderer', () => {
     assert.ok(innerLabelIdx < outerLabelIdx, 'the inner (nested) li\'s label should appear before the outer li\'s label in document order');
   });
 
+  it('should apply profiling class/data-attribute directly onto a profiled table <row>\'s own rendered <tr> tag, and land the label inside its last cell rather than as an invalid direct child of <tr>', () => {
+    // Regression: <row>'s DITA source tagName ("row") differs from the tag
+    // it renders as (<tr>). injectBlockProfiling used to build its
+    // closing-tag search from the source tagName, which never matched the
+    // rendered </tr>, and a naive fix that just inserted a <span> as the
+    // row's own last child would still be invalid HTML -- <tr>'s only
+    // legal direct children are <td>/<th>, so a browser foster-parents
+    // any other element out of the table entirely, detaching the label
+    // from its row and corrupting the row's border-sharing with its
+    // neighbour.
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/table', [
+          makeEl('topic/tgroup', [
+            makeEl('topic/tbody', [
+              makeEl('topic/row', [
+                makeEl('topic/entry', [makeText('A1')]),
+                makeEl('topic/entry', [makeText('B1')]),
+              ], { audience: 'internal' }),
+              makeEl('topic/row', [
+                makeEl('topic/entry', [makeText('A2')]),
+                makeEl('topic/entry', [makeText('B2')]),
+              ]),
+            ]),
+          ], { cols: '2' }),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!/<tr[^>]*>(?:(?!<td|<th)[\s\S])*?<span/.test(html), 'no <span> should appear as a direct child of <tr> before its first <td>/<th> -- that is invalid HTML');
+    const trMatch = html.match(/<tr\b[^>]*>/);
+    assert.ok(trMatch, 'profiled row should still render as <tr>');
+    assert.ok(trMatch![0].includes('class="profiled"'), 'class="profiled" must be an attribute on the tr\'s own opening tag');
+    assert.ok(trMatch![0].includes('data-profile-keys="audience:internal"'), 'data-profile-keys must be an attribute on the tr\'s own opening tag');
+    const lastCellMatch = html.match(/<td\b[^>]*>B1[\s\S]*?<\/td>/);
+    assert.ok(lastCellMatch, 'row\'s last cell should be found');
+    assert.ok(lastCellMatch![0].includes('class="profiling-label"'), 'the profiling label should be nested inside the row\'s last cell, not as a direct child of <tr>');
+    assert.ok(lastCellMatch![0].trim().endsWith('</span></td>'), 'the label span should be the last thing before the cell\'s own closing tag');
+    // Second (unprofiled) row must not pick up any stray label.
+    const secondRowLabelCount = (html.slice(html.indexOf('A2')).match(/profiling-label/g) || []).length;
+    assert.strictEqual(secondRowLabelCount, 0, 'the unprofiled second row should have no profiling label');
+  });
+
+  it('should apply profiling class/data-attribute directly onto a profiled table <entry>\'s own rendered <td>/<th> tag (regression: source tagName "entry"/"stentry" never matched the rendered </td>/</th>, silently dropping the label)', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/table', [
+          makeEl('topic/tgroup', [
+            makeEl('topic/tbody', [
+              makeEl('topic/row', [
+                makeEl('topic/entry', [makeText('A1')], { platform: 'windows' }),
+                makeEl('topic/entry', [makeText('B1')]),
+              ]),
+            ]),
+          ], { cols: '2' }),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    const cellMatch = html.match(/<td\b[^>]*>A1[\s\S]*?<\/td>/);
+    assert.ok(cellMatch, 'profiled entry should render as <td>');
+    assert.ok(cellMatch![0].includes('class="profiled"'), 'class="profiled" must be an attribute on the td\'s own opening tag');
+    assert.ok(cellMatch![0].includes('data-profile-keys="platform:windows"'));
+    assert.ok(cellMatch![0].includes('class="profiling-label"'), 'the profiling label must actually be inserted for a profiled cell');
+  });
+
   it('should highlight nested profiled elements independently (parent and child both flagged)', () => {
     const doc = makeEl('topic/topic', [
       makeEl('topic/body', [
