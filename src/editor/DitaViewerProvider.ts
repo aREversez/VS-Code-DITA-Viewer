@@ -1,14 +1,14 @@
 import * as vscode from 'vscode';
-import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
+import { parseDita, preprocessEntities } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
-import { readFileSync, existsSync, readdirSync } from 'fs';
-import { dirname, isAbsolute, join, resolve, basename } from 'path';
+import { dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
-import { DitaNode } from '../parser/domTypes';
-import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart, detectNoteLabels, detectIndexLabel, readImageDimensions, clearImageDimensionsCache, clearTopicRenderCache, stampFiles, FileReader } from './ditaRenderUtils';
+import { buildTitleMap, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart, detectNoteLabels, detectIndexLabel, readImageDimensions, clearImageDimensionsCache, clearTopicRenderCache } from './ditaRenderUtils';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { foldPendingRender, PendingRender } from './pendingRender';
 import { sharedWebviewStrings } from './webviewL10n';
+import { discoverCssFiles } from './cssDiscovery';
+import { findDitamapFiles, buildKeyMap, clearKeyMapCache } from './keyMap';
 
 // Test-only hook: @vscode/test-electron integration tests can't read a
 // webview's rendered HTML directly (VS Code doesn't expose the WebviewPanel
@@ -34,7 +34,7 @@ export function getLastRenderedHtmlForTesting(uriString: string): string | undef
  */
 export function clearAllCaches(): void {
   lastRenderedHtmlByUri.clear();
-  keyMapCache.clear();
+  clearKeyMapCache();
   clearImageDimensionsCache();
   clearTopicRenderCache();
 }
@@ -1530,276 +1530,10 @@ export function escapeJson(text: string): string {
 
 // ── Keyref: parse DITAMAP for key→value mappings ──
 
-export function findDitamapFiles(docUri: vscode.Uri, stopAtFirstMatch = true): string[] {
-  const results: string[] = [];
-  const docDir = dirname(docUri.fsPath);
-  const root = parseDocRoot(docDir);
-  let dir = docDir;
-  while (dir.length >= root.length) {
-    try {
-      for (const entry of readdirSync(dir)) {
-        if (entry.toLowerCase().endsWith('.ditamap')) results.push(join(dir, entry));
-      }
-    } catch (e) {
-      console.warn(`Failed to read directory ${dir}:`, e instanceof Error ? e.message : e);
-    }
-    if (stopAtFirstMatch && results.length > 0) return results;
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return results;
-}
-
-function extractTextFromNode(node: DitaNode): string {
-  if (node.type === 'text') return node.text || '';
-  return (node.children || []).map(extractTextFromNode).join('');
-}
-
-function getNodeValue(node: DitaNode, childBaseTypes: string[]): string | undefined {
-  for (const bt of childBaseTypes) {
-    const child = (node.children || []).find(
-      (c) => c.type === 'element' && c.baseType === bt,
-    );
-    if (child) {
-      const text = extractTextFromNode(child).trim();
-      if (text) return text;
-    }
-    // DITA wraps <keyword> inside <keywords>; also search inside known wrappers
-    const wrapper = (node.children || []).find(
-      (c) => c.type === 'element' && (c.baseType === 'map/keywords'),
-    );
-    if (wrapper) {
-      const inner = (wrapper.children || []).find(
-        (c) => c.type === 'element' && c.baseType === bt,
-      );
-      if (inner) {
-        const text = extractTextFromNode(inner).trim();
-        if (text) return text;
-      }
-    }
-  }
-  return undefined;
-}
-
-function getKeyValueFromRef(node: DitaNode): string | undefined {
-  // Priority: keyword > linktext > navtitle > shortdesc > indexterm
-  const topicmeta = (node.children || []).find(
-    (c) => c.type === 'element' && (c.baseType === 'map/topicmeta'),
-  );
-  if (!topicmeta) return undefined; // No topicmeta, no value
-  return getNodeValue(topicmeta, [
-    'map/keyword',
-    'map/linktext',
-    'map/navtitle',
-    'map/shortdesc',
-  ]);
-}
-
-// buildKeyMap sits on hot paths (preview re-render, completion, diagnostics,
-// map tree) and used to re-read and re-parse every ancestor ditamap each
-// call. Cache per document directory; invalidated when the set of ancestor
-// maps changes or any involved file's mtime changes (including maps pulled
-// in via expandDitamapRefs, tracked through the recording reader).
-interface KeyMapCacheEntry {
-  mapFilesKey: string;
-  stamps: string;
-  files: string[];
-  map: Map<string, string>;
-}
-const keyMapCache = new Map<string, KeyMapCacheEntry>();
-// One entry per document directory; bound it so long sessions touching many
-// folders cannot grow the cache without limit (evicts oldest-inserted first).
-const KEY_MAP_CACHE_MAX = 50;
-// stampFiles is imported from ditaRenderUtils.ts rather than defined here:
-// book-mode topic caching needs the identical mtime fingerprint, and two
-// copies of an invalidation rule drift apart silently.
-
-export function buildKeyMap(docUri: vscode.Uri): Map<string, string> {
-  const docDir = dirname(docUri.fsPath);
-  // Scan all ancestor folders (not just the nearest one with a map) so keydef
-  // maps living in outer folders are still picked up; maps referenced from any
-  // scanned map are followed via expandDitamapRefs regardless of location.
-  const mapFiles = findDitamapFiles(docUri, false);
-  const mapFilesKey = mapFiles.join('|');
-
-  const cached = keyMapCache.get(docDir);
-  if (cached && cached.mapFilesKey === mapFilesKey && stampFiles(cached.files) === cached.stamps) {
-    return cached.map;
-  }
-
-  const map = new Map<string, string>();
-  const involvedFiles = [...mapFiles];
-  const recordingRead: FileReader = (path, encoding) => {
-    involvedFiles.push(path);
-    return readFileSync(path, encoding);
-  };
-  for (const mf of mapFiles) {
-    try {
-      const content = readFileSync(mf, 'utf-8');
-      const doc = parseDitamap(preprocessEntities(content));
-      const mapRoot = doc.root;
-      // Expand referenced ditamaps so keydefs from included maps are visible
-      expandDitamapRefs(mapRoot, dirname(mf), recordingRead);
-      function walk(node: DitaNode) {
-        if (node.type !== 'element') return;
-        const baseType = node.baseType;
-        if ((baseType === 'map/topicref' || baseType === 'map/keydef') && node.attributes?.keys) {
-          const keys = node.attributes.keys;
-          const value = getKeyValueFromRef(node);
-          // First definition wins (DITA precedence; nearest map scanned first)
-          if (!map.has(keys)) map.set(keys, value || keys);
-        }
-        for (const child of node.children || []) walk(child);
-      }
-      for (const child of mapRoot.children || []) walk(child);
-    } catch (e) {
-      console.warn(`Failed to parse keymap from ${mf}:`, e instanceof Error ? e.message : e);
-    }
-  }
-
-  if (keyMapCache.size >= KEY_MAP_CACHE_MAX && !keyMapCache.has(docDir)) {
-    const oldest = keyMapCache.keys().next().value;
-    if (oldest !== undefined) keyMapCache.delete(oldest);
-  }
-  keyMapCache.set(docDir, {
-    mapFilesKey,
-    stamps: stampFiles(involvedFiles),
-    files: involvedFiles,
-    map,
-  });
-  return map;
-}
-
-// (cross-file helpers now in ditaRenderUtils.ts)
-
-// ── CSS file discovery ──
-
-function discoverCssFiles(docUri: vscode.Uri): { files: Record<string, string>; defaultName: string } {
-  const files: Record<string, string> = {};
-  const loadedNames = new Set<string>();
-
-  const addFile = (filePath: string) => {
-    const name = basename(filePath);
-    if (!loadedNames.has(name) && existsSync(filePath)) {
-      try {
-        files[name] = readFileSync(filePath, 'utf-8');
-        loadedNames.add(name);
-      } catch (e) {
-        console.warn(`Failed to load file ${filePath}:`, e instanceof Error ? e.message : e);
-      }
-    }
-  };
-
-  const docDir = dirname(docUri.fsPath);
-  const root = parseDocRoot(docDir);
-  const cssDir = findCustomCssDir(docDir);
-
-  // Scan directories for .css files
-  const scanDirs = new Set<string>();
-  scanDirs.add(cssDir);
-  if (root !== cssDir) scanDirs.add(root);
-  // Add configured CSS directories
-  try {
-    const config = vscode.workspace.getConfiguration('dita-viewer');
-    const cssDirConfigs: string[] | undefined = config.get('cssDirectory');
-    if (cssDirConfigs) {
-      for (const dir of cssDirConfigs) {
-        const resolvedDir = resolveDirectoryPath(dir, docDir);
-        if (resolvedDir && existsSync(resolvedDir) && !scanDirs.has(resolvedDir)) {
-          scanDirs.add(resolvedDir);
-        }
-      }
-    }
-  } catch (e) {
-    console.warn('Failed to read CSS directory configuration:', e instanceof Error ? e.message : e);
-  }
-
-  for (const sd of scanDirs) {
-    try {
-      for (const entry of readdirSync(sd)) {
-        if (entry.toLowerCase().endsWith('.css')) addFile(join(sd, entry));
-      }
-    } catch (e) {
-      console.warn(`Failed to read CSS directory ${sd}:`, e instanceof Error ? e.message : e);
-    }
-  }
-
-  // Add explicitly configured CSS files
-  try {
-    const config = vscode.workspace.getConfiguration('dita-viewer');
-    const paths: string[] | undefined = config.get('customCss');
-    if (paths) {
-      for (const p of paths) {
-        const resolvedPath = resolveCssFilePath(p, docDir);
-        if (resolvedPath) addFile(resolvedPath);
-      }
-    }
-  } catch (e) {
-    console.warn('Failed to read custom CSS configuration:', e instanceof Error ? e.message : e);
-  }
-
-  const defaultName = files['custom.css'] ? 'custom.css' : (Object.keys(files)[0] || '');
-  return { files, defaultName };
-}
-
-function findCustomCssDir(docDir: string): string {
-  const root = parseDocRoot(docDir);
-  let dir = docDir;
-  while (dir.length >= root.length) {
-    if (existsSync(join(dir, 'custom.css'))) return dir;
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return docDir;
-}
-
-function parseDocRoot(dir: string): string {
-  // Multi-root workspaces: bound upward walks by the folder that actually
-  // contains the document, not always the first folder.
-  const owner = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(dir));
-  if (owner) return owner.uri.fsPath;
-  const folders = vscode.workspace.workspaceFolders;
-  if (folders && folders.length > 0) return folders[0].uri.fsPath;
-  const sep = dir.includes('/') ? '/' : '\\';
-  const parts = dir.split(/[\\/]/);
-  // POSIX: root is "/", Windows: root is "C:\"
-  if (sep === '/') return '/' + parts.slice(1, 2).join('/');
-  return parts.length > 2 ? parts.slice(0, 2).join('\\') : dir;
-}
-
-function resolveCssFilePath(cssPath: string, docDir: string): string | undefined {
-  if (isAbsolute(cssPath) && existsSync(cssPath)) {
-    return cssPath;
-  }
-  const resolved = resolve(docDir, cssPath);
-  if (existsSync(resolved)) return resolved;
-  const folders = vscode.workspace.workspaceFolders;
-  if (folders) {
-    for (const f of folders) {
-      const wsPath = resolve(f.uri.fsPath, cssPath);
-      if (existsSync(wsPath)) return wsPath;
-    }
-  }
-  return undefined;
-}
-
-function resolveDirectoryPath(dirPath: string, docDir: string): string | undefined {
-  // Absolute path
-  if (isAbsolute(dirPath)) {
-    return existsSync(dirPath) ? dirPath : undefined;
-  }
-  // Relative to doc directory
-  const fromDoc = resolve(docDir, dirPath);
-  if (existsSync(fromDoc)) return fromDoc;
-  // Relative to workspace root
-  const folders = vscode.workspace.workspaceFolders;
-  if (folders) {
-    for (const f of folders) {
-      const wsPath = resolve(f.uri.fsPath, dirPath);
-      if (existsSync(wsPath)) return wsPath;
-    }
-  }
-  return undefined;
-}
+// findDitamapFiles/buildKeyMap and discoverCssFiles now live in
+// ./keyMap and ./cssDiscovery respectively -- extracted verbatim, see those
+// files for the byte-for-byte-unchanged implementations. Re-exported here
+// so MapViewerProvider.ts, ditaDiffProvider.ts, exportHtml.ts,
+// extension.ts, ditaLanguageFeatures.ts and ditaMapTreeProvider.ts don't
+// need their import paths touched.
+export { findDitamapFiles, buildKeyMap };
