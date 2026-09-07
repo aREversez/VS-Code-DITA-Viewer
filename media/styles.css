@@ -153,6 +153,31 @@ p { margin: 0.75em 0; }
   border-radius: 2px;
 }
 .profiled--inline .profiling-label { float: none; position: static; display: inline-flex; margin-left: 0.3em; vertical-align: middle; }
+/* Clearfix: .profiling-label below is `float: right` so it can share the
+   last line with short content (see the comment on .profiling-label) --
+   but a float is intentionally excluded from its containing block's own
+   height calculation unless that container is cleared or establishes a
+   new block formatting context, and .profiled does neither on its own.
+   When the label doesn't fit on the same line as the preceding text (long
+   or wrapping content) it drops to a line of its own below -- and without
+   this rule, .profiled's box-shadow border is sized from the non-floated
+   text alone, so it closes *before* that dropped line: the label then
+   visually sits outside/below its own green box, and can bleed into the
+   top margin of the very next .profiled sibling, breaking what should be
+   two clean, separate borders. The classic content:""; display:table;
+   clear:both idiom forces an (invisible) trailing box that clears the
+   float, so .profiled's own height -- and therefore its border -- always
+   extends down to actually contain the label. Scoped away from
+   .profiled--inline (label is float:none there, nothing to clear) and
+   away from tr.profiled (a <tr> doesn't render ::after reliably, and its
+   own label lives inside a <td> which already establishes its own block
+   formatting context and needs no help containing floats).
+*/
+.profiled:not(.profiled--inline):not(tr)::after {
+  content: '';
+  display: table;
+  clear: both;
+}
 /* float rather than a dedicated bottom-padding + position:absolute slot:
    the box no longer has to reserve a fixed amount of vertical space for
    the label regardless of how little content actually needs it (a
