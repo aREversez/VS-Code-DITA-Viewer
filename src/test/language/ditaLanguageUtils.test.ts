@@ -782,5 +782,65 @@ describe('ditaLanguageUtils', () => {
       assert.strictEqual(unknown.length, 1);
       assert.strictEqual(unknown[0].tagName, 'not-a-real-map-element');
     });
+
+    it('does not flag an unmapped element nested directly inside <indexterm>', () => {
+      // Regression test. topic/indexterm's own renderer does not use the
+      // generic child dispatch at all -- collectIndextermChips() (baseTypeMap.ts)
+      // walks node.children itself, reading only direct text nodes plus
+      // nested topic/indexterm, topic/index-see and topic/index-see-also by
+      // baseType. Any other child element is simply never consulted, known
+      // or unknown alike, so an unmapped tag name here causes no *additional*
+      // content loss beyond what the renderer already does for every non-term
+      // child -- not the "silently dropped, looks like a typo" case this
+      // diagnostic exists to catch.
+      const xml = `<topic id="t1"><title>T</title><body>
+        <p><indexterm>term<weird-emphasis>nested</weird-emphasis></indexterm></p>
+      </body></topic>`;
+      const doc = parseDita(xml);
+      assert.deepStrictEqual(collectUnknownElements(doc.root), []);
+    });
+
+    it('does not flag an unmapped element nested inside <index-see-also>, which is itself only ever consumed inside <indexterm>', () => {
+      const xml = `<topic id="t1"><title>T</title><body>
+        <p><indexterm>term<index-see-also><indexterm><weird-tag>y</weird-tag></indexterm></index-see-also></indexterm></p>
+      </body></topic>`;
+      const doc = parseDita(xml);
+      assert.deepStrictEqual(collectUnknownElements(doc.root), []);
+    });
+
+    it('still flags a genuine typo outside <indexterm>, in a document whose indexterm also has unmapped content', () => {
+      const xml = `<topic id="t1"><title>T</title><body>
+        <p><indexterm>term<weird-emphasis>nested</weird-emphasis></indexterm></p>
+        <bogus-tag>oops</bogus-tag>
+      </body></topic>`;
+      const doc = parseDita(xml);
+      const unknown = collectUnknownElements(doc.root);
+      assert.strictEqual(unknown.length, 1);
+      assert.strictEqual(unknown[0].tagName, 'bogus-tag');
+    });
+
+    it('does not flag an unmapped element inside <relcolspec>, whose title is read via a baseType-agnostic extractText() fallback', () => {
+      // Regression test, same shape as the map <title> hotfix above:
+      // map/relheader's renderer (mapTypeMap.ts) falls back to extractText()
+      // for a relcolspec's column title whenever @navtitle is absent, and
+      // extractText() does not consult baseType at all -- an unmapped tag
+      // here was never actually losing content.
+      const xml = `<map><title>T</title>
+        <reltable><relheader><relcolspec><weird-tag>Col A</weird-tag></relcolspec></relheader></reltable>
+      </map>`;
+      const doc = parseDitamap(xml);
+      assert.deepStrictEqual(collectUnknownElements(doc.root), []);
+    });
+
+    it('still flags a genuine typo elsewhere in the map, in a document whose relcolspec also has unmapped content', () => {
+      const xml = `<map><title>T</title>
+        <reltable><relheader><relcolspec><weird-tag>Col A</weird-tag></relcolspec></relheader></reltable>
+        <topicref href="a.dita"><bogus-outside/></topicref>
+      </map>`;
+      const doc = parseDitamap(xml);
+      const unknown = collectUnknownElements(doc.root);
+      assert.strictEqual(unknown.length, 1);
+      assert.strictEqual(unknown[0].tagName, 'bogus-outside');
+    });
   });
 });

@@ -696,7 +696,30 @@ export interface UnknownElementEntry {
 // subtree, not about the elements in it being any less real or valid DITA
 // than a <p> or a <note> -- unlike topic/foreign, which is correctly
 // non-DITA content.
-const SUBTREE_OWNED_BASETYPES = new Set(['topic/foreign', 'topic/prolog', 'map/topicmeta', 'map/map-title']);
+const SUBTREE_OWNED_BASETYPES = new Set([
+  'topic/foreign',
+  'topic/prolog',
+  'map/topicmeta',
+  'map/map-title',
+  // topic/indexterm's own renderer (collectIndextermChips() in
+  // baseTypeMap.ts) walks node.children itself -- direct text nodes plus
+  // nested topic/indexterm, topic/index-see and topic/index-see-also by
+  // baseType -- and never dispatches through the generic recursive
+  // renderer for anything else, so an unmapped tag anywhere inside an
+  // indexterm causes no additional silent content loss to report here.
+  // topic/index-see-also (and its siblings, all only ever valid inside an
+  // indexterm) are included defensively for the case where the enclosing
+  // indexterm itself failed to classify and so was not skipped.
+  'topic/indexterm',
+  'topic/index-see',
+  'topic/index-see-also',
+  'topic/index-sort-as',
+  'topic/index-base',
+  // map/relheader falls back to a baseType-agnostic extractText() walk for
+  // a relcolspec's column title whenever @navtitle is absent (mapTypeMap.ts)
+  // -- same shape as map/map-title above, content is never actually lost.
+  'map/relcolspec',
+]);
 
 /**
  * Walks a parsed document and collects every element the parser fell
