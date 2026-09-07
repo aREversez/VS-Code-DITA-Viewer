@@ -42,7 +42,7 @@ describe('renderer', () => {
       makeEl('topic/title', [makeText('My Title')]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('title="title"'));
+    assert.ok(html.includes('data-dita-tagname="title"'));
     assert.ok(html.includes('My Title'));
     assert.ok(html.includes('</h1>'));
   });
@@ -84,7 +84,7 @@ describe('renderer', () => {
       ]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('title="p"'));
+    assert.ok(html.includes('data-dita-tagname="p"'));
     assert.ok(html.includes('Hello world'));
   });
 
@@ -147,9 +147,9 @@ describe('renderer', () => {
       ]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('title="ul"'));
-    assert.ok(html.includes('title="ol"'));
-    assert.ok(html.includes('title="li"'));
+    assert.ok(html.includes('data-dita-tagname="ul"'));
+    assert.ok(html.includes('data-dita-tagname="ol"'));
+    assert.ok(html.includes('data-dita-tagname="li"'));
     assert.ok(html.includes('>A<'));
     assert.ok(html.includes('>1<'));
   });
@@ -164,9 +164,9 @@ describe('renderer', () => {
       ]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('title="dl"'));
-    assert.ok(html.includes('title="dt"'));
-    assert.ok(html.includes('title="dd"'));
+    assert.ok(html.includes('data-dita-tagname="dl"'));
+    assert.ok(html.includes('data-dita-tagname="dt"'));
+    assert.ok(html.includes('data-dita-tagname="dd"'));
     assert.ok(html.includes('>term<'));
     assert.ok(html.includes('>definition<'));
   });
@@ -332,7 +332,7 @@ describe('renderer', () => {
     ]);
     const html = renderDocument(doc, defaultCtx);
     assert.ok(html.includes('class="simple-table"'));
-    assert.ok(html.includes('title="stentry"'));
+    assert.ok(html.includes('data-dita-tagname="stentry"'));
     assert.ok(html.includes('>OS<'));
     assert.ok(html.includes('>Linux<'));
   });
@@ -501,7 +501,7 @@ describe('renderer', () => {
     assert.ok(html.includes('title="From attribute"'));
   });
 
-  it('should omit a fabricated alt="" but keep the generic title="image" tooltip when no alt info is provided', () => {
+  it('should omit a fabricated alt="" but keep the generic tag-name tooltip data attribute when no alt info is provided', () => {
     const doc = makeEl('topic/topic', [
       makeEl('topic/image', [], { href: 'pic.png' }),
     ]);
@@ -510,10 +510,10 @@ describe('renderer', () => {
     assert.ok(!imgTag.includes('alt='), 'should not fabricate an empty alt="" on the <img> tag');
     // injectAttributes' generic tagName-as-tooltip fallback still applies
     // here since the renderer itself has nothing more specific to offer.
-    assert.ok(imgTag.includes('title="image"'));
+    assert.ok(imgTag.includes('data-dita-tagname="image"'));
   });
 
-  it('should not duplicate the title attribute: alt-derived title wins over the generic tagName tooltip', () => {
+  it('should not add the generic tag-name data attribute when the renderer already set its own title', () => {
     const doc = makeEl('topic/topic', [
       makeEl('topic/image', [], { href: 'pic.png', alt: 'Real description' }),
     ]);
@@ -522,6 +522,12 @@ describe('renderer', () => {
     const titleMatches = imgTag.match(/ title="/g) || [];
     assert.strictEqual(titleMatches.length, 1, 'the <img> tag should carry exactly one title attribute, not two');
     assert.ok(imgTag.includes('title="Real description"'));
+    // The failure mode this guards against isn't a second title= anymore --
+    // that was only possible while the generic fallback was itself a
+    // title=. Now it would be a data-dita-tagname sitting alongside the
+    // real title, which the "Tags" toggle would then show as "image"
+    // instead of leaving the meaningful alt text alone.
+    assert.ok(!imgTag.includes('data-dita-tagname'), 'the alt-derived title should suppress the generic fallback entirely, not just avoid duplicating title=');
   });
 
   it('should apply @scale as a --dita-scale style hint when width/height are absent', () => {
@@ -780,7 +786,7 @@ describe('renderer', () => {
       makeEl('topic/xref', [makeText('see section')], { href: '#section1' }),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('title="xref"'));
+    assert.ok(html.includes('data-dita-tagname="xref"'));
     assert.ok(html.includes('href="#section1"'));
     assert.ok(html.includes('see section'));
   });
@@ -811,12 +817,12 @@ describe('renderer', () => {
       makeEl('topic/sub', [makeText('sub')]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('title="b"'));
-    assert.ok(html.includes('title="i"'));
-    assert.ok(html.includes('title="u"'));
-    assert.ok(html.includes('title="tt"'));
-    assert.ok(html.includes('title="sup"'));
-    assert.ok(html.includes('title="sub"'));
+    assert.ok(html.includes('data-dita-tagname="b"'));
+    assert.ok(html.includes('data-dita-tagname="i"'));
+    assert.ok(html.includes('data-dita-tagname="u"'));
+    assert.ok(html.includes('data-dita-tagname="tt"'));
+    assert.ok(html.includes('data-dita-tagname="sup"'));
+    assert.ok(html.includes('data-dita-tagname="sub"'));
     assert.ok(html.includes('>bold<'));
     assert.ok(html.includes('>italic<'));
     assert.ok(html.includes('>underline<'));
@@ -831,8 +837,8 @@ describe('renderer', () => {
       makeEl('topic/lq', [makeText('block quote')]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('title="q"'));
-    assert.ok(html.includes('title="lq"'));
+    assert.ok(html.includes('data-dita-tagname="q"'));
+    assert.ok(html.includes('data-dita-tagname="lq"'));
     assert.ok(html.includes('>inline quote<'));
     assert.ok(html.includes('>block quote<'));
   });
@@ -843,8 +849,8 @@ describe('renderer', () => {
       makeEl('topic/term', [makeText('term')]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('title="keyword"'));
-    assert.ok(html.includes('title="term"'));
+    assert.ok(html.includes('data-dita-tagname="keyword"'));
+    assert.ok(html.includes('data-dita-tagname="term"'));
     assert.ok(html.includes('class="keyword"'));
     assert.ok(html.includes('class="term"'));
     assert.ok(html.includes('>kw<'));
@@ -1016,7 +1022,7 @@ describe('renderer', () => {
       ]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('title="title"'));
+    assert.ok(html.includes('data-dita-tagname="title"'));
     assert.ok(html.includes('>Main<'));
     assert.ok(/<h1[\s>]/.test(html));
     assert.ok(/<h2[\s>]/.test(html));

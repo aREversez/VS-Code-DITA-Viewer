@@ -49,6 +49,18 @@ export function clearAllCaches(): void {
 export const FONT_PREFS_KEY = 'ditaViewer.fontPrefs';
 export const DEFAULT_FONT_PREFS = { size: 100, serif: false };
 
+// Same reasoning as font prefs: whether the reader wants every element's
+// tag name as a hover tooltip is a reading preference, not something tied
+// to one file or to which provider is showing it, so both providers share
+// this key rather than each keeping their own copy of the default.
+// Defaults off -- injectAttributes() in renderer.ts still injects the tag
+// name into every element as data-dita-tagname regardless, so turning
+// this on needs no re-render, only a DOM walk promoting that data
+// attribute to a real title= (see applyTagTooltips() in both providers'
+// webview scripts).
+export const TAG_TOOLTIPS_KEY = 'ditaViewer.tagTooltips';
+export const DEFAULT_TAG_TOOLTIPS = false;
+
 // CSS theme and page-width choices, unlike font prefs, ARE tied to one
 // document -- discoverCssFiles() scans relative to each document's own
 // directory, so a different file may not even have the same set of custom
@@ -763,6 +775,12 @@ function getWebviewScript(): string {
         // to pick up the new one, though:
         contentRoot.innerHTML = e.data.html;
         enhanceImages(); // per-image zoom toolbars -- idempotent, only wraps images not already wrapped
+        // Off (the default) needs no walk here: fresh HTML only ever carries
+        // data-dita-tagname, never a stray title= from this feature, so
+        // there is nothing to remove. On is the one case a walk is needed,
+        // to promote the new content's data attributes the same way the
+        // old content's already were.
+        if (tagTooltipsOn) applyTagTooltips();
         if (typeof pfApplyFilter === 'function') pfApplyFilter(); // re-apply the current filter selection to the new content's [data-profile-keys] elements
         if (typeof pfPanel !== 'undefined' && pfPanel) { // filter panel was open -- refresh its checkbox list against the new content rather than leaving it showing stale attribute/value options
           pfPanel.remove();
@@ -909,6 +927,39 @@ function getWebviewScript(): string {
   });
   applyProfilingToggle();
   toolbar.appendChild(profilingBtn);
+
+  // Tag-name tooltip toggle. injectAttributes() in renderer.ts already puts
+  // the tag name on every element without a more specific title of its own
+  // as data-dita-tagname -- see the constant's own comment in
+  // DitaViewerProvider.ts for why a data attribute and not title= directly.
+  // Off by default: useful while learning DITA's vocabulary, otherwise a
+  // native browser tooltip firing on every hover, everywhere, is just
+  // noise. Persisted like font prefs, since it is the same kind of
+  // preference -- how the reader wants to read, not something tied to
+  // this one file.
+  var tagTooltipsOn = window.__tagTooltips === true;
+  var tagTooltipsBtn = document.createElement('button');
+  tagTooltipsBtn.textContent = ${L.tagTooltipsLabel};
+  tagTooltipsBtn.style.cssText = btnStyle + 'font-size:11px;';
+  function applyTagTooltips() {
+    var contentRoot = document.getElementById('dita-content-root');
+    var els = contentRoot ? contentRoot.querySelectorAll('[data-dita-tagname]') : [];
+    for (var i = 0; i < els.length; i++) {
+      if (tagTooltipsOn) els[i].setAttribute('title', els[i].getAttribute('data-dita-tagname'));
+      else els[i].removeAttribute('title');
+    }
+    tagTooltipsBtn.style.background = tagTooltipsOn ? 'var(--color-profiling-label-bg)' : '';
+    tagTooltipsBtn.style.color = tagTooltipsOn ? 'var(--color-profiling-label-text)' : '';
+    tagTooltipsBtn.title = tagTooltipsOn ? ${L.tagTooltipsOnTitle} : ${L.tagTooltipsOffTitle};
+    tagTooltipsBtn.setAttribute('aria-label', tagTooltipsOn ? ${L.tagTooltipsOnTitle} : ${L.tagTooltipsOffTitle});
+  }
+  tagTooltipsBtn.addEventListener('click', function() {
+    tagTooltipsOn = !tagTooltipsOn;
+    applyTagTooltips();
+    vscode.postMessage({ type: 'setTagTooltips', value: tagTooltipsOn });
+  });
+  applyTagTooltips(); // reflects a persisted "on" against the initial content; a no-op walk when off, but only once per panel open
+  toolbar.appendChild(tagTooltipsBtn);
 
   // Filter button goes immediately next to Flags -- "show me what's
   // flagged" and "actually hide what's flagged" are closely related
@@ -1077,6 +1128,8 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
         const size = typeof message.size === 'number' ? message.size : DEFAULT_FONT_PREFS.size;
         const serif = message.serif === true;
         this.context.globalState.update(FONT_PREFS_KEY, { size, serif });
+      } else if (message.type === 'setTagTooltips') {
+        this.context.globalState.update(TAG_TOOLTIPS_KEY, message.value === true);
       } else if (message.type === 'setCssSelection') {
         // Persisted per-document (see CSS_SELECTION_KEY above) so the next
         // re-render (every edit reassigns webview.html wholesale, which
@@ -1418,6 +1471,8 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       const widthSelectionJson = escapeJson(JSON.stringify(widthSelection));
       const fontPrefs = this.context.globalState.get(FONT_PREFS_KEY, DEFAULT_FONT_PREFS);
       const fontPrefsJson = escapeJson(JSON.stringify(fontPrefs));
+      const tagTooltips = this.context.globalState.get(TAG_TOOLTIPS_KEY, DEFAULT_TAG_TOOLTIPS);
+      const tagTooltipsJson = escapeJson(JSON.stringify(tagTooltips));
       const initialScrollLineJs = typeof initialScrollLine === 'number' && Number.isFinite(initialScrollLine)
         ? String(Math.max(0, Math.floor(initialScrollLine)))
         : 'null';
@@ -1434,7 +1489,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
 <link rel="stylesheet" href="${stylesUri}">
 ${defaultContent ? `<style>\n${defaultContent}\n</style>` : ''}
 <title>${escapeHtml(document.fileName)}</title>
-<script nonce="${nonce}">window.__cssFiles=${cssFilesJson};window.__defaultCss=${defaultNameJson};window.__widthSelection=${widthSelectionJson};window.__fontPrefs=${fontPrefsJson};window.__initialScrollLine=${initialScrollLineJs};</script>
+<script nonce="${nonce}">window.__cssFiles=${cssFilesJson};window.__defaultCss=${defaultNameJson};window.__widthSelection=${widthSelectionJson};window.__fontPrefs=${fontPrefsJson};window.__tagTooltips=${tagTooltipsJson};window.__initialScrollLine=${initialScrollLineJs};</script>
 </head>
 <body>
 <div id="dita-content-root">${content}</div>

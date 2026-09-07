@@ -6,7 +6,7 @@ import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
 import { foldPendingRender, PendingRender } from './pendingRender';
 import { sharedWebviewStrings } from './webviewL10n';
-import { buildKeyMap, FONT_PREFS_KEY, DEFAULT_FONT_PREFS, WIDTH_SELECTION_KEY, escapeJson } from './DitaViewerProvider';
+import { buildKeyMap, FONT_PREFS_KEY, DEFAULT_FONT_PREFS, WIDTH_SELECTION_KEY, TAG_TOOLTIPS_KEY, DEFAULT_TAG_TOOLTIPS, escapeJson } from './DitaViewerProvider';
 import { formatLocalizedRole } from '../language/bookRoleL10n';
 import { dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
@@ -50,6 +50,9 @@ const MSG_REQUEST_FULL_RENDER = 'requestFullRender';
 // fix (see FONT_PREFS_KEY / WIDTH_SELECTION_KEY above).
 const MSG_SET_FONT_PREFS = 'setFontPrefs';
 const MSG_SET_WIDTH_SELECTION = 'setWidthSelection';
+// Same reasoning again -- see TAG_TOOLTIPS_KEY in DitaViewerProvider.ts for
+// why this is a global, shared-with-the-topic-viewer preference.
+const MSG_SET_TAG_TOOLTIPS = 'setTagTooltips';
 
 function getMapWebviewScript(): string {
   const L = {
@@ -193,6 +196,36 @@ function getMapWebviewScript(): string {
   });
   toolbar.appendChild(wSel);
 
+  // Tag-name tooltip toggle -- same feature and same persisted preference
+  // as the topic viewer's own (see TAG_TOOLTIPS_KEY in
+  // DitaViewerProvider.ts). Book mode renders each topic through the same
+  // renderTopicCached()/renderer.ts pipeline, so the same data-dita-tagname
+  // attributes are already present here; this toggle is the only piece
+  // that was missing.
+  var tagTooltipsOn = window.__tagTooltips === true;
+  var tagTooltipsBtn = document.createElement('button');
+  tagTooltipsBtn.textContent = ${L.tagTooltipsLabel};
+  tagTooltipsBtn.style.cssText = btnStyle + 'font-size:11px;';
+  function applyTagTooltips() {
+    var contentRoot = document.getElementById('dita-content-root');
+    var els = contentRoot ? contentRoot.querySelectorAll('[data-dita-tagname]') : [];
+    for (var i = 0; i < els.length; i++) {
+      if (tagTooltipsOn) els[i].setAttribute('title', els[i].getAttribute('data-dita-tagname'));
+      else els[i].removeAttribute('title');
+    }
+    tagTooltipsBtn.style.background = tagTooltipsOn ? 'var(--color-profiling-label-bg)' : '';
+    tagTooltipsBtn.style.color = tagTooltipsOn ? 'var(--color-profiling-label-text)' : '';
+    tagTooltipsBtn.title = tagTooltipsOn ? ${L.tagTooltipsOnTitle} : ${L.tagTooltipsOffTitle};
+    tagTooltipsBtn.setAttribute('aria-label', tagTooltipsOn ? ${L.tagTooltipsOnTitle} : ${L.tagTooltipsOffTitle});
+  }
+  tagTooltipsBtn.addEventListener('click', function() {
+    tagTooltipsOn = !tagTooltipsOn;
+    applyTagTooltips();
+    vscode.postMessage({ type: '${MSG_SET_TAG_TOOLTIPS}', value: tagTooltipsOn });
+  });
+  applyTagTooltips(); // reflects a persisted "on" against the initial content; a no-op walk when off, but only once per panel open
+  toolbar.appendChild(tagTooltipsBtn);
+
   // Mode toggle button
   var modeBtn = document.createElement('button');
   modeBtn.title = ${L.switchModeTitle};
@@ -292,6 +325,10 @@ function getMapWebviewScript(): string {
     if (typeof sb !== 'undefined' && sb.style.display !== 'none' && searchInput.value) {
       performSearch(searchInput.value);
     }
+    // Off (the default) needs no walk: fresh HTML, whether this is a full
+    // replace or bookPatch.ts's per-entry patch, only ever carries
+    // data-dita-tagname, never a stray title= from this feature.
+    if (tagTooltipsOn) applyTagTooltips();
   }
 
   window.addEventListener('message', function(e) {
@@ -397,6 +434,8 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
           map[document.uri.toString()] = message.value;
           this.context.globalState.update(WIDTH_SELECTION_KEY, map);
         }
+      } else if (message.type === MSG_SET_TAG_TOOLTIPS) {
+        this.context.globalState.update(TAG_TOOLTIPS_KEY, message.value === true);
       }
     });
 
@@ -633,6 +672,8 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     const fontPrefsJson = escapeJson(JSON.stringify(fontPrefs));
     const widthSelection = this.context.globalState.get<Record<string, string>>(WIDTH_SELECTION_KEY, {})[document.uri.toString()] || '';
     const widthSelectionJson = escapeJson(JSON.stringify(widthSelection));
+    const tagTooltips = this.context.globalState.get(TAG_TOOLTIPS_KEY, DEFAULT_TAG_TOOLTIPS);
+    const tagTooltipsJson = escapeJson(JSON.stringify(tagTooltips));
 
     return {
       html: `<!DOCTYPE html>
@@ -646,7 +687,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
 </head>
 <body class="mode-${mode}">
 <div id="dita-content-root">${result.html}</div>
-<script nonce="${nonce}">window.__fontPrefs=${fontPrefsJson};window.__widthSelection=${widthSelectionJson};</script>
+<script nonce="${nonce}">window.__fontPrefs=${fontPrefsJson};window.__widthSelection=${widthSelectionJson};window.__tagTooltips=${tagTooltipsJson};</script>
 <script nonce="${nonce}">${script}</script>
 </body>
 </html>`,

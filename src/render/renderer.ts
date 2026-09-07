@@ -217,13 +217,22 @@ function injectAttributes(html: string, tagName: string, range: SourceRange): st
   // in the tag and, per HTML5's first-duplicate-wins parsing rule, silently
   // shadows whatever the renderer intended (e.g. topic/image using the
   // resolved alt text as its tooltip instead of the literal word "image").
+  //
+  // The generic fallback itself is a data attribute, not a second title=:
+  // baking "every element gets a native browser tooltip reading its raw
+  // tag name" straight into the HTML made it impossible to turn off without
+  // a full re-render, and reading the tag name on hover is useful while
+  // learning DITA but noisy otherwise. data-dita-tagname carries the same
+  // information; the "Tags" toolbar toggle promotes it to a real title
+  // attribute only when the reader has asked for it (see applyTagTooltips
+  // in DitaViewerProvider.ts/MapViewerProvider.ts's webview scripts).
   const openTagEnd = html.indexOf('>');
   const openTag = openTagEnd >= 0 ? html.slice(0, openTagEnd) : html;
   const hasOwnTitle = / title="/.test(openTag);
-  const titlePart = hasOwnTitle ? '' : ` title="${tagName}"`;
+  const tagNamePart = hasOwnTitle ? '' : ` data-dita-tagname="${tagName}"`;
   return html.replace(
     /^<([a-zA-Z][a-zA-Z0-9]*)/,
-    `<$1${titlePart} data-line="${range.startLine}" data-end-line="${range.endLine}" data-start-col="${range.startCol}" data-end-col="${range.endCol}"`,
+    `<$1${tagNamePart} data-line="${range.startLine}" data-end-line="${range.endLine}" data-start-col="${range.startCol}" data-end-col="${range.endCol}"`,
   );
 }
 

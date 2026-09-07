@@ -188,6 +188,44 @@ describe('DITA/DITAMAP preview rendering', () => {
     }
   });
 
+  it('renders both previews with the tag-tooltip toggle honouring a persisted "on"', async () => {
+    // 'ditaViewer.tagTooltips' hardcoded rather than imported for the same
+    // reason as the font/width keys above: the point is that the provider
+    // and this test independently agree on the storage key.
+    const ext = vscode.extensions.getExtension(EXTENSION_ID)!;
+    const globalState = ext.exports._test.globalState as vscode.Memento;
+    const previous = globalState.get('ditaViewer.tagTooltips');
+    try {
+      await globalState.update('ditaViewer.tagTooltips', true);
+
+      const topicUri = vscode.Uri.file(path.join(fixturesDir, 'topics', 'db_overview.dita'));
+      await vscode.commands.executeCommand('vscode.openWith', topicUri, 'ditaViewer.preview');
+      await waitFor(() => !!ext.exports._test.getLastRenderedHtml(topicUri.toString()));
+      const topicPage: string = ext.exports._test.getLastRenderedHtml(topicUri.toString());
+      assert.ok(
+        topicPage.includes('window.__tagTooltips=true'),
+        'expected the topic preview to bootstrap from the persisted tag-tooltips preference',
+      );
+      assert.ok(topicPage.includes('data-dita-tagname='), 'expected the generic fallback to use the data attribute, not a bare title=');
+      assert.ok(topicPage.includes("type: 'setTagTooltips'"), 'expected the toolbar to persist toggling this back');
+      await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+
+      const mapUri = vscode.Uri.file(path.join(fixturesDir, 'test.ditamap'));
+      await vscode.commands.executeCommand('vscode.openWith', mapUri, 'ditaViewer.mapPreview');
+      await waitFor(() => !!ext.exports._test.getLastRenderedMapHtml(mapUri.toString()));
+      const mapPage: string = ext.exports._test.getLastRenderedMapHtml(mapUri.toString());
+      assert.ok(
+        mapPage.includes('window.__tagTooltips=true'),
+        'expected the map preview to bootstrap from the same, shared preference',
+      );
+      assert.ok(mapPage.includes("type: 'setTagTooltips'"), 'expected the map toolbar to persist toggling this back too');
+      assert.ok(!mapPage.includes('${MSG_'), 'an un-interpolated MSG_ constant would leave the message type unmatched');
+      await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+    } finally {
+      await globalState.update('ditaViewer.tagTooltips', previous);
+    }
+  });
+
   it('toggles back to the source editor when the command runs in the reading view', async () => {
     const uri = vscode.Uri.file(path.join(fixturesDir, 'topics', 'db_overview.dita'));
 
