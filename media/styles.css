@@ -148,11 +148,47 @@ p { margin: 0.75em 0; }
 }
 .profiled--inline {
   display: inline;
-  padding: 0 0.2rem;
+  padding: 0.15em 0.2rem;
   margin: 0;
   border-radius: 2px;
+  /* An inline .profiled--inline element that wraps across multiple lines
+     (a long profiled phrase) is painted per line-box fragment. The CSS
+     default (box-decoration-break: slice) only draws the true left cap on
+     the fragment that starts the element and the true right cap on the
+     fragment that ends it -- any fragment in between (or a fragment that's
+     a continuation from the previous line) is left open on the side that
+     isn't a real edge of the element. That's expected slice behaviour, not
+     a bug, but it reads as "the box-shadow border doesn't close" exactly
+     like the reported screenshot. `clone` makes every line fragment paint
+     its own complete, self-contained box-shadow/padding/border-radius, so
+     each visual line segment looks like its own whole rounded box instead
+     of an open-ended slice. -webkit- prefix required: this is still behind
+     the prefix in the Chromium version VS Code's webview embeds. */
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
-.profiled--inline .profiling-label { float: none; position: static; display: inline-flex; margin-left: 0.3em; vertical-align: middle; }
+.profiled--inline .profiling-label {
+  float: none;
+  position: static;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.3em;
+  vertical-align: middle;
+}
+/* .profiled--inline's box-shadow/background is painted from its own font
+   metrics (roughly its em-box), not from the actual rendered height of
+   whatever's inside it -- so a taller atomic inline child, like the
+   profiling-chip pill below (its own padding + line-height can add up to
+   a hair more than a line of plain text), doesn't force that box to grow
+   to contain it. With zero top/bottom padding there was no slack at all,
+   so the chip's bottom edge could sit at or past the shadow's own bottom
+   edge (the reported "green block sits lower than the outline, even
+   though it's bottom-aligned"). The padding above gives the shadow some
+   vertical room to work with; tightening the chip's own line-height here
+   keeps its rendered height as close to normal text as possible, so
+   there's less height for that padding to have to absorb in the first
+   place. */
+.profiled--inline .profiling-chip { line-height: 1; }
 /* Clearfix: .profiling-label below is `float: right` so it can share the
    last line with short content (see the comment on .profiling-label) --
    but a float is intentionally excluded from its containing block's own
