@@ -652,16 +652,42 @@ export interface UnknownElementEntry {
   sourceRange: SourceRange;
 }
 
-// The one base type that deliberately opts a subtree out of DITA's own
-// vocabulary: <foreign>, <mathml> and this project's 'svg-container'
-// convenience mapping (see standardTagMap.ts) all resolve to this, and
-// their renderer (BASE_TYPE_RENDERERS['topic/foreign'] in baseTypeMap.ts)
-// serializes their children as raw markup without ever consulting each
-// descendant's own baseType. Every MathML/SVG tag underneath is correctly
-// unrecognized by parseBaseType() -- that is the point, it is not DITA --
-// so walking into one of these and reporting its contents here would just
-// relabel valid MathML/SVG markup as "unknown DITA elements".
-const FOREIGN_BASETYPE = 'topic/foreign';
+// Base types whose own renderer takes full, exclusive ownership of its
+// subtree instead of generically dispatching to each child by its own
+// baseType. An unmapped tag name underneath one of these causes no silent
+// content loss -- the reason this diagnostic exists at all -- because
+// nothing under them is shown via the generic per-child path regardless of
+// whether the parser could classify it:
+//
+// - topic/foreign (<foreign>, <mathml>, and this project's 'svg-container'
+//   convenience mapping in standardTagMap.ts): BASE_TYPE_RENDERERS in
+//   baseTypeMap.ts serializes its children as raw markup directly, without
+//   ever consulting each descendant's own baseType. Every MathML/SVG tag
+//   underneath is correctly unrecognized by parseBaseType() -- that is the
+//   point, it is not DITA -- so walking in and reporting its contents would
+//   just relabel valid MathML/SVG markup as "unknown DITA elements".
+// - topic/prolog: its renderer (baseTypeMap.ts) extracts only top-level
+//   indexterm chips via a dedicated traversal and returns '' for
+//   everything else -- by its own comment, "every OTHER prolog descendant
+//   ... is still fully suppressed". author, critdate, metadata, audience,
+//   keywords and the rest of DITA's prolog vocabulary are real, valid,
+//   commonly-used elements; several (metadata, keywords, navtitle, author,
+//   critdate, ...) simply have no entry of their own in standardTagMap.ts,
+//   because nothing before this diagnostic ever needed one -- prolog's own
+//   renderer already hides the entire subtree, mapped or not.
+// - map/topicmeta: the same shape one level up, for maps -- its renderer
+//   (mapTypeMap.ts) also returns '' unconditionally, with the topicref's
+//   navtitle/keyword text pulled out separately via getNodeText() rather
+//   than the generic per-child dispatch. indexterm is valid inside a map's
+//   <topicmeta><keywords> (DITA maps reuse several topic-level metadata
+//   elements verbatim) but was never given its own entry in mapTagMap.ts
+//   for the same reason: nothing needed it before.
+//
+// Skipping these three is about what the renderer actually does with a
+// subtree, not about the elements in it being any less real or valid DITA
+// than a <p> or a <note> -- unlike topic/foreign, which is correctly
+// non-DITA content.
+const SUBTREE_OWNED_BASETYPES = new Set(['topic/foreign', 'topic/prolog', 'map/topicmeta']);
 
 /**
  * Walks a parsed document and collects every element the parser fell
@@ -682,7 +708,7 @@ export function collectUnknownElements(root: DitaNode): UnknownElementEntry[] {
 
   function walk(node: DitaNode): void {
     if (node.type !== 'element') return;
-    if (node.baseType === FOREIGN_BASETYPE) return;
+    if (node.baseType && SUBTREE_OWNED_BASETYPES.has(node.baseType)) return;
     if (!node.baseType && node.tagName) {
       results.push({ tagName: node.tagName, sourceRange: node.sourceRange });
     }

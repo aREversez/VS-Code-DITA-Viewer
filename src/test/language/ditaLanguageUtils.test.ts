@@ -662,6 +662,61 @@ describe('ditaLanguageUtils', () => {
       assert.strictEqual(unknown[0].tagName, 'bogus-tag');
     });
 
+    it('does not flag real DITA prolog elements that simply have no entry of their own in standardTagMap.ts', () => {
+      // Regression test: standardTagMap.ts has no direct entry for author,
+      // critdate, metadata, audience or keywords -- only specialized
+      // elements that happen to resolve to the same base types (see
+      // exportanchors -> topic/keywords, change-historylist ->
+      // topic/metadata) do. This used to mean a completely ordinary
+      // <prolog> lit this diagnostic up on every one of these, even though
+      // topic/prolog's own renderer (baseTypeMap.ts) already suppresses
+      // its entire subtree unconditionally except for top-level indexterm
+      // chips -- an unmapped tag name in here causes no silent content
+      // loss, the reason this diagnostic exists in the first place.
+      const xml = `<topic id="t1"><title>T</title>
+        <prolog>
+          <author>Jane</author>
+          <critdate value="2024-01-01"/>
+          <metadata>
+            <audience type="user"/>
+            <keywords><keyword>foo</keyword><indexterm>bar</indexterm></keywords>
+          </metadata>
+        </prolog>
+        <body><p>x</p></body>
+      </topic>`;
+      const doc = parseDita(xml);
+      assert.deepStrictEqual(collectUnknownElements(doc.root), []);
+    });
+
+    it('still flags a genuine typo outside <prolog>, even in a document whose prolog has unmapped elements', () => {
+      const xml = `<topic id="t1"><title>T</title>
+        <prolog><author>Jane</author></prolog>
+        <body><bogus-tag>oops</bogus-tag></body>
+      </topic>`;
+      const doc = parseDita(xml);
+      const unknown = collectUnknownElements(doc.root);
+      assert.strictEqual(unknown.length, 1);
+      assert.strictEqual(unknown[0].tagName, 'bogus-tag');
+    });
+
+    it('does not flag <indexterm> inside a map topicref\'s <topicmeta><keywords>', () => {
+      // Regression test, map-side counterpart of the prolog one above:
+      // mapTagMap.ts has no entry for indexterm (only the topic-side
+      // tag map does), even though DITA maps reuse <keywords> verbatim
+      // inside <topicmeta> and it is valid to nest an indexterm there.
+      // map/topicmeta's renderer (mapTypeMap.ts) also returns '' for its
+      // entire subtree unconditionally, extracting only navtitle/keyword
+      // text via a separate getNodeText() call -- same shape as
+      // topic/prolog, one level up, for maps.
+      const xml = `<map><title>T</title>
+        <topicref href="a.dita">
+          <topicmeta><keywords><keyword>k1</keyword><indexterm>idx1</indexterm></keywords></topicmeta>
+        </topicref>
+      </map>`;
+      const doc = parseDitamap(xml);
+      assert.deepStrictEqual(collectUnknownElements(doc.root), []);
+    });
+
     it('flags nested unknown elements individually rather than only the outermost one', () => {
       const xml = `<topic id="t1"><title>T</title><body>
         <outer-bad><inner-bad>x</inner-bad></outer-bad>
