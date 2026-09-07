@@ -682,12 +682,21 @@ export interface UnknownElementEntry {
 //   <topicmeta><keywords> (DITA maps reuse several topic-level metadata
 //   elements verbatim) but was never given its own entry in mapTagMap.ts
 //   for the same reason: nothing needed it before.
+// - map/map-title: the map's own <title> (and <booktitle>/<mainbooktitle>/
+//   <booktitlealt>/<subtitle>, which specialize the same base type) is
+//   rendered by extractText() -- a dedicated, baseType-agnostic recursive
+//   text walk with its own <ph keyref="..."> substitution built in, not
+//   the generic per-child dispatch either. Nothing under a map's <title>
+//   goes missing for being unmapped: extractText() walks every descendant
+//   by its .children/.text shape alone and does not consult baseType at
+//   all, which is exactly why a keyref-only <ph/> in a map title already
+//   resolves correctly -- and why flagging it here was never accurate.
 //
-// Skipping these three is about what the renderer actually does with a
+// Skipping these four is about what the renderer actually does with a
 // subtree, not about the elements in it being any less real or valid DITA
 // than a <p> or a <note> -- unlike topic/foreign, which is correctly
 // non-DITA content.
-const SUBTREE_OWNED_BASETYPES = new Set(['topic/foreign', 'topic/prolog', 'map/topicmeta']);
+const SUBTREE_OWNED_BASETYPES = new Set(['topic/foreign', 'topic/prolog', 'map/topicmeta', 'map/map-title']);
 
 /**
  * Walks a parsed document and collects every element the parser fell

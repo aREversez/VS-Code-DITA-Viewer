@@ -717,6 +717,36 @@ describe('ditaLanguageUtils', () => {
       assert.deepStrictEqual(collectUnknownElements(doc.root), []);
     });
 
+    it('does not flag <ph> inside a map <title>, where a keyref-only <ph/> already resolves correctly', () => {
+      // Regression test. mapTagMap.ts has no entry for ph at all -- unlike
+      // indexterm above, this is not a topic-only element (ph is common
+      // and valid directly inside a map's own <title>), but map/map-title
+      // is rendered by extractText() (mapTypeMap.ts), a dedicated
+      // baseType-agnostic recursive text walk with its own <ph
+      // keyref="..."/> substitution built in. An unmapped tag under a
+      // map's <title> was never actually losing content: extractText()
+      // does not consult baseType at all.
+      const xml = '<map><title><ph keyref="product_name"/> User Guide</title></map>';
+      const doc = parseDitamap(xml);
+      assert.deepStrictEqual(collectUnknownElements(doc.root), []);
+    });
+
+    it('does not flag <ph> inside a bookmap <booktitle>/<mainbooktitle>, which specializes the same base type', () => {
+      const xml = '<bookmap><booktitle><mainbooktitle><ph keyref="x"/> Guide</mainbooktitle></booktitle></bookmap>';
+      const doc = parseDitamap(xml);
+      assert.deepStrictEqual(collectUnknownElements(doc.root), []);
+    });
+
+    it('still flags a genuine typo elsewhere in the map, in a document whose <title> also has an unmapped <ph>', () => {
+      const xml = `<map><title><ph keyref="x"/> Guide</title>
+        <topicref href="a.dita"><bogus-outside/></topicref>
+      </map>`;
+      const doc = parseDitamap(xml);
+      const unknown = collectUnknownElements(doc.root);
+      assert.strictEqual(unknown.length, 1);
+      assert.strictEqual(unknown[0].tagName, 'bogus-outside');
+    });
+
     it('flags nested unknown elements individually rather than only the outermost one', () => {
       const xml = `<topic id="t1"><title>T</title><body>
         <outer-bad><inner-bad>x</inner-bad></outer-bad>
