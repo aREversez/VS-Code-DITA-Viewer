@@ -151,6 +151,22 @@ p { margin: 0.75em 0; }
   padding: 0.15em 0.2rem;
   margin: 0;
   border-radius: 2px;
+  /* Extra line-height, scoped to this element only: box-shadow/padding on
+     an inline element paints around its content area, but doesn't reserve
+     any space for itself -- the space it paints into is whatever leading
+     (the gap above/below the text that `line-height` creates) already
+     exists around that line. The padding above needs that gap to be at
+     least as tall as the padding itself, on both the line before and the
+     line after; the ambient document line-height (var(--line-height),
+     1.6) wasn't quite enough headroom once padding was added, so
+     consecutive wrapped lines of a profiled phrase would paint into each
+     other's territory -- exactly the crossing-borders regression from the
+     last round. Bumping line-height specifically here reserves genuinely
+     extra room around any line this element touches, which the padding
+     can then safely paint into without reaching whatever line is next,
+     whether that neighbouring line is another wrapped fragment of this
+     same element or an unrelated line above/below it. */
+  line-height: calc(var(--line-height) + 0.6);
   /* An inline .profiled--inline element that wraps across multiple lines
      (a long profiled phrase) is painted per line-box fragment. The CSS
      default (box-decoration-break: slice) only draws the true left cap on
@@ -162,8 +178,13 @@ p { margin: 0.75em 0; }
      like the reported screenshot. `clone` makes every line fragment paint
      its own complete, self-contained box-shadow/padding/border-radius, so
      each visual line segment looks like its own whole rounded box instead
-     of an open-ended slice. -webkit- prefix required: this is still behind
-     the prefix in the Chromium version VS Code's webview embeds. */
+     of an open-ended slice. This only affects the left/right (inline-axis)
+     edges at a wrap point -- top/bottom padding is already painted in
+     full on every fragment regardless of slice vs. clone, so it isn't
+     what caused the crossing-borders issue above; that was purely a
+     leading/line-height shortfall. -webkit- prefix required: this is
+     still behind the prefix in the Chromium version VS Code's webview
+     embeds. */
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
 }
@@ -183,12 +204,15 @@ p { margin: 0.75em 0; }
    to contain it. With zero top/bottom padding there was no slack at all,
    so the chip's bottom edge could sit at or past the shadow's own bottom
    edge (the reported "green block sits lower than the outline, even
-   though it's bottom-aligned"). The padding above gives the shadow some
-   vertical room to work with; tightening the chip's own line-height here
-   keeps its rendered height as close to normal text as possible, so
-   there's less height for that padding to have to absorb in the first
-   place. */
-.profiled--inline .profiling-chip { line-height: 1; }
+   though it's bottom-aligned"). The padding above -- now with the
+   matching line-height increase so it has somewhere safe to paint into --
+   gives the shadow the vertical room it needs. Deliberately NOT shrinking
+   the chip itself (e.g. forcing its line-height down) to make it fit:
+   that was tried and made this chip visibly flatter/smaller than the
+   identical .profiling-chip used in block-level profiling labels
+   elsewhere, an inconsistency of its own. The chip keeps its normal,
+   shared size here; the room to contain it comes entirely from this
+   wrapper's own padding/line-height instead. */
 /* Clearfix: .profiling-label below is `float: right` so it can share the
    last line with short content (see the comment on .profiling-label) --
    but a float is intentionally excluded from its containing block's own
