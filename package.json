@@ -159,6 +159,16 @@
         "command": "ditaViewer.showMapRendered",
         "key": "ctrl+shift+alt+m",
         "when": "editorLangId == ditamap || resourceExtname == .ditamap"
+      },
+      {
+        "command": "ditaViewer.showRendered",
+        "key": "ctrl+k v",
+        "when": "editorLangId == dita || resourceExtname == .dita"
+      },
+      {
+        "command": "ditaViewer.showMapRendered",
+        "key": "ctrl+k v",
+        "when": "editorLangId == ditamap || resourceExtname == .ditamap"
       }
     ],
     "snippets": [
