@@ -13,6 +13,8 @@ import {
   renderBookParts,
   wrapBookParts,
   clearTopicRenderCache,
+  resolveBookTopicPath,
+  buildBookNavManifest,
 } from '../../editor/ditaRenderUtils';
 import type { BookPart } from '../../editor/bookPatch';
 
@@ -725,5 +727,93 @@ describe('renderBookEntries', () => {
 
       assert.strictEqual(wrapBookParts(renderParts(entries)), renderBook(entries));
     });
+  });
+});
+
+// Docsite mode design doc (step 1 of the implementation order): the nav
+// sidebar/prev-next data source has to agree with renderBookEntries above on
+// exactly which topics a book contains, or the sidebar could list a topic
+// the book doesn't render (or omit one it does). Both now go through
+// resolveBookTopicPath, so this suite is mostly about confirming that
+// shared resolution rule and the manifest built on top of it, not
+// re-testing renderBookEntries' own assembly.
+describe('resolveBookTopicPath / buildBookNavManifest (docsite nav manifest)', () => {
+  const docDir = '/proj/docs';
+
+  it('resolves a plain .dita href against docDir', () => {
+    const entry: MapEntry = { href: 'topics/intro.dita', displayName: 'Intro', depth: 0 };
+    assert.strictEqual(resolveBookTopicPath(entry, docDir), join(docDir, 'topics/intro.dita'));
+  });
+
+  it('strips a #fragment before resolving', () => {
+    const entry: MapEntry = { href: 'topics/intro.dita#section2', displayName: 'Intro', depth: 0 };
+    assert.strictEqual(resolveBookTopicPath(entry, docDir), join(docDir, 'topics/intro.dita'));
+  });
+
+  it('returns undefined for an entry with no href (a keydef with no target, a topichead heading, ...)', () => {
+    const entry: MapEntry = { href: undefined, displayName: 'Section heading', depth: 0 };
+    assert.strictEqual(resolveBookTopicPath(entry, docDir), undefined);
+  });
+
+  it('returns undefined for a .ditamap href -- expandDitamapRefs should have flattened it before entries reach here', () => {
+    const entry: MapEntry = { href: 'submaps/appendix.ditamap', displayName: 'Appendix', depth: 0 };
+    assert.strictEqual(resolveBookTopicPath(entry, docDir), undefined);
+  });
+
+  it('decodes a URL-encoded href the same way renderBookEntries does', () => {
+    const entry: MapEntry = { href: 'topics/caf%C3%A9.dita', displayName: 'Café', depth: 0 };
+    assert.strictEqual(resolveBookTopicPath(entry, docDir), join(docDir, 'topics/café.dita'));
+  });
+
+  it('builds one manifest entry per topic, in document order, carrying title/depth/role through', () => {
+    const entries: MapEntry[] = [
+      { href: 'topics/ch1.dita', displayName: 'Chapter One', depth: 0, role: 'Chapter 1' },
+      { href: 'topics/ch1-s1.dita', displayName: 'Section 1.1', depth: 1 },
+      { href: undefined, displayName: 'No target', depth: 0 }, // e.g. a keydef
+    ];
+    const manifest = buildBookNavManifest(entries, docDir);
+    assert.deepStrictEqual(manifest, [
+      { absPath: join(docDir, 'topics/ch1.dita'), title: 'Chapter One', depth: 0, role: 'Chapter 1' },
+      { absPath: join(docDir, 'topics/ch1-s1.dita'), title: 'Section 1.1', depth: 1, role: undefined },
+    ]);
+  });
+
+  it('de-duplicates a topic referenced twice, keeping only its first occurrence -- same rule renderBookEntries applies via its own visited set', () => {
+    const entries: MapEntry[] = [
+      { href: 'topics/shared.dita', displayName: 'First mention', depth: 0 },
+      { href: 'topics/shared.dita', displayName: 'Second mention (should not appear)', depth: 1 },
+    ];
+    const manifest = buildBookNavManifest(entries, docDir);
+    assert.strictEqual(manifest.length, 1);
+    assert.strictEqual(manifest[0].title, 'First mention');
+  });
+
+  it('excludes .ditamap entries from the manifest the same way it excludes them from resolution', () => {
+    const entries: MapEntry[] = [
+      { href: 'submaps/appendix.ditamap', displayName: 'Appendix (submap ref)', depth: 0 },
+      { href: 'topics/real.dita', displayName: 'Real topic', depth: 0 },
+    ];
+    const manifest = buildBookNavManifest(entries, docDir);
+    assert.strictEqual(manifest.length, 1);
+    assert.strictEqual(manifest[0].title, 'Real topic');
+  });
+
+  it('agrees with renderBookEntries on which topics a real map produces (regression guard against the two drifting apart)', () => {
+    const doc = parseMap(TEST_MAP_XML);
+    const entries = collectMapEntries(doc.root);
+    const manifest = buildBookNavManifest(entries, docDir);
+    // TEST_MAP_XML references topics/db_overview.dita twice (once via a
+    // keys-only topicref with no href of its own, once bare) -- see the
+    // fixture at the top of this file -- so the manifest should contain it
+    // only once, plus db_config.dita and db_ui_test.dita.
+    assert.strictEqual(manifest.length, 3, 'db_overview (deduped), db_config, db_ui_test');
+    assert.deepStrictEqual(
+      manifest.map((m) => m.absPath),
+      [
+        join(docDir, 'topics/db_overview.dita'),
+        join(docDir, 'topics/db_config.dita'),
+        join(docDir, 'topics/db_ui_test.dita'),
+      ],
+    );
   });
 });

@@ -1065,6 +1065,59 @@ export function renderTopicCached(input: TopicRenderInput): TopicRenderResult {
 
 // ── Book mode assembly ──
 
+/**
+ * Resolves one map entry's href to the absolute path renderBookParts (and
+ * the docsite-mode nav manifest below, which must agree with it exactly --
+ * a sidebar listing a topic this book doesn't actually render, or vice
+ * versa, is worse than either one being wrong consistently) would treat as
+ * "this topic". Returns undefined for anything that isn't a renderable
+ * .dita topic: no href, a fragment-only self-reference, or a .ditamap --
+ * by the time entries reach here they should already be flattened by
+ * expandDitamapRefs, so a .ditamap entry surviving to this point means the
+ * caller skipped that step, not that this is a legitimate case to render.
+ */
+export function resolveBookTopicPath(entry: MapEntry, docDir: string): string | undefined {
+  if (!entry.href) return undefined;
+  const refPath = entry.href.split('#')[0];
+  if (!refPath || refPath.toLowerCase().endsWith('.ditamap')) return undefined;
+  return resolve(docDir, decodeHrefPart(refPath));
+}
+
+export interface DocsiteNavEntry {
+  /** Resolved absolute path -- the same identity renderBookParts's own
+   *  `visited` set and de-duplication use, and what a future "is this xref
+   *  target part of the current book" check (docsite design doc, 3.2/4.5)
+   *  will key off of. */
+  absPath: string;
+  title: string;
+  /** Nesting level, 0 at the map's own top level -- for sidebar indentation. */
+  depth: number;
+  /** BookMap structural role ("Chapter 1", "Appendix A", ...), when the
+   *  entry has one -- see collectMapEntries/createBookRoleLabeler. */
+  role?: string;
+}
+
+/**
+ * Builds the docsite-mode sidebar/prev-next data source from the same
+ * flattened entries list renderBookParts renders from -- pass it the exact
+ * same `entries` (and `docDir`) used for the content render, not a
+ * separately-collected one, so the nav can never list a topic the book
+ * doesn't actually contain or omit one it does. Order matches document
+ * order (collectMapEntries' own order), which is what a reading-order
+ * prev/next needs.
+ */
+export function buildBookNavManifest(entries: MapEntry[], docDir: string): DocsiteNavEntry[] {
+  const seen = new Set<string>();
+  const result: DocsiteNavEntry[] = [];
+  for (const entry of entries) {
+    const absPath = resolveBookTopicPath(entry, docDir);
+    if (!absPath || seen.has(absPath)) continue; // same one-entry-per-topic rule renderBookParts's own `visited` set enforces
+    seen.add(absPath);
+    result.push({ absPath, title: entry.displayName, depth: entry.depth, role: entry.role });
+  }
+  return result;
+}
+
 export interface BookRenderInput {
   /** Flattened topicref list, in map order -- see collectMapEntries. */
   entries: MapEntry[];
@@ -1137,7 +1190,7 @@ export function renderBookParts(input: BookRenderInput): BookPart[] {
         );
         continue;
       }
-      const absPath = resolve(docDir, decodeHrefPart(refPath));
+      const absPath = resolveBookTopicPath(entry, docDir)!; // href is truthy and not a .ditamap -- both already checked above, so this always resolves
       if (visited.has(absPath)) {
         push(`skip:${entry.href}`, renderBookSkipMessage(entry.href));
         continue;
