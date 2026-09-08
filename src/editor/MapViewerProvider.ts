@@ -109,7 +109,7 @@ function getMapWebviewScript(): string {
     fontSerif: L.fontSerif,
     fontCurrentSans: L.fontCurrentSans,
     fontCurrentSerif: L.fontCurrentSerif,
-    fontSizeButtonExtraStyle: 'font-weight:bold;',
+    fontSizeButtonExtraStyle: '',
     includeFontReset: false,
     widthAuto: L.widthAuto,
     widthFull: L.widthFull,
