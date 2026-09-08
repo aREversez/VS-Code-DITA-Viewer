@@ -139,15 +139,42 @@ p { margin: 0.75em 0; }
      and nested list markers, and any decoration on <li>/<ul>/<ol> visually
      interferes with the browser's list-marker positioning. box-shadow paints
      outward from the border-box edge without affecting layout, so the green
-     highlight ring never pushes content or covers nested bullets/numbers. */
+     highlight ring never pushes content or covers nested bullets/numbers.
+     This box-shadow default is kept only for <li>/<ul>/<ol> (see the
+     override right below, which switches everything else to a real
+     border). */
   box-shadow: 0 0 0 1.5px var(--color-profiling-border);
   border-radius: 3px;
   background: none;
   padding: 0.4rem 0.6rem;
   margin: 0.5rem 0;
 }
+/* Every OTHER block-level profiled element (section, div, p, dl, note,
+   ...) draws its highlight with a real border instead of the box-shadow
+   above. Reported symptom: two independently-profiled block elements
+   stacked directly next to each other (e.g. two sibling <section>s, each
+   with its own profiling attribute) rendering with their left/right sides
+   looking "not closed". box-shadow is purely a paint effect layered
+   outside the border-box -- it has no guaranteed closed-rectangle
+   semantics of its own the way an actual border does, and at a boundary
+   where two elements' painted regions sit close together (their margins
+   collapsed to the usual gap above), a thin 1.5px ring is exactly the
+   kind of decoration where that can go visibly wrong. A real border
+   doesn't share that ambiguity: border-left/right/top/bottom are each
+   unconditionally part of the element's own box, drawn every time,
+   regardless of what's rendered nearby. This is safe everywhere except
+   <li>/<ul>/<ol> -- border-radius/border don't affect list-marker
+   positioning on any other element, and for a block element with the
+   default width: auto, adding a border doesn't change its outer width
+   either (the browser narrows the content area to compensate, same as it
+   already does for padding). */
+.profiled:not(li):not(ul):not(ol):not(tr):not(.profiled--inline) {
+  box-shadow: none;
+  border: 1.5px solid var(--color-profiling-border);
+}
 .profiled--inline {
   display: inline;
+
   padding: 0 0.2rem;
   margin: 0;
   border-radius: 2px;
