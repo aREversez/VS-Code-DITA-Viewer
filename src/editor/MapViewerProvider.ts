@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderBookParts, wrapBookParts, escapeHtml, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart } from './ditaRenderUtils';
+import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart } from './ditaRenderUtils';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
 import { foldPendingRender, PendingRender } from './pendingRender';
@@ -402,8 +402,23 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       requestUpdate('full');
     });
 
-    const updateWebview = () => {
+    const updateWebview = async () => {
       if (disposed) return;
+      if (currentMode === 'book') {
+        // collectBookParts/wrapBookParts below assembles every referenced
+        // topic into one document synchronously on the extension host --
+        // see scripts/bench-book-render.js for how long that can actually
+        // take on a large book. Without a placeholder the panel just sits
+        // however it last looked (or blank, on first switch into book
+        // mode) for the whole stretch, which reads as the extension having
+        // hung rather than as work in progress.
+        webviewPanel.webview.html = this.generateLoadingHtml(webviewPanel.webview);
+        // Yield one tick so the webview process actually receives and
+        // paints the placeholder before the synchronous render below
+        // monopolizes the extension host's single JS thread.
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        if (disposed) return;
+      }
       const rendered = this.generateHtml(document, webviewPanel.webview, currentMode);
       webviewPanel.webview.html = rendered.html;
       lastRenderedHtmlByUri.set(document.uri.toString(), rendered.html);
@@ -537,6 +552,28 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       const message = err instanceof Error ? err.message : String(err);
       return { error: message };
     }
+  }
+
+  private generateLoadingHtml(webview: vscode.Webview): string {
+    const stylesUri = webview.asWebviewUri(
+      vscode.Uri.file(join(this.context.extensionPath, 'media', 'styles.css')),
+    );
+    const theme = vscode.window.activeColorTheme;
+    const isDark = theme.kind === vscode.ColorThemeKind.Dark || theme.kind === vscode.ColorThemeKind.HighContrast;
+    const label = vscode.l10n.t('Rendering book…');
+    return `<!DOCTYPE html>
+<html lang="en"${isDark ? ' class="vscode-dark"' : ''}>
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; base-uri 'none';">
+<link rel="stylesheet" href="${stylesUri}">
+<title>DITA</title>
+</head>
+<body class="dita-loading">
+<div class="dita-loading-spinner" role="status" aria-label="${escapeAttr(label)}"></div>
+<div>${escapeHtml(label)}</div>
+</body>
+</html>`;
   }
 
   private generateHtml(
