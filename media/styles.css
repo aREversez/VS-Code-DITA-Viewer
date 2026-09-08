@@ -172,6 +172,47 @@ p { margin: 0.75em 0; }
   box-shadow: none;
   border: 1.5px solid var(--color-profiling-border);
 }
+/* <li>/<ul>/<ol> can't take the same real-border treatment above -- border
+   is real box-model space, and shifting an <li>'s own border-box shifts
+   where the browser hangs its list-marker, per the comment on .profiled
+   itself. box-shadow (and, tried next, outline) turned out not to be
+   reliable substitutes: both are paint-only effects layered outside the
+   border-box, and reported symptoms kept recurring on <li> specifically
+   whenever it had a block-level child like <p> inside it (plain
+   text-only <li>s were fine) -- e.g. box-shadow's the exact thing that
+   was going wrong for section before switching it to border, and outline
+   reproduced the identical "right side won't close" symptom for a
+   profiled <li> containing a <p>, plus introduced a new "crossing lines"
+   regression that plain border sidesteps.
+   Sidestepping the question of exactly which decoration property is safe
+   in this Chromium build for a list-item box with block children: draw
+   the ring with a real border, but on an absolutely-positioned ::before
+   pseudo-element instead of on the <li> itself. An absolutely-positioned
+   element is taken out of normal flow entirely, so it cannot move the
+   list-marker (nothing about the <li>'s own box model changed -- no new
+   border, no new padding, nothing the marker-positioning algorithm could
+   react to) while still being a literal border on a literal box, with
+   the same unambiguous every-side-drawn-every-time guarantee that fixed
+   section. It also can't fragment across the <li>'s own wrapped lines the
+   way an inline element's decoration can: this pseudo-element covers the
+   <li>'s box exactly once, top to bottom, regardless of how many lines
+   its content wraps to internally -- which is what rules out the
+   crossing-lines regression outline introduced. */
+.profiled:is(li, ul, ol) {
+  position: relative;
+  box-shadow: none;
+}
+.profiled:is(li, ul, ol)::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border: 1.5px solid var(--color-profiling-border);
+  border-radius: 3px;
+  pointer-events: none;
+}
 .profiled--inline {
   display: inline;
 
