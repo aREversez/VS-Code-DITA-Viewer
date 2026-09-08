@@ -3,7 +3,7 @@ import { parseDita, preprocessEntities } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
 import { dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
-import { buildTitleMap, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart, detectNoteLabels, detectIndexLabel, readImageDimensions, clearImageDimensionsCache, clearTopicRenderCache } from './ditaRenderUtils';
+import { buildTitleMap, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, detectNoteLabels, detectIndexLabel, readImageDimensions, clearImageDimensionsCache, clearTopicRenderCache } from './ditaRenderUtils';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { foldPendingRender, PendingRender } from './pendingRender';
 import { sharedWebviewStrings } from './webviewL10n';
@@ -92,7 +92,7 @@ function getWebviewScript(): string {
     // that exists only here.
     ...sharedWebviewStrings(),
     selectThemeCss: JSON.stringify(vscode.l10n.t('Select theme CSS')),
-    resetFont: JSON.stringify(vscode.l10n.t('Reset font size and family to default')),
+    resetFont: vscode.l10n.t('Reset font size and family to default'),
     // The image lightbox is a single-topic affordance; book mode renders the
     // same images inline with no zoom, full-screen or copy control to label.
     imgZoomOutTitle: JSON.stringify(vscode.l10n.t('Zoom out this image (preview only)')),
@@ -223,20 +223,7 @@ function getWebviewScript(): string {
     }
   }
 
-  var fontPrefs = window.__fontPrefs || { size: 100, serif: false };
-  var fontSize = typeof fontPrefs.size === 'number' ? fontPrefs.size : 100;
-  var isSerif = fontPrefs.serif === true;
-  var SERIF_STACK = "Georgia,'Times New Roman','Noto Serif SC','Songti SC',STSong,SimSun,serif";
-
-  function applyFontPrefs() {
-    document.body.style.fontSize = fontSize + '%';
-    document.body.style.fontFamily = isSerif ? SERIF_STACK : '';
-  }
-  applyFontPrefs();
-
-  function saveFontPrefs() {
-    vscode.postMessage({ type: 'setFontPrefs', size: fontSize, serif: isSerif });
-  }
+  ${getFontPrefsScript({ setFontPrefsMsgType: 'setFontPrefs' })}
 
   // Highlight box, with a fade-out transition -- highlightElement() above
   // adds '__hl-fade' shortly before removing '__hl' entirely, so the box
@@ -803,17 +790,7 @@ function getWebviewScript(): string {
   });
 
   // Toolbar
-  var tbStyle = 'position:fixed;top:4px;right:8px;z-index:9999;display:flex;align-items:center;gap:4px;padding:3px 6px;border-radius:5px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;background:var(--vscode-editor-background,rgba(30,30,30,0.88));border:1px solid var(--vscode-widget-border,rgba(255,255,255,0.12));backdrop-filter:blur(4px);opacity:0.75;transition:opacity 0.15s;';
-  var ddStyle = 'padding:1px 4px;border-radius:3px;border:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));background:var(--vscode-dropdown-background,#333);color:var(--vscode-dropdown-foreground,#eee);font-size:11px;outline:none;cursor:pointer;';
-  var btnStyle = 'padding:1px 5px;border-radius:3px;border:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));background:var(--vscode-dropdown-background,#333);color:var(--vscode-dropdown-foreground,#eee);cursor:pointer;font-size:13px;line-height:1;outline:none;display:flex;align-items:center;';
-
-  var toolbar = document.createElement('div');
-  toolbar.id = '__toolbar';
-  toolbar.setAttribute('role', 'toolbar');
-  toolbar.setAttribute('aria-label', ${L.previewToolbar});
-  toolbar.style.cssText = tbStyle;
-  toolbar.addEventListener('mouseenter', function() { toolbar.style.opacity = '1'; });
-  toolbar.addEventListener('mouseleave', function() { toolbar.style.opacity = '0.75'; });
+  ${getToolbarScaffoldScript({ previewToolbar: L.previewToolbar })}
 
   // Theme CSS dropdown
   var cssFiles = window.__cssFiles || {};
@@ -842,62 +819,31 @@ function getWebviewScript(): string {
     toolbar.appendChild(sel);
   }
 
-  // Font size controls
-  var fsDown = document.createElement('button');
-  fsDown.innerHTML = 'A−';
-  fsDown.title = ${L.decreaseFontSize};
-  fsDown.setAttribute('aria-label', ${L.decreaseFontSize});
-  fsDown.style.cssText = btnStyle;
-  fsDown.addEventListener('click', function() {
-    fontSize = Math.max(60, fontSize - 10);
-    document.body.style.fontSize = fontSize + '%';
-    saveFontPrefs();
-  });
+  ${getToolbarFontWidthTagTooltipsButtonsScript({
+    decreaseFontSize: L.decreaseFontSize,
+    increaseFontSize: L.increaseFontSize,
+    fontSans: L.fontSans,
+    fontSerif: L.fontSerif,
+    fontCurrentSans: L.fontCurrentSans,
+    fontCurrentSerif: L.fontCurrentSerif,
+    fontSizeButtonExtraStyle: '',
+    includeFontReset: true,
+    resetFont: L.resetFont,
+    widthAuto: L.widthAuto,
+    widthFull: L.widthFull,
+    widthWide: L.widthWide,
+    widthDesktop: L.widthDesktop,
+    widthNarrow: L.widthNarrow,
+    pageWidth: L.pageWidth,
+    setWidthSelectionMsgType: 'setWidthSelection',
+    tagTooltipsLabel: L.tagTooltipsLabel,
+    tagTooltipsOnTitle: L.tagTooltipsOnTitle,
+    tagTooltipsOffTitle: L.tagTooltipsOffTitle,
+    setTagTooltipsMsgType: 'setTagTooltips',
+  })}
   toolbar.appendChild(fsDown);
-
-  var fsUp = document.createElement('button');
-  fsUp.innerHTML = 'A+';
-  fsUp.title = ${L.increaseFontSize};
-  fsUp.setAttribute('aria-label', ${L.increaseFontSize});
-  fsUp.style.cssText = btnStyle;
-  fsUp.addEventListener('click', function() {
-    fontSize = Math.min(200, fontSize + 10);
-    document.body.style.fontSize = fontSize + '%';
-    saveFontPrefs();
-  });
   toolbar.appendChild(fsUp);
-
-  // Font toggle (serif / sans-serif) — reflects the persisted state on open
-  var fontBtn = document.createElement('button');
-  fontBtn.textContent = isSerif ? ${L.fontSerif} : ${L.fontSans};
-  fontBtn.title = isSerif ? ${L.fontCurrentSerif} : ${L.fontCurrentSans};
-  fontBtn.setAttribute('aria-label', isSerif ? ${L.fontCurrentSerif} : ${L.fontCurrentSans});
-  fontBtn.style.cssText = btnStyle + 'font-size:11px;';
-  fontBtn.addEventListener('click', function() {
-    isSerif = !isSerif;
-    fontBtn.textContent = isSerif ? ${L.fontSerif} : ${L.fontSans};
-    fontBtn.title = isSerif ? ${L.fontCurrentSerif} : ${L.fontCurrentSans};
-    fontBtn.setAttribute('aria-label', isSerif ? ${L.fontCurrentSerif} : ${L.fontCurrentSans});
-    document.body.style.fontFamily = isSerif ? SERIF_STACK : '';
-    saveFontPrefs();
-  });
   toolbar.appendChild(fontBtn);
-
-  // Reset font size + family to default in one click
-  var fontResetBtn = document.createElement('button');
-  fontResetBtn.innerHTML = '&#8635;';
-  fontResetBtn.title = ${L.resetFont};
-  fontResetBtn.setAttribute('aria-label', ${L.resetFont});
-  fontResetBtn.style.cssText = btnStyle + 'font-size:12px;';
-  fontResetBtn.addEventListener('click', function() {
-    fontSize = 100;
-    isSerif = false;
-    applyFontPrefs();
-    fontBtn.textContent = ${L.fontSans};
-    fontBtn.title = ${L.fontCurrentSans};
-    fontBtn.setAttribute('aria-label', ${L.fontCurrentSans});
-    saveFontPrefs();
-  });
   toolbar.appendChild(fontResetBtn);
 
   // Image display zoom is no longer a page-wide toolbar control — see
@@ -937,28 +883,6 @@ function getWebviewScript(): string {
   // noise. Persisted like font prefs, since it is the same kind of
   // preference -- how the reader wants to read, not something tied to
   // this one file.
-  var tagTooltipsOn = window.__tagTooltips === true;
-  var tagTooltipsBtn = document.createElement('button');
-  tagTooltipsBtn.textContent = ${L.tagTooltipsLabel};
-  tagTooltipsBtn.style.cssText = btnStyle + 'font-size:11px;';
-  function applyTagTooltips() {
-    var contentRoot = document.getElementById('dita-content-root');
-    var els = contentRoot ? contentRoot.querySelectorAll('[data-dita-tagname]') : [];
-    for (var i = 0; i < els.length; i++) {
-      if (tagTooltipsOn) els[i].setAttribute('title', els[i].getAttribute('data-dita-tagname'));
-      else els[i].removeAttribute('title');
-    }
-    tagTooltipsBtn.style.background = tagTooltipsOn ? 'var(--color-profiling-label-bg)' : '';
-    tagTooltipsBtn.style.color = tagTooltipsOn ? 'var(--color-profiling-label-text)' : '';
-    tagTooltipsBtn.title = tagTooltipsOn ? ${L.tagTooltipsOnTitle} : ${L.tagTooltipsOffTitle};
-    tagTooltipsBtn.setAttribute('aria-label', tagTooltipsOn ? ${L.tagTooltipsOnTitle} : ${L.tagTooltipsOffTitle});
-  }
-  tagTooltipsBtn.addEventListener('click', function() {
-    tagTooltipsOn = !tagTooltipsOn;
-    applyTagTooltips();
-    vscode.postMessage({ type: 'setTagTooltips', value: tagTooltipsOn });
-  });
-  applyTagTooltips(); // reflects a persisted "on" against the initial content; a no-op walk when off, but only once per panel open
   toolbar.appendChild(tagTooltipsBtn);
 
   // Filter button goes immediately next to Flags -- "show me what's
@@ -972,35 +896,6 @@ function getWebviewScript(): string {
     emptyLabel: L.filterEmpty,
   })}
 
-  // Page width dropdown
-  var widths = [
-    { label: ${L.widthAuto}, value: '' },
-    { label: ${L.widthFull}, value: '100%' },
-    { label: ${L.widthWide}, value: '1400px' },
-    { label: ${L.widthDesktop}, value: '1280px' },
-    { label: ${L.widthNarrow}, value: '720px' },
-  ];
-  var wSel = document.createElement('select');
-  wSel.title = ${L.pageWidth};
-  wSel.setAttribute('aria-label', ${L.pageWidth});
-  wSel.style.cssText = 'max-width:72px;' + ddStyle;
-  var restoredWidth = window.__widthSelection || '';
-  for (var i = 0; i < widths.length; i++) {
-    var opt = document.createElement('option');
-    opt.value = widths[i].value;
-    opt.textContent = widths[i].label;
-    if (widths[i].value === restoredWidth) opt.selected = true;
-    wSel.appendChild(opt);
-  }
-  function applyWidth(value) {
-    document.body.style.maxWidth = value;
-    document.body.style.margin = value ? '0 auto' : '';
-  }
-  if (restoredWidth) applyWidth(restoredWidth);
-  wSel.addEventListener('change', function() {
-    applyWidth(wSel.value);
-    vscode.postMessage({ type: 'setWidthSelection', value: wSel.value });
-  });
   toolbar.appendChild(wSel);
 
   // Refresh button

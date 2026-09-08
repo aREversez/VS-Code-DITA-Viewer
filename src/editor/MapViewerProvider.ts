@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderBookParts, wrapBookParts, escapeHtml, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart } from './ditaRenderUtils';
+import { renderBookParts, wrapBookParts, escapeHtml, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart } from './ditaRenderUtils';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
 import { foldPendingRender, PendingRender } from './pendingRender';
@@ -89,16 +89,7 @@ function getMapWebviewScript(): string {
   });
 
   // Toolbar (same pattern as DITA viewer)
-  var tbStyle = 'position:fixed;top:4px;right:8px;z-index:9999;display:flex;align-items:center;gap:4px;padding:3px 6px;border-radius:5px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;background:var(--vscode-editor-background,rgba(30,30,30,0.88));border:1px solid var(--vscode-widget-border,rgba(255,255,255,0.12));backdrop-filter:blur(4px);opacity:0.75;transition:opacity 0.15s;';
-  var btnStyle = 'padding:1px 5px;border-radius:3px;border:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));background:var(--vscode-dropdown-background,#333);color:var(--vscode-dropdown-foreground,#eee);cursor:pointer;font-size:13px;line-height:1;outline:none;display:flex;align-items:center;';
-
-  var toolbar = document.createElement('div');
-  toolbar.id = '__toolbar';
-  toolbar.setAttribute('role', 'toolbar');
-  toolbar.setAttribute('aria-label', ${L.previewToolbar});
-  toolbar.style.cssText = tbStyle;
-  toolbar.addEventListener('mouseenter', function() { toolbar.style.opacity = '1'; });
-  toolbar.addEventListener('mouseleave', function() { toolbar.style.opacity = '0.75'; });
+  ${getToolbarScaffoldScript({ previewToolbar: L.previewToolbar })}
 
   // Font size, typeface and page width are read back from the bootstrap
   // script (window.__fontPrefs / window.__widthSelection, set in
@@ -109,91 +100,32 @@ function getMapWebviewScript(): string {
   // only document.body's inline style: nothing read them back on open and
   // nothing told the extension they had changed, so a size, typeface or
   // width picked in a map preview was gone the moment the panel closed.
-  var fontPrefs = window.__fontPrefs || { size: 100, serif: false };
-  var fontSize = typeof fontPrefs.size === 'number' ? fontPrefs.size : 100;
-  var isSerif = fontPrefs.serif === true;
-  var SERIF_STACK = "Georgia,'Times New Roman','Noto Serif SC','Songti SC',STSong,SimSun,serif";
+  ${getFontPrefsScript({ setFontPrefsMsgType: MSG_SET_FONT_PREFS })}
 
-  function applyFontPrefs() {
-    document.body.style.fontSize = fontSize + '%';
-    document.body.style.fontFamily = isSerif ? SERIF_STACK : '';
-  }
-  applyFontPrefs();
-
-  function saveFontPrefs() {
-    vscode.postMessage({ type: '${MSG_SET_FONT_PREFS}', size: fontSize, serif: isSerif });
-  }
-
-  var fsDown = document.createElement('button');
-  fsDown.innerHTML = 'A\u2212';
-  fsDown.title = ${L.decreaseFontSize};
-  fsDown.setAttribute('aria-label', ${L.decreaseFontSize});
-  fsDown.style.cssText = btnStyle + 'font-weight:bold;';
-  fsDown.addEventListener('click', function() {
-    fontSize = Math.max(60, fontSize - 10);
-    document.body.style.fontSize = fontSize + '%';
-    saveFontPrefs();
-  });
+  ${getToolbarFontWidthTagTooltipsButtonsScript({
+    decreaseFontSize: L.decreaseFontSize,
+    increaseFontSize: L.increaseFontSize,
+    fontSans: L.fontSans,
+    fontSerif: L.fontSerif,
+    fontCurrentSans: L.fontCurrentSans,
+    fontCurrentSerif: L.fontCurrentSerif,
+    fontSizeButtonExtraStyle: 'font-weight:bold;',
+    includeFontReset: false,
+    widthAuto: L.widthAuto,
+    widthFull: L.widthFull,
+    widthWide: L.widthWide,
+    widthDesktop: L.widthDesktop,
+    widthNarrow: L.widthNarrow,
+    pageWidth: L.pageWidth,
+    setWidthSelectionMsgType: MSG_SET_WIDTH_SELECTION,
+    tagTooltipsLabel: L.tagTooltipsLabel,
+    tagTooltipsOnTitle: L.tagTooltipsOnTitle,
+    tagTooltipsOffTitle: L.tagTooltipsOffTitle,
+    setTagTooltipsMsgType: MSG_SET_TAG_TOOLTIPS,
+  })}
   toolbar.appendChild(fsDown);
-
-  var fsUp = document.createElement('button');
-  fsUp.innerHTML = 'A+';
-  fsUp.title = ${L.increaseFontSize};
-  fsUp.setAttribute('aria-label', ${L.increaseFontSize});
-  fsUp.style.cssText = btnStyle + 'font-weight:bold;';
-  fsUp.addEventListener('click', function() {
-    fontSize = Math.min(200, fontSize + 10);
-    document.body.style.fontSize = fontSize + '%';
-    saveFontPrefs();
-  });
   toolbar.appendChild(fsUp);
-
-  // Font toggle (serif / sans-serif) -- reflects the persisted state on open
-  var fontBtn = document.createElement('button');
-  fontBtn.textContent = isSerif ? ${L.fontSerif} : ${L.fontSans};
-  fontBtn.title = isSerif ? ${L.fontCurrentSerif} : ${L.fontCurrentSans};
-  fontBtn.setAttribute('aria-label', isSerif ? ${L.fontCurrentSerif} : ${L.fontCurrentSans});
-  fontBtn.style.cssText = btnStyle + 'font-size:11px;';
-  fontBtn.addEventListener('click', function() {
-    isSerif = !isSerif;
-    fontBtn.textContent = isSerif ? ${L.fontSerif} : ${L.fontSans};
-    fontBtn.title = isSerif ? ${L.fontCurrentSerif} : ${L.fontCurrentSans};
-    fontBtn.setAttribute('aria-label', isSerif ? ${L.fontCurrentSerif} : ${L.fontCurrentSans});
-    document.body.style.fontFamily = isSerif ? SERIF_STACK : '';
-    saveFontPrefs();
-  });
   toolbar.appendChild(fontBtn);
-
-  // Page width
-  var widths = [
-    { label: ${L.widthAuto}, value: '' },
-    { label: ${L.widthFull}, value: '100%' },
-    { label: ${L.widthWide}, value: '1400px' },
-    { label: ${L.widthDesktop}, value: '1280px' },
-    { label: ${L.widthNarrow}, value: '720px' },
-  ];
-  var ddStyle = 'padding:1px 4px;border-radius:3px;border:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));background:var(--vscode-dropdown-background,#333);color:var(--vscode-dropdown-foreground,#eee);font-size:11px;outline:none;cursor:pointer;';
-  var wSel = document.createElement('select');
-  wSel.title = ${L.pageWidth};
-  wSel.setAttribute('aria-label', ${L.pageWidth});
-  wSel.style.cssText = 'max-width:72px;' + ddStyle;
-  var restoredWidth = window.__widthSelection || '';
-  for (var i = 0; i < widths.length; i++) {
-    var opt = document.createElement('option');
-    opt.value = widths[i].value;
-    opt.textContent = widths[i].label;
-    if (widths[i].value === restoredWidth) opt.selected = true;
-    wSel.appendChild(opt);
-  }
-  function applyWidth(value) {
-    document.body.style.maxWidth = value;
-    document.body.style.margin = value ? '0 auto' : '';
-  }
-  if (restoredWidth) applyWidth(restoredWidth);
-  wSel.addEventListener('change', function() {
-    applyWidth(wSel.value);
-    vscode.postMessage({ type: '${MSG_SET_WIDTH_SELECTION}', value: wSel.value });
-  });
   toolbar.appendChild(wSel);
 
   // Tag-name tooltip toggle -- same feature and same persisted preference
@@ -202,28 +134,6 @@ function getMapWebviewScript(): string {
   // renderTopicCached()/renderer.ts pipeline, so the same data-dita-tagname
   // attributes are already present here; this toggle is the only piece
   // that was missing.
-  var tagTooltipsOn = window.__tagTooltips === true;
-  var tagTooltipsBtn = document.createElement('button');
-  tagTooltipsBtn.textContent = ${L.tagTooltipsLabel};
-  tagTooltipsBtn.style.cssText = btnStyle + 'font-size:11px;';
-  function applyTagTooltips() {
-    var contentRoot = document.getElementById('dita-content-root');
-    var els = contentRoot ? contentRoot.querySelectorAll('[data-dita-tagname]') : [];
-    for (var i = 0; i < els.length; i++) {
-      if (tagTooltipsOn) els[i].setAttribute('title', els[i].getAttribute('data-dita-tagname'));
-      else els[i].removeAttribute('title');
-    }
-    tagTooltipsBtn.style.background = tagTooltipsOn ? 'var(--color-profiling-label-bg)' : '';
-    tagTooltipsBtn.style.color = tagTooltipsOn ? 'var(--color-profiling-label-text)' : '';
-    tagTooltipsBtn.title = tagTooltipsOn ? ${L.tagTooltipsOnTitle} : ${L.tagTooltipsOffTitle};
-    tagTooltipsBtn.setAttribute('aria-label', tagTooltipsOn ? ${L.tagTooltipsOnTitle} : ${L.tagTooltipsOffTitle});
-  }
-  tagTooltipsBtn.addEventListener('click', function() {
-    tagTooltipsOn = !tagTooltipsOn;
-    applyTagTooltips();
-    vscode.postMessage({ type: '${MSG_SET_TAG_TOOLTIPS}', value: tagTooltipsOn });
-  });
-  applyTagTooltips(); // reflects a persisted "on" against the initial content; a no-op walk when off, but only once per panel open
   toolbar.appendChild(tagTooltipsBtn);
 
   // Mode toggle button

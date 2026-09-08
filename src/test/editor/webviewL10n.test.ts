@@ -57,7 +57,13 @@ describe('webview toolbar string table', () => {
   it('holds both value shapes, so neither group can be flattened into the other', () => {
     // Named keys rather than a count: a count would still pass on a table that
     // had been gutted and padded back out, and would say nothing about shape.
-    for (const key of ['previewToolbar', 'pageWidth', 'reloadContent', 'profilingOnTitle']) {
+    // previewToolbar/pageWidth used to canary the pre-quoted group here, but
+    // both moved to the raw group when getToolbarScaffoldScript/
+    // getToolbarFontWidthTagTooltipsButtonsScript started taking them as
+    // function arguments instead of the providers interpolating them
+    // directly -- reloadContent and profilingOnTitle still are, and still
+    // represent the pre-quoted group correctly.
+    for (const key of ['reloadContent', 'profilingOnTitle']) {
       assert.ok(sharedEntries.has(key), `shared table lost ${key}`);
       assert.match(sharedEntries.get(key)!, /^JSON\.stringify\(/);
     }

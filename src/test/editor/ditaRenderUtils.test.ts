@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -1265,5 +1265,80 @@ describe('getSearchOverlayScript', () => {
     assert.deepStrictEqual(revived(2, 2, 5), { clear: -1, set: 2 });
     assert.deepStrictEqual(revived(7, 0, 3), { clear: -1, set: 0 });
     assert.deepStrictEqual(revived(2, -1, 0), { clear: -1, set: -1 });
+  });
+});
+
+describe('toolbar scaffold/font-prefs/font-width-tag-tooltips scripts (a3\' extraction)', () => {
+  // These three cover the code both DitaViewerProvider.ts and
+  // MapViewerProvider.ts used to carry two byte-for-byte copies of. Same
+  // reasoning as getSearchOverlayScript above: there is no DOM here to
+  // actually run these against, so new Function's parse-only check is the
+  // cheapest thing that still catches a broken template literal.
+
+  it('getToolbarScaffoldScript emits a script that parses as JavaScript', () => {
+    assert.doesNotThrow(() => new Function(getToolbarScaffoldScript({ previewToolbar: 'Preview toolbar' })));
+  });
+
+  it('getFontPrefsScript emits a script that parses as JavaScript', () => {
+    assert.doesNotThrow(() => new Function(getFontPrefsScript({ setFontPrefsMsgType: 'setFontPrefs' })));
+  });
+
+  const buttonsOpts = {
+    decreaseFontSize: 'Decrease font size',
+    increaseFontSize: 'Increase font size',
+    fontSans: 'Sans',
+    fontSerif: 'Serif',
+    fontCurrentSans: 'Current: Sans-serif',
+    fontCurrentSerif: 'Current: Serif',
+    fontSizeButtonExtraStyle: '',
+    includeFontReset: false,
+    widthAuto: 'Auto',
+    widthFull: 'Full',
+    widthWide: 'Wide',
+    widthDesktop: 'Desktop',
+    widthNarrow: 'Narrow',
+    pageWidth: 'Page width',
+    setWidthSelectionMsgType: 'setWidthSelection',
+    tagTooltipsLabel: 'Tags',
+    tagTooltipsOnTitle: 'Tags on',
+    tagTooltipsOffTitle: 'Tags off',
+    setTagTooltipsMsgType: 'setTagTooltips',
+  };
+
+  it('getToolbarFontWidthTagTooltipsButtonsScript emits a script that parses as JavaScript, with and without the font-reset button', () => {
+    assert.doesNotThrow(() => new Function(getToolbarFontWidthTagTooltipsButtonsScript(buttonsOpts)));
+    assert.doesNotThrow(() => new Function(getToolbarFontWidthTagTooltipsButtonsScript({
+      ...buttonsOpts,
+      includeFontReset: true,
+      resetFont: 'Reset font',
+    })));
+  });
+
+  it('includes a font-reset button only when includeFontReset is true -- the topic viewer has one, the map viewer does not', () => {
+    const without = getToolbarFontWidthTagTooltipsButtonsScript(buttonsOpts);
+    assert.ok(!without.includes('fontResetBtn'), 'expected no fontResetBtn when includeFontReset is false');
+    const withReset = getToolbarFontWidthTagTooltipsButtonsScript({
+      ...buttonsOpts,
+      includeFontReset: true,
+      resetFont: 'Reset font',
+    });
+    assert.ok(withReset.includes('fontResetBtn'), 'expected fontResetBtn when includeFontReset is true');
+  });
+
+  it('applies fontSizeButtonExtraStyle to the font-size buttons only -- the map viewer bolds them, the topic viewer does not', () => {
+    const plain = getToolbarFontWidthTagTooltipsButtonsScript(buttonsOpts);
+    assert.ok(plain.includes("fsDown.style.cssText = btnStyle + '';"));
+    assert.ok(plain.includes("fsUp.style.cssText = btnStyle + '';"));
+    const bold = getToolbarFontWidthTagTooltipsButtonsScript({ ...buttonsOpts, fontSizeButtonExtraStyle: 'font-weight:bold;' });
+    assert.ok(bold.includes("fsDown.style.cssText = btnStyle + 'font-weight:bold;';"));
+    assert.ok(bold.includes("fsUp.style.cssText = btnStyle + 'font-weight:bold;';"));
+  });
+
+  it('does not append any of its buttons to a toolbar itself -- ordering stays with the caller', () => {
+    // The two providers interleave these buttons with their own
+    // (theme CSS dropdown, mode toggle, refresh, Flags, Filter) in
+    // different orders; this function only builds and wires them up.
+    const script = getToolbarFontWidthTagTooltipsButtonsScript(buttonsOpts);
+    assert.ok(!script.includes('toolbar.appendChild'));
   });
 });
