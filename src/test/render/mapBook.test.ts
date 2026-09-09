@@ -87,6 +87,29 @@ describe('collectMapEntries', () => {
     assert.strictEqual(entries[6].keys, 'product_version');
   });
 
+  it('marks displayNameExplicit correctly: true for a real navtitle/linktext/keyword, false for a filename fallback', () => {
+    const doc = parseMap(TEST_MAP_XML);
+    const entries = collectMapEntries(doc.root);
+    // entries[1]: keys="product_name" href="topics/db_overview.dita" with a
+    // <topicmeta><linktext>DatabaseX Pro v3.0</linktext></topicmeta> -- a
+    // real, explicit name.
+    assert.strictEqual(entries[1].displayNameExplicit, true);
+    // entries[3]: bare href, no topicmeta at all -- filename fallback.
+    assert.strictEqual(entries[3].displayNameExplicit, false);
+    // entries[6]: keys="product_version" with its own
+    // <topicmeta><linktext>V1.0.0</linktext></topicmeta> -- explicit too,
+    // even though there's no href (a keydef-style entry can still name
+    // itself).
+    assert.strictEqual(entries[6].displayNameExplicit, true);
+  });
+
+  it('marks displayNameExplicit false for the raw `keys` value fallback (no href, no topicmeta at all)', () => {
+    const doc = parseMap('<map><title>T</title><topicref keys="bare_key"/></map>');
+    const entries = collectMapEntries(doc.root);
+    assert.strictEqual(entries[0].displayName, 'bare_key');
+    assert.strictEqual(entries[0].displayNameExplicit, false);
+  });
+
   it('should set depth correctly for flat entries', () => {
     const doc = parseMap(TEST_MAP_XML);
     const entries = collectMapEntries(doc.root);
@@ -407,7 +430,7 @@ describe('renderBookEntries', () => {
   }
 
   function topicRef(href: string | undefined, displayName: string, depth = 0): MapEntry {
-    return { href, displayName, depth };
+    return { href, displayName, displayNameExplicit: true, depth };
   }
 
   function renderBook(entries: MapEntry[]): string {
@@ -742,35 +765,35 @@ describe('resolveBookTopicPath / buildBookNavManifest (docsite nav manifest)', (
   const docDir = '/proj/docs';
 
   it('resolves a plain .dita href against docDir', () => {
-    const entry: MapEntry = { href: 'topics/intro.dita', displayName: 'Intro', depth: 0 };
+    const entry: MapEntry = { href: 'topics/intro.dita', displayName: 'Intro', displayNameExplicit: true, depth: 0 };
     assert.strictEqual(resolveBookTopicPath(entry, docDir), join(docDir, 'topics/intro.dita'));
   });
 
   it('strips a #fragment before resolving', () => {
-    const entry: MapEntry = { href: 'topics/intro.dita#section2', displayName: 'Intro', depth: 0 };
+    const entry: MapEntry = { href: 'topics/intro.dita#section2', displayName: 'Intro', displayNameExplicit: true, depth: 0 };
     assert.strictEqual(resolveBookTopicPath(entry, docDir), join(docDir, 'topics/intro.dita'));
   });
 
   it('returns undefined for an entry with no href (a keydef with no target, a topichead heading, ...)', () => {
-    const entry: MapEntry = { href: undefined, displayName: 'Section heading', depth: 0 };
+    const entry: MapEntry = { href: undefined, displayName: 'Section heading', displayNameExplicit: true, depth: 0 };
     assert.strictEqual(resolveBookTopicPath(entry, docDir), undefined);
   });
 
   it('returns undefined for a .ditamap href -- expandDitamapRefs should have flattened it before entries reach here', () => {
-    const entry: MapEntry = { href: 'submaps/appendix.ditamap', displayName: 'Appendix', depth: 0 };
+    const entry: MapEntry = { href: 'submaps/appendix.ditamap', displayName: 'Appendix', displayNameExplicit: true, depth: 0 };
     assert.strictEqual(resolveBookTopicPath(entry, docDir), undefined);
   });
 
   it('decodes a URL-encoded href the same way renderBookEntries does', () => {
-    const entry: MapEntry = { href: 'topics/caf%C3%A9.dita', displayName: 'Café', depth: 0 };
+    const entry: MapEntry = { href: 'topics/caf%C3%A9.dita', displayName: 'Café', displayNameExplicit: true, depth: 0 };
     assert.strictEqual(resolveBookTopicPath(entry, docDir), join(docDir, 'topics/café.dita'));
   });
 
   it('builds one manifest entry per topic, in document order, carrying title/depth/role through', () => {
     const entries: MapEntry[] = [
-      { href: 'topics/ch1.dita', displayName: 'Chapter One', depth: 0, role: 'Chapter 1' },
-      { href: 'topics/ch1-s1.dita', displayName: 'Section 1.1', depth: 1 },
-      { href: undefined, displayName: 'No target', depth: 0 }, // e.g. a keydef
+      { href: 'topics/ch1.dita', displayName: 'Chapter One', displayNameExplicit: true, depth: 0, role: 'Chapter 1' },
+      { href: 'topics/ch1-s1.dita', displayName: 'Section 1.1', displayNameExplicit: true, depth: 1 },
+      { href: undefined, displayName: 'No target', displayNameExplicit: true, depth: 0 }, // e.g. a keydef
     ];
     const manifest = buildBookNavManifest(entries, docDir);
     assert.deepStrictEqual(manifest, [
@@ -781,8 +804,8 @@ describe('resolveBookTopicPath / buildBookNavManifest (docsite nav manifest)', (
 
   it('de-duplicates a topic referenced twice, keeping only its first occurrence -- same rule renderBookEntries applies via its own visited set', () => {
     const entries: MapEntry[] = [
-      { href: 'topics/shared.dita', displayName: 'First mention', depth: 0 },
-      { href: 'topics/shared.dita', displayName: 'Second mention (should not appear)', depth: 1 },
+      { href: 'topics/shared.dita', displayName: 'First mention', displayNameExplicit: true, depth: 0 },
+      { href: 'topics/shared.dita', displayName: 'Second mention (should not appear)', displayNameExplicit: true, depth: 1 },
     ];
     const manifest = buildBookNavManifest(entries, docDir);
     assert.strictEqual(manifest.length, 1);
@@ -791,12 +814,44 @@ describe('resolveBookTopicPath / buildBookNavManifest (docsite nav manifest)', (
 
   it('excludes .ditamap entries from the manifest the same way it excludes them from resolution', () => {
     const entries: MapEntry[] = [
-      { href: 'submaps/appendix.ditamap', displayName: 'Appendix (submap ref)', depth: 0 },
-      { href: 'topics/real.dita', displayName: 'Real topic', depth: 0 },
+      { href: 'submaps/appendix.ditamap', displayName: 'Appendix (submap ref)', displayNameExplicit: true, depth: 0 },
+      { href: 'topics/real.dita', displayName: 'Real topic', displayNameExplicit: true, depth: 0 },
     ];
     const manifest = buildBookNavManifest(entries, docDir);
     assert.strictEqual(manifest.length, 1);
     assert.strictEqual(manifest[0].title, 'Real topic');
+  });
+
+  it('resolveTopicTitle is only consulted for entries whose displayName was a fallback, never an explicit navtitle/linktext/keyword', () => {
+    const entries: MapEntry[] = [
+      { href: 'topics/named.dita', displayName: 'A Real Navtitle', displayNameExplicit: true, depth: 0 },
+      { href: 'topics/unnamed.dita', displayName: 'unnamed', displayNameExplicit: false, depth: 0 },
+    ];
+    const calls: string[] = [];
+    const manifest = buildBookNavManifest(entries, docDir, (href) => {
+      calls.push(href);
+      return 'Resolved: ' + href;
+    });
+    assert.deepStrictEqual(calls, ['topics/unnamed.dita'], 'resolveTopicTitle should not be called for the explicit entry');
+    assert.strictEqual(manifest[0].title, 'A Real Navtitle', 'explicit navtitle is never overridden');
+    assert.strictEqual(manifest[1].title, 'Resolved: topics/unnamed.dita', 'fallback title gets replaced with the resolved one');
+  });
+
+  it('keeps the fallback title when resolveTopicTitle finds nothing (topic has no <title> either, or the file failed to read)', () => {
+    const entries: MapEntry[] = [
+      { href: 'topics/unnamed.dita', displayName: 'unnamed', displayNameExplicit: false, depth: 0 },
+    ];
+    const manifest = buildBookNavManifest(entries, docDir, () => undefined);
+    assert.strictEqual(manifest[0].title, 'unnamed');
+  });
+
+  it('does not call resolveTopicTitle at all when none is passed -- the docsite-only cost stays opt-in', () => {
+    const entries: MapEntry[] = [
+      { href: 'topics/unnamed.dita', displayName: 'unnamed', displayNameExplicit: false, depth: 0 },
+    ];
+    assert.doesNotThrow(() => buildBookNavManifest(entries, docDir));
+    const manifest = buildBookNavManifest(entries, docDir);
+    assert.strictEqual(manifest[0].title, 'unnamed');
   });
 
   it('agrees with renderBookEntries on which topics a real map produces (regression guard against the two drifting apart)', () => {

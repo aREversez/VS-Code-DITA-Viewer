@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, renderSiteNavHtml, getSiteNavClickHandlerScript, renderTopicCached, DocsiteNavEntry } from './ditaRenderUtils';
+import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, renderSiteNavHtml, getSiteNavClickHandlerScript, renderTopicCached, makeFileTitleResolver, DocsiteNavEntry } from './ditaRenderUtils';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
 import { foldPendingRender, PendingRender } from './pendingRender';
@@ -310,6 +310,16 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     // undefined before the first site-mode render, which falls back to the
     // nav manifest's first entry (see generateHtml's site-mode branch).
     let currentSitePage: string | undefined;
+    // Populated by every full site-mode render (updateWebview), consumed by
+    // postSitePageUpdate so a page-switch click reuses the already-built
+    // manifest/keyMap instead of re-parsing the whole map and re-reading
+    // every un-navtitled topic's <title> off disk again on every click --
+    // see postSitePageUpdate's own comment. Self-heals: postContentUpdate's
+    // site-mode branch always falls back to a full updateWebview() on a
+    // source edit (never a content-only message in site mode), which
+    // repopulates this: there is no separate invalidation path to keep in
+    // sync by hand.
+    let siteManifestCache: { manifest: DocsiteNavEntry[]; keyMap: Map<string, string> } | undefined;
 
     webviewPanel.webview.options = {
       enableScripts: true,
@@ -455,6 +465,9 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       // adopt whatever it actually rendered, so the next page-switch click
       // and the next full re-render agree on what is currently on screen.
       if (rendered.resolvedSitePage !== undefined) currentSitePage = rendered.resolvedSitePage;
+      siteManifestCache = rendered.siteManifest
+        ? { manifest: rendered.siteManifest, keyMap: rendered.siteKeyMap! }
+        : undefined;
     };
 
     // Docsite mode's page-switch path: unlike postContentUpdate below (a
@@ -463,14 +476,24 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     // case to fall through to -- just render the newly-selected topic and
     // send it as a content-only update. The sidebar itself is untouched:
     // its own click handler already flipped the active class client-side
-    // before this message was even sent (see getMapWebviewScript). Calls
-    // buildSiteManifest/renderSiteTopicContent directly rather than going
-    // through generateHtml, so a page switch never pays for rebuilding the
-    // sidebar HTML or the surrounding document shell it does not need.
+    // before this message was even sent (see getMapWebviewScript).
+    //
+    // Reuses siteManifestCache (populated by the last full updateWebview()
+    // render) rather than re-parsing the map and rebuilding the manifest --
+    // which, for any topic the map itself never gave a navtitle, means
+    // re-reading that topic's <title> off disk -- on every single click.
+    // buildSiteManifest(document) is still here as a defensive fallback for
+    // the case postSitePageUpdate somehow fires with no prior full render
+    // (shouldn't happen: entering site mode always goes through
+    // updateWebview first), not the normal path.
     const postSitePageUpdate = () => {
       if (disposed) return;
-      const site = this.buildSiteManifest(document);
-      if (site.error !== undefined || site.manifest.length === 0) {
+      let site = siteManifestCache;
+      if (!site) {
+        const built = this.buildSiteManifest(document);
+        site = built.error !== undefined ? undefined : { manifest: built.manifest, keyMap: built.keyMap };
+      }
+      if (!site || site.manifest.length === 0) {
         updateWebview(); // show whatever error/empty state a full render produces
         return;
       }
@@ -591,7 +614,12 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
   ): { keyMap: Map<string, string>; manifest: DocsiteNavEntry[] } {
     const keyMap = buildKeyMap(document.uri);
     const entries = collectMapEntries(mapRoot, (k) => keyMap.get(k));
-    const manifest = buildBookNavManifest(entries, docDir);
+    // makeFileTitleResolver reads a topic file's own <title> off disk, cached
+    // per docDir -- only actually invoked for entries the map itself never
+    // named (buildBookNavManifest's own resolveTopicTitle contract), so a
+    // well-authored map with real navtitles everywhere pays nothing extra
+    // here beyond the resolver's own construction.
+    const manifest = buildBookNavManifest(entries, docDir, makeFileTitleResolver(docDir));
     return { keyMap, manifest };
   }
 
@@ -655,7 +683,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     webview: vscode.Webview,
     mode: 'tree' | 'book' | 'site',
     sitePageHint?: string,
-  ): { html: string; parts?: BookPart[]; sidebarHtml?: string; resolvedSitePage?: string; error?: undefined } | { html?: undefined; error: string } {
+  ): { html: string; parts?: BookPart[]; sidebarHtml?: string; resolvedSitePage?: string; siteManifest?: DocsiteNavEntry[]; siteKeyMap?: Map<string, string>; error?: undefined } | { html?: undefined; error: string } {
     const docDir = dirname(document.uri.fsPath);
     try {
       const rawXml = document.getText();
@@ -685,7 +713,12 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         const topic = this.renderSiteTopicContent(resolvedSitePage, webview, keyMap);
         if (topic.error !== undefined) return { error: topic.error };
         const sidebarHtml = renderSiteNavHtml(manifest, resolvedSitePage, vscode.l10n.t('Topics'));
-        return { html: topic.html, sidebarHtml, resolvedSitePage };
+        // manifest/keyMap go back to the caller too (updateWebview) so a
+        // page switch (postSitePageUpdate) can reuse them instead of
+        // re-parsing the map and re-reading every un-navtitled topic's
+        // <title> off disk on every single click -- see that function's
+        // own comment.
+        return { html: topic.html, sidebarHtml, resolvedSitePage, siteManifest: manifest, siteKeyMap: keyMap };
       }
 
       let content: string;
@@ -741,7 +774,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     webview: vscode.Webview,
     mode: 'tree' | 'book' | 'site',
     sitePageHint?: string,
-  ): { html: string; parts?: BookPart[]; resolvedSitePage?: string } {
+  ): { html: string; parts?: BookPart[]; resolvedSitePage?: string; siteManifest?: DocsiteNavEntry[]; siteKeyMap?: Map<string, string> } {
     const stylesUri = webview.asWebviewUri(
       vscode.Uri.file(join(this.context.extensionPath, 'media', 'styles.css')),
     );
@@ -802,6 +835,8 @@ ${result.sidebarHtml ?? ''}
 </html>`,
       parts: result.parts,
       resolvedSitePage: result.resolvedSitePage,
+      siteManifest: result.siteManifest,
+      siteKeyMap: result.siteKeyMap,
     };
   }
 

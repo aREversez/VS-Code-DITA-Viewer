@@ -957,7 +957,17 @@ body.mode-site {
   max-width: none;
   margin: 0;
   padding: 0;
-  min-height: 100vh;
+  /* A fixed height, not min-height, is load-bearing here: flex children
+     stretched against a min-height container just grow past it to fit
+     their own content (min-height sets a floor, not a ceiling), so their
+     own overflow-y:auto below never actually has a boundary to trigger
+     against -- the whole page ends up scrolling together instead, with
+     the shorter pane dragged along past its own natural end by however
+     much taller the other one is. A real height caps both children at
+     the viewport, which is what makes each one's own overflow-y:auto
+     take over instead. */
+  height: 100vh;
+  overflow: hidden;
 }
 .site-nav {
   flex: 0 0 240px;

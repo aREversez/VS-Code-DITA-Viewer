@@ -187,6 +187,19 @@ function getNodeText(node: DitaNode, childBaseTypes: string[], resolveKey?: Reso
 }
 
 export function getDisplayName(node: DitaNode, resolveKey?: ResolveKey): string {
+  return getDisplayNameInfo(node, resolveKey).text;
+}
+
+/**
+ * Same resolution as getDisplayName, but also reports whether the map
+ * itself actually named this entry (an explicit navtitle/linktext/
+ * shortdesc/keyword) versus a fallback that isn't really a title at all
+ * (the href's own filename, or the raw `keys` value) -- docsite mode's
+ * sidebar (buildBookNavManifest/MapViewerProvider.ts) uses `explicit` to
+ * decide when it's worth reading the target topic's own <title> off disk
+ * instead of showing something that was never meant to be read as a title.
+ */
+export function getDisplayNameInfo(node: DitaNode, resolveKey?: ResolveKey): { text: string; explicit: boolean } {
   const keys = getAttr(node, 'keys');
   const href = getAttr(node, 'href');
 
@@ -197,31 +210,31 @@ export function getDisplayName(node: DitaNode, resolveKey?: ResolveKey): string 
   );
   if (topicmeta) {
     const metaText = getNodeText(topicmeta, ['map/navtitle', 'map/linktext', 'map/shortdesc'], resolveKey);
-    if (metaText) return metaText;
+    if (metaText) return { text: metaText, explicit: true };
     // keyword within topicmeta > keywords > keyword
     const keywords = topicmeta.children.find(
       (c) => c.type === 'element' && c.baseType === 'map/keywords',
     );
     if (keywords) {
       const kwText = getNodeText(keywords, ['map/keyword'], resolveKey);
-      if (kwText) return kwText;
+      if (kwText) return { text: kwText, explicit: true };
     }
   }
 
-  // Priority 3: href filename without extension
+  // Priority 3: href filename without extension -- not really a title, just
+  // the only thing left to call this entry.
   if (href) {
     const parts = href.replace(/\\/g, '/').split('/');
     const file = parts[parts.length - 1] || '';
     const dotIdx = file.lastIndexOf('.');
-    if (dotIdx > 0) return file.substring(0, dotIdx);
-    return file;
+    return { text: dotIdx > 0 ? file.substring(0, dotIdx) : file, explicit: false };
   }
 
-  // Priority 4: keys attribute
-  if (keys) return keys;
+  // Priority 4: keys attribute -- a machine-readable identifier, not a title either.
+  if (keys) return { text: keys, explicit: false };
 
   // Fallback
-  return '(unnamed)';
+  return { text: '(unnamed)', explicit: false };
 }
 
 function isNavigable(node: DitaNode): boolean {
@@ -486,6 +499,13 @@ const MAP_BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 export interface MapEntry {
   href?: string;
   displayName: string;
+  /** True when displayName came from an actual navtitle/linktext/shortdesc/
+   *  keyword in the map -- false when it's the href's own filename, the raw
+   *  `keys` value, or the "(unnamed)" fallback (see getDisplayNameInfo).
+   *  Consumers that want a "is this worth reading the topic's own <title>
+   *  instead" signal (docsite mode's sidebar) key off this rather than
+   *  guessing from the string itself. */
+  displayNameExplicit: boolean;
   depth: number;
   keys?: string;
   /** BookMap structural role, numbered in document order ("Chapter 1", "Appendix A", …) */
@@ -508,9 +528,11 @@ function collectEntriesRecursive(
   if (baseType === 'map/topicref' || baseType === 'map/keydef' || baseType === 'map/mapref' || baseType === 'map/topichead') {
     const href = getAttr(node, 'href');
     const keys = getAttr(node, 'keys');
+    const nameInfo = getDisplayNameInfo(node, resolveKey);
     result.push({
       href,
-      displayName: getDisplayName(node, resolveKey),
+      displayName: nameInfo.text,
+      displayNameExplicit: nameInfo.explicit,
       depth,
       keys,
       role: roleLabel(node.tagName, depth),

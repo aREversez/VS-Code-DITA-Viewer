@@ -1105,15 +1105,39 @@ export interface DocsiteNavEntry {
  * doesn't actually contain or omit one it does. Order matches document
  * order (collectMapEntries' own order), which is what a reading-order
  * prev/next needs.
+ *
+ * resolveTopicTitle, when given, is called ONLY for entries whose
+ * displayName isn't a real title to begin with (MapEntry.
+ * displayNameExplicit false -- the map itself never gave this topicref a
+ * navtitle/linktext/shortdesc/keyword, so collectMapEntries fell back to
+ * the href's own filename or the raw `keys` value). Passed entry.href (the
+ * original relative href, not the resolved absPath) so a caller can hand
+ * this makeFileTitleResolver(docDir) directly. Tree mode and Book mode
+ * don't need this at all -- a book's own rendered content always shows a
+ * topic's real <title> regardless of what the map called it -- so this
+ * stays an opt-in the general entries-processing pipeline doesn't pay for
+ * unless a caller actually wants it (docsite mode's sidebar is the reader's
+ * only view of a topic before clicking into it, so a filename standing in
+ * for a title there is a lot more visible than it is in the other two
+ * modes).
  */
-export function buildBookNavManifest(entries: MapEntry[], docDir: string): DocsiteNavEntry[] {
+export function buildBookNavManifest(
+  entries: MapEntry[],
+  docDir: string,
+  resolveTopicTitle?: (href: string) => string | undefined,
+): DocsiteNavEntry[] {
   const seen = new Set<string>();
   const result: DocsiteNavEntry[] = [];
   for (const entry of entries) {
     const absPath = resolveBookTopicPath(entry, docDir);
     if (!absPath || seen.has(absPath)) continue; // same one-entry-per-topic rule renderBookParts's own `visited` set enforces
     seen.add(absPath);
-    result.push({ absPath, title: entry.displayName, depth: entry.depth, role: entry.role });
+    let title = entry.displayName;
+    if (!entry.displayNameExplicit && resolveTopicTitle && entry.href) {
+      const realTitle = resolveTopicTitle(entry.href);
+      if (realTitle) title = realTitle;
+    }
+    result.push({ absPath, title, depth: entry.depth, role: entry.role });
   }
   return result;
 }
