@@ -1118,6 +1118,57 @@ export function buildBookNavManifest(entries: MapEntry[], docDir: string): Docsi
   return result;
 }
 
+/**
+ * Docsite mode's sidebar -- one link per topic, indented by depth, the
+ * current page marked active. Deliberately just a static list: switching
+ * pages toggles the `active` class client-side (see the webview script's
+ * .site-nav-link click handler) rather than re-rendering this nav on every
+ * page change, since which topics exist and how they nest never changes
+ * just because the reader picked a different one to look at right now.
+ *
+ * currentAbsPath must be one of manifest's own absPath values (generateHtml
+ * resolves an unknown/stale one back to the first entry before calling
+ * this) -- if it somehow isn't, nothing throws, the sidebar just renders
+ * with no active entry.
+ */
+export function renderSiteNavHtml(manifest: DocsiteNavEntry[], currentAbsPath: string, navLabel: string): string {
+  const links = manifest
+    .map((entry) => {
+      const activeClass = entry.absPath === currentAbsPath ? ' active' : '';
+      const indent = 8 + entry.depth * 16;
+      return `<a href="#" class="site-nav-link${activeClass}" data-site-target="${escapeAttr(entry.absPath)}" style="padding-left:${indent}px" title="${escapeAttr(entry.title)}">${escapeHtml(entry.title)}</a>`;
+    })
+    .join('\n');
+  return `<nav class="site-nav" aria-label="${escapeAttr(navLabel)}">${links}</nav>`;
+}
+
+/**
+ * Docsite mode's sidebar click handler -- flips which .site-nav-link
+ * carries the `active` class (client-side, no server round-trip for that
+ * part; see renderSiteNavHtml's own comment for why) and asks the
+ * extension host to render the newly-selected topic. Extracted into its
+ * own testable function rather than left inline in getMapWebviewScript
+ * (MapViewerProvider.ts, which isn't reachable from mocha -- it imports
+ * vscode) for the same reason getSearchOverlayScript/
+ * getProfilingFilterScript above are: new Function(script) is the cheapest
+ * check that still catches a broken template literal.
+ */
+export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: string }): string {
+  return `
+  document.addEventListener('click', function(e) {
+    var siteLink = e.target.closest ? e.target.closest('.site-nav-link') : null;
+    if (!siteLink) return;
+    e.preventDefault();
+    var target = siteLink.getAttribute('data-site-target');
+    if (!target || siteLink.classList.contains('active')) return;
+    var prevActive = document.querySelector('.site-nav-link.active');
+    if (prevActive) prevActive.classList.remove('active');
+    siteLink.classList.add('active');
+    vscode.postMessage({ type: '${opts.switchSitePageMsgType}', target: target });
+  });
+`;
+}
+
 export interface BookRenderInput {
   /** Flattened topicref list, in map order -- see collectMapEntries. */
   entries: MapEntry[];

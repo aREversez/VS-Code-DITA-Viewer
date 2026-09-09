@@ -15,6 +15,7 @@ import {
   clearTopicRenderCache,
   resolveBookTopicPath,
   buildBookNavManifest,
+  renderSiteNavHtml,
 } from '../../editor/ditaRenderUtils';
 import type { BookPart } from '../../editor/bookPatch';
 
@@ -815,5 +816,46 @@ describe('resolveBookTopicPath / buildBookNavManifest (docsite nav manifest)', (
         join(docDir, 'topics/db_ui_test.dita'),
       ],
     );
+  });
+});
+
+describe('renderSiteNavHtml', () => {
+  const manifest = [
+    { absPath: '/proj/docs/topics/a.dita', title: 'Topic A', depth: 0 },
+    { absPath: '/proj/docs/topics/b.dita', title: 'Topic B', depth: 1 },
+  ];
+
+  it('renders one link per manifest entry, each carrying its absPath as the click target', () => {
+    const html = renderSiteNavHtml(manifest, manifest[0].absPath, 'Topics');
+    assert.strictEqual((html.match(/class="site-nav-link/g) || []).length, 2);
+    assert.ok(html.includes('data-site-target="/proj/docs/topics/a.dita"'));
+    assert.ok(html.includes('data-site-target="/proj/docs/topics/b.dita"'));
+  });
+
+  it('marks only the current page active', () => {
+    const html = renderSiteNavHtml(manifest, manifest[1].absPath, 'Topics');
+    assert.ok(!/class="site-nav-link active"[^>]*data-site-target="\/proj\/docs\/topics\/a\.dita"/.test(html), 'a.dita should not be active');
+    assert.ok(/class="site-nav-link active"[^>]*data-site-target="\/proj\/docs\/topics\/b\.dita"/.test(html), 'b.dita should be active');
+  });
+
+  it('renders with no active link when currentAbsPath matches nothing, rather than throwing', () => {
+    assert.doesNotThrow(() => renderSiteNavHtml(manifest, '/proj/docs/topics/gone.dita', 'Topics'));
+    const html = renderSiteNavHtml(manifest, '/proj/docs/topics/gone.dita', 'Topics');
+    assert.ok(!html.includes(' active'));
+  });
+
+  it('indents deeper entries further', () => {
+    const html = renderSiteNavHtml(manifest, manifest[0].absPath, 'Topics');
+    const aStyle = /data-site-target="\/proj\/docs\/topics\/a\.dita" style="padding-left:(\d+)px"/.exec(html);
+    const bStyle = /data-site-target="\/proj\/docs\/topics\/b\.dita" style="padding-left:(\d+)px"/.exec(html);
+    assert.ok(aStyle && bStyle);
+    assert.ok(Number(bStyle![1]) > Number(aStyle![1]), 'depth 1 should indent further than depth 0');
+  });
+
+  it('escapes title/aria-label/path for XSS (title used for both link text and its title= attribute)', () => {
+    const evil = [{ absPath: '/proj/"><script>x</script>.dita', title: '<script>alert(1)</script>', depth: 0 }];
+    const html = renderSiteNavHtml(evil, evil[0].absPath, '<script>y</script>');
+    assert.ok(!html.includes('<script>'), 'no raw script tag anywhere');
+    assert.ok(html.includes('&lt;script&gt;'));
   });
 });

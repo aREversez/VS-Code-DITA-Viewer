@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart } from './ditaRenderUtils';
+import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, renderSiteNavHtml, getSiteNavClickHandlerScript, renderTopicCached, DocsiteNavEntry } from './ditaRenderUtils';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
 import { foldPendingRender, PendingRender } from './pendingRender';
@@ -53,6 +53,10 @@ const MSG_SET_WIDTH_SELECTION = 'setWidthSelection';
 // Same reasoning again -- see TAG_TOOLTIPS_KEY in DitaViewerProvider.ts for
 // why this is a global, shared-with-the-topic-viewer preference.
 const MSG_SET_TAG_TOOLTIPS = 'setTagTooltips';
+// webview -> host only, no counterpart-typo risk on the other side to guard
+// against (nothing else reads this literal), so it stays a plain constant
+// rather than getting the MSG_UPDATE_CONTENT treatment above.
+const MSG_SWITCH_SITE_PAGE = 'switchSitePage';
 
 function getMapWebviewScript(): string {
   const L = {
@@ -64,9 +68,10 @@ function getMapWebviewScript(): string {
     ...sharedWebviewStrings(),
     // The outline/book switch has no counterpart in the single-topic preview,
     // which only ever shows one topic.
-    switchModeTitle: JSON.stringify(vscode.l10n.t('Switch between outline tree and full book view')),
+    switchModeTitle: JSON.stringify(vscode.l10n.t('Switch between outline tree, full book view and docsite view')),
     modeOutline: JSON.stringify(vscode.l10n.t('Outline')),
     modeBook: JSON.stringify(vscode.l10n.t('Book')),
+    modeSite: JSON.stringify(vscode.l10n.t('Site')),
   };
   return `
 (function() {
@@ -75,7 +80,10 @@ function getMapWebviewScript(): string {
   // the current mode from the body class instead of a hardcoded default —
   // otherwise the script's state resets to 'tree' while the extension is in
   // 'book' mode and the toggle can never switch back.
-  var currentMode = document.body.classList.contains('mode-book') ? 'book' : 'tree';
+  var currentMode = document.body.classList.contains('mode-book') ? 'book'
+    : document.body.classList.contains('mode-site') ? 'site' : 'tree';
+
+  ${getSiteNavClickHandlerScript({ switchSitePageMsgType: MSG_SWITCH_SITE_PAGE })}
 
   // Click on navigable tree node → post message to extension
   document.addEventListener('click', function(e) {
@@ -136,17 +144,24 @@ function getMapWebviewScript(): string {
   // that was missing.
   toolbar.appendChild(tagTooltipsBtn);
 
-  // Mode toggle button
+  // Mode toggle button. Cycles tree -> book -> site -> tree; the label
+  // always names the mode a click switches TO, not the current one.
   var modeBtn = document.createElement('button');
   modeBtn.title = ${L.switchModeTitle};
   modeBtn.setAttribute('aria-label', ${L.switchModeTitle});
   modeBtn.style.cssText = btnStyle + 'font-size:11px;';
+  function nextMode(m) {
+    return m === 'tree' ? 'book' : m === 'book' ? 'site' : 'tree';
+  }
+  function labelFor(m) {
+    return m === 'book' ? ${L.modeBook} : m === 'site' ? ${L.modeSite} : ${L.modeOutline};
+  }
   function updateModeLabel() {
-    modeBtn.textContent = currentMode === 'tree' ? ${L.modeBook} : ${L.modeOutline};
+    modeBtn.textContent = labelFor(nextMode(currentMode));
   }
   updateModeLabel();
   modeBtn.addEventListener('click', function() {
-    var newMode = currentMode === 'tree' ? 'book' : 'tree';
+    var newMode = nextMode(currentMode);
     currentMode = newMode;
     updateModeLabel();
     vscode.postMessage({ type: 'switchMode', mode: newMode });
@@ -290,7 +305,11 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
   ): Promise<void> {
     const documentRoot = vscode.Uri.file(dirname(document.uri.fsPath));
     // Per-panel mode state (not global)
-    let currentMode: 'tree' | 'book' = 'tree';
+    let currentMode: 'tree' | 'book' | 'site' = 'tree';
+    // Which topic (absolute path) docsite mode is currently showing --
+    // undefined before the first site-mode render, which falls back to the
+    // nav manifest's first entry (see generateHtml's site-mode branch).
+    let currentSitePage: string | undefined;
 
     webviewPanel.webview.options = {
       enableScripts: true,
@@ -316,8 +335,13 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         const viewType = filePart.toLowerCase().endsWith('.ditamap') ? 'ditaViewer.mapPreview' : 'ditaViewer.preview';
         vscode.commands.executeCommand('vscode.openWith', targetUri, viewType);
       } else if (message.type === 'switchMode') {
-        currentMode = message.mode as 'tree' | 'book';
+        currentMode = message.mode as 'tree' | 'book' | 'site';
         requestUpdate('full');
+      } else if (message.type === MSG_SWITCH_SITE_PAGE) {
+        const target = message.target as string;
+        if (!target || target === currentSitePage) return;
+        currentSitePage = target;
+        postSitePageUpdate();
       } else if (message.type === MSG_REQUEST_FULL_RENDER) {
         // The webview declined a patch: its DOM does not match the baseline
         // the indices were computed against. Straight to updateWebview rather
@@ -419,13 +443,47 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         await new Promise<void>((resolve) => setImmediate(resolve));
         if (disposed) return;
       }
-      const rendered = this.generateHtml(document, webviewPanel.webview, currentMode);
+      const rendered = this.generateHtml(document, webviewPanel.webview, currentMode, currentSitePage);
       webviewPanel.webview.html = rendered.html;
       lastRenderedHtmlByUri.set(document.uri.toString(), rendered.html);
       // Reassigning webview.html replaces the DOM outright, so the baseline
       // becomes whatever this render produced -- including nothing at all in
       // tree mode and on the error page, where there are no parts to diff.
       lastBookParts = rendered.parts;
+      // Site mode may have fallen back to the manifest's first entry (no
+      // hint yet, or the hint no longer names a topic this map has) --
+      // adopt whatever it actually rendered, so the next page-switch click
+      // and the next full re-render agree on what is currently on screen.
+      if (rendered.resolvedSitePage !== undefined) currentSitePage = rendered.resolvedSitePage;
+    };
+
+    // Docsite mode's page-switch path: unlike postContentUpdate below (a
+    // source edit, which can land in any mode), this only ever fires from
+    // the site-mode sidebar's own click handler, so there is no tree/book
+    // case to fall through to -- just render the newly-selected topic and
+    // send it as a content-only update. The sidebar itself is untouched:
+    // its own click handler already flipped the active class client-side
+    // before this message was even sent (see getMapWebviewScript). Calls
+    // buildSiteManifest/renderSiteTopicContent directly rather than going
+    // through generateHtml, so a page switch never pays for rebuilding the
+    // sidebar HTML or the surrounding document shell it does not need.
+    const postSitePageUpdate = () => {
+      if (disposed) return;
+      const site = this.buildSiteManifest(document);
+      if (site.error !== undefined || site.manifest.length === 0) {
+        updateWebview(); // show whatever error/empty state a full render produces
+        return;
+      }
+      const resolvedSitePage = currentSitePage && site.manifest.some((m) => m.absPath === currentSitePage)
+        ? currentSitePage
+        : site.manifest[0].absPath;
+      currentSitePage = resolvedSitePage;
+      const topic = this.renderSiteTopicContent(resolvedSitePage, webviewPanel.webview, site.keyMap);
+      if (topic.error !== undefined) {
+        updateWebview();
+        return;
+      }
+      webviewPanel.webview.postMessage({ type: MSG_UPDATE_CONTENT, html: topic.html });
     };
 
     // The common case: a regular source edit (topicref profiling, adding/
@@ -438,6 +496,19 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     // failed, to show the error page.
     const postContentUpdate = () => {
       if (disposed) return;
+      if (currentMode === 'site') {
+        // A source edit can rename a topicref's navtitle, add/remove/reorder
+        // entries, or change which topic a keyref-driven title resolves to
+        // -- all sidebar changes, not just content-pane ones. The sidebar
+        // lives outside #dita-content-root (postSitePageUpdate's own
+        // content-only message only ever touches that div), so a content-
+        // only update here would leave it showing stale topics/titles.
+        // Correctness over avoiding a reload for this one case; postponing
+        // the same optimization postSitePageUpdate already does for actual
+        // page switches is a smaller, separate follow-up.
+        updateWebview();
+        return;
+      }
       const result = this.renderMapContent(document, webviewPanel.webview, currentMode);
       if (result.error !== undefined) {
         updateWebview();
@@ -513,11 +584,78 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     });
   }
 
+  private buildSiteManifestFromParsedMap(
+    mapRoot: import('../parser/domTypes').DitaNode,
+    document: vscode.TextDocument,
+    docDir: string,
+  ): { keyMap: Map<string, string>; manifest: DocsiteNavEntry[] } {
+    const keyMap = buildKeyMap(document.uri);
+    const entries = collectMapEntries(mapRoot, (k) => keyMap.get(k));
+    const manifest = buildBookNavManifest(entries, docDir);
+    return { keyMap, manifest };
+  }
+
+  private buildSiteManifest(
+    document: vscode.TextDocument,
+  ): { docDir: string; keyMap: Map<string, string>; manifest: DocsiteNavEntry[]; error?: undefined } | { error: string } {
+    const docDir = dirname(document.uri.fsPath);
+    try {
+      const rawXml = document.getText();
+      const preprocessedXml = preprocessEntities(rawXml);
+      const mapDoc = parseDitamap(preprocessedXml);
+      expandDitamapRefs(mapDoc.root, docDir);
+      const { keyMap, manifest } = this.buildSiteManifestFromParsedMap(mapDoc.root, document, docDir);
+      return { docDir, keyMap, manifest };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { error: message };
+    }
+  }
+
+  /**
+   * Renders exactly one topic's content for docsite mode -- the sidebar
+   * (built separately, see buildBookNavManifest/renderSiteNavHtml) never
+   * needs to re-render alongside it, which is the entire point of docsite
+   * mode over Book mode: switching pages costs one renderTopicCached call,
+   * not every topic in the map.
+   *
+   * headingLevel: 1 and a topic-relative asWebviewUri, matching
+   * DitaViewerProvider's own single-topic render -- a docsite page is
+   * meant to read exactly like opening that topic directly, same
+   * philosophy Book mode's own per-entry render already follows (see
+   * renderBookParts' own comment).
+   */
+  private renderSiteTopicContent(
+    absPath: string,
+    webview: vscode.Webview,
+    keyMap: Map<string, string>,
+  ): { html: string; error?: undefined } | { html?: undefined; error: string } {
+    const topicDir = dirname(absPath);
+    const asWebviewUri = (relPath: string): string => {
+      try {
+        return webview.asWebviewUri(vscode.Uri.file(resolve(topicDir, decodeHrefPart(relPath)))).toString();
+      } catch (e) {
+        console.warn(`Failed to resolve webview URI for ${relPath}:`, e instanceof Error ? e.message : e);
+        return '';
+      }
+    };
+    const result = renderTopicCached({
+      filePath: absPath,
+      keyMap,
+      asWebviewUri,
+      headingLevel: 1,
+      uiLanguage: vscode.env.language,
+    });
+    if (result.error) return { error: result.error };
+    return { html: result.html };
+  }
+
   private renderMapContent(
     document: vscode.TextDocument,
     webview: vscode.Webview,
-    mode: 'tree' | 'book',
-  ): { html: string; parts?: BookPart[]; error?: undefined } | { html?: undefined; error: string } {
+    mode: 'tree' | 'book' | 'site',
+    sitePageHint?: string,
+  ): { html: string; parts?: BookPart[]; sidebarHtml?: string; resolvedSitePage?: string; error?: undefined } | { html?: undefined; error: string } {
     const docDir = dirname(document.uri.fsPath);
     try {
       const rawXml = document.getText();
@@ -527,6 +665,28 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       // Expand topicrefs/keydefs that reference external .ditamap files
       // so their key-value pairs are visible inline in both tree and book mode
       expandDitamapRefs(mapDoc.root, docDir);
+
+      if (mode === 'site') {
+        // mapDoc.root is already parsed and expandDitamapRefs'd above --
+        // reuse it rather than going through buildSiteManifest (which
+        // re-parses from document.getText() for postSitePageUpdate's
+        // benefit, where there is no already-parsed mapDoc to hand it).
+        const { keyMap, manifest } = this.buildSiteManifestFromParsedMap(mapDoc.root, document, docDir);
+        if (manifest.length === 0) {
+          return { error: vscode.l10n.t('This map has no topics to show in site view.') };
+        }
+        // sitePageHint is whatever the caller last knew as "current" -- stale
+        // (the map was edited and that topic's entry is gone) or never set
+        // (first render) both fall back to the first entry, same as opening
+        // a book always starts at its first topic.
+        const resolvedSitePage = sitePageHint && manifest.some((m) => m.absPath === sitePageHint)
+          ? sitePageHint
+          : manifest[0].absPath;
+        const topic = this.renderSiteTopicContent(resolvedSitePage, webview, keyMap);
+        if (topic.error !== undefined) return { error: topic.error };
+        const sidebarHtml = renderSiteNavHtml(manifest, resolvedSitePage, vscode.l10n.t('Topics'));
+        return { html: topic.html, sidebarHtml, resolvedSitePage };
+      }
 
       let content: string;
       // Parts are produced in book mode only. That is the one content worth
@@ -579,13 +739,14 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
   private generateHtml(
     document: vscode.TextDocument,
     webview: vscode.Webview,
-    mode: 'tree' | 'book',
-  ): { html: string; parts?: BookPart[] } {
+    mode: 'tree' | 'book' | 'site',
+    sitePageHint?: string,
+  ): { html: string; parts?: BookPart[]; resolvedSitePage?: string } {
     const stylesUri = webview.asWebviewUri(
       vscode.Uri.file(join(this.context.extensionPath, 'media', 'styles.css')),
     );
 
-    const result = this.renderMapContent(document, webview, mode);
+    const result = this.renderMapContent(document, webview, mode, sitePageHint);
     if (result.error !== undefined) {
       const message = result.error;
       // No parts on the error page: it is not a book, so there is nothing a
@@ -633,12 +794,14 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
 <title>${escapeHtml(document.fileName)}</title>
 </head>
 <body class="mode-${mode}">
-<div id="dita-content-root">${result.html}</div>
+${result.sidebarHtml ?? ''}
+<div id="dita-content-root"${mode === 'site' ? ' class="site-main"' : ''}>${result.html}</div>
 <script nonce="${nonce}">window.__fontPrefs=${fontPrefsJson};window.__widthSelection=${widthSelectionJson};window.__tagTooltips=${tagTooltipsJson};</script>
 <script nonce="${nonce}">${script}</script>
 </body>
 </html>`,
       parts: result.parts,
+      resolvedSitePage: result.resolvedSitePage,
     };
   }
 

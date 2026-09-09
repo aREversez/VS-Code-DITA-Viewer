@@ -946,6 +946,52 @@ section, .example { margin: 1.5rem 0; }
    assembling every topic into one document finishes. Standalone body-level
    rules rather than scoped to a wrapper class: the shell document has
    nothing else in it. */
+/* Docsite mode (MapViewerProvider.ts, mode 'site') -- a sidebar of topic
+   links beside one topic's rendered content, instead of Book mode's single
+   long page. body itself is the flex row; #dita-content-root.site-main is
+   the only piece a page switch ever touches (see postSitePageUpdate's own
+   comment) -- .site-nav is a sibling, never replaced by that message. */
+body.mode-site {
+  display: flex;
+  align-items: stretch;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+.site-nav {
+  flex: 0 0 240px;
+  overflow-y: auto;
+  border-right: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.3));
+  padding: 1rem 0.5rem;
+  box-sizing: border-box;
+}
+.site-nav-link {
+  display: block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: var(--vscode-foreground);
+  text-decoration: none;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.site-nav-link:hover { background: var(--vscode-list-hoverBackground); }
+.site-nav-link.active {
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+#dita-content-root.site-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-y: auto;
+  box-sizing: border-box;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
 body.dita-loading {
   display: flex;
   flex-direction: column;

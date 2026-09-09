@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -1340,5 +1340,17 @@ describe('toolbar scaffold/font-prefs/font-width-tag-tooltips scripts (a3\' extr
     // different orders; this function only builds and wires them up.
     const script = getToolbarFontWidthTagTooltipsButtonsScript(buttonsOpts);
     assert.ok(!script.includes('toolbar.appendChild'));
+  });
+});
+
+describe('getSiteNavClickHandlerScript (docsite mode)', () => {
+  it('emits a script that parses as JavaScript', () => {
+    assert.doesNotThrow(() => new Function(getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' })));
+  });
+
+  it('posts the configured message type, not a hardcoded one', () => {
+    const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'someOtherType' });
+    assert.ok(script.includes("type: 'someOtherType'"));
+    assert.ok(!script.includes("type: 'switchSitePage'"));
   });
 });

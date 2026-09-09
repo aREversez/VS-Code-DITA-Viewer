@@ -85,7 +85,6 @@
   "Select theme CSS": "选择主题 CSS",
   "Serif": "衬线",
   "Sidebar Outline": "侧边栏目录",
-  "Switch between outline tree and full book view": "在大纲树和整书视图之间切换",
   "Target id \"{0}\" not found in {1}.": "在 {1} 中找不到目标 id \"{0}\"。",
   "Unknown element <{0}>: not a standard DITA element and has no @class specialization DITA Viewer recognizes. It will render, but its own tag is dropped and only its content shows.": "未知元素 <{0}>：不是标准 DITA 元素，也没有 DITA Viewer 能识别的 @class 特化。它仍会渲染，但自身标签会被丢弃，只显示其内容。",
   "this file": "当前文件",
@@ -127,5 +126,9 @@
   "Previous change": "上一处变更",
   "Next change": "下一处变更",
   "Show word-level changes": "显示词级变更",
-  "Rendering book…": "正在渲染书籍…"
+  "Rendering book…": "正在渲染书籍…",
+  "Switch between outline tree, full book view and docsite view": "在大纲树、整书视图和文档站视图之间切换",
+  "Site": "文档站",
+  "This map has no topics to show in site view.": "此地图没有可在文档站视图中显示的主题。",
+  "Topics": "主题"
 }
