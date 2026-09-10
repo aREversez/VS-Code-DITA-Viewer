@@ -860,9 +860,9 @@ describe('resolveBookTopicPath / buildBookNavManifest (docsite nav manifest)', (
     assert.strictEqual(manifest[0].title, 'Real topic');
   });
 
-  it('resolveTopicTitle is only consulted for entries whose displayName was a fallback, never an explicit navtitle/linktext/keyword', () => {
+  it('resolveTopicTitle is consulted for every entry with an href, even one the map gave an explicit navtitle/linktext/keyword -- the sidebar shows the topic\'s own <title>, not the map\'s label for it', () => {
     const entries: MapEntry[] = [
-      { href: 'topics/named.dita', displayName: 'A Real Navtitle', displayNameExplicit: true, depth: 0 },
+      { href: 'topics/named.dita', displayName: 'A Map-Authored Navtitle', displayNameExplicit: true, depth: 0 },
       { href: 'topics/unnamed.dita', displayName: 'unnamed', displayNameExplicit: false, depth: 0 },
     ];
     const calls: string[] = [];
@@ -870,9 +870,17 @@ describe('resolveBookTopicPath / buildBookNavManifest (docsite nav manifest)', (
       calls.push(href);
       return 'Resolved: ' + href;
     });
-    assert.deepStrictEqual(calls, ['topics/unnamed.dita'], 'resolveTopicTitle should not be called for the explicit entry');
-    assert.strictEqual(manifest[0].title, 'A Real Navtitle', 'explicit navtitle is never overridden');
+    assert.deepStrictEqual(calls, ['topics/named.dita', 'topics/unnamed.dita'], 'resolveTopicTitle should be called for every entry that has an href, explicit navtitle or not');
+    assert.strictEqual(manifest[0].title, 'Resolved: topics/named.dita', 'the topic\'s own <title> wins over the map\'s navtitle/linktext/keyword');
     assert.strictEqual(manifest[1].title, 'Resolved: topics/unnamed.dita', 'fallback title gets replaced with the resolved one');
+  });
+
+  it('falls back to the map\'s displayName (navtitle or otherwise) when resolveTopicTitle finds no real <title> -- an explicit navtitle is still better than nothing', () => {
+    const entries: MapEntry[] = [
+      { href: 'topics/named.dita', displayName: 'A Map-Authored Navtitle', displayNameExplicit: true, depth: 0 },
+    ];
+    const manifest = buildBookNavManifest(entries, docDir, () => undefined);
+    assert.strictEqual(manifest[0].title, 'A Map-Authored Navtitle');
   });
 
   it('keeps the fallback title when resolveTopicTitle finds nothing (topic has no <title> either, or the file failed to read)', () => {

@@ -1247,20 +1247,19 @@ export interface DocsiteNavEntry {
  * order (collectMapEntries' own order), which is what a reading-order
  * prev/next needs.
  *
- * resolveTopicTitle, when given, is called ONLY for entries whose
- * displayName isn't a real title to begin with (MapEntry.
- * displayNameExplicit false -- the map itself never gave this topicref a
- * navtitle/linktext/shortdesc/keyword, so collectMapEntries fell back to
- * the href's own filename or the raw `keys` value). Passed entry.href (the
- * original relative href, not the resolved absPath) so a caller can hand
- * this makeFileTitleResolver(docDir) directly. Tree mode and Book mode
- * don't need this at all -- a book's own rendered content always shows a
- * topic's real <title> regardless of what the map called it -- so this
- * stays an opt-in the general entries-processing pipeline doesn't pay for
- * unless a caller actually wants it (docsite mode's sidebar is the reader's
- * only view of a topic before clicking into it, so a filename standing in
- * for a title there is a lot more visible than it is in the other two
- * modes).
+ * resolveTopicTitle, when given, is called for every entry that has an
+ * href -- regardless of MapEntry.displayNameExplicit -- and its result, if
+ * any, wins over entry.displayName. This deliberately overrides an
+ * explicit map-authored navtitle/linktext/keyword too: the sidebar is
+ * showing the reader a list of topics, and a book's own rendered content
+ * (tree mode's tooltip aside) always shows a topic's real <title>
+ * regardless of what the map called it, so the sidebar should match that
+ * rather than surface the map's own label for it, which can drift from the
+ * topic's actual title over time. entry.displayName is still the fallback
+ * when resolveTopicTitle finds nothing (topic has no <title>, or the file
+ * failed to read) -- an explicit navtitle beats no title at all. Passed
+ * entry.href (the original relative href, not the resolved absPath) so a
+ * caller can hand this makeFileTitleResolver(docDir) directly.
  *
  * resolveTopicType, when given, is called for every entry with a real
  * href (regardless of role -- a chapter can still be a <task>, and
@@ -1287,7 +1286,7 @@ export function buildBookNavManifest(
     if (!absPath || seen.has(absPath)) continue; // same one-entry-per-topic rule renderBookParts's own `visited` set enforces
     seen.add(absPath);
     let title = entry.displayName;
-    if (!entry.displayNameExplicit && resolveTopicTitle && entry.href) {
+    if (resolveTopicTitle && entry.href) {
       const realTitle = resolveTopicTitle(entry.href);
       if (realTitle) title = realTitle;
     }
