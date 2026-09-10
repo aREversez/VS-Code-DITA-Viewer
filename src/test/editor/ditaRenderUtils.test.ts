@@ -1382,6 +1382,20 @@ describe('getSearchOverlayScript', () => {
     assert.deepStrictEqual(revived(7, 0, 3), { clear: -1, set: 0 });
     assert.deepStrictEqual(revived(2, -1, 0), { clear: -1, set: -1 });
   });
+
+  it('excludes docsite mode\'s sidebar (.site-nav) from search matches, not just the toolbar/search bar', () => {
+    // Regression guard, not a behavioral test: there's no DOM here to
+    // actually run the TreeWalker filter against (see the parse-check
+    // test's own comment on why), so this only confirms the source text
+    // still contains the sidebar exclusion rather than someone quietly
+    // dropping it in a future refactor of this same walk-up loop. Without
+    // it, Ctrl+F in site mode would also match/highlight sidebar topic
+    // titles and chips -- .site-nav sits beside #dita-content-root as a
+    // sibling under body, not inside it, and isn't caught by the existing
+    // __toolbar/__search_bar id checks.
+    const script = getSearchOverlayScript(opts);
+    assert.ok(script.includes("classList.contains('site-nav')"), 'search TreeWalker filter should exclude the sidebar');
+  });
 });
 
 describe('toolbar scaffold/font-prefs/font-width-tag-tooltips scripts (a3\' extraction)', () => {

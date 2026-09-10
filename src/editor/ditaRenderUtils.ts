@@ -1764,6 +1764,11 @@ export function getSearchOverlayScript(opts: {
         var el = parent;
         while (el && el !== document.body) {
           if (el.id === '__toolbar' || el.id === '__search_bar') return NodeFilter.FILTER_REJECT;
+          // Docsite mode's sidebar (.site-nav) sits beside #dita-content-root
+          // as a sibling under body, not inside it -- without this, Ctrl+F
+          // would also match/highlight topic titles and chips in the
+          // sidebar, which isn't "the page" the reader is searching.
+          if (el.classList && el.classList.contains('site-nav')) return NodeFilter.FILTER_REJECT;
           el = el.parentNode;
         }
         return NodeFilter.FILTER_ACCEPT;
