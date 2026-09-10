@@ -1362,17 +1362,91 @@ export function renderSiteNavHtml(manifest: DocsiteNavEntry[], currentAbsPath: s
  */
 export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: string }): string {
   return `
+  // Shared by the sidebar's own click handler and the prev/next buttons
+  // (getSitePrevNextButtonsScript below) -- switching pages always means
+  // the same three things: flip which sidebar link is 'active', refresh
+  // prev/next's own enabled state and click targets against the new
+  // active link, and ask the extension host to render it. Takes the
+  // .site-nav-link element itself (not just its target path) so
+  // updatePrevNextButtons can read the *next* prev/next targets' own
+  // title attribute for free.
+  function switchToSitePage(link) {
+    if (!link || link.classList.contains('active')) return;
+    var target = link.getAttribute('data-site-target');
+    if (!target) return;
+    var prevActive = document.querySelector('.site-nav-link.active');
+    if (prevActive) prevActive.classList.remove('active');
+    link.classList.add('active');
+    updatePrevNextButtons();
+    vscode.postMessage({ type: '${opts.switchSitePageMsgType}', target: target });
+  }
+
+  // Prev/next's targets are derived from the sidebar's own link order
+  // rather than tracked separately -- buildBookNavManifest's own contract
+  // is that its entries (and so the sidebar links built from them) are
+  // already in document/reading order, so the sidebar IS the ordering,
+  // not just a display of it. A no-op wherever the buttons don't exist
+  // (only site mode creates them; see getSitePrevNextButtonsScript).
+  function updatePrevNextButtons() {
+    var prevBtn = document.getElementById('__site-prev-btn');
+    var nextBtn = document.getElementById('__site-next-btn');
+    if (!prevBtn && !nextBtn) return;
+    var links = Array.prototype.slice.call(document.querySelectorAll('.site-nav-link'));
+    var activeIdx = -1;
+    for (var i = 0; i < links.length; i++) {
+      if (links[i].classList.contains('active')) { activeIdx = i; break; }
+    }
+    var prevLink = activeIdx > 0 ? links[activeIdx - 1] : null;
+    var nextLink = activeIdx >= 0 && activeIdx < links.length - 1 ? links[activeIdx + 1] : null;
+    if (prevBtn) {
+      prevBtn.disabled = !prevLink;
+      prevBtn.onclick = prevLink ? function() { switchToSitePage(prevLink); } : null;
+    }
+    if (nextBtn) {
+      nextBtn.disabled = !nextLink;
+      nextBtn.onclick = nextLink ? function() { switchToSitePage(nextLink); } : null;
+    }
+  }
+
   document.addEventListener('click', function(e) {
     var siteLink = e.target.closest ? e.target.closest('.site-nav-link') : null;
     if (!siteLink) return;
     e.preventDefault();
-    var target = siteLink.getAttribute('data-site-target');
-    if (!target || siteLink.classList.contains('active')) return;
-    var prevActive = document.querySelector('.site-nav-link.active');
-    if (prevActive) prevActive.classList.remove('active');
-    siteLink.classList.add('active');
-    vscode.postMessage({ type: '${opts.switchSitePageMsgType}', target: target });
+    switchToSitePage(siteLink);
   });
+
+  updatePrevNextButtons(); // establish initial state on load, same as the sidebar's own active link is already set server-side
+`;
+}
+
+/**
+ * Docsite mode's prev/next buttons -- built but, same convention as
+ * getToolbarFontWidthTagTooltipsButtonsScript, NOT appended to the toolbar
+ * here; the caller decides where in its own button order they belong
+ * (design doc: "跟字号/页宽那些按钮放一起"). Their actual enabled state and
+ * click targets are established by updatePrevNextButtons() in
+ * getSiteNavClickHandlerScript above, called once these exist -- so this
+ * function only needs to create the two elements, not wire them up.
+ */
+export function getSitePrevNextButtonsScript(opts: { prevLabel: string; prevTitle: string; nextLabel: string; nextTitle: string }): string {
+  const prevLabel = JSON.stringify(opts.prevLabel);
+  const prevTitle = JSON.stringify(opts.prevTitle);
+  const nextLabel = JSON.stringify(opts.nextLabel);
+  const nextTitle = JSON.stringify(opts.nextTitle);
+  return `
+  var sitePrevBtn = document.createElement('button');
+  sitePrevBtn.id = '__site-prev-btn';
+  sitePrevBtn.textContent = ${prevLabel};
+  sitePrevBtn.title = ${prevTitle};
+  sitePrevBtn.setAttribute('aria-label', ${prevTitle});
+  sitePrevBtn.style.cssText = btnStyle + 'font-size:11px;';
+
+  var siteNextBtn = document.createElement('button');
+  siteNextBtn.id = '__site-next-btn';
+  siteNextBtn.textContent = ${nextLabel};
+  siteNextBtn.title = ${nextTitle};
+  siteNextBtn.setAttribute('aria-label', ${nextTitle});
+  siteNextBtn.style.cssText = btnStyle + 'font-size:11px;';
 `;
 }
 

@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getSitePrevNextButtonsScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -1468,5 +1468,48 @@ describe('getSiteNavClickHandlerScript (docsite mode)', () => {
     const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'someOtherType' });
     assert.ok(script.includes("type: 'someOtherType'"));
     assert.ok(!script.includes("type: 'switchSitePage'"));
+  });
+
+  it('defines updatePrevNextButtons as a no-op when neither prev/next button exists in the DOM', () => {
+    // Combined with getSitePrevNextButtonsScript below, this is what lets
+    // tree/book mode run the exact same click-handler script as site mode
+    // without erroring on document.getElementById returning null for
+    // buttons that were never appended there.
+    const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
+    const fn = new Function('document', 'vscode', script + '; return typeof updatePrevNextButtons;');
+    const fakeDocument = {
+      getElementById: () => null,
+      querySelectorAll: () => [],
+      addEventListener: () => {},
+    };
+    assert.doesNotThrow(() => fn(fakeDocument, { postMessage: () => {} }));
+  });
+});
+
+describe('getSitePrevNextButtonsScript (docsite mode)', () => {
+  const opts = { prevLabel: '\u2039', prevTitle: 'Previous topic', nextLabel: '\u203a', nextTitle: 'Next topic' };
+
+  it('emits a script that parses as JavaScript', () => {
+    assert.doesNotThrow(() => new Function(getSitePrevNextButtonsScript(opts)));
+  });
+
+  it('creates elements with the ids getSiteNavClickHandlerScript looks them up by', () => {
+    const script = getSitePrevNextButtonsScript(opts);
+    assert.ok(script.includes("sitePrevBtn.id = '__site-prev-btn'"));
+    assert.ok(script.includes("siteNextBtn.id = '__site-next-btn'"));
+  });
+
+  it('does not append the buttons to a toolbar itself -- same convention as the other shared button scripts, caller decides whether/where', () => {
+    const script = getSitePrevNextButtonsScript(opts);
+    assert.ok(!script.includes('toolbar.appendChild'));
+  });
+
+  it('uses the configured labels/titles, not hardcoded English text', () => {
+    const custom = { prevLabel: 'PREV', prevTitle: 'Go back', nextLabel: 'NEXT', nextTitle: 'Go forward' };
+    const script = getSitePrevNextButtonsScript(custom);
+    assert.ok(script.includes(JSON.stringify('PREV')));
+    assert.ok(script.includes(JSON.stringify('Go back')));
+    assert.ok(script.includes(JSON.stringify('NEXT')));
+    assert.ok(script.includes(JSON.stringify('Go forward')));
   });
 });

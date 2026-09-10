@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, renderSiteNavHtml, getSiteNavClickHandlerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
+import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, renderSiteNavHtml, getSiteNavClickHandlerScript, getSitePrevNextButtonsScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
 import { foldPendingRender, PendingRender } from './pendingRender';
@@ -101,6 +101,8 @@ function getMapWebviewScript(): string {
     modeOutline: JSON.stringify(vscode.l10n.t('Outline')),
     modeBook: JSON.stringify(vscode.l10n.t('Book')),
     modeSite: JSON.stringify(vscode.l10n.t('Site')),
+    sitePrevTopic: vscode.l10n.t('Previous topic'),
+    siteNextTopic: vscode.l10n.t('Next topic'),
   };
   return `
 (function() {
@@ -164,6 +166,23 @@ function getMapWebviewScript(): string {
   toolbar.appendChild(fsUp);
   toolbar.appendChild(fontBtn);
   toolbar.appendChild(wSel);
+
+  // Prev/next topic buttons -- docsite mode only. Built unconditionally
+  // (same pattern the shared font/width buttons above already use: both
+  // providers always create the full shared button set, then each decides
+  // what to append) but only appended in site mode; updatePrevNextButtons
+  // (getSiteNavClickHandlerScript) already no-ops when it can't find these
+  // by id, which is exactly what happens if they were never appended.
+  ${getSitePrevNextButtonsScript({
+    prevLabel: '\u2039',
+    prevTitle: L.sitePrevTopic,
+    nextLabel: '\u203a',
+    nextTitle: L.siteNextTopic,
+  })}
+  if (currentMode === 'site') {
+    toolbar.appendChild(sitePrevBtn);
+    toolbar.appendChild(siteNextBtn);
+  }
 
   // Tag-name tooltip toggle -- same feature and same persisted preference
   // as the topic viewer's own (see TAG_TOOLTIPS_KEY in

@@ -1050,6 +1050,14 @@ body.mode-site {
   color: var(--vscode-list-activeSelectionForeground);
   opacity: 1;
 }
+/* Prev/next toolbar buttons (site mode) -- explicit opacity/cursor rather
+   than relying on the browser's native disabled look, since btnStyle
+   (getToolbarScaffoldScript) sets background/border/color explicitly and
+   would otherwise mostly hide it. Disabled at the first/last topic. */
+#__site-prev-btn:disabled, #__site-next-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
 #dita-content-root.site-main {
   flex: 1 1 auto;
   min-width: 0;
