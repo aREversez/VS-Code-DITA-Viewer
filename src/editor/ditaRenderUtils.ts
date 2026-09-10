@@ -1438,14 +1438,48 @@ export function getSitePrevNextButtonsScript(opts: { prevLabel: string; prevTitl
   sitePrevBtn.textContent = ${prevLabel};
   sitePrevBtn.title = ${prevTitle};
   sitePrevBtn.setAttribute('aria-label', ${prevTitle});
-  sitePrevBtn.style.cssText = btnStyle + 'font-size:11px;';
+  sitePrevBtn.style.cssText = btnStyle + 'font-size:20px;padding:2px 10px;justify-content:center;';
 
   var siteNextBtn = document.createElement('button');
   siteNextBtn.id = '__site-next-btn';
   siteNextBtn.textContent = ${nextLabel};
   siteNextBtn.title = ${nextTitle};
   siteNextBtn.setAttribute('aria-label', ${nextTitle});
-  siteNextBtn.style.cssText = btnStyle + 'font-size:11px;';
+  siteNextBtn.style.cssText = btnStyle + 'font-size:20px;padding:2px 10px;justify-content:center;';
+`;
+}
+
+/**
+ * Docsite mode's sidebar collapse toggle -- a single button that flips
+ * `site-nav-collapsed` on document.body. The sidebar itself starts
+ * collapsed (see MapViewerProvider.ts's body class construction for site
+ * mode): a fully-expanded topic list by default ate too much width for
+ * what's often a glance-and-dismiss navigation aid, so site mode now opens
+ * with the content pane full-width and this button is how a reader gets
+ * the list back. Deliberately a plain class toggle on body rather than
+ * anything that touches the sidebar's own markup or posts a message to the
+ * extension host: nothing here needs to survive a page switch through any
+ * path other than "the class is already sitting on body, which page
+ * switches never touch" (see postSitePageUpdate's own comment on why the
+ * sidebar element itself is left alone by a content-only update) -- so
+ * this one class flip is also, for free, exactly what keeps the sidebar's
+ * open/closed state stable across clicking from topic to topic.
+ * Same convention as getSitePrevNextButtonsScript: builds the element but
+ * does not append it anywhere, so the caller decides where in the toolbar
+ * it belongs.
+ */
+export function getSiteSidebarToggleScript(opts: { toggleTitle: string }): string {
+  const toggleTitle = JSON.stringify(opts.toggleTitle);
+  return `
+  var siteSidebarToggleBtn = document.createElement('button');
+  siteSidebarToggleBtn.id = '__site-sidebar-toggle-btn';
+  siteSidebarToggleBtn.textContent = '\\u2630';
+  siteSidebarToggleBtn.title = ${toggleTitle};
+  siteSidebarToggleBtn.setAttribute('aria-label', ${toggleTitle});
+  siteSidebarToggleBtn.style.cssText = btnStyle + 'font-size:14px;';
+  siteSidebarToggleBtn.addEventListener('click', function() {
+    document.body.classList.toggle('site-nav-collapsed');
+  });
 `;
 }
 

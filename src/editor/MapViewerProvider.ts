@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, renderSiteNavHtml, getSiteNavClickHandlerScript, getSitePrevNextButtonsScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
+import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, renderSiteNavHtml, getSiteNavClickHandlerScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
 import { foldPendingRender, PendingRender } from './pendingRender';
@@ -103,6 +103,7 @@ function getMapWebviewScript(): string {
     modeSite: JSON.stringify(vscode.l10n.t('Site')),
     sitePrevTopic: vscode.l10n.t('Previous topic'),
     siteNextTopic: vscode.l10n.t('Next topic'),
+    siteToggleSidebar: vscode.l10n.t('Show/hide topic list'),
   };
   return `
 (function() {
@@ -166,6 +167,17 @@ function getMapWebviewScript(): string {
   toolbar.appendChild(fsUp);
   toolbar.appendChild(fontBtn);
   toolbar.appendChild(wSel);
+
+  // Sidebar collapse toggle -- docsite mode only, same unconditional-build/
+  // conditional-append convention as the prev/next buttons right below.
+  // Placed before them in the toolbar: it's the button that gets the topic
+  // list back after the sidebar's default-collapsed start (see body's own
+  // site-nav-collapsed class below), so it reads left-to-right as "open the
+  // list, then step through it".
+  ${getSiteSidebarToggleScript({ toggleTitle: L.siteToggleSidebar })}
+  if (currentMode === 'site') {
+    toolbar.appendChild(siteSidebarToggleBtn);
+  }
 
   // Prev/next topic buttons -- docsite mode only. Built unconditionally
   // (same pattern the shared font/width buttons above already use: both
@@ -888,7 +900,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
 <link rel="stylesheet" href="${stylesUri}">
 <title>${escapeHtml(document.fileName)}</title>
 </head>
-<body class="mode-${mode}">
+<body class="mode-${mode}${mode === 'site' ? ' site-nav-collapsed' : ''}">
 ${result.sidebarHtml ?? ''}
 <div id="dita-content-root"${mode === 'site' ? ' class="site-main"' : ''}>${result.html}</div>
 <script nonce="${nonce}">window.__fontPrefs=${fontPrefsJson};window.__widthSelection=${widthSelectionJson};window.__tagTooltips=${tagTooltipsJson};</script>

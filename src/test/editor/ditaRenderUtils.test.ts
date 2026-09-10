@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getSitePrevNextButtonsScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -1525,5 +1525,51 @@ describe('getSitePrevNextButtonsScript (docsite mode)', () => {
     assert.ok(script.includes(JSON.stringify('Go back')));
     assert.ok(script.includes(JSON.stringify('NEXT')));
     assert.ok(script.includes(JSON.stringify('Go forward')));
+  });
+});
+
+describe('getSiteSidebarToggleScript (docsite mode)', () => {
+  const opts = { toggleTitle: 'Toggle topic list' };
+
+  it('emits a script that parses as JavaScript', () => {
+    assert.doesNotThrow(() => new Function(getSiteSidebarToggleScript(opts)));
+  });
+
+  it('creates a button with the id the click handler can be wired to', () => {
+    const script = getSiteSidebarToggleScript(opts);
+    assert.ok(script.includes("siteSidebarToggleBtn.id = '__site-sidebar-toggle-btn'"));
+  });
+
+  it('toggles the site-nav-collapsed class on body when clicked', () => {
+    const script = getSiteSidebarToggleScript(opts);
+    const listeners: Record<string, () => void> = {};
+    const fakeBtn = {
+      style: {},
+      setAttribute: () => {},
+      addEventListener: (evt: string, fn: () => void) => { listeners[evt] = fn; },
+    };
+    const fakeBody = {
+      classList: {
+        toggled: false,
+        toggle(cls: string) { if (cls === 'site-nav-collapsed') this.toggled = !this.toggled; },
+      },
+    };
+    const fn = new Function('document', 'btnStyle', script + '; return siteSidebarToggleBtn;');
+    const fakeDocument = { createElement: () => fakeBtn, body: fakeBody };
+    const btn = fn(fakeDocument, '');
+    assert.strictEqual(btn, fakeBtn);
+    listeners['click']();
+    assert.strictEqual(fakeBody.classList.toggled, true, 'clicking the button should flip site-nav-collapsed on body');
+  });
+
+  it('does not append the button to a toolbar itself -- same convention as the other shared button scripts, caller decides whether/where', () => {
+    const script = getSiteSidebarToggleScript(opts);
+    assert.ok(!script.includes('toolbar.appendChild'));
+  });
+
+  it('uses the configured title, not hardcoded English text', () => {
+    const custom = { toggleTitle: 'Afficher/masquer les sujets' };
+    const script = getSiteSidebarToggleScript(custom);
+    assert.ok(script.includes(JSON.stringify('Afficher/masquer les sujets')));
   });
 });

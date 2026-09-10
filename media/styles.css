@@ -975,6 +975,26 @@ body.mode-site {
   border-right: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.3));
   padding: 1rem 0.5rem;
   box-sizing: border-box;
+  transition: flex-basis 0.15s ease, padding 0.15s ease;
+}
+/* Sidebar starts collapsed (body carries this class from first paint --
+   see MapViewerProvider.ts's body-class construction for site mode) so a
+   book's full topic list doesn't eat width the reader didn't ask to spend
+   on it before they've even looked at a page. The __site-sidebar-toggle-btn
+   toolbar button (getSiteSidebarToggleScript) flips this class; nothing
+   else ever touches it, including a page switch (postSitePageUpdate's
+   content-only update never reaches body), so the open/closed choice
+   simply persists as the reader clicks from topic to topic. Content and
+   padding stay in the DOM either way -- box-sizing:border-box plus
+   flex-basis:0 and overflow:hidden above is what makes it disappear
+   visually, not display:none, so no re-layout of the links themselves is
+   needed when it reopens. */
+body.mode-site.site-nav-collapsed .site-nav {
+  flex-basis: 0;
+  padding-left: 0;
+  padding-right: 0;
+  overflow: hidden;
+  border-right: none;
 }
 .site-nav-link {
   display: flex;
@@ -1053,7 +1073,15 @@ body.mode-site {
 /* Prev/next toolbar buttons (site mode) -- explicit opacity/cursor rather
    than relying on the browser's native disabled look, since btnStyle
    (getToolbarScaffoldScript) sets background/border/color explicitly and
-   would otherwise mostly hide it. Disabled at the first/last topic. */
+   would otherwise mostly hide it. Disabled at the first/last topic.
+   Sized up from the rest of the toolbar's icon-sized buttons on purpose:
+   these are the two a reader clicks over and over while reading straight
+   through a book, so a bigger, easier target matters more here than
+   toolbar-wide visual uniformity does. */
+#__site-prev-btn, #__site-next-btn {
+  min-width: 2.2em;
+  min-height: 1.9em;
+}
 #__site-prev-btn:disabled, #__site-next-btn:disabled {
   opacity: 0.4;
   cursor: default;
