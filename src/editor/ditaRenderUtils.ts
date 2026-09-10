@@ -430,6 +430,139 @@ export function makeFileTitleResolver(
   };
 }
 
+/**
+ * Default topic-type labeler used when no localized labeler is injected.
+ * Returns undefined for the generic `<topic>` root (every entry would
+ * otherwise carry an identical "Topic" chip, which adds visual noise
+ * without any information), and a simple capitalized tag name for any
+ * specialization (`concept` -> "Concept", `task` -> "Task", ...). Callers
+ * that want localized labels (MapViewerProvider in VS Code) inject their
+ * own labeler; pure-function tests use this default to stay vscode-free.
+ */
+function defaultTopicTypeLabel(tagName: string): string | undefined {
+  if (!tagName || tagName === 'topic') return undefined;
+  return tagName.charAt(0).toUpperCase() + tagName.slice(1);
+}
+
+// Read at most this many bytes before falling back to the whole file --
+// generous enough to clear an XML declaration, a handful of comments, and
+// a DOCTYPE with a modest internal entity subset (the overwhelming
+// majority of real DITA files), while still being a small, bounded read
+// rather than the whole file.
+const ROOT_TAG_SNIFF_BYTES = 8192;
+
+// Matches one leading "preamble" construct at the start of a string: an
+// XML declaration, a comment, a DOCTYPE (with or without a `[...]`
+// internal subset), another processing instruction, or plain whitespace.
+// sniffRootTagName below strips these one at a time until only the root
+// element itself is left at the front of the string.
+const PREAMBLE_CONSTRUCT_RE =
+  /^(?:<\?xml[^>]*\?>|<!--[\s\S]*?-->|<!DOCTYPE[^[>]*(?:\[[\s\S]*?\])?\s*>|<\?[^>]*\?>|\s+)/;
+
+/**
+ * Extracts the root element's tag name from a string already known to
+ * start (after any preamble) with that element -- the actual scan logic
+ * sniffRootTagName below is built around; split out so it can be re-run
+ * against progressively more of the file (the bounded chunk, then, only if
+ * that wasn't enough, the whole file) without duplicating the preamble-
+ * stripping loop.
+ */
+function extractRootTagName(content: string): string | undefined {
+  let rest = content;
+  // Realistically at most a handful of these constructs precede the root
+  // element in any real document; the iteration cap is defensive against
+  // a pathological input looping here, not a real limit on well-formed XML.
+  for (let i = 0; i < 20; i++) {
+    const m = PREAMBLE_CONSTRUCT_RE.exec(rest);
+    if (!m || m[0].length === 0) break;
+    rest = rest.slice(m[0].length);
+  }
+  const tagMatch = /^<([A-Za-z_][\w.-]*)/.exec(rest);
+  return tagMatch ? tagMatch[1] : undefined;
+}
+
+/**
+ * Reads just enough of a file to name its root element, without parsing it
+ * -- makeFileTopicTypeResolver's whole reason to exist rather than reusing
+ * makeFileTitleResolver's cache.loadFile(), which runs the file through
+ * the full DITA parser (parseDita) to build a complete DOM. For a sidebar
+ * chip that only needs one tag name, and that -- unlike the title fallback,
+ * which only fires for entries the map itself left unnamed -- is
+ * unconditional on every entry with an href, paying for a full parse of
+ * every referenced topic on every docsite render would reintroduce exactly
+ * the O(topics-in-book) cost docsite mode exists to avoid.
+ *
+ * Reads a bounded leading chunk first (ROOT_TAG_SNIFF_BYTES) and only
+ * falls back to the whole file if the root tag wasn't found in it and
+ * there was more file left to read -- a huge DOCTYPE internal subset is
+ * rare, but should still resolve correctly rather than silently return
+ * nothing.
+ */
+function sniffRootTagName(absPath: string): string | undefined {
+  let fd: number | undefined;
+  try {
+    fd = openSync(absPath, 'r');
+    const buf = Buffer.alloc(ROOT_TAG_SNIFF_BYTES);
+    const bytesRead = readSync(fd, buf, 0, ROOT_TAG_SNIFF_BYTES, 0);
+    const chunk = buf.toString('utf-8', 0, bytesRead);
+    const tag = extractRootTagName(chunk);
+    if (tag !== undefined || bytesRead < ROOT_TAG_SNIFF_BYTES) return tag;
+  } catch {
+    return undefined;
+  } finally {
+    if (fd !== undefined) {
+      try { closeSync(fd); } catch { /* already closed or never opened successfully */ }
+    }
+  }
+  // The bounded chunk didn't contain the root tag and the file is bigger
+  // than that chunk -- fall back to reading (not parsing) the whole thing.
+  try {
+    return extractRootTagName(readFileSync(absPath, 'utf-8'));
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Resolves a topic href to its root element's displayable type label
+ * ("Concept", "Task", "Reference", ...) for the docsite-mode sidebar's
+ * per-entry chip. Mirrors makeFileTitleResolver's guard rules exactly
+ * (local relative .dita/.xml hrefs only, fragment stripped since the
+ * sidebar links to files and a fragment points inside one) but resolves
+ * the root tag via sniffRootTagName instead of a full parse -- see that
+ * function's own comment for why that distinction matters here
+ * specifically. Has its own small per-resolver cache (path -> tag name)
+ * rather than sharing makeFileTitleResolver's file-cache: there is no DOM
+ * to share, and a de-duplicated entries list (buildBookNavManifest's own
+ * contract) means this cache mostly guards against a resolver being
+ * handed to buildBookNavManifest more than once, not a hot path.
+ */
+export function makeFileTopicTypeResolver(
+  docDir: string,
+  labeler: (tagName: string) => string | undefined = defaultTopicTypeLabel,
+): (href: string) => string | undefined {
+  const cache = new Map<string, string | undefined>();
+
+  return (href: string): string | undefined => {
+    if (!href || URL_SCHEME_RE.test(href) || isAbsolute(href)) return undefined;
+    const hashIdx = href.indexOf('#');
+    // Same file-level-only resolution makeFileTitleResolver uses for its
+    // no-fragment branch: a bare id is not a filename and must not be
+    // probed as one, and a fragment points inside the current topic file
+    // (whose type this resolver already reports for the file itself).
+    const filePath = hashIdx < 0 ? href : href.substring(0, hashIdx);
+    if (!filePath || !/\.(dita|xml)$/i.test(filePath)) return undefined;
+    const absPath = resolve(docDir, decodeHrefPart(filePath));
+    if (cache.has(absPath)) {
+      const tagName = cache.get(absPath);
+      return tagName === undefined ? undefined : labeler(tagName);
+    }
+    const tagName = sniffRootTagName(absPath);
+    cache.set(absPath, tagName);
+    return tagName === undefined ? undefined : labeler(tagName);
+  };
+}
+
 // ── Search text matching ──
 // Pure match engine shared between unit tests and the webview search overlay
 // (injected there via findTextMatches.toString(), so it must stay fully
@@ -1095,6 +1228,14 @@ export interface DocsiteNavEntry {
   /** BookMap structural role ("Chapter 1", "Appendix A", ...), when the
    *  entry has one -- see collectMapEntries/createBookRoleLabeler. */
   role?: string;
+  /** Displayable type label for the referenced topic's own root element
+   *  ("Concept", "Task", "Reference", ...), when a resolveTopicType was
+   *  passed to buildBookNavManifest and the topic file's root tag is one
+   *  the labeler recognized. The generic `<topic>` root yields undefined
+   *  (see makeFileTopicTypeResolver's default labeler) so a plain map
+   *  full of `<topic>` files doesn't get a row of identical "Topic"
+   *  chips with no information -- only specializations get a chip. */
+  topicType?: string;
 }
 
 /**
@@ -1120,11 +1261,24 @@ export interface DocsiteNavEntry {
  * only view of a topic before clicking into it, so a filename standing in
  * for a title there is a lot more visible than it is in the other two
  * modes).
+ *
+ * resolveTopicType, when given, is called for every entry with a real
+ * href (regardless of role -- a chapter can still be a <task>, and
+ * showing both chips lets the sidebar answer "structural role" and
+ * "information type" independently) and produces the sidebar's per-entry
+ * type chip. Pass makeFileTopicTypeResolver(docDir); unlike
+ * resolveTopicTitle this isn't conditioned on the map having left the
+ * entry unnamed, since a topic's type isn't something the map ever states
+ * on its own -- but the resolver itself stays cheap by design (a bounded
+ * sniff of the root tag, not a full parse; see sniffRootTagName's own
+ * comment), specifically so this being unconditional doesn't reintroduce
+ * an O(topics-in-book) cost on every docsite render.
  */
 export function buildBookNavManifest(
   entries: MapEntry[],
   docDir: string,
   resolveTopicTitle?: (href: string) => string | undefined,
+  resolveTopicType?: (href: string) => string | undefined,
 ): DocsiteNavEntry[] {
   const seen = new Set<string>();
   const result: DocsiteNavEntry[] = [];
@@ -1137,7 +1291,13 @@ export function buildBookNavManifest(
       const realTitle = resolveTopicTitle(entry.href);
       if (realTitle) title = realTitle;
     }
-    result.push({ absPath, title, depth: entry.depth, role: entry.role });
+    // Topic type is read straight off the topic file (not the map), so a
+    // missing href (keydef-only entry, fragment-only self-reference) has
+    // no file to read from and therefore no type chip -- skipped here
+    // rather than calling the resolver with an undefined href, matching
+    // resolveTopicTitle's own guard above.
+    const topicType = entry.href && resolveTopicType ? resolveTopicType(entry.href) : undefined;
+    result.push({ absPath, title, depth: entry.depth, role: entry.role, topicType });
   }
   return result;
 }
@@ -1154,13 +1314,36 @@ export function buildBookNavManifest(
  * resolves an unknown/stale one back to the first entry before calling
  * this) -- if it somehow isn't, nothing throws, the sidebar just renders
  * with no active entry.
+ *
+ * Each entry can carry up to two chips in front of its title: a role chip
+ * for the bookmap's structural role ("Chapter 1", "Appendix A", ...) and a
+ * type chip for the topic's own root element type ("Concept", "Task", ...).
+ * Both are optional per entry; missing chips simply don't render, which
+ * keeps a plain map full of generic `<topic>` files from getting a row of
+ * identical "Topic" labels with no information value (see
+ * makeFileTopicTypeResolver's default labeler for that filter). The title
+ * text is wrapped in its own span so the link's flex layout can ellipsis
+ * the title without ever clipping the chips -- the chips are short fixed
+ * labels and the title is the part that overflows on narrow sidebars.
  */
 export function renderSiteNavHtml(manifest: DocsiteNavEntry[], currentAbsPath: string, navLabel: string): string {
   const links = manifest
     .map((entry) => {
       const activeClass = entry.absPath === currentAbsPath ? ' active' : '';
       const indent = 8 + entry.depth * 16;
-      return `<a href="#" class="site-nav-link${activeClass}" data-site-target="${escapeAttr(entry.absPath)}" style="padding-left:${indent}px" title="${escapeAttr(entry.title)}">${escapeHtml(entry.title)}</a>`;
+      // Role chip first (the rarer, more specific signal), then the type
+      // chip (the topic's information type), then the title. Both chips
+      // are escaped the same way the title is -- they're already display
+      // strings produced by labelers, but a labeler fed a malicious tag
+      // name (from a parsed topic a user controls) shouldn't be able to
+      // inject markup into the sidebar.
+      const roleChip = entry.role
+        ? `<span class="site-nav-chip site-nav-chip--role">${escapeHtml(entry.role)}</span>`
+        : '';
+      const typeChip = entry.topicType
+        ? `<span class="site-nav-chip site-nav-chip--type">${escapeHtml(entry.topicType)}</span>`
+        : '';
+      return `<a href="#" class="site-nav-link${activeClass}" data-site-target="${escapeAttr(entry.absPath)}" style="padding-left:${indent}px" title="${escapeAttr(entry.title)}">${roleChip}${typeChip}<span class="site-nav-link-text">${escapeHtml(entry.title)}</span></a>`;
     })
     .join('\n');
   return `<nav class="site-nav" aria-label="${escapeAttr(navLabel)}">${links}</nav>`;

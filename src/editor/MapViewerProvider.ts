@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, renderSiteNavHtml, getSiteNavClickHandlerScript, renderTopicCached, makeFileTitleResolver, DocsiteNavEntry } from './ditaRenderUtils';
+import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, renderSiteNavHtml, getSiteNavClickHandlerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
 import { foldPendingRender, PendingRender } from './pendingRender';
@@ -57,6 +57,35 @@ const MSG_SET_TAG_TOOLTIPS = 'setTagTooltips';
 // against (nothing else reads this literal), so it stays a plain constant
 // rather than getting the MSG_UPDATE_CONTENT treatment above.
 const MSG_SWITCH_SITE_PAGE = 'switchSitePage';
+
+// Localized topic-type labeler for the docsite sidebar's per-entry chip:
+// every known DITA topic specialization gets a localized short label
+// ("Concept"/"概念", "Task"/"任务", …), and the generic `<topic>` root
+// returns undefined so a plain map full of `<topic>` files doesn't get a
+// row of identical "Topic" chips with no information. Passed to
+// makeFileTopicTypeResolver, which calls it with the topic file's root
+// tag name (sniffed off the front of the file, not fully parsed -- see
+// that function's own comment). Mirrors formatLocalizedRole's own
+// contract (see bookRoleL10n.ts): the render layer stays pure, VS Code
+// callers inject translated display text.
+const TOPIC_TYPE_LABELS: Record<string, () => string> = {
+  concept: () => vscode.l10n.t('Concept'),
+  task: () => vscode.l10n.t('Task'),
+  reference: () => vscode.l10n.t('Reference'),
+  troubleshooting: () => vscode.l10n.t('Troubleshooting'),
+  glossentry: () => vscode.l10n.t('Glossary Entry'),
+  glossgroup: () => vscode.l10n.t('Glossary Group'),
+};
+function localizeTopicTypeLabel(tagName: string): string | undefined {
+  if (!tagName || tagName === 'topic') return undefined;
+  const factory = TOPIC_TYPE_LABELS[tagName];
+  if (factory) return factory();
+  // Unknown specializations (custom domains, future DITA modules) fall
+  // back to a capitalized tag name rather than disappearing entirely --
+  // the chip's whole point is to show *something* the reader can scan,
+  // and "this is an unfamiliar type" is still more useful than nothing.
+  return tagName.charAt(0).toUpperCase() + tagName.slice(1);
+}
 
 function getMapWebviewScript(): string {
   const L = {
@@ -614,12 +643,26 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
   ): { keyMap: Map<string, string>; manifest: DocsiteNavEntry[] } {
     const keyMap = buildKeyMap(document.uri);
     const entries = collectMapEntries(mapRoot, (k) => keyMap.get(k));
-    // makeFileTitleResolver reads a topic file's own <title> off disk, cached
-    // per docDir -- only actually invoked for entries the map itself never
-    // named (buildBookNavManifest's own resolveTopicTitle contract), so a
+    // makeFileTitleResolver reads a topic file's own <title> off disk --
+    // only actually invoked for entries the map itself never named
+    // (buildBookNavManifest's own resolveTopicTitle contract), so a
     // well-authored map with real navtitles everywhere pays nothing extra
     // here beyond the resolver's own construction.
-    const manifest = buildBookNavManifest(entries, docDir, makeFileTitleResolver(docDir));
+    //
+    // makeFileTopicTypeResolver, unlike the title resolver, is called for
+    // every entry with an href regardless of whether the map named it --
+    // a topic's type isn't something the map ever states on its own. It
+    // stays cheap despite being unconditional because it only sniffs the
+    // root tag (a bounded read, not a full parse) rather than sharing the
+    // title resolver's DOM-based file cache; see that function's own
+    // comment for why a full parse here would reintroduce exactly the
+    // O(topics-in-book) cost docsite mode exists to avoid.
+    const manifest = buildBookNavManifest(
+      entries,
+      docDir,
+      makeFileTitleResolver(docDir),
+      makeFileTopicTypeResolver(docDir, localizeTopicTypeLabel),
+    );
     return { keyMap, manifest };
   }
 

@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -758,6 +758,122 @@ describe('makeFileTitleResolver', () => {
   it('should not treat a bare id as a filename even when a matching file exists', () => {
     const resolver = makeFileTitleResolver(dir);
     assert.strictEqual(resolver('someid'), undefined);
+  });
+});
+
+describe('makeFileTopicTypeResolver (sniffRootTagName)', () => {
+  let dir: string;
+
+  before(() => {
+    dir = mkdtempSync(join(tmpdir(), 'dita-type-'));
+    writeFileSync(join(dir, 'concept.dita'), `<concept id="c1"><title>C</title></concept>`);
+    writeFileSync(join(dir, 'task.dita'), `<task id="t1"><title>T</title></task>`);
+    writeFileSync(join(dir, 'reference.dita'), `<reference id="r1"><title>R</title></reference>`);
+    writeFileSync(join(dir, 'troubleshooting.dita'), `<troubleshooting id="tb1"><title>TB</title></troubleshooting>`);
+    writeFileSync(join(dir, 'glossentry.dita'), `<glossentry id="g1"><glossterm>G</glossterm></glossentry>`);
+    writeFileSync(join(dir, 'generic.dita'), `<topic id="t1"><title>Plain Topic</title></topic>`);
+    // Full DITA preamble -- XML declaration, a DOCTYPE with a small
+    // internal entity subset, and a leading comment -- all ahead of the
+    // root element, exercising every branch of PREAMBLE_CONSTRUCT_RE at
+    // once rather than one preamble construct per fixture file.
+    writeFileSync(
+      join(dir, 'full-preamble.dita'),
+      `<?xml version="1.0" encoding="UTF-8"?>\n` +
+        `<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd" [\n` +
+        `  <!ENTITY product "Widget">\n` +
+        `]>\n` +
+        `<!-- generated file, do not edit -->\n` +
+        `<concept id="c2"><title>Full preamble</title></concept>`,
+    );
+    // File deliberately named like a bare id — must NOT be picked up.
+    writeFileSync(join(dir, 'someid'), `<concept id="someid"><title>Ghost</title></concept>`);
+  });
+
+  after(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('should resolve the root tag of a local .dita href to its capitalized type label, for each common specialization', () => {
+    const resolver = makeFileTopicTypeResolver(dir);
+    assert.strictEqual(resolver('concept.dita'), 'Concept');
+    assert.strictEqual(resolver('task.dita'), 'Task');
+    assert.strictEqual(resolver('reference.dita'), 'Reference');
+    assert.strictEqual(resolver('troubleshooting.dita'), 'Troubleshooting');
+    assert.strictEqual(resolver('glossentry.dita'), 'Glossentry');
+  });
+
+  it('should see past an XML declaration, a DOCTYPE with an internal entity subset, and a leading comment to find the root element', () => {
+    const resolver = makeFileTopicTypeResolver(dir);
+    assert.strictEqual(resolver('full-preamble.dita'), 'Concept');
+  });
+
+  it('should return undefined for the generic <topic> root, since the default labeler drops it to avoid a row of identical chips with no information', () => {
+    const resolver = makeFileTopicTypeResolver(dir);
+    assert.strictEqual(resolver('generic.dita'), undefined);
+  });
+
+  it('should let a custom labeler override the default (e.g. localize, or hide tags the default would show)', () => {
+    // A labeler that hides everything except "concept" -- a contrived but
+    // representative case for the localized labeler in MapViewerProvider,
+    // which both translates known tags and falls back to capitalized for
+    // unknown ones.
+    const resolver = makeFileTopicTypeResolver(dir, (tagName) =>
+      tagName === 'concept' ? 'Concept (custom)' : undefined,
+    );
+    assert.strictEqual(resolver('concept.dita'), 'Concept (custom)');
+    assert.strictEqual(resolver('task.dita'), undefined);
+  });
+
+  it('should return undefined for external URLs instead of probing the filesystem', () => {
+    const resolver = makeFileTopicTypeResolver(dir);
+    assert.strictEqual(resolver('https://example.com/page.dita'), undefined);
+    assert.strictEqual(resolver('mailto:someone@example.com'), undefined);
+  });
+
+  it('should return undefined for absolute paths', () => {
+    const resolver = makeFileTopicTypeResolver(dir);
+    assert.strictEqual(resolver(join(dir, 'concept.dita')), undefined);
+  });
+
+  it('should not treat a bare id as a filename even when a matching file exists', () => {
+    const resolver = makeFileTopicTypeResolver(dir);
+    assert.strictEqual(resolver('someid'), undefined);
+  });
+
+  it('should return undefined for a missing file rather than throwing', () => {
+    const resolver = makeFileTopicTypeResolver(dir);
+    assert.strictEqual(resolver('does-not-exist.dita'), undefined);
+  });
+
+  it('should return undefined for an href with a fragment (points inside a topic, not at a file root) but still report the file\'s own root type', () => {
+    const resolver = makeFileTopicTypeResolver(dir);
+    // The fragment points at a nested topic inside the file; the resolver
+    // deliberately resolves the file's *root* tag, not the fragment's, so
+    // this still returns the file's root type. The contract is "what kind
+    // of file is this", not "what kind of element does the fragment point
+    // at" -- the sidebar links to files.
+    assert.strictEqual(resolver('concept.dita#nested'), 'Concept');
+  });
+
+  it('caches a resolved tag name per absolute path, reading each file at most once', () => {
+    writeFileSync(join(dir, 'counted.dita'), `<task id="ct1"><title>Counted</title></task>`);
+    const resolver = makeFileTopicTypeResolver(dir);
+    assert.strictEqual(resolver('counted.dita'), 'Task');
+    // Mutate the file after the first call -- if the resolver were re-
+    // reading on every call, this second call would see 'Concept'
+    // instead. Getting 'Task' back proves it served the cached answer
+    // without touching the file again.
+    writeFileSync(join(dir, 'counted.dita'), `<concept id="ct1"><title>Counted</title></concept>`);
+    assert.strictEqual(resolver('counted.dita'), 'Task', 'second call should be served from cache, not re-read the mutated file');
+  });
+
+  it('still finds the root tag when a huge DOCTYPE internal subset pushes it past the bounded sniff chunk, by falling back to the whole file', () => {
+    // A comment well past ROOT_TAG_SNIFF_BYTES (8192) worth of padding
+    // ahead of the root element -- the bounded read alone won't reach it.
+    const padding = '<!-- ' + 'x'.repeat(9000) + ' -->\n';
+    writeFileSync(join(dir, 'huge-preamble.dita'), padding + `<reference id="huge"><title>Huge</title></reference>`);
+    const resolver = makeFileTopicTypeResolver(dir);
+    assert.strictEqual(resolver('huge-preamble.dita'), 'Reference');
   });
 });
 

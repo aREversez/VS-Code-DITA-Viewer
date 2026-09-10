@@ -130,5 +130,11 @@
   "Switch between outline tree, full book view and docsite view": "Switch between outline tree, full book view and docsite view",
   "Site": "Site",
   "This map has no topics to show in site view.": "This map has no topics to show in site view.",
-  "Topics": "Topics"
+  "Topics": "Topics",
+  "Concept": "Concept",
+  "Task": "Task",
+  "Reference": "Reference",
+  "Troubleshooting": "Troubleshooting",
+  "Glossary Entry": "Glossary Entry",
+  "Glossary Group": "Glossary Group"
 }

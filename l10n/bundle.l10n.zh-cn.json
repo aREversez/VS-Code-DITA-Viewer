@@ -130,5 +130,11 @@
   "Switch between outline tree, full book view and docsite view": "在大纲树、整书视图和文档站视图之间切换",
   "Site": "文档站",
   "This map has no topics to show in site view.": "此地图没有可在文档站视图中显示的主题。",
-  "Topics": "主题"
+  "Topics": "主题",
+  "Concept": "概念",
+  "Task": "任务",
+  "Reference": "参考",
+  "Troubleshooting": "故障排查",
+  "Glossary Entry": "术语条目",
+  "Glossary Group": "术语组"
 }

@@ -797,9 +797,47 @@ describe('resolveBookTopicPath / buildBookNavManifest (docsite nav manifest)', (
     ];
     const manifest = buildBookNavManifest(entries, docDir);
     assert.deepStrictEqual(manifest, [
-      { absPath: join(docDir, 'topics/ch1.dita'), title: 'Chapter One', depth: 0, role: 'Chapter 1' },
-      { absPath: join(docDir, 'topics/ch1-s1.dita'), title: 'Section 1.1', depth: 1, role: undefined },
+      { absPath: join(docDir, 'topics/ch1.dita'), title: 'Chapter One', depth: 0, role: 'Chapter 1', topicType: undefined },
+      { absPath: join(docDir, 'topics/ch1-s1.dita'), title: 'Section 1.1', depth: 1, role: undefined, topicType: undefined },
     ]);
+  });
+
+  it('calls resolveTopicType for every entry with a real href and stores its return as topicType, regardless of whether role is also present', () => {
+    const entries: MapEntry[] = [
+      // Chapter that happens to be a <task> -- both chips should fire.
+      { href: 'topics/ch1.dita', displayName: 'Chapter One', displayNameExplicit: true, depth: 0, role: 'Chapter 1' },
+      // Plain topicref whose target is a <concept> -- only the type chip fires.
+      { href: 'topics/c.dita', displayName: 'Concept X', displayNameExplicit: true, depth: 1 },
+      // Keydef with no href -- no file to read, no type chip. Excluded from
+      // the manifest entirely by resolveBookTopicPath (it returns undefined
+      // for hrefless entries), so this entry contributes nothing to either
+      // the call list or the result.
+      { href: undefined, displayName: 'No target', displayNameExplicit: true, depth: 0 },
+    ];
+    const calls: string[] = [];
+    const manifest = buildBookNavManifest(entries, docDir, undefined, (href) => {
+      calls.push(href);
+      // Pretend ch1.dita is a <task> and c.dita is a <concept>.
+      if (href === 'topics/ch1.dita') return 'Task';
+      if (href === 'topics/c.dita') return 'Concept';
+      return undefined;
+    });
+    // resolveTopicType was called for both real-href entries, NOT the keydef
+    // (which never reached the resolver because resolveBookTopicPath filters
+    // hrefless entries out before the resolver is consulted).
+    assert.deepStrictEqual(calls, ['topics/ch1.dita', 'topics/c.dita']);
+    assert.strictEqual(manifest.length, 2, 'keydef entry was filtered out, manifest has the two real-href entries');
+    assert.strictEqual(manifest[0].topicType, 'Task', 'chapter entry still gets its topic type');
+    assert.strictEqual(manifest[1].topicType, 'Concept', 'plain topicref gets its topic type');
+  });
+
+  it('does not call resolveTopicType at all when none is passed -- the docsite-only cost stays opt-in, parallel to resolveTopicTitle', () => {
+    const entries: MapEntry[] = [
+      { href: 'topics/c.dita', displayName: 'Concept X', displayNameExplicit: true, depth: 0 },
+    ];
+    assert.doesNotThrow(() => buildBookNavManifest(entries, docDir));
+    const manifest = buildBookNavManifest(entries, docDir);
+    assert.strictEqual(manifest[0].topicType, undefined);
   });
 
   it('de-duplicates a topic referenced twice, keeping only its first occurrence -- same rule renderBookEntries applies via its own visited set', () => {
@@ -882,7 +920,11 @@ describe('renderSiteNavHtml', () => {
 
   it('renders one link per manifest entry, each carrying its absPath as the click target', () => {
     const html = renderSiteNavHtml(manifest, manifest[0].absPath, 'Topics');
-    assert.strictEqual((html.match(/class="site-nav-link/g) || []).length, 2);
+    // Match only the <a> tags' class attribute, not the inner <span
+    // class="site-nav-link-text"> -- the [\s"] after "site-nav-link"
+    // rejects "site-nav-link-text" by requiring a space or closing quote
+    // where the span has a hyphen.
+    assert.strictEqual((html.match(/class="site-nav-link[\s"]/g) || []).length, 2);
     assert.ok(html.includes('data-site-target="/proj/docs/topics/a.dita"'));
     assert.ok(html.includes('data-site-target="/proj/docs/topics/b.dita"'));
   });
@@ -912,5 +954,65 @@ describe('renderSiteNavHtml', () => {
     const html = renderSiteNavHtml(evil, evil[0].absPath, '<script>y</script>');
     assert.ok(!html.includes('<script>'), 'no raw script tag anywhere');
     assert.ok(html.includes('&lt;script&gt;'));
+  });
+
+  it('wraps the title in a span so the flex layout can ellipsis the title without clipping chips', () => {
+    const html = renderSiteNavHtml(manifest, manifest[0].absPath, 'Topics');
+    assert.ok(/<span class="site-nav-link-text">Topic A<\/span>/.test(html), 'title text is in a dedicated span');
+  });
+
+  it('emits no chip markup at all when neither role nor topicType is present on an entry', () => {
+    const html = renderSiteNavHtml(manifest, manifest[0].absPath, 'Topics');
+    assert.ok(!html.includes('site-nav-chip'), 'no chip classes when both role and topicType are undefined');
+  });
+
+  it('emits a role chip (and only a role chip) when only role is present', () => {
+    const withRole = [
+      { absPath: '/proj/docs/topics/a.dita', title: 'Topic A', depth: 0, role: 'Chapter 1' },
+    ];
+    const html = renderSiteNavHtml(withRole, withRole[0].absPath, 'Topics');
+    assert.ok(/<span class="site-nav-chip site-nav-chip--role">Chapter 1<\/span>/.test(html), 'role chip is present and labelled');
+    assert.ok(!html.includes('site-nav-chip--type'), 'no type chip when topicType is absent');
+  });
+
+  it('emits a type chip (and only a type chip) when only topicType is present', () => {
+    const withType = [
+      { absPath: '/proj/docs/topics/a.dita', title: 'Topic A', depth: 0, topicType: 'Concept' },
+    ];
+    const html = renderSiteNavHtml(withType, withType[0].absPath, 'Topics');
+    assert.ok(/<span class="site-nav-chip site-nav-chip--type">Concept<\/span>/.test(html), 'type chip is present and labelled');
+    assert.ok(!html.includes('site-nav-chip--role'), 'no role chip when role is absent');
+  });
+
+  it('emits both chips in order role, type, title when both are present on the same entry', () => {
+    const both = [
+      { absPath: '/proj/docs/topics/a.dita', title: 'Topic A', depth: 0, role: 'Chapter 1', topicType: 'Task' },
+    ];
+    const html = renderSiteNavHtml(both, both[0].absPath, 'Topics');
+    // Role chip first, then type chip, then title text -- the order is the
+    // visual order on screen, and the order in which a screen reader
+    // announces them.
+    assert.ok(/<span class="site-nav-chip site-nav-chip--role">Chapter 1<\/span><span class="site-nav-chip site-nav-chip--type">Task<\/span><span class="site-nav-link-text">Topic A<\/span>/.test(html), 'chips precede title in the right order');
+  });
+
+  it('escapes title/aria-label/path AND chip text for XSS (a labeler fed a malicious tag name must not inject markup)', () => {
+    const evil = [
+      {
+        absPath: '/proj/"><script>x</script>.dita',
+        title: '<script>alert(1)</script>',
+        depth: 0,
+        role: '<script>r</script>',
+        topicType: '<script>t</script>',
+      },
+    ];
+    const html = renderSiteNavHtml(evil, evil[0].absPath, '<script>y</script>');
+    assert.ok(!html.includes('<script>'), 'no raw script tag anywhere');
+    assert.ok(html.includes('&lt;script&gt;'), 'title text is escaped');
+    assert.ok(html.includes('site-nav-chip--role'), 'role chip is present');
+    assert.ok(html.includes('site-nav-chip--type'), 'type chip is present');
+    // The chip text itself must also be escaped, not just the title.
+    const roleChipMatch = html.match(/site-nav-chip--role[^<]*<[^>]*>([^<]*)</);
+    assert.ok(roleChipMatch, 'role chip has text content');
+    assert.ok(!roleChipMatch![1].includes('<script>'), 'role chip text is escaped');
   });
 });
