@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -1571,5 +1571,61 @@ describe('getSiteSidebarToggleScript (docsite mode)', () => {
     const custom = { toggleTitle: 'Afficher/masquer les sujets' };
     const script = getSiteSidebarToggleScript(custom);
     assert.ok(script.includes(JSON.stringify('Afficher/masquer les sujets')));
+  });
+});
+
+describe('getModeToggleScript (docsite mode)', () => {
+  const opts = {
+    switchModeTitle: 'Switch mode',
+    modeOutline: 'Outline',
+    modeBook: 'Book',
+    modeSite: 'Site',
+    switchModeMsgType: 'switchMode',
+  };
+
+  it('emits a script that parses as JavaScript', () => {
+    assert.doesNotThrow(() => new Function('currentMode', opts.switchModeMsgType, getModeToggleScript(opts)));
+  });
+
+  function run(currentMode: string) {
+    const script = getModeToggleScript(opts);
+    const fakeBtn = { style: {}, setAttribute: () => {}, addEventListener: () => {} };
+    const fakeDocument = { createElement: () => fakeBtn };
+    const fn = new Function('currentMode', 'btnStyle', 'document', 'vscode', script + '; return { btn: modeBtn, getMode: function() { return currentMode; } };');
+    return fn(currentMode, '', fakeDocument, { postMessage: () => {} });
+  }
+
+  it('labels the button with the CURRENT mode, not the mode a click switches to -- the earlier version showed the target mode, which read backwards', () => {
+    assert.strictEqual(run('book').btn.textContent, 'Book', 'in book mode, the button should say "Book", not "Site" (the mode a click would switch to)');
+    assert.strictEqual(run('site').btn.textContent, 'Site');
+    assert.strictEqual(run('tree').btn.textContent, 'Outline');
+  });
+
+  it('still cycles tree -> book -> site -> tree on click, and posts the new mode', () => {
+    const posted: Array<{ type: string; mode: string }> = [];
+    const script = getModeToggleScript(opts);
+    const listeners: Record<string, () => void> = {};
+    const fakeBtn = {
+      style: {},
+      setAttribute: () => {},
+      addEventListener: (evt: string, fn: () => void) => { listeners[evt] = fn; },
+    };
+    const fakeDocument = { createElement: () => fakeBtn };
+    const fn = new Function('currentMode', 'btnStyle', 'document', 'vscode', script + '; return modeBtn;');
+    const btn = fn('tree', '', fakeDocument, { postMessage: (m: { type: string; mode: string }) => posted.push(m) });
+    assert.strictEqual(btn.textContent, 'Outline');
+    listeners['click']();
+    assert.strictEqual(btn.textContent, 'Book', 'first click from tree should switch to book and relabel to the new current mode');
+    listeners['click']();
+    assert.strictEqual(btn.textContent, 'Site');
+    listeners['click']();
+    assert.strictEqual(btn.textContent, 'Outline');
+    assert.deepStrictEqual(posted.map(m => m.mode), ['book', 'site', 'tree']);
+    assert.ok(posted.every(m => m.type === 'switchMode'));
+  });
+
+  it('does not append the button to a toolbar itself', () => {
+    const script = getModeToggleScript(opts);
+    assert.ok(!script.includes('toolbar.appendChild'));
   });
 });

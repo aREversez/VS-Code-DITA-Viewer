@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, renderSiteNavHtml, getSiteNavClickHandlerScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
+import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, renderSiteNavHtml, getSiteNavClickHandlerScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
 import { foldPendingRender, PendingRender } from './pendingRender';
@@ -97,10 +97,10 @@ function getMapWebviewScript(): string {
     ...sharedWebviewStrings(),
     // The outline/book switch has no counterpart in the single-topic preview,
     // which only ever shows one topic.
-    switchModeTitle: JSON.stringify(vscode.l10n.t('Switch between outline tree, full book view and docsite view')),
-    modeOutline: JSON.stringify(vscode.l10n.t('Outline')),
-    modeBook: JSON.stringify(vscode.l10n.t('Book')),
-    modeSite: JSON.stringify(vscode.l10n.t('Site')),
+    switchModeTitle: vscode.l10n.t('Switch between outline tree, full book view and docsite view'),
+    modeOutline: vscode.l10n.t('Outline'),
+    modeBook: vscode.l10n.t('Book'),
+    modeSite: vscode.l10n.t('Site'),
     sitePrevTopic: vscode.l10n.t('Previous topic'),
     siteNextTopic: vscode.l10n.t('Next topic'),
     siteToggleSidebar: vscode.l10n.t('Show/hide topic list'),
@@ -205,27 +205,15 @@ function getMapWebviewScript(): string {
   toolbar.appendChild(tagTooltipsBtn);
 
   // Mode toggle button. Cycles tree -> book -> site -> tree; the label
-  // always names the mode a click switches TO, not the current one.
-  var modeBtn = document.createElement('button');
-  modeBtn.title = ${L.switchModeTitle};
-  modeBtn.setAttribute('aria-label', ${L.switchModeTitle});
-  modeBtn.style.cssText = btnStyle + 'font-size:11px;';
-  function nextMode(m) {
-    return m === 'tree' ? 'book' : m === 'book' ? 'site' : 'tree';
-  }
-  function labelFor(m) {
-    return m === 'book' ? ${L.modeBook} : m === 'site' ? ${L.modeSite} : ${L.modeOutline};
-  }
-  function updateModeLabel() {
-    modeBtn.textContent = labelFor(nextMode(currentMode));
-  }
-  updateModeLabel();
-  modeBtn.addEventListener('click', function() {
-    var newMode = nextMode(currentMode);
-    currentMode = newMode;
-    updateModeLabel();
-    vscode.postMessage({ type: 'switchMode', mode: newMode });
-  });
+  // always names the CURRENT mode (see getModeToggleScript's own comment
+  // for why).
+  ${getModeToggleScript({
+    switchModeTitle: L.switchModeTitle,
+    modeOutline: L.modeOutline,
+    modeBook: L.modeBook,
+    modeSite: L.modeSite,
+    switchModeMsgType: 'switchMode',
+  })}
   toolbar.appendChild(modeBtn);
 
   // Profiling / conditional-attribute highlight toggle, same as the topic

@@ -1483,6 +1483,58 @@ export function getSiteSidebarToggleScript(opts: { toggleTitle: string }): strin
 `;
 }
 
+/**
+ * Docsite mode's mode-cycle toggle button (tree -> book -> site -> tree).
+ * The button's label always names the CURRENT mode, not the mode a click
+ * switches to -- an earlier version showed the target mode ("reads as a
+ * destination button"), but in practice that reads backwards: seeing
+ * "Site" while already in Book mode looks like the button is claiming
+ * you're in Site mode, not offering to take you there. Relies on the
+ * caller's own `currentMode` variable (declared once near the top of
+ * getMapWebviewScript, updated by this same click handler) and `btnStyle`
+ * (getToolbarScaffoldScript) already being in scope -- same closure
+ * convention as the other button scripts in this file, and why this one
+ * isn't reusable outside MapViewerProvider.ts's own script the way some of
+ * the docsite-specific ones already aren't (getSiteNavClickHandlerScript's
+ * switchToSitePage, for instance, also assumes an outer `vscode`).
+ * Does not call toolbar.appendChild itself, same convention as
+ * getSitePrevNextButtonsScript/getSiteSidebarToggleScript above.
+ */
+export function getModeToggleScript(opts: {
+  switchModeTitle: string;
+  modeOutline: string;
+  modeBook: string;
+  modeSite: string;
+  switchModeMsgType: string; // raw, e.g. 'switchMode'
+}): string {
+  const switchModeTitle = JSON.stringify(opts.switchModeTitle);
+  const modeOutline = JSON.stringify(opts.modeOutline);
+  const modeBook = JSON.stringify(opts.modeBook);
+  const modeSite = JSON.stringify(opts.modeSite);
+  return `
+  var modeBtn = document.createElement('button');
+  modeBtn.title = ${switchModeTitle};
+  modeBtn.setAttribute('aria-label', ${switchModeTitle});
+  modeBtn.style.cssText = btnStyle + 'font-size:11px;';
+  function nextMapMode(m) {
+    return m === 'tree' ? 'book' : m === 'book' ? 'site' : 'tree';
+  }
+  function modeLabel(m) {
+    return m === 'book' ? ${modeBook} : m === 'site' ? ${modeSite} : ${modeOutline};
+  }
+  function updateModeLabel() {
+    modeBtn.textContent = modeLabel(currentMode);
+  }
+  updateModeLabel();
+  modeBtn.addEventListener('click', function() {
+    var newMode = nextMapMode(currentMode);
+    currentMode = newMode;
+    updateModeLabel();
+    vscode.postMessage({ type: '${opts.switchModeMsgType}', mode: newMode });
+  });
+`;
+}
+
 export interface BookRenderInput {
   /** Flattened topicref list, in map order -- see collectMapEntries. */
   entries: MapEntry[];
