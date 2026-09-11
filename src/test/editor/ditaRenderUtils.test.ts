@@ -439,6 +439,23 @@ describe('renderTopicCached', () => {
     assert.ok(freshMap.html.includes('two'), 'buildKeyMap rebuilds its Map when its own cache expires; treating an equal-but-distinct instance as "keys unchanged" would be an assumption this function cannot verify, so it re-renders instead');
   });
 
+  it('should re-render when handed a different bookMembers set even with equal contents, since the same topic renders different HTML for a cross-file xref depending on whether the target is part of THIS book', () => {
+    const other = writeTopic('other-target.dita', '<p>target</p>');
+    const a = writeTopic('xref-host.dita', '<xref href="other-target.dita"/>');
+
+    const inBook = new Set<string>([other]);
+    const withBook = renderTopicCached({ filePath: a, keyMap, asWebviewUri, headingLevel: 1, bookMembers: inBook });
+    assert.ok(withBook.html.includes('data-dita-book-xref'), 'target is in this book, so the xref should be a real link');
+
+    // Same file, same pinned mtime, same keyMap instance -- everything the
+    // OLD cache key considered is identical. Only the book membership
+    // changed (this render's book does not contain the xref's target).
+    const notInBook = new Set<string>();
+    const withoutBook = renderTopicCached({ filePath: a, keyMap, asWebviewUri, headingLevel: 1, bookMembers: notInBook });
+    assert.ok(!withoutBook.html.includes('data-dita-book-xref'), 'a cache keyed only on filePath+headingLevel+keyMap would wrongly reuse the first entry and still show a clickable link here');
+    assert.ok(withoutBook.html.includes('xref-external'));
+  });
+
   it('should not cache a failed render, so the next pass recovers once the file is there', () => {
     const missing = join(dir, 'not-yet.dita');
     const failed = render(missing);
@@ -1549,6 +1566,115 @@ describe('getSiteNavClickHandlerScript (docsite mode)', () => {
       addEventListener: () => {},
     };
     assert.doesNotThrow(() => fn(fakeDocument, { postMessage: () => {} }));
+  });
+
+  // --- book-internal cross-topic xref clicks (docsite design doc, 3.2/4.5) ---
+  //
+  // These simulate real DOM click delegation (multiple document-level
+  // 'click' listeners, each independently checking e.target.closest(...))
+  // rather than calling switchToSitePage directly, since the thing under
+  // test IS the delegation wiring: does a click on a data-dita-book-xref
+  // link actually find the matching sidebar link and drive it the same
+  // way a real sidebar click would.
+  function makeFakeElement(opts: { classes?: string[]; attrs?: Record<string, string> }) {
+    const classes = new Set(opts.classes || []);
+    const attrs = opts.attrs || {};
+    const el = {
+      classList: {
+        contains: (c: string) => classes.has(c),
+        add: (c: string) => classes.add(c),
+        remove: (c: string) => classes.delete(c),
+      },
+      getAttribute: (name: string) => (name in attrs ? attrs[name] : null),
+      closest(selector: string): unknown {
+        if (selector.startsWith('.')) return classes.has(selector.slice(1)) ? el : null;
+        if (selector.startsWith('[') && selector.endsWith(']')) {
+          const attr = selector.slice(1, -1);
+          return attr in attrs ? el : null;
+        }
+        return null;
+      },
+    };
+    return el;
+  }
+
+  function makeFakeSiteDocument(navLinks: ReturnType<typeof makeFakeElement>[], elementsById: Record<string, { scrollIntoView: () => void }>) {
+    const listeners: Record<string, Array<(e: unknown) => void>> = {};
+    const document = {
+      addEventListener: (evt: string, fn: (e: unknown) => void) => {
+        (listeners[evt] = listeners[evt] || []).push(fn);
+      },
+      querySelectorAll: (sel: string) => (sel === '.site-nav-link' ? navLinks : []),
+      querySelector: (sel: string) =>
+        sel === '.site-nav-link.active' ? navLinks.find((l) => l.classList.contains('active')) ?? null : null,
+      getElementById: (id: string) => elementsById[id] ?? null,
+    };
+    return {
+      document,
+      click(target: ReturnType<typeof makeFakeElement>) {
+        for (const fn of listeners['click'] || []) fn({ target, preventDefault: () => {} });
+      },
+    };
+  }
+
+  it('clicking a book-xref link switches to the matching sidebar page and posts its target', () => {
+    const posted: Array<{ type: string; target: string }> = [];
+    const bTopic = makeFakeElement({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/book/b.dita' } });
+    const aTopic = makeFakeElement({ classes: ['site-nav-link', 'active'], attrs: { 'data-site-target': '/book/a.dita' } });
+    const { document, click } = makeFakeSiteDocument([aTopic, bTopic], {});
+    const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
+    new Function('document', 'vscode', script)(document, { postMessage: (m: { type: string; target: string }) => posted.push(m) });
+
+    const xrefLink = makeFakeElement({ attrs: { 'data-dita-book-xref': '/book/b.dita#sec1' } });
+    click(xrefLink);
+
+    assert.deepStrictEqual(posted, [{ type: 'switchSitePage', target: '/book/b.dita' }]);
+    assert.strictEqual(bTopic.classList.contains('active'), true, 'clicking the xref should switch the sidebar to the target page');
+    assert.strictEqual(aTopic.classList.contains('active'), false);
+  });
+
+  it('clicking a book-xref link to the page already open just scrolls, without posting a page switch', () => {
+    const posted: unknown[] = [];
+    const scrolled: string[] = [];
+    const aTopic = makeFakeElement({ classes: ['site-nav-link', 'active'], attrs: { 'data-site-target': '/book/a.dita' } });
+    const { document, click } = makeFakeSiteDocument([aTopic], {
+      'sec2': { scrollIntoView: () => scrolled.push('sec2') },
+    });
+    const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
+    new Function('document', 'vscode', script)(document, { postMessage: (m: unknown) => posted.push(m) });
+
+    const xrefLink = makeFakeElement({ attrs: { 'data-dita-book-xref': '/book/a.dita#sec2' } });
+    click(xrefLink);
+
+    assert.deepStrictEqual(posted, [], 'the target page is already open -- no page switch to ask for');
+    assert.deepStrictEqual(scrolled, ['sec2'], 'but it should still scroll to the anchor on the current page');
+  });
+
+  it('clicking a book-xref with no matching sidebar entry does nothing, rather than throwing', () => {
+    const posted: unknown[] = [];
+    const { document, click } = makeFakeSiteDocument([], {});
+    const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
+    new Function('document', 'vscode', script)(document, { postMessage: (m: unknown) => posted.push(m) });
+
+    const xrefLink = makeFakeElement({ attrs: { 'data-dita-book-xref': '/book/nowhere.dita' } });
+    assert.doesNotThrow(() => click(xrefLink));
+    assert.deepStrictEqual(posted, []);
+  });
+
+  it('clicking a book-xref with no fragment switches pages without attempting to scroll to an empty id', () => {
+    const scrolled: string[] = [];
+    const bTopic = makeFakeElement({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/book/b.dita' } });
+    const aTopic = makeFakeElement({ classes: ['site-nav-link', 'active'], attrs: { 'data-site-target': '/book/a.dita' } });
+    const { document, click } = makeFakeSiteDocument([aTopic, bTopic], {
+      '': { scrollIntoView: () => scrolled.push('') },
+    });
+    const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
+    new Function('document', 'vscode', script)(document, { postMessage: () => {} });
+
+    const xrefLink = makeFakeElement({ attrs: { 'data-dita-book-xref': '/book/b.dita' } });
+    click(xrefLink);
+
+    assert.strictEqual(bTopic.classList.contains('active'), true);
   });
 });
 

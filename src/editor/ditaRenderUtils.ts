@@ -763,6 +763,8 @@ export interface TopicRenderInput {
    * renders once and has nothing to invalidate.
    */
   collectDependencies?: Set<string>;
+  /** See TopicXmlRenderInput.bookMembers below; passed through untouched. */
+  bookMembers?: ReadonlySet<string>;
 }
 
 export interface TopicRenderResult {
@@ -782,6 +784,22 @@ export interface TopicXmlRenderInput {
   suppressIndexterm?: boolean;
   /** See TopicRenderInput.collectDependencies above. */
   collectDependencies?: Set<string>;
+  /**
+   * Absolute paths of every topic that is part of the current book/docsite
+   * render -- passed straight to RenderContext.isInCurrentBook (see that
+   * field's own doc comment for why a cross-file xref's clickability
+   * depends on this). Undefined for standalone single-topic preview and
+   * "Export as HTML", which is exactly when a cross-file xref should keep
+   * rendering as the non-clickable xref-external hint it always has.
+   *
+   * A ReadonlySet, not a plain array: renderBookParts/MapViewerProvider
+   * build this once per book and hand the SAME instance to every topic's
+   * render call, which renderTopicCached leans on for its own cache key
+   * (compared by identity, exactly like keyMap) -- membership lookups
+   * would work the same with an array, but identity comparison is the
+   * whole point here.
+   */
+  bookMembers?: ReadonlySet<string>;
 }
 
 export interface ParsedTopicResult {
@@ -894,7 +912,7 @@ export function expandDitamapRefs(
 }
 
 export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
-  const { xml, docDir, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, collectDependencies } = input;
+  const { xml, docDir, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, collectDependencies, bookMembers } = input;
   try {
     const preprocessedXml = preprocessEntities(xml);
     const ditaDoc = parseDita(preprocessedXml);
@@ -919,11 +937,25 @@ export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
       return fileTitleResolver(id);
     };
 
+    // Same local-reference guard makeFileTitleResolver applies before ever
+    // touching the filesystem: never probe for a URL-scheme or absolute
+    // href, and a fragment-only href has no file part to resolve.
+    const isInCurrentBook = bookMembers
+      ? (href: string): string | undefined => {
+          if (!href || URL_SCHEME_RE.test(href) || isAbsolute(href)) return undefined;
+          const pathPart = href.split('#')[0];
+          if (!pathPart) return undefined;
+          const absPath = resolve(docDir, decodeHrefPart(pathPart));
+          return bookMembers.has(absPath) ? absPath : undefined;
+        }
+      : undefined;
+
     const html = renderDocument(ditaDoc.root, {
       headingLevel,
       asWebviewUri,
       documentDir: docDir,
       resolveTitle,
+      isInCurrentBook,
       resolveKey: (key: string) => keyMap.get(key),
       resolveConref: (conref: string) => conrefResolver(conref),
       resolveConrefRange: (conref: string, conrefend: string) => conrefRangeResolver(conref, conrefend),
@@ -963,7 +995,7 @@ export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
 }
 
 export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
-  const { filePath, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, collectDependencies } = input;
+  const { filePath, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, collectDependencies, bookMembers } = input;
   try {
     if (!existsSync(filePath)) {
       return { html: '', error: `File not found: ${filePath}` };
@@ -981,6 +1013,7 @@ export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
       uiLanguage,
       suppressIndexterm,
       collectDependencies,
+      bookMembers,
     });
     return { html: result.html, title: result.title, error: result.error };
   } catch (err) {
@@ -1057,6 +1090,14 @@ interface TopicRenderCacheEntry {
   keyMap: Map<string, string>;
   uiLanguage: string | undefined;
   suppressIndexterm: boolean | undefined;
+  /** Compared by identity, same rationale as keyMap above -- the same
+   *  topic renders different HTML (a cross-file xref is a real link or
+   *  not) depending on which book's membership set it was rendered
+   *  against, so a stale entry from a different book must never answer
+   *  for this one. renderBookParts/MapViewerProvider hand the same Set
+   *  instance to every topic in one book's render pass, so this stays a
+   *  cheap identity check rather than a per-render content comparison. */
+  bookMembers: ReadonlySet<string> | undefined;
   /** Retained size of html, stored so eviction can subtract it without
    *  re-measuring every entry. */
   bytes: number;
@@ -1065,6 +1106,58 @@ interface TopicRenderCacheEntry {
 const topicRenderCache = new Map<string, TopicRenderCacheEntry>();
 let topicRenderCacheBytes = 0;
 let topicRenderCacheBudget = TOPIC_RENDER_CACHE_MAX_BYTES;
+
+/**
+ * Keeps the same bookMembers Set instance alive across render passes of the
+ * same open map when its actual membership hasn't changed -- which is the
+ * overwhelmingly common case (editing a topic's own content, the debounced
+ * trigger for nearly every book-mode re-render, changes nothing about which
+ * topics the book references). renderTopicCached's own cache keys the
+ * bookMembers field by identity, same rationale as keyMap (see
+ * TopicRenderCacheEntry.bookMembers) -- without this, renderBookParts
+ * handing a freshly `new Set()`-built membership to every single pass would
+ * silently defeat topic-render reuse across every re-render, not just ones
+ * that actually changed the map's topicref list.
+ *
+ * Keyed by docDir (one open map, one docDir -- matches buildKeyMap's own
+ * cache granularity in keyMap.ts) and fingerprinted by the resolved
+ * absolute-path list itself (cheap: pure path resolution already computed
+ * to build the set, no extra disk I/O), not by entries' own object
+ * identity -- entries is rebuilt fresh from freshly re-parsed map XML on
+ * every render pass regardless of whether anything in it actually changed.
+ */
+interface BookMembersCacheEntry {
+  fingerprint: string;
+  members: Set<string>;
+}
+const bookMembersCache = new Map<string, BookMembersCacheEntry>();
+const BOOK_MEMBERS_CACHE_MAX = 50;
+
+/** Part of clearAllCaches() in DitaViewerProvider.ts, same as clearKeyMapCache. */
+export function clearBookMembersCache(): void {
+  bookMembersCache.clear();
+}
+
+function getStableBookMembers(entries: MapEntry[], docDir: string): ReadonlySet<string> {
+  const paths: string[] = [];
+  for (const entry of entries) {
+    const absPath = resolveBookTopicPath(entry, docDir);
+    if (absPath) paths.push(absPath);
+  }
+  // \u0000 can't appear in a filesystem path, so this join is collision-free
+  // the same way TopicRenderCacheEntry's own cache key delimiter is.
+  const fingerprint = paths.join('\u0000');
+  const cached = bookMembersCache.get(docDir);
+  if (cached && cached.fingerprint === fingerprint) return cached.members;
+
+  if (bookMembersCache.size >= BOOK_MEMBERS_CACHE_MAX && !bookMembersCache.has(docDir)) {
+    const oldest = bookMembersCache.keys().next().value;
+    if (oldest !== undefined) bookMembersCache.delete(oldest);
+  }
+  const members = new Set(paths);
+  bookMembersCache.set(docDir, { fingerprint, members });
+  return members;
+}
 
 export function clearTopicRenderCache(): void {
   topicRenderCache.clear();
@@ -1139,6 +1232,7 @@ export function renderTopicCached(input: TopicRenderInput): TopicRenderResult {
     cached.keyMap === input.keyMap &&
     cached.uiLanguage === input.uiLanguage &&
     cached.suppressIndexterm === input.suppressIndexterm &&
+    cached.bookMembers === input.bookMembers &&
     stampFiles(cached.files) === cached.stamps
   ) {
     // Re-insert so a hit keeps the entry from being the oldest (and therefore
@@ -1190,6 +1284,7 @@ export function renderTopicCached(input: TopicRenderInput): TopicRenderResult {
     keyMap: input.keyMap,
     uiLanguage: input.uiLanguage,
     suppressIndexterm: input.suppressIndexterm,
+    bookMembers: input.bookMembers,
     bytes,
   });
   topicRenderCacheBytes += bytes;
@@ -1369,15 +1464,41 @@ export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: stri
   // .site-nav-link element itself (not just its target path) so
   // updatePrevNextButtons can read the *next* prev/next targets' own
   // title attribute for free.
-  function switchToSitePage(link) {
-    if (!link || link.classList.contains('active')) return;
+  //
+  // The optional anchor is for book-internal xref jumps (docsite design
+  // doc, 3.2/4.5): a plain sidebar/prev-next click never has one. When
+  // present, it's an element id on the TARGET page to scroll to once its
+  // HTML actually lands -- remembered in pendingSiteAnchor rather than
+  // acted on here, since the new content doesn't exist in the DOM yet at
+  // click time (it's still an async render on the extension host side).
+  function switchToSitePage(link, anchor) {
+    if (!link) return;
+    if (link.classList.contains('active')) {
+      // Same page already showing -- an xref jump still needs to scroll,
+      // a plain nav click has no anchor and this is just a no-op.
+      if (anchor) scrollToSiteAnchor(anchor);
+      return;
+    }
     var target = link.getAttribute('data-site-target');
     if (!target) return;
     var prevActive = document.querySelector('.site-nav-link.active');
     if (prevActive) prevActive.classList.remove('active');
     link.classList.add('active');
     updatePrevNextButtons();
+    pendingSiteAnchor = anchor || null;
     vscode.postMessage({ type: '${opts.switchSitePageMsgType}', target: target });
+  }
+
+  // Set right before the page-switch postMessage above and consumed once
+  // by the MSG_UPDATE_CONTENT handler when the new page's HTML actually
+  // arrives (see getMapWebviewScript) -- cleared immediately after so a
+  // later plain sidebar/prev-next switch (no anchor) doesn't accidentally
+  // replay a stale scroll target.
+  var pendingSiteAnchor = null;
+
+  function scrollToSiteAnchor(anchor) {
+    var el = document.getElementById(anchor);
+    if (el && el.scrollIntoView) el.scrollIntoView();
   }
 
   // Prev/next's targets are derived from the sidebar's own link order
@@ -1412,6 +1533,29 @@ export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: stri
     if (!siteLink) return;
     e.preventDefault();
     switchToSitePage(siteLink);
+  });
+
+  // Book-internal cross-topic xref (docsite design doc, 3.2/4.5): the
+  // renderer only ever emits data-dita-book-xref for a target it already
+  // confirmed is part of this book (RenderContext.isInCurrentBook), so
+  // the matching sidebar link should always exist -- if it doesn't
+  // (shouldn't happen, but the manifest and the render pass could in
+  // principle disagree), this silently does nothing rather than throwing.
+  document.addEventListener('click', function(e) {
+    var xrefLink = e.target.closest ? e.target.closest('[data-dita-book-xref]') : null;
+    if (!xrefLink) return;
+    e.preventDefault();
+    var raw = xrefLink.getAttribute('data-dita-book-xref');
+    if (!raw) return;
+    var hashIdx = raw.indexOf('#');
+    var targetPath = hashIdx >= 0 ? raw.slice(0, hashIdx) : raw;
+    var anchor = hashIdx >= 0 ? raw.slice(hashIdx + 1) : '';
+    var navLinks = document.querySelectorAll('.site-nav-link');
+    var navLink = null;
+    for (var j = 0; j < navLinks.length; j++) {
+      if (navLinks[j].getAttribute('data-site-target') === targetPath) { navLink = navLinks[j]; break; }
+    }
+    if (navLink) switchToSitePage(navLink, anchor);
   });
 
   updatePrevNextButtons(); // establish initial state on load, same as the sidebar's own active link is already set server-side
@@ -1653,6 +1797,22 @@ export function renderBookParts(input: BookRenderInput): BookPart[] {
   // Track visited absolute paths to avoid duplicates
   const visited = new Set<string>();
 
+  // The full set of topics this book contains, computed once up front --
+  // deliberately NOT the same thing as `visited` above, which only grows
+  // as the loop below reaches each entry. A topic near the start of the
+  // book can legitimately xref one near the end (docsite design doc,
+  // 3.2/4.5): by the time that early topic is rendered, `visited` would
+  // not yet contain the later one, and an xref renderer keying off it
+  // would wrongly treat an in-book target as outside the book. Same
+  // one-entry-per-topic identity resolveBookTopicPath/buildBookNavManifest
+  // already use, so this set agrees with the sidebar on exactly which
+  // topics "this book" means. getStableBookMembers (not a plain `new
+  // Set()` built inline here) keeps the same Set instance across passes
+  // where membership hasn't actually changed -- see its own comment for
+  // why that identity has to survive a re-render for renderTopicCached's
+  // reuse to work at all.
+  const bookMembers = getStableBookMembers(entries, docDir);
+
   const parts: BookPart[] = [];
   // A key per part, so two renders of the same map can be compared part by
   // part. Uniqueness is enforced here rather than assumed: a topic's resolved
@@ -1715,6 +1875,7 @@ export function renderBookParts(input: BookRenderInput): BookPart[] {
         asWebviewUri,
         headingLevel,
         uiLanguage,
+        bookMembers,
       });
 
       if (result.error) {

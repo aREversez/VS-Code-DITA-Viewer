@@ -13,6 +13,7 @@ import {
   renderBookParts,
   wrapBookParts,
   clearTopicRenderCache,
+  clearBookMembersCache,
   resolveBookTopicPath,
   buildBookNavManifest,
   renderSiteNavHtml,
@@ -399,13 +400,16 @@ describe('renderBookEntries', () => {
   after(() => {
     rmSync(dir, { recursive: true, force: true });
     clearTopicRenderCache();
+    clearBookMembersCache();
   });
   beforeEach(() => {
     clearTopicRenderCache();
+    clearBookMembersCache();
     uriRequests = [];
   });
   afterEach(() => {
     clearTopicRenderCache();
+    clearBookMembersCache();
   });
 
   /**
@@ -454,6 +458,34 @@ describe('renderBookEntries', () => {
     assert.ok(html.endsWith('</div>'));
     assert.strictEqual(countOf(html, '<div class="book-entry">'), 2, 'one wrapper per rendered topic');
     assert.ok(html.indexOf('alpha') < html.indexOf('beta'), 'map order, not filesystem order');
+  });
+
+  it('should render a book-internal cross-file xref as a clickable link even when it points FORWARD to a topic later in reading order (membership must be known for the whole book up front, not built incrementally as each topic is rendered)', () => {
+    // order-a (rendered first) links to order-b, which the render loop has
+    // not reached yet at the time order-a is rendered -- an incrementally
+    // built "visited so far" set would wrongly treat order-b as outside
+    // the book here.
+    writeTopic('topics/order-a.dita', '<p><xref href="order-b.dita"/></p>');
+    writeTopic('topics/order-b.dita', '<p>beta</p>');
+
+    const html = renderBook([
+      topicRef('topics/order-a.dita', 'A'),
+      topicRef('topics/order-b.dita', 'B'),
+    ]);
+
+    assert.ok(html.includes('data-dita-book-xref'), 'order-b is part of this book, just not rendered yet -- the xref should still be a real link');
+    assert.ok(!html.includes('xref-external'));
+  });
+
+  it('should leave a cross-file xref to a topic OUTSIDE this book as the existing non-clickable hint', () => {
+    writeTopic('topics/order-a.dita', '<p><xref href="not-in-book.dita"/></p>');
+    // Deliberately never referenced by any topicref below.
+    writeTopic('topics/not-in-book.dita', '<p>elsewhere</p>');
+
+    const html = renderBook([topicRef('topics/order-a.dita', 'A')]);
+
+    assert.ok(html.includes('xref-external'));
+    assert.ok(!html.includes('data-dita-book-xref'));
   });
 
   it('should render an entry with no href as a placeholder, which is what keydefs and key-only topicrefs produce', () => {
