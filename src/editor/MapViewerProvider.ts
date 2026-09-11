@@ -310,6 +310,15 @@ function getMapWebviewScript(): string {
       if (contentRoot) {
         contentRoot.innerHTML = e.data.html;
         afterContentSwap();
+        // Site mode's book-internal xref jump (docsite design doc,
+        // 3.2/4.5): switchToSitePage stashed the target anchor before the
+        // page-switch postMessage, since the element it names doesn't
+        // exist until this new HTML lands. A plain sidebar/prev-next
+        // switch never sets this, so it's a no-op there.
+        if (currentMode === 'site' && pendingSiteAnchor) {
+          scrollToSiteAnchor(pendingSiteAnchor);
+          pendingSiteAnchor = null;
+        }
       }
     } else if (e.data.type === '${MSG_PATCH_CONTENT}') {
       // Book mode's incremental update: replace only the entries whose HTML
@@ -367,7 +376,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     // source edit (never a content-only message in site mode), which
     // repopulates this: there is no separate invalidation path to keep in
     // sync by hand.
-    let siteManifestCache: { manifest: DocsiteNavEntry[]; keyMap: Map<string, string> } | undefined;
+    let siteManifestCache: { manifest: DocsiteNavEntry[]; keyMap: Map<string, string>; bookMembers: ReadonlySet<string> } | undefined;
 
     webviewPanel.webview.options = {
       enableScripts: true,
@@ -514,7 +523,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       // and the next full re-render agree on what is currently on screen.
       if (rendered.resolvedSitePage !== undefined) currentSitePage = rendered.resolvedSitePage;
       siteManifestCache = rendered.siteManifest
-        ? { manifest: rendered.siteManifest, keyMap: rendered.siteKeyMap! }
+        ? { manifest: rendered.siteManifest, keyMap: rendered.siteKeyMap!, bookMembers: rendered.siteBookMembers! }
         : undefined;
     };
 
@@ -539,7 +548,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       let site = siteManifestCache;
       if (!site) {
         const built = this.buildSiteManifest(document);
-        site = built.error !== undefined ? undefined : { manifest: built.manifest, keyMap: built.keyMap };
+        site = built.error !== undefined ? undefined : { manifest: built.manifest, keyMap: built.keyMap, bookMembers: built.bookMembers };
       }
       if (!site || site.manifest.length === 0) {
         updateWebview(); // show whatever error/empty state a full render produces
@@ -549,7 +558,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         ? currentSitePage
         : site.manifest[0].absPath;
       currentSitePage = resolvedSitePage;
-      const topic = this.renderSiteTopicContent(resolvedSitePage, webviewPanel.webview, site.keyMap);
+      const topic = this.renderSiteTopicContent(resolvedSitePage, webviewPanel.webview, site.keyMap, site.bookMembers);
       if (topic.error !== undefined) {
         updateWebview();
         return;
@@ -659,7 +668,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     mapRoot: import('../parser/domTypes').DitaNode,
     document: vscode.TextDocument,
     docDir: string,
-  ): { keyMap: Map<string, string>; manifest: DocsiteNavEntry[] } {
+  ): { keyMap: Map<string, string>; manifest: DocsiteNavEntry[]; bookMembers: ReadonlySet<string> } {
     const keyMap = buildKeyMap(document.uri);
     const entries = collectMapEntries(mapRoot, (k) => keyMap.get(k));
     // makeFileTitleResolver reads a topic file's own <title> off disk --
@@ -682,20 +691,31 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       makeFileTitleResolver(docDir),
       makeFileTopicTypeResolver(docDir, localizeTopicTypeLabel),
     );
-    return { keyMap, manifest };
+    // Book-internal cross-topic xref (docsite design doc, 3.2/4.5): built
+    // once here, alongside the manifest it's derived from, and handed as
+    // the SAME instance to every renderSiteTopicContent call made against
+    // this manifest (both the initial page render below and every later
+    // page-switch in postSitePageUpdate) -- renderTopicCached's own cache
+    // keys bookMembers by identity, so reusing this instance rather than
+    // building a fresh Set per page switch is what keeps switching pages
+    // back and forth cheap instead of silently re-rendering every time.
+    const bookMembers = new Set(manifest.map((entry) => entry.absPath));
+    return { keyMap, manifest, bookMembers };
   }
 
   private buildSiteManifest(
     document: vscode.TextDocument,
-  ): { docDir: string; keyMap: Map<string, string>; manifest: DocsiteNavEntry[]; error?: undefined } | { error: string } {
+  ):
+    | { docDir: string; keyMap: Map<string, string>; manifest: DocsiteNavEntry[]; bookMembers: ReadonlySet<string>; error?: undefined }
+    | { error: string } {
     const docDir = dirname(document.uri.fsPath);
     try {
       const rawXml = document.getText();
       const preprocessedXml = preprocessEntities(rawXml);
       const mapDoc = parseDitamap(preprocessedXml);
       expandDitamapRefs(mapDoc.root, docDir);
-      const { keyMap, manifest } = this.buildSiteManifestFromParsedMap(mapDoc.root, document, docDir);
-      return { docDir, keyMap, manifest };
+      const { keyMap, manifest, bookMembers } = this.buildSiteManifestFromParsedMap(mapDoc.root, document, docDir);
+      return { docDir, keyMap, manifest, bookMembers };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { error: message };
@@ -719,6 +739,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     absPath: string,
     webview: vscode.Webview,
     keyMap: Map<string, string>,
+    bookMembers: ReadonlySet<string>,
   ): { html: string; error?: undefined } | { html?: undefined; error: string } {
     const topicDir = dirname(absPath);
     const asWebviewUri = (relPath: string): string => {
@@ -735,6 +756,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       asWebviewUri,
       headingLevel: 1,
       uiLanguage: vscode.env.language,
+      bookMembers,
     });
     if (result.error) return { error: result.error };
     return { html: result.html };
@@ -745,7 +767,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     webview: vscode.Webview,
     mode: 'tree' | 'book' | 'site',
     sitePageHint?: string,
-  ): { html: string; parts?: BookPart[]; sidebarHtml?: string; resolvedSitePage?: string; siteManifest?: DocsiteNavEntry[]; siteKeyMap?: Map<string, string>; error?: undefined } | { html?: undefined; error: string } {
+  ): { html: string; parts?: BookPart[]; sidebarHtml?: string; resolvedSitePage?: string; siteManifest?: DocsiteNavEntry[]; siteKeyMap?: Map<string, string>; siteBookMembers?: ReadonlySet<string>; error?: undefined } | { html?: undefined; error: string } {
     const docDir = dirname(document.uri.fsPath);
     try {
       const rawXml = document.getText();
@@ -761,7 +783,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         // reuse it rather than going through buildSiteManifest (which
         // re-parses from document.getText() for postSitePageUpdate's
         // benefit, where there is no already-parsed mapDoc to hand it).
-        const { keyMap, manifest } = this.buildSiteManifestFromParsedMap(mapDoc.root, document, docDir);
+        const { keyMap, manifest, bookMembers } = this.buildSiteManifestFromParsedMap(mapDoc.root, document, docDir);
         if (manifest.length === 0) {
           return { error: vscode.l10n.t('This map has no topics to show in site view.') };
         }
@@ -772,15 +794,16 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         const resolvedSitePage = sitePageHint && manifest.some((m) => m.absPath === sitePageHint)
           ? sitePageHint
           : manifest[0].absPath;
-        const topic = this.renderSiteTopicContent(resolvedSitePage, webview, keyMap);
+        const topic = this.renderSiteTopicContent(resolvedSitePage, webview, keyMap, bookMembers);
         if (topic.error !== undefined) return { error: topic.error };
         const sidebarHtml = renderSiteNavHtml(manifest, resolvedSitePage, vscode.l10n.t('Topics'));
-        // manifest/keyMap go back to the caller too (updateWebview) so a
-        // page switch (postSitePageUpdate) can reuse them instead of
-        // re-parsing the map and re-reading every un-navtitled topic's
-        // <title> off disk on every single click -- see that function's
-        // own comment.
-        return { html: topic.html, sidebarHtml, resolvedSitePage, siteManifest: manifest, siteKeyMap: keyMap };
+        // manifest/keyMap/bookMembers go back to the caller too
+        // (updateWebview) so a page switch (postSitePageUpdate) can reuse
+        // them instead of re-parsing the map, re-reading every
+        // un-navtitled topic's <title> off disk, and rebuilding the book
+        // membership set on every single click -- see that function's own
+        // comment.
+        return { html: topic.html, sidebarHtml, resolvedSitePage, siteManifest: manifest, siteKeyMap: keyMap, siteBookMembers: bookMembers };
       }
 
       let content: string;
@@ -836,7 +859,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     webview: vscode.Webview,
     mode: 'tree' | 'book' | 'site',
     sitePageHint?: string,
-  ): { html: string; parts?: BookPart[]; resolvedSitePage?: string; siteManifest?: DocsiteNavEntry[]; siteKeyMap?: Map<string, string> } {
+  ): { html: string; parts?: BookPart[]; resolvedSitePage?: string; siteManifest?: DocsiteNavEntry[]; siteKeyMap?: Map<string, string>; siteBookMembers?: ReadonlySet<string> } {
     const stylesUri = webview.asWebviewUri(
       vscode.Uri.file(join(this.context.extensionPath, 'media', 'styles.css')),
     );
@@ -900,6 +923,7 @@ ${mode === 'site' ? '<div id="__site-nav-resizer" class="site-nav-resizer" role=
       resolvedSitePage: result.resolvedSitePage,
       siteManifest: result.siteManifest,
       siteKeyMap: result.siteKeyMap,
+      siteBookMembers: result.siteBookMembers,
     };
   }
 
