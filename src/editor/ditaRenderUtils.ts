@@ -2435,6 +2435,26 @@ ${fontResetBlock}
   function applyWidth(value) {
     document.body.style.maxWidth = value;
     document.body.style.margin = value ? '0 auto' : '';
+    // #dita-content-root.site-main (docsite mode) has its own
+    // max-width:var(--max-width); margin:0 auto -- a separate box from
+    // body, which in site mode is just the outer flex row holding the
+    // sidebar and the content pane side by side (see body.mode-site in
+    // styles.css). Setting body.style.maxWidth above only ever affected
+    // body itself, which is exactly the box site mode's own CSS already
+    // resets to max-width:none -- so every width selection was a no-op
+    // there: "Full" looked identical to "Auto" because neither one was
+    // reaching the box that actually determines the reading column's
+    // width. Setting the --max-width custom property instead reaches
+    // both: body's own rule already reads max-width:var(--max-width) (the
+    // property this used to set directly is now just a more specific
+    // duplicate of what the variable already produces in tree/book mode),
+    // and .site-main's rule, which the class-based override in site mode
+    // never touched, now tracks the same selection.
+    if (value) {
+      document.body.style.setProperty('--max-width', value);
+    } else {
+      document.body.style.removeProperty('--max-width');
+    }
   }
   if (restoredWidth) applyWidth(restoredWidth);
   wSel.addEventListener('change', function() {

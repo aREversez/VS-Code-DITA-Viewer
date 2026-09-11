@@ -1464,6 +1464,58 @@ describe('toolbar scaffold/font-prefs/font-width-tag-tooltips scripts (a3\' extr
     assert.ok(bold.includes("fsUp.style.cssText = btnStyle + 'font-weight:bold;';"));
   });
 
+  it('applies the page-width selection as the --max-width custom property (not just body.style.maxWidth), so it also reaches #dita-content-root.site-main in docsite mode -- body.style.maxWidth alone only ever affected the outer flex row body becomes in site mode, which site mode\'s own CSS already resets to none, making every width selection a no-op there', () => {
+    const script = getToolbarFontWidthTagTooltipsButtonsScript(buttonsOpts);
+    const setProps: Array<[string, string]> = [];
+    const removedProps: string[] = [];
+    const fakeSelect = {
+      style: {},
+      setAttribute: () => {},
+      appendChild: () => {},
+      addEventListener: () => {},
+    };
+    const fakeOption = { value: '', textContent: '', selected: false };
+    const fakeButtons: Array<{ style: Record<string, unknown>; setAttribute: () => void; addEventListener: () => void }> = [];
+    const fakeDocument = {
+      createElement: (tag: string) => {
+        if (tag === 'select') return fakeSelect;
+        if (tag === 'option') return { ...fakeOption };
+        const btn = { style: {}, setAttribute: () => {}, addEventListener: () => {} };
+        fakeButtons.push(btn);
+        return btn;
+      },
+      getElementById: () => null,
+    };
+    const bodyStyle = {
+      maxWidth: '',
+      margin: '',
+      fontSize: '',
+      fontFamily: '',
+      setProperty: (name: string, value: string) => { setProps.push([name, value]); },
+      removeProperty: (name: string) => { removedProps.push(name); },
+    };
+    // fontSize/isSerif/SERIF_STACK are declared by getFontPrefsScript in
+    // production, always concatenated ahead of this one (see
+    // MapViewerProvider.ts/DitaViewerProvider.ts's own script assembly);
+    // stub them the same way here since this script alone references them
+    // (fontBtn's initial label) without declaring them itself.
+    const fontPrefsStub = 'var fontSize = 100; var isSerif = false; var SERIF_STACK = "serif";';
+    const fn = new Function(
+      'document', 'btnStyle', 'ddStyle', 'window',
+      fontPrefsStub + script + '; return applyWidth;',
+    );
+    const applyWidth = fn(fakeDocument, '', '', { __fontPrefs: undefined, __widthSelection: undefined, __tagTooltips: undefined });
+    // applyWidth is a closure over the real document.body from the script's
+    // own top-level scope in production; here it closes over whatever
+    // `document` this test handed the function, so point document.body at
+    // the fake style object before calling it.
+    (fakeDocument as unknown as { body: { style: typeof bodyStyle } }).body = { style: bodyStyle };
+    applyWidth('1400px');
+    assert.deepStrictEqual(setProps, [['--max-width', '1400px']], 'expected the CSS custom property to be set, not just body.style.maxWidth');
+    applyWidth('');
+    assert.deepStrictEqual(removedProps, ['--max-width'], 'expected the property to be cleared (falling back to :root\'s default), not set to an empty/invalid value');
+  });
+
   it('does not append any of its buttons to a toolbar itself -- ordering stays with the caller', () => {
     // The two providers interleave these buttons with their own
     // (theme CSS dropdown, mode toggle, refresh, Flags, Filter) in
