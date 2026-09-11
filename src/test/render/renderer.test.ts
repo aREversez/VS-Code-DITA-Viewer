@@ -936,6 +936,57 @@ describe('renderer', () => {
     assert.ok(html.includes('missing.dita'), 'should fall back to raw href');
   });
 
+  it('should render a book-internal cross-file xref as a clickable link with a resolved target', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveTitle: (id: string) => (id === 'other.dita#sec1' ? 'Other Topic' : undefined),
+      isInCurrentBook: (href: string) => (href === 'other.dita#sec1' ? '/book/other.dita' : undefined),
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/xref', [], { href: 'other.dita#sec1' }),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('data-dita-book-xref="/book/other.dita#sec1"'), 'should carry the resolved absolute path + anchor');
+    assert.ok(html.includes('class="xref"'), 'should use the real link style, not xref-external');
+    assert.ok(!html.includes('xref-external'), 'should not fall back to the non-clickable hint span');
+    assert.ok(html.includes('Other Topic'));
+  });
+
+  it('should render a book-internal cross-file xref without a fragment using just the resolved file path', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      isInCurrentBook: (href: string) => (href === 'other.dita' ? '/book/other.dita' : undefined),
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/xref', [], { href: 'other.dita' }),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('data-dita-book-xref="/book/other.dita"'));
+    assert.ok(!html.includes('/book/other.dita#'), 'no trailing fragment when the href had none');
+  });
+
+  it('should keep the non-clickable xref-external span when isInCurrentBook says the target is not in this book', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      isInCurrentBook: () => undefined,
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/xref', [], { href: 'outside.dita' }),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('xref-external'));
+    assert.ok(!html.includes('data-dita-book-xref'));
+  });
+
+  it('should behave exactly as before when isInCurrentBook is not supplied (standalone preview / export)', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/xref', [], { href: 'other.dita' }),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('xref-external'));
+    assert.ok(!html.includes('data-dita-book-xref'));
+  });
+
   it('should prefer xref text content over resolveTitle', () => {
     const ctx: RenderContext = {
       ...defaultCtx,

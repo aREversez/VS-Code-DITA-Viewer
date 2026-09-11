@@ -41,6 +41,26 @@ export interface RenderContext {
    * MapViewerProvider) keeps showing chips exactly as before.
    */
   suppressIndexterm?: boolean;
+  /**
+   * Resolves a cross-file xref's raw href to an absolute path IF the
+   * referenced topic is part of the book/docsite this topic is itself
+   * being rendered as part of, and undefined otherwise (target isn't in
+   * this book, or isn't a resolvable local .dita reference at all). Only
+   * set by callers assembling a book (renderBookParts) or a docsite page
+   * (MapViewerProvider's site mode) -- standalone single-topic preview
+   * (DitaViewerProvider) and "Export as HTML" never set this, so a
+   * cross-file xref there keeps rendering as the existing non-clickable
+   * <span class="xref-external"> hint (docsite design doc, 3.2/4.5).
+   *
+   * Deliberately returns the resolved path rather than a plain boolean:
+   * the caller (MapViewerProvider's webview click handler) needs an
+   * address to act on, not just a yes/no, and resolving the href against
+   * the right base directory (this topic's own directory, not the map's)
+   * is something only the caller building this closure can do correctly
+   * -- see makeFileTitleResolver's own resolution for the same rule
+   * applied to xref titles.
+   */
+  isInCurrentBook?: (href: string) => string | undefined;
 }
 
 const CONTAINER_BASETYPES = new Set([

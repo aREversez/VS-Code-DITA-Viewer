@@ -728,6 +728,25 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
       return `<a href="${escapeAttr(anchor)}" class="xref">${content}</a>`;
     }
 
+    // Cross-file: when the target topic is part of the book/docsite this
+    // topic is itself being rendered as part of, isInCurrentBook resolves
+    // it to an absolute path and this becomes a real, clickable link
+    // instead of the plain hint text below -- the webview's click handler
+    // reads data-dita-book-xref to ask the extension host to switch pages
+    // (see getSiteNavClickHandlerScript in ditaRenderUtils.ts). The
+    // anchor id reuses the same "last path segment" convention the
+    // same-page branch above already uses, so a nested
+    // "topicId/elementId" fragment still resolves to the specific element
+    // to scroll to, not just the topic root.
+    const bookTarget = ctx.isInCurrentBook?.(href);
+    if (bookTarget) {
+      const hashIdx = href.indexOf('#');
+      const idPart = hashIdx >= 0 ? href.slice(hashIdx + 1) : '';
+      const anchorId = idPart ? (idPart.includes('/') ? idPart.split('/').pop()! : idPart) : '';
+      const target = bookTarget + (anchorId ? '#' + anchorId : '');
+      return `<a href="#" class="xref" data-dita-book-xref="${escapeAttr(target)}">${content}</a>`;
+    }
+
     return `<span class="xref-external">→ ${content}</span>`;
   },
 
