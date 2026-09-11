@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -1627,5 +1627,42 @@ describe('getModeToggleScript (docsite mode)', () => {
   it('does not append the button to a toolbar itself', () => {
     const script = getModeToggleScript(opts);
     assert.ok(!script.includes('toolbar.appendChild'));
+  });
+});
+
+describe('clampSidebarWidth (docsite mode sidebar resize)', () => {
+  it('passes values already inside the range through unchanged', () => {
+    assert.strictEqual(clampSidebarWidth(300), 300);
+  });
+
+  it('clamps to the default minimum (160) and maximum (560)', () => {
+    assert.strictEqual(clampSidebarWidth(50), 160);
+    assert.strictEqual(clampSidebarWidth(9999), 560);
+  });
+
+  it('honors explicit min/max overrides', () => {
+    assert.strictEqual(clampSidebarWidth(50, 100, 200), 100);
+    assert.strictEqual(clampSidebarWidth(9999, 100, 200), 200);
+    assert.strictEqual(clampSidebarWidth(150, 100, 200), 150);
+  });
+});
+
+describe('getSiteSidebarResizerScript (docsite mode)', () => {
+  it('emits a script that parses as JavaScript', () => {
+    assert.doesNotThrow(() => new Function('document', getSiteSidebarResizerScript()));
+  });
+
+  it('no-ops without throwing when the resizer/.site-nav elements are not in the DOM (tree/book mode pages)', () => {
+    const fakeDocument = { getElementById: () => null, querySelector: () => null };
+    const fn = new Function('document', getSiteSidebarResizerScript());
+    assert.doesNotThrow(() => fn(fakeDocument));
+  });
+
+  it('injects the exported clampSidebarWidth rather than re-deriving the clamp math inline', () => {
+    const script = getSiteSidebarResizerScript();
+    assert.ok(
+      script.includes('var clampSidebarWidth = ' + clampSidebarWidth.toString() + ';'),
+      'expected the resizer script to inject the exported clampSidebarWidth verbatim',
+    );
   });
 });

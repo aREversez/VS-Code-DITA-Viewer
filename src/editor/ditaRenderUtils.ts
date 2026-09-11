@@ -1451,12 +1451,10 @@ export function getSitePrevNextButtonsScript(opts: { prevLabel: string; prevTitl
 
 /**
  * Docsite mode's sidebar collapse toggle -- a single button that flips
- * `site-nav-collapsed` on document.body. The sidebar itself starts
- * collapsed (see MapViewerProvider.ts's body class construction for site
- * mode): a fully-expanded topic list by default ate too much width for
- * what's often a glance-and-dismiss navigation aid, so site mode now opens
- * with the content pane full-width and this button is how a reader gets
- * the list back. Deliberately a plain class toggle on body rather than
+ * `site-nav-collapsed` on document.body. The sidebar itself starts open
+ * (see MapViewerProvider.ts's body class construction for site mode); this
+ * is how a reader tucks it away when they don't need it and gets it back
+ * the same way. Deliberately a plain class toggle on body rather than
  * anything that touches the sidebar's own markup or posts a message to the
  * extension host: nothing here needs to survive a page switch through any
  * path other than "the class is already sitting on body, which page
@@ -1532,6 +1530,81 @@ export function getModeToggleScript(opts: {
     updateModeLabel();
     vscode.postMessage({ type: '${opts.switchModeMsgType}', mode: newMode });
   });
+`;
+}
+
+/**
+ * Clamps a docsite-mode sidebar width (px) a drag gesture produced to a
+ * sane range. Pure and exported so the clamping math itself is unit
+ * tested; the drag wiring around it (getSiteSidebarResizerScript below)
+ * has no DOM in this test suite to actually drag through, same situation
+ * as isSearchExcludedAncestor/planCurrentMarkMove above -- this is the
+ * piece of that feature that can be tested directly, so it is.
+ */
+export function clampSidebarWidth(width: number, min = 160, max = 560): number {
+  if (width < min) return min;
+  if (width > max) return max;
+  return width;
+}
+
+/**
+ * Docsite mode's sidebar resize handle -- lets a reader drag the sidebar
+ * wider or narrower than its 240px default. A self-contained IIFE rather
+ * than something that needs appending to a toolbar: #__site-nav-resizer is
+ * already sitting in the page markup as a sibling of .site-nav (see
+ * MapViewerProvider.ts's body markup), one per docsite-mode page, so this
+ * only needs to find it and wire it up -- same "no-op if the element isn't
+ * there" safety the other docsite scripts get from their own id lookups,
+ * which is what makes it safe to always emit this call regardless of mode
+ * (tree/book pages never have #__site-nav-resizer in the DOM at all).
+ * Widens via el.style.flexBasis rather than a fixed width: .site-nav's own
+ * `flex: 0 0 240px` rule already fixes flex-grow/flex-shrink at 0, so only
+ * the flex-basis longhand needs an inline override to resize without also
+ * fighting the flex layout on every other axis.
+ * Keyboard support (ArrowLeft/ArrowRight nudge by 20px) comes from the
+ * element's own role="separator" tabindex="0" in the markup -- a
+ * mouse-only drag target with that role and no keyboard handler would be
+ * reachable by keyboard but do nothing once focused, which is worse than
+ * not being focusable at all.
+ */
+export function getSiteSidebarResizerScript(): string {
+  return `
+  (function() {
+    var resizer = document.getElementById('__site-nav-resizer');
+    var nav = document.querySelector('.site-nav');
+    if (!resizer || !nav) return;
+    var clampSidebarWidth = ${clampSidebarWidth.toString()};
+    var startX = 0;
+    var startWidth = 0;
+    function onMouseMove(e) {
+      nav.style.flexBasis = clampSidebarWidth(startWidth + (e.clientX - startX)) + 'px';
+    }
+    function onMouseUp() {
+      resizer.classList.remove('resizing');
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    }
+    resizer.addEventListener('mousedown', function(e) {
+      startX = e.clientX;
+      startWidth = nav.getBoundingClientRect().width;
+      resizer.classList.add('resizing');
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+      e.preventDefault();
+    });
+    resizer.addEventListener('keydown', function(e) {
+      var current = nav.getBoundingClientRect().width;
+      if (e.key === 'ArrowLeft') {
+        nav.style.flexBasis = clampSidebarWidth(current - 20) + 'px';
+        e.preventDefault();
+      } else if (e.key === 'ArrowRight') {
+        nav.style.flexBasis = clampSidebarWidth(current + 20) + 'px';
+        e.preventDefault();
+      }
+    });
+  })();
 `;
 }
 

@@ -972,29 +972,57 @@ body.mode-site {
 .site-nav {
   flex: 0 0 240px;
   overflow-y: auto;
-  border-right: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.3));
   padding: 1rem 0.5rem;
   box-sizing: border-box;
   transition: flex-basis 0.15s ease, padding 0.15s ease;
 }
-/* Sidebar starts collapsed (body carries this class from first paint --
-   see MapViewerProvider.ts's body-class construction for site mode) so a
-   book's full topic list doesn't eat width the reader didn't ask to spend
-   on it before they've even looked at a page. The __site-sidebar-toggle-btn
-   toolbar button (getSiteSidebarToggleScript) flips this class; nothing
-   else ever touches it, including a page switch (postSitePageUpdate's
-   content-only update never reaches body), so the open/closed choice
-   simply persists as the reader clicks from topic to topic. Content and
-   padding stay in the DOM either way -- box-sizing:border-box plus
-   flex-basis:0 and overflow:hidden above is what makes it disappear
-   visually, not display:none, so no re-layout of the links themselves is
-   needed when it reopens. */
+/* Sidebar starts open. The __site-sidebar-toggle-btn toolbar button
+   (getSiteSidebarToggleScript) is how a reader tucks it away and gets it
+   back; nothing else ever touches this class, including a page switch
+   (postSitePageUpdate's content-only update never reaches body), so the
+   open/closed choice simply persists as the reader clicks from topic to
+   topic. Content and padding stay in the DOM either way -- box-sizing:
+   border-box plus flex-basis:0 and overflow:hidden below is what makes it
+   disappear visually, not display:none, so no re-layout of the links
+   themselves is needed when it reopens. */
 body.mode-site.site-nav-collapsed .site-nav {
   flex-basis: 0;
   padding-left: 0;
   padding-right: 0;
   overflow: hidden;
-  border-right: none;
+}
+/* The resizer, not .site-nav's own border, is what draws the divider line
+   now (::before below) -- a plain 1px border can't grow into a comfortable
+   drag target the way this element's own width can, and layering a
+   separate hit area on top of a bordered sidebar just doubles up the line
+   for no benefit. flex:0 0 4px reserves a small hit area either side of
+   the visible 1px line; getSiteSidebarResizerScript resizes .site-nav
+   itself by setting its flex-basis directly (overriding the flex
+   shorthand's 240px longhand), which is why min-width:0 not being needed
+   here). Hidden together with .site-nav when collapsed -- dragging a
+   0-width sidebar open again is what the toggle button is for, not this. */
+.site-nav-resizer {
+  flex: 0 0 4px;
+  position: relative;
+  cursor: col-resize;
+}
+.site-nav-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--vscode-widget-border, rgba(128, 128, 128, 0.3));
+}
+.site-nav-resizer:hover::before,
+.site-nav-resizer.resizing::before {
+  left: calc(50% - 0.5px);
+  width: 2px;
+  background: var(--vscode-focusBorder, #007fd4);
+}
+body.mode-site.site-nav-collapsed .site-nav-resizer {
+  display: none;
 }
 .site-nav-link {
   display: flex;
