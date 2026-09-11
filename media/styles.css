@@ -1102,13 +1102,17 @@ body.mode-site.site-nav-collapsed .site-nav-resizer {
    than relying on the browser's native disabled look, since btnStyle
    (getToolbarScaffoldScript) sets background/border/color explicitly and
    would otherwise mostly hide it. Disabled at the first/last topic.
-   Sized up from the rest of the toolbar's icon-sized buttons on purpose:
-   these are the two a reader clicks over and over while reading straight
-   through a book, so a bigger, easier target matters more here than
-   toolbar-wide visual uniformity does. */
+   min-width only, deliberately no min-height: an earlier version bumped
+   font-size to 20px with a matching 1.9em min-height to make these two
+   easier to hit than the rest of the icon-sized toolbar, but that made
+   them visibly taller than every other button in the same toolbar row.
+   Same font-size as the rest of the toolbar now (btnStyle's default,
+   via 'font-size:14px' close to but not exactly it -- see
+   getSitePrevNextButtonsScript's own inline style), just wider, so the
+   two read as a slightly bigger target without breaking the toolbar's
+   otherwise-uniform row height. */
 #__site-prev-btn, #__site-next-btn {
-  min-width: 2.2em;
-  min-height: 1.9em;
+  min-width: 2.4em;
 }
 #__site-prev-btn:disabled, #__site-next-btn:disabled {
   opacity: 0.4;

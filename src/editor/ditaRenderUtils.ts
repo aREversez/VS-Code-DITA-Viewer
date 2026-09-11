@@ -1438,14 +1438,14 @@ export function getSitePrevNextButtonsScript(opts: { prevLabel: string; prevTitl
   sitePrevBtn.textContent = ${prevLabel};
   sitePrevBtn.title = ${prevTitle};
   sitePrevBtn.setAttribute('aria-label', ${prevTitle});
-  sitePrevBtn.style.cssText = btnStyle + 'font-size:20px;padding:2px 10px;justify-content:center;';
+  sitePrevBtn.style.cssText = btnStyle + 'font-size:14px;padding:1px 9px;justify-content:center;';
 
   var siteNextBtn = document.createElement('button');
   siteNextBtn.id = '__site-next-btn';
   siteNextBtn.textContent = ${nextLabel};
   siteNextBtn.title = ${nextTitle};
   siteNextBtn.setAttribute('aria-label', ${nextTitle});
-  siteNextBtn.style.cssText = btnStyle + 'font-size:20px;padding:2px 10px;justify-content:center;';
+  siteNextBtn.style.cssText = btnStyle + 'font-size:14px;padding:1px 9px;justify-content:center;';
 `;
 }
 
