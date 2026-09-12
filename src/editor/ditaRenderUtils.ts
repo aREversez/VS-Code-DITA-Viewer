@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, openSync, readSync, closeSync, statSync } from 'fs';
-import { resolve, dirname, relative, isAbsolute, extname, normalize } from 'path';
+import { existsSync, readFileSync, openSync, readSync, closeSync, statSync, readdirSync } from 'fs';
+import { resolve, join, dirname, relative, isAbsolute, extname, normalize } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
@@ -1046,6 +1046,60 @@ export function stampFiles(files: string[]): string {
       }
     })
     .join('|');
+}
+
+/**
+ * Pure directory-walking core of findDitamapFiles (keyMap.ts). Lives here
+ * rather than there for the same reason stampFiles above does: keyMap.ts
+ * imports vscode at module scope for parseDocRoot/vscode.Uri, so nothing
+ * defined there can be unit tested without a vscode.Uri/workspace, even
+ * logic like this that never touches vscode itself.
+ *
+ * Walks upward from startDir to root (inclusive); at *each* level it scans
+ * that directory's whole subtree, not just its direct children, for
+ * .ditamap files -- layouts that keep maps/ and topics/ as siblings (see
+ * test-dita-file/manual) put the nearest map one directory below the
+ * ancestor level being scanned, so a direct-children-only scan at each
+ * ancestor silently misses it and buildKeyMap falls back to whichever
+ * unrelated .ditamap happens to sit directly in a further-up ancestor, if
+ * any, instead of the real one (kill test: keyMap.test.ts).
+ */
+export function collectDitamapFilesUpward(startDir: string, root: string, stopAtFirstMatch: boolean): string[] {
+  const results: string[] = [];
+  // A directory two ancestor levels up recursively covers everything a
+  // closer level already scanned, so without this a .ditamap nested a
+  // couple of directories down would be reported once per ancestor level
+  // that subsumes it, not once.
+  const visited = new Set<string>();
+  let dir = startDir;
+  while (dir.length >= root.length) {
+    collectDitamapFilesRecursive(dir, results, visited);
+    if (stopAtFirstMatch && results.length > 0) return results;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return results;
+}
+
+function collectDitamapFilesRecursive(dir: string, results: string[], visited: Set<string>): void {
+  if (visited.has(dir)) return;
+  visited.add(dir);
+  let entries: import('fs').Dirent[];
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch (e) {
+    console.warn(`Failed to read directory ${dir}:`, e instanceof Error ? e.message : e);
+    return;
+  }
+  for (const entry of entries) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      collectDitamapFilesRecursive(full, results, visited);
+    } else if (entry.name.toLowerCase().endsWith('.ditamap')) {
+      results.push(full);
+    }
+  }
 }
 
 /**

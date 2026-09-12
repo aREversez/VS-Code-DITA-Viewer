@@ -10,32 +10,17 @@
 // file for the byte-for-byte diff against the code's previous location.
 
 import * as vscode from 'vscode';
-import { readFileSync, readdirSync } from 'fs';
-import { dirname, join } from 'path';
+import { readFileSync } from 'fs';
+import { dirname } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
-import { expandDitamapRefs, stampFiles, FileReader } from './ditaRenderUtils';
+import { expandDitamapRefs, stampFiles, collectDitamapFilesUpward, FileReader } from './ditaRenderUtils';
 import { parseDocRoot } from './docPaths';
 
 export function findDitamapFiles(docUri: vscode.Uri, stopAtFirstMatch = true): string[] {
-  const results: string[] = [];
   const docDir = dirname(docUri.fsPath);
   const root = parseDocRoot(docDir);
-  let dir = docDir;
-  while (dir.length >= root.length) {
-    try {
-      for (const entry of readdirSync(dir)) {
-        if (entry.toLowerCase().endsWith('.ditamap')) results.push(join(dir, entry));
-      }
-    } catch (e) {
-      console.warn(`Failed to read directory ${dir}:`, e instanceof Error ? e.message : e);
-    }
-    if (stopAtFirstMatch && results.length > 0) return results;
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return results;
+  return collectDitamapFilesUpward(docDir, root, stopAtFirstMatch);
 }
 
 function extractTextFromNode(node: DitaNode): string {
