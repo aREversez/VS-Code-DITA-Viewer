@@ -77,7 +77,7 @@ function extractPlainText(node: DitaNode): string {
 // see the topic/indexterm renderer below) and produces one chip per leaf
 // path, each with own text plus any index-see/index-see-also attached at
 // that level.
-interface IndextermChip {
+export interface IndextermChip {
   /** Term levels from outermost to innermost, e.g. ['Database', 'backup']. */
   path: string[];
   /** Rendered "see: X" / "see also: X" annotations attached at this level. */
@@ -92,7 +92,14 @@ function directTermText(node: DitaNode): string {
     .trim();
 }
 
-function collectIndextermChips(node: DitaNode, ancestorPath: string[] = []): IndextermChip[] {
+/**
+ * Exported for the full-book search index (docsite design doc, 4.4):
+ * findTopLevelIndextermsInSubtree finds every independent indexterm tree in
+ * a topic (body and prolog/keywords alike), and this turns each one into
+ * its leaf-path chips -- the same two-step extraction the topic/indexterm
+ * renderer below already does for on-page display.
+ */
+export function collectIndextermChips(node: DitaNode, ancestorPath: string[] = []): IndextermChip[] {
   const ownTerm = directTermText(node);
   const path = ownTerm ? [...ancestorPath, ownTerm] : ancestorPath;
   const children = node.children || [];
