@@ -378,8 +378,16 @@ export function getBookSearchScript(opts: {
     // new ones, per the "copy VS Code's own search-panel icon row"
     // request this row is modeled on.
     var bsIconBtnStyle = 'padding:1px 5px;border-radius:3px;border:1px solid transparent;background:transparent;color:var(--vscode-icon-foreground,var(--vscode-foreground));cursor:pointer;font-size:13px;line-height:1.4;outline:none;';
+    // Hidden until there is an actual query (bsUpdateHeaderVisibility,
+    // driven by the input listener below): an icon-only row with nothing
+    // else on it reads as orphaned real estate before the reader has
+    // typed anything, and refresh/clear are both meaningless against an
+    // empty box anyway (bsRefreshBtn's own handler already no-ops then,
+    // and bsClearBtn has nothing to clear). Surfacing them only once
+    // there is a query keeps the box a single, uncluttered line until
+    // the reader is actually searching.
     var bsHeaderRow = document.createElement('div');
-    bsHeaderRow.style.cssText = 'display:flex;justify-content:flex-end;gap:2px;';
+    bsHeaderRow.style.cssText = 'display:none;justify-content:flex-end;gap:2px;';
 
     var bsRefreshBtn = document.createElement('button');
     bsRefreshBtn.innerHTML = '&#x21bb;';
@@ -454,10 +462,20 @@ export function getBookSearchScript(opts: {
     var bsCaseSensitive = false;
     var bsUseRegex = false;
 
+    // Single source of truth for the header row's visibility, so the
+    // empty-query path (bsShowLinks, reached both from bsRunQuery and
+    // from bsClearBtn) and the has-a-query path (the input listener
+    // below) can never drift into disagreeing about what an empty box
+    // means.
+    function bsUpdateHeaderVisibility() {
+      bsHeaderRow.style.display = bookSearchInput.value ? 'flex' : 'none';
+    }
+
     function bsShowLinks() {
       bookSearchResults.style.display = 'none';
       bookSearchResults.innerHTML = '';
       bsLinksWrap.style.display = '';
+      bsUpdateHeaderVisibility();
     }
 
     function bsRunQuery(forceRefresh) {
@@ -474,6 +492,12 @@ export function getBookSearchScript(opts: {
     // typing, not once per keystroke.
     var bsDebounce = null;
     bookSearchInput.addEventListener('input', function() {
+      // Not debounced along with the query itself: the header row
+      // showing/hiding is a cheap, purely-local style flip, and tying it
+      // to the same 200ms pause-in-typing delay as bsRunQuery would mean
+      // the icons visibly lag a keystroke or two behind the reader
+      // actually typing -- worse than just reacting immediately.
+      bsUpdateHeaderVisibility();
       if (bsDebounce) clearTimeout(bsDebounce);
       bsDebounce = setTimeout(function() { bsRunQuery(false); }, 200);
     });

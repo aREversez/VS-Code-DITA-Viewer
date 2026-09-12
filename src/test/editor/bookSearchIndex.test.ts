@@ -446,7 +446,7 @@ describe('bookSearchIndex', () => {
         requestMsgType: 'bookSearch',
         responseMsgType: 'bookSearchResults',
       })}
-      return { siteNavRef: siteNav, input: bookSearchInput, results: bookSearchResults, linksWrap: bsLinksWrap, caseBtn: bsCaseBtn, regexBtn: bsRegexBtn, refreshBtn: bsRefreshBtn, clearBtn: bsClearBtn };
+      return { siteNavRef: siteNav, input: bookSearchInput, results: bookSearchResults, linksWrap: bsLinksWrap, caseBtn: bsCaseBtn, regexBtn: bsRegexBtn, refreshBtn: bsRefreshBtn, clearBtn: bsClearBtn, headerRow: bsHeaderRow };
     `;
     const fn = new Function('document', 'window', 'vscode', script);
     const api = fn(env.document, env.window, env.vscode) as {
@@ -458,6 +458,7 @@ describe('bookSearchIndex', () => {
       regexBtn: FakeNode;
       refreshBtn: FakeNode;
       clearBtn: FakeNode;
+      headerRow: FakeNode;
     };
     return { ...env, ...api };
   }
@@ -526,6 +527,37 @@ describe('bookSearchIndex', () => {
     assert.strictEqual(results.style.display, 'none');
     assert.strictEqual(linksWrap.style.display, '');
     assert.deepStrictEqual(posted, []);
+  });
+
+  it('the refresh/clear icon row is hidden until there is a query', () => {
+    const { headerRow } = runBookSearchScript([{ absPath: '/book/a.dita' }]);
+    assert.strictEqual(headerRow.style.display, 'none');
+  });
+
+  it('typing a query reveals the icon row immediately, without waiting for debounce', () => {
+    const { input, headerRow, posted } = runBookSearchScript([{ absPath: '/book/a.dita' }]);
+    (input as { value: string }).value = 'widget';
+    input.fire('input');
+    assert.strictEqual(headerRow.style.display, 'flex');
+    assert.deepStrictEqual(posted, [], 'the icon row reacting immediately should not itself skip the search debounce');
+  });
+
+  it('clearing the query back to empty via typing hides the icon row again', () => {
+    const { input, headerRow } = runBookSearchScript([{ absPath: '/book/a.dita' }]);
+    (input as { value: string }).value = 'widget';
+    input.fire('input');
+    assert.strictEqual(headerRow.style.display, 'flex');
+    (input as { value: string }).value = '';
+    input.fire('input');
+    assert.strictEqual(headerRow.style.display, 'none');
+  });
+
+  it('the clear button also hides the icon row', () => {
+    const { input, headerRow, clearBtn } = runBookSearchScript([{ absPath: '/book/a.dita' }]);
+    (input as { value: string }).value = 'widget';
+    input.fire('input');
+    clearBtn.fire('click');
+    assert.strictEqual(headerRow.style.display, 'none');
   });
 
   it('the refresh button re-sends the current query with refresh: true', async () => {
