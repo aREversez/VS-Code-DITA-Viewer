@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import { mkdirSync, mkdtempSync, rmSync, statSync, utimesSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { collectMapEntries } from '../../render/mapTypeMap';
 import type { MapEntry } from '../../render/mapTypeMap';
 import { parseDitamap, preprocessEntities } from '../../parser/ditaParser';
@@ -794,7 +794,16 @@ describe('renderBookEntries', () => {
 // shared resolution rule and the manifest built on top of it, not
 // re-testing renderBookEntries' own assembly.
 describe('resolveBookTopicPath / buildBookNavManifest (docsite nav manifest)', () => {
-  const docDir = '/proj/docs';
+  // Must be a genuinely absolute path -- with a drive letter on Windows --
+  // the same shape dirname(document.uri.fsPath) always produces in real
+  // usage. A bare '/proj/docs' *looks* absolute but has no drive letter, so
+  // on Windows path.resolve() (which resolveBookTopicPath uses) silently
+  // anchors it to whatever drive the process happens to be running from,
+  // while path.join() (used below for expected values) doesn't -- the two
+  // only diverge in this corner case, and only on Windows, which is why
+  // this passed on Linux/macOS CI for a long time before windows-latest
+  // caught it.
+  const docDir = resolve('/proj/docs');
 
   it('resolves a plain .dita href against docDir', () => {
     const entry: MapEntry = { href: 'topics/intro.dita', displayName: 'Intro', displayNameExplicit: true, depth: 0 };
