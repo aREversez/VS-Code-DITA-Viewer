@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="features_overview" xml:lang="zh-CN">
+  <title>核心功能一览</title>
+  <shortdesc>本章概览中控主机的全部功能模块，并给出各功能的详细说明入口，帮助您快速定位所需内容。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>功能总览</indexterm>
+        <indexterm>功能地图</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <conbody>
+<p><ph keyref="product-name"/> 的功能划分为六个模块，各模块彼此联动，共同构成完整的智能家居中枢体验。</p>
+    <note type="tip"><p>功能清单可能随固件更新而变化，请以手机应用内实际展示为准。</p></note><section>
+      <title>功能地图</title>
+      <simpletable id="feature-map">
+        <sthead><stentry>功能模块</stentry><stentry>一句话说明</stentry><stentry>详细文档</stentry></sthead>
+        <strow><stentry>设备接入</stentry><stentry>Zigbee、红外、Wi-Fi 设备统一管理</stentry><stentry><xref href="feature_zigbee.dita"/>、<xref href="feature_ir.dita"/></stentry></strow>
+        <strow><stentry>场景模式</stentry><stentry>一键切换多设备组合状态</stentry><stentry><xref href="feature_scene.dita"/></stentry></strow>
+        <strow><stentry>自动化</stentry><stentry>条件触发、自动执行</stentry><stentry><xref href="feature_automation.dita"/></stentry></strow>
+        <strow><stentry>语音控制</stentry><stentry>免手操的远场语音交互</stentry><stentry><xref href="feature_voice.dita"/></stentry></strow>
+        <strow><stentry>安防监控</stentry><stentry>传感器联动布防与告警</stentry><stentry><xref href="feature_security.dita"/></stentry></strow>
+        <strow><stentry>传感器联动</stentry><stentry>温湿度、光照驱动设备策略</stentry><stentry><xref href="feature_sensor.dita"/></stentry></strow>
+      </simpletable>
+    </section>    <section>
+      <title>硬件与软件协作</title>
+      <p>主机本体的触摸屏适合近场快速操作；日常远程与细粒度配置建议使用手机应用，二者数据实时同步。应用界面布局参见 <xref href="app_dashboard.dita"/>。</p>
+      <p>对于具备网络基础的用户，主机同时提供本地 Web 管理界面，访问方式与账号体系说明参见 <xref href="feature_gateway.dita"/>。</p>
+    </section>
+  </conbody>
+</concept>

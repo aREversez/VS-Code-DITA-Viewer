@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<task id="remote_control" xml:lang="zh-CN">
+  <title>远程控制家中设备</title>
+  <shortdesc>在外网环境下通过手机应用控制家中设备，并了解远程通道的工作方式。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>远程控制</indexterm>
+        <indexterm>外网</indexterm>
+        <indexterm>加密通道</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <taskbody>
+    <prereq>
+      <ul>
+        <li>主机已绑定到账号并在线（<xref href="app_pairing.dita"/>）。</li>
+        <li>手机可访问互联网（移动数据或外部 Wi-Fi 均可）。</li>
+      </ul>
+    </prereq>
+    <context>
+      <p>远程控制经由云端加密通道转发，指令端到端加密，<ph keyref="company-name"/> 服务器无法读取指令内容。</p>
+    </context>
+    <steps>
+<step>
+        <cmd>打开手机应用，确认顶部状态栏显示主机「在线」。</cmd>
+      </step>
+      <step>
+        <cmd>像在本地一样点击设备卡片或场景即可下发控制。</cmd>
+      <info>
+          <p>远程指令的延迟通常在 1 秒以内；设备卡片右上角的旋转图标表示指令正在传输。</p>
+        </info>
+      </step>
+        <step>
+        <cmd>查看执行结果：设备详情页的历史记录会标注每条指令是本地还是远程执行。</cmd>
+      </step>
+
+    </steps>
+    <result>
+<p>家中设备状态按指令更新。</p>
+    </result>
+    <example>
+<note type="caution"><p>主机离线时远程指令会失败并提示。请参见 <xref href="ts_offline.dita"/> 恢复主机在线后再试。</p></note>
+    </example>
+  </taskbody>
+</task>

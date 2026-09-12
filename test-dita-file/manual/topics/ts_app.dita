@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE troubleshooting PUBLIC "-//OASIS//DTD DITA Troubleshooting//EN" "troubleshooting.dtd">
+<troubleshooting id="ts_app" xml:lang="zh-CN">
+  <title>手机应用异常</title>
+  <shortdesc>应用闪退、白屏、无法登录或控制指令无响应时的处理方法。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>应用闪退</indexterm>
+        <indexterm>白屏</indexterm>
+        <indexterm>登录异常</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <troublebody>
+    <condition>
+      <p>应用出现闪退、界面白屏、登录卡住或指令下发后无反馈。</p>
+    </condition>
+    <troubleSolution>
+      <cause>
+      <p>常见原因：</p>
+      <ol>
+        <li>应用版本过旧，与主机固件不匹配。</li>
+        <li>本地网络权限被系统回收（多见于 iOS 升级后）。</li>
+        <li>应用缓存数据损坏。</li>
+      </ol>
+      </cause>
+      <remedy>
+<steps>
+        <step><cmd>将应用升级到应用商店最新版本。</cmd></step>
+        <step><cmd>检查系统权限。</cmd></step>
+        <step><cmd>清除应用缓存。路径：系统设置 → 应用管理 → 智能中控 → 清除缓存（不清除数据）。</cmd></step>
+        <step><cmd>退出登录后重新登录账号。</cmd></step>
+        <step><cmd>仍异常时卸载重装应用，配置保存在云端与主机上，重装不丢失数据。</cmd></step>
+      </steps>
+      </remedy>
+    </troubleSolution>
+  </troublebody>
+</troubleshooting>

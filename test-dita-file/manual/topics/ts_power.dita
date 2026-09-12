@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE troubleshooting PUBLIC "-//OASIS//DTD DITA Troubleshooting//EN" "troubleshooting.dtd">
+<troubleshooting id="ts_power" xml:lang="zh-CN">
+  <title>无法开机或指示灯红色常亮</title>
+  <shortdesc>主机通电后屏幕不亮、氛围灯熄灭或呈红色常亮时，按本主题排查供电与系统问题。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>无法开机</indexterm>
+        <indexterm>红色灯</indexterm>
+        <indexterm>电源故障</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <troublebody>
+    <condition>
+      <p>存在以下任一现象：</p>
+      <ul>
+        <li>通电后屏幕与氛围灯均无反应。</li>
+        <li>氛围灯红色常亮，屏幕无输出。</li>
+        <li>开机后反复重启。</li>
+      </ul>
+    </condition>
+    <troubleSolution>
+      <cause>
+      <p>常见原因按概率排序：</p>
+      <ol>
+        <li>电源适配器未插紧或插座无电。</li>
+        <li>使用了非原装适配器，输出电压或电流不足。</li>
+        <li>系统分区损坏（多发生于升级中断电）。</li>
+      </ol>
+      </cause>
+      <remedy>
+<steps>
+        <step><cmd>检查插座是否有电，可将手机充电器插入同一插座验证。</cmd></step>
+        <step><cmd>重新插拔适配器与主机连接端，确认插紧。</cmd></step>
+        <step><cmd>确认使用的是原装 12 V/2 A 适配器。</cmd></step>
+        <step><cmd>若灯仍红色常亮，断电 1 分钟后重新通电，让系统执行恢复自检。</cmd></step>
+        <step><cmd>问题依旧时，尝试物理恢复出厂（<xref href="reset_device.dita"/>）。</cmd><info><note type="important"><p>上述步骤均无效时，设备可能存在硬件故障，请停止通电并联系售后（<xref href="contact_support.dita"/>）。</p></note></info></step>
+      </steps>
+
+      </remedy>
+    </troubleSolution>
+  </troublebody>
+</troubleshooting>

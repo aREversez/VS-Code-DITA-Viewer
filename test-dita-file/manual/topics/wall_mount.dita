@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<task id="wall_mount" xml:lang="zh-CN">
+  <title>壁挂安装</title>
+  <shortdesc>在墙面固定壁挂支架并将主机挂装的完整步骤，含打孔定位与承重检查要点。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>壁挂</indexterm>
+        <indexterm>支架</indexterm>
+        <indexterm>打孔</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <taskbody>
+    <prereq>
+<note type="warning"><p>本任务涉及在墙体上钻孔。请先确认墙内无水电管线，并佩戴护目镜。</p></note>
+    </prereq>
+    <context>
+      <p>壁挂支架需两颗膨胀螺栓固定，孔距 80 mm，孔径 6 mm，孔深 35 mm。仅实心砖墙与混凝土墙可承受主机重量（约 380 g 含支架）。</p>
+    </context>
+    <steps>
+<step>
+        <cmd>用铅笔按支架孔位在墙上标记两个钻孔点，并用水平尺校准。</cmd>
+      </step>
+      <step>
+        <cmd>使用 6 mm 冲击钻头在标记处钻孔，孔深 35 mm。</cmd>
+      </step>
+      <step>
+        <cmd>将膨胀螺栓打入孔中，使其与墙面齐平。</cmd>
+      </step>
+      <step>
+        <cmd>用十字螺丝刀将支架固定在螺栓上，扭矩以垫片压紧不晃动为准。</cmd>
+      </step>
+      <step>
+        <cmd>将主机顶部挂钩对准支架上沿，下部沿导轨推入并下压，听到「咔哒」声即锁止。</cmd>
+      <info>
+          <p>锁止后请向下轻拉主机确认牢固，再进行接线。</p>
+        </info>
+</step>
+        
+    </steps>
+    <result>
+<p>主机固定于墙面，水平无歪斜，轻拉不脱落。</p>
+    </result>
+    <postreq>
+<p>进行接线与通电：<xref href="connect_power.dita"/>。若需拆下主机，请先断电再向上顶起主机底部卡扣。</p>
+    </postreq>
+  </taskbody>
+</task>

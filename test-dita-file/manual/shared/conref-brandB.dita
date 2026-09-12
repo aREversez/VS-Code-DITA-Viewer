@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE reference PUBLIC "-//OASIS//DTD DITA Reference//EN" "reference.dtd">
+<reference id="shared-brandB" xml:lang="zh-CN">
+  <title>品牌 B 共享内容库</title>
+  <shortdesc>品牌 B（碧峰数联）渠道的重用内容，通过 conkeyref 引用，不直接发布。</shortdesc>
+  <refbody>
+    <section>
+      <p id="support-info">品牌 B 渠道用户请拨打 <keyword keyref="support-phone"/> 联系碧峰数联客户服务中心，或访问 <xref href="https://help.example-bifeng.com" format="html" scope="external"/> 在线提交报修。工作日 9:00-21:00 提供人工支持。</p>
+    </section>
+    <section>
+      <p id="warranty-text">由碧峰数联渠道销售的产品，自购买之日起主机享有 36 个月整机保修，原装电源适配器与配件享有 18 个月保修。碧峰数联提供「15 天无理由退换、首年只换不修」服务承诺。</p>
+    </section>
+    <section>
+      <p id="warranty-extended">品牌 B 渠道的延保与意外保障服务由碧峰数联（深圳）有限公司统一提供，办理入口为官方小程序「碧峰服务」，具体条款以购买页面展示为准。</p>
+    </section>
+    <section>
+      <p id="copyright">Copyright © <keyword keyref="release-year"/> 碧峰数联（深圳）有限公司，保留所有权利。</p>
+    </section>
+  </refbody>
+</reference>

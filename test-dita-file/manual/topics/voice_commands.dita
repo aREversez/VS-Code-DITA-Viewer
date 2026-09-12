@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE reference PUBLIC "-//OASIS//DTD DITA Reference//EN" "reference.dtd">
+<reference id="voice_commands" xml:lang="zh-CN">
+  <title>语音指令参考</title>
+  <shortdesc>主机支持的常用语音指令速查，按使用对象分类。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>语音指令</indexterm>
+        <indexterm>命令列表</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <refbody>
+<section>
+      <title>设备控制类</title>
+    <table id="voice-device">
+      <title>设备控制指令</title>
+      <tgroup cols="2">
+        <thead><row><entry>指令</entry><entry>效果</entry></row></thead>
+        <tbody>
+          <row><entry>打开 / 关闭 + 设备名</entry><entry>开关指定设备</entry></row>
+          <row><entry>把空调调到 24 度</entry><entry>设置空调温度</entry></row>
+          <row><entry>客厅灯调到 50%</entry><entry>调节亮度</entry></row>
+          <row><entry>全部灯光关闭</entry><entry>关闭全屋照明</entry></row>
+        </tbody>
+      </tgroup>
+    </table>
+    </section>    <section>
+      <title>场景与系统类</title>
+    <ul>
+      <li>执行 + 场景名：运行指定场景。</li>
+      <li>现在几点 / 今天天气：系统信息查询。</li>
+      <li>打开免打扰 / 关闭免打扰。</li>
+      <li>布防 / 撤防：切换安防模式（需语音密码）。</li>
+      <li>取消 / 停止：中断当前交互。</li>
+    </ul>
+    <note type="important"><p>布防与撤防指令涉及安防，默认开启语音密码验证，可在 <menucascade><uicontrol>设置</uicontrol><uicontrol>语音</uicontrol><uicontrol>安全指令</uicontrol></menucascade> 中管理。</p></note></section>
+  </refbody>
+</reference>

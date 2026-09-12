@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<task id="app_pairing" xml:lang="zh-CN">
+  <title>绑定中控主机</title>
+  <shortdesc>将手机应用与中控主机配对，实现远程管理与控制。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>绑定</indexterm>
+        <indexterm>配对</indexterm>
+        <indexterm>添加设备</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <taskbody>
+    <prereq>
+      <ul>
+        <li>主机已完成初始化（<xref href="first_boot.dita"/>）。</li>
+        <li>手机已登录账号（<xref href="app_account.dita"/>）。</li>
+      </ul>
+    </prereq>
+    <context>
+      <p>配对通过局域网自动发现完成，主机与手机需处于同一路由器下。</p>
+    </context>
+    <steps>
+<step>
+        <cmd>在应用首页点击 <uicontrol>添加设备</uicontrol>。</cmd>
+      </step>
+      <step>
+        <cmd>在设备列表中选择检测到的主机（名称含主机序列号后四位）。</cmd>
+      </step>
+      <step>
+        <cmd>核对屏幕上显示的配对码与手机弹窗一致后，点击 <uicontrol>确认绑定</uicontrol>。</cmd>
+      <choices>
+          <choice platform="ios">iOS：首次绑定时系统会请求加入本地网络的权限，点击允许。</choice>
+          <choice platform="android">Android：部分机型需要允许「附近的设备」权限。</choice>
+        </choices>
+      </step>
+        <step>
+        <cmd>等待绑定完成，应用自动跳转到控制台。</cmd>
+      </step>
+
+    </steps>
+    <result>
+<p>控制台显示主机在线状态与常用卡片，绑定完成。</p>
+    </result>
+    <example>
+<note type="tip"><p>若搜索不到主机，请确认手机未开启 VPN，并尝试在 <menucascade><uicontrol>添加设备</uicontrol><uicontrol>手动添加</uicontrol></menucascade> 中输入主机屏幕显示的配对码。</p></note>
+    </example>
+    <postreq>
+<p>熟悉控制台布局：<xref href="app_dashboard.dita"/>。</p>
+    </postreq>
+  </taskbody>
+</task>

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<task id="network_setup" xml:lang="zh-CN">
+  <title>网络配置</title>
+  <shortdesc>为中控主机配置有线或无线网络连接，并验证连通性。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>网络配置</indexterm>
+        <indexterm>Wi-Fi</indexterm>
+        <indexterm>有线连接</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <taskbody>
+    <prereq>
+      <p>主机已开机并进入初始化向导（<xref href="connect_power.dita"/>）。已知路由器的 Wi-Fi 名称与密码（无线方式时）。</p>
+    </prereq>
+    <context>
+      <p>推荐优先使用有线连接；无线连接建议选择 2.4 GHz 频段以获得更好的穿墙能力。</p>
+    </context>
+    <steps>
+<step>
+        <cmd>选择连接方式。</cmd>
+      <choices>
+          <choice>有线：主机检测到网线后自动通过 DHCP 获取地址，无需额外操作。</choice>
+          <choice>无线：在屏幕网络列表中选择目标 Wi-Fi，输入密码并点击 <uicontrol>连接</uicontrol>。</choice>
+        </choices>
+      </step>
+        <step>
+        <cmd>等待连接成功提示。</cmd>
+      <info>
+          <p>连接成功后屏幕右上角显示信号图标；主机同时通过蓝牙向手机应用广播配对信息。</p>
+        </info>
+      </step>
+        <step>
+        <cmd>在屏幕上点击 <uicontrol>下一步</uicontrol> 进入账号登录环节。</cmd>
+      </step>
+
+    </steps>
+    <result>
+<p>主机已接入网络。</p>
+    </result>
+    <example>
+      <p>若使用静态 IP 的网络环境，请在屏幕 <menucascade><uicontrol>网络设置</uicontrol><uicontrol>高级</uicontrol><uicontrol>手动配置</uicontrol></menucascade> 中填写以下参数：</p>
+      <codeblock><![CDATA[IP 地址:   192.168.1.50
+子网掩码:  255.255.255.0
+网关:      192.168.1.1
+DNS:       192.168.1.1 或 223.5.5.5]]></codeblock>
+      <p>网线直连失败时，请参见 <xref href="ts_network.dita"/>。</p>
+    </example>
+    <postreq>
+<p>完成初始化：<xref href="first_boot.dita"/>。</p>
+    </postreq>
+  </taskbody>
+</task>

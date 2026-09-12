@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE troubleshooting PUBLIC "-//OASIS//DTD DITA Troubleshooting//EN" "troubleshooting.dtd">
+<troubleshooting id="ts_pairing" xml:lang="zh-CN">
+  <title>子设备配对失败</title>
+  <shortdesc>Zigbee 或红外设备无法完成配对时的排查方法。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>配对失败</indexterm>
+        <indexterm>Zigbee 信道</indexterm>
+        <indexterm>复位</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <troublebody>
+    <condition>
+      <p>添加子设备时搜索不到设备，或配对进度长时间停在 99%。</p>
+    </condition>
+    <troubleSolution>
+      <cause>
+      <ol>
+        <li>子设备未正确进入配对模式。</li>
+        <li>子设备此前绑定过其他网关，需要先彻底复位。</li>
+        <li>Zigbee 网络已满或信道与 Wi-Fi 2.4 GHz 严重重叠。</li>
+      </ol>
+      </cause>
+      <remedy>
+<steps>
+        <step><cmd>按子设备说明书重新执行配对态复位，通常需要长按复位键 5-10 秒直到指示灯快闪。</cmd></step>
+        <step><cmd>将子设备移到主机旁 1 米内重新配对，成功后再移回安装位置。</cmd></step>
+        <step><cmd>曾接入其他网关的设备，先在原网关中删除，再执行 3 次复位彻底清除旧绑定。</cmd></step>
+        <step><cmd>在 <menucascade><uicontrol>设置</uicontrol><uicontrol>Zigbee</uicontrol></menucascade> 中将信道切换到 15、20 或 25，避开 Wi-Fi 干扰。</cmd></step>
+        <step><cmd>查看网络容量：设置 → Zigbee → 网络信息，子设备数接近上限时先移除不用的设备。</cmd></step>
+      </steps>
+      </remedy>
+    </troubleSolution>
+  </troublebody>
+</troubleshooting>

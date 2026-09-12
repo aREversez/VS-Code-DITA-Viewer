@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE reference PUBLIC "-//OASIS//DTD DITA Reference//EN" "reference.dtd">
+<reference id="app_settings" xml:lang="zh-CN">
+  <title>应用设置参考</title>
+  <shortdesc>手机应用各设置项的位置与作用速查表。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>应用设置</indexterm>
+        <indexterm>设置项</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <refbody>
+<section>
+      <title>设置项一览</title>
+    <table id="app-settings-table">
+      <title>应用设置项</title>
+      <tgroup cols="3">
+        <thead><row><entry>设置项</entry><entry>路径</entry><entry>说明</entry></row></thead>
+        <tbody>
+          <row><entry>主题与外观</entry><entry><menucascade><uicontrol>我的</uicontrol><uicontrol>外观</uicontrol></menucascade></entry><entry>深色模式、字体大小</entry></row>
+          <row><entry>单位与温标</entry><entry><menucascade><uicontrol>我的</uicontrol><uicontrol>通用</uicontrol></menucascade></entry><entry>摄氏/华氏、面积单位</entry></row>
+          <row><entry>多语言</entry><entry><menucascade><uicontrol>我的</uicontrol><uicontrol>语言</uicontrol></menucascade></entry><entry>界面显示语言</entry></row>
+          <row><entry>数据导出</entry><entry><menucascade><uicontrol>我的</uicontrol><uicontrol>账号与数据</uicontrol></menucascade></entry><entry>导出家庭数据（JSON）</entry></row>
+          <row><entry>诊断日志</entry><entry><menucascade><uicontrol>我的</uicontrol><uicontrol>帮助与反馈</uicontrol></menucascade></entry><entry>上传运行日志用于问题分析</entry></row>
+          <row><entry>手势密码</entry><entry><menucascade><uicontrol>我的</uicontrol><uicontrol>账号与安全</uicontrol></menucascade></entry><entry>打开应用时的二级验证</entry></row>
+        </tbody>
+      </tgroup>
+    </table>
+    <note type="tip"><p>设置仅对当前手机生效，家庭成员需各自配置外观与通知偏好。</p></note></section>
+  </refbody>
+</reference>

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE reference PUBLIC "-//OASIS//DTD DITA Reference//EN" "reference.dtd">
+<reference id="glossary" xml:lang="zh-CN">
+  <title>术语表</title>
+  <shortdesc>本手册与产品界面中使用的专业术语解释。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>术语</indexterm>
+        <indexterm>名词解释</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <refbody>
+<section>
+      <title>术语定义</title>
+    <dl>
+      <dlentry>
+        <dt>Zigbee</dt>
+        <dd>一种低功耗局域网无线标准，用于传感器与开关类设备的组网通信。</dd>
+      </dlentry>
+      <dlentry>
+        <dt>协调器（Coordinator）</dt>
+        <dd>Zigbee 网络的核心节点，主机在家庭 Zigbee 网络中扮演该角色。</dd>
+      </dlentry>
+      <dlentry>
+        <dt>场景（Scene）</dt>
+        <dd>多台设备目标状态的集合，可一键执行，参见 <xref href="feature_scene.dita"/>。</dd>
+      </dlentry>
+      <dlentry>
+        <dt>自动化（Automation）</dt>
+        <dd>由触发器、条件与动作组成的自动执行规则，参见 <xref href="feature_automation.dita"/>。</dd>
+      </dlentry>
+      <dlentry>
+        <dt>布防（Arming）</dt>
+        <dd>安防系统进入警戒状态，触发传感器将产生告警。</dd>
+      </dlentry>
+      <dlentry>
+        <dt>OTA</dt>
+        <dd>Over-the-Air，通过空中无线方式分发固件升级包的技术。</dd>
+      </dlentry>
+      <dlentry>
+        <dt>DFS 信道</dt>
+        <dd>5 GHz 频段中与雷达共享的信道，部分设备不支持，可能引起无线连接失败。</dd>
+      </dlentry>
+    </dl>
+    </section>
+  </refbody>
+</reference>

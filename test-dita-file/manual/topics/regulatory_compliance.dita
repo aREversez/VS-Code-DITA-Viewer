@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE reference PUBLIC "-//OASIS//DTD DITA Reference//EN" "reference.dtd">
+<reference id="regulatory_compliance" xml:lang="zh-CN">
+  <title>合规与认证</title>
+  <shortdesc>本主题列出产品在各销售区域取得的认证信息与无线电合规声明。不同销售区域的认证标识存在差异。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>合规</indexterm>
+        <indexterm>认证</indexterm>
+        <indexterm>无线电</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <refbody>
+<section>
+      <title>认证信息</title>
+    <ul>
+      <li>无线电发射设备型号核准（CMIIT ID）：见主机底部标签。</li>
+      <li>2.4 GHz / 5 GHz 频段使用符合国家无线电管理规定。</li>
+      <li>产品符合 GB 4943.1 信息技术设备安全要求。</li>
+    </ul>
+    </section>    <section product="brandA">
+      <title>品牌 A 专属合规声明</title>
+    <p>本节内容仅在品牌 A（星澜科技）渠道销售的版本中出现。</p>
+    <p><ph keyref="company-name"/> 声明：本设备符合其销售区域的电磁兼容标准，认证编号以设备铭牌为准。品牌 A 渠道版本内置经核准的无线模组，用户不得擅自更换天线。</p>
+    </section>    <section product="brandB">
+      <title>品牌 B 专属合规声明</title>
+    <p>本节内容仅在品牌 B（碧峰数联）渠道销售的版本中出现。</p>
+    <p><ph keyref="company-name"/> 声明：本设备由碧峰数联（深圳）有限公司负责渠道合规，认证档案编号以随附文件为准。品牌 B 渠道版本的销售包装与标识由品牌方提供，用户不得撕毁铭牌。</p>
+    <note type="warning"><p>拆改无线模组或天线的做法违反无线电管理规定，并导致保修失效。</p></note></section>
+  </refbody>
+</reference>

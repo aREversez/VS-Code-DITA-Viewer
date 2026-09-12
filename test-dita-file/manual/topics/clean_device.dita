@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<task id="clean_device" xml:lang="zh-CN">
+  <title>清洁与保养</title>
+  <shortdesc>安全清洁主机外壳、屏幕与散热孔的操作步骤。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>清洁</indexterm>
+        <indexterm>保养</indexterm>
+        <indexterm>散热</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <taskbody>
+    <prereq>
+<note type="warning"><p>清洁前必须先拔下电源适配器，并等待主机完全冷却。</p></note>
+    </prereq>
+    <context>
+      <p>所需材料：干燥的超细纤维布、少量清水、软毛刷。禁止使用酒精、稀释剂、喷雾式清洁剂。</p>
+    </context>
+    <steps>
+<step>
+        <cmd>拔下电源适配器，等待 5 分钟。</cmd>
+      </step>
+      <step>
+        <cmd>用干燥超细纤维布擦拭屏幕，顽固污渍可将布微湿后单方向轻擦。</cmd>
+      <info>
+          <note type="important">切勿让液体流入散热孔与接口，湿布不得滴水的程度为准。</note>
+        </info>
+      </step>
+        <step>
+        <cmd>用软毛刷清理背面散热孔的积尘。</cmd>
+      </step>
+      <step>
+        <cmd>用干布擦干机身，静置 10 分钟至完全干燥。</cmd>
+      </step>
+      <step>
+        <cmd>确认机身与接口完全干燥后，重新接通电源（<xref href="connect_power.dita"/>）。</cmd>
+      </step>
+
+    </steps>
+    <result>
+<p>主机清洁完毕，屏幕透亮，散热孔无积尘。</p>
+    </result>
+  </taskbody>
+</task>

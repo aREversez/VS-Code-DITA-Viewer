@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<task id="set_schedule" xml:lang="zh-CN">
+  <title>设置定时任务</title>
+  <shortdesc>为场景或设备动作设置定时执行计划，支持单次、每日与自定义星期重复。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>定时</indexterm>
+        <indexterm>计划任务</indexterm>
+        <indexterm>自动化</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <taskbody>
+    <context>
+      <p>定时任务依赖主机本地时钟，联网后自动校时。若长期离网，时钟漂移可能造成分钟级偏差。</p>
+    </context>
+    <steps>
+<step>
+        <cmd>进入定时管理：<menucascade><uicontrol>自动化</uicontrol><uicontrol>定时任务</uicontrol><uicontrol>新建</uicontrol></menucascade>。</cmd>
+      </step>
+      <step>
+        <cmd>选择要执行的对象。</cmd>
+      <choices>
+          <choice>执行某个场景：选择场景名称。</choice>
+          <choice>控制单台设备：选择设备及其目标状态。</choice>
+        </choices>
+      </step>
+        <step>
+        <cmd>设置执行时间。</cmd>
+      <choices>
+          <choice>单次：指定日期与时间，执行一次后自动失效。</choice>
+          <choice>每日：固定时间每天执行。</choice>
+          <choice>自定义：勾选周一至周日中的若干天。</choice>
+        </choices>
+      </step>
+        <step>
+        <cmd>（可选）开启「生效日期范围」，用于假期等临时计划。</cmd>
+      </step>
+      <step>
+        <cmd>点击 <uicontrol>保存</uicontrol>。</cmd>
+      </step>
+
+    </steps>
+    <result>
+<p>定时任务出现在列表中，可随时暂停或删除；暂停的任务保留配置但不执行。</p>
+    </result>
+    <example>
+<note type="tip"><p>避免将多个重动作任务设在同一分钟执行，Zigbee 网络在高峰并发时可能出现秒级延迟。</p></note>
+    </example>
+  </taskbody>
+</task>

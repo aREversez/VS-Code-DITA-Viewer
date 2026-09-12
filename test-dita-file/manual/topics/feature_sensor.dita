@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="feature_sensor" xml:lang="zh-CN">
+  <title>传感器联动</title>
+  <shortdesc>温湿度、光照、门窗等传感器为主机提供环境感知能力，是自动化规则的重要数据来源。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>传感器</indexterm>
+        <indexterm>温湿度</indexterm>
+        <indexterm>联动</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <conbody>
+<p>所有传感器的实时数值在控制台卡片中展示，历史曲线保留 90 天。传感器数值本身不直接驱动设备，需要通过自动化规则产生行为。</p>
+    <note type="important"><p>传感器上报存在采样间隔（默认 60 秒），依赖传感器触发的自动化同样受此间隔约束，追求即时响应的场景请改用即时类触发器。</p></note><section>
+      <title>常用联动策略</title>
+      <table id="sensor-recipes">
+        <title>常见传感器联动配方</title>
+        <tgroup cols="3">
+          <thead><row><entry>传感器</entry><entry>触发条件</entry><entry>推荐动作</entry></row></thead>
+          <tbody>
+            <row><entry>温湿度</entry><entry>湿度高于 70%</entry><entry>除湿机开启</entry></row>
+            <row><entry>光照</entry><entry>光照低于 50 lux 且人在家</entry><entry>自动开灯</entry></row>
+            <row><entry>门窗</entry><entry>夜间 23 点后开启</entry><entry>推送告警</entry></row>
+            <row><entry>人体</entry><entry>离家布防后侦测到活动</entry><entry>安防告警链</entry></row>
+          </tbody>
+        </tgroup>
+      </table>
+    </section>    <section>
+      <title>传感器校准</title>
+      <p>温湿度传感器支持偏移校准：在设备详情页选择 <menucascade><uicontrol>设置</uicontrol><uicontrol>校准</uicontrol></menucascade>，参照标准温度计输入偏移值，范围 ±5°C。</p>
+    </section>
+  </conbody>
+</concept>

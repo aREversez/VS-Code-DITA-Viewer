@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  develop.ditaval — 开发版本条件处理文件
+  - 显式包含开发者内容（audience="developer"）
+  - 包含规划中特性（rev="planned"）
+  - 剔除品牌 B 专属内容（product="brandB"）
+-->
+<val>
+  <prop action="include" att="audience" val="developer"/>
+  <prop action="include" att="rev" val="planned"/>
+  <prop action="exclude" att="product" val="brandB"/>
+  <prop action="include" att="product" val="brandA"/>
+</val>

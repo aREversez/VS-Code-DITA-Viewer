@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE troubleshooting PUBLIC "-//OASIS//DTD DITA Troubleshooting//EN" "troubleshooting.dtd">
+<troubleshooting id="ts_overheat" xml:lang="zh-CN">
+  <title>设备过热保护</title>
+  <shortdesc>主机红色快闪并自动降频或关机时，说明触发了过热保护，按本主题恢复。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>过热</indexterm>
+        <indexterm>高温</indexterm>
+        <indexterm>散热</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <troublebody>
+    <condition>
+      <p>氛围灯红色快闪，屏幕可能出现高温提示，主机响应变慢或自动关机。</p>
+    </condition>
+    <troubleSolution>
+      <cause>
+      <p>过热保护的常见诱因：</p>
+      <ol>
+        <li>主机被毛毯、纸张覆盖或嵌入密闭柜体。</li>
+        <li>环境温度超过 40°C，如夏季阳光直射的窗台。</li>
+        <li>散热孔积尘严重。</li>
+      </ol><note type="warning"><p>过热保护是安全机制，禁止通过改装或屏蔽传感器的方式绕过。</p></note>
+      </cause>
+      <remedy>
+<steps>
+        <step><cmd>断电并将主机移至阴凉通风处，静置 15 分钟。</cmd></step>
+        <step><cmd>清除覆盖物，确认四壁留有至少 5 厘米散热间隙。</cmd></step>
+        <step><cmd>按 <xref href="clean_device.dita"/> 清理散热孔积尘。</cmd></step>
+        <step><cmd>重新通电，确认灯环恢复白色常亮。</cmd></step>
+      </steps>
+      </remedy>
+    </troubleSolution>
+  </troublebody>
+</troubleshooting>

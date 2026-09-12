@@ -1308,6 +1308,16 @@ export function resolveBookTopicPath(entry: MapEntry, docDir: string): string | 
   if (!entry.href) return undefined;
   const refPath = entry.href.split('#')[0];
   if (!refPath || refPath.toLowerCase().endsWith('.ditamap')) return undefined;
+  // External resources (keydefs/topicrefs pointing at https:, mailto:, ...)
+  // are links, not book members. Without this guard resolve() would splice
+  // the URL onto docDir -- on Windows a topicref/keydef href of
+  // "https://support.example.com" used to surface as the nonsense path
+  // <docDir>\https:\support.example.com and blow up docsite/book mode with
+  // "File not found". Same guard isInCurrentBook and the title/type
+  // resolvers apply before touching the filesystem. (Drive-rooted hrefs
+  // like "/topics/x.dita" stay resolvable on purpose -- resolve() already
+  // handles them against docDir's own drive.)
+  if (URL_SCHEME_RE.test(refPath)) return undefined;
   return resolve(docDir, decodeHrefPart(refPath));
 }
 
@@ -1840,7 +1850,13 @@ export function renderBookParts(input: BookRenderInput): BookPart[] {
         );
         continue;
       }
-      const absPath = resolveBookTopicPath(entry, docDir)!; // href is truthy and not a .ditamap -- both already checked above, so this always resolves
+      const absPath = resolveBookTopicPath(entry, docDir);
+      if (!absPath) {
+        // External resource (https:, mailto:, absolute path) -- a link, not
+        // a book member; getStableBookMembers already excluded it, so there
+        // is nothing to render inline.
+        continue;
+      }
       if (visited.has(absPath)) {
         push(`skip:${entry.href}`, renderBookSkipMessage(entry.href));
         continue;

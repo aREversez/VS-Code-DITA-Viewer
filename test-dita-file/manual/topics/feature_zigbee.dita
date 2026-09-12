@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="feature_zigbee" xml:lang="zh-CN">
+  <title>Zigbee 子设备接入</title>
+  <shortdesc>主机内置 Zigbee 3.0 网关，可直接接入开关、插座、传感器等 Zigbee 子设备。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>Zigbee</indexterm>
+        <indexterm>子设备</indexterm>
+        <indexterm>网关</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <conbody>
+<p>主机作为 Zigbee 协调器组建网络，理论容量 128 台子设备。子设备之间可互为路由节点，形成网状网络，覆盖范围随设备数量扩大。</p>
+    <section>
+      <title>接入流程概览</title>
+      <ol>
+        <li>在主机或应用中进入配对模式：<menucascade><uicontrol>设备</uicontrol><uicontrol>添加子设备</uicontrol><uicontrol>Zigbee</uicontrol></menucascade>。</li>
+        <li>按子设备说明书将其复位到配对状态（通常长按复位键 5 秒）。</li>
+        <li>等待配对成功提示，为子设备命名并分配房间。</li>
+      </ol>
+      <p>配对失败的处理参见 <xref href="ts_pairing.dita"/>。</p>
+    </section>    <section>
+      <title>兼容性</title>
+      <p>符合 Zigbee 3.0 标准的设备均可接入；部分厂商私有协议设备可能仅支持基础开关功能。已验证设备清单可在支持网站 <xref href="https://support.example-starlumos.com/zigbee" format="html" scope="external"/> 查询。</p>
+    </section>    <section>
+      <title>网络维护建议</title>
+      <ul>
+        <li>每层楼至少保留一台常供电的 Zigbee 路由类设备（如智能插座）作为中继。</li>
+        <li>电池供电的传感器不参与路由，只作为终端节点。</li>
+        <li>单网段子设备数量建议不超过 64 台，以保证响应速度。</li>
+      </ul>
+    </section>
+  </conbody>
+</concept>

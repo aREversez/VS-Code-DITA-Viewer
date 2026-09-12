@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<task id="create_scene" xml:lang="zh-CN">
+  <title>创建场景</title>
+  <shortdesc>创建一个包含多设备动作的自定义场景，并可添加到控制台快捷区。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>创建场景</indexterm>
+        <indexterm>场景</indexterm>
+        <indexterm>晚餐模式</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <taskbody>
+    <prereq>
+<p>至少已有一台可控设备接入（<xref href="feature_zigbee.dita"/> 或 <xref href="feature_ir.dita"/>）。</p>
+    </prereq>
+    <context>
+      <p>本例创建「晚餐模式」：打开餐厅灯、把空调调至 26°C、播放轻音乐。</p>
+    </context>
+    <steps>
+<step>
+        <cmd>进入场景编辑器：控制台点击 <menucascade><uicontrol>场景</uicontrol><uicontrol>新建场景</uicontrol></menucascade>。</cmd>
+      </step>
+      <step>
+        <cmd>输入场景名称「晚餐模式」，选择图标与颜色。</cmd>
+      </step>
+      <step>
+        <cmd>点击 <uicontrol>添加动作</uicontrol>，逐个选择设备并设定目标状态。</cmd>
+      <info>
+          <p>动作列表按添加顺序执行，可在列表中长按拖动调整顺序。</p>
+        </info>
+      </step>
+        <step>
+        <cmd>点击 <uicontrol>试运行</uicontrol> 验证效果。</cmd>
+      </step>
+      <step>
+        <cmd>确认无误后点击 <uicontrol>保存</uicontrol>，并在弹窗中勾选「显示在快捷区」。</cmd>
+      </step>
+
+    </steps>
+    <result>
+<p>场景出现在控制台快捷区，点击即可执行；也可以通过语音指令「执行晚餐模式」触发（<xref href="feature_voice.dita"/>）。</p>
+    </result>
+    <postreq>
+<p>如需让场景定时自动执行，参见 <xref href="set_schedule.dita"/>。</p>
+    </postreq>
+  </taskbody>
+</task>

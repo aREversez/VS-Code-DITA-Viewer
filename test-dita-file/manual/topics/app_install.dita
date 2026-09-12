@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<task id="app_install" xml:lang="zh-CN">
+  <title>安装手机应用</title>
+  <shortdesc>在 iOS 或 Android 手机上安装中控主机配套应用。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>手机应用</indexterm>
+        <indexterm>App</indexterm>
+        <indexterm>安装</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <taskbody>
+    <prereq>
+<p>手机系统版本满足要求：iOS 15 及以上，Android 10 及以上。</p>
+    </prereq>
+    <context>
+<p>应用名称为 <uicontrol>智能中控</uicontrol>，由 <ph keyref="company-name"/> 发布。</p>
+    </context>
+    <steps>
+<step>
+        <cmd>打开应用商店。</cmd>
+      </step>
+      <step>
+        <cmd>搜索并安装应用。</cmd>
+      <choices>
+          <choice platform="ios">iPhone 用户：打开 App Store，搜索 <uicontrol>智能中控</uicontrol> 并点击 <uicontrol>获取</uicontrol>。</choice>
+          <choice platform="android">Android 用户：在应用商店搜索 <uicontrol>智能中控</uicontrol> 并点击 <uicontrol>安装</uicontrol>；也可扫描主机屏幕上的二维码下载安装包。</choice>
+        </choices>
+      </step>
+        <step>
+        <cmd>安装完成后打开应用，授予本地网络、蓝牙与通知权限。</cmd>
+      <info>
+          <note type="important">若拒绝本地网络权限，应用将无法发现主机，需在系统设置中重新开启。</note>
+        </info>
+</step>
+        
+    </steps>
+    <result>
+<p>应用打开并显示登录界面。</p>
+    </result>
+    <postreq>
+<p>注册并登录账号：<xref href="app_account.dita"/>。</p>
+    </postreq>
+  </taskbody>
+</task>

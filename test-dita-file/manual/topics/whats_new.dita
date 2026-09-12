@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="whats_new" xml:lang="zh-CN" rev="2.1">
+  <title>新功能与版本更新</title>
+  <shortdesc>本主题列出版本 <keyword keyref="version"/> 的主要更新内容，包括新增功能、体验优化与已知问题修复情况。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>版本更新</indexterm>
+        <indexterm>新功能</indexterm>
+        <indexterm>2.1</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <conbody>
+<p>当前手册对应的固件版本为 <keyword keyref="version"/>，发布年份 <keyword keyref="release-year"/>。与上一版本相比，主要变化如下：</p>
+    <section rev="2.1">
+      <title>版本 2.1 新增</title>
+      <ul>
+        <li rev="2.1">新增本地自动化引擎 v2：规则执行平均延迟降低 60%。</li>
+        <li rev="2.1">Zigbee 3.0 全栈支持，兼容更多第三方子设备。</li>
+        <li rev="2.1">语音助手新增连续对话能力，无需每次重复唤醒词。</li>
+        <li rev="2.1">控制台界面支持自定义卡片排序。</li>
+      </ul>
+    </section>    <section rev="2.0">
+      <title>体验优化（rev="2.0"）</title>
+      <ul>
+        <li rev="2.0">手机应用启动速度提升约 30%。</li>
+        <li rev="2.0">设备离线检测灵敏度优化，从 5 分钟缩短至 90 秒。</li>
+        <li rev="2.0">固件升级支持断点续传。</li>
+      </ul>
+    </section>    <section rev="planned">
+      <title>下一版本预览</title>
+      <p>以下为开发中的功能，正式发布版不包含，仅供内部与尝鲜用户评估：</p>
+      <ul>
+        <li>Matter 1.2 协议桥接支持。</li>
+        <li>自动化规则的可视化流程编辑器。</li>
+        <li>开放本地 API 的 WebSocket 订阅接口，供第三方面板调用。</li>
+      </ul>
+<note type="caution" audience="developer"><p>预览功能随开发版固件分发，接口与行为可能随时调整，请勿在生产环境依赖。</p></note>
+    </section>    <section>
+      <title>已知问题</title>
+      <table id="known-issues">
+        <title>已知问题与规避方法</title>
+        <tgroup cols="3">
+          <thead><row><entry>问题</entry><entry>影响</entry><entry>规避方法</entry></row></thead>
+          <tbody>
+            <row><entry>部分老旧红外电视码库匹配失败</entry><entry>无法学习该型号遥控器</entry><entry>改用红外学习模式逐键录入</entry></row>
+            <row><entry>iOS 17.0 上推送偶发延迟</entry><entry>告警消息晚于预期到达</entry><entry>升级到 iOS 17.1 或以上版本</entry></row>
+          </tbody>
+        </tgroup>
+      </table>
+    </section>
+  </conbody>
+</concept>

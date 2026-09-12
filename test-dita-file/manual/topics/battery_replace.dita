@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<task id="battery_replace" xml:lang="zh-CN">
+  <title>遥控器电池更换</title>
+  <shortdesc>为选配可充电遥控器更换内置锂离子电池，或为其充电。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>电池</indexterm>
+        <indexterm>遥控器</indexterm>
+        <indexterm>充电</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <taskbody>
+    <prereq>
+<note type="caution"><p>电池更换涉及拆解外壳，仅限具备动手能力的用户，不当操作可能损坏设备。非必要请优先使用充电方式。</p></note>
+    </prereq>
+    <context>
+      <p>遥控器使用 3.7 V / 500 mAh 聚合物锂电池。日常通过主机侧面 <uicontrol>充电触点</uicontrol> 吸附充电，充满约 1.5 小时。</p>
+    </context>
+    <steps>
+<step>
+        <cmd>将遥控器关闭（长按侧键 3 秒）。</cmd>
+      </step>
+      <step>
+        <cmd>用塑料撬片沿外壳缝隙拆开后盖。</cmd>
+      <info><note type="warning"><p>金属撬片可能造成短路，禁止使用。</p></note>      </info></step>
+<step>
+        <cmd>断开电池排线，取出旧电池。</cmd>
+      </step>
+      <step>
+        <cmd>装入新电池，连接排线（注意正负极方向）。</cmd>
+      </step>
+      <step>
+        <cmd>合上后盖并长按侧键开机验证。</cmd>
+      </step>
+      <step>
+        <cmd>旧电池请投入专用回收箱，勿与生活垃圾混弃。</cmd>
+      </step>
+
+    </steps>
+    <result>
+<p>遥控器开机指示灯亮起，按键响应正常。</p>
+    </result>
+  </taskbody>
+</task>

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<task id="connect_power" xml:lang="zh-CN">
+  <title>连接电源并开机</title>
+  <shortdesc>为主机接通电源并完成首次开机自检。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>开机</indexterm>
+        <indexterm>通电</indexterm>
+        <indexterm>电源</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <taskbody>
+    <context>
+<note type="warning"><p>请务必使用包装内原装 12 V/2 A 电源适配器，使用其他规格适配器可能损坏设备。</p></note>
+    </context>
+    <steps>
+<step>
+        <cmd>确认电源适配器已接入主机背面 <uicontrol>DC 12V</uicontrol> 口。</cmd>
+      </step>
+      <step>
+        <cmd>将适配器插头插入墙壁插座，此时环形氛围灯亮起白色呼吸灯。</cmd>
+      </step>
+      <step>
+        <cmd>等待约 40 秒，主机完成自检，屏幕显示开机动画并进入语言选择界面。</cmd>
+      </step>
+
+    </steps>
+    <result>
+<p>屏幕亮起并进入初始化向导，说明开机成功。若屏幕始终不亮或灯呈红色快闪，参见 <xref href="ts_power.dita"/>。</p>
+    </result>
+    <postreq>
+<p>继续完成首次初始化：<xref href="first_boot.dita"/>。</p>
+    </postreq>
+  </taskbody>
+</task>

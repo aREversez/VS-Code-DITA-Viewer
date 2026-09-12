@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="feature_gateway" xml:lang="zh-CN" audience="admin">
+  <title>网关与本地管理</title>
+  <shortdesc>本主题介绍主机的网关属性、本地管理界面访问方式与安全边界。普通用户日常使用手机应用即可，无需阅读本主题。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>网关</indexterm>
+        <indexterm>本地管理</indexterm>
+        <indexterm>Web 界面</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <conbody>
+<p>主机在局域网中占用一个 DHCP 地址，同时监听以下本地服务端口：</p>
+    <ul>
+      <li><b>80/443</b>：本地 Web 管理界面（HTTPS 需浏览器信任自签证书）。</li>
+      <li><b>1883</b>：本地 MQTT 代理，供第三方网关桥接。</li>
+      <li><b>8123</b>：REST API 网关（默认关闭，需手动开启）。</li>
+    </ul>
+    <note type="warning" props="advanced"><p>本地 Web 管理界面的部分高级设置（VLAN、静态路由）仅供专业部署使用，误配置可能导致主机掉线，届时参见 <xref href="ts_network.dita"/> 恢复。</p></note><section>
+      <title>访问本地管理界面</title>
+      <ol>
+        <li>查询主机 IP：主机屏幕 <menucascade><uicontrol>设置</uicontrol><uicontrol>网络</uicontrol></menucascade> 页显示当前地址。</li>
+        <li>在同一局域网的电脑浏览器中访问 <codeph>http://主机IP</codeph>。</li>
+        <li>使用管理员账号登录（与手机应用相同的账号体系）。</li>
+      </ol>
+    </section>    <section>
+      <title>安全边界</title>
+      <ul>
+        <li>本地服务仅监听局域网接口，无法从公网直接访问。</li>
+        <li>开启 REST API 后建议配合访问令牌使用，令牌在 <menucascade><uicontrol>Web 管理</uicontrol><uicontrol>开放能力</uicontrol></menucascade> 中生成。</li>
+        <li>路由器上的端口映射会将本地服务暴露到公网，强烈不建议。</li>
+      </ul>
+    </section>
+  </conbody>
+</concept>

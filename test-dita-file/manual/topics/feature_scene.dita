@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="feature_scene" xml:lang="zh-CN">
+  <title>场景模式</title>
+  <shortdesc>场景将多台设备的状态组合为一键动作，例如「回家」一键开灯、开空调、拉窗帘。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>场景</indexterm>
+        <indexterm>模式</indexterm>
+        <indexterm>一键控制</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <conbody>
+<p>场景是面向结果的操作封装：执行场景时，其中的设备动作按顺序快速下发，通常在 2 秒内全部完成。场景可以由控制台、主机屏幕、语音或自动化规则触发。</p>
+    <note type="caution"><p>场景内动作的执行顺序可以在编辑器中拖动调整，涉及门锁类设备的动作务必放在最后校验，参见 <xref href="create_scene.dita"/>。</p></note><section>
+      <title>场景类型</title>
+      <ul>
+        <li><b>手动场景</b>：需要主动触发，如「观影模式」。</li>
+        <li><b>定时场景</b>：按时间自动执行，如每晚上 11 点的「睡眠模式」，创建方法参见 <xref href="set_schedule.dita"/>。</li>
+        <li><b>联动场景</b>：由传感器或设备状态触发，属于自动化规则的一部分，参见 <xref href="feature_automation.dita"/>。</li>
+      </ul>
+    </section>    <section>
+      <title>内置场景</title>
+      <p>主机预置了四个常用场景，可直接使用或修改：</p>
+      <sl>
+        <sli>回家模式：玄关灯亮、空调开启至 26°C、窗帘拉开</sli>
+        <sli>离家模式：全屋灯与空调关闭、安防布防</sli>
+        <sli>观影模式：主灯关闭、灯带调至 20%、电视与音响开启</sli>
+        <sli>睡眠模式：全屋熄灯、窗帘闭合、免打扰开启</sli>
+      </sl>
+    </section>
+  </conbody>
+</concept>

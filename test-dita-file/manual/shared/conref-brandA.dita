@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE reference PUBLIC "-//OASIS//DTD DITA Reference//EN" "reference.dtd">
+<reference id="shared-brandA" xml:lang="zh-CN">
+  <title>品牌 A 共享内容库</title>
+  <shortdesc>品牌 A（星澜科技）渠道的重用内容，通过 conkeyref 引用，不直接发布。</shortdesc>
+  <refbody>
+    <section>
+      <p id="support-info">品牌 A 渠道用户可拨打 <keyword keyref="support-phone"/> 预约远程协助，或通过支持网站 <xref href="https://support.example-starlumos.com" format="html" scope="external"/> 提交工单。保修期内首次上门检测免费。</p>
+    </section>
+    <section>
+      <p id="warranty-text">由星澜科技销售的产品，自购买之日起主机享有 24 个月有限保修，原装电源适配器享有 12 个月保修，选配遥控器电池享有 6 个月保修。保修凭证为购买发票与保修卡。</p>
+    </section>
+    <section>
+      <p id="warranty-extended">品牌 A 渠道提供付费延保服务：在原始保修期届满前 30 天内，可通过应用内 <menucascade><uicontrol>我的设备</uicontrol><uicontrol>保修信息</uicontrol><uicontrol>延保</uicontrol></menucascade> 购买，最长可延长 24 个月。</p>
+    </section>
+    <section>
+      <p id="copyright">Copyright © <keyword keyref="release-year"/> 星澜科技（深圳）有限公司，保留所有权利。</p>
+    </section>
+  </refbody>
+</reference>

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE reference PUBLIC "-//OASIS//DTD DITA Reference//EN" "reference.dtd">
+<reference id="tech_specs" xml:lang="zh-CN">
+  <title>技术规格</title>
+  <shortdesc>本主题列出中控主机的硬件参数、通信能力与工作环境要求，供安装规划与兼容性评估参考。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>技术规格</indexterm>
+        <indexterm>参数</indexterm>
+        <indexterm>硬件</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <refbody>
+<section>
+      <title>硬件参数</title>
+    <simpletable id="hardware-specs">
+      <sthead><stentry>项目</stentry><stentry>参数</stentry></sthead>
+      <strow><stentry>处理器</stentry><stentry>四核 Cortex-A55，1.4 GHz</stentry></strow>
+      <strow><stentry>内存 / 闪存</stentry><stentry>2 GB / 32 GB</stentry></strow>
+      <strow><stentry>屏幕</stentry><stentry>4 英寸电容触摸屏，480 × 800</stentry></strow>
+      <strow><stentry>麦克风阵列</stentry><stentry>双麦克风，远场拾音半径约 5 米</stentry></strow>
+      <strow><stentry>扬声器</stentry><stentry>2 W 全频单元</stentry></strow>
+      <strow><stentry>尺寸 / 重量</stentry><stentry>130 × 130 × 32 mm，约 380 g</stentry></strow>
+    </simpletable>
+    </section>    <section>
+      <title>通信能力</title>
+    <simpletable id="comm-specs">
+      <sthead><stentry>通道</stentry><stentry>规格</stentry></sthead>
+      <strow><stentry>以太网</stentry><stentry>10/100/1000 Mbps 自适应</stentry></strow>
+      <strow><stentry>Wi-Fi</stentry><stentry>2.4 GHz / 5 GHz，支持 802.11 a/b/g/n/ac</stentry></strow>
+      <strow><stentry>Zigbee</stentry><stentry>Zigbee 3.0，理论子设备容量 128 台</stentry></strow>
+      <strow><stentry>红外</stentry><stentry>360° 发射，载波 38 kHz</stentry></strow>
+      <strow><stentry>蓝牙</stentry><stentry>Bluetooth 5.0（仅用于初始配网）</stentry></strow>
+    </simpletable>
+    </section>    <section>
+      <title>工作环境</title>
+      <ul>
+        <li>工作温度：0 °C 至 40 °C</li>
+        <li>存储温度：-20 °C 至 60 °C</li>
+        <li>工作湿度：10% 至 90%（无冷凝）</li>
+      </ul>
+<note type="caution"><p>请勿将主机安装在浴室等高湿环境或阳光直射位置，过热可能触发保护性关机，参见 <xref href="ts_overheat.dita"/>。</p></note>
+    </section>    <section>
+      <title>电气参数</title>
+      <p>输入：100-240 V AC，50/60 Hz（经电源适配器转换）；输出：12 V DC，2 A，功耗典型值 6 W，峰值 12 W。</p>
+    </section>
+  </refbody>
+</reference>

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE reference PUBLIC "-//OASIS//DTD DITA Reference//EN" "reference.dtd">
+<reference id="warranty" xml:lang="zh-CN">
+  <title>保修条款</title>
+  <shortdesc>产品保修政策概览与保修状态查询方法。完整的保修条款以随附保修卡为准。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>保修</indexterm>
+        <indexterm>售后政策</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <refbody>
+<section>
+      <title>保修范围</title>
+    <p conkeyref="shared-brand/warranty-text"/>
+    </section>    <section>
+      <title>查询保修状态</title>
+    <ol>
+      <li>在应用中进入 <menucascade><uicontrol>我的设备</uicontrol><uicontrol>设备详情</uicontrol><uicontrol>保修信息</uicontrol></menucascade>。</li>
+      <li>或拨打 <keyword keyref="support-phone"/> 提供主机序列号查询。</li>
+    </ol>
+    </section>    <section>
+      <title>不属于保修范围的情形</title>
+    <ul>
+      <li>超过保修期限。</li>
+      <li>使用非原装电源适配器造成的损坏。</li>
+      <li>私自拆解、改装或维修。</li>
+      <li>不可抗力（雷击、水浸、火灾等）。</li>
+      <li>外壳磨损、屏幕划痕等正常损耗。</li>
+    </ul>
+    <p conkeyref="shared-brand/warranty-extended"/>
+    </section>
+  </refbody>
+</reference>

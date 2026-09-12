@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE troubleshooting PUBLIC "-//OASIS//DTD DITA Troubleshooting//EN" "troubleshooting.dtd">
+<troubleshooting id="ts_voice" xml:lang="zh-CN">
+  <title>语音无响应或识别错误</title>
+  <shortdesc>说出唤醒词后主机没有反应，或指令被错误识别时的排查方法。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>语音</indexterm>
+        <indexterm>唤醒失败</indexterm>
+        <indexterm>识别率</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <troublebody>
+    <condition>
+      <p>存在以下任一现象：</p>
+      <ul>
+        <li>说出唤醒词后灯环无任何变化。</li>
+        <li>灯环响应但指令执行错误或被误唤醒。</li>
+        <li>远场（3 米以上）识别率明显下降。</li>
+      </ul>
+    </condition>
+    <troubleSolution>
+      <cause>
+      <p>常见原因：</p>
+      <ol>
+        <li>麦克风已被硬件级关闭（屏幕有状态图标）。</li>
+        <li>环境噪声过大或主机前方有遮挡。</li>
+        <li>唤醒词发音与默认模板差异较大。</li>
+      </ol>
+      </cause>
+      <remedy>
+<steps>
+        <step><cmd>查看屏幕隐私图标，确认麦克风开关已打开（<xref href="feature_voice.dita"/>）。</cmd></step>
+        <step><cmd>按主机顶部 <uicontrol>语音键</uicontrol> 测试近场是否正常，正常则说明是拾音环境问题。</cmd></step>
+        <step><cmd>移除主机前方的遮挡物，与噪声源（电视、音响）保持 1 米以上距离。</cmd></step>
+        <step><cmd>在 <menucascade><uicontrol>设置</uicontrol><uicontrol>语音</uicontrol><uicontrol>唤醒词</uicontrol></menucascade> 中重新录制唤醒词模板。</cmd></step>
+        <step><cmd>执行麦克风阵列校准：设置 → 语音 → 阵列校准，按提示保持安静 30 秒。</cmd></step>
+      </steps>
+      </remedy>
+    </troubleSolution>
+  </troublebody>
+</troubleshooting>

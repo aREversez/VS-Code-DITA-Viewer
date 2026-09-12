@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="feature_ir" xml:lang="zh-CN">
+  <title>红外遥控</title>
+  <shortdesc>主机内置 360° 红外发射器，可将电视、空调、机顶盒等传统红外家电纳入统一控制。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>红外</indexterm>
+        <indexterm>遥控</indexterm>
+        <indexterm>码库</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <conbody>
+<p>红外功能支持两种录入方式：<b>码库匹配</b>（自动）与<b>逐键学习</b>（手动）。主机正面的红外窗口以锥形覆盖前方约 8 米范围，正对被控电器效果最佳。</p>
+    <note type="important"><p>请勿在主机红外窗口前放置遮挡物，透明玻璃柜会显著衰减红外信号。</p></note><note type="caution"><p>红外是单向通信，主机无法得知电器实际状态，卡片上显示的状态仅供参考。</p></note><section>
+      <title>码库匹配</title>
+      <ol>
+        <li>在应用中选择 <menucascade><uicontrol>设备</uicontrol><uicontrol>添加子设备</uicontrol><uicontrol>红外电器</uicontrol></menucascade>，选择电器类型与品牌。</li>
+        <li>应用下发测试指令（如开关电视），回答电器是否响应。</li>
+        <li>若未响应，应用自动切换下一组码值，通常 3 组以内即可命中。</li>
+      </ol>
+    </section>    <section>
+      <title>逐键学习</title>
+      <p>码库未收录的老旧型号可使用学习模式：将原遥控器红外窗口对准主机顶部学习窗，逐键按下，主机记录后即可复现。学习时两机距离保持 3 厘米左右。</p>
+    </section>
+  </conbody>
+</concept>

@@ -375,52 +375,44 @@ export function getBookSearchScript(opts: {
     // own already-established glyphs for these exact actions (the main
     // toolbar's refresh button and the page search overlay's close
     // button, both in this same assembled script) rather than inventing
-    // new ones. Originally a dedicated row above the input (per a "copy
-    // VS Code's own search-panel icon row" reference), but that put two
-    // icons alone on their own line -- isolated before there was a query
-    // (fixed by hiding the row), and still an oddly empty-looking lone
-    // line once a query DID make it visible. Folded into the input row
-    // instead, the more common pattern for an inline search box: clear
-    // lives inside the input itself (an overlay glyph at its trailing
-    // edge, VS Code's own text-input convention), and refresh sits as a
-    // plain icon button alongside the existing Aa/.* toggles, so nothing
-    // ever occupies a row by itself.
+    // new ones, per the "copy VS Code's own search-panel icon row"
+    // request this row is modeled on.
     var bsIconBtnStyle = 'padding:1px 5px;border-radius:3px;border:1px solid transparent;background:transparent;color:var(--vscode-icon-foreground,var(--vscode-foreground));cursor:pointer;font-size:13px;line-height:1.4;outline:none;';
-
-    var bsInputRow = document.createElement('div');
-    bsInputRow.style.cssText = 'display:flex;align-items:center;gap:4px;';
-
-    // Wraps just the input, so the clear glyph can be positioned as an
-    // overlay at its trailing edge (absolute, relative to this wrapper)
-    // without affecting the layout of the Aa/.*/refresh buttons that
-    // follow it in bsInputRow.
-    var bsInputWrap = document.createElement('div');
-    bsInputWrap.style.cssText = 'position:relative;flex:1;min-width:0;display:flex;align-items:center;';
-
-    var bookSearchInput = document.createElement('input');
-    bookSearchInput.type = 'text';
-    bookSearchInput.placeholder = ${placeholder};
-    bookSearchInput.setAttribute('aria-label', ${placeholder});
-    bookSearchInput.style.cssText = 'width:100%;box-sizing:border-box;padding:3px 20px 3px 6px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,var(--vscode-widget-border,#555));border-radius:3px;font-size:12px;outline:none;';
-
-    // Hidden until there is an actual query (bsUpdateClearVisibility,
-    // driven by the input listener below): nothing to clear against an
-    // empty box, and an always-visible x inside an empty input reads as
-    // a stray mark rather than a control.
-    var bsClearBtn = document.createElement('button');
-    bsClearBtn.innerHTML = '&times;';
-    bsClearBtn.title = ${clearLabel};
-    bsClearBtn.setAttribute('aria-label', ${clearLabel});
-    bsClearBtn.style.cssText = bsIconBtnStyle + 'display:none;position:absolute;right:2px;top:50%;transform:translateY(-50%);font-size:16px;padding:0 3px;';
-
-    bsInputWrap.appendChild(bookSearchInput);
-    bsInputWrap.appendChild(bsClearBtn);
+    // Hidden until there is an actual query (bsUpdateHeaderVisibility,
+    // driven by the input listener below): an icon-only row with nothing
+    // else on it reads as orphaned real estate before the reader has
+    // typed anything, and refresh/clear are both meaningless against an
+    // empty box anyway (bsRefreshBtn's own handler already no-ops then,
+    // and bsClearBtn has nothing to clear). Surfacing them only once
+    // there is a query keeps the box a single, uncluttered line until
+    // the reader is actually searching.
+    var bsHeaderRow = document.createElement('div');
+    bsHeaderRow.style.cssText = 'display:none;justify-content:flex-end;gap:2px;';
 
     var bsRefreshBtn = document.createElement('button');
     bsRefreshBtn.innerHTML = '&#x21bb;';
     bsRefreshBtn.title = ${refreshLabel};
     bsRefreshBtn.setAttribute('aria-label', ${refreshLabel});
     bsRefreshBtn.style.cssText = bsIconBtnStyle;
+
+    var bsClearBtn = document.createElement('button');
+    bsClearBtn.innerHTML = '&times;';
+    bsClearBtn.title = ${clearLabel};
+    bsClearBtn.setAttribute('aria-label', ${clearLabel});
+    bsClearBtn.style.cssText = bsIconBtnStyle + 'font-size:16px;';
+
+    bsHeaderRow.appendChild(bsRefreshBtn);
+    bsHeaderRow.appendChild(bsClearBtn);
+    bsBox.appendChild(bsHeaderRow);
+
+    var bsInputRow = document.createElement('div');
+    bsInputRow.style.cssText = 'display:flex;align-items:center;gap:4px;';
+
+    var bookSearchInput = document.createElement('input');
+    bookSearchInput.type = 'text';
+    bookSearchInput.placeholder = ${placeholder};
+    bookSearchInput.setAttribute('aria-label', ${placeholder});
+    bookSearchInput.style.cssText = 'flex:1;min-width:0;box-sizing:border-box;padding:3px 6px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,var(--vscode-widget-border,#555));border-radius:3px;font-size:12px;outline:none;';
 
     // Exact same button styling and toggle-visual convention as the page
     // search overlay's own caseBtn/regexBtn (getSearchOverlayScript) --
@@ -455,10 +447,9 @@ export function getBookSearchScript(opts: {
     bsRegexBtn.style.cssText = bsToggleStyle + 'font-family:monospace;';
     bsUpdateToggle(bsRegexBtn, false);
 
-    bsInputRow.appendChild(bsInputWrap);
+    bsInputRow.appendChild(bookSearchInput);
     bsInputRow.appendChild(bsCaseBtn);
     bsInputRow.appendChild(bsRegexBtn);
-    bsInputRow.appendChild(bsRefreshBtn);
     bsBox.appendChild(bsInputRow);
 
     var bookSearchResults = document.createElement('div');
@@ -471,20 +462,20 @@ export function getBookSearchScript(opts: {
     var bsCaseSensitive = false;
     var bsUseRegex = false;
 
-    // Single source of truth for the clear button's visibility, so the
+    // Single source of truth for the header row's visibility, so the
     // empty-query path (bsShowLinks, reached both from bsRunQuery and
-    // from bsClearBtn's own click handler below) and the has-a-query
-    // path (the input listener below) can never drift into disagreeing
-    // about what an empty box means.
-    function bsUpdateClearVisibility() {
-      bsClearBtn.style.display = bookSearchInput.value ? 'block' : 'none';
+    // from bsClearBtn) and the has-a-query path (the input listener
+    // below) can never drift into disagreeing about what an empty box
+    // means.
+    function bsUpdateHeaderVisibility() {
+      bsHeaderRow.style.display = bookSearchInput.value ? 'flex' : 'none';
     }
 
     function bsShowLinks() {
       bookSearchResults.style.display = 'none';
       bookSearchResults.innerHTML = '';
       bsLinksWrap.style.display = '';
-      bsUpdateClearVisibility();
+      bsUpdateHeaderVisibility();
     }
 
     function bsRunQuery(forceRefresh) {
@@ -501,12 +492,12 @@ export function getBookSearchScript(opts: {
     // typing, not once per keystroke.
     var bsDebounce = null;
     bookSearchInput.addEventListener('input', function() {
-      // Not debounced along with the query itself: showing/hiding the
-      // clear button is a cheap, purely-local style flip, and tying it
+      // Not debounced along with the query itself: the header row
+      // showing/hiding is a cheap, purely-local style flip, and tying it
       // to the same 200ms pause-in-typing delay as bsRunQuery would mean
-      // it visibly lags a keystroke or two behind the reader actually
-      // typing -- worse than just reacting immediately.
-      bsUpdateClearVisibility();
+      // the icons visibly lag a keystroke or two behind the reader
+      // actually typing -- worse than just reacting immediately.
+      bsUpdateHeaderVisibility();
       if (bsDebounce) clearTimeout(bsDebounce);
       bsDebounce = setTimeout(function() { bsRunQuery(false); }, 200);
     });

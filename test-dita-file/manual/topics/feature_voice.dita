@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="feature_voice" xml:lang="zh-CN">
+  <title>语音控制</title>
+  <shortdesc>对主机说出指令即可控制设备或执行场景，无需掏出手机。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>语音控制</indexterm>
+        <indexterm>唤醒词</indexterm>
+        <indexterm>语音助手</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <conbody>
+<p>主机配备双麦克风阵列，在安静环境下有效拾音半径约 5 米。默认唤醒词为「你好小星」，可在设置中更换。</p>
+    <note type="tip"><p>语音无响应时，先看灯环颜色：黄色慢闪表示网络断开，红色表示系统异常，再按 <xref href="ts_voice.dita"/> 排查。</p></note><section>
+      <title>唤醒方式</title>
+      <ul>
+        <li><b>远场唤醒</b>：直接说出唤醒词，灯环变青色后继续说指令。</li>
+        <li><b>连续对话</b>：一次唤醒后 30 秒内可连续下达多条指令，无需重复唤醒词。</li>
+        <li><b>按键唤醒</b>：按下主机顶部 <uicontrol>语音键</uicontrol> 可在嘈杂环境中强制唤醒。</li>
+      </ul>
+    </section>    <section>
+      <title>指令结构</title>
+      <p>指令通常遵循「对象 + 动作 + 参数」结构：</p>
+      <codeblock>打开客厅的灯
+把空调调到 24 度
+关闭全部灯光
+执行观影模式</codeblock>
+      <p>完整指令清单参见 <xref href="voice_commands.dita"/>。</p>
+    </section>    <section>
+      <title>隐私控制</title>
+      <p>麦克风可硬件级关闭：<menucascade><uicontrol>设置</uicontrol><uicontrol>隐私</uicontrol><uicontrol>麦克风开关</uicontrol></menucascade>。关闭后语音功能不可用，但其余功能不受影响。详见 <xref href="privacy_protection.dita"/>。</p>
+    </section>
+  </conbody>
+</concept>

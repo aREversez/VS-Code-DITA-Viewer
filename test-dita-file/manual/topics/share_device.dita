@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<task id="share_device" xml:lang="zh-CN">
+  <title>共享设备给访客</title>
+  <shortdesc>将指定设备临时共享给访客账号，访客只能看到被共享的设备。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>设备共享</indexterm>
+        <indexterm>访客</indexterm>
+        <indexterm>权限</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <taskbody>
+    <prereq>
+<p>您是家庭的管理员或 owner 角色（角色说明见 <xref href="family_manage.dita"/>）。</p>
+    </prereq>
+    <context>
+<note type="tip"><p>共享基于设备而非整个家庭，适合保姆、租客、短期访客等场景。</p></note>
+    </context>
+    <steps>
+<step>
+        <cmd>进入设备详情页，点击右上角 <menucascade><uicontrol>更多</uicontrol><uicontrol>设备共享</uicontrol></menucascade>。</cmd>
+      </step>
+      <step>
+        <cmd>输入对方的注册手机号。</cmd>
+      </step>
+      <step>
+        <cmd>设置权限。</cmd>
+      <choices>
+          <choice>仅查看：只能看到状态，不能控制。</choice>
+          <choice>可控制：可以下发控制指令，不能修改配置。</choice>
+        </choices>
+      </step>
+        <step>
+        <cmd>设置到期时间（最长 30 天），点击 <uicontrol>发送邀请</uicontrol>。</cmd>
+      </step>
+      <step>
+        <cmd>对方在其应用 <uicontrol>消息中心</uicontrol> 接受邀请后，共享生效。</cmd>
+      </step>
+
+    </steps>
+    <result>
+<p>对方的应用中出现被共享的设备卡片，并带有「共享」角标。</p>
+    </result>
+    <postreq>
+<p>在 <menucascade><uicontrol>设备共享</uicontrol><uicontrol>已共享</uicontrol></menucascade> 列表中可随时撤销共享或修改权限。</p>
+    </postreq>
+  </taskbody>
+</task>

@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<map id="fengrui-user-manual" xml:lang="zh-CN">
+  <title><keyword keyref="product-name"/> 智能家居中控用户手册</title>
+  <topicmeta>
+    <shortdesc><keyword keyref="product-name"/> 智能家居中控的安装、使用与维护手册（<keyword keyref="version"/>）。</shortdesc>
+    <keywords>
+      <keyword keyref="product-name"/>
+      <keyword keyref="company-name"/>
+      <keyword>用户手册</keyword>
+    </keywords>
+  </topicmeta>
+  <!--
+    换品牌版本 ditamap（品牌 A → 品牌 B）。
+    构建: dita -i maps/rebrand.ditamap -f html5 -t out/rebrand (ditaval: ditavals/rebrand.ditaval))
+    说明: 全部品牌内容（产品名、公司名、版本号、客服信息、logo、共享短语）均来自
+          keydef/conkeyref，源 topic 不做任何修改；品牌 A 专属正文段落由
+          rebrand.ditaval 通过 product="brandA" 过滤剔除，品牌 B 专属段落保留。
+  -->
+  <!-- ===== 品牌相关 keydef：换品牌仅替换本块 ===== -->
+  <keydef keys="product-name">
+    <topicmeta><keywords><keyword>峰睿 P5</keyword></keywords></topicmeta>
+  </keydef>
+  <keydef keys="product-model">
+    <topicmeta><keywords><keyword>P5</keyword></keywords></topicmeta>
+  </keydef>
+  <keydef keys="brand-name">
+    <topicmeta><keywords><keyword>峰睿</keyword></keywords></topicmeta>
+  </keydef>
+  <keydef keys="company-name">
+    <topicmeta><keywords><keyword>碧峰数联</keyword></keywords></topicmeta>
+  </keydef>
+  <keydef keys="version">
+    <topicmeta><keywords><keyword>1.0.0</keyword></keywords></topicmeta>
+  </keydef>
+  <keydef keys="release-year">
+    <topicmeta><keywords><keyword>2026</keyword></keywords></topicmeta>
+  </keydef>
+  <keydef keys="support-phone">
+    <topicmeta><keywords><keyword>400-630-8888</keyword></keywords></topicmeta>
+  </keydef>
+  <keydef keys="support-url" href="https://help.example-bifeng.com" scope="external" format="html"/>
+  <keydef keys="support-mail" href="mailto:help@example-bifeng.com" scope="external" format="mailto"/>
+  <keydef keys="logo" href="../images/logo-brandB.svg" format="svg"/>
+  <keydef keys="shared-brand" href="../shared/conref-brandB.dita"/>
+
+  <!-- ===== 目录 ===== -->
+  <topichead navtitle="第 1 章 产品简介">
+    <topicref href="../topics/about_manual.dita"/>
+    <topicref href="../topics/product_intro.dita"/>
+    <topicref href="../topics/whats_new.dita"/>
+    <topicref href="../topics/features_overview.dita"/>
+    <topicref href="../topics/package_contents.dita"/>
+    <topicref href="../topics/tech_specs.dita"/>
+  </topichead>
+  <topichead navtitle="第 2 章 安全须知">
+    <topicref href="../topics/safety_general.dita"/>
+    <topicref href="../topics/electrical_safety.dita"/>
+    <topicref href="../topics/privacy_protection.dita"/>
+    <topicref href="../topics/regulatory_compliance.dita"/>
+  </topichead>
+  <topichead navtitle="第 3 章 安装配置">
+    <topicref href="../topics/before_install.dita"/>
+    <topicref href="../topics/install_hardware.dita"/>
+    <topicref href="../topics/wall_mount.dita"/>
+    <topicref href="../topics/connect_power.dita"/>
+    <topicref href="../topics/network_setup.dita"/>
+    <topicref href="../topics/first_boot.dita"/>
+    <topicref href="../topics/firmware_update.dita"/>
+    <topicref href="../topics/led_status.dita"/>
+  </topichead>
+  <topichead navtitle="第 4 章 手机应用">
+    <topicref href="../topics/app_install.dita"/>
+    <topicref href="../topics/app_account.dita"/>
+    <topicref href="../topics/app_pairing.dita"/>
+    <topicref href="../topics/app_dashboard.dita"/>
+    <topicref href="../topics/app_notifications.dita"/>
+    <topicref href="../topics/app_settings.dita"/>
+  </topichead>
+  <topichead navtitle="第 5 章 功能说明">
+    <topicref href="../topics/feature_scene.dita"/>
+    <topicref href="../topics/feature_voice.dita"/>
+    <topicref href="../topics/feature_security.dita"/>
+    <topicref href="../topics/feature_automation.dita"/>
+    <topicref href="../topics/feature_zigbee.dita"/>
+    <topicref href="../topics/feature_ir.dita"/>
+    <topicref href="../topics/feature_sensor.dita"/>
+    <topicref href="../topics/feature_gateway.dita"/>
+  </topichead>
+  <topichead navtitle="第 6 章 常用任务">
+    <topicref href="../topics/create_scene.dita"/>
+    <topicref href="../topics/set_schedule.dita"/>
+    <topicref href="../topics/remote_control.dita"/>
+    <topicref href="../topics/share_device.dita"/>
+    <topicref href="../topics/family_manage.dita"/>
+    <topicref href="../topics/backup_restore.dita"/>
+  </topichead>
+  <topichead navtitle="第 7 章 日常维护">
+    <topicref href="../topics/maintenance_general.dita"/>
+    <topicref href="../topics/clean_device.dita"/>
+    <topicref href="../topics/reset_device.dita"/>
+    <topicref href="../topics/battery_replace.dita"/>
+    <topicref href="../topics/firmware_rollback.dita"/>
+  </topichead>
+  <topichead navtitle="第 8 章 故障排查">
+    <topicref href="../topics/ts_power.dita"/>
+    <topicref href="../topics/ts_network.dita"/>
+    <topicref href="../topics/ts_offline.dita"/>
+    <topicref href="../topics/ts_app.dita"/>
+    <topicref href="../topics/ts_voice.dita"/>
+    <topicref href="../topics/ts_pairing.dita"/>
+    <topicref href="../topics/ts_overheat.dita"/>
+  </topichead>
+  <topichead navtitle="第 9 章 参考资料">
+    <topicref href="../topics/error_codes.dita"/>
+    <topicref href="../topics/voice_commands.dita"/>
+    <topicref href="../topics/glossary.dita"/>
+    <topicref href="../topics/contact_support.dita"/>
+    <topicref href="../topics/warranty.dita"/>
+    <topicref href="../topics/legal_notice.dita"/>
+  </topichead>
+  <!-- ===== 关系表：故障排查主题之间的横向参考 ===== -->
+  <reltable>
+    <relheader>
+      <relcolspec linking="sourceonly"/><relcolspec linking="targetonly"/>
+    </relheader>
+    <relrow>
+      <relcell><topicref href="../topics/led_status.dita"/></relcell>
+      <relcell>
+        <topicref href="../topics/ts_power.dita"/>
+        <topicref href="../topics/ts_network.dita"/>
+        <topicref href="../topics/ts_overheat.dita"/>
+      </relcell>
+    </relrow>
+  </reltable>
+</map>

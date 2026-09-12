@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE troubleshooting PUBLIC "-//OASIS//DTD DITA Troubleshooting//EN" "troubleshooting.dtd">
+<troubleshooting id="ts_offline" xml:lang="zh-CN">
+  <title>子设备频繁离线</title>
+  <shortdesc>控制台卡片频繁出现黄色感叹号、设备状态长时间不刷新时的处理方法。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>设备离线</indexterm>
+        <indexterm>Zigbee</indexterm>
+        <indexterm>信号弱</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <troublebody>
+    <condition>
+      <p>同一台或多台子设备每天离线数次，或离线后长时间无法自动恢复。</p>
+    </condition>
+    <troubleSolution>
+      <cause>
+      <p>按设备类型区分：</p>
+      <ol>
+        <li>Zigbee 电池设备：电量不足或距离路由节点过远。</li>
+        <li>Zigbee 市电设备：网络内路由节点过少，链路不稳。</li>
+        <li>Wi-Fi 子设备：与主机不在同一网段，或路由器信号差。</li>
+      </ol>
+      </cause>
+      <remedy>
+<steps>
+        <step><cmd>在设备详情页查看最近离线时间与电量，电池设备先更换电池或充电。</cmd></step>
+        <step><cmd>统计离线设备的房间分布，判断是否集中在同一信号弱区。</cmd></step>
+        <step><cmd>在弱区加装一台市电 Zigbee 设备（如智能插座）作为路由节点。</cmd></step>
+        <step><cmd>重启主机，触发 Zigbee 网络自组网。</cmd></step>
+        <step><cmd>单台设备持续离线时，将其复位重新配对（<xref href="ts_pairing.dita"/>）。</cmd></step>
+      </steps>
+      </remedy>
+    </troubleSolution>
+  </troublebody>
+</troubleshooting>
