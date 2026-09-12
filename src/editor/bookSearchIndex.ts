@@ -3,7 +3,13 @@
 // ditaRenderUtils.ts), which is a pure DOM/<mark> mechanism that already
 // works per-page for free in site mode -- searching the WHOLE book needs
 // its own text index, since a book can have far more content than what is
-// on screen at once.
+// on screen at once. That said, the two are wired together rather than
+// left as two unrelated features: this module's own matching reuses
+// findTextMatches (the same pure match engine the page overlay uses) so
+// "does this count as a match" agrees between the two, and picking a
+// full-book result hands off to the page overlay to actually highlight
+// and scroll to it once the target page has loaded (see getBookSearchScript's
+// own comment on pendingSiteSearchHighlight).
 //
 // The one thing this module is careful never to do is run a full render
 // (renderTopicCached/renderDocument) per topic to build that index: that
@@ -17,21 +23,23 @@ import { existsSync, readFileSync } from 'fs';
 import { DitaNode } from '../parser/domTypes';
 import { parseDita, preprocessEntities } from '../parser/ditaParser';
 import { findTopLevelIndextermsInSubtree, collectIndextermChips } from '../render/baseTypeMap';
-import { stampFiles } from './ditaRenderUtils';
+import { stampFiles, findTextMatches } from './ditaRenderUtils';
 import type { DocsiteNavEntry } from './ditaRenderUtils';
 
 export interface BookSearchEntry {
   absPath: string;
-  /** Whitespace-collapsed, already-lowercased body text (title included,
-   *  prolog excluded -- see extractBookSearchEntry). Lowercased once here
-   *  at index-build time rather than per query, since the same entry is
-   *  matched against every keystroke of a search. */
-  bodyTextLower: string;
+  /** Whitespace-collapsed body text, ORIGINAL casing (title included,
+   *  prolog and indexterm text excluded -- see extractBodyText). Kept in
+   *  its original case, not lowercased at build time: case sensitivity is
+   *  a per-query option (searchBookIndex below), so a single stored copy
+   *  has to serve both a case-sensitive and a case-insensitive search,
+   *  and findTextMatches already handles the insensitive case via a regex
+   *  flag rather than needing a pre-lowered copy to compare against. */
+  bodyText: string;
   /** One entry per indexterm chip found anywhere in the topic (body or
    *  prolog/keywords) -- path keeps its original casing for display,
-   *  pathLower is the space-joined lowercase form searchBookIndex matches
-   *  against. */
-  indexterms: Array<{ path: string[]; pathLower: string }>;
+   *  pathText is its " "-joined form searchBookIndex matches against. */
+  indexterms: Array<{ path: string[]; pathText: string }>;
 }
 
 /**
@@ -53,7 +61,7 @@ function extractBodyText(node: DitaNode): string {
   return (node.children || []).map(extractBodyText).join(' ');
 }
 
-function collectIndextermsFrom(root: DitaNode): Array<{ path: string[]; pathLower: string }> {
+function collectIndextermsFrom(root: DitaNode): Array<{ path: string[]; pathText: string }> {
   const roots = findTopLevelIndextermsInSubtree(root);
   const chips = roots.flatMap((r) => collectIndextermChips(r));
   // index-see/index-see-also targets (docsite design doc, 4.4 closing
@@ -66,7 +74,7 @@ function collectIndextermsFrom(root: DitaNode): Array<{ path: string[]; pathLowe
   // topic's indexterms, which is the safe default called for there.
   return chips
     .filter((c) => c.path.length > 0)
-    .map((c) => ({ path: c.path, pathLower: c.path.join(' ').toLowerCase() }));
+    .map((c) => ({ path: c.path, pathText: c.path.join(' ') }));
 }
 
 /**
@@ -82,9 +90,9 @@ export function extractBookSearchEntry(filePath: string): BookSearchEntry | unde
     if (!existsSync(filePath)) return undefined;
     const raw = readFileSync(filePath, 'utf-8');
     const doc = parseDita(preprocessEntities(raw));
-    const bodyTextLower = extractBodyText(doc.root).replace(/\s+/g, ' ').trim().toLowerCase();
+    const bodyText = extractBodyText(doc.root).replace(/\s+/g, ' ').trim();
     const indexterms = collectIndextermsFrom(doc.root);
-    return { absPath: filePath, bodyTextLower, indexterms };
+    return { absPath: filePath, bodyText, indexterms };
   } catch (e) {
     console.warn(`Failed to extract search text from ${filePath}:`, e instanceof Error ? e.message : e);
     return undefined;
@@ -152,6 +160,11 @@ export function getBookSearchIndex(docDir: string, manifest: DocsiteNavEntry[]):
   return index;
 }
 
+export interface BookSearchOptions {
+  caseSensitive?: boolean;
+  useRegex?: boolean;
+}
+
 export interface BookSearchHit {
   absPath: string;
   kind: 'indexterm' | 'body';
@@ -160,14 +173,23 @@ export interface BookSearchHit {
   snippet: string;
 }
 
+export interface BookSearchOutcome {
+  hits: BookSearchHit[];
+  /** Set only when useRegex produced an invalid pattern -- mirrors the
+   *  page search overlay's own "invalid regex" state (getSearchOverlayScript's
+   *  performSearch) rather than silently reporting zero results, which
+   *  would look identical to "the pattern is valid but matches nothing". */
+  error?: 'invalid-regex';
+}
+
 const SNIPPET_RADIUS = 40;
 
-function makeBodySnippet(textLower: string, matchIndex: number, matchLength: number): string {
+function makeBodySnippet(text: string, matchIndex: number, matchLength: number): string {
   const start = Math.max(0, matchIndex - SNIPPET_RADIUS);
-  const end = Math.min(textLower.length, matchIndex + matchLength + SNIPPET_RADIUS);
+  const end = Math.min(text.length, matchIndex + matchLength + SNIPPET_RADIUS);
   const prefix = start > 0 ? '\u2026' : '';
-  const suffix = end < textLower.length ? '\u2026' : '';
-  return prefix + textLower.slice(start, end) + suffix;
+  const suffix = end < text.length ? '\u2026' : '';
+  return prefix + text.slice(start, end) + suffix;
 }
 
 /**
@@ -182,10 +204,34 @@ function makeBodySnippet(textLower: string, matchIndex: number, matchLength: num
  * within each bucket follow that order, so results read top-to-bottom the
  * same way the book itself does, same rationale as buildBookNavManifest's
  * own entries being reading-order.
+ *
+ * Matching goes through findTextMatches -- the exact same pure engine the
+ * page-level search overlay uses -- rather than a separate indexOf/includes
+ * implementation, specifically so "is this a match" (and, with useRegex,
+ * "is this even a valid pattern") agrees between the book-wide result list
+ * and what lights up once the reader actually jumps to a result (see
+ * getBookSearchScript's pendingSiteSearchHighlight hand-off).
  */
-export function searchBookIndex(index: Map<string, BookSearchEntry>, query: string, order: string[]): BookSearchHit[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return [];
+export function searchBookIndex(
+  index: Map<string, BookSearchEntry>,
+  query: string,
+  order: string[],
+  options: BookSearchOptions = {},
+): BookSearchOutcome {
+  const q = query.trim();
+  if (!q) return { hits: [] };
+
+  const caseSensitive = options.caseSensitive ?? false;
+  const useRegex = options.useRegex ?? false;
+
+  // findTextMatches itself returns null for an invalid pattern, but only
+  // once it is handed an actual piece of text -- validating once here
+  // up front means an invalid regex is reported once, not once per topic
+  // (and not "no results" for a book that might otherwise match plenty).
+  if (useRegex) {
+    const probe = findTextMatches('', q, true, caseSensitive);
+    if (probe === null) return { hits: [], error: 'invalid-regex' };
+  }
 
   const indextermHits: BookSearchHit[] = [];
   const bodyHits: BookSearchHit[] = [];
@@ -194,7 +240,9 @@ export function searchBookIndex(index: Map<string, BookSearchEntry>, query: stri
     const entry = index.get(absPath);
     if (!entry) continue;
 
-    const matchedChips = entry.indexterms.filter((t) => t.pathLower.includes(q));
+    const matchedChips = entry.indexterms.filter(
+      (t) => (findTextMatches(t.pathText, q, useRegex, caseSensitive)?.length ?? 0) > 0,
+    );
     if (matchedChips.length > 0) {
       indextermHits.push({
         absPath,
@@ -203,118 +251,252 @@ export function searchBookIndex(index: Map<string, BookSearchEntry>, query: stri
       });
     }
 
-    const matchIndex = entry.bodyTextLower.indexOf(q);
-    if (matchIndex >= 0) {
-      bodyHits.push({ absPath, kind: 'body', snippet: makeBodySnippet(entry.bodyTextLower, matchIndex, q.length) });
+    const bodyMatches = findTextMatches(entry.bodyText, q, useRegex, caseSensitive);
+    if (bodyMatches && bodyMatches.length > 0) {
+      const first = bodyMatches[0];
+      bodyHits.push({ absPath, kind: 'body', snippet: makeBodySnippet(entry.bodyText, first.start, first.end - first.start) });
     }
   }
 
-  return [...indextermHits, ...bodyHits];
+  return { hits: [...indextermHits, ...bodyHits] };
 }
 
 /**
- * Docsite mode's full-book search UI: a toolbar button that toggles a
- * small panel with a query input and a results list. Deliberately a
- * simple first version (docsite design doc, 6.3: exact placement/styling
- * is left to iterate on once it's visible on a real machine) -- no
- * highlighting, no keyboard navigation between results, no dismiss-on-
- * outside-click yet.
+ * Docsite mode's full-book search UI (docsite design doc, 4.4 and 6.3,
+ * revised after first-look feedback on the initial toolbar-button version):
+ * an always-visible search box pinned to the top of the sidebar's topic
+ * list, not a magnifying-glass button in the per-topic toolbar. Two
+ * reasons, both from that feedback: every other toolbar control acts on
+ * the CURRENT topic (font, width, tags, current-page search...), so a
+ * button there reads as "search this page" even before considering its
+ * icon; and putting the search box directly above the topic list it
+ * searches is a stronger, self-explanatory placement than any icon choice
+ * could be. The "Aa" / ".*" toggle buttons deliberately reuse the exact
+ * button styling AND wording (via the caller's L.searchMatchCase/
+ * L.searchUseRegex/L.searchInvalidRegex, the same strings the page overlay
+ * itself is built with) as getSearchOverlayScript's own case/regex
+ * toggles, rather than a new icon vocabulary -- consistency was the
+ * complaint, so this reuses the one pair of controls already established
+ * as this project's visual language for "match case" / "use regex".
  *
  * Same unconditional-build/caller-decides-append convention as
- * getSitePrevNextButtonsScript etc. in ditaRenderUtils.ts: this only
- * builds bookSearchBtn (for the toolbar) and appends bookSearchPanel to
- * document.body itself (a fixed-position overlay needs to escape the
- * toolbar's own layout, unlike a plain button). Assumes `btnStyle`
- * (getToolbarScaffoldScript) and `switchToSitePage`
- * (getSiteNavClickHandlerScript) are already in scope, same as this
- * project's other site-mode-only script generators.
+ * getSitePrevNextButtonsScript etc. in ditaRenderUtils.ts: this builds
+ * everything and then, itself, finds .site-nav and inserts into it --
+ * MapViewerProvider.ts's own toolbar assembly does not need to know this
+ * feature exists. Assumes `switchToSitePage`/`pendingSiteAnchor`
+ * (getSiteNavClickHandlerScript) and the page search overlay's own
+ * `performSearch`/`openSearchBar`/`caseSensitive`/`useRegex`/`searchInput`/
+ * `caseBtn`/`regexBtn`/`updateToggleVisual` (getSearchOverlayScript) are
+ * already in scope, same as this project's other site-mode-only script
+ * generators.
  */
 export function getBookSearchScript(opts: {
-  buttonTitle: string;
+  searchLabel: string;
   placeholder: string;
   noResultsLabel: string;
+  matchCaseLabel: string;
+  useRegexLabel: string;
+  invalidRegexLabel: string;
   requestMsgType: string;
   responseMsgType: string;
 }): string {
-  const buttonTitle = JSON.stringify(opts.buttonTitle);
+  const searchLabel = JSON.stringify(opts.searchLabel);
   const placeholder = JSON.stringify(opts.placeholder);
   const noResultsLabel = JSON.stringify(opts.noResultsLabel);
+  const matchCaseLabel = JSON.stringify(opts.matchCaseLabel);
+  const useRegexLabel = JSON.stringify(opts.useRegexLabel);
+  const invalidRegexLabel = JSON.stringify(opts.invalidRegexLabel);
   return `
-  var bookSearchBtn = document.createElement('button');
-  bookSearchBtn.id = '__site-search-btn';
-  bookSearchBtn.innerHTML = '&#x1F50D;';
-  bookSearchBtn.title = ${buttonTitle};
-  bookSearchBtn.setAttribute('aria-label', ${buttonTitle});
-  bookSearchBtn.style.cssText = btnStyle;
+  // Consumed once by MSG_UPDATE_CONTENT's handler (MapViewerProvider.ts)
+  // when the target page's HTML actually arrives -- cleared immediately
+  // after, same lifecycle as pendingSiteAnchor above. Declared ahead of
+  // the .site-nav guard below (rather than inside it) so MapViewerProvider's
+  // handler can always safely check/clear it even in tree/book mode, where
+  // it will simply stay null forever.
+  var pendingSiteSearchHighlight = null;
 
-  var bookSearchPanel = document.createElement('div');
-  bookSearchPanel.id = '__site-search-panel';
-  bookSearchPanel.style.cssText = 'display:none;position:fixed;top:36px;right:12px;z-index:50;width:320px;max-height:60vh;overflow:auto;background:var(--vscode-editor-background);color:var(--vscode-editor-foreground);border:1px solid var(--vscode-panel-border);border-radius:4px;padding:8px;box-shadow:0 2px 8px rgba(0,0,0,0.25);';
+  // Shared by both paths a search result click can take: the target page
+  // is already the one showing (nothing to switch, so no MSG_UPDATE_CONTENT
+  // will ever arrive to trigger this -- it has to run immediately), or a
+  // different page (deferred via pendingSiteSearchHighlight above until
+  // that page's HTML actually lands). Either way, this defers the ACTUAL
+  // highlighting to the page's own already-tested search overlay
+  // (performSearch/openSearchBar/caseSensitive/useRegex/searchInput/
+  // caseBtn/regexBtn/updateToggleVisual -- getSearchOverlayScript) rather
+  // than this feature inventing a second, parallel highlighting mechanism.
+  function bsApplyPageSearch(opts) {
+    caseSensitive = opts.caseSensitive;
+    useRegex = opts.useRegex;
+    updateToggleVisual(caseBtn, caseSensitive);
+    updateToggleVisual(regexBtn, useRegex);
+    searchInput.value = opts.term;
+    openSearchBar();
+    performSearch(opts.term);
+  }
 
-  var bookSearchInput = document.createElement('input');
-  bookSearchInput.type = 'text';
-  bookSearchInput.placeholder = ${placeholder};
-  bookSearchInput.style.cssText = 'width:100%;box-sizing:border-box;padding:4px 6px;margin-bottom:6px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border);border-radius:2px;';
-  bookSearchPanel.appendChild(bookSearchInput);
+  var siteNav = document.querySelector('.site-nav');
+  if (siteNav) {
+    // renderSiteNavHtml (ditaRenderUtils.ts) renders the topic links
+    // directly as .site-nav's children -- wrapping them here, at script
+    // run time, rather than changing that function, is what lets this
+    // hide/show "the topic list" as one unit while a search is active,
+    // without that pure/tested HTML-generation function needing to know
+    // search exists at all.
+    var bsLinksWrap = document.createElement('div');
+    bsLinksWrap.className = 'site-nav-links';
+    var bsExistingLinks = Array.prototype.slice.call(siteNav.children);
+    bsExistingLinks.forEach(function(el) { bsLinksWrap.appendChild(el); });
 
-  var bookSearchResults = document.createElement('div');
-  bookSearchPanel.appendChild(bookSearchResults);
+    var bsBox = document.createElement('div');
+    bsBox.setAttribute('role', 'search');
+    bsBox.setAttribute('aria-label', ${searchLabel});
+    bsBox.style.cssText = 'padding:6px 8px;border-bottom:1px solid var(--vscode-panel-border);display:flex;flex-direction:column;gap:4px;';
 
-  bookSearchBtn.addEventListener('click', function() {
-    var willShow = bookSearchPanel.style.display === 'none';
-    bookSearchPanel.style.display = willShow ? 'block' : 'none';
-    if (willShow) bookSearchInput.focus();
-  });
+    var bsInputRow = document.createElement('div');
+    bsInputRow.style.cssText = 'display:flex;align-items:center;gap:4px;';
 
-  // Debounced -- a query is sent to the extension host (which builds/reuses
-  // the lazy index; see getBookSearchIndex) at most once per pause in
-  // typing, not once per keystroke.
-  var bookSearchDebounce = null;
-  bookSearchInput.addEventListener('input', function() {
-    if (bookSearchDebounce) clearTimeout(bookSearchDebounce);
-    var q = bookSearchInput.value;
-    bookSearchDebounce = setTimeout(function() {
-      vscode.postMessage({ type: '${opts.requestMsgType}', query: q });
-    }, 200);
-  });
+    var bookSearchInput = document.createElement('input');
+    bookSearchInput.type = 'text';
+    bookSearchInput.placeholder = ${placeholder};
+    bookSearchInput.setAttribute('aria-label', ${placeholder});
+    bookSearchInput.style.cssText = 'flex:1;min-width:0;box-sizing:border-box;padding:3px 6px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,var(--vscode-widget-border,#555));border-radius:3px;font-size:12px;outline:none;';
 
-  window.addEventListener('message', function(e) {
-    if (e.data.type !== '${opts.responseMsgType}') return;
-    var results = e.data.results || [];
-    bookSearchResults.innerHTML = '';
-    if (results.length === 0) {
-      var empty = document.createElement('div');
-      empty.textContent = ${noResultsLabel};
-      empty.style.cssText = 'opacity:0.7;padding:4px 2px;';
-      bookSearchResults.appendChild(empty);
-      return;
+    // Exact same button styling and toggle-visual convention as the page
+    // search overlay's own caseBtn/regexBtn (getSearchOverlayScript) --
+    // deliberately duplicated as bs-prefixed constants rather than shared
+    // variables, so this toggle's on/off state stays independent of the
+    // page overlay's own (a reader filtering the book-wide result list in
+    // regex mode is not necessarily also mid-way through a page-level
+    // regex search), while still looking identical.
+    var bsToggleStyle = 'padding:1px 5px;border-radius:3px;border:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));background:var(--vscode-dropdown-background,#333);color:var(--vscode-dropdown-foreground,#eee);cursor:pointer;font-size:11px;line-height:1.4;outline:none;';
+    var bsActiveBg = 'var(--vscode-button-background,#0e639c)';
+    var bsActiveFg = 'var(--vscode-button-foreground,#fff)';
+    var bsInactiveBg = 'var(--vscode-dropdown-background,#333)';
+    var bsInactiveFg = 'var(--vscode-dropdown-foreground,#eee)';
+    var bsInactiveBd = 'var(--vscode-dropdown-border,var(--vscode-widget-border,#555))';
+    function bsUpdateToggle(btn, active) {
+      btn.style.background = active ? bsActiveBg : bsInactiveBg;
+      btn.style.color = active ? bsActiveFg : bsInactiveFg;
+      btn.style.borderColor = active ? bsActiveBg : bsInactiveBd;
     }
-    results.forEach(function(r) {
-      var item = document.createElement('div');
-      item.style.cssText = 'padding:4px 2px;cursor:pointer;border-bottom:1px solid var(--vscode-panel-border);';
-      var titleEl = document.createElement('div');
-      // U+1F4D1 (bookmark tabs) matches the indexterm chip's own marker
-      // (renderIndextermChip in baseTypeMap.ts) -- same visual language
-      // for \"this came from an index entry\" wherever it shows up.
-      titleEl.textContent = (r.kind === 'indexterm' ? '\\u{1F4D1} ' : '') + r.title;
-      titleEl.style.cssText = 'font-weight:600;';
-      var snippetEl = document.createElement('div');
-      snippetEl.textContent = r.snippet;
-      snippetEl.style.cssText = 'opacity:0.75;font-size:0.9em;';
-      item.appendChild(titleEl);
-      item.appendChild(snippetEl);
-      item.addEventListener('click', function() {
-        var navLinks = document.querySelectorAll('.site-nav-link');
-        for (var i = 0; i < navLinks.length; i++) {
-          if (navLinks[i].getAttribute('data-site-target') === r.absPath) {
-            switchToSitePage(navLinks[i]);
-            break;
-          }
-        }
-        bookSearchPanel.style.display = 'none';
-      });
-      bookSearchResults.appendChild(item);
+
+    var bsCaseBtn = document.createElement('button');
+    bsCaseBtn.textContent = 'Aa';
+    bsCaseBtn.title = ${matchCaseLabel};
+    bsCaseBtn.setAttribute('aria-label', ${matchCaseLabel});
+    bsCaseBtn.style.cssText = bsToggleStyle;
+    bsUpdateToggle(bsCaseBtn, false);
+
+    var bsRegexBtn = document.createElement('button');
+    bsRegexBtn.textContent = '.*';
+    bsRegexBtn.title = ${useRegexLabel};
+    bsRegexBtn.setAttribute('aria-label', ${useRegexLabel});
+    bsRegexBtn.style.cssText = bsToggleStyle + 'font-family:monospace;';
+    bsUpdateToggle(bsRegexBtn, false);
+
+    bsInputRow.appendChild(bookSearchInput);
+    bsInputRow.appendChild(bsCaseBtn);
+    bsInputRow.appendChild(bsRegexBtn);
+    bsBox.appendChild(bsInputRow);
+
+    var bookSearchResults = document.createElement('div');
+    bookSearchResults.style.cssText = 'display:none;max-height:50vh;overflow:auto;';
+    bsBox.appendChild(bookSearchResults);
+
+    siteNav.insertBefore(bsLinksWrap, siteNav.firstChild);
+    siteNav.insertBefore(bsBox, bsLinksWrap);
+
+    var bsCaseSensitive = false;
+    var bsUseRegex = false;
+
+    function bsRunQuery() {
+      var q = bookSearchInput.value;
+      if (!q) {
+        bookSearchResults.style.display = 'none';
+        bookSearchResults.innerHTML = '';
+        bsLinksWrap.style.display = '';
+        return;
+      }
+      vscode.postMessage({ type: '${opts.requestMsgType}', query: q, caseSensitive: bsCaseSensitive, useRegex: bsUseRegex });
+    }
+
+    // Debounced -- a query is sent to the extension host (which builds/reuses
+    // the lazy index; see getBookSearchIndex) at most once per pause in
+    // typing, not once per keystroke.
+    var bsDebounce = null;
+    bookSearchInput.addEventListener('input', function() {
+      if (bsDebounce) clearTimeout(bsDebounce);
+      bsDebounce = setTimeout(bsRunQuery, 200);
     });
-  });
+
+    bsCaseBtn.addEventListener('click', function() {
+      bsCaseSensitive = !bsCaseSensitive;
+      bsUpdateToggle(bsCaseBtn, bsCaseSensitive);
+      bsRunQuery();
+    });
+    bsRegexBtn.addEventListener('click', function() {
+      bsUseRegex = !bsUseRegex;
+      bsUpdateToggle(bsRegexBtn, bsUseRegex);
+      bsRunQuery();
+    });
+
+    window.addEventListener('message', function(e) {
+      if (e.data.type !== '${opts.responseMsgType}') return;
+      bookSearchResults.innerHTML = '';
+      bookSearchResults.style.display = 'block';
+      bsLinksWrap.style.display = 'none';
+
+      if (e.data.error === 'invalid-regex') {
+        var err = document.createElement('div');
+        err.textContent = ${invalidRegexLabel};
+        err.style.cssText = 'color:var(--vscode-errorForeground,#f48771);padding:4px 2px;font-size:12px;';
+        bookSearchResults.appendChild(err);
+        return;
+      }
+
+      var results = e.data.results || [];
+      if (results.length === 0) {
+        var empty = document.createElement('div');
+        empty.textContent = ${noResultsLabel};
+        empty.style.cssText = 'opacity:0.7;padding:4px 2px;font-size:12px;';
+        bookSearchResults.appendChild(empty);
+        return;
+      }
+      results.forEach(function(r) {
+        var item = document.createElement('div');
+        item.style.cssText = 'padding:4px 2px;cursor:pointer;border-bottom:1px solid var(--vscode-panel-border);font-size:12px;';
+        var titleEl = document.createElement('div');
+        // U+1F4D1 (bookmark tabs) matches the indexterm chip's own marker
+        // (renderIndextermChip in baseTypeMap.ts) -- same visual language
+        // for \"this came from an index entry\" wherever it shows up.
+        titleEl.textContent = (r.kind === 'indexterm' ? '\\u{1F4D1} ' : '') + r.title;
+        titleEl.style.cssText = 'font-weight:600;';
+        var snippetEl = document.createElement('div');
+        snippetEl.textContent = r.snippet;
+        snippetEl.style.cssText = 'opacity:0.75;';
+        item.appendChild(titleEl);
+        item.appendChild(snippetEl);
+        item.addEventListener('click', function() {
+          var opts = { term: bookSearchInput.value, caseSensitive: bsCaseSensitive, useRegex: bsUseRegex };
+          var navLinks = bsLinksWrap.querySelectorAll('.site-nav-link');
+          var navLink = null;
+          for (var i = 0; i < navLinks.length; i++) {
+            if (navLinks[i].getAttribute('data-site-target') === r.absPath) { navLink = navLinks[i]; break; }
+          }
+          if (!navLink) return;
+          if (navLink.classList.contains('active')) {
+            // Already on this page -- switchToSitePage would no-op and no
+            // MSG_UPDATE_CONTENT will ever arrive to trigger the deferred
+            // path below, so apply the highlight right now instead.
+            bsApplyPageSearch(opts);
+          } else {
+            pendingSiteSearchHighlight = opts;
+            switchToSitePage(navLink);
+          }
+        });
+        bookSearchResults.appendChild(item);
+      });
+    });
+  }
 `;
 }

@@ -42,28 +42,28 @@ describe('bookSearchIndex', () => {
   }
 
   describe('extractBookSearchEntry', () => {
-    it('extracts plain body text with markup stripped', () => {
-      const p = writeTopic('a.dita', '<p>The quick <b>brown</b> fox.</p>');
+    it('extracts plain body text with markup stripped, in its original casing', () => {
+      const p = writeTopic('a.dita', '<p>The Quick <b>Brown</b> Fox.</p>');
       const result = extractBookSearchEntry(p);
       assert.ok(result);
-      assert.ok(result!.bodyTextLower.includes('quick'));
-      assert.ok(result!.bodyTextLower.includes('brown'));
-      assert.ok(result!.bodyTextLower.includes('fox'));
-      assert.ok(!result!.bodyTextLower.includes('<b>'), 'markup should be stripped, not just lowercased');
+      assert.ok(result!.bodyText.includes('Quick'));
+      assert.ok(result!.bodyText.includes('Brown'));
+      assert.ok(result!.bodyText.includes('Fox'));
+      assert.ok(!result!.bodyText.includes('<b>'), 'markup should be stripped');
     });
 
     it('does not run words from separate elements together', () => {
       const p = writeTopic('a.dita', '<p>Hello</p><p>World</p>');
       const result = extractBookSearchEntry(p);
       assert.ok(result);
-      assert.ok(!result!.bodyTextLower.includes('helloworld'), 'element boundaries need a separator, or adjacent words become one unsearchable token');
+      assert.ok(!result!.bodyText.includes('HelloWorld'), 'element boundaries need a separator, or adjacent words become one unsearchable token');
     });
 
     it('excludes an indexterm\'s own term text from bodyText, since it is already tracked via indexterms', () => {
       const p = writeTopic('a.dita', '<p>Prose here.</p><indexterm>UniqueTermXyz</indexterm>');
       const result = extractBookSearchEntry(p);
       assert.ok(result);
-      assert.ok(!result!.bodyTextLower.includes('uniquetermxyz'), 'otherwise every indexterm match would also produce a redundant body hit for the same word');
+      assert.ok(!result!.bodyText.includes('UniqueTermXyz'), 'otherwise every indexterm match would also produce a redundant body hit for the same word');
       assert.strictEqual(result!.indexterms.length, 1);
       assert.deepStrictEqual(result!.indexterms[0].path, ['UniqueTermXyz']);
     });
@@ -77,8 +77,8 @@ describe('bookSearchIndex', () => {
 <body><p>Public content.</p></body></topic>`);
       const result = extractBookSearchEntry(p);
       assert.ok(result);
-      assert.ok(!result!.bodyTextLower.includes('internalcodenamezephyr'));
-      assert.ok(result!.bodyTextLower.includes('public content'));
+      assert.ok(!result!.bodyText.includes('InternalCodenameZephyr'));
+      assert.ok(result!.bodyText.includes('Public content'));
     });
 
     it('collects indexterm chips found anywhere in the topic, including nested body indexterms', () => {
@@ -90,7 +90,7 @@ describe('bookSearchIndex', () => {
       assert.ok(result);
       assert.strictEqual(result!.indexterms.length, 1);
       assert.deepStrictEqual(result!.indexterms[0].path, ['Database', 'backup']);
-      assert.strictEqual(result!.indexterms[0].pathLower, 'database backup');
+      assert.strictEqual(result!.indexterms[0].pathText, 'Database backup');
     });
 
     it('collects indexterm chips from prolog/keywords too, not just the body', () => {
@@ -139,7 +139,7 @@ describe('bookSearchIndex', () => {
       const b = writeTopic('b.dita', '<p>unrelated content</p><indexterm>widget</indexterm>');
       const manifest = [entry(a, 'Topic A'), entry(b, 'Topic B')];
       const index = buildBookSearchIndex(manifest);
-      const hits = searchBookIndex(index, 'widget', manifest.map((m) => m.absPath));
+      const { hits } = searchBookIndex(index, 'widget', manifest.map((m) => m.absPath));
       assert.strictEqual(hits.length, 2);
       assert.strictEqual(hits[0].absPath, b, 'the indexterm hit (topic B) must come first despite topic A being earlier in the book');
       assert.strictEqual(hits[0].kind, 'indexterm');
@@ -147,19 +147,57 @@ describe('bookSearchIndex', () => {
       assert.strictEqual(hits[1].kind, 'body');
     });
 
-    it('matches case-insensitively', () => {
+    it('matches case-insensitively by default', () => {
       const a = writeTopic('a.dita', '<p>Widget Assembly</p>');
       const manifest = [entry(a, 'A')];
       const index = buildBookSearchIndex(manifest);
-      const hits = searchBookIndex(index, 'WIDGET', manifest.map((m) => m.absPath));
+      const { hits } = searchBookIndex(index, 'WIDGET', manifest.map((m) => m.absPath));
       assert.strictEqual(hits.length, 1);
+    });
+
+    it('respects caseSensitive: true, matching only the exact case', () => {
+      const a = writeTopic('a.dita', '<p>Widget Assembly</p>');
+      const manifest = [entry(a, 'A')];
+      const index = buildBookSearchIndex(manifest);
+      const insensitive = searchBookIndex(index, 'WIDGET', manifest.map((m) => m.absPath), { caseSensitive: true });
+      assert.strictEqual(insensitive.hits.length, 0, 'wrong case should not match once case sensitivity is on');
+      const sensitive = searchBookIndex(index, 'Widget', manifest.map((m) => m.absPath), { caseSensitive: true });
+      assert.strictEqual(sensitive.hits.length, 1);
+    });
+
+    it('supports useRegex, including finding matches a literal search could not express', () => {
+      const a = writeTopic('a.dita', '<p>widget1 widget2 gadget3</p>');
+      const manifest = [entry(a, 'A')];
+      const index = buildBookSearchIndex(manifest);
+      const { hits } = searchBookIndex(index, '\\w+get\\d', manifest.map((m) => m.absPath), { useRegex: true });
+      assert.strictEqual(hits.length, 1);
+    });
+
+    it('reports an invalid-regex error rather than silently returning zero results', () => {
+      const a = writeTopic('a.dita', '<p>Some content that would otherwise match plenty.</p>');
+      const manifest = [entry(a, 'A')];
+      const index = buildBookSearchIndex(manifest);
+      const result = searchBookIndex(index, '(unterminated', manifest.map((m) => m.absPath), { useRegex: true });
+      assert.strictEqual(result.error, 'invalid-regex');
+      assert.deepStrictEqual(result.hits, []);
+    });
+
+    it('an indexterm chip also matches under the same case/regex rules as body text', () => {
+      const a = writeTopic('a.dita', '<indexterm>Widget</indexterm>');
+      const manifest = [entry(a, 'A')];
+      const index = buildBookSearchIndex(manifest);
+      const insensitiveMiss = searchBookIndex(index, 'widget', manifest.map((m) => m.absPath), { caseSensitive: true });
+      assert.strictEqual(insensitiveMiss.hits.length, 0);
+      const hit = searchBookIndex(index, 'Widget', manifest.map((m) => m.absPath), { caseSensitive: true });
+      assert.strictEqual(hit.hits.length, 1);
+      assert.strictEqual(hit.hits[0].kind, 'indexterm');
     });
 
     it('returns a snippet with context around the body match', () => {
       const a = writeTopic('a.dita', '<p>Before context widget after context text here for padding.</p>');
       const manifest = [entry(a, 'A')];
       const index = buildBookSearchIndex(manifest);
-      const hits = searchBookIndex(index, 'widget', manifest.map((m) => m.absPath));
+      const { hits } = searchBookIndex(index, 'widget', manifest.map((m) => m.absPath));
       assert.strictEqual(hits.length, 1);
       assert.ok(hits[0].snippet.toLowerCase().includes('widget'));
       assert.ok(hits[0].snippet.length < 'Before context widget after context text here for padding.'.length + 20);
@@ -169,15 +207,15 @@ describe('bookSearchIndex', () => {
       const a = writeTopic('a.dita', '<p>Some content.</p>');
       const manifest = [entry(a, 'A')];
       const index = buildBookSearchIndex(manifest);
-      assert.deepStrictEqual(searchBookIndex(index, '', manifest.map((m) => m.absPath)), []);
-      assert.deepStrictEqual(searchBookIndex(index, '   ', manifest.map((m) => m.absPath)), []);
+      assert.deepStrictEqual(searchBookIndex(index, '', manifest.map((m) => m.absPath)).hits, []);
+      assert.deepStrictEqual(searchBookIndex(index, '   ', manifest.map((m) => m.absPath)).hits, []);
     });
 
     it('returns no results when nothing matches', () => {
       const a = writeTopic('a.dita', '<p>Some content.</p>');
       const manifest = [entry(a, 'A')];
       const index = buildBookSearchIndex(manifest);
-      assert.deepStrictEqual(searchBookIndex(index, 'nonexistentword', manifest.map((m) => m.absPath)), []);
+      assert.deepStrictEqual(searchBookIndex(index, 'nonexistentword', manifest.map((m) => m.absPath)).hits, []);
     });
   });
 
@@ -194,7 +232,7 @@ describe('bookSearchIndex', () => {
       const a = writeTopic('a.dita', '<p>Original content.</p>');
       const manifest = [entry(a, 'A')];
       const first = getBookSearchIndex(dir, manifest);
-      assert.ok(first.get(a)!.bodyTextLower.includes('original'));
+      assert.ok(first.get(a)!.bodyText.includes('Original'));
 
       writeFileSync(a, topicXml('<p>Updated content.</p>'));
       // Force the mtime forward -- writes within the same tick can land on
@@ -205,167 +243,245 @@ describe('bookSearchIndex', () => {
 
       const second = getBookSearchIndex(dir, manifest);
       assert.notStrictEqual(first, second);
-      assert.ok(second.get(a)!.bodyTextLower.includes('updated'));
-      assert.ok(!second.get(a)!.bodyTextLower.includes('original'));
+      assert.ok(second.get(a)!.bodyText.includes('Updated'));
+      assert.ok(!second.get(a)!.bodyText.includes('Original'));
     });
   });
 
   // --- getBookSearchScript (webview UI) ---
   //
-  // Same lightweight fake-DOM approach as ditaRenderUtils.test.ts's own
-  // getSiteNavClickHandlerScript tests: minimal element stubs, not a real
-  // DOM, just enough surface for the script's own calls to run.
-  function makeFakeStyle(): { cssText: string; display?: string } {
-    const state: { cssText: string; display?: string; _cssText?: string } = { cssText: '' };
-    Object.defineProperty(state, 'cssText', {
-      get() { return state._cssText || ''; },
-      // A real element's style.cssText and style.display stay in sync in
-      // both directions; this fake only needs the cssText -> display
-      // direction, since that is the only one the script under test relies
-      // on (it sets the panel's initial "display:none;..." via cssText,
-      // then toggles it afterwards via the plain .display property, which
-      // needs no special handling here).
-      set(v: string) {
-        state._cssText = v;
-        const m = /display\s*:\s*([^;]+)/.exec(v);
-        if (m) state.display = m[1].trim();
-      },
-    });
-    return state;
-  }
-
-  interface FakeElement {
+  // A minimal but real tree-shaped fake DOM (not just isolated element
+  // stubs): the script under test moves real nodes around
+  // (appendChild/insertBefore actually relocate a link from .site-nav
+  // into the new wrapper div) and queries by selector from a document
+  // root, and the thing worth testing IS that relocation + query
+  // behavior, not just "does it throw".
+  class FakeNode {
     tagName: string;
-    id: string;
-    innerHTML: string;
-    textContent: string;
-    title: string;
-    value: string;
+    id = '';
+    innerHTML = '';
+    textContent = '';
+    title = '';
+    value = '';
+    placeholder = '';
     style: { cssText: string; display?: string };
-    children: FakeElement[];
-    setAttribute: (name: string, v: string) => void;
-    getAttribute: (name: string) => string | null;
-    appendChild: (child: FakeElement) => void;
-    addEventListener: (evt: string, fn: (e: unknown) => void) => void;
-    focus: () => void;
-    fire: (evt: string, e?: unknown) => void;
-    classList?: { contains: (c: string) => boolean; add: (c: string) => void; remove: (c: string) => void };
+    children: FakeNode[] = [];
+    parentNode: FakeNode | null = null;
+    private attrs: Record<string, string> = {};
+    private classSet = new Set<string>();
+    private listeners: Record<string, Array<(e: unknown) => void>> = {};
+
+    constructor(tag: string) {
+      this.tagName = tag;
+      this.style = (() => {
+        const s: { cssText: string; display?: string; _cssText?: string } = { cssText: '' };
+        Object.defineProperty(s, 'cssText', {
+          get() { return s._cssText || ''; },
+          set(v: string) {
+            s._cssText = v;
+            const m = /display\s*:\s*([^;]+)/.exec(v);
+            if (m) s.display = m[1].trim();
+          },
+        });
+        return s;
+      })();
+    }
+
+    get classList() {
+      return {
+        contains: (c: string) => this.classSet.has(c),
+        add: (c: string) => { this.classSet.add(c); },
+        remove: (c: string) => { this.classSet.delete(c); },
+      };
+    }
+    set className(v: string) { this.classSet = new Set(v.split(/\s+/).filter(Boolean)); }
+    get className(): string { return Array.from(this.classSet).join(' '); }
+
+    setAttribute(name: string, v: string) {
+      this.attrs[name] = v;
+      if (name === 'class') this.className = v;
+    }
+    getAttribute(name: string): string | null { return name in this.attrs ? this.attrs[name] : null; }
+
+    get firstChild(): FakeNode | null { return this.children[0] ?? null; }
+
+    appendChild(child: FakeNode) {
+      if (child.parentNode) child.parentNode.removeChild(child);
+      this.children.push(child);
+      child.parentNode = this;
+    }
+    insertBefore(newNode: FakeNode, ref: FakeNode | null) {
+      if (newNode.parentNode) newNode.parentNode.removeChild(newNode);
+      const idx = ref ? this.children.indexOf(ref) : -1;
+      if (idx === -1) this.children.push(newNode);
+      else this.children.splice(idx, 0, newNode);
+      newNode.parentNode = this;
+    }
+    removeChild(child: FakeNode) {
+      const idx = this.children.indexOf(child);
+      if (idx >= 0) this.children.splice(idx, 1);
+      child.parentNode = null;
+    }
+
+    addEventListener(evt: string, fn: (e: unknown) => void) {
+      (this.listeners[evt] = this.listeners[evt] || []).push(fn);
+    }
+    fire(evt: string, e: unknown = {}) {
+      for (const fn of this.listeners[evt] || []) fn(e);
+    }
+    focus() {}
+
+    private matches(selector: string): boolean {
+      if (selector.startsWith('.')) return selector.slice(1).split('.').every((c) => this.classList.contains(c));
+      if (selector.startsWith('[') && selector.endsWith(']')) return this.getAttribute(selector.slice(1, -1)) !== null;
+      return false;
+    }
+    querySelectorAll(selector: string): FakeNode[] {
+      const results: FakeNode[] = [];
+      const walk = (n: FakeNode) => {
+        for (const c of n.children) {
+          if (c.matches(selector)) results.push(c);
+          walk(c);
+        }
+      };
+      walk(this);
+      return results;
+    }
+    querySelector(selector: string): FakeNode | null {
+      return this.querySelectorAll(selector)[0] ?? null;
+    }
   }
 
-  function makeFakeElement(tag: string): FakeElement {
-    const listeners: Record<string, Array<(e: unknown) => void>> = {};
-    const attrs: Record<string, string> = {};
-    const children: FakeElement[] = [];
-    const el: FakeElement = {
-      tagName: tag,
-      id: '',
-      innerHTML: '',
-      textContent: '',
-      title: '',
-      value: '',
-      style: makeFakeStyle(),
-      children,
-      setAttribute: (name: string, v: string) => { attrs[name] = v; },
-      getAttribute: (name: string) => (name in attrs ? attrs[name] : null),
-      appendChild: (child: FakeElement) => { children.push(child); },
-      addEventListener: (evt: string, fn: (e: unknown) => void) => {
-        (listeners[evt] = listeners[evt] || []).push(fn);
-      },
-      focus: () => {},
-      fire(evt: string, e: unknown = {}) {
-        for (const fn of listeners[evt] || []) fn(e);
-      },
-    };
-    return el;
-  }
+  function makeFakeSiteDocument(navLinks: Array<{ absPath: string; active?: boolean }>) {
+    const root = new FakeNode('root');
+    const siteNav = new FakeNode('nav');
+    siteNav.className = 'site-nav';
+    navLinks.forEach((nl) => {
+      const link = new FakeNode('a');
+      link.className = 'site-nav-link' + (nl.active ? ' active' : '');
+      link.setAttribute('data-site-target', nl.absPath);
+      siteNav.appendChild(link);
+    });
+    root.appendChild(siteNav);
 
-  function runBookSearchScript() {
-    const created: FakeElement[] = [];
+    const globalListeners: Record<string, Array<(e: unknown) => void>> = {};
     const messageListeners: Array<(e: { data: unknown }) => void> = [];
     const posted: Array<{ type: string; [k: string]: unknown }> = [];
-    const navLinks = [
-      (() => {
-        const l = makeFakeElement('a');
-        l.setAttribute('data-site-target', '/book/a.dita');
-        l.classList = { contains: () => false, add: () => {}, remove: () => {} };
-        return l;
-      })(),
-      (() => {
-        const l = makeFakeElement('a');
-        l.setAttribute('data-site-target', '/book/target.dita');
-        l.classList = { contains: () => false, add: () => {}, remove: () => {} };
-        return l;
-      })(),
-    ];
-    const fakeDocument = {
-      createElement: (tag: string) => {
-        const el = makeFakeElement(tag);
-        created.push(el);
-        return el;
-      },
-      addEventListener: () => {},
-      querySelector: () => null,
-      querySelectorAll: () => navLinks,
+
+    const document = {
+      createElement: (tag: string) => new FakeNode(tag),
+      querySelector: (sel: string) => root.querySelector(sel),
+      querySelectorAll: (sel: string) => root.querySelectorAll(sel),
       getElementById: () => null,
+      addEventListener: (evt: string, fn: (e: unknown) => void) => {
+        (globalListeners[evt] = globalListeners[evt] || []).push(fn);
+      },
     };
-    const fakeWindow = {
+    const window = {
       addEventListener: (evt: string, fn: (e: { data: unknown }) => void) => {
         if (evt === 'message') messageListeners.push(fn);
       },
     };
-    const fakeVscode = { postMessage: (m: { type: string; [k: string]: unknown }) => posted.push(m) };
+    const vscode = { postMessage: (m: { type: string; [k: string]: unknown }) => posted.push(m) };
 
-    const script = `
-      var btnStyle = '';
-      ${getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' })}
-      ${getBookSearchScript({
-        buttonTitle: 'Search this book',
-        placeholder: 'Search all topics...',
-        noResultsLabel: 'No matches found',
-        requestMsgType: 'bookSearch',
-        responseMsgType: 'bookSearchResults',
-      })}
-      return { btn: bookSearchBtn, panel: bookSearchPanel, input: bookSearchInput, results: bookSearchResults };
-    `;
-    const fn = new Function('document', 'window', 'vscode', script);
-    const api = fn(fakeDocument, fakeWindow, fakeVscode) as {
-      btn: ReturnType<typeof makeFakeElement>;
-      panel: ReturnType<typeof makeFakeElement>;
-      input: ReturnType<typeof makeFakeElement>;
-      results: ReturnType<typeof makeFakeElement>;
-    };
     return {
-      ...api,
+      document,
+      window,
+      vscode,
+      root,
+      siteNav,
       posted,
-      navLinks,
+      fireGlobalClick: (target: FakeNode) => {
+        for (const fn of globalListeners['click'] || []) fn({ target, preventDefault: () => {} });
+      },
       emitMessage: (data: unknown) => messageListeners.forEach((fn) => fn({ data })),
     };
   }
 
-  it('getBookSearchScript builds a script that runs without throwing', () => {
-    assert.doesNotThrow(() => runBookSearchScript());
+  function runBookSearchScript(navLinks: Array<{ absPath: string; active?: boolean }> = []) {
+    const env = makeFakeSiteDocument(navLinks);
+    const script = `
+      ${getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' })}
+      ${getBookSearchScript({
+        searchLabel: 'Search this book',
+        placeholder: 'Search all topics...',
+        noResultsLabel: 'No matches found',
+        matchCaseLabel: 'Match case',
+        useRegexLabel: 'Use regex',
+        invalidRegexLabel: 'Invalid regex',
+        requestMsgType: 'bookSearch',
+        responseMsgType: 'bookSearchResults',
+      })}
+      return { siteNavRef: siteNav, input: bookSearchInput, results: bookSearchResults, linksWrap: bsLinksWrap, caseBtn: bsCaseBtn, regexBtn: bsRegexBtn };
+    `;
+    const fn = new Function('document', 'window', 'vscode', script);
+    const api = fn(env.document, env.window, env.vscode) as {
+      siteNavRef: FakeNode;
+      input: FakeNode;
+      results: FakeNode;
+      linksWrap: FakeNode;
+      caseBtn: FakeNode;
+      regexBtn: FakeNode;
+    };
+    return { ...env, ...api };
+  }
+
+  it('builds a script that runs without throwing even with no .site-nav present (tree/book mode)', () => {
+    const script = `
+      ${getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' })}
+      ${getBookSearchScript({
+        searchLabel: 'Search this book',
+        placeholder: 'Search all topics...',
+        noResultsLabel: 'No matches found',
+        matchCaseLabel: 'Match case',
+        useRegexLabel: 'Use regex',
+        invalidRegexLabel: 'Invalid regex',
+        requestMsgType: 'bookSearch',
+        responseMsgType: 'bookSearchResults',
+      })}
+    `;
+    const fakeDocument = { querySelector: () => null, addEventListener: () => {}, getElementById: () => null };
+    const fakeWindow = { addEventListener: () => {} };
+    assert.doesNotThrow(() => new Function('document', 'window', 'vscode', script)(fakeDocument, fakeWindow, {}));
   });
 
-  it('clicking the search button toggles the panel open and closed', () => {
-    const { btn, panel } = runBookSearchScript();
-    assert.strictEqual(panel.style.display, 'none');
-    btn.fire('click');
-    assert.strictEqual(panel.style.display, 'block');
-    btn.fire('click');
-    assert.strictEqual(panel.style.display, 'none');
+  it('inserts the search box above the existing topic links, without losing any of them', () => {
+    const { siteNavRef, linksWrap } = runBookSearchScript([{ absPath: '/book/a.dita', active: true }, { absPath: '/book/b.dita' }]);
+    assert.strictEqual(linksWrap.children.length, 2, 'both original links should have moved into the wrapper, none lost');
+    assert.ok(siteNavRef.children.indexOf(linksWrap) > 0, 'the search box (whatever precedes it) should sit above the link wrapper');
   });
 
-  it('typing in the search input posts a debounced bookSearch query', async () => {
-    const { input, posted } = runBookSearchScript();
+  it('typing a query posts a debounced bookSearch request with the case/regex toggle state', async () => {
+    const { input, posted } = runBookSearchScript([{ absPath: '/book/a.dita' }]);
     (input as { value: string }).value = 'widget';
     input.fire('input');
     assert.deepStrictEqual(posted, [], 'should not post immediately -- it is debounced');
     await new Promise((r) => setTimeout(r, 260));
-    assert.deepStrictEqual(posted, [{ type: 'bookSearch', query: 'widget' }]);
+    assert.deepStrictEqual(posted, [{ type: 'bookSearch', query: 'widget', caseSensitive: false, useRegex: false }]);
   });
 
-  it('renders a result list from a bookSearchResults message, with an indexterm marker for indexterm hits', () => {
-    const { results, emitMessage } = runBookSearchScript();
+  it('toggling case/regex buttons changes the flags sent with the next query', async () => {
+    const { input, caseBtn, regexBtn, posted } = runBookSearchScript([{ absPath: '/book/a.dita' }]);
+    caseBtn.fire('click');
+    regexBtn.fire('click');
+    (input as { value: string }).value = '\\d+';
+    input.fire('input');
+    await new Promise((r) => setTimeout(r, 260));
+    assert.deepStrictEqual(posted, [{ type: 'bookSearch', query: '\\d+', caseSensitive: true, useRegex: true }]);
+  });
+
+  it('clearing the query back to empty hides results and restores the topic list', async () => {
+    const { input, results, linksWrap, posted } = runBookSearchScript([{ absPath: '/book/a.dita' }]);
+    (input as { value: string }).value = '';
+    input.fire('input');
+    await new Promise((r) => setTimeout(r, 260));
+    assert.deepStrictEqual(posted, [], 'an empty query should not even ask the extension host');
+    assert.strictEqual(results.style.display, 'none');
+    assert.strictEqual(linksWrap.style.display, '');
+  });
+
+  it('renders results and hides the topic list while a non-empty result set is showing', () => {
+    const { results, linksWrap, emitMessage } = runBookSearchScript([{ absPath: '/book/a.dita' }]);
     emitMessage({
       type: 'bookSearchResults',
       results: [
@@ -373,24 +489,113 @@ describe('bookSearchIndex', () => {
         { absPath: '/book/target.dita', title: 'Topic B', kind: 'body', snippet: '...some text...' },
       ],
     });
-    assert.strictEqual((results.children as unknown[]).length, 2);
+    assert.strictEqual(results.children.length, 2);
+    assert.strictEqual(linksWrap.style.display, 'none');
   });
 
   it('shows the empty-results label when a search comes back with nothing', () => {
     const { results, emitMessage } = runBookSearchScript();
     emitMessage({ type: 'bookSearchResults', results: [] });
-    assert.strictEqual((results.children as unknown[]).length, 1);
+    assert.strictEqual(results.children.length, 1);
+    assert.strictEqual(results.children[0].textContent, 'No matches found');
   });
 
-  it('clicking a result switches to that topic\'s page via the existing sidebar navigation', () => {
-    const { results, emitMessage, posted, panel } = runBookSearchScript();
+  it('shows the invalid-regex message distinctly from an empty result set', () => {
+    const { results, emitMessage } = runBookSearchScript();
+    emitMessage({ type: 'bookSearchResults', error: 'invalid-regex' });
+    assert.strictEqual(results.children.length, 1);
+    assert.strictEqual(results.children[0].textContent, 'Invalid regex');
+  });
+
+  // --- integration with the page-level search overlay ---
+  //
+  // These stub out getSearchOverlayScript's own surface (performSearch,
+  // openSearchBar, caseSensitive, useRegex, searchInput, caseBtn, regexBtn,
+  // updateToggleVisual) rather than including the real script: that
+  // overlay does its own document.createTreeWalker-based DOM text search,
+  // already covered by its own tests elsewhere, and simulating a full text
+  // tree here would test that mechanism a second time instead of what is
+  // actually new -- whether a result click correctly hands off to it (or,
+  // for the already-open page, calls it immediately) with the right term
+  // and flags.
+  function overlayStubScript(): { calls: { openSearchBar: number; performSearch: string[] }; prelude: string } {
+    const calls = { openSearchBar: 0, performSearch: [] as string[] };
+    const prelude = `
+      var caseSensitive = false;
+      var useRegex = false;
+      var searchInput = { value: '' };
+      var caseBtn = {}; var regexBtn = {};
+      function updateToggleVisual(btn, active) {}
+      function openSearchBar() { __overlayCalls.openSearchBar++; }
+      function performSearch(term) { __overlayCalls.performSearch.push(term); }
+    `;
+    return { calls, prelude };
+  }
+
+  function runIntegrationScript(navLinks: Array<{ absPath: string; active?: boolean }>) {
+    const env = makeFakeSiteDocument(navLinks);
+    const { calls, prelude } = overlayStubScript();
+    const script = `
+      ${prelude}
+      ${getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' })}
+      ${getBookSearchScript({
+        searchLabel: 'Search this book',
+        placeholder: 'Search all topics...',
+        noResultsLabel: 'No matches found',
+        matchCaseLabel: 'Match case',
+        useRegexLabel: 'Use regex',
+        invalidRegexLabel: 'Invalid regex',
+        requestMsgType: 'bookSearch',
+        responseMsgType: 'bookSearchResults',
+      })}
+      return { input: bookSearchInput, results: bookSearchResults, applyPageSearch: bsApplyPageSearch, getPending: function() { return pendingSiteSearchHighlight; } };
+    `;
+    const fn = new Function('document', 'window', 'vscode', '__overlayCalls', script);
+    const api = fn(env.document, env.window, env.vscode, calls) as {
+      input: FakeNode;
+      results: FakeNode;
+      applyPageSearch: (opts: unknown) => void;
+      getPending: () => unknown;
+    };
+    return { ...env, ...api, overlayCalls: calls };
+  }
+
+  it('clicking a result for the page already open applies the page-level search immediately (no page switch to wait for)', () => {
+    const { results, emitMessage, posted, input, overlayCalls } = runIntegrationScript([{ absPath: '/book/a.dita', active: true }]);
+    (input as { value: string }).value = 'widget';
     emitMessage({
       type: 'bookSearchResults',
-      results: [{ absPath: '/book/target.dita', title: 'Target Topic', kind: 'body', snippet: 'snippet' }],
+      results: [{ absPath: '/book/a.dita', title: 'A', kind: 'body', snippet: 'snippet' }],
     });
-    const item = (results.children as ReturnType<typeof makeFakeElement>[])[0];
-    item.fire('click');
+    results.children[0].fire('click');
+    assert.deepStrictEqual(posted, [], 'already on this page -- no page switch to post');
+    assert.strictEqual(overlayCalls.openSearchBar, 1);
+    assert.deepStrictEqual(overlayCalls.performSearch, ['widget']);
+  });
+
+  it('clicking a result for a different page defers the search-highlight via pendingSiteSearchHighlight, applied once MSG_UPDATE_CONTENT would consume it', () => {
+    const { results, emitMessage, posted, input, getPending, applyPageSearch, overlayCalls } = runIntegrationScript([
+      { absPath: '/book/a.dita', active: true },
+      { absPath: '/book/target.dita' },
+    ]);
+    (input as { value: string }).value = 'widget';
+    emitMessage({
+      type: 'bookSearchResults',
+      results: [{ absPath: '/book/target.dita', title: 'Target', kind: 'body', snippet: 'snippet' }],
+    });
+    results.children[0].fire('click');
     assert.deepStrictEqual(posted, [{ type: 'switchSitePage', target: '/book/target.dita' }]);
-    assert.strictEqual(panel.style.display, 'none', 'the panel should close after picking a result');
+    assert.strictEqual(overlayCalls.openSearchBar, 0, 'not applied yet -- the target page has not loaded');
+    const pending = getPending() as { term: string } | null;
+    assert.ok(pending);
+    assert.strictEqual(pending!.term, 'widget');
+
+    // Simulates the other half of the hand-off, which lives in
+    // MapViewerProvider.ts's MSG_UPDATE_CONTENT handler: once the new
+    // page's HTML has actually landed, it calls bsApplyPageSearch with
+    // the pending request.
+    applyPageSearch(pending);
+    assert.strictEqual(overlayCalls.openSearchBar, 1);
+    assert.deepStrictEqual(overlayCalls.performSearch, ['widget']);
   });
 });

@@ -208,23 +208,28 @@ function getMapWebviewScript(): string {
     toolbar.appendChild(siteNextBtn);
   }
 
-  // Full-book search -- docsite mode only (docsite design doc, 4.4). A
-  // topic-level, DOM-only search already exists (getSearchOverlayScript,
-  // Ctrl+F) and needs no change here: it already works per-page for free
-  // in site mode. This is the separate, whole-book version, backed by the
-  // lazy per-book text index built on the extension host side (see
-  // bookSearchIndex.ts) rather than anything client-side.
+  // Full-book search -- docsite mode only (docsite design doc, 4.4,
+  // revised to live in the sidebar rather than a toolbar button after
+  // first-look feedback -- see getBookSearchScript's own doc comment for
+  // why). A topic-level, DOM-only search already exists
+  // (getSearchOverlayScript, Ctrl+F) and needs no change here: it already
+  // works per-page for free in site mode, and getBookSearchScript hands
+  // off to it directly to actually highlight a picked result rather than
+  // duplicating that mechanism. This is the separate, whole-book version,
+  // backed by the lazy per-book text index built on the extension host
+  // side (see bookSearchIndex.ts). getBookSearchScript inserts itself
+  // into .site-nav directly (a no-op if that element does not exist, i.e.
+  // tree/book mode), so there is no toolbar wiring needed here at all.
   ${getBookSearchScript({
-    buttonTitle: L.siteSearchTitle,
+    searchLabel: L.siteSearchTitle,
     placeholder: L.siteSearchPlaceholder,
     noResultsLabel: L.siteSearchNoResults,
+    matchCaseLabel: L.searchMatchCase,
+    useRegexLabel: L.searchUseRegex,
+    invalidRegexLabel: L.searchInvalidRegex,
     requestMsgType: MSG_BOOK_SEARCH,
     responseMsgType: MSG_BOOK_SEARCH_RESULTS,
   })}
-  if (currentMode === 'site') {
-    toolbar.appendChild(bookSearchBtn);
-    document.body.appendChild(bookSearchPanel);
-  }
 
   // Tag-name tooltip toggle -- same feature and same persisted preference
   // as the topic viewer's own (see TAG_TOOLTIPS_KEY in
@@ -349,6 +354,15 @@ function getMapWebviewScript(): string {
           scrollToSiteAnchor(pendingSiteAnchor);
           pendingSiteAnchor = null;
         }
+        // Full-book search result jump (bookSearchIndex.ts): a result
+        // click on a DIFFERENT page stashed the query + case/regex flags
+        // here rather than applying them immediately, since the page
+        // search overlay needs this page's own content in the DOM before
+        // performSearch can find anything to highlight.
+        if (currentMode === 'site' && pendingSiteSearchHighlight) {
+          bsApplyPageSearch(pendingSiteSearchHighlight);
+          pendingSiteSearchHighlight = null;
+        }
       }
     } else if (e.data.type === '${MSG_PATCH_CONTENT}') {
       // Book mode's incremental update: replace only the entries whose HTML
@@ -442,13 +456,17 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       } else if (message.type === MSG_BOOK_SEARCH) {
         // Reuses siteManifestCache when it is already warm (the common
         // case: the person opened site mode, which is the only mode this
-        // button exists in, before ever touching search) rather than
+        // search box exists in, before ever touching it) rather than
         // re-parsing the map -- same rationale as postSitePageUpdate's own
         // reuse of it. getBookSearchIndex is its own separate lazy cache on
         // top of that (docsite design doc, 3.1): the manifest gives it
         // which topics to index, but the actual per-topic text extraction
         // only happens once per book per edit, not once per keystroke.
         const query = typeof message.query === 'string' ? message.query : '';
+        const searchOptions = {
+          caseSensitive: message.caseSensitive === true,
+          useRegex: message.useRegex === true,
+        };
         let site = siteManifestCache;
         if (!site) {
           const built = this.buildSiteManifest(document);
@@ -460,14 +478,18 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         }
         const searchDocDir = dirname(document.uri.fsPath);
         const searchIndex = getBookSearchIndex(searchDocDir, site.manifest);
-        const hits = searchBookIndex(searchIndex, query, site.manifest.map((m) => m.absPath));
+        const outcome = searchBookIndex(searchIndex, query, site.manifest.map((m) => m.absPath), searchOptions);
+        if (outcome.error) {
+          webviewPanel.webview.postMessage({ type: MSG_BOOK_SEARCH_RESULTS, results: [], error: outcome.error });
+          return;
+        }
         const titleByPath = new Map(site.manifest.map((m) => [m.absPath, m.title] as const));
         // Capped rather than sent in full: a broad query against a very
         // large book could otherwise match most of it, and the panel
         // (docsite design doc, 6.3: a simple first version) has no
         // pagination -- a long but bounded list is more useful than either
         // an unbounded one or truncating silently with no signal at all.
-        const results = hits.slice(0, 30).map((h) => ({
+        const results = outcome.hits.slice(0, 30).map((h) => ({
           absPath: h.absPath,
           title: titleByPath.get(h.absPath) ?? h.absPath,
           kind: h.kind,
