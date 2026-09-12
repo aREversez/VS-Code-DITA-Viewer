@@ -22,6 +22,7 @@
       <title>硬件参数</title>
     <simpletable id="hardware-specs">
       <sthead><stentry>项目</stentry><stentry>参数</stentry></sthead>
+      <strow><stentry>型号</stentry><stentry><keyword keyref="product-model"/></stentry></strow>
       <strow><stentry>处理器</stentry><stentry>四核 Cortex-A55，1.4 GHz</stentry></strow>
       <strow><stentry>内存 / 闪存</stentry><stentry>2 GB / 32 GB</stentry></strow>
       <strow><stentry>屏幕</stentry><stentry>4 英寸电容触摸屏，480 × 800</stentry></strow>

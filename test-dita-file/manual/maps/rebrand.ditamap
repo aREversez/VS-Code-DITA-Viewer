@@ -39,6 +39,16 @@
   <keydef keys="support-phone">
     <topicmeta><keywords><keyword>400-630-8888</keyword></keywords></topicmeta>
   </keydef>
+  <!--
+    support-url / support-mail / logo：href 型 keydef，故意不通过 keyref 从
+    正文引用。当前渲染器（src/render/baseTypeMap.ts 的 topic/xref、
+    topic/image）只读取各自的 href 属性，不会回退到 keyref 做 keydef 查找，
+    resolveKey（src/editor/keyMap.ts）也只解析 keydef 的文本值（keyword/
+    linktext 等），不解析 href/scope/format——所以 <xref keyref="support-url"/>
+    或 <image keyref="logo"/> 现在会静默渲染成空。在这项能力补上之前，
+    contact_support.dita 里对应的链接故意保留硬编码 href，没有跟着改成
+    keyref，避免链接被静默吞掉。
+  -->
   <keydef keys="support-url" href="https://help.example-bifeng.com" scope="external" format="html"/>
   <keydef keys="support-mail" href="mailto:help@example-bifeng.com" scope="external" format="mailto"/>
   <keydef keys="logo" href="../images/logo-brandB.svg" format="svg"/>
