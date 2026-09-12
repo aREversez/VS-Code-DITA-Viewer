@@ -7,6 +7,7 @@ import {
   buildBookSearchIndex,
   getBookSearchIndex,
   clearBookSearchIndexCache,
+  invalidateBookSearchIndex,
   searchBookIndex,
   getBookSearchScript,
 } from '../../editor/bookSearchIndex';
@@ -246,6 +247,37 @@ describe('bookSearchIndex', () => {
       assert.ok(second.get(a)!.bodyText.includes('Updated'));
       assert.ok(!second.get(a)!.bodyText.includes('Original'));
     });
+
+    it('invalidateBookSearchIndex forces a rebuild even when nothing on disk looks stale (manual refresh button)', () => {
+      const a = writeTopic('a.dita', '<p>Content.</p>');
+      const manifest = [entry(a, 'A')];
+      const first = getBookSearchIndex(dir, manifest);
+      const second = getBookSearchIndex(dir, manifest);
+      assert.strictEqual(first, second, 'sanity check: unchanged inputs share the cached instance');
+
+      invalidateBookSearchIndex(dir);
+      const third = getBookSearchIndex(dir, manifest);
+      assert.notStrictEqual(second, third, 'a manual refresh should rebuild even though the mtime/file-list check alone would have reused the cache');
+    });
+
+    it('invalidateBookSearchIndex only drops the named book, leaving other open books cached', () => {
+      const dir2 = mkdtempSync(join(tmpdir(), 'dita-book-search-'));
+      try {
+        const a = writeTopic('a.dita', '<p>Book one.</p>');
+        const b = join(dir2, 'b.dita');
+        writeFileSync(b, topicXml('<p>Book two.</p>'));
+        const manifestA = [entry(a, 'A')];
+        const manifestB = [entry(b, 'B')];
+        const beforeB = getBookSearchIndex(dir2, manifestB);
+        getBookSearchIndex(dir, manifestA);
+
+        invalidateBookSearchIndex(dir);
+        const afterB = getBookSearchIndex(dir2, manifestB);
+        assert.strictEqual(beforeB, afterB, 'invalidating one book should not touch a different, unrelated book\'s cache');
+      } finally {
+        rmSync(dir2, { recursive: true, force: true });
+      }
+    });
   });
 
   // --- getBookSearchScript (webview UI) ---
@@ -409,10 +441,12 @@ describe('bookSearchIndex', () => {
         matchCaseLabel: 'Match case',
         useRegexLabel: 'Use regex',
         invalidRegexLabel: 'Invalid regex',
+        refreshLabel: 'Refresh search results',
+        clearLabel: 'Clear search',
         requestMsgType: 'bookSearch',
         responseMsgType: 'bookSearchResults',
       })}
-      return { siteNavRef: siteNav, input: bookSearchInput, results: bookSearchResults, linksWrap: bsLinksWrap, caseBtn: bsCaseBtn, regexBtn: bsRegexBtn };
+      return { siteNavRef: siteNav, input: bookSearchInput, results: bookSearchResults, linksWrap: bsLinksWrap, caseBtn: bsCaseBtn, regexBtn: bsRegexBtn, refreshBtn: bsRefreshBtn, clearBtn: bsClearBtn };
     `;
     const fn = new Function('document', 'window', 'vscode', script);
     const api = fn(env.document, env.window, env.vscode) as {
@@ -422,6 +456,8 @@ describe('bookSearchIndex', () => {
       linksWrap: FakeNode;
       caseBtn: FakeNode;
       regexBtn: FakeNode;
+      refreshBtn: FakeNode;
+      clearBtn: FakeNode;
     };
     return { ...env, ...api };
   }
@@ -436,6 +472,8 @@ describe('bookSearchIndex', () => {
         matchCaseLabel: 'Match case',
         useRegexLabel: 'Use regex',
         invalidRegexLabel: 'Invalid regex',
+        refreshLabel: 'Refresh search results',
+        clearLabel: 'Clear search',
         requestMsgType: 'bookSearch',
         responseMsgType: 'bookSearchResults',
       })}
@@ -457,7 +495,7 @@ describe('bookSearchIndex', () => {
     input.fire('input');
     assert.deepStrictEqual(posted, [], 'should not post immediately -- it is debounced');
     await new Promise((r) => setTimeout(r, 260));
-    assert.deepStrictEqual(posted, [{ type: 'bookSearch', query: 'widget', caseSensitive: false, useRegex: false }]);
+    assert.deepStrictEqual(posted, [{ type: 'bookSearch', query: 'widget', caseSensitive: false, useRegex: false, refresh: false }]);
   });
 
   it('toggling case/regex buttons changes the flags sent with the next query', async () => {
@@ -467,7 +505,7 @@ describe('bookSearchIndex', () => {
     (input as { value: string }).value = '\\d+';
     input.fire('input');
     await new Promise((r) => setTimeout(r, 260));
-    assert.deepStrictEqual(posted, [{ type: 'bookSearch', query: '\\d+', caseSensitive: true, useRegex: true }]);
+    assert.deepStrictEqual(posted, [{ type: 'bookSearch', query: '\\d+', caseSensitive: true, useRegex: true, refresh: false }]);
   });
 
   it('clearing the query back to empty hides results and restores the topic list', async () => {
@@ -478,6 +516,34 @@ describe('bookSearchIndex', () => {
     assert.deepStrictEqual(posted, [], 'an empty query should not even ask the extension host');
     assert.strictEqual(results.style.display, 'none');
     assert.strictEqual(linksWrap.style.display, '');
+  });
+
+  it('the clear button empties the input and restores the topic list without waiting for debounce', () => {
+    const { input, results, linksWrap, clearBtn, posted } = runBookSearchScript([{ absPath: '/book/a.dita' }]);
+    (input as { value: string }).value = 'widget';
+    clearBtn.fire('click');
+    assert.strictEqual((input as { value: string }).value, '');
+    assert.strictEqual(results.style.display, 'none');
+    assert.strictEqual(linksWrap.style.display, '');
+    assert.deepStrictEqual(posted, []);
+  });
+
+  it('the refresh button re-sends the current query with refresh: true', async () => {
+    const { input, refreshBtn, posted } = runBookSearchScript([{ absPath: '/book/a.dita' }]);
+    (input as { value: string }).value = 'widget';
+    input.fire('input');
+    await new Promise((r) => setTimeout(r, 260));
+    refreshBtn.fire('click');
+    assert.deepStrictEqual(posted, [
+      { type: 'bookSearch', query: 'widget', caseSensitive: false, useRegex: false, refresh: false },
+      { type: 'bookSearch', query: 'widget', caseSensitive: false, useRegex: false, refresh: true },
+    ]);
+  });
+
+  it('the refresh button does nothing on an empty query', () => {
+    const { refreshBtn, posted } = runBookSearchScript([{ absPath: '/book/a.dita' }]);
+    refreshBtn.fire('click');
+    assert.deepStrictEqual(posted, [], 'nothing to refresh with no query');
   });
 
   it('renders results and hides the topic list while a non-empty result set is showing', () => {
@@ -545,6 +611,8 @@ describe('bookSearchIndex', () => {
         matchCaseLabel: 'Match case',
         useRegexLabel: 'Use regex',
         invalidRegexLabel: 'Invalid regex',
+        refreshLabel: 'Refresh search results',
+        clearLabel: 'Clear search',
         requestMsgType: 'bookSearch',
         responseMsgType: 'bookSearchResults',
       })}

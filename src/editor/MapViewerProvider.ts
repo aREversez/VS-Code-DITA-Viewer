@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
 import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, renderSiteNavHtml, getSiteNavClickHandlerScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
-import { getBookSearchIndex, searchBookIndex, getBookSearchScript } from './bookSearchIndex';
+import { getBookSearchIndex, searchBookIndex, getBookSearchScript, invalidateBookSearchIndex } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
 import { foldPendingRender, PendingRender } from './pendingRender';
@@ -116,6 +116,8 @@ function getMapWebviewScript(): string {
     siteSearchTitle: vscode.l10n.t('Search this book'),
     siteSearchPlaceholder: vscode.l10n.t('Search all topics...'),
     siteSearchNoResults: vscode.l10n.t('No matches found'),
+    siteSearchRefresh: vscode.l10n.t('Refresh search results'),
+    siteSearchClear: vscode.l10n.t('Clear search'),
   };
   return `
 (function() {
@@ -227,6 +229,8 @@ function getMapWebviewScript(): string {
     matchCaseLabel: L.searchMatchCase,
     useRegexLabel: L.searchUseRegex,
     invalidRegexLabel: L.searchInvalidRegex,
+    refreshLabel: L.siteSearchRefresh,
+    clearLabel: L.siteSearchClear,
     requestMsgType: MSG_BOOK_SEARCH,
     responseMsgType: MSG_BOOK_SEARCH_RESULTS,
   })}
@@ -477,6 +481,11 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
           return;
         }
         const searchDocDir = dirname(document.uri.fsPath);
+        // The manual refresh button (getBookSearchScript's bsRefreshBtn):
+        // getBookSearchIndex's own mtime-based staleness check already
+        // catches an edited topic on its own, so this only matters for
+        // the reassurance case of forcing a rebuild anyway.
+        if (message.refresh === true) invalidateBookSearchIndex(searchDocDir);
         const searchIndex = getBookSearchIndex(searchDocDir, site.manifest);
         const outcome = searchBookIndex(searchIndex, query, site.manifest.map((m) => m.absPath), searchOptions);
         if (outcome.error) {

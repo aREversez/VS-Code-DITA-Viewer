@@ -130,6 +130,21 @@ export function clearBookSearchIndexCache(): void {
 }
 
 /**
+ * Drops just one book's cached index, forcing the next getBookSearchIndex
+ * call for that docDir to rebuild from disk regardless of whether its own
+ * mtime-based staleness check would have caught anything -- backs the
+ * search box's manual refresh button (getBookSearchScript's bsRefreshBtn):
+ * mtime stamps already invalidate automatically on an edit, so this exists
+ * for the reassurance case (the reader isn't sure the index reflects
+ * disk, or a file changed some other way stampFiles can't observe) rather
+ * than being required for correctness the way clearBookSearchIndexCache's
+ * blanket clear is for clearAllCaches.
+ */
+export function invalidateBookSearchIndex(docDir: string): void {
+  bookSearchIndexCache.delete(docDir);
+}
+
+/**
  * Lazy + cached (docsite design doc, 3.1): the first full-book search in a
  * session pays for extracting every topic's text once; every search after
  * that against an unchanged book reuses the same index instance instead of
@@ -297,6 +312,8 @@ export function getBookSearchScript(opts: {
   matchCaseLabel: string;
   useRegexLabel: string;
   invalidRegexLabel: string;
+  refreshLabel: string;
+  clearLabel: string;
   requestMsgType: string;
   responseMsgType: string;
 }): string {
@@ -306,6 +323,8 @@ export function getBookSearchScript(opts: {
   const matchCaseLabel = JSON.stringify(opts.matchCaseLabel);
   const useRegexLabel = JSON.stringify(opts.useRegexLabel);
   const invalidRegexLabel = JSON.stringify(opts.invalidRegexLabel);
+  const refreshLabel = JSON.stringify(opts.refreshLabel);
+  const clearLabel = JSON.stringify(opts.clearLabel);
   return `
   // Consumed once by MSG_UPDATE_CONTENT's handler (MapViewerProvider.ts)
   // when the target page's HTML actually arrives -- cleared immediately
@@ -351,6 +370,32 @@ export function getBookSearchScript(opts: {
     bsBox.setAttribute('role', 'search');
     bsBox.setAttribute('aria-label', ${searchLabel});
     bsBox.style.cssText = 'padding:6px 8px;border-bottom:1px solid var(--vscode-panel-border);display:flex;flex-direction:column;gap:4px;';
+
+    // Icon-only action buttons (refresh, clear) -- reusing this project's
+    // own already-established glyphs for these exact actions (the main
+    // toolbar's refresh button and the page search overlay's close
+    // button, both in this same assembled script) rather than inventing
+    // new ones, per the "copy VS Code's own search-panel icon row"
+    // request this row is modeled on.
+    var bsIconBtnStyle = 'padding:1px 5px;border-radius:3px;border:1px solid transparent;background:transparent;color:var(--vscode-icon-foreground,var(--vscode-foreground));cursor:pointer;font-size:13px;line-height:1.4;outline:none;';
+    var bsHeaderRow = document.createElement('div');
+    bsHeaderRow.style.cssText = 'display:flex;justify-content:flex-end;gap:2px;';
+
+    var bsRefreshBtn = document.createElement('button');
+    bsRefreshBtn.innerHTML = '&#x21bb;';
+    bsRefreshBtn.title = ${refreshLabel};
+    bsRefreshBtn.setAttribute('aria-label', ${refreshLabel});
+    bsRefreshBtn.style.cssText = bsIconBtnStyle;
+
+    var bsClearBtn = document.createElement('button');
+    bsClearBtn.innerHTML = '&times;';
+    bsClearBtn.title = ${clearLabel};
+    bsClearBtn.setAttribute('aria-label', ${clearLabel});
+    bsClearBtn.style.cssText = bsIconBtnStyle + 'font-size:16px;';
+
+    bsHeaderRow.appendChild(bsRefreshBtn);
+    bsHeaderRow.appendChild(bsClearBtn);
+    bsBox.appendChild(bsHeaderRow);
 
     var bsInputRow = document.createElement('div');
     bsInputRow.style.cssText = 'display:flex;align-items:center;gap:4px;';
@@ -409,15 +454,19 @@ export function getBookSearchScript(opts: {
     var bsCaseSensitive = false;
     var bsUseRegex = false;
 
-    function bsRunQuery() {
+    function bsShowLinks() {
+      bookSearchResults.style.display = 'none';
+      bookSearchResults.innerHTML = '';
+      bsLinksWrap.style.display = '';
+    }
+
+    function bsRunQuery(forceRefresh) {
       var q = bookSearchInput.value;
       if (!q) {
-        bookSearchResults.style.display = 'none';
-        bookSearchResults.innerHTML = '';
-        bsLinksWrap.style.display = '';
+        bsShowLinks();
         return;
       }
-      vscode.postMessage({ type: '${opts.requestMsgType}', query: q, caseSensitive: bsCaseSensitive, useRegex: bsUseRegex });
+      vscode.postMessage({ type: '${opts.requestMsgType}', query: q, caseSensitive: bsCaseSensitive, useRegex: bsUseRegex, refresh: !!forceRefresh });
     }
 
     // Debounced -- a query is sent to the extension host (which builds/reuses
@@ -426,18 +475,34 @@ export function getBookSearchScript(opts: {
     var bsDebounce = null;
     bookSearchInput.addEventListener('input', function() {
       if (bsDebounce) clearTimeout(bsDebounce);
-      bsDebounce = setTimeout(bsRunQuery, 200);
+      bsDebounce = setTimeout(function() { bsRunQuery(false); }, 200);
     });
 
     bsCaseBtn.addEventListener('click', function() {
       bsCaseSensitive = !bsCaseSensitive;
       bsUpdateToggle(bsCaseBtn, bsCaseSensitive);
-      bsRunQuery();
+      bsRunQuery(false);
     });
     bsRegexBtn.addEventListener('click', function() {
       bsUseRegex = !bsUseRegex;
       bsUpdateToggle(bsRegexBtn, bsUseRegex);
-      bsRunQuery();
+      bsRunQuery(false);
+    });
+
+    // Mtime-based cache invalidation (getBookSearchIndex) already catches
+    // an edited topic on its own -- this is for the reassurance case
+    // (unsure the index reflects disk) rather than being needed for
+    // correctness, same as VS Code's own search panel refresh button
+    // re-running a search that could otherwise already be showing stale
+    // results. A no-op on an empty query: there is nothing to refresh.
+    bsRefreshBtn.addEventListener('click', function() {
+      if (bookSearchInput.value) bsRunQuery(true);
+    });
+
+    bsClearBtn.addEventListener('click', function() {
+      bookSearchInput.value = '';
+      bsShowLinks();
+      bookSearchInput.focus();
     });
 
     window.addEventListener('message', function(e) {
