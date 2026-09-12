@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
 import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, renderSiteNavHtml, getSiteNavClickHandlerScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
+import { getBookSearchIndex, searchBookIndex, getBookSearchScript } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
 import { foldPendingRender, PendingRender } from './pendingRender';
@@ -57,6 +58,14 @@ const MSG_SET_TAG_TOOLTIPS = 'setTagTooltips';
 // against (nothing else reads this literal), so it stays a plain constant
 // rather than getting the MSG_UPDATE_CONTENT treatment above.
 const MSG_SWITCH_SITE_PAGE = 'switchSitePage';
+// Full-book search (docsite design doc, 4.4) -- webview -> host request and
+// host -> webview response, same pairing convention as MSG_UPDATE_CONTENT
+// above (both spellings live in this one file already, but the pair is
+// still named/interpolated together rather than left as two independent
+// literals, since a mismatch here would silently mean search never shows
+// results instead of failing loudly).
+const MSG_BOOK_SEARCH = 'bookSearch';
+const MSG_BOOK_SEARCH_RESULTS = 'bookSearchResults';
 
 // Localized topic-type labeler for the docsite sidebar's per-entry chip:
 // every known DITA topic specialization gets a localized short label
@@ -104,6 +113,9 @@ function getMapWebviewScript(): string {
     sitePrevTopic: vscode.l10n.t('Previous topic'),
     siteNextTopic: vscode.l10n.t('Next topic'),
     siteToggleSidebar: vscode.l10n.t('Show/hide topic list'),
+    siteSearchTitle: vscode.l10n.t('Search this book'),
+    siteSearchPlaceholder: vscode.l10n.t('Search all topics...'),
+    siteSearchNoResults: vscode.l10n.t('No matches found'),
   };
   return `
 (function() {
@@ -194,6 +206,24 @@ function getMapWebviewScript(): string {
   if (currentMode === 'site') {
     toolbar.appendChild(sitePrevBtn);
     toolbar.appendChild(siteNextBtn);
+  }
+
+  // Full-book search -- docsite mode only (docsite design doc, 4.4). A
+  // topic-level, DOM-only search already exists (getSearchOverlayScript,
+  // Ctrl+F) and needs no change here: it already works per-page for free
+  // in site mode. This is the separate, whole-book version, backed by the
+  // lazy per-book text index built on the extension host side (see
+  // bookSearchIndex.ts) rather than anything client-side.
+  ${getBookSearchScript({
+    buttonTitle: L.siteSearchTitle,
+    placeholder: L.siteSearchPlaceholder,
+    noResultsLabel: L.siteSearchNoResults,
+    requestMsgType: MSG_BOOK_SEARCH,
+    responseMsgType: MSG_BOOK_SEARCH_RESULTS,
+  })}
+  if (currentMode === 'site') {
+    toolbar.appendChild(bookSearchBtn);
+    document.body.appendChild(bookSearchPanel);
   }
 
   // Tag-name tooltip toggle -- same feature and same persisted preference
@@ -409,6 +439,41 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         if (!target || target === currentSitePage) return;
         currentSitePage = target;
         postSitePageUpdate();
+      } else if (message.type === MSG_BOOK_SEARCH) {
+        // Reuses siteManifestCache when it is already warm (the common
+        // case: the person opened site mode, which is the only mode this
+        // button exists in, before ever touching search) rather than
+        // re-parsing the map -- same rationale as postSitePageUpdate's own
+        // reuse of it. getBookSearchIndex is its own separate lazy cache on
+        // top of that (docsite design doc, 3.1): the manifest gives it
+        // which topics to index, but the actual per-topic text extraction
+        // only happens once per book per edit, not once per keystroke.
+        const query = typeof message.query === 'string' ? message.query : '';
+        let site = siteManifestCache;
+        if (!site) {
+          const built = this.buildSiteManifest(document);
+          site = built.error !== undefined ? undefined : { manifest: built.manifest, keyMap: built.keyMap, bookMembers: built.bookMembers };
+        }
+        if (!site) {
+          webviewPanel.webview.postMessage({ type: MSG_BOOK_SEARCH_RESULTS, results: [] });
+          return;
+        }
+        const searchDocDir = dirname(document.uri.fsPath);
+        const searchIndex = getBookSearchIndex(searchDocDir, site.manifest);
+        const hits = searchBookIndex(searchIndex, query, site.manifest.map((m) => m.absPath));
+        const titleByPath = new Map(site.manifest.map((m) => [m.absPath, m.title] as const));
+        // Capped rather than sent in full: a broad query against a very
+        // large book could otherwise match most of it, and the panel
+        // (docsite design doc, 6.3: a simple first version) has no
+        // pagination -- a long but bounded list is more useful than either
+        // an unbounded one or truncating silently with no signal at all.
+        const results = hits.slice(0, 30).map((h) => ({
+          absPath: h.absPath,
+          title: titleByPath.get(h.absPath) ?? h.absPath,
+          kind: h.kind,
+          snippet: h.snippet,
+        }));
+        webviewPanel.webview.postMessage({ type: MSG_BOOK_SEARCH_RESULTS, results });
       } else if (message.type === MSG_REQUEST_FULL_RENDER) {
         // The webview declined a patch: its DOM does not match the baseline
         // the indices were computed against. Straight to updateWebview rather

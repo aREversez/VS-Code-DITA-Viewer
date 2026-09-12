@@ -4,6 +4,7 @@ import { renderDocument } from '../render/renderer';
 import { dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
 import { buildTitleMap, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, detectNoteLabels, detectIndexLabel, readImageDimensions, clearImageDimensionsCache, clearTopicRenderCache, clearBookMembersCache } from './ditaRenderUtils';
+import { clearBookSearchIndexCache } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { foldPendingRender, PendingRender } from './pendingRender';
 import { sharedWebviewStrings } from './webviewL10n';
@@ -38,6 +39,7 @@ export function clearAllCaches(): void {
   clearImageDimensionsCache();
   clearTopicRenderCache();
   clearBookMembersCache();
+  clearBookSearchIndexCache();
 }
 
 // Font preferences (size % + serif toggle) are global rather than per-document:
