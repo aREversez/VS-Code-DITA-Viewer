@@ -221,7 +221,19 @@ export function getDisplayNameInfo(node: DitaNode, resolveKey?: ResolveKey): { t
     }
   }
 
-  // Priority 3: href filename without extension -- not really a title, just
+  // Priority 3: @navtitle attribute -- a valid DITA shortcut form for
+  // naming a topicref/topichead without a full <topicmeta>, and the *only*
+  // way to name a topichead at all when it carries neither. Authored
+  // content, same as Priority 1/2, so `explicit: true`. This mirrors
+  // ditaLanguageUtils.ts's getMapRefName (the outline/tree-view path),
+  // which already checked this attribute -- book/site mode and HTML
+  // export (both built on this function) did not, so a topichead named
+  // only this way rendered as a literal "(unnamed)" heading in those
+  // views while showing correctly in the outline.
+  const navtitleAttr = getAttr(node, 'navtitle');
+  if (navtitleAttr) return { text: navtitleAttr, explicit: true };
+
+  // Priority 4: href filename without extension -- not really a title, just
   // the only thing left to call this entry.
   if (href) {
     const parts = href.replace(/\\/g, '/').split('/');
@@ -230,7 +242,7 @@ export function getDisplayNameInfo(node: DitaNode, resolveKey?: ResolveKey): { t
     return { text: dotIdx > 0 ? file.substring(0, dotIdx) : file, explicit: false };
   }
 
-  // Priority 4: keys attribute -- a machine-readable identifier, not a title either.
+  // Priority 5: keys attribute -- a machine-readable identifier, not a title either.
   if (keys) return { text: keys, explicit: false };
 
   // Fallback

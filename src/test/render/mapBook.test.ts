@@ -111,6 +111,27 @@ describe('collectMapEntries', () => {
     assert.strictEqual(entries[0].displayNameExplicit, false);
   });
 
+  it('resolves the attribute-form @navtitle on a structural topichead (no href, no topicmeta child) instead of falling back to "(unnamed)"', () => {
+    // @navtitle is a valid DITA attribute-form alternative to
+    // <topicmeta><navtitle>, and it is the *only* way to name a topichead
+    // that has no topicmeta at all -- ditaLanguageUtils.ts's getMapRefName
+    // (the outline/tree-view path) already reads this attribute, but
+    // collectMapEntries' own displayName resolution (getDisplayNameInfo)
+    // used by book/site mode and HTML export did not, so any topichead
+    // written this way rendered as a literal "(unnamed)" heading in those
+    // views while showing correctly in the outline.
+    const doc = parseMap('<map><title>T</title><topichead navtitle="Chapter 1 Intro"><topicref href="a.dita"/></topichead></map>');
+    const entries = collectMapEntries(doc.root);
+    assert.strictEqual(entries[0].displayName, 'Chapter 1 Intro');
+    assert.strictEqual(entries[0].displayNameExplicit, true, '@navtitle is authored content, same as <topicmeta><navtitle>');
+  });
+
+  it('prefers <topicmeta><navtitle> over a coexisting @navtitle attribute (topicmeta is the more specific, more capable form)', () => {
+    const doc = parseMap('<map><title>T</title><topichead navtitle="Attr Title"><topicmeta><navtitle>Meta Title</navtitle></topicmeta><topicref href="a.dita"/></topichead></map>');
+    const entries = collectMapEntries(doc.root);
+    assert.strictEqual(entries[0].displayName, 'Meta Title');
+  });
+
   it('should set depth correctly for flat entries', () => {
     const doc = parseMap(TEST_MAP_XML);
     const entries = collectMapEntries(doc.root);
