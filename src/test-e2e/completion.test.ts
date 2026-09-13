@@ -84,78 +84,20 @@ describe('DITA completion', () => {
     items.filter((i) => i.kind === kind).map(labelOf);
 
   it('offers the referenceable files for an href value, relative to the map folder', async () => {
-    const items = await completeAfter('test.ditamap', 'href="', '"');
+    const items = await completeAfter('fixture/test.ditamap', 'href="', '"');
     const labels = labelsOfKind(items, vscode.CompletionItemKind.File);
 
-    // The fixture root also holds six .css files and images/db_topology.png, so
-    // this exact match is what proves the extension filter is applied rather
-    // than "everything the walk found". It also proves the paths are relative
-    // and forward-slashed: on Windows a leaked separator would read
-    // 'topics\db_overview.dita' and fail here. The manual/ subtree holds the
-    // generated 56-topic user manual (3 maps, 2 conref libraries, 56 topics).
+    // The walk is rooted at the open document's own folder (test-dita-file/
+    // fixture/, which test.ditamap lives in) and never climbs out of it -- see
+    // 'roots the walk at the document folder' below -- so test-dita-file/manual,
+    // a sibling of fixture/, is out of reach from here and rightly absent.
+    // fixture/ also holds six .css files and images/db_topology.png directly
+    // alongside test.ditamap, so this exact match is what proves the extension
+    // filter is applied rather than "everything the walk found". It also proves
+    // the paths are relative and forward-slashed: on Windows a leaked separator
+    // would read 'topics\db_overview.dita' and fail here.
     const expected = [
       'common/keys.ditamap',
-      'manual/maps/develop.ditamap',
-      'manual/maps/main.ditamap',
-      'manual/maps/rebrand.ditamap',
-      'manual/shared/conref-brandA.dita',
-      'manual/shared/conref-brandB.dita',
-      'manual/topics/about_manual.dita',
-      'manual/topics/app_account.dita',
-      'manual/topics/app_dashboard.dita',
-      'manual/topics/app_install.dita',
-      'manual/topics/app_notifications.dita',
-      'manual/topics/app_pairing.dita',
-      'manual/topics/app_settings.dita',
-      'manual/topics/backup_restore.dita',
-      'manual/topics/battery_replace.dita',
-      'manual/topics/before_install.dita',
-      'manual/topics/clean_device.dita',
-      'manual/topics/connect_power.dita',
-      'manual/topics/contact_support.dita',
-      'manual/topics/create_scene.dita',
-      'manual/topics/electrical_safety.dita',
-      'manual/topics/error_codes.dita',
-      'manual/topics/family_manage.dita',
-      'manual/topics/feature_automation.dita',
-      'manual/topics/feature_gateway.dita',
-      'manual/topics/feature_ir.dita',
-      'manual/topics/feature_scene.dita',
-      'manual/topics/feature_security.dita',
-      'manual/topics/feature_sensor.dita',
-      'manual/topics/feature_voice.dita',
-      'manual/topics/feature_zigbee.dita',
-      'manual/topics/features_overview.dita',
-      'manual/topics/firmware_rollback.dita',
-      'manual/topics/firmware_update.dita',
-      'manual/topics/first_boot.dita',
-      'manual/topics/glossary.dita',
-      'manual/topics/install_hardware.dita',
-      'manual/topics/led_status.dita',
-      'manual/topics/legal_notice.dita',
-      'manual/topics/maintenance_general.dita',
-      'manual/topics/network_setup.dita',
-      'manual/topics/package_contents.dita',
-      'manual/topics/privacy_protection.dita',
-      'manual/topics/product_intro.dita',
-      'manual/topics/regulatory_compliance.dita',
-      'manual/topics/remote_control.dita',
-      'manual/topics/reset_device.dita',
-      'manual/topics/safety_general.dita',
-      'manual/topics/set_schedule.dita',
-      'manual/topics/share_device.dita',
-      'manual/topics/tech_specs.dita',
-      'manual/topics/ts_app.dita',
-      'manual/topics/ts_network.dita',
-      'manual/topics/ts_offline.dita',
-      'manual/topics/ts_overheat.dita',
-      'manual/topics/ts_pairing.dita',
-      'manual/topics/ts_power.dita',
-      'manual/topics/ts_voice.dita',
-      'manual/topics/voice_commands.dita',
-      'manual/topics/wall_mount.dita',
-      'manual/topics/warranty.dita',
-      'manual/topics/whats_new.dita',
       'relative_test/relative_path_test-book.ditamap',
       'relative_test/relative_path_test.ditamap',
       'reuse/reuse.dita',
@@ -179,7 +121,7 @@ describe('DITA completion', () => {
   });
 
   it('roots the walk at the document folder, so a topic never offers a path out of it', async () => {
-    const items = await completeAfter(path.join('topics', 'db_overview.dita'), 'href="', '"');
+    const items = await completeAfter(path.join('fixture', 'topics', 'db_overview.dita'), 'href="', '"');
     const labels = labelsOfKind(items, vscode.CompletionItemKind.File);
 
     // Same eight files as the case above, but bare: from inside topics/ they sit
@@ -209,7 +151,7 @@ describe('DITA completion', () => {
     // by the async walk, but provideCompletionItems becoming async applies to
     // all of it -- an un-awaited return would surface as an empty list here.
     const items = await completeAfter(
-      path.join('topics', 'db_ui_test.dita'),
+      path.join('fixture', 'topics', 'db_ui_test.dita'),
       'conref="db_overview.dita#',
       '#',
     );
@@ -225,9 +167,9 @@ describe('DITA completion', () => {
     // that never touch the file system.
     //
     // An untitled in-memory document rather than a fixture edit on purpose --
-    // the file-list assertions above match test-dita-file's contents exactly,
-    // so a test that wrote to a tracked fixture and failed halfway would leave
-    // the tree dirty and break them on the next run.
+    // the file-list assertions above match the fixture subtree's contents
+    // exactly, so a test that wrote to a tracked fixture and failed halfway
+    // would leave the tree dirty and break them on the next run.
     const doc = await vscode.workspace.openTextDocument({ language: 'ditamap', content: '<map>\n  <' });
     await vscode.window.showTextDocument(doc);
     const position = doc.positionAt(doc.getText().length);

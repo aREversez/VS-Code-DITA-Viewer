@@ -7,6 +7,11 @@ const EXTENSION_ID = 'dita-viewer.dita-viewer';
 // dist/test/preview.test.js -> repo root is two levels up.
 const repoRoot = path.resolve(__dirname, '..', '..');
 const fixturesDir = path.join(repoRoot, 'test-dita-file');
+// test-dita-file/fixture holds the generic DITA-element/keyref/conref smoke-test
+// set (test.ditamap, common/keys.ditamap, topics/db_*.dita, relative_test/...);
+// test-dita-file/manual holds the separate, unrelated realistic-user-manual
+// fixture. Every test below exercises the smoke-test set specifically.
+const legacyFixturesDir = path.join(fixturesDir, 'fixture');
 
 async function waitFor(check: () => boolean, timeoutMs = 8000, intervalMs = 150): Promise<void> {
   const start = Date.now();
@@ -25,7 +30,7 @@ describe('DITA/DITAMAP preview rendering', () => {
 
   it('renders a .dita topic and includes its title text', async () => {
     const ext = vscode.extensions.getExtension(EXTENSION_ID)!;
-    const uri = vscode.Uri.file(path.join(fixturesDir, 'topics', 'db_overview.dita'));
+    const uri = vscode.Uri.file(path.join(legacyFixturesDir, 'topics', 'db_overview.dita'));
 
     await vscode.commands.executeCommand('vscode.openWith', uri, 'ditaViewer.preview');
 
@@ -44,7 +49,7 @@ describe('DITA/DITAMAP preview rendering', () => {
 
   it('renders a .ditamap outline and includes a referenced topic label', async () => {
     const ext = vscode.extensions.getExtension(EXTENSION_ID)!;
-    const uri = vscode.Uri.file(path.join(fixturesDir, 'test.ditamap'));
+    const uri = vscode.Uri.file(path.join(legacyFixturesDir, 'test.ditamap'));
 
     await vscode.commands.executeCommand('vscode.openWith', uri, 'ditaViewer.mapPreview');
 
@@ -81,7 +86,7 @@ describe('DITA/DITAMAP preview rendering', () => {
     // can only be entered from a button inside the webview, which the test
     // harness cannot click.
     const ext = vscode.extensions.getExtension(EXTENSION_ID)!;
-    const uri = vscode.Uri.file(path.join(fixturesDir, 'test.ditamap'));
+    const uri = vscode.Uri.file(path.join(legacyFixturesDir, 'test.ditamap'));
 
     await vscode.commands.executeCommand('vscode.openWith', uri, 'ditaViewer.mapPreview');
 
@@ -116,7 +121,7 @@ describe('DITA/DITAMAP preview rendering', () => {
     // declaration, or a parenthesised arrow); what must not appear is a bare
     // identifier after the `=`.
     const ext = vscode.extensions.getExtension(EXTENSION_ID)!;
-    const uri = vscode.Uri.file(path.join(fixturesDir, 'test.ditamap'));
+    const uri = vscode.Uri.file(path.join(legacyFixturesDir, 'test.ditamap'));
 
     await vscode.commands.executeCommand('vscode.openWith', uri, 'ditaViewer.mapPreview');
 
@@ -143,7 +148,7 @@ describe('DITA/DITAMAP preview rendering', () => {
     // reason the MSG_ constants test above checks literal message-name
     // strings rather than importing the constant that names them.
     const ext = vscode.extensions.getExtension(EXTENSION_ID)!;
-    const uri = vscode.Uri.file(path.join(fixturesDir, 'test.ditamap'));
+    const uri = vscode.Uri.file(path.join(legacyFixturesDir, 'test.ditamap'));
 
     const globalState = ext.exports._test.globalState as vscode.Memento;
     const previousFontPrefs = globalState.get('ditaViewer.fontPrefs');
@@ -198,7 +203,7 @@ describe('DITA/DITAMAP preview rendering', () => {
     try {
       await globalState.update('ditaViewer.tagTooltips', true);
 
-      const topicUri = vscode.Uri.file(path.join(fixturesDir, 'topics', 'db_overview.dita'));
+      const topicUri = vscode.Uri.file(path.join(legacyFixturesDir, 'topics', 'db_overview.dita'));
       await vscode.commands.executeCommand('vscode.openWith', topicUri, 'ditaViewer.preview');
       await waitFor(() => !!ext.exports._test.getLastRenderedHtml(topicUri.toString()));
       const topicPage: string = ext.exports._test.getLastRenderedHtml(topicUri.toString());
@@ -210,7 +215,7 @@ describe('DITA/DITAMAP preview rendering', () => {
       assert.ok(topicPage.includes("type: 'setTagTooltips'"), 'expected the toolbar to persist toggling this back');
       await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
 
-      const mapUri = vscode.Uri.file(path.join(fixturesDir, 'test.ditamap'));
+      const mapUri = vscode.Uri.file(path.join(legacyFixturesDir, 'test.ditamap'));
       await vscode.commands.executeCommand('vscode.openWith', mapUri, 'ditaViewer.mapPreview');
       await waitFor(() => !!ext.exports._test.getLastRenderedMapHtml(mapUri.toString()));
       const mapPage: string = ext.exports._test.getLastRenderedMapHtml(mapUri.toString());
@@ -227,7 +232,7 @@ describe('DITA/DITAMAP preview rendering', () => {
   });
 
   it('toggles back to the source editor when the command runs in the reading view', async () => {
-    const uri = vscode.Uri.file(path.join(fixturesDir, 'topics', 'db_overview.dita'));
+    const uri = vscode.Uri.file(path.join(legacyFixturesDir, 'topics', 'db_overview.dita'));
 
     // Open the reading view directly (no source text tab open)
     await vscode.commands.executeCommand('vscode.openWith', uri, 'ditaViewer.preview');
@@ -247,7 +252,7 @@ describe('DITA/DITAMAP preview rendering', () => {
   });
 
   it('toggles the map reading view back to source and focuses an existing text tab', async () => {
-    const uri = vscode.Uri.file(path.join(fixturesDir, 'test.ditamap'));
+    const uri = vscode.Uri.file(path.join(legacyFixturesDir, 'test.ditamap'));
 
     // Open source first, then the reading view beside it (the toolbar flow)
     await vscode.window.showTextDocument(uri);
@@ -273,7 +278,7 @@ describe('DITA/DITAMAP preview rendering', () => {
 
   describe('Find All References', () => {
     it('finds keyref/conkeyref usages of a key from its keydef', async () => {
-      const mapUri = vscode.Uri.file(path.join(fixturesDir, 'common', 'keys.ditamap'));
+      const mapUri = vscode.Uri.file(path.join(legacyFixturesDir, 'common', 'keys.ditamap'));
       const doc = await vscode.workspace.openTextDocument(mapUri);
       const text = doc.getText();
       const keyOffset = text.indexOf('product_name') + 2; // inside the token
@@ -287,7 +292,7 @@ describe('DITA/DITAMAP preview rendering', () => {
 
       const paths = locations.map((l) => path.basename(l.uri.fsPath));
       // Known usages of the product_name key in the fixture set (see
-      // test-dita-file/topics/db_ui_test.dita and both relative_test maps).
+      // test-dita-file/fixture/topics/db_ui_test.dita and both relative_test maps).
       assert.ok(paths.includes('db_ui_test.dita'), `expected db_ui_test.dita among: ${paths.join(', ')}`);
       assert.ok(
         paths.includes('relative_path_test.ditamap'),
@@ -300,7 +305,7 @@ describe('DITA/DITAMAP preview rendering', () => {
     });
 
     it('finds conref usages of an id from its declaration', async () => {
-      const topicUri = vscode.Uri.file(path.join(fixturesDir, 'topics', 'db_overview.dita'));
+      const topicUri = vscode.Uri.file(path.join(legacyFixturesDir, 'topics', 'db_overview.dita'));
       const doc = await vscode.workspace.openTextDocument(topicUri);
       const text = doc.getText();
       const idOffset = text.indexOf('shared_note') + 2;
@@ -323,7 +328,7 @@ describe('DITA/DITAMAP preview rendering', () => {
       // to the addressed element (shared_note), not to its topic scope
       // (db_overview), or this path agrees with neither the declaration site
       // above nor where Go to Definition actually lands.
-      const uiUri = vscode.Uri.file(path.join(fixturesDir, 'topics', 'db_ui_test.dita'));
+      const uiUri = vscode.Uri.file(path.join(legacyFixturesDir, 'topics', 'db_ui_test.dita'));
       const doc = await vscode.workspace.openTextDocument(uiUri);
       const text = doc.getText();
       const conrefOffset = text.indexOf('db_overview/shared_note') + 2;
@@ -342,7 +347,7 @@ describe('DITA/DITAMAP preview rendering', () => {
     it('resolves references from a reference site (not just a declaration site)', async () => {
       // Put the cursor ON the keyref usage itself, not on the keydef --
       // should resolve to the same key and find the OTHER usages.
-      const uiUri = vscode.Uri.file(path.join(fixturesDir, 'topics', 'db_ui_test.dita'));
+      const uiUri = vscode.Uri.file(path.join(legacyFixturesDir, 'topics', 'db_ui_test.dita'));
       const doc = await vscode.workspace.openTextDocument(uiUri);
       const text = doc.getText();
       const keyrefOffset = text.indexOf('keyref="product_name"') + 10;
@@ -367,7 +372,7 @@ describe('DITA/DITAMAP preview rendering', () => {
       // silently fall through to "who references this ditamap file" --
       // technically valid results, but not an answer to what someone
       // clicking the visible product name text was actually asking.
-      const mapUri = vscode.Uri.file(path.join(fixturesDir, 'common', 'keys.ditamap'));
+      const mapUri = vscode.Uri.file(path.join(legacyFixturesDir, 'common', 'keys.ditamap'));
       const doc = await vscode.workspace.openTextDocument(mapUri);
       const text = doc.getText();
       const keywordTextOffset = text.indexOf('DatabaseX Pro v3.0') + 2;
@@ -415,8 +420,8 @@ describe('DITA/DITAMAP preview rendering', () => {
       await settle();
       const baseline = totalRefs(counts());
 
-      const topic = vscode.Uri.file(path.join(fixturesDir, 'topics', 'db_overview.dita'));
-      const map = vscode.Uri.file(path.join(fixturesDir, 'test.ditamap'));
+      const topic = vscode.Uri.file(path.join(legacyFixturesDir, 'topics', 'db_overview.dita'));
+      const map = vscode.Uri.file(path.join(legacyFixturesDir, 'test.ditamap'));
 
       await vscode.commands.executeCommand('vscode.openWith', topic, 'ditaViewer.preview');
       await waitFor(() => !!ext.exports._test.getLastRenderedHtml(topic.toString()));

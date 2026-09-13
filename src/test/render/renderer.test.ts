@@ -642,7 +642,7 @@ describe('renderer', () => {
     // real parseDita() here (rather than the makeRaw()/makeEl() synthetic
     // tree above) catches any surprises from how sax hands tagNames back,
     // which the unit-level test can't see.
-    const fixturePath = join(__dirname, '..', '..', '..', 'test-dita-file', 'topics', 'mathml_prefixed_test.dita');
+    const fixturePath = join(__dirname, '..', '..', '..', 'test-dita-file', 'fixture', 'topics', 'mathml_prefixed_test.dita');
     const xml = readFileSync(fixturePath, 'utf-8');
     const doc = parseDita(xml);
     const html = renderDocument(doc.root, defaultCtx);
@@ -756,7 +756,7 @@ describe('renderer', () => {
     // catches anything the sax parser does differently with mfenced's
     // attributes (e.g. attribute name casing/ordering) that the unit-level
     // tests above can't see.
-    const fixturePath = join(__dirname, '..', '..', '..', 'test-dita-file', 'topics', 'mathml_mfenced_test.dita');
+    const fixturePath = join(__dirname, '..', '..', '..', 'test-dita-file', 'fixture', 'topics', 'mathml_mfenced_test.dita');
     const xml = readFileSync(fixturePath, 'utf-8');
     const doc = parseDita(xml);
     const html = renderDocument(doc.root, defaultCtx);

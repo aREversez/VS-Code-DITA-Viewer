@@ -279,7 +279,7 @@ describe('buildDitaOtArgs', () => {
 
 describe('buildNavManifest', () => {
   it('should build manifest from test ditamap', () => {
-    const manifest = buildNavManifest(join(__dirname, '..', '..', '..', 'test-dita-file', 'test.ditamap'));
+    const manifest = buildNavManifest(join(__dirname, '..', '..', '..', 'test-dita-file', 'fixture', 'test.ditamap'));
     assert.ok(Array.isArray(manifest));
     assert.ok(manifest.length > 0);
     // All entries should have .html extension
@@ -295,7 +295,7 @@ describe('buildNavManifest', () => {
   });
 
   it('should skip ditamap references', () => {
-    const manifest = buildNavManifest(join(__dirname, '..', '..', '..', 'test-dita-file', 'test.ditamap'));
+    const manifest = buildNavManifest(join(__dirname, '..', '..', '..', 'test-dita-file', 'fixture', 'test.ditamap'));
     // keys.ditamap is referenced with format="ditamap", should not appear
     for (const entry of manifest) {
       assert.ok(!entry.file.endsWith('.ditamap'), 'should not contain ditamap entries');

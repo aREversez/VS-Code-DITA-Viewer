@@ -191,7 +191,7 @@ pre.codeblock { background: #f5f5f5; border-radius: 6px; }
 
 #### Complete page theme
 
-Create a full documentation-style theme by overriding most elements. See the example files in `test-dita-file/`:
+Create a full documentation-style theme by overriding most elements. See the example files in `test-dita-file/fixture/`:
 
 | File | Style |
 |---|---|
@@ -361,6 +361,8 @@ media/
 └── transform-assets/         # Site-chrome JS/CSS injected into DITA-OT output
 l10n/                         # Runtime translations (en + zh-cn)
 test-dita-file/               # Sample DITA project used for manual testing and e2e fixtures
+├── fixture/                   #   generic DITA-element/keyref/conref smoke-test set + custom CSS theme examples
+└── manual/                    #   realistic multi-topic user-manual fixture (docsite mode, keyref rebrand, etc.)
 ```
 
 ## License
