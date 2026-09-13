@@ -489,6 +489,24 @@ describe('bookSearchIndex', () => {
     assert.ok(siteNavRef.children.indexOf(linksWrap) > 0, 'the search box (whatever precedes it) should sit above the link wrapper');
   });
 
+  it("search box has no negative top margin (Chromium does not honor one on a position:sticky box)", () => {
+    const { siteNavRef } = runBookSearchScript([{ absPath: '/book/a.dita', active: true }]);
+    const bsBox = siteNavRef.children[0];
+    assert.strictEqual(bsBox.getAttribute('role'), 'search', "expected .site-nav's first child to be the search box");
+    const m = /margin\s*:\s*([^;]+);/.exec(bsBox.style.cssText);
+    assert.ok(m, 'search box should declare a margin');
+    const marginTop = m![1].trim().split(/\s+/)[0];
+    assert.strictEqual(
+      marginTop,
+      '0',
+      "a negative top margin here used to be how this box tried to cancel .site-nav's top padding, but " +
+        'Chromium silently clamps a negative top margin away on position:sticky boxes (confirmed on real ' +
+        "Chromium, not just this shape-only test) -- leaving a permanent gap above the search box no matter " +
+        "what the margin said. The fix is .site-nav no longer having top padding to cancel in the first " +
+        'place (see styles.css .site-nav has no top padding test), not a margin trick here.',
+    );
+  });
+
   it('typing a query posts a debounced bookSearch request with the case/regex toggle state', async () => {
     const { input, posted } = runBookSearchScript([{ absPath: '/book/a.dita' }]);
     (input as { value: string }).value = 'widget';

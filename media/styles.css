@@ -972,7 +972,19 @@ body.mode-site {
 .site-nav {
   flex: 0 0 240px;
   overflow-y: auto;
-  padding: 1rem 0.5rem;
+  /* No top padding, deliberately: the always-on search box
+     (getBookSearchScript, bookSearchIndex.ts) is a position:sticky first
+     child pinned to this container's top edge, and Chromium does not
+     honor a negative top margin on a sticky box the way it does for
+     static/relative ones (confirmed empirically -- a -1rem margin here
+     used to be clamped away entirely, leaving exactly this padding's
+     worth of gap above the search box instead of the intended flush fit).
+     Left/right padding stays here since that axis isn't the sticky one
+     and the negative-margin cancel trick does work for it; bottom
+     padding stays too since it has nothing to do with the sticky box at
+     all. The search box supplies its own top inset via its own padding
+     instead of borrowing this element's. */
+  padding: 0 0.5rem 1rem;
   box-sizing: border-box;
   transition: flex-basis 0.15s ease, padding 0.15s ease;
 }

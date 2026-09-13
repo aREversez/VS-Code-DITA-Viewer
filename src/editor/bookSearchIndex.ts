@@ -370,17 +370,32 @@ export function getBookSearchScript(opts: {
     bsBox.setAttribute('role', 'search');
     bsBox.setAttribute('aria-label', ${searchLabel});
     // Sticky, not just top-of-list: .site-nav (the scroll container) has
-    // its own top/left/right padding (media/styles.css), so a plain
+    // its own left/right padding (media/styles.css), so a plain
     // "position:sticky;top:0" here would still leave that padding's worth
-    // of gap above the box, and the topic list would be visible peeking
-    // in at the sides once scrolled. The negative margin cancels exactly
-    // that padding so bsBox's own background spans flush edge-to-edge and
-    // flush to the very top of the scrollport, then re-adds the same
-    // amount as its own padding so the box's contents still sit where
-    // they used to. bottom margin instead of padding keeps the visible
-    // divider line (border-bottom) hugging the box itself rather than
-    // trailing off across the gap before bsLinksWrap.
-    bsBox.style.cssText = 'position:sticky;top:0;z-index:1;margin:-1rem -0.5rem 0.5rem;padding:0.75rem 0.5rem 6px;background:var(--vscode-sideBar-background,var(--vscode-editor-background));border-bottom:1px solid var(--vscode-panel-border);display:flex;flex-direction:column;gap:4px;';
+    // of gap at the sides, and the topic list would be visible peeking in
+    // once scrolled. The negative left/right margin cancels exactly that
+    // padding so bsBox's own background spans flush edge-to-edge, then
+    // re-adds the same amount as its own padding so the box's contents
+    // still sit where they used to. bottom margin instead of padding
+    // keeps the visible divider line (border-bottom) hugging the box
+    // itself rather than trailing off across the gap before bsLinksWrap.
+    //
+    // No top margin, deliberately, and .site-nav has no top padding to
+    // cancel in the first place (media/styles.css) -- a top version of
+    // this same trick used to be here (a -1rem margin canceling
+    // .site-nav's then-top-padding), but confirmed empirically (real
+    // Chromium, not just this project's own DOM-shape tests): Chromium
+    // does not honor a negative top margin on a position:sticky box the
+    // way it does on a static/relative one, so that margin was silently
+    // clamped away and the box sat exactly one padding's worth below
+    // where it should have, i.e. a permanent gap above the search box
+    // that no amount of scrolling ever closed. The left/right axis isn't
+    // the sticky one here (only "top" is set) and was confirmed to still
+    // honor its negative margin correctly, so that half of the trick
+    // stays; only the broken top half was removed, with .site-nav's own
+    // top padding moved off of it entirely rather than left for a
+    // negative margin to (unreliably) cancel.
+    bsBox.style.cssText = 'position:sticky;top:0;z-index:1;margin:0 -0.5rem 0.5rem;padding:0.75rem 0.5rem 6px;background:var(--vscode-sideBar-background,var(--vscode-editor-background));border-bottom:1px solid var(--vscode-panel-border);display:flex;flex-direction:column;gap:4px;';
 
     // Icon-only action buttons (refresh, clear) -- reusing this project's
     // own already-established glyphs for these exact actions (the main

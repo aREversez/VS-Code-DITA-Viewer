@@ -122,3 +122,51 @@ describe('styles.css book-entry render skipping', () => {
     );
   });
 });
+
+/**
+ * Docsite mode's sidebar (.site-nav) used to give itself top padding and
+ * rely on the always-on search box (getBookSearchScript, bookSearchIndex.ts)
+ * canceling it with a negative top margin on its own position:sticky box.
+ * Confirmed empirically (real Chromium, not just this project's own
+ * DOM-shape tests): Chromium does not honor a negative top margin on a
+ * sticky box the way it does on a static/relative one, so that margin was
+ * silently clamped away and the search box sat exactly one padding's worth
+ * below the sidebar's actual top -- a permanent gap no amount of scrolling
+ * ever closed. The fix moved that top inset off of .site-nav entirely
+ * (the sticky search box supplies its own top padding instead), so this is
+ * a tripwire on `.site-nav` growing top padding again -- source-only, since
+ * this repo does not run a real layout engine, but real-Chromium
+ * measurement (before/after, see PR) confirmed a non-zero top padding here
+ * reproduces the reader-visible gap 1:1.
+ */
+describe('styles.css .site-nav has no top padding (sticky search box gap regression)', () => {
+  const css = stylesCss.replace(/\/\*[\s\S]*?\*\//g, '');
+
+  function bodyForSelector(selector: string): string {
+    // Word-boundary-ish guard so `.site-nav` doesn't also match
+    // `.site-nav-link`, `.site-nav-resizer`, etc.
+    const escaped = selector.replace(/[.]/g, '\\.');
+    const re = new RegExp(escaped + '(?![-\\w])\\s*\\{');
+    const m = re.exec(css);
+    assert.ok(m, `expected a \`${selector} { ... }\` rule in styles.css`);
+    const open = css.indexOf('{', m!.index);
+    const close = css.indexOf('}', open);
+    return css.slice(open + 1, close);
+  }
+
+  it('gives .site-nav zero top padding', () => {
+    const body = bodyForSelector('.site-nav');
+    const m = /padding\s*:\s*([^;]+);/.exec(body);
+    assert.ok(m, '.site-nav should declare a padding shorthand');
+    const parts = m![1].trim().split(/\s+/);
+    // 1-value: all sides: parts[0] is top. 2/3/4-value shorthand: parts[0]
+    // is always top. Either way, top is parts[0].
+    assert.strictEqual(
+      parts[0],
+      '0',
+      'top padding must stay 0 -- the sticky search box (bookSearchIndex.ts) no longer ' +
+        'cancels it with a negative margin (Chromium does not honor that for position:sticky), ' +
+        'so any non-zero top padding here reintroduces a permanent gap above the search box',
+    );
+  });
+});
