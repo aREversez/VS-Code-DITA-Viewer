@@ -416,7 +416,7 @@ export function getBookSearchScript(opts: {
     bookSearchInput.type = 'text';
     bookSearchInput.placeholder = ${placeholder};
     bookSearchInput.setAttribute('aria-label', ${placeholder});
-    bookSearchInput.style.cssText = 'width:100%;box-sizing:border-box;padding:3px 20px 3px 6px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,var(--vscode-widget-border,#555));border-radius:3px;font-size:12px;outline:none;';
+    bookSearchInput.style.cssText = 'width:100%;height:24px;box-sizing:border-box;padding:0 20px 0 6px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,var(--vscode-widget-border,#555));border-radius:3px;font-size:12px;outline:none;';
 
     // Hidden until there is an actual query (bsUpdateClearVisibility,
     // driven by the input listener below): nothing to clear against an
@@ -434,23 +434,30 @@ export function getBookSearchScript(opts: {
     // Aa / .* / refresh used to each carry their own border (the two
     // toggles) or none at all (refresh), which read as visually
     // inconsistent siblings. They now share a single outer border as one
-    // segmented group -- borderless individually, separated from each
-    // other only by a thin 1px divider, echoing the same "segmented
-    // control" look already used for this project's tab strip.
+    // segmented group -- borderless individually, no divider between
+    // them (tried a 1px border-left divider first, but with only three
+    // short glyphs it read as clutter rather than structure -- the outer
+    // border alone already reads as one control). height:24px +
+    // box-sizing:border-box matches bookSearchInput's own height exactly
+    // (both border-box, both 24px total including their 1px border), so
+    // the two sit flush at the same height instead of the group reading
+    // taller than the input.
     var bsToggleGroup = document.createElement('div');
-    bsToggleGroup.style.cssText = 'display:flex;align-items:stretch;flex:0 0 auto;border:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));border-radius:3px;overflow:hidden;background:var(--vscode-dropdown-background,#333);';
+    bsToggleGroup.style.cssText = 'display:flex;align-items:stretch;flex:0 0 auto;height:24px;box-sizing:border-box;border:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));border-radius:3px;overflow:hidden;background:var(--vscode-dropdown-background,#333);';
 
-    var bsToggleDividerStyle = 'border-left:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));';
-    // Exact same button styling and toggle-visual convention as the page
-    // search overlay's own caseBtn/regexBtn (getSearchOverlayScript) --
-    // deliberately duplicated as bs-prefixed constants rather than shared
-    // variables, so this toggle's on/off state stays independent of the
-    // page overlay's own (a reader filtering the book-wide result list in
+    // Exact same toggle-visual convention as the page search overlay's
+    // own caseBtn/regexBtn (getSearchOverlayScript) -- deliberately
+    // duplicated as bs-prefixed constants rather than shared variables,
+    // so this toggle's on/off state stays independent of the page
+    // overlay's own (a reader filtering the book-wide result list in
     // regex mode is not necessarily also mid-way through a page-level
     // regex search), while still looking identical. border:none here
     // (rather than the page overlay's own bordered buttons) because the
     // shared border now lives on bsToggleGroup, not on each button.
-    var bsToggleStyle = 'padding:1px 6px;border:none;border-radius:0;background:transparent;color:var(--vscode-dropdown-foreground,#eee);cursor:pointer;font-size:11px;line-height:1.6;outline:none;';
+    // display:flex + centering, rather than line-height, keeps each
+    // glyph centered once align-items:stretch (above) grows the button
+    // to fill the group's fixed height.
+    var bsToggleStyle = 'flex:0 0 auto;display:flex;align-items:center;justify-content:center;padding:0 6px;border:none;border-radius:0;background:transparent;color:var(--vscode-dropdown-foreground,#eee);cursor:pointer;font-size:11px;outline:none;';
     var bsActiveBg = 'var(--vscode-button-background,#0e639c)';
     var bsActiveFg = 'var(--vscode-button-foreground,#fff)';
     function bsUpdateToggle(btn, active) {
@@ -469,14 +476,14 @@ export function getBookSearchScript(opts: {
     bsRegexBtn.textContent = '.*';
     bsRegexBtn.title = ${useRegexLabel};
     bsRegexBtn.setAttribute('aria-label', ${useRegexLabel});
-    bsRegexBtn.style.cssText = bsToggleStyle + bsToggleDividerStyle + 'font-family:monospace;';
+    bsRegexBtn.style.cssText = bsToggleStyle + 'font-family:monospace;';
     bsUpdateToggle(bsRegexBtn, false);
 
     var bsRefreshBtn = document.createElement('button');
     bsRefreshBtn.innerHTML = '&#x21bb;';
     bsRefreshBtn.title = ${refreshLabel};
     bsRefreshBtn.setAttribute('aria-label', ${refreshLabel});
-    bsRefreshBtn.style.cssText = bsToggleStyle + bsToggleDividerStyle + 'font-size:13px;color:var(--vscode-icon-foreground,var(--vscode-foreground));';
+    bsRefreshBtn.style.cssText = bsToggleStyle + 'font-size:13px;color:var(--vscode-icon-foreground,var(--vscode-foreground));';
 
     bsToggleGroup.appendChild(bsCaseBtn);
     bsToggleGroup.appendChild(bsRegexBtn);
