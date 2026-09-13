@@ -369,7 +369,18 @@ export function getBookSearchScript(opts: {
     var bsBox = document.createElement('div');
     bsBox.setAttribute('role', 'search');
     bsBox.setAttribute('aria-label', ${searchLabel});
-    bsBox.style.cssText = 'padding:6px 8px;border-bottom:1px solid var(--vscode-panel-border);display:flex;flex-direction:column;gap:4px;';
+    // Sticky, not just top-of-list: .site-nav (the scroll container) has
+    // its own top/left/right padding (media/styles.css), so a plain
+    // "position:sticky;top:0" here would still leave that padding's worth
+    // of gap above the box, and the topic list would be visible peeking
+    // in at the sides once scrolled. The negative margin cancels exactly
+    // that padding so bsBox's own background spans flush edge-to-edge and
+    // flush to the very top of the scrollport, then re-adds the same
+    // amount as its own padding so the box's contents still sit where
+    // they used to. bottom margin instead of padding keeps the visible
+    // divider line (border-bottom) hugging the box itself rather than
+    // trailing off across the gap before bsLinksWrap.
+    bsBox.style.cssText = 'position:sticky;top:0;z-index:1;margin:-1rem -0.5rem 0.5rem;padding:0.75rem 0.5rem 6px;background:var(--vscode-sideBar-background,var(--vscode-editor-background));border-bottom:1px solid var(--vscode-panel-border);display:flex;flex-direction:column;gap:4px;';
 
     // Icon-only action buttons (refresh, clear) -- reusing this project's
     // own already-established glyphs for these exact actions (the main
@@ -385,6 +396,10 @@ export function getBookSearchScript(opts: {
     // edge, VS Code's own text-input convention), and refresh sits as a
     // plain icon button alongside the existing Aa/.* toggles, so nothing
     // ever occupies a row by itself.
+    //
+    // bsClearBtn stays fully borderless (it floats inside bookSearchInput,
+    // not alongside the toggles), so it keeps its own transparent-border
+    // style separate from the toggle group below.
     var bsIconBtnStyle = 'padding:1px 5px;border-radius:3px;border:1px solid transparent;background:transparent;color:var(--vscode-icon-foreground,var(--vscode-foreground));cursor:pointer;font-size:13px;line-height:1.4;outline:none;';
 
     var bsInputRow = document.createElement('div');
@@ -416,29 +431,31 @@ export function getBookSearchScript(opts: {
     bsInputWrap.appendChild(bookSearchInput);
     bsInputWrap.appendChild(bsClearBtn);
 
-    var bsRefreshBtn = document.createElement('button');
-    bsRefreshBtn.innerHTML = '&#x21bb;';
-    bsRefreshBtn.title = ${refreshLabel};
-    bsRefreshBtn.setAttribute('aria-label', ${refreshLabel});
-    bsRefreshBtn.style.cssText = bsIconBtnStyle;
+    // Aa / .* / refresh used to each carry their own border (the two
+    // toggles) or none at all (refresh), which read as visually
+    // inconsistent siblings. They now share a single outer border as one
+    // segmented group -- borderless individually, separated from each
+    // other only by a thin 1px divider, echoing the same "segmented
+    // control" look already used for this project's tab strip.
+    var bsToggleGroup = document.createElement('div');
+    bsToggleGroup.style.cssText = 'display:flex;align-items:stretch;flex:0 0 auto;border:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));border-radius:3px;overflow:hidden;background:var(--vscode-dropdown-background,#333);';
 
+    var bsToggleDividerStyle = 'border-left:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));';
     // Exact same button styling and toggle-visual convention as the page
     // search overlay's own caseBtn/regexBtn (getSearchOverlayScript) --
     // deliberately duplicated as bs-prefixed constants rather than shared
     // variables, so this toggle's on/off state stays independent of the
     // page overlay's own (a reader filtering the book-wide result list in
     // regex mode is not necessarily also mid-way through a page-level
-    // regex search), while still looking identical.
-    var bsToggleStyle = 'padding:1px 5px;border-radius:3px;border:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));background:var(--vscode-dropdown-background,#333);color:var(--vscode-dropdown-foreground,#eee);cursor:pointer;font-size:11px;line-height:1.4;outline:none;';
+    // regex search), while still looking identical. border:none here
+    // (rather than the page overlay's own bordered buttons) because the
+    // shared border now lives on bsToggleGroup, not on each button.
+    var bsToggleStyle = 'padding:1px 6px;border:none;border-radius:0;background:transparent;color:var(--vscode-dropdown-foreground,#eee);cursor:pointer;font-size:11px;line-height:1.6;outline:none;';
     var bsActiveBg = 'var(--vscode-button-background,#0e639c)';
     var bsActiveFg = 'var(--vscode-button-foreground,#fff)';
-    var bsInactiveBg = 'var(--vscode-dropdown-background,#333)';
-    var bsInactiveFg = 'var(--vscode-dropdown-foreground,#eee)';
-    var bsInactiveBd = 'var(--vscode-dropdown-border,var(--vscode-widget-border,#555))';
     function bsUpdateToggle(btn, active) {
-      btn.style.background = active ? bsActiveBg : bsInactiveBg;
-      btn.style.color = active ? bsActiveFg : bsInactiveFg;
-      btn.style.borderColor = active ? bsActiveBg : bsInactiveBd;
+      btn.style.background = active ? bsActiveBg : 'transparent';
+      btn.style.color = active ? bsActiveFg : 'var(--vscode-dropdown-foreground,#eee)';
     }
 
     var bsCaseBtn = document.createElement('button');
@@ -452,13 +469,21 @@ export function getBookSearchScript(opts: {
     bsRegexBtn.textContent = '.*';
     bsRegexBtn.title = ${useRegexLabel};
     bsRegexBtn.setAttribute('aria-label', ${useRegexLabel});
-    bsRegexBtn.style.cssText = bsToggleStyle + 'font-family:monospace;';
+    bsRegexBtn.style.cssText = bsToggleStyle + bsToggleDividerStyle + 'font-family:monospace;';
     bsUpdateToggle(bsRegexBtn, false);
 
+    var bsRefreshBtn = document.createElement('button');
+    bsRefreshBtn.innerHTML = '&#x21bb;';
+    bsRefreshBtn.title = ${refreshLabel};
+    bsRefreshBtn.setAttribute('aria-label', ${refreshLabel});
+    bsRefreshBtn.style.cssText = bsToggleStyle + bsToggleDividerStyle + 'font-size:13px;color:var(--vscode-icon-foreground,var(--vscode-foreground));';
+
+    bsToggleGroup.appendChild(bsCaseBtn);
+    bsToggleGroup.appendChild(bsRegexBtn);
+    bsToggleGroup.appendChild(bsRefreshBtn);
+
     bsInputRow.appendChild(bsInputWrap);
-    bsInputRow.appendChild(bsCaseBtn);
-    bsInputRow.appendChild(bsRegexBtn);
-    bsInputRow.appendChild(bsRefreshBtn);
+    bsInputRow.appendChild(bsToggleGroup);
     bsBox.appendChild(bsInputRow);
 
     var bookSearchResults = document.createElement('div');
@@ -537,6 +562,32 @@ export function getBookSearchScript(opts: {
       bsShowLinks();
       bookSearchInput.focus();
     });
+
+    // Ctrl+F normally opens the page-level search overlay
+    // (getSearchOverlayScript, registered separately) no matter where the
+    // reader is -- reasonable for the topic content itself, but a reader
+    // hovering the sidebar (or already focused inside this book-search
+    // box) almost certainly means "find it in the book", not "find it on
+    // this one page". bsMouseOverNav tracks hover instead of relying on
+    // focus alone, since most of .site-nav (the links themselves) is
+    // never a focus target. Registered with the capture flag so it runs
+    // ahead of the overlay's own bubble-phase document listener
+    // regardless of which of the two assembled scripts happens to run
+    // first (see MapViewerProvider.ts's getBookSearchScript call site);
+    // stopping the event here keeps the overlay from also opening
+    // underneath.
+    var bsMouseOverNav = false;
+    siteNav.addEventListener('mouseenter', function() { bsMouseOverNav = true; });
+    siteNav.addEventListener('mouseleave', function() { bsMouseOverNav = false; });
+
+    document.addEventListener('keydown', function(e) {
+      if (!(e.ctrlKey || e.metaKey) || (e.key !== 'f' && e.key !== 'F')) return;
+      if (!bsMouseOverNav && document.activeElement !== bookSearchInput) return;
+      e.preventDefault();
+      e.stopPropagation();
+      bookSearchInput.focus();
+      bookSearchInput.select();
+    }, true);
 
     window.addEventListener('message', function(e) {
       if (e.data.type !== '${opts.responseMsgType}') return;
