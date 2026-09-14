@@ -74,5 +74,18 @@ export function sharedWebviewStrings() {
     filterTitle: vscode.l10n.t('Show/hide content by profiling attribute value (actually hides matching content, unlike the Flags toggle which only shows/hides the highlight)'),
     filterClose: vscode.l10n.t('Close'),
     filterEmpty: vscode.l10n.t('No profiling attributes in this document'),
+    // ── image lightbox + copy menu, passed to getImageLightboxScript as
+    // values ──
+    // Both previews keep styles.css's cursor:zoom-in promise on every
+    // rendered image, so the click-to-enlarge lightbox and its copy
+    // affordances are a both-providers surface too -- the strings live here
+    // rather than in each provider's local additions, or the two previews
+    // would drift apart on the same right-click menu they both show.
+    imgCopyMenuItem: vscode.l10n.t('Copy Image'),
+    imgCopyDoneLabel: vscode.l10n.t('Copied!'),
+    imgCopyFailedLabel: vscode.l10n.t('Copy failed'),
+    imgCopyUnsupportedLabel: vscode.l10n.t('Copying images is not supported here'),
+    imgCopyToastDone: vscode.l10n.t('Image copied to clipboard'),
+    imgCopyToastFailed: vscode.l10n.t('Copy failed'),
   };
 }

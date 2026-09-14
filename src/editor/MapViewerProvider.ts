@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, renderSiteNavHtml, getSiteNavClickHandlerScript, getSiteNavToggleScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
+import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, renderSiteNavHtml, getSiteNavClickHandlerScript, getSiteNavToggleScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
 import { getBookSearchIndex, searchBookIndex, getBookSearchScript, invalidateBookSearchIndex } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
@@ -313,6 +313,26 @@ function getMapWebviewScript(): string {
     invalidRegex: L.searchInvalidRegex,
   })}
 
+  // Click-to-enlarge lightbox + image copy menu -- the same script the topic
+  // viewer embeds. styles.css gives every rendered image cursor:zoom-in in
+  // BOTH webviews, so book/site mode's images promised enlargement on click
+  // but nothing here kept that promise: the cursor turned into a magnifying
+  // glass and clicking did nothing. Embedding the shared script makes the
+  // promise true (and gives tree mode's occasional inline images the same
+  // behavior for free). No afterContentSwap involvement needed: every
+  // listener is document-level delegation, and lightboxCandidates()
+  // re-queries the DOM on each open, so content swaps and book-mode patches
+  // are picked up automatically -- see getImageLightboxScript in
+  // ditaRenderUtils.ts.
+  ${getImageLightboxScript({
+    copyMenuItem: L.imgCopyMenuItem,
+    copyDoneLabel: L.imgCopyDoneLabel,
+    copyFailedLabel: L.imgCopyFailedLabel,
+    copyUnsupportedLabel: L.imgCopyUnsupportedLabel,
+    copyToastDone: L.imgCopyToastDone,
+    copyToastFailed: L.imgCopyToastFailed,
+  })}
+
   // Every source edit (a topicref's profiling attributes, reordering
   // entries, ...) sends just the freshly rendered content as a message
   // instead of the extension reassigning webview.html wholesale -- see
@@ -320,9 +340,10 @@ function getMapWebviewScript(): string {
   // the topic viewer's own content-only update). Content-dependent setup
   // that only ran once at initial load, because a full reload used to
   // rerun this entire script from scratch every time, needs to re-run
-  // after each swap instead. Map view has no per-image zoom toolbar and
-  // no source-editor scroll-sync of its own to re-apply (unlike the topic
-  // viewer), so this is a shorter list.
+  // after each swap instead. The image lightbox needs none of this -- its
+  // document-level delegation survives any content swap untouched -- and
+  // there is still no per-image zoom toolbar or source-editor scroll-sync
+  // here to re-apply (unlike the topic viewer), so this is a shorter list.
   //
   // Both content paths call this. Patching a handful of entries leaves the
   // same kind of stale state behind as replacing all of them: profiling
