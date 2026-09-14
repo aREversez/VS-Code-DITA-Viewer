@@ -1036,6 +1036,73 @@ body.mode-site.site-nav-collapsed .site-nav {
 body.mode-site.site-nav-collapsed .site-nav-resizer {
   display: none;
 }
+/* Sidebar tree structure (renderSiteNavHtml, ditaRenderUtils.ts) -- plain
+   <ul>/<li> nesting rather than the old flat list of <a> tags, so a
+   collapsed branch can hide its whole subtree with one CSS rule (below)
+   instead of this project tracking which rows are currently visible.
+   list-style/margin/padding reset on both levels since these are
+   structural, not bulleted, lists. */
+.site-nav-tree,
+.site-nav-children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.site-nav-item {
+  /* Anchors .site-nav-toggle's absolute positioning (below) to this row
+     rather than to .site-nav itself, so the same left:Npx the toggle is
+     given at render time lines it up under its own entry regardless of
+     how deep that entry is nested in the DOM. */
+  position: relative;
+}
+/* Hides a collapsed branch's whole subtree in one rule -- the browser's
+   own cascade takes care of a collapsed grandparent hiding already-hidden
+   descendants too, so getSiteNavToggleScript only ever needs to flip the
+   `collapsed` class on the one <li> that was actually clicked. */
+.site-nav-item.collapsed > .site-nav-children {
+  display: none;
+}
+/* The expand/collapse triangle -- only rendered (renderSiteNavHtml) for
+   an entry that actually has children; a leaf's title starts at the same
+   x position regardless, since the indent formula reserves this width at
+   every depth whether or not a given row has a toggle to put in it. */
+.site-nav-toggle {
+  position: absolute;
+  top: 6px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--vscode-icon-foreground, var(--vscode-foreground));
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+.site-nav-toggle:hover {
+  color: var(--vscode-foreground);
+}
+/* A plain CSS triangle rather than a glyph/icon font -- rotated 90°
+   closed -> open by .site-nav-item's own aria-expanded/collapsed state,
+   same rotate-a-static-shape approach the resizer's divider line
+   (.site-nav-resizer::before above) already uses for its own hover state. */
+.site-nav-toggle::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 4px 0 4px 5px;
+  border-color: transparent transparent transparent currentColor;
+  transition: transform 0.1s ease;
+}
+.site-nav-item.collapsed > .site-nav-toggle::before {
+  transform: rotate(0deg);
+}
+.site-nav-item:not(.collapsed) > .site-nav-toggle::before {
+  transform: rotate(90deg);
+}
 .site-nav-link {
   display: flex;
   align-items: baseline;
