@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, renderSiteNavHtml, getSiteNavClickHandlerScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
+import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, renderSiteNavHtml, getSiteNavClickHandlerScript, getSiteNavToggleScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
 import { getBookSearchIndex, searchBookIndex, getBookSearchScript, invalidateBookSearchIndex } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
@@ -130,6 +130,7 @@ function getMapWebviewScript(): string {
     : document.body.classList.contains('mode-site') ? 'site' : 'tree';
 
   ${getSiteNavClickHandlerScript({ switchSitePageMsgType: MSG_SWITCH_SITE_PAGE })}
+  ${getSiteNavToggleScript()}
   ${getSiteSidebarResizerScript()}
 
   // Click on navigable tree node → post message to extension
@@ -892,7 +893,10 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
           : manifest[0].absPath;
         const topic = this.renderSiteTopicContent(resolvedSitePage, webview, keyMap, bookMembers);
         if (topic.error !== undefined) return { error: topic.error };
-        const sidebarHtml = renderSiteNavHtml(manifest, resolvedSitePage, vscode.l10n.t('Topics'));
+        const sidebarHtml = renderSiteNavHtml(manifest, resolvedSitePage, vscode.l10n.t('Topics'), {
+          expand: vscode.l10n.t('Expand'),
+          collapse: vscode.l10n.t('Collapse'),
+        });
         // manifest/keyMap/bookMembers go back to the caller too
         // (updateWebview) so a page switch (postSitePageUpdate) can reuse
         // them instead of re-parsing the map, re-reading every
