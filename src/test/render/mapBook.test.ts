@@ -1085,4 +1085,82 @@ describe('renderSiteNavHtml', () => {
     assert.ok(roleChipMatch, 'role chip has text content');
     assert.ok(!roleChipMatch![1].includes('<script>'), 'role chip text is escaped');
   });
+
+  // --- collapsible tree structure (Oxygen-style expand/collapse toggle) ---
+
+  it('nests a depth-1 entry inside its depth-0 parent\'s own <ul class="site-nav-children">, not as a flat sibling', () => {
+    const html = renderSiteNavHtml(manifest, manifest[0].absPath, 'Topics');
+    // manifest here is [depth 0 "a", depth 1 "b"] -- b must be inside a's
+    // own children list. A flat list (the pre-tree implementation) would
+    // never produce a site-nav-children element at all.
+    const parentLi = /<li class="site-nav-item has-children"[^>]*>.*<\/li>/s.exec(html);
+    assert.ok(parentLi, 'the parent entry should render as a has-children <li>');
+    assert.ok(parentLi![0].includes('site-nav-children'), 'the parent <li> should contain a site-nav-children wrapper');
+    assert.ok(parentLi![0].includes('data-site-target="/proj/docs/topics/b.dita"'), 'the child link should be inside the parent\'s own <li>, not a sibling of it');
+  });
+
+  it('gives a parent entry a toggle button and a leaf entry none', () => {
+    const html = renderSiteNavHtml(manifest, manifest[0].absPath, 'Topics');
+    assert.strictEqual((html.match(/class="site-nav-toggle"/g) || []).length, 1, 'only the one parent entry (depth 0, with a depth-1 child) should get a toggle');
+  });
+
+  it('renders a leaf-only manifest (no entry has children) with zero toggle buttons', () => {
+    const flat = [
+      { absPath: '/proj/docs/topics/a.dita', title: 'Topic A', depth: 0 },
+      { absPath: '/proj/docs/topics/b.dita', title: 'Topic B', depth: 0 },
+    ];
+    const html = renderSiteNavHtml(flat, flat[0].absPath, 'Topics');
+    assert.ok(!html.includes('site-nav-toggle'), 'no entry has children, so no toggle should render at all');
+    assert.ok(!html.includes('has-children'));
+  });
+
+  it('starts every parent entry expanded (aria-expanded="true", no collapsed class) so nothing is hidden on first render', () => {
+    const html = renderSiteNavHtml(manifest, manifest[0].absPath, 'Topics');
+    assert.ok(!html.includes('collapsed'), 'nothing should start collapsed');
+    assert.ok(/<button type="button" class="site-nav-toggle"[^>]*aria-expanded="true"/.test(html));
+  });
+
+  it('groups a three-level manifest (0/1/2) so the depth-2 entry nests under the depth-1 entry, which itself nests under the depth-0 entry', () => {
+    const nested = [
+      { absPath: '/proj/docs/topics/a.dita', title: 'Topic A', depth: 0 },
+      { absPath: '/proj/docs/topics/b.dita', title: 'Topic B', depth: 1 },
+      { absPath: '/proj/docs/topics/c.dita', title: 'Topic C', depth: 2 },
+    ];
+    const html = renderSiteNavHtml(nested, nested[0].absPath, 'Topics');
+    // c's own link must appear textually after b's own <ul class="site-nav-children">
+    // opening tag and before b's own </li> -- i.e. c is inside b's subtree,
+    // not a sibling of b under a.
+    const bStart = html.indexOf('data-site-target="/proj/docs/topics/b.dita"');
+    const bChildrenOpen = html.indexOf('site-nav-children', bStart);
+    const cLink = html.indexOf('data-site-target="/proj/docs/topics/c.dita"');
+    assert.ok(bStart > -1 && bChildrenOpen > -1 && cLink > -1);
+    assert.ok(cLink > bChildrenOpen, 'c should be nested inside b\'s own children list, not a', );
+  });
+
+  it('handles an irregular depth jump (0 straight to 2) without throwing, nesting the depth-2 entry as a child of the depth-0 entry', () => {
+    const irregular = [
+      { absPath: '/proj/docs/topics/a.dita', title: 'Topic A', depth: 0 },
+      { absPath: '/proj/docs/topics/c.dita', title: 'Topic C', depth: 2 },
+    ];
+    assert.doesNotThrow(() => renderSiteNavHtml(irregular, irregular[0].absPath, 'Topics'));
+    const html = renderSiteNavHtml(irregular, irregular[0].absPath, 'Topics');
+    assert.ok(html.includes('has-children'), 'a should still be recognized as having a child even though the depth jumped by 2');
+  });
+
+  it('uses the supplied expand/collapse labels for the toggle\'s data attributes and initial aria-label instead of the English defaults', () => {
+    const html = renderSiteNavHtml(manifest, manifest[0].absPath, 'Topics', { expand: '\u5c55\u5f00', collapse: '\u6298\u53e0' });
+    assert.ok(html.includes('data-expand-label="\u5c55\u5f00"'));
+    assert.ok(html.includes('data-collapse-label="\u6298\u53e0"'));
+    // Starts expanded, so the initial aria-label should be the collapse verb
+    // (what clicking it right now would do), same convention as a real
+    // file explorer's own expand/collapse control.
+    assert.ok(html.includes('aria-label="\u6298\u53e0"'));
+  });
+
+  it('escapes the expand/collapse labels for XSS the same way title/chip text is escaped', () => {
+    const evil = { expand: '<script>e</script>', collapse: '<script>c</script>' };
+    const html = renderSiteNavHtml(manifest, manifest[0].absPath, 'Topics', evil);
+    assert.ok(!html.includes('<script>'), 'no raw script tag anywhere, including from the toggle labels');
+    assert.ok(html.includes('&lt;script&gt;'));
+  });
 });

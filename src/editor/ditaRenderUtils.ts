@@ -1460,13 +1460,60 @@ export function buildBookNavManifest(
   return result;
 }
 
+/** One manifest entry plus the direct children nested under it, built by
+ *  buildSiteNavTree below. The manifest itself never carries parent/child
+ *  links (see DocsiteNavEntry's own comment -- it's a flat, already-in-
+ *  reading-order list keyed only by depth), so this is the one place that
+ *  shape gets turned into an actual tree, purely for renderSiteNavHtml's
+ *  own nested-<ul> output. */
+interface SiteNavTreeNode {
+  entry: DocsiteNavEntry;
+  children: SiteNavTreeNode[];
+}
+
 /**
- * Docsite mode's sidebar -- one link per topic, indented by depth, the
- * current page marked active. Deliberately just a static list: switching
- * pages toggles the `active` class client-side (see the webview script's
- * .site-nav-link click handler) rather than re-rendering this nav on every
- * page change, since which topics exist and how they nest never changes
- * just because the reader picked a different one to look at right now.
+ * Groups a flat, depth-annotated manifest into a tree via a simple
+ * ancestor stack: each entry becomes a child of the most recent
+ * still-open entry with a strictly shallower depth (popping anything at
+ * the same depth or deeper off the stack first, since those branches are
+ * now closed). Works for irregular depth jumps the same way a strictly-
+ * incrementing manifest would -- it only ever compares each entry's depth
+ * to the stack, never assumes a fixed step of 1.
+ */
+function buildSiteNavTree(manifest: readonly DocsiteNavEntry[]): SiteNavTreeNode[] {
+  const roots: SiteNavTreeNode[] = [];
+  const stack: SiteNavTreeNode[] = [];
+  for (const entry of manifest) {
+    const node: SiteNavTreeNode = { entry, children: [] };
+    while (stack.length > 0 && stack[stack.length - 1].entry.depth >= entry.depth) stack.pop();
+    const parent = stack[stack.length - 1];
+    if (parent) parent.children.push(node);
+    else roots.push(node);
+    stack.push(node);
+  }
+  return roots;
+}
+
+/** Width, in px, reserved in front of every entry's title for the
+ *  expand/collapse toggle -- reserved at every depth (not just where a
+ *  toggle actually renders) so a leaf's title still lines up under its
+ *  parent's title rather than jumping left by one toggle's width. */
+const SITE_NAV_TOGGLE_SLOT = 16;
+
+/**
+ * Docsite mode's sidebar -- one link per topic, nested and indented by
+ * depth to match the map's own structure, the current page marked active.
+ * Parent entries (anything with at least one entry nested under it) get an
+ * expand/collapse toggle to their left, Oxygen-style; leaves don't, but
+ * still reserve that same width (SITE_NAV_TOGGLE_SLOT) so titles at a
+ * given depth line up whether or not that particular row has a toggle.
+ * Collapsing/expanding is pure client-side state (getSiteNavToggleScript)
+ * -- which topics exist and how they nest never changes just because a
+ * branch is tucked away, so this function never needs to know about
+ * collapsed state at all, and this HTML is still rendered exactly once and
+ * left alone afterward: switching pages toggles the `active` class
+ * client-side (see the webview script's .site-nav-link click handler)
+ * rather than re-rendering this nav on every page change.
  *
  * currentAbsPath must be one of manifest's own absPath values (generateHtml
  * resolves an unknown/stale one back to the first entry before calling
@@ -1483,28 +1530,65 @@ export function buildBookNavManifest(
  * text is wrapped in its own span so the link's flex layout can ellipsis
  * the title without ever clipping the chips -- the chips are short fixed
  * labels and the title is the part that overflows on narrow sidebars.
+ *
+ * toggleLabels is optional (defaults to English) rather than required so
+ * every existing caller/test that only cares about the link markup itself
+ * doesn't have to thread localized strings through just to satisfy the
+ * type checker.
  */
-export function renderSiteNavHtml(manifest: DocsiteNavEntry[], currentAbsPath: string, navLabel: string): string {
-  const links = manifest
-    .map((entry) => {
-      const activeClass = entry.absPath === currentAbsPath ? ' active' : '';
-      const indent = 8 + entry.depth * 16;
-      // Role chip first (the rarer, more specific signal), then the type
-      // chip (the topic's information type), then the title. Both chips
-      // are escaped the same way the title is -- they're already display
-      // strings produced by labelers, but a labeler fed a malicious tag
-      // name (from a parsed topic a user controls) shouldn't be able to
-      // inject markup into the sidebar.
-      const roleChip = entry.role
-        ? `<span class="site-nav-chip site-nav-chip--role">${escapeHtml(entry.role)}</span>`
-        : '';
-      const typeChip = entry.topicType
-        ? `<span class="site-nav-chip site-nav-chip--type">${escapeHtml(entry.topicType)}</span>`
-        : '';
-      return `<a href="#" class="site-nav-link${activeClass}" data-site-target="${escapeAttr(entry.absPath)}" style="padding-left:${indent}px" title="${escapeAttr(entry.title)}">${roleChip}${typeChip}<span class="site-nav-link-text">${escapeHtml(entry.title)}</span></a>`;
-    })
-    .join('\n');
-  return `<nav class="site-nav" aria-label="${escapeAttr(navLabel)}">${links}</nav>`;
+export function renderSiteNavHtml(
+  manifest: DocsiteNavEntry[],
+  currentAbsPath: string,
+  navLabel: string,
+  toggleLabels: { expand: string; collapse: string } = { expand: 'Expand', collapse: 'Collapse' },
+): string {
+  const expandLabel = escapeAttr(toggleLabels.expand);
+  const collapseLabel = escapeAttr(toggleLabels.collapse);
+
+  const renderNode = (node: SiteNavTreeNode): string => {
+    const entry = node.entry;
+    const hasChildren = node.children.length > 0;
+    const activeClass = entry.absPath === currentAbsPath ? ' active' : '';
+    // The link's own padding-left carries the full indent, toggle slot
+    // included, exactly as before this feature -- the toggle itself is a
+    // sibling, absolutely positioned into that reserved slot (see
+    // .site-nav-toggle/.site-nav-item in media/styles.css) rather than an
+    // inline child of the link, so a click on it can be told apart from a
+    // click on the link (the .site-nav-link click delegation only ever
+    // matches inside the <a> itself).
+    const indent = 8 + SITE_NAV_TOGGLE_SLOT + entry.depth * 16;
+    const toggleLeft = 8 + entry.depth * 16;
+    // Role chip first (the rarer, more specific signal), then the type
+    // chip (the topic's information type), then the title. Both chips
+    // are escaped the same way the title is -- they're already display
+    // strings produced by labelers, but a labeler fed a malicious tag
+    // name (from a parsed topic a user controls) shouldn't be able to
+    // inject markup into the sidebar.
+    const roleChip = entry.role
+      ? `<span class="site-nav-chip site-nav-chip--role">${escapeHtml(entry.role)}</span>`
+      : '';
+    const typeChip = entry.topicType
+      ? `<span class="site-nav-chip site-nav-chip--type">${escapeHtml(entry.topicType)}</span>`
+      : '';
+    // Starts expanded (no `collapsed` class, aria-expanded="true") --
+    // matches the flat list's own old behavior of showing every entry,
+    // and getSiteNavToggleScript is the only thing that ever adds
+    // `collapsed` afterward.
+    const toggleHtml = hasChildren
+      ? `<button type="button" class="site-nav-toggle" style="left:${toggleLeft}px" aria-expanded="true" aria-label="${collapseLabel}" data-expand-label="${expandLabel}" data-collapse-label="${collapseLabel}"></button>`
+      : '';
+    const link = `<a href="#" class="site-nav-link${activeClass}" data-site-target="${escapeAttr(entry.absPath)}" style="padding-left:${indent}px" title="${escapeAttr(entry.title)}">${roleChip}${typeChip}<span class="site-nav-link-text">${escapeHtml(entry.title)}</span></a>`;
+    const childrenHtml = hasChildren
+      ? `<ul class="site-nav-children" role="group">${node.children.map(renderNode).join('')}</ul>`
+      : '';
+    const itemClass = hasChildren ? ' has-children' : '';
+    const itemAriaExpanded = hasChildren ? ' aria-expanded="true"' : '';
+    return `<li class="site-nav-item${itemClass}" role="treeitem"${itemAriaExpanded}>${toggleHtml}${link}${childrenHtml}</li>`;
+  };
+
+  const tree = buildSiteNavTree(manifest);
+  const items = tree.map(renderNode).join('');
+  return `<nav class="site-nav" aria-label="${escapeAttr(navLabel)}"><ul class="site-nav-tree" role="tree">${items}</ul></nav>`;
 }
 
 /**
@@ -1623,6 +1707,50 @@ export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: stri
   });
 
   updatePrevNextButtons(); // establish initial state on load, same as the sidebar's own active link is already set server-side
+`;
+}
+
+/**
+ * Docsite mode's sidebar expand/collapse toggle (Oxygen-style triangle in
+ * front of a parent entry) -- click delegation only, same one-listener-per-
+ * concern pattern as the .site-nav-link and [data-dita-book-xref] listeners
+ * in getSiteNavClickHandlerScript above (a separate function, and a
+ * separate document-level listener, rather than folded into that one,
+ * since this is a genuinely different concern: it never posts a message to
+ * the extension host or touches which page is showing, only whether a
+ * branch of the sidebar's own tree is visible).
+ *
+ * Purely a `collapsed` class flip on the entry's own <li class="site-nav-
+ * item"> -- media/styles.css hides `.site-nav-item.collapsed >
+ * .site-nav-children` (the direct child <ul>, so a collapsed grandparent's
+ * hidden subtree doesn't need this script to separately walk into and
+ * re-hide already-hidden descendants; the cascade is free). No state is
+ * kept anywhere outside that class: renderSiteNavHtml (ditaRenderUtils.ts)
+ * is called exactly once per mode-switch/refresh and always renders every
+ * branch open, so collapsing a branch and then switching pages (which only
+ * ever replaces the topic content pane, never re-renders the sidebar --
+ * see renderSiteNavHtml's own doc comment) leaves it collapsed, same as a
+ * real file explorer.
+ *
+ * The toggle button itself (renderSiteNavHtml) carries its own expand/
+ * collapse aria-label strings as data-expand-label/data-collapse-label so
+ * this script doesn't need its own copies threaded in as opts just to
+ * flip aria-label text along with aria-expanded.
+ */
+export function getSiteNavToggleScript(): string {
+  return `
+  document.addEventListener('click', function(e) {
+    var toggle = e.target.closest ? e.target.closest('.site-nav-toggle') : null;
+    if (!toggle) return;
+    e.preventDefault();
+    var item = toggle.closest ? toggle.closest('.site-nav-item') : null;
+    if (!item) return;
+    var collapsed = item.classList.toggle('collapsed');
+    toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    item.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    var label = collapsed ? toggle.getAttribute('data-expand-label') : toggle.getAttribute('data-collapse-label');
+    if (label) toggle.setAttribute('aria-label', label);
+  });
 `;
 }
 

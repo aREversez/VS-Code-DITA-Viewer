@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getSiteNavToggleScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -1675,6 +1675,117 @@ describe('getSiteNavClickHandlerScript (docsite mode)', () => {
     click(xrefLink);
 
     assert.strictEqual(bTopic.classList.contains('active'), true);
+  });
+});
+
+describe('getSiteNavToggleScript (docsite mode)', () => {
+  it('emits a script that parses as JavaScript', () => {
+    assert.doesNotThrow(() => new Function(getSiteNavToggleScript()));
+  });
+
+  // Minimal standalone fakes (deliberately not reusing
+  // getSiteNavClickHandlerScript's own makeFakeElement above, which is
+  // scoped to that describe block) -- a fake .site-nav-item with a real
+  // Set-backed classList (so classList.toggle's own add/remove-and-report
+  // semantics are exercised, not just stubbed to a fixed return value) and
+  // a fake .site-nav-toggle button whose closest('.site-nav-item') points
+  // back at it, mirroring the actual parent/child DOM shape
+  // renderSiteNavHtml produces.
+  function makeFakeItem() {
+    const classes = new Set<string>();
+    const attrs: Record<string, string> = {};
+    return {
+      classList: {
+        contains: (c: string) => classes.has(c),
+        add: (c: string) => classes.add(c),
+        remove: (c: string) => classes.delete(c),
+        toggle: (c: string) => {
+          if (classes.has(c)) { classes.delete(c); return false; }
+          classes.add(c);
+          return true;
+        },
+      },
+      getAttribute: (name: string) => (name in attrs ? attrs[name] : null),
+      setAttribute: (name: string, val: string) => { attrs[name] = val; },
+      attrs,
+    };
+  }
+
+  function makeFakeToggle(item: ReturnType<typeof makeFakeItem>, initialAttrs?: Record<string, string>) {
+    const attrs: Record<string, string> = { ...(initialAttrs || {}) };
+    const toggle: { getAttribute: (n: string) => string | null; setAttribute: (n: string, v: string) => void; closest: (s: string) => unknown } = {
+      getAttribute: (name: string) => (name in attrs ? attrs[name] : null),
+      setAttribute: (name: string, val: string) => { attrs[name] = val; },
+      closest: (selector: string) => {
+        if (selector === '.site-nav-toggle') return toggle;
+        if (selector === '.site-nav-item') return item;
+        return null;
+      },
+    };
+    return toggle;
+  }
+
+  function makeFakeToggleDocument() {
+    const listeners: Array<(e: unknown) => void> = [];
+    const document = {
+      addEventListener: (evt: string, fn: (e: unknown) => void) => { if (evt === 'click') listeners.push(fn); },
+    };
+    return {
+      document,
+      click(target: unknown) {
+        for (const fn of listeners) fn({ target, preventDefault: () => {} });
+      },
+    };
+  }
+
+  it('clicking a toggle collapses its own .site-nav-item and flips its aria-expanded to false', () => {
+    const item = makeFakeItem();
+    item.setAttribute('aria-expanded', 'true');
+    const toggle = makeFakeToggle(item, { 'aria-expanded': 'true', 'data-expand-label': 'Expand', 'data-collapse-label': 'Collapse' });
+    const { document, click } = makeFakeToggleDocument();
+    new Function('document', getSiteNavToggleScript())(document);
+
+    click(toggle);
+
+    assert.strictEqual(item.classList.contains('collapsed'), true);
+    assert.strictEqual(toggle.getAttribute('aria-expanded'), 'false');
+    assert.strictEqual(item.getAttribute('aria-expanded'), 'false');
+  });
+
+  it('clicking an already-collapsed toggle expands it again, restoring aria-expanded to true', () => {
+    const item = makeFakeItem();
+    const toggle = makeFakeToggle(item, { 'aria-expanded': 'true', 'data-expand-label': 'Expand', 'data-collapse-label': 'Collapse' });
+    const { document, click } = makeFakeToggleDocument();
+    new Function('document', getSiteNavToggleScript())(document);
+
+    click(toggle); // collapse
+    click(toggle); // expand again
+
+    assert.strictEqual(item.classList.contains('collapsed'), false);
+    assert.strictEqual(toggle.getAttribute('aria-expanded'), 'true');
+  });
+
+  it('swaps the toggle\'s aria-label between its data-collapse-label and data-expand-label as it flips', () => {
+    const item = makeFakeItem();
+    const toggle = makeFakeToggle(item, { 'aria-expanded': 'true', 'data-expand-label': '\u5c55\u5f00', 'data-collapse-label': '\u6298\u53e0' });
+    const { document, click } = makeFakeToggleDocument();
+    new Function('document', getSiteNavToggleScript())(document);
+
+    click(toggle); // now collapsed -- label should offer the "expand" verb
+    assert.strictEqual(toggle.getAttribute('aria-label'), '\u5c55\u5f00');
+
+    click(toggle); // expanded again -- label should offer the "collapse" verb
+    assert.strictEqual(toggle.getAttribute('aria-label'), '\u6298\u53e0');
+  });
+
+  it('a click that does not hit a .site-nav-toggle (e.g. the link itself) does nothing, rather than throwing', () => {
+    const item = makeFakeItem();
+    const { document, click } = makeFakeToggleDocument();
+    new Function('document', getSiteNavToggleScript())(document);
+
+    const link = { closest: () => null };
+    assert.doesNotThrow(() => click(link));
+    assert.strictEqual(item.classList.contains('collapsed'), false);
   });
 });
 
