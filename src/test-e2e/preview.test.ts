@@ -163,7 +163,16 @@ describe('DITA/DITAMAP preview rendering', () => {
       await vscode.commands.executeCommand('vscode.openWith', uri, 'ditaViewer.mapPreview');
 
       const getHtml = () => ext.exports._test.getLastRenderedMapHtml(uri.toString());
-      await waitFor(() => !!getHtml());
+      // Waits for the render to actually carry the preference just set above,
+      // not merely for *a* cached entry to exist -- an earlier test in this
+      // file already rendered this same test.ditamap once (with whatever
+      // preferences were live then) and MapViewerProvider only deletes that
+      // entry from its cache on webview dispose, which fires asynchronously
+      // relative to `workbench.action.closeActiveEditor` resolving. A plain
+      // `!!getHtml()` check can observe the still-live, stale entry from the
+      // previous test on its very first (synchronous) poll and return before
+      // the fresh render lands, reading yesterday's preferences.
+      await waitFor(() => (getHtml() || '').includes('window.__fontPrefs={"size":140,"serif":true}'));
 
       const page = getHtml();
       // The values a globally-set topic preference and a uri-keyed width
@@ -205,7 +214,12 @@ describe('DITA/DITAMAP preview rendering', () => {
 
       const topicUri = vscode.Uri.file(path.join(legacyFixturesDir, 'topics', 'db_overview.dita'));
       await vscode.commands.executeCommand('vscode.openWith', topicUri, 'ditaViewer.preview');
-      await waitFor(() => !!ext.exports._test.getLastRenderedHtml(topicUri.toString()));
+      // See the font/width test's comment on why this polls for the actual
+      // expected value rather than `!!getLastRenderedHtml(...)` -- this same
+      // topicUri was already rendered (with tagTooltips off) by the very
+      // first test in this file, and that stale cache entry is not
+      // guaranteed to be gone by the time this test's openWith resolves.
+      await waitFor(() => (ext.exports._test.getLastRenderedHtml(topicUri.toString()) || '').includes('window.__tagTooltips=true'));
       const topicPage: string = ext.exports._test.getLastRenderedHtml(topicUri.toString());
       assert.ok(
         topicPage.includes('window.__tagTooltips=true'),
@@ -217,7 +231,11 @@ describe('DITA/DITAMAP preview rendering', () => {
 
       const mapUri = vscode.Uri.file(path.join(legacyFixturesDir, 'test.ditamap'));
       await vscode.commands.executeCommand('vscode.openWith', mapUri, 'ditaViewer.mapPreview');
-      await waitFor(() => !!ext.exports._test.getLastRenderedMapHtml(mapUri.toString()));
+      // Same rationale: test.ditamap was already rendered (tagTooltips off)
+      // by several earlier tests in this file, most recently the font/width
+      // test right above -- poll for the value this test actually set, not
+      // just for any cached entry to reappear.
+      await waitFor(() => (ext.exports._test.getLastRenderedMapHtml(mapUri.toString()) || '').includes('window.__tagTooltips=true'));
       const mapPage: string = ext.exports._test.getLastRenderedMapHtml(mapUri.toString());
       assert.ok(
         mapPage.includes('window.__tagTooltips=true'),
