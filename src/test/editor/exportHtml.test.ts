@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { buildStandaloneHtml, makeDataUriInliner, buildBookHeading } from '../../editor/exportHtmlHelpers';
+import { buildStandaloneHtml, makeDataUriInliner, buildBookHeading, classifyMapExportEntry } from '../../editor/exportHtmlHelpers';
 
 describe('buildStandaloneHtml', () => {
   it('should produce a complete HTML document', () => {
@@ -132,5 +132,35 @@ describe('buildBookHeading', () => {
   it('should escape ampersands and quotes in the role badge', () => {
     const html = buildBookHeading('Title', 0, 'A & B "C"');
     assert.ok(html.includes('A &amp; B &quot;C&quot;'));
+  });
+});
+
+describe('classifyMapExportEntry', () => {
+  it('skips a resource-only entry outright, even one with a real href', () => {
+    assert.strictEqual(classifyMapExportEntry({ href: 'a.dita', resourceOnly: true }), 'skip');
+  });
+
+  it('skips a resource-only entry even when it has no href (a resource-only topichead, however unusual)', () => {
+    assert.strictEqual(classifyMapExportEntry({ resourceOnly: true }), 'skip');
+  });
+
+  it('renders a real topic (href, not resource-only, not a .ditamap)', () => {
+    assert.strictEqual(classifyMapExportEntry({ href: 'topics/a.dita' }), 'render-topic');
+  });
+
+  it('treats a href ending in .ditamap as not a real topic -- falls through to the structural-heading/keys check', () => {
+    assert.strictEqual(classifyMapExportEntry({ href: 'sub.ditamap' }), 'structural-heading');
+  });
+
+  it('renders a hrefless entry with no keys as a structural heading (a topichead, in practice)', () => {
+    assert.strictEqual(classifyMapExportEntry({}), 'structural-heading');
+  });
+
+  it('skips a hrefless entry that DOES have keys (a pure keydef/key-only topicref -- a definition, not content)', () => {
+    assert.strictEqual(classifyMapExportEntry({ keys: 'product_version' }), 'skip');
+  });
+
+  it('skips a .ditamap-href entry that also has keys (both signals say "not real content" -- keys wins the same way it does for the hrefless case)', () => {
+    assert.strictEqual(classifyMapExportEntry({ href: 'sub.ditamap', keys: 'k' }), 'skip');
   });
 });

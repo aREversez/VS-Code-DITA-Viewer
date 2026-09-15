@@ -10,7 +10,7 @@ import { collectMapEntries, getMapTitleText } from '../render/mapTypeMap';
 import { formatLocalizedRole } from '../language/bookRoleL10n';
 import { expandDitamapRefs, renderTopicToHtml, decodeHrefPart } from './ditaRenderUtils';
 import { buildKeyMap } from './DitaViewerProvider';
-import { buildStandaloneHtml, makeDataUriInliner, buildBookHeading } from './exportHtmlHelpers';
+import { buildStandaloneHtml, makeDataUriInliner, buildBookHeading, classifyMapExportEntry } from './exportHtmlHelpers';
 
 // ── Pure helpers (re-exported from exportHtmlHelpers, unit-tested there) ──
 
@@ -54,9 +54,10 @@ function buildMapExport(fsPath: string): { title: string; bodyHtml: string; erro
   const heading = buildBookHeading;
 
   for (const entry of entries) {
-    if (entry.resourceOnly) continue; // exists purely to be pulled in via keyref/conref elsewhere, never its own page or heading
-    if (entry.href && !entry.href.split('#')[0].toLowerCase().endsWith('.ditamap')) {
-      const absPath = resolve(docDir, decodeHrefPart(entry.href.split('#')[0]));
+    const action = classifyMapExportEntry(entry);
+    if (action === 'skip') continue;
+    if (action === 'render-topic') {
+      const absPath = resolve(docDir, decodeHrefPart(entry.href!.split('#')[0]));
       if (visited.has(absPath)) continue;
       visited.add(absPath);
       const result = renderTopicToHtml({
@@ -73,9 +74,8 @@ function buildMapExport(fsPath: string): { title: string; bodyHtml: string; erro
         if (entry.role) parts.push(heading(entry.displayName, entry.depth, entry.role));
         parts.push(`<div class="book-entry">${result.html}</div>`);
       }
-    } else if (!entry.keys) {
-      // Structural heading (topichead / chapter without href / sub-map label);
-      // pure keydefs are definitions, not content
+    } else {
+      // structural-heading: topichead / chapter without href / sub-map label
       parts.push(heading(entry.displayName, entry.depth, entry.role));
     }
   }
