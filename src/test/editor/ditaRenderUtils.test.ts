@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getSiteNavToggleScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getSiteNavToggleScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -1953,5 +1953,442 @@ describe('getSiteSidebarResizerScript (docsite mode)', () => {
       script.includes('var clampSidebarWidth = ' + clampSidebarWidth.toString() + ';'),
       'expected the resizer script to inject the exported clampSidebarWidth verbatim',
     );
+  });
+});
+
+describe('getImageLightboxScript', () => {
+  // A minimal, hand-rolled fake DOM -- same spirit as
+  // getSiteNavClickHandlerScript/getSiteNavToggleScript's own fake
+  // elements above, just enough real behavior (attributes, classList,
+  // a small CSS-selector matcher for the handful of selectors this
+  // script actually uses, event delegation via document-level
+  // listeners) to exercise the synchronous, clipboard/fetch-independent
+  // parts of the lightbox: opening/closing, arrow-key stepping, error
+  // marking, and the right-click menu's own open/close/label.
+  //
+  // NOT covered here: copyImageToClipboard's own body (fetch +
+  // createImageBitmap + navigator.clipboard.write) -- those are real
+  // browser APIs with no meaningful fake in a plain Node test, so the
+  // Ctrl+C-copies / right-click "Copy Image" *outcome* isn't
+  // exercised, only that the menu opens with the right label and can
+  // be dismissed.
+
+  /** Minimal stand-in for a DOM Event -- just the fields
+   *  getImageLightboxScript's own handlers actually read. */
+  interface FakeDomEvent {
+    target?: FakeElement;
+    key?: string;
+    clientX?: number;
+    clientY?: number;
+    ctrlKey?: boolean;
+    metaKey?: boolean;
+    preventDefault?: () => void;
+  }
+
+  interface FakeElement {
+    tagName: string;
+    attrs: Record<string, string>;
+    style: Record<string, string>;
+    classListSet: Set<string>;
+    children: FakeElement[];
+    parentNode: FakeElement | FakeDocument | null;
+    listeners: Record<string, Array<(e: FakeDomEvent) => void>>;
+    src: string;
+    alt: string;
+    title: string;
+    textContent: string;
+    disabled: boolean;
+    offsetWidth: number;
+    offsetHeight: number;
+    getAttribute(name: string): string | null;
+    setAttribute(name: string, value: string): void;
+    hasAttribute(name: string): boolean;
+    removeAttribute(name: string): void;
+    classList: { add(c: string): void; contains(c: string): boolean; remove(c: string): void };
+    appendChild(child: FakeElement): FakeElement;
+    remove(): void;
+    addEventListener(type: string, fn: (e: FakeDomEvent) => void): void;
+    closest(selector: string): FakeElement | null;
+    contains(el: FakeElement): boolean;
+  }
+
+  interface FakeDocument {
+    body: FakeElement;
+    listeners: Record<string, Array<(e: FakeDomEvent) => void>>;
+    createElement(tag: string): FakeElement;
+    addEventListener(type: string, fn: (e: FakeDomEvent) => void, _capture?: boolean): void;
+    removeEventListener(type: string, fn: (e: FakeDomEvent) => void): void;
+    querySelector(selector: string): FakeElement | null;
+    querySelectorAll(selector: string): FakeElement[];
+    dispatch(type: string, e: FakeDomEvent): void;
+  }
+
+  // Supports exactly the selectors getImageLightboxScript's own source
+  // uses: a tag name, [attr]/: not([attr]), and .class, ORed together
+  // with commas ('a, b'). Not a general CSS engine -- just enough to
+  // drive this one script's own delegation logic faithfully.
+  function matchesSimple(el: FakeElement, simple: string): boolean {
+    const tagMatch = simple.match(/^[a-zA-Z]+/);
+    if (tagMatch && el.tagName.toLowerCase() !== tagMatch[0].toLowerCase()) return false;
+    const classMatches = simple.match(/\.[\w-]+/g) || [];
+    for (const c of classMatches) if (!el.classListSet.has(c.slice(1))) return false;
+    const notMatches = simple.match(/:not\(\[([\w-]+)\]\)/g) || [];
+    for (const n of notMatches) {
+      const attr = /:not\(\[([\w-]+)\]\)/.exec(n)![1];
+      if (el.attrs[attr] !== undefined) return false;
+    }
+    const attrPresence = simple.replace(/:not\(\[[\w-]+\]\)/g, '').match(/\[([\w-]+)\]/g) || [];
+    for (const a of attrPresence) {
+      const attr = /\[([\w-]+)\]/.exec(a)![1];
+      if (el.attrs[attr] === undefined) return false;
+    }
+    return true;
+  }
+
+  function matches(el: FakeElement, selector: string): boolean {
+    return selector.split(',').some((s) => matchesSimple(el, s.trim()));
+  }
+
+  function makeFakeElement(tag: string): FakeElement {
+    const el: FakeElement = {
+      tagName: tag.toUpperCase(),
+      attrs: {},
+      style: {},
+      classListSet: new Set<string>(),
+      children: [],
+      parentNode: null,
+      listeners: {},
+      src: '',
+      alt: '',
+      title: '',
+      textContent: '',
+      disabled: false,
+      offsetWidth: 100,
+      offsetHeight: 40,
+      getAttribute(name) { return name in el.attrs ? el.attrs[name] : null; },
+      setAttribute(name, value) { el.attrs[name] = value; },
+      hasAttribute(name) { return name in el.attrs; },
+      removeAttribute(name) { delete el.attrs[name]; },
+      classList: undefined as unknown as FakeElement['classList'],
+      appendChild(child) { child.parentNode = el; el.children.push(child); return child; },
+      remove() {
+        if (el.parentNode && 'children' in el.parentNode) {
+          const idx = (el.parentNode as FakeElement).children.indexOf(el);
+          if (idx !== -1) (el.parentNode as FakeElement).children.splice(idx, 1);
+        }
+        el.parentNode = null;
+      },
+      addEventListener(type, fn) {
+        if (!el.listeners[type]) el.listeners[type] = [];
+        el.listeners[type].push(fn);
+      },
+      closest(selector) {
+        let cur: FakeElement | null = el;
+        while (cur) {
+          if (matches(cur, selector)) return cur;
+          cur = cur.parentNode && 'children' in cur.parentNode ? (cur.parentNode as FakeElement) : null;
+        }
+        return null;
+      },
+      contains(other) {
+        let cur: FakeElement | null = other;
+        while (cur) {
+          if (cur === el) return true;
+          cur = cur.parentNode && 'children' in cur.parentNode ? (cur.parentNode as FakeElement) : null;
+        }
+        return false;
+      },
+    };
+    el.classList = {
+      add: (c: string) => el.classListSet.add(c),
+      contains: (c: string) => el.classListSet.has(c),
+      remove: (c: string) => el.classListSet.delete(c),
+    };
+    // className is read by matchesSimple via classListSet directly, but
+    // the real DOM also lets code set `el.className = '...'` --
+    // getImageLightboxScript only ever uses el.className = 'x' (single
+    // class) for its own created elements, so mirror that one case.
+    Object.defineProperty(el, 'className', {
+      set(v: string) { el.classListSet = new Set(v.split(/\s+/).filter(Boolean)); },
+      get() { return Array.from(el.classListSet).join(' '); },
+    });
+    return el;
+  }
+
+  function walk(el: FakeElement, out: FakeElement[]): void {
+    out.push(el);
+    for (const c of el.children) walk(c, out);
+  }
+
+  function makeFakeDocument(): FakeDocument {
+    const body = makeFakeElement('body');
+    const doc: FakeDocument = {
+      body,
+      listeners: {},
+      createElement: (tag: string) => makeFakeElement(tag),
+      addEventListener(type, fn) {
+        if (!this.listeners[type]) this.listeners[type] = [];
+        this.listeners[type].push(fn);
+      },
+      removeEventListener(type, fn) {
+        if (!this.listeners[type]) return;
+        const idx = this.listeners[type].indexOf(fn);
+        if (idx !== -1) this.listeners[type].splice(idx, 1);
+      },
+      querySelector(selector) {
+        const all: FakeElement[] = [];
+        walk(body, all);
+        return all.find((el) => el !== body && matches(el, selector)) || null;
+      },
+      querySelectorAll(selector) {
+        const all: FakeElement[] = [];
+        walk(body, all);
+        return all.filter((el) => el !== body && matches(el, selector));
+      },
+      dispatch(type, e) {
+        for (const fn of (this.listeners[type] || []).slice()) fn(e);
+      },
+    };
+    return doc;
+  }
+
+  const opts = {
+    copyMenuItem: 'Copy Image',
+    copyDoneLabel: 'Copied',
+    copyFailedLabel: 'Copy failed',
+    copyUnsupportedLabel: 'Not supported',
+    copyToastDone: 'Copied to clipboard',
+    copyToastFailed: 'Copy failed',
+  };
+
+  function run(doc: FakeDocument) {
+    const fakeWindow = { innerWidth: 1024, innerHeight: 768 };
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    new Function('document', 'window', getImageLightboxScript(opts))(doc, fakeWindow);
+  }
+
+  it('emits a script that parses as JavaScript', () => {
+    assert.doesNotThrow(() => new Function(getImageLightboxScript(opts)));
+  });
+
+  it('marks a broken data-dita-src image with data-load-error, an alt/title failure message, and a red outline', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const img = makeFakeElement('img');
+    img.setAttribute('data-dita-src', 'diagram.png');
+    doc.dispatch('error', { target: img });
+    assert.strictEqual(img.getAttribute('data-load-error'), 'true');
+    assert.ok(img.alt.includes('diagram.png'));
+    assert.ok(img.title.includes('diagram.png'));
+    assert.strictEqual(img.style.outline, '3px solid red');
+  });
+
+  it('does not overwrite an image\'s own pre-existing alt text with the failure message', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const img = makeFakeElement('img');
+    img.setAttribute('data-dita-src', 'diagram.png');
+    img.setAttribute('alt', 'A real DITA <alt>');
+    doc.dispatch('error', { target: img });
+    // The script's guard reads via getAttribute('alt') and only assigns
+    // img.alt = msg when that's falsy -- asserting the .alt property was
+    // never touched (still its default) is the real signal that the
+    // guard actually short-circuited, not just that nothing called
+    // setAttribute('alt', ...) afterward (this fake element's .alt
+    // property and its 'alt' attribute aren't auto-reflected the way a
+    // real DOM element's are, so checking getAttribute alone wouldn't
+    // prove the assignment itself was skipped).
+    assert.strictEqual(img.alt, '', 'img.alt = msg should never have run');
+    assert.ok(img.title.includes('diagram.png'), 'title still gets the failure text even though alt is left alone');
+  });
+
+  it('ignores an error event whose target is not an IMG, or an IMG with no data-dita-src', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const div = makeFakeElement('div');
+    assert.doesNotThrow(() => doc.dispatch('error', { target: div }));
+    assert.strictEqual(div.getAttribute('data-load-error'), null);
+    const plainImg = makeFakeElement('img');
+    doc.dispatch('error', { target: plainImg });
+    assert.strictEqual(plainImg.getAttribute('data-load-error'), null);
+  });
+
+  it('clicking an eligible image opens the lightbox: an overlay + enlarged <img> appended to body, src/alt copied from the clicked image', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const img = makeFakeElement('img');
+    img.setAttribute('data-dita-src', 'diagram.png');
+    img.src = 'webview-resource://diagram.png';
+    img.alt = 'A diagram';
+    doc.body.appendChild(img);
+    doc.dispatch('click', { target: img, preventDefault() {} });
+    assert.strictEqual(doc.body.children.length, 2, 'the overlay should be appended alongside the clicked image');
+    const overlay = doc.body.children[1];
+    assert.strictEqual(overlay.children.length, 1);
+    const big = overlay.children[0];
+    assert.strictEqual(big.tagName, 'IMG');
+    assert.strictEqual(big.src, 'webview-resource://diagram.png');
+    assert.strictEqual(big.alt, 'A diagram');
+  });
+
+  it('clicking a broken (data-load-error) image does not open the lightbox', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const img = makeFakeElement('img');
+    img.setAttribute('data-dita-src', 'diagram.png');
+    img.setAttribute('data-load-error', 'true');
+    doc.body.appendChild(img);
+    doc.dispatch('click', { target: img, preventDefault() {} });
+    assert.strictEqual(doc.body.children.length, 1, 'only the original image, no overlay was added');
+  });
+
+  it('clicking a plain non-image element does nothing', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const div = makeFakeElement('div');
+    doc.body.appendChild(div);
+    assert.doesNotThrow(() => doc.dispatch('click', { target: div, preventDefault() {} }));
+    assert.strictEqual(doc.body.children.length, 1);
+  });
+
+  it('pressing Escape while the lightbox is open closes it (overlay removed from body)', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const img = makeFakeElement('img');
+    img.setAttribute('data-dita-src', 'a.png');
+    doc.body.appendChild(img);
+    doc.dispatch('click', { target: img, preventDefault() {} });
+    assert.strictEqual(doc.body.children.length, 2);
+    doc.dispatch('keydown', { key: 'Escape', preventDefault() {} });
+    assert.strictEqual(doc.body.children.length, 1, 'the overlay should have removed itself');
+  });
+
+  it('clicking the overlay background closes the lightbox', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const img = makeFakeElement('img');
+    img.setAttribute('data-dita-src', 'a.png');
+    doc.body.appendChild(img);
+    doc.dispatch('click', { target: img, preventDefault() {} });
+    const overlay = doc.body.children[1];
+    // The overlay's own click listener was registered directly on it
+    // (addEventListener('click', closeLightbox)), not via document
+    // delegation -- fire it the same way a real click would.
+    overlay.listeners.click[0]({ target: overlay });
+    assert.strictEqual(doc.body.children.length, 1);
+  });
+
+  it('ArrowRight/ArrowLeft step through every eligible image on the page, in document order, wrapping around', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const imgs = ['a.png', 'b.png', 'c.png'].map((src) => {
+      const img = makeFakeElement('img');
+      img.setAttribute('data-dita-src', src);
+      img.src = src;
+      doc.body.appendChild(img);
+      return img;
+    });
+    doc.dispatch('click', { target: imgs[0], preventDefault() {} });
+    const overlay = doc.body.children[doc.body.children.length - 1];
+    const big = overlay.children[0];
+    assert.strictEqual(big.src, 'a.png');
+    doc.dispatch('keydown', { key: 'ArrowRight', preventDefault() {} });
+    assert.strictEqual(big.src, 'b.png');
+    doc.dispatch('keydown', { key: 'ArrowRight', preventDefault() {} });
+    assert.strictEqual(big.src, 'c.png');
+    doc.dispatch('keydown', { key: 'ArrowRight', preventDefault() {} });
+    assert.strictEqual(big.src, 'a.png', 'wraps back around to the first image');
+    doc.dispatch('keydown', { key: 'ArrowLeft', preventDefault() {} });
+    assert.strictEqual(big.src, 'c.png', 'wraps the other direction too');
+  });
+
+  it('ArrowRight skips images marked data-load-error when stepping', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const a = makeFakeElement('img');
+    a.setAttribute('data-dita-src', 'a.png');
+    a.src = 'a.png';
+    const broken = makeFakeElement('img');
+    broken.setAttribute('data-dita-src', 'broken.png');
+    broken.setAttribute('data-load-error', 'true');
+    const c = makeFakeElement('img');
+    c.setAttribute('data-dita-src', 'c.png');
+    c.src = 'c.png';
+    doc.body.appendChild(a);
+    doc.body.appendChild(broken);
+    doc.body.appendChild(c);
+    doc.dispatch('click', { target: a, preventDefault() {} });
+    const overlay = doc.body.children[doc.body.children.length - 1];
+    const big = overlay.children[0];
+    doc.dispatch('keydown', { key: 'ArrowRight', preventDefault() {} });
+    assert.strictEqual(big.src, 'c.png', 'broken.png was never a lightbox candidate to begin with');
+  });
+
+  it('right-clicking an eligible image opens the copy-image menu with the supplied copyMenuItem label, positioned near the click', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const img = makeFakeElement('img');
+    img.setAttribute('data-dita-src', 'a.png');
+    doc.body.appendChild(img);
+    doc.dispatch('contextmenu', { target: img, clientX: 50, clientY: 60, preventDefault() {} });
+    const menu = doc.querySelector('.dita-img-ctxmenu');
+    assert.ok(menu, 'the context menu should have been appended to the document');
+    assert.strictEqual(menu!.children[0].textContent, 'Copy Image');
+  });
+
+  it('right-clicking a non-image element closes any open menu instead of opening a new one', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const img = makeFakeElement('img');
+    img.setAttribute('data-dita-src', 'a.png');
+    doc.body.appendChild(img);
+    doc.dispatch('contextmenu', { target: img, clientX: 0, clientY: 0, preventDefault() {} });
+    assert.ok(doc.querySelector('.dita-img-ctxmenu'));
+    const div = makeFakeElement('div');
+    doc.body.appendChild(div);
+    doc.dispatch('contextmenu', { target: div, clientX: 0, clientY: 0, preventDefault() {} });
+    assert.strictEqual(doc.querySelector('.dita-img-ctxmenu'), null);
+  });
+
+  it('clicking outside the open context menu closes it', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const img = makeFakeElement('img');
+    img.setAttribute('data-dita-src', 'a.png');
+    doc.body.appendChild(img);
+    doc.dispatch('contextmenu', { target: img, clientX: 0, clientY: 0, preventDefault() {} });
+    assert.ok(doc.querySelector('.dita-img-ctxmenu'));
+    const outside = makeFakeElement('div');
+    doc.body.appendChild(outside);
+    doc.dispatch('click', { target: outside, preventDefault() {} });
+    assert.strictEqual(doc.querySelector('.dita-img-ctxmenu'), null);
+  });
+
+  it('pressing Escape closes an open context menu', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const img = makeFakeElement('img');
+    img.setAttribute('data-dita-src', 'a.png');
+    doc.body.appendChild(img);
+    doc.dispatch('contextmenu', { target: img, clientX: 0, clientY: 0, preventDefault() {} });
+    assert.ok(doc.querySelector('.dita-img-ctxmenu'));
+    doc.dispatch('keydown', { key: 'Escape' });
+    assert.strictEqual(doc.querySelector('.dita-img-ctxmenu'), null);
+  });
+
+  it('embeds each opts string via JSON.stringify -- a value containing quotes/backslashes still round-trips exactly, rather than breaking the generated script', () => {
+    const tricky = { ...opts, copyMenuItem: 'Copy "the" image\\thing' };
+    const doc = makeFakeDocument();
+    const fakeWindow = { innerWidth: 1024, innerHeight: 768 };
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    assert.doesNotThrow(() => new Function('document', 'window', getImageLightboxScript(tricky))(doc, fakeWindow));
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    new Function('document', 'window', getImageLightboxScript(tricky))(doc, fakeWindow);
+    const img = makeFakeElement('img');
+    img.setAttribute('data-dita-src', 'a.png');
+    doc.body.appendChild(img);
+    doc.dispatch('contextmenu', { target: img, clientX: 0, clientY: 0, preventDefault() {} });
+    const menu = doc.querySelector('.dita-img-ctxmenu');
+    assert.strictEqual(menu!.children[0].textContent, 'Copy "the" image\\thing');
   });
 });
