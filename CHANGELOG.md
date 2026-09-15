@@ -2,6 +2,54 @@
 
 ## Unreleased
 
+## 1.0.9 (2026-09-15)
+
+### Features
+
+- **New Docsite (site) mode for the DITA Map preview.** A third way to read a map alongside Outline and Book mode: a collapsible, resizable sidebar tree (starting open, matching topic titles rather than the map's navtitle) with role/topic-type chips, one topic rendered per page instead of one long scroll, Previous/Next buttons sized to match the toolbar, and book-internal `xref` links jump straight to the right page. Page switches only re-parse the topic being shown, not the whole map.
+- **Full-book search in Docsite mode.** A dedicated search box in the sidebar (case-sensitive and regex toggles, refresh/clear buttons folded into the input row, sticky positioning, `Ctrl+F` redirected to it when hovering the sidebar) searches every topic in the book at once and highlights the match on jump, built on a new full-book search index module.
+- **"Compare with Git Version" — a rendered diff view**, not a raw text diff: renders both revisions through the normal DITA renderer and diffs the resulting HTML, with word-level highlighting, correct HEAD/HEAD~1 resolution, always-older-on-the-left ordering, narrow-panel stacking, and recursion into `parml`/`list`/`simpletable` and full table structures (not just `section`/`example`). Includes similarity scoring that works correctly for Chinese text.
+- **Find All References** — the reverse of Go to Definition. Right-click an `id`, a keydef's `keys`, or a `keyref`/`conref`/`href` itself and run Find All References (`Shift+F12`) to see every place a topic, element id, or key is used across the workspace.
+- **MathML formulas now render**, via the webview's native MathML Core support instead of being flattened to plain text, with a compatibility shim that expands `<mfenced>` (used by Oxygen's equation editor, but dropped from MathML Core) into explicit fence characters so brackets and `|absolute value|` bars no longer vanish from real formulas.
+- **`conref`/`conrefend` range references are now resolved.** Previously only the single element at `conref` was pulled in; the full run of siblings through `conrefend` is now resolved and rendered, matching Oxygen's behavior.
+- **`indexterm` now renders inline** as a small chip wherever it's authored, instead of being silently dropped — including instances declared inside `prolog`/`metadata`/`keywords`, which weren't being read at all before.
+- **Preview auto-refreshes when a referenced file changes on disk** (images, conref/conrefend targets, etc.), not only when the file you're previewing itself changes.
+- **Accessibility: ARIA roles and labels** added to toolbar controls and the outline tree.
+- **`Ctrl+K V` now opens the reading view**, matching VS Code's own Markdown "open preview to the side" shortcut.
+- **Image lightbox unified across topic, book, and site modes** — click to enlarge, arrow keys to step between images, right-click for a copy-to-clipboard menu (replacing an earlier always-visible toolbar copy button that shipped and was reverted in the same cycle).
+- Map/book: `topichead` now renders as a collapsible, non-clickable group header, and resource-only entries no longer appear in reading navigation; chapter numbering is now continuous across a `mapref`/submap boundary instead of restarting.
+- Map/book preview now persists font size, typeface, and page width per document, extending the persistence the topic preview already had.
+
+### Performance
+
+- Topic and book rendering is now memoized per file, so an edit only re-renders the parts of a book that actually changed and skips re-rendering off-screen book entries entirely.
+- Hidden webview panels no longer re-render while nothing is looking at them.
+- One file watcher is now shared per folder across every DITA-consuming feature, instead of each feature opening its own.
+- The map tree now refreshes when the map changes on disk, not only when it's saved from within VS Code.
+- `href` completion no longer blocks the extension host on every keystroke.
+
+### Bug Fixes
+
+- **Profiling highlight**: reverted an inline-profiling regression (the `clone`/line-height fix was itself wrong), switched to a real border for block-level highlights, and moved `li`/`ul`/`ol` highlighting onto an absolutely-positioned pseudo-element so it no longer crosses on wrapped lines or resizes list markers.
+- **Diagnostics**: stopped flagging content inside `<indexterm>`/`<relcolspec>`, and inside a map's own `<title>`, as unknown elements; stopped flagging real DITA `prolog`/`topicmeta` elements the same way.
+- **Diff panel**: images now resolve through the real `webview.asWebviewUri` instead of a broken path; word-level highlight round-trip and offset drift fixed; table column widths, malformed `colwidth` dot-notation, and `tgroup`/`colspec`/`entry` alignment now handled.
+- **Rendering**: default image scale now shrinks relative to the page rather than the image's own resolution; figure-to-caption spacing tightened; `msgph` now styles as a message variable placeholder instead of plain text; `indexterm` chips suppressed from Export as HTML output (they're a preview-only affordance).
+- **Keys/links**: `keyref`/`conref`/`href` Find References/Go to Definition now resolves from anywhere in a keydef, not just its `keys=` attribute; self-referencing conref (`#./id`) no longer flags as a missing target; the `./` same-document fragment marker is now normalized in one shared place instead of three separate ones; `findDitamapFiles` now recurses into ancestor subdirectories.
+- **i18n**: resolved zh-CN note-type label collisions and corrected the "trouble" note-type label.
+- **Webview chrome**: removed an incorrect bold font-weight override on the A-/A+ toolbar buttons; escaped `fileName` in the webview `<title>`; pinned `base-uri` in the Content-Security-Policy.
+- **Icons**: preview/map-preview/transform toolbar icons are now theme-aware; custom icon font metrics now match codicon's own convention.
+- **Paths**: rebased/relative `href`s and file paths now normalize correctly.
+
+### Reliability & Internal
+
+- Previously-silent `catch` blocks (including `asWebviewUri` failures) now log instead of swallowing errors.
+- `imageDimensionsCache` is now bounded with an LRU cap and cleared from a real `deactivate()` hook, closing an unbounded-memory-growth path.
+- Patched 5 known vulnerabilities in dev dependencies; updated `sharp` and `libvips` to 0.35.4 / 1.3.3.
+- CI now runs the `check:l10n` guard and typechecks all of `src` (10 files had previously been checked by nothing); a hand-written `sax` type shim that shadowed `@types/sax` was deleted.
+- Added `.gitattributes` to pin text files to LF, and fixed a Windows-only path-separator mismatch in the map/book test suite this surfaced.
+- Added a full DITA user-manual fixture set under `test-dita-file/manual/` for docsite/keyref/rebrand testing, and reorganized the legacy smoke-test fixtures under `test-dita-file/fixture/`; fixed a dead `product-model` keydef and a duplicate map id in the fixtures.
+- Expanded marketplace listing metadata (description, screenshots placeholder).
+
 ## 1.0.8 (2026-08-19)
 
 ### Bug Fixes

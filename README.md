@@ -7,9 +7,11 @@ A VS Code extension that renders **`.dita`** and **`.ditamap`** files as a forma
 ## Features
 
 - **DITA topic preview** (`.dita`) — rendered view with bidirectional scroll sync
-- **DITA Map preview** (`.ditamap`) — two modes:
+- **DITA Map preview** (`.ditamap`) — three modes:
   - **Outline (tree) view** — structured hierarchy of map entries with display names and navigation
   - **Book mode** — renders all referenced topics in sequence as a single reading flow
+  - **Docsite (site) mode** — one topic per page behind a collapsible, resizable sidebar tree, with Previous/Next navigation and full-book search (case-sensitive/regex, highlight-on-jump)
+- **Auto-refresh** — the preview re-renders automatically when a file it references (an image, a `conref`/`conrefend` target, …) changes on disk, not only when the previewed file itself changes
 - **Two-way preview toggle** — the same button/shortcut that opens a reading view switches back to the source editor when pressed inside the preview (the toolbar button becomes **Back to DITA Source**)
 - **Key and map-reference resolution** — `keyref` values resolve across folders by following the map's own references (`topicref`/`keydef`/`mapref` to other `.ditamap` files); nested and "all-in-one" maps are merged recursively with hrefs rebased onto the root map
 - **BookMap semantics** — chapter/part/appendix entries carry numbered role badges in document order (Chapter 1, Part I, Appendix A …, localized in zh-CN as 第 1 章 / 第 I 部分 / 附录 A); `<booktitle>` renders as a title page with the main title elevated and alternate titles as subtitles
@@ -20,6 +22,10 @@ A VS Code extension that renders **`.dita`** and **`.ditamap`** files as a forma
 - **Index term visibility** — `<indexterm>` (including nested primary/secondary/… levels, sibling sub-entries, and `index-see`/`index-see-also` cross-references) and `<indextermref>` render as small inline chips right where they're authored, in both topic preview and book mode. This is intentionally not a compiled, alphabetically-sorted back-of-book index page — sort order only makes sense for scripts with a stable alphabetic/stroke ordering, so a generated index would be meaningless for e.g. Chinese content; seeing each term inline works the same way regardless of language.
 - **Profiling / conditional-processing support** — content carrying `props`/`platform`/`product`/`audience`/`otherprops`/`base`/`importance`/`rev`/`status` is highlighted (toggleable via **Flags**) and can be hidden by value (**Filter**), matching Oxygen's own conditional-processing display; available both within topic content and, independently, at the ditamap `topicref` level in map/book view, where a topicref's profiling attributes cascade down to its descendant topicrefs
 - **Reltable and topicgroup support** — reltables are skipped from the tree; topicgroups render children without adding their own entry
+- **Compare with Git Version** — a rendered diff (not a raw text diff) between the working copy and any git revision (HEAD/HEAD~1 shortcuts or a picked revision), with word-level highlighting across paragraphs, lists, and full tables
+- **MathML rendering** — `<mathml>`/`<foreign>` formulas render natively in the preview, including an `<mfenced>` compatibility shim so bracket/absolute-value notation from Oxygen's equation editor displays correctly
+- **`conref`/`conrefend` range references** — the full run of elements from a `conref` target through its `conrefend` target resolves and renders, matching Oxygen's "reference to range end" behavior
+- **Accessibility** — ARIA roles and labels on toolbar controls and the outline tree
 - **Theme-aware** — automatically adapts background and border colors to the current VS Code theme
 - **Custom CSS support** — override or extend the default styling with an in-preview theme switcher
 - **DITA-OT Transform** — run formal publishing transforms (`html5`, `pdf`, `xhtml`, `markdown`) using a local DITA-OT installation with live log output, cancellable progress, CSS/DITAVAL support, and automatic injection of site-chrome enhancements (sidebar TOC, on-page navigation, code language labels, back-to-top, dark mode)
@@ -47,7 +53,7 @@ To add these yourself: open a representative `.dita`/`.ditamap` project, trigger
 
 **Method 3 — Command Palette:** With a `.dita` file open, press `Ctrl+Shift+P` and run **Open DITA Reading View**.
 
-**Method 4 — Shortcut:** With a `.dita` file focused, press `Ctrl+Shift+Alt+D`.
+**Method 4 — Shortcut:** With a `.dita` file focused, press `Ctrl+Shift+Alt+D`, or `Ctrl+K V` (matching VS Code's own Markdown "open preview to the side" convention).
 
 The preview opens in a new column beside your source editor.
 
@@ -65,9 +71,12 @@ The preview opens in a new column beside your source editor.
 
 > The same two-way toggle applies: inside the map reading view, the title button becomes **Back to DITA Map Source**.
 
-#### Outline Mode vs Book Mode
+#### Outline Mode vs Book Mode vs Docsite Mode
 
-The map preview opens in **Outline (tree) mode** by default, showing the map's hierarchical structure. Use the **Outline / Book** toggle in the toolbar to render all referenced topics inline as a continuous document, and click it again to return to the outline. A **reload button** (↻) in the toolbar re-renders the preview from the files on disk.
+The map preview opens in **Outline (tree) mode** by default, showing the map's hierarchical structure. A single toolbar toggle cycles Outline → Book → Docsite → Outline; its label always names the mode you're currently in. A **reload button** (↻) in the toolbar re-renders the preview from the files on disk.
+
+- **Book mode** renders all referenced topics inline as one continuous document.
+- **Docsite mode** renders one topic per page behind a collapsible, resizable sidebar tree — click a sidebar entry (or use the Previous/Next buttons) to switch pages, and use the sidebar's search box to search every topic in the book at once (case-sensitive/regex toggles, jump-to-match with highlight).
 
 Duplicate topics (same file referenced multiple times) are shown with a skip message rather than being re-rendered.
 
