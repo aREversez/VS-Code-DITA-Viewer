@@ -1449,6 +1449,13 @@ export interface DocsiteNavEntry {
  * included -- a resource-only <topichead> (unusual, but not invalid) is
  * skipped outright rather than surfaced as an empty group, same as a
  * resource-only real topic is skipped rather than surfaced as a page.
+ *
+ * The returned entries' depth values are COMPACTED, not copied straight
+ * from MapEntry.depth: skipping an entry (resource-only, a duplicate
+ * topic, a dropped childless hrefless entry) also promotes everything
+ * that survives underneath it by however many ancestors were skipped, so
+ * the output tree never has a surviving entry stranded one level deeper
+ * than a parent that no longer exists in it.
  */
 export function buildBookNavManifest(
   entries: MapEntry[],
@@ -1458,8 +1465,31 @@ export function buildBookNavManifest(
 ): DocsiteNavEntry[] {
   const seen = new Set<string>();
   const result: DocsiteNavEntry[] = [];
+  // Depth compaction: entries carry their ORIGINAL depth from the full,
+  // unfiltered map structure (collectMapEntries) -- but a skipped entry
+  // (resource-only, a duplicate reference, or a childless hrefless entry
+  // dropped outright below) must not leave a "hole" that pushes its own
+  // surviving descendants one level deeper in the sidebar tree than they
+  // should sit. survivingAncestors holds the ORIGINAL depth of every
+  // still-open ancestor that DID make it into the manifest, in nesting
+  // order; its length at any point is exactly the entry now being
+  // considered own compacted depth (no surviving ancestor open above it
+  // -> depth 0; one -> depth 1; and so on). A skipped entry is simply
+  // never pushed onto it, so whatever survives right after it re-parents
+  // to the next real ancestor still on the stack -- e.g. a topichead
+  // marked resource-only that would otherwise have grouped three real
+  // topics underneath it: those three now surface as depth-0 siblings
+  // instead of stranded, unreachable depth-1 orphans with no depth-0
+  // parent left in the output tree for buildSiteNavTree
+  // (renderSiteNavHtml) to nest them under.
+  const survivingAncestors: number[] = [];
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
+    while (survivingAncestors.length > 0 && survivingAncestors[survivingAncestors.length - 1] >= entry.depth) {
+      survivingAncestors.pop();
+    }
+    const depth = survivingAncestors.length;
+
     if (entry.resourceOnly) continue; // exists purely to be pulled in via keyref/conref elsewhere, never its own page
     if (!entry.href) {
       // No topic file of its own -- either a <topichead> (which by
@@ -1471,16 +1501,19 @@ export function buildBookNavManifest(
       // baseType/tagName carried through), so they're told apart the only
       // way that's actually meaningful for the sidebar: does this entry
       // have anything nested under it. A topichead grouping real
-      // topicrefs has entries[i+1..] at a deeper depth right after it and
-      // becomes a group header (DocsiteNavEntry.isGroup); a leaf
-      // key-only topicref has nothing deeper following it and is
-      // dropped, exactly as it always was before isGroup existed --
-      // showing an unclickable, childless "V1.0.0" row in the reading
-      // sidebar for what is really just a keyref variable would be pure
-      // noise, not navigation.
+      // topicrefs has entries[i+1..] at a deeper ORIGINAL depth right
+      // after it (compaction doesn't change whether one entry nests
+      // under another in the source map, only what depth number a
+      // surviving entry is labeled with) and becomes a group header
+      // (DocsiteNavEntry.isGroup); a leaf key-only topicref has nothing
+      // deeper following it and is dropped, exactly as it always was
+      // before isGroup existed -- showing an unclickable, childless
+      // "V1.0.0" row in the reading sidebar for what is really just a
+      // keyref variable would be pure noise, not navigation.
       const hasChildren = i + 1 < entries.length && entries[i + 1].depth > entry.depth;
       if (hasChildren) {
-        result.push({ title: entry.displayName, depth: entry.depth, role: entry.role, isGroup: true });
+        result.push({ title: entry.displayName, depth, role: entry.role, isGroup: true });
+        survivingAncestors.push(entry.depth);
       }
       continue;
     }
@@ -1493,7 +1526,8 @@ export function buildBookNavManifest(
       if (realTitle) title = realTitle;
     }
     const topicType = resolveTopicType ? resolveTopicType(entry.href) : undefined;
-    result.push({ absPath, title, depth: entry.depth, role: entry.role, topicType });
+    result.push({ absPath, title, depth, role: entry.role, topicType });
+    survivingAncestors.push(entry.depth);
   }
   return result;
 }

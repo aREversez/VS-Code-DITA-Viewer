@@ -1000,7 +1000,7 @@ describe('resolveBookTopicPath / buildBookNavManifest (docsite nav manifest)', (
     assert.strictEqual(manifest.length, 1);
   });
 
-  it('a resource-only hrefless entry never becomes a group header, even with real descendants nested under it', () => {
+  it('a resource-only hrefless entry never becomes a group header, even with real descendants nested under it -- and its surviving child is promoted up to depth 0, not stranded at depth 1', () => {
     const entries: MapEntry[] = [
       { href: undefined, displayName: 'Hidden Group', displayNameExplicit: true, depth: 0, resourceOnly: true },
       { href: 'topics/child.dita', displayName: 'Child', displayNameExplicit: true, depth: 1 },
@@ -1008,7 +1008,69 @@ describe('resolveBookTopicPath / buildBookNavManifest (docsite nav manifest)', (
     const manifest = buildBookNavManifest(entries, docDir);
     assert.strictEqual(manifest.length, 1, 'the resource-only group header itself is skipped, but its child is not resource-only and still shows');
     assert.strictEqual(manifest[0].title, 'Child');
-    assert.strictEqual(manifest[0].depth, 1, 'depth is untouched -- the child keeps its original nesting level even though its group header did not survive');
+    assert.strictEqual(manifest[0].depth, 0, 'depth is compacted -- with no surviving ancestor left in the manifest, the child is promoted to depth 0 rather than stranded at its original depth 1');
+  });
+
+  // --- depth compaction (a skipped ancestor must not strand its surviving descendants one level too deep) ---
+
+  it('promotes every descendant of a skipped resource-only group by exactly one level, keeping siblings at their own relative depths', () => {
+    const entries: MapEntry[] = [
+      { href: undefined, displayName: 'Hidden Group', displayNameExplicit: true, depth: 0, resourceOnly: true },
+      { href: 'topics/a.dita', displayName: 'A', displayNameExplicit: true, depth: 1 },
+      { href: 'topics/a1.dita', displayName: 'A1', displayNameExplicit: true, depth: 2 },
+      { href: 'topics/b.dita', displayName: 'B', displayNameExplicit: true, depth: 1 },
+    ];
+    const manifest = buildBookNavManifest(entries, docDir);
+    assert.strictEqual(manifest.length, 3);
+    assert.deepStrictEqual(manifest.map((e) => [e.title, e.depth]), [
+      ['A', 0],
+      ['A1', 1],
+      ['B', 0],
+    ]);
+  });
+
+  it('promotes descendants by two levels when two nested resource-only ancestors are both skipped', () => {
+    const entries: MapEntry[] = [
+      { href: undefined, displayName: 'Outer', displayNameExplicit: true, depth: 0, resourceOnly: true },
+      { href: undefined, displayName: 'Inner', displayNameExplicit: true, depth: 1, resourceOnly: true },
+      { href: 'topics/leaf.dita', displayName: 'Leaf', displayNameExplicit: true, depth: 2 },
+    ];
+    const manifest = buildBookNavManifest(entries, docDir);
+    assert.strictEqual(manifest.length, 1);
+    assert.strictEqual(manifest[0].title, 'Leaf');
+    assert.strictEqual(manifest[0].depth, 0, 'both ancestors were skipped, so Leaf is promoted all the way to depth 0');
+  });
+
+  it('does not promote a surviving sibling that sits alongside (not under) a skipped entry', () => {
+    const entries: MapEntry[] = [
+      { href: 'topics/kept-parent.dita', displayName: 'Kept Parent', displayNameExplicit: true, depth: 0 },
+      { href: undefined, displayName: 'Hidden Group', displayNameExplicit: true, depth: 1, resourceOnly: true },
+      { href: 'topics/child.dita', displayName: 'Child', displayNameExplicit: true, depth: 2 },
+    ];
+    const manifest = buildBookNavManifest(entries, docDir);
+    assert.strictEqual(manifest.length, 2);
+    assert.deepStrictEqual(manifest.map((e) => [e.title, e.depth]), [
+      ['Kept Parent', 0],
+      // Child's own immediate parent (Hidden Group, depth 1) was skipped,
+      // but Kept Parent (depth 0) is still a surviving ancestor above it --
+      // Child is promoted only past the one skipped level, landing at
+      // depth 1 (nested under Kept Parent), not all the way to depth 0.
+      ['Child', 1],
+    ]);
+  });
+
+  it('promotes descendants past a deduplicated (already-seen) topic the same way it does past a resource-only one', () => {
+    const entries: MapEntry[] = [
+      { href: 'topics/dup.dita', displayName: 'First occurrence', displayNameExplicit: true, depth: 0 },
+      { href: 'topics/dup.dita', displayName: 'Second occurrence (dup)', displayNameExplicit: true, depth: 0 },
+      { href: 'topics/child.dita', displayName: 'Child of the duplicate', displayNameExplicit: true, depth: 1 },
+    ];
+    const manifest = buildBookNavManifest(entries, docDir);
+    assert.strictEqual(manifest.length, 2, 'the duplicate itself is dropped, its child is not');
+    assert.deepStrictEqual(manifest.map((e) => [e.title, e.depth]), [
+      ['First occurrence', 0],
+      ['Child of the duplicate', 0],
+    ]);
   });
 
   it('calls resolveTopicType for every entry with a real href and stores its return as topicType, regardless of whether role is also present', () => {
