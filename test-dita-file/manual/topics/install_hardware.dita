@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<task id="install_hardware" xml:lang="zh-CN">
+  <title>安装主机</title>
+  <shortdesc>按步骤完成主机的台面摆放或墙面固定，并连接外设接口。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>安装主机</indexterm>
+        <indexterm>壁挂</indexterm>
+        <indexterm>摆放</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <taskbody>
+    <context>
+      <p>安装过程约需 5 分钟。请先完成 <xref href="before_install.dita"/> 中的准备工作。</p>
+    </context>
+    <steps>
+<step>
+        <cmd>撕除主机屏幕与背面的保护膜。</cmd>
+      </step>
+      <step>
+        <cmd>选择固定方式。</cmd>
+      <choices>
+          <choice>平放：将主机置于平整台面，确保底部四点全部接触。</choice>
+          <choice>壁挂：先安装壁挂支架，参见 <xref href="wall_mount.dita"/>，再将主机沿导轨卡入支架并下压锁止。</choice>
+        </choices>
+      </step>
+        <step>
+        <cmd>将网线一端插入主机背面 <uicontrol>LAN</uicontrol> 口，另一端接入路由器。</cmd>
+      <info>
+          <note type="tip">暂时没有网线也可跳过本步，初始化时改用 Wi-Fi。</note>
+        </info>
+      </step>
+        <step>
+        <cmd>连接电源：将电源适配器输出线接入主机背面 <uicontrol>DC 12V</uicontrol> 口。</cmd>
+      </step>
+      <step>
+        <cmd>（可选）将 USB 外设（如摄像头）接入背面 <uicontrol>USB-A</uicontrol> 口。</cmd>
+      </step>
+
+    </steps>
+    <result>
+<p>主机固定完毕，接口连接到位，环形氛围灯将在通电后亮起。</p>
+    </result>
+    <example>
+<note type="caution"><p>卡入壁挂支架时如遇明显阻力，请勿硬压；先检查支架方向是否正确。</p></note>
+    </example>
+    <postreq>
+<p>为主机通电：<xref href="connect_power.dita"/>。</p>
+    </postreq>
+  </taskbody>
+</task>

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<task id="reset_device" xml:lang="zh-CN">
+  <title>恢复出厂设置</title>
+  <shortdesc>将主机恢复到出厂状态，清除本机全部配置。用于转卖、故障恢复或重新规划家庭结构。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>恢复出厂</indexterm>
+        <indexterm>重置</indexterm>
+        <indexterm>数据清除</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <taskbody>
+    <prereq>
+<note type="warning"><p>恢复出厂设置将删除本机所有设备配对、场景、自动化与本地数据，且不可撤销。恢复前请先完成备份（<xref href="backup_restore.dita"/>）。</p></note>
+    </prereq>
+    <context>
+      <p>有两种恢复方式，按可操作性选择：</p>
+    </context>
+    <steps>
+<step>
+        <cmd>优先使用屏幕菜单恢复。</cmd>
+      <info>
+          <p>路径：<menucascade><uicontrol>设置</uicontrol><uicontrol>系统</uicontrol><uicontrol>恢复出厂</uicontrol></menucascade>，按提示输入屏幕显示的确认码。</p>
+        </info>
+      </step>
+        <step>
+        <cmd>主机无法进入系统时，使用物理按键恢复。</cmd>
+      <choices>
+          <choice>长按主机底部 <uicontrol>Reset</uicontrol> 针孔键 8 秒，灯环转红色快闪后松开。</choice>
+          <choice>听到提示音后等待主机自动重启并进入初始化向导。</choice>
+        </choices>
+      </step>
+        <step>
+        <cmd>恢复完成后，主机回到首次开机状态（<xref href="first_boot.dita"/>）。</cmd>
+      </step>
+
+    </steps>
+    <result>
+<p>主机进入初始化向导，本机数据已清空。</p>
+    </result>
+    <example>
+<note type="important"><p>云端备份不受恢复出厂影响；如需彻底删除云端数据，请在手机应用中操作，参见 <xref href="privacy_protection.dita"/>。</p></note>
+    </example>
+  </taskbody>
+</task>

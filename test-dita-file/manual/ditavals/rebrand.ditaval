@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  rebrand.ditaval — 换品牌版本条件处理文件
+  - 剔除品牌 A 专属正文段落（product="brandA"）
+  - 保留品牌 B 专属正文段落（product="brandB"）
+  - 文本品牌替换由 rebrand.ditamap 的 keydef/conkeyref 完成，本文件只处理
+    无法用 key 表达的品牌专属段落
+-->
+<val>
+  <prop action="exclude" att="audience" val="developer"/>
+  <prop action="exclude" att="rev" val="planned"/>
+  <prop action="exclude" att="product" val="brandA"/>
+  <prop action="include" att="product" val="brandB"/>
+</val>

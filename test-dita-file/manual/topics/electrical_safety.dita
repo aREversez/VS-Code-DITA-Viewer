@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE reference PUBLIC "-//OASIS//DTD DITA Reference//EN" "reference.dtd">
+<reference id="electrical_safety" xml:lang="zh-CN">
+  <title>用电安全</title>
+  <shortdesc>本主题汇总用电相关的强制性要求与建议，帮助您避免触电、短路等电气风险。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>用电安全</indexterm>
+        <indexterm>电源</indexterm>
+        <indexterm>触电</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <refbody>
+<section>
+      <title>电源使用要求</title>
+    <ul>
+      <li>仅使用标称输出 12 V DC / 2 A 的原装电源适配器。</li>
+      <li>电源插座应安装在易于插拔的位置，作为主要断电手段。</li>
+      <li>不要将适配器与电暖器、微波炉等大功率设备共用同一插排。</li>
+      <li>拔插头时应握住插头本体，切勿拉扯电源线。</li>
+    </ul>
+    </section>    <section>
+      <title>接线操作规范</title>
+    <p>进行任何接线（网线、USB 外设、壁挂走线）之前：</p>
+    <ol>
+      <li>关闭主机并拔下电源适配器。</li>
+      <li>确认双手干燥，操作环境无积水。</li>
+      <li>完成接线并检查接口插紧后，再恢复供电。</li>
+    </ol>
+<note type="warning"><p>雷雨天气建议拔下电源与网线，防止浪涌损坏设备。</p></note>
+    </section>    <section>
+      <title>异常情况处置</title>
+    <table id="electrical-abnormal">
+      <title>电气异常处置方法</title>
+      <tgroup cols="2">
+        <thead><row><entry>现象</entry><entry>处置</entry></row></thead>
+        <tbody>
+          <row><entry>插头或线材发烫</entry><entry>立即停止使用，更换插座并联系售后</entry></row>
+          <row><entry>适配器有烧焦味</entry><entry>断电，勿再通电，参见 <xref href="contact_support.dita"/> 报修</entry></row>
+          <row><entry>跳闸后主机无法启动</entry><entry>检查适配器与插座，参见 <xref href="ts_power.dita"/></entry></row>
+        </tbody>
+      </tgroup>
+    </table>
+    </section>
+  </refbody>
+</reference>

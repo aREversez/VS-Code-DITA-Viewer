@@ -4,8 +4,12 @@ import {
   collectMapSymbols,
   collectRefEntries,
   collectTopicSymbols,
+  collectUnknownElements,
   findConrefTargetOffset,
+  findEnclosingKeydefKeys,
+  findIdAttrAt,
   findKeyDefinitionOffset,
+  findKeysAttrAt,
   findRefAttrAt,
   findUnclosedTag,
   getAttributesForTag,
@@ -15,8 +19,11 @@ import {
   getMapRefName,
   isExternalRef,
   offsetToLineCol,
+  splitRefFragment,
+  stripSameDocumentFragmentPrefix,
 } from '../../language/ditaLanguageUtils';
 import { parseDita, parseDitamap } from '../../parser/ditaParser';
+import { DitaNode } from '../../parser/domTypes';
 import { collectMapEntries, createBookRoleLabeler } from '../../render/mapTypeMap';
 
 describe('ditaLanguageUtils', () => {
@@ -111,6 +118,57 @@ describe('ditaLanguageUtils', () => {
     });
   });
 
+  describe('stripSameDocumentFragmentPrefix', () => {
+    it('strips a leading "./" marker', () => {
+      assert.strictEqual(stripSameDocumentFragmentPrefix('./note_xxx'), 'note_xxx');
+      assert.strictEqual(stripSameDocumentFragmentPrefix('./t2/p1'), 't2/p1');
+    });
+
+    it('leaves fragments without the marker unchanged', () => {
+      assert.strictEqual(stripSameDocumentFragmentPrefix('note_xxx'), 'note_xxx');
+      assert.strictEqual(stripSameDocumentFragmentPrefix('t2/p1'), 't2/p1');
+      assert.strictEqual(stripSameDocumentFragmentPrefix(''), '');
+    });
+  });
+
+  describe('splitRefFragment', () => {
+    it('splits the standard two-part form into topic scope and element id', () => {
+      assert.deepStrictEqual(splitRefFragment('db_overview/shared_note'), {
+        topicId: 'db_overview',
+        elementId: 'shared_note',
+      });
+    });
+
+    it('treats a one-part fragment as the id itself, with no topic scope', () => {
+      assert.deepStrictEqual(splitRefFragment('shared_note'), {
+        topicId: undefined,
+        elementId: 'shared_note',
+      });
+    });
+
+    it('normalizes the "./" same-document shorthand before splitting', () => {
+      assert.deepStrictEqual(splitRefFragment('./shared_note'), {
+        topicId: undefined,
+        elementId: 'shared_note',
+      });
+      assert.deepStrictEqual(splitRefFragment('./t2/p1'), { topicId: 't2', elementId: 'p1' });
+    });
+
+    it('returns an empty element id for an empty fragment', () => {
+      assert.deepStrictEqual(splitRefFragment(''), { topicId: undefined, elementId: '' });
+    });
+
+    it('yields the element id, not the topic id, for the form conrefs are actually written in', () => {
+      // The regression this helper exists to prevent: find-references used to
+      // take segment [0] of a "topicId/elementId" fragment and compare it
+      // against an id="..." value, so the two could never be equal and every
+      // cross-file conref was dropped from the results.
+      const { elementId } = splitRefFragment('db_overview/shared_note');
+      assert.strictEqual(elementId, 'shared_note');
+      assert.notStrictEqual(elementId, 'db_overview');
+    });
+  });
+
   describe('findConrefTargetOffset', () => {
     const text = '<topic id="t1"><body><p id="p1">x</p></body></topic><topic id="t2"><p id="p1">y</p></topic>';
 
@@ -128,6 +186,22 @@ describe('ditaLanguageUtils', () => {
       assert.strictEqual(findConrefTargetOffset(text, 'missing'), -1);
       assert.strictEqual(findConrefTargetOffset(text, 't1/missing'), -1);
     });
+
+    it('resolves the "./elementId" same-document shorthand instead of treating "." as a literal (unmatchable) topic id', () => {
+      const selfRefText = '<topic id="t1"><body><note id="note_xxx">x</note></body></topic>';
+      const off = findConrefTargetOffset(selfRefText, './note_xxx');
+      assert.ok(off >= 0, 'should find note_xxx despite the "./" prefix');
+      assert.ok(selfRefText.substring(off).startsWith('id="note_xxx"'));
+    });
+
+    it('resolves the "./topicId/elementId" same-document shorthand for a topic-scoped fragment, not just the bare-id case', () => {
+      // Before stripping the "./" prefix up front, splitting on the FIRST
+      // "/" in "./t2/p1" put "." in topicId (already handled) but folded
+      // the rest -- "t2/p1" -- into a single, unmatchable elementId instead
+      // of recognizing "t2" as the topic scope.
+      const off = findConrefTargetOffset(text, './t2/p1');
+      assert.ok(off > text.indexOf('id="t2"'), 'should resolve p1 scoped to topic t2, not search for a literal "t2/p1" id');
+    });
   });
 
   describe('collectIds / offsetToLineCol', () => {
@@ -140,6 +214,103 @@ describe('ditaLanguageUtils', () => {
       assert.deepStrictEqual(offsetToLineCol(text, 0), { line: 0, col: 0 });
       assert.deepStrictEqual(offsetToLineCol(text, 4), { line: 1, col: 1 });
       assert.deepStrictEqual(offsetToLineCol(text, 6), { line: 2, col: 0 });
+    });
+  });
+
+  describe('findIdAttrAt', () => {
+    const text = '<topic id="intro"><p id="p1">x</p></topic>';
+
+    it('returns the id when the offset is inside the value', () => {
+      const off = text.indexOf('"intro"') + 3; // middle of "intro"
+      assert.deepStrictEqual(findIdAttrAt(text, off)?.id, 'intro');
+    });
+
+    it('matches at both the start and end boundary of the value', () => {
+      const start = text.indexOf('intro');
+      const end = start + 'intro'.length;
+      assert.strictEqual(findIdAttrAt(text, start)?.id, 'intro');
+      assert.strictEqual(findIdAttrAt(text, end)?.id, 'intro');
+    });
+
+    it('returns undefined outside any id value', () => {
+      assert.strictEqual(findIdAttrAt(text, 0), undefined);
+      assert.strictEqual(findIdAttrAt(text, text.indexOf('<p')), undefined);
+    });
+
+    it('finds the second id, not just the first', () => {
+      const off = text.indexOf('"p1"') + 2;
+      assert.strictEqual(findIdAttrAt(text, off)?.id, 'p1');
+    });
+  });
+
+  describe('findKeysAttrAt', () => {
+    const text = '<keydef keys="alpha beta gamma" href="a.dita"/>';
+
+    it('returns just the single token the offset lands on, not the whole list', () => {
+      const betaStart = text.indexOf('beta');
+      assert.strictEqual(findKeysAttrAt(text, betaStart)?.key, 'beta');
+      assert.strictEqual(findKeysAttrAt(text, betaStart + 2)?.key, 'beta');
+    });
+
+    it('resolves the first and last token correctly (boundary check)', () => {
+      assert.strictEqual(findKeysAttrAt(text, text.indexOf('alpha'))?.key, 'alpha');
+      const gammaStart = text.indexOf('gamma');
+      assert.strictEqual(findKeysAttrAt(text, gammaStart + 'gamma'.length)?.key, 'gamma');
+    });
+
+    it('returns undefined when the offset lands on the whitespace between tokens', () => {
+      const text2 = '<keydef keys="alpha  beta" href="a.dita"/>'; // two spaces: a genuine interior gap position exists
+      const gapOffset = text2.indexOf('alpha') + 'alpha'.length + 1; // strictly inside the 2-space gap
+      assert.strictEqual(findKeysAttrAt(text2, gapOffset), undefined);
+    });
+
+    it('returns undefined for an unrelated keys-less attribute value', () => {
+      assert.strictEqual(findKeysAttrAt(text, text.indexOf('a.dita')), undefined);
+    });
+
+    it('returns undefined when there is no keys attribute at all', () => {
+      assert.strictEqual(findKeysAttrAt('<topicref href="a.dita"/>', 5), undefined);
+    });
+  });
+
+  describe('findEnclosingKeydefKeys', () => {
+    it('finds the key(s) when the cursor is on the href, not the keys attribute itself', () => {
+      const text = '<keydef keys="product_name" href="a.dita"/>';
+      const hrefOffset = text.indexOf('a.dita');
+      assert.deepStrictEqual(findEnclosingKeydefKeys(text, hrefOffset)?.keys, ['product_name']);
+    });
+
+    it('finds the key(s) when the cursor is on a nested <keyword> display text -- the case a user unfamiliar with the extension is likely to click', () => {
+      const text = '<keydef keys="product_name"><topicmeta><keywords><keyword>Acme Widget</keyword></keywords></topicmeta></keydef>';
+      const keywordTextOffset = text.indexOf('Acme Widget') + 2;
+      assert.deepStrictEqual(findEnclosingKeydefKeys(text, keywordTextOffset)?.keys, ['product_name']);
+    });
+
+    it('returns every alias when a keydef declares multiple keys', () => {
+      const text = '<keydef keys="a b c" href="x.dita"/>';
+      const hrefOffset = text.indexOf('x.dita');
+      assert.deepStrictEqual(findEnclosingKeydefKeys(text, hrefOffset)?.keys, ['a', 'b', 'c']);
+    });
+
+    it('returns undefined outside any keydef element', () => {
+      const text = '<map><keydef keys="a" href="x.dita"/></map>';
+      assert.strictEqual(findEnclosingKeydefKeys(text, 0), undefined); // on <map>, before the keydef
+      const afterEnd = text.indexOf('</map>') + 3;
+      assert.strictEqual(findEnclosingKeydefKeys(text, afterEnd), undefined);
+    });
+
+    it('does not treat a DIFFERENT, later keydef as the enclosing one', () => {
+      const text = '<map><keydef keys="first" href="a.dita"/><keydef keys="second" href="b.dita"/></map>';
+      const secondHrefOffset = text.indexOf('b.dita');
+      assert.deepStrictEqual(findEnclosingKeydefKeys(text, secondHrefOffset)?.keys, ['second']);
+    });
+
+    it('handles a non-self-closing keydef with a closing tag', () => {
+      const text = '<keydef keys="k1"><topicmeta><keywords><keyword>Label</keyword></keywords></topicmeta></keydef><p>outside</p>';
+      const insideOffset = text.indexOf('Label');
+      const outsideOffset = text.indexOf('outside');
+      assert.deepStrictEqual(findEnclosingKeydefKeys(text, insideOffset)?.keys, ['k1']);
+      assert.strictEqual(findEnclosingKeydefKeys(text, outsideOffset), undefined);
     });
   });
 
@@ -429,6 +600,247 @@ describe('ditaLanguageUtils', () => {
         entries.map((e) => e.role),
         ['第 1 章', 'Appendix!'],
       );
+    });
+  });
+
+  describe('collectUnknownElements', () => {
+    it('flags an element with no known tag name and no @class specialization', () => {
+      const xml = `<topic id="t1"><title>T</title><body><mistyped-tag>x</mistyped-tag></body></topic>`;
+      const doc = parseDita(xml);
+      const unknown = collectUnknownElements(doc.root);
+      assert.strictEqual(unknown.length, 1);
+      assert.strictEqual(unknown[0].tagName, 'mistyped-tag');
+    });
+
+    it('does not flag standard DITA elements', () => {
+      const xml = `<concept id="c1"><title>T</title><conbody>
+        <p>text</p>
+        <note type="warning">careful</note>
+        <ul><li>one</li><li>two</li></ul>
+      </conbody></concept>`;
+      const doc = parseDita(xml);
+      assert.deepStrictEqual(collectUnknownElements(doc.root), []);
+    });
+
+    it('does not flag a specialized element whose @class resolves it to a known base type', () => {
+      // A specialization vocabulary can use an arbitrary tag name as long as
+      // @class states what it specializes -- parseBaseType() in
+      // ditaParser.ts falls back to this when the tag name itself is not in
+      // the standard map, and this has to agree with that or every real
+      // specialized document would light up as "unknown".
+      const xml = `<topic id="t1"><title>T</title><body>
+        <my-custom-para class="- topic/p ">hello</my-custom-para>
+      </body></topic>`;
+      const doc = parseDita(xml);
+      assert.deepStrictEqual(collectUnknownElements(doc.root), []);
+    });
+
+    it('does not descend into <mathml> content, which is deliberately non-DITA markup', () => {
+      // mathml resolves to topic/foreign (see standardTagMap.ts), whose
+      // renderer serializes its children as raw markup without consulting
+      // each one's own baseType -- see BASE_TYPE_RENDERERS['topic/foreign']
+      // in baseTypeMap.ts. Every tag under it (mi, mo, mrow, ...) correctly
+      // has no DITA baseType; that is not a typo to report.
+      const xml = `<topic id="t1"><title>T</title><body>
+        <p><mathml><mrow><mi>x</mi><mo>+</mo><mi>y</mi></mrow></mathml></p>
+      </body></topic>`;
+      const doc = parseDita(xml);
+      assert.deepStrictEqual(collectUnknownElements(doc.root), []);
+    });
+
+    it('still flags a genuine typo alongside unrelated <mathml> content in the same document', () => {
+      // The <mathml> skip must be scoped to that one subtree, not something
+      // that quietly suppresses every other diagnostic once any foreign
+      // content appears anywhere in the document.
+      const xml = `<topic id="t1"><title>T</title><body>
+        <p><mathml><mi>x</mi></mathml></p>
+        <bogus-tag>oops</bogus-tag>
+      </body></topic>`;
+      const doc = parseDita(xml);
+      const unknown = collectUnknownElements(doc.root);
+      assert.strictEqual(unknown.length, 1);
+      assert.strictEqual(unknown[0].tagName, 'bogus-tag');
+    });
+
+    it('does not flag real DITA prolog elements that simply have no entry of their own in standardTagMap.ts', () => {
+      // Regression test: standardTagMap.ts has no direct entry for author,
+      // critdate, metadata, audience or keywords -- only specialized
+      // elements that happen to resolve to the same base types (see
+      // exportanchors -> topic/keywords, change-historylist ->
+      // topic/metadata) do. This used to mean a completely ordinary
+      // <prolog> lit this diagnostic up on every one of these, even though
+      // topic/prolog's own renderer (baseTypeMap.ts) already suppresses
+      // its entire subtree unconditionally except for top-level indexterm
+      // chips -- an unmapped tag name in here causes no silent content
+      // loss, the reason this diagnostic exists in the first place.
+      const xml = `<topic id="t1"><title>T</title>
+        <prolog>
+          <author>Jane</author>
+          <critdate value="2024-01-01"/>
+          <metadata>
+            <audience type="user"/>
+            <keywords><keyword>foo</keyword><indexterm>bar</indexterm></keywords>
+          </metadata>
+        </prolog>
+        <body><p>x</p></body>
+      </topic>`;
+      const doc = parseDita(xml);
+      assert.deepStrictEqual(collectUnknownElements(doc.root), []);
+    });
+
+    it('still flags a genuine typo outside <prolog>, even in a document whose prolog has unmapped elements', () => {
+      const xml = `<topic id="t1"><title>T</title>
+        <prolog><author>Jane</author></prolog>
+        <body><bogus-tag>oops</bogus-tag></body>
+      </topic>`;
+      const doc = parseDita(xml);
+      const unknown = collectUnknownElements(doc.root);
+      assert.strictEqual(unknown.length, 1);
+      assert.strictEqual(unknown[0].tagName, 'bogus-tag');
+    });
+
+    it('does not flag <indexterm> inside a map topicref\'s <topicmeta><keywords>', () => {
+      // Regression test, map-side counterpart of the prolog one above:
+      // mapTagMap.ts has no entry for indexterm (only the topic-side
+      // tag map does), even though DITA maps reuse <keywords> verbatim
+      // inside <topicmeta> and it is valid to nest an indexterm there.
+      // map/topicmeta's renderer (mapTypeMap.ts) also returns '' for its
+      // entire subtree unconditionally, extracting only navtitle/keyword
+      // text via a separate getNodeText() call -- same shape as
+      // topic/prolog, one level up, for maps.
+      const xml = `<map><title>T</title>
+        <topicref href="a.dita">
+          <topicmeta><keywords><keyword>k1</keyword><indexterm>idx1</indexterm></keywords></topicmeta>
+        </topicref>
+      </map>`;
+      const doc = parseDitamap(xml);
+      assert.deepStrictEqual(collectUnknownElements(doc.root), []);
+    });
+
+    it('does not flag <ph> inside a map <title>, where a keyref-only <ph/> already resolves correctly', () => {
+      // Regression test. mapTagMap.ts has no entry for ph at all -- unlike
+      // indexterm above, this is not a topic-only element (ph is common
+      // and valid directly inside a map's own <title>), but map/map-title
+      // is rendered by extractText() (mapTypeMap.ts), a dedicated
+      // baseType-agnostic recursive text walk with its own <ph
+      // keyref="..."/> substitution built in. An unmapped tag under a
+      // map's <title> was never actually losing content: extractText()
+      // does not consult baseType at all.
+      const xml = '<map><title><ph keyref="product_name"/> User Guide</title></map>';
+      const doc = parseDitamap(xml);
+      assert.deepStrictEqual(collectUnknownElements(doc.root), []);
+    });
+
+    it('does not flag <ph> inside a bookmap <booktitle>/<mainbooktitle>, which specializes the same base type', () => {
+      const xml = '<bookmap><booktitle><mainbooktitle><ph keyref="x"/> Guide</mainbooktitle></booktitle></bookmap>';
+      const doc = parseDitamap(xml);
+      assert.deepStrictEqual(collectUnknownElements(doc.root), []);
+    });
+
+    it('still flags a genuine typo elsewhere in the map, in a document whose <title> also has an unmapped <ph>', () => {
+      const xml = `<map><title><ph keyref="x"/> Guide</title>
+        <topicref href="a.dita"><bogus-outside/></topicref>
+      </map>`;
+      const doc = parseDitamap(xml);
+      const unknown = collectUnknownElements(doc.root);
+      assert.strictEqual(unknown.length, 1);
+      assert.strictEqual(unknown[0].tagName, 'bogus-outside');
+    });
+
+    it('flags nested unknown elements individually rather than only the outermost one', () => {
+      const xml = `<topic id="t1"><title>T</title><body>
+        <outer-bad><inner-bad>x</inner-bad></outer-bad>
+      </body></topic>`;
+      const doc = parseDita(xml);
+      const unknown = collectUnknownElements(doc.root);
+      assert.deepStrictEqual(
+        unknown.map((u) => u.tagName).sort(),
+        ['inner-bad', 'outer-bad'],
+      );
+    });
+
+    it('does not flag a node with no tag name of its own, such as the synthetic wrapper the parser starts from', () => {
+      // parseDita()/parseDitamap() already unwrap this before returning
+      // .root -- the returned root is always a real element with a tag
+      // name -- but collectUnknownElements() takes a DitaNode directly and
+      // has no way to enforce that at the type level, so its own guard
+      // against a tagName-less node is worth pinning on its own rather
+      // than relying on every future caller happening to pass an already-
+      // unwrapped root.
+      const wrapper: DitaNode = {
+        type: 'element',
+        children: [],
+        sourceRange: { startLine: 0, startCol: 0, endLine: 0, endCol: 0 },
+      };
+      assert.deepStrictEqual(collectUnknownElements(wrapper), []);
+    });
+
+    it('works the same way for .ditamap documents', () => {
+      const xml = `<map><title>T</title><not-a-real-map-element/></map>`;
+      const doc = parseDitamap(xml);
+      const unknown = collectUnknownElements(doc.root);
+      assert.strictEqual(unknown.length, 1);
+      assert.strictEqual(unknown[0].tagName, 'not-a-real-map-element');
+    });
+
+    it('does not flag an unmapped element nested directly inside <indexterm>', () => {
+      // Regression test. topic/indexterm's own renderer does not use the
+      // generic child dispatch at all -- collectIndextermChips() (baseTypeMap.ts)
+      // walks node.children itself, reading only direct text nodes plus
+      // nested topic/indexterm, topic/index-see and topic/index-see-also by
+      // baseType. Any other child element is simply never consulted, known
+      // or unknown alike, so an unmapped tag name here causes no *additional*
+      // content loss beyond what the renderer already does for every non-term
+      // child -- not the "silently dropped, looks like a typo" case this
+      // diagnostic exists to catch.
+      const xml = `<topic id="t1"><title>T</title><body>
+        <p><indexterm>term<weird-emphasis>nested</weird-emphasis></indexterm></p>
+      </body></topic>`;
+      const doc = parseDita(xml);
+      assert.deepStrictEqual(collectUnknownElements(doc.root), []);
+    });
+
+    it('does not flag an unmapped element nested inside <index-see-also>, which is itself only ever consumed inside <indexterm>', () => {
+      const xml = `<topic id="t1"><title>T</title><body>
+        <p><indexterm>term<index-see-also><indexterm><weird-tag>y</weird-tag></indexterm></index-see-also></indexterm></p>
+      </body></topic>`;
+      const doc = parseDita(xml);
+      assert.deepStrictEqual(collectUnknownElements(doc.root), []);
+    });
+
+    it('still flags a genuine typo outside <indexterm>, in a document whose indexterm also has unmapped content', () => {
+      const xml = `<topic id="t1"><title>T</title><body>
+        <p><indexterm>term<weird-emphasis>nested</weird-emphasis></indexterm></p>
+        <bogus-tag>oops</bogus-tag>
+      </body></topic>`;
+      const doc = parseDita(xml);
+      const unknown = collectUnknownElements(doc.root);
+      assert.strictEqual(unknown.length, 1);
+      assert.strictEqual(unknown[0].tagName, 'bogus-tag');
+    });
+
+    it('does not flag an unmapped element inside <relcolspec>, whose title is read via a baseType-agnostic extractText() fallback', () => {
+      // Regression test, same shape as the map <title> hotfix above:
+      // map/relheader's renderer (mapTypeMap.ts) falls back to extractText()
+      // for a relcolspec's column title whenever @navtitle is absent, and
+      // extractText() does not consult baseType at all -- an unmapped tag
+      // here was never actually losing content.
+      const xml = `<map><title>T</title>
+        <reltable><relheader><relcolspec><weird-tag>Col A</weird-tag></relcolspec></relheader></reltable>
+      </map>`;
+      const doc = parseDitamap(xml);
+      assert.deepStrictEqual(collectUnknownElements(doc.root), []);
+    });
+
+    it('still flags a genuine typo elsewhere in the map, in a document whose relcolspec also has unmapped content', () => {
+      const xml = `<map><title>T</title>
+        <reltable><relheader><relcolspec><weird-tag>Col A</weird-tag></relcolspec></relheader></reltable>
+        <topicref href="a.dita"><bogus-outside/></topicref>
+      </map>`;
+      const doc = parseDitamap(xml);
+      const unknown = collectUnknownElements(doc.root);
+      assert.strictEqual(unknown.length, 1);
+      assert.strictEqual(unknown[0].tagName, 'bogus-outside');
     });
   });
 });

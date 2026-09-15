@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE reference PUBLIC "-//OASIS//DTD DITA Reference//EN" "reference.dtd">
+<reference id="legal_notice" xml:lang="zh-CN">
+  <title>法律声明</title>
+  <shortdesc>商标、版权与责任限制声明。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>法律声明</indexterm>
+        <indexterm>商标</indexterm>
+        <indexterm>版权</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <refbody>
+<section>
+      <title>版权声明</title>
+    <p conkeyref="shared-brand/copyright"/>
+    </section>    <section>
+      <title>商标声明</title>
+    <p><ph keyref="product-name"/> 与 <ph keyref="brand-name"/> 是 <ph keyref="company-name"/> 的商标。文中提到的其他商标归其各自所有者所有。</p>
+    </section>    <section>
+      <title>开源组件</title>
+    <p>本产品固件包含开源软件组件，完整清单与许可证文本可在本地管理界面（<xref href="feature_gateway.dita"/>）的「关于 → 开源声明」页面查看。</p>
+    </section>    <section>
+      <title>责任限制</title>
+    <p>在法律允许的最大范围内，<ph keyref="company-name"/> 不对因未按本手册操作而导致的间接损失承担责任。安防功能为辅助性功能，不能替代专业安保服务。</p>
+    </section>
+  </refbody>
+</reference>

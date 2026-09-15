@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE reference PUBLIC "-//OASIS//DTD DITA Reference//EN" "reference.dtd">
+<reference id="contact_support" xml:lang="zh-CN">
+  <title>联系客服与技术支持</title>
+  <shortdesc>获取人工支持的渠道与报修时需要准备的信息。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>客服</indexterm>
+        <indexterm>售后</indexterm>
+        <indexterm>技术支持</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <refbody>
+<section>
+      <title>联系方式</title>
+    <p>以下联系信息随销售渠道不同而变化，请以包装内保修卡为准：</p>
+    <ul>
+      <li>官方支持网站：<xref href="https://support.example-starlumos.com" format="html" scope="external"/></li>
+      <li>客服热线：<keyword keyref="support-phone"/>（工作日 9:00-18:00）</li>
+      <li>邮箱支持：<xref href="mailto:support@example-starlumos.com" format="mailto" scope="external"/></li>
+    </ul>
+    <p conkeyref="shared-brand/support-info"/>
+    </section>    <section>
+      <title>报修前准备</title>
+    <p>联系客服前，建议先准备好以下信息，可显著缩短处理时间：</p>
+    <ol>
+      <li>主机序列号（主机底部标签，或屏幕 设置 → 关于 中查看）。</li>
+      <li>固件版本号。</li>
+      <li>问题现象描述与首次发生时间。</li>
+      <li>相关错误代码（<xref href="error_codes.dita"/>）。</li>
+      <li>已尝试过的排查步骤（如 <xref href="ts_power.dita"/>、<xref href="ts_network.dita"/>）。</li>
+    </ol>
+    <note type="tip"><p>应用内 <menucascade><uicontrol>帮助与反馈</uicontrol><uicontrol>诊断日志</uicontrol></menucascade> 上传日志后，请将生成的日志编号一并提供给客服。</p></note></section>
+  </refbody>
+</reference>

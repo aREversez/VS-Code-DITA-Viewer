@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, findTextMatches, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getSiteNavToggleScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -39,6 +39,30 @@ const KEYDEF_XML = `<?xml version="1.0" encoding="UTF-8"?>
     </topicmeta>
   </keydef>
 </map>`;
+
+/**
+ * A minimal but structurally real PNG: signature, IHDR carrying the
+ * dimensions, IEND. The readers under test never validate the CRC, so a
+ * correct one isn't needed -- only the length/tag/data layout they read.
+ * Module-scoped because both the image-dimension tests and the topic-render
+ * cache tests need real image files on disk.
+ */
+function writePng(path: string, width: number, height: number) {
+  const sig = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const ihdrData = Buffer.alloc(13);
+  ihdrData.writeUInt32BE(width, 0);
+  ihdrData.writeUInt32BE(height, 4);
+  ihdrData.writeUInt8(8, 8); // bit depth
+  ihdrData.writeUInt8(2, 9); // color type
+  const chunk = (tag: string, data: Buffer) => {
+    const tagBuf = Buffer.from(tag, 'ascii');
+    const lenBuf = Buffer.alloc(4);
+    lenBuf.writeUInt32BE(data.length, 0);
+    const crcBuf = Buffer.alloc(4);
+    return Buffer.concat([lenBuf, tagBuf, data, crcBuf]);
+  };
+  writeFileSync(path, Buffer.concat([sig, chunk('IHDR', ihdrData), chunk('IEND', Buffer.alloc(0))]));
+}
 
 describe('detectNoteLabels', () => {
   function makeRoot(attrs: Record<string, string>): DitaNode {
@@ -87,25 +111,6 @@ describe('readImageDimensions', () => {
   after(() => {
     rmSync(dir, { recursive: true, force: true });
   });
-
-  function writePng(path: string, width: number, height: number) {
-    const sig = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-    const ihdrData = Buffer.alloc(13);
-    ihdrData.writeUInt32BE(width, 0);
-    ihdrData.writeUInt32BE(height, 4);
-    ihdrData.writeUInt8(8, 8); // bit depth
-    ihdrData.writeUInt8(2, 9); // color type
-    // The reader here never validates the CRC, so a real one isn't needed
-    // for this test -- only the length/tag/data layout it actually reads.
-    const chunk = (tag: string, data: Buffer) => {
-      const tagBuf = Buffer.from(tag, 'ascii');
-      const lenBuf = Buffer.alloc(4);
-      lenBuf.writeUInt32BE(data.length, 0);
-      const crcBuf = Buffer.alloc(4);
-      return Buffer.concat([lenBuf, tagBuf, data, crcBuf]);
-    };
-    writeFileSync(path, Buffer.concat([sig, chunk('IHDR', ihdrData), chunk('IEND', Buffer.alloc(0))]));
-  }
 
   function writeGif(path: string, width: number, height: number) {
     const buf = Buffer.alloc(13);
@@ -260,6 +265,272 @@ describe('readImageDimensions', () => {
       // time) rather than erroring on a second attempt to parse garbage.
       assert.strictEqual(readImageDimensions(p), undefined);
     });
+
+    it('should evict the least-recently-used entry once the cache fills past its cap, rather than growing without limit', () => {
+      const p = join(dir, 'lru-victim.png');
+      const fixedMtime = new Date('2024-01-01T00:00:00.000Z');
+      writePng(p, 100, 80);
+      utimesSync(p, fixedMtime, fixedMtime);
+      assert.deepStrictEqual(readImageDimensions(p), { width: 100, height: 80 });
+
+      // Push the victim out by reading enough distinct other images to
+      // fill the cache past its cap (entries are tiny, so this is cheap).
+      for (let i = 0; i < IMAGE_DIMENSIONS_CACHE_MAX; i++) {
+        const q = join(dir, `lru-fill-${i}.png`);
+        writePng(q, i + 1, i + 1);
+        readImageDimensions(q);
+      }
+
+      // Same path, same mtime, but rewritten content: if the entry were
+      // still cached the old dimensions would come back (see the mtime
+      // test above), so fresh on-disk dimensions prove it was evicted.
+      writePng(p, 320, 240);
+      utimesSync(p, fixedMtime, fixedMtime);
+      assert.deepStrictEqual(readImageDimensions(p), { width: 320, height: 240 }, 'the oldest entry should have been evicted once the cache filled past its cap, so a re-read from disk is what answers');
+    });
+
+    it('should re-read from disk after clearImageDimensionsCache(), even when mtime alone would not invalidate', () => {
+      const p = join(dir, 'cache-clear.png');
+      const fixedMtime = new Date('2024-06-01T00:00:00.000Z');
+      writePng(p, 100, 80);
+      utimesSync(p, fixedMtime, fixedMtime);
+      assert.deepStrictEqual(readImageDimensions(p), { width: 100, height: 80 });
+
+      writePng(p, 500, 400);
+      utimesSync(p, fixedMtime, fixedMtime);
+      clearImageDimensionsCache();
+
+      assert.deepStrictEqual(readImageDimensions(p), { width: 500, height: 400 }, 'clearing the cache (the deactivation path) must force a fresh read even when mtime alone would not invalidate');
+    });
+  });
+});
+
+// Book mode re-renders every referenced topic on each pass, so this cache is
+// what stands between "one keystroke in one topic" and "the whole book again".
+// The tests below all pin mtime to a fixed timestamp (see the identical note
+// in the image-dimensions caching block above) so that a cache hit and a cache
+// miss are distinguishable by content alone -- otherwise every rewrite would
+// invalidate on mtime and none of this would prove anything.
+describe('renderTopicCached', () => {
+  let dir: string;
+  // Book mode hands the same keyMap instance to every topic in a pass, so a
+  // shared one is the realistic fixture; the identity test passes its own.
+  const keyMap = new Map<string, string>();
+  const asWebviewUri = (relPath: string) => `https://vscode-resource/${relPath}`;
+  const fixedMtime = new Date('2024-01-01T00:00:00.000Z');
+
+  /** Writes (or rewrites) a one-paragraph topic and pins its mtime. */
+  function writeTopic(name: string, body: string): string {
+    const p = join(dir, name);
+    const id = name.replace(/\.dita$/, '');
+    writeFileSync(
+      p,
+      `<?xml version="1.0" encoding="UTF-8"?>\n<topic id="${id}"><title>${id}</title><body>${body}</body></topic>`,
+    );
+    utimesSync(p, fixedMtime, fixedMtime);
+    return p;
+  }
+
+  function render(filePath: string, headingLevel = 1) {
+    return renderTopicCached({ filePath, keyMap, asWebviewUri, headingLevel });
+  }
+
+  function bumpMtime(p: string) {
+    const later = new Date(statSync(p).mtime.getTime() + 5000);
+    utimesSync(p, later, later);
+  }
+
+  before(() => {
+    dir = mkdtempSync(join(tmpdir(), 'dita-viewer-topic-cache-'));
+  });
+  after(() => {
+    rmSync(dir, { recursive: true, force: true });
+    clearTopicRenderCache();
+  });
+  // Module-level cache shared by every test in the file: start each one empty,
+  // or a hit here could be explained by another test's leftovers.
+  beforeEach(() => {
+    clearTopicRenderCache();
+  });
+  afterEach(() => {
+    setTopicRenderCacheBudgetForTesting(); // back to the production budget
+    clearTopicRenderCache();
+  });
+
+  it('should return the cached HTML for an unchanged topic even after its on-disk content changed, proving the cache rather than a fresh render answered', () => {
+    const a = writeTopic('a.dita', '<p>first</p>');
+    assert.ok(render(a).html.includes('first'));
+
+    writeTopic('a.dita', '<p>second</p>'); // new content, same pinned mtime
+
+    const again = render(a);
+    assert.ok(again.html.includes('first'), 'no dependency changed, so the stored HTML is what should answer');
+    assert.ok(!again.html.includes('second'), 'a re-render would have picked up the new content');
+  });
+
+  it('should re-render a topic once its own file mtime changes', () => {
+    const a = writeTopic('own.dita', '<p>before</p>');
+    assert.ok(render(a).html.includes('before'));
+
+    writeTopic('own.dita', '<p>after</p>');
+    bumpMtime(a);
+
+    assert.ok(render(a).html.includes('after'), 'editing the topic itself must invalidate its own entry');
+  });
+
+  it('should re-render a topic when a conref target it pulled in changed, even though the topic file itself did not', () => {
+    const shared = writeTopic('shared.dita', '<p id="sn">ORIGINAL</p>');
+    const host = writeTopic('host.dita', '<p conref="shared.dita#shared/sn">fallback</p>');
+    assert.ok(render(host).html.includes('ORIGINAL'), 'conref content is inlined into the referencing topic');
+
+    // Only the target changed. A cache keyed on the topic file alone -- the
+    // obvious design -- would serve stale HTML from here on.
+    writeTopic('shared.dita', '<p id="sn">UPDATED</p>');
+    bumpMtime(shared);
+
+    const again = render(host);
+    assert.ok(again.html.includes('UPDATED'), 'the conref target is a dependency of the referencing topic, so changing it must invalidate');
+    assert.ok(!again.html.includes('ORIGINAL'));
+  });
+
+  it('should re-render a topic when an image it emitted natural dimensions for was replaced, since those dimensions are baked into the HTML', () => {
+    const png = join(dir, 'dims.png');
+    writePng(png, 300, 200);
+    utimesSync(png, fixedMtime, fixedMtime);
+    const a = writeTopic('img.dita', '<image href="dims.png"/>');
+    assert.ok(render(a).html.includes('width="300"'), 'the natural size is emitted when the DITA source gives none');
+
+    writePng(png, 640, 480);
+    bumpMtime(png);
+
+    assert.ok(render(a).html.includes('width="640"'), 'the image bytes are not in the output but its dimensions are, so a replaced image must invalidate the topic -- which never changed itself');
+  });
+
+  it('should treat a file that did not exist at render time as a dependency, so creating it invalidates', () => {
+    const a = writeTopic('late-host.dita', '<image href="late.png"/>');
+    assert.ok(!render(a).html.includes('width='), 'nothing to measure while the file is missing');
+
+    writePng(join(dir, 'late.png'), 120, 90);
+
+    assert.ok(render(a).html.includes('width="120"'), 'a dependency recorded as missing must invalidate when the file appears, or the topic stays dimension-less until something unrelated touches it');
+  });
+
+  it('should keep separate entries per headingLevel, since the same topic sits at different depths across two open books', () => {
+    const a = writeTopic('depth.dita', '<p>x</p>');
+    const shallow = render(a, 1);
+    const deep = render(a, 2);
+
+    assert.ok(/<h1[\s>]/.test(shallow.html), 'depth 1 renders an h1');
+    assert.ok(/<h2[\s>]/.test(deep.html), 'depth 2 renders an h2');
+    assert.strictEqual(topicRenderCacheSize(), 2, 'one entry per depth -- validating headingLevel instead of keying on it would make two open books evict each other every pass');
+
+    assert.ok(render(a, 1).html.includes('<h1'), 'both entries stay independently valid');
+    assert.ok(render(a, 2).html.includes('<h2'));
+  });
+
+  it('should re-render when handed a different keyMap instance even with equal contents, trading a false invalidation for never serving stale key values', () => {
+    const a = writeTopic('keys.dita', '<p>one</p>');
+    render(a);
+    writeTopic('keys.dita', '<p>two</p>'); // new content, same pinned mtime
+
+    assert.ok(render(a).html.includes('one'), 'same instance + unchanged mtimes = a hit');
+
+    const freshMap = renderTopicCached({ filePath: a, keyMap: new Map(keyMap), asWebviewUri, headingLevel: 1 });
+    assert.ok(freshMap.html.includes('two'), 'buildKeyMap rebuilds its Map when its own cache expires; treating an equal-but-distinct instance as "keys unchanged" would be an assumption this function cannot verify, so it re-renders instead');
+  });
+
+  it('should re-render when handed a different bookMembers set even with equal contents, since the same topic renders different HTML for a cross-file xref depending on whether the target is part of THIS book', () => {
+    const other = writeTopic('other-target.dita', '<p>target</p>');
+    const a = writeTopic('xref-host.dita', '<xref href="other-target.dita"/>');
+
+    const inBook = new Set<string>([other]);
+    const withBook = renderTopicCached({ filePath: a, keyMap, asWebviewUri, headingLevel: 1, bookMembers: inBook });
+    assert.ok(withBook.html.includes('data-dita-book-xref'), 'target is in this book, so the xref should be a real link');
+
+    // Same file, same pinned mtime, same keyMap instance -- everything the
+    // OLD cache key considered is identical. Only the book membership
+    // changed (this render's book does not contain the xref's target).
+    const notInBook = new Set<string>();
+    const withoutBook = renderTopicCached({ filePath: a, keyMap, asWebviewUri, headingLevel: 1, bookMembers: notInBook });
+    assert.ok(!withoutBook.html.includes('data-dita-book-xref'), 'a cache keyed only on filePath+headingLevel+keyMap would wrongly reuse the first entry and still show a clickable link here');
+    assert.ok(withoutBook.html.includes('xref-external'));
+  });
+
+  it('should not cache a failed render, so the next pass recovers once the file is there', () => {
+    const missing = join(dir, 'not-yet.dita');
+    const failed = render(missing);
+    assert.ok(failed.error, 'a missing topic reports an error');
+    assert.strictEqual(topicRenderCacheSize(), 0, 'a failure must not be pinned: the stamps would still match, because the file that failed is the very file whose mtime gets compared');
+
+    const created = writeTopic('not-yet.dita', '<p>here now</p>');
+    const recovered = render(created);
+    assert.strictEqual(recovered.error, undefined);
+    assert.ok(recovered.html.includes('here now'), 'a malformed or absent mid-edit save must not keep serving the error page after the file is fixed');
+  });
+
+  it('should not grow past the byte budget, evicting the oldest entry rather than growing without limit', () => {
+    // Equal-length ids and bodies, so all three topics render to the same
+    // number of bytes and the arithmetic below is exact rather than
+    // approximate. Calibrating the budget against measured entries (rather
+    // than a number guessed from the fixture markup) matters for the same
+    // reason; filling the production 32MB with real renders would take
+    // seconds and prove nothing this scale does not.
+    const victim = writeTopic('victim.dita', '<p>vvvv</p>');
+    render(victim);
+    const fill0 = writeTopic('fill-0.dita', '<p>f0f0</p>');
+    render(fill0);
+    const budget = topicRenderCacheBytesHeld(); // exactly two entries' worth
+    assert.ok(budget > 0);
+    setTopicRenderCacheBudgetForTesting(budget);
+
+    render(writeTopic('fill-1.dita', '<p>f1f1</p>'));
+
+    assert.ok(topicRenderCacheBytesHeld() <= budget, 'the running total respects the budget');
+    assert.ok(topicRenderCacheSize() < 3, 'the third entry did not simply grow the cache');
+
+    writeTopic('victim.dita', '<p>v2v2</p>'); // new content, same pinned mtime
+    assert.ok(render(victim).html.includes('v2v2'), 'only an eviction explains fresh output here, since nothing about the victim\'s stamps changed');
+  });
+
+  it('should skip caching a topic larger than the entire budget instead of evicting everything else to make room for it', () => {
+    const small = writeTopic('small.dita', '<p>s</p>');
+    render(small);
+    const smallBytes = topicRenderCacheBytesHeld();
+    const big = writeTopic('big.dita', '<p>b</p>');
+
+    setTopicRenderCacheBudgetForTesting(1); // nothing at all can fit
+
+    const result = render(big);
+    assert.ok(result.html.includes('b'), 'it still renders correctly; only the caching is skipped');
+    assert.strictEqual(topicRenderCacheSize(), 1, 'the entry that did fit survives');
+    assert.strictEqual(topicRenderCacheBytesHeld(), smallBytes, 'and an impossible insert must not disturb the accounting');
+  });
+
+  it('should keep the byte total exact when an entry is replaced, not merely when one is added', () => {
+    const a = writeTopic('acct.dita', '<p>one</p>');
+    render(a);
+
+    writeTopic('acct.dita', '<p>two, but longer</p>');
+    bumpMtime(a);
+    render(a);
+
+    assert.strictEqual(topicRenderCacheSize(), 1);
+    assert.strictEqual(
+      topicRenderCacheBytesHeld(),
+      Buffer.byteLength(render(a).html, 'utf8'),
+      'the total must equal what is actually stored: an overwrite that only ever added would shrink the effective budget on every single edit',
+    );
+  });
+
+  it('should re-render after clearTopicRenderCache(), even when mtime alone would not invalidate', () => {
+    const a = writeTopic('cleared.dita', '<p>before</p>');
+    render(a);
+    writeTopic('cleared.dita', '<p>after</p>'); // new content, same pinned mtime
+
+    clearTopicRenderCache();
+    assert.strictEqual(topicRenderCacheSize(), 0, 'the deactivation path drops every entry');
+    assert.strictEqual(topicRenderCacheBytesHeld(), 0, 'and resets the running total with them');
+    assert.ok(render(a).html.includes('after'));
   });
 });
 
@@ -507,6 +778,122 @@ describe('makeFileTitleResolver', () => {
   });
 });
 
+describe('makeFileTopicTypeResolver (sniffRootTagName)', () => {
+  let dir: string;
+
+  before(() => {
+    dir = mkdtempSync(join(tmpdir(), 'dita-type-'));
+    writeFileSync(join(dir, 'concept.dita'), `<concept id="c1"><title>C</title></concept>`);
+    writeFileSync(join(dir, 'task.dita'), `<task id="t1"><title>T</title></task>`);
+    writeFileSync(join(dir, 'reference.dita'), `<reference id="r1"><title>R</title></reference>`);
+    writeFileSync(join(dir, 'troubleshooting.dita'), `<troubleshooting id="tb1"><title>TB</title></troubleshooting>`);
+    writeFileSync(join(dir, 'glossentry.dita'), `<glossentry id="g1"><glossterm>G</glossterm></glossentry>`);
+    writeFileSync(join(dir, 'generic.dita'), `<topic id="t1"><title>Plain Topic</title></topic>`);
+    // Full DITA preamble -- XML declaration, a DOCTYPE with a small
+    // internal entity subset, and a leading comment -- all ahead of the
+    // root element, exercising every branch of PREAMBLE_CONSTRUCT_RE at
+    // once rather than one preamble construct per fixture file.
+    writeFileSync(
+      join(dir, 'full-preamble.dita'),
+      `<?xml version="1.0" encoding="UTF-8"?>\n` +
+        `<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd" [\n` +
+        `  <!ENTITY product "Widget">\n` +
+        `]>\n` +
+        `<!-- generated file, do not edit -->\n` +
+        `<concept id="c2"><title>Full preamble</title></concept>`,
+    );
+    // File deliberately named like a bare id — must NOT be picked up.
+    writeFileSync(join(dir, 'someid'), `<concept id="someid"><title>Ghost</title></concept>`);
+  });
+
+  after(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('should resolve the root tag of a local .dita href to its capitalized type label, for each common specialization', () => {
+    const resolver = makeFileTopicTypeResolver(dir);
+    assert.strictEqual(resolver('concept.dita'), 'Concept');
+    assert.strictEqual(resolver('task.dita'), 'Task');
+    assert.strictEqual(resolver('reference.dita'), 'Reference');
+    assert.strictEqual(resolver('troubleshooting.dita'), 'Troubleshooting');
+    assert.strictEqual(resolver('glossentry.dita'), 'Glossentry');
+  });
+
+  it('should see past an XML declaration, a DOCTYPE with an internal entity subset, and a leading comment to find the root element', () => {
+    const resolver = makeFileTopicTypeResolver(dir);
+    assert.strictEqual(resolver('full-preamble.dita'), 'Concept');
+  });
+
+  it('should return undefined for the generic <topic> root, since the default labeler drops it to avoid a row of identical chips with no information', () => {
+    const resolver = makeFileTopicTypeResolver(dir);
+    assert.strictEqual(resolver('generic.dita'), undefined);
+  });
+
+  it('should let a custom labeler override the default (e.g. localize, or hide tags the default would show)', () => {
+    // A labeler that hides everything except "concept" -- a contrived but
+    // representative case for the localized labeler in MapViewerProvider,
+    // which both translates known tags and falls back to capitalized for
+    // unknown ones.
+    const resolver = makeFileTopicTypeResolver(dir, (tagName) =>
+      tagName === 'concept' ? 'Concept (custom)' : undefined,
+    );
+    assert.strictEqual(resolver('concept.dita'), 'Concept (custom)');
+    assert.strictEqual(resolver('task.dita'), undefined);
+  });
+
+  it('should return undefined for external URLs instead of probing the filesystem', () => {
+    const resolver = makeFileTopicTypeResolver(dir);
+    assert.strictEqual(resolver('https://example.com/page.dita'), undefined);
+    assert.strictEqual(resolver('mailto:someone@example.com'), undefined);
+  });
+
+  it('should return undefined for absolute paths', () => {
+    const resolver = makeFileTopicTypeResolver(dir);
+    assert.strictEqual(resolver(join(dir, 'concept.dita')), undefined);
+  });
+
+  it('should not treat a bare id as a filename even when a matching file exists', () => {
+    const resolver = makeFileTopicTypeResolver(dir);
+    assert.strictEqual(resolver('someid'), undefined);
+  });
+
+  it('should return undefined for a missing file rather than throwing', () => {
+    const resolver = makeFileTopicTypeResolver(dir);
+    assert.strictEqual(resolver('does-not-exist.dita'), undefined);
+  });
+
+  it('should return undefined for an href with a fragment (points inside a topic, not at a file root) but still report the file\'s own root type', () => {
+    const resolver = makeFileTopicTypeResolver(dir);
+    // The fragment points at a nested topic inside the file; the resolver
+    // deliberately resolves the file's *root* tag, not the fragment's, so
+    // this still returns the file's root type. The contract is "what kind
+    // of file is this", not "what kind of element does the fragment point
+    // at" -- the sidebar links to files.
+    assert.strictEqual(resolver('concept.dita#nested'), 'Concept');
+  });
+
+  it('caches a resolved tag name per absolute path, reading each file at most once', () => {
+    writeFileSync(join(dir, 'counted.dita'), `<task id="ct1"><title>Counted</title></task>`);
+    const resolver = makeFileTopicTypeResolver(dir);
+    assert.strictEqual(resolver('counted.dita'), 'Task');
+    // Mutate the file after the first call -- if the resolver were re-
+    // reading on every call, this second call would see 'Concept'
+    // instead. Getting 'Task' back proves it served the cached answer
+    // without touching the file again.
+    writeFileSync(join(dir, 'counted.dita'), `<concept id="ct1"><title>Counted</title></concept>`);
+    assert.strictEqual(resolver('counted.dita'), 'Task', 'second call should be served from cache, not re-read the mutated file');
+  });
+
+  it('still finds the root tag when a huge DOCTYPE internal subset pushes it past the bounded sniff chunk, by falling back to the whole file', () => {
+    // A comment well past ROOT_TAG_SNIFF_BYTES (8192) worth of padding
+    // ahead of the root element -- the bounded read alone won't reach it.
+    const padding = '<!-- ' + 'x'.repeat(9000) + ' -->\n';
+    writeFileSync(join(dir, 'huge-preamble.dita'), padding + `<reference id="huge"><title>Huge</title></reference>`);
+    const resolver = makeFileTopicTypeResolver(dir);
+    assert.strictEqual(resolver('huge-preamble.dita'), 'Reference');
+  });
+});
+
 describe('makeConrefResolver', () => {
   let dir: string;
 
@@ -590,6 +977,28 @@ describe('makeConrefResolver', () => {
     const resolver = makeConrefResolver(dir);
     const el = resolver('reuse.dita#conref_topic/nonexistent_id');
     assert.strictEqual(el, undefined);
+  });
+
+  it('should resolve a same-document bare-id conref against the passed-in root, without touching the filesystem', () => {
+    const ownDoc = parseDita(`<topic id="t1"><body><note id="note_xxx">Own-file note</note><p conref="#note_xxx"/></body></topic>`);
+    const resolver = makeConrefResolver(dir, ownDoc.root);
+    const el = resolver('#note_xxx');
+    assert.ok(el, 'should resolve same-document conref');
+    assert.strictEqual(el!.attributes?.id, 'note_xxx');
+  });
+
+  it('should resolve the "#./id" same-document shorthand some authors use', () => {
+    const ownDoc = parseDita(`<topic id="t1"><body><note id="note_xxx">Own-file note</note><p conref="#./note_xxx"/></body></topic>`);
+    const resolver = makeConrefResolver(dir, ownDoc.root);
+    const el = resolver('#./note_xxx');
+    assert.ok(el, 'should resolve "#./id" shorthand');
+    assert.strictEqual(el!.attributes?.id, 'note_xxx');
+  });
+
+  it('should return undefined for a same-document conref when no root was passed in (rather than throwing)', () => {
+    const resolver = makeConrefResolver(dir);
+    assert.doesNotThrow(() => resolver('#note_xxx'));
+    assert.strictEqual(resolver('#note_xxx'), undefined);
   });
 
   it('should render ph conref with filepath child as span.filepath (end-to-end)', () => {
@@ -747,6 +1156,28 @@ describe('makeConrefRangeResolver', () => {
     assert.strictEqual(range, undefined);
   });
 
+  it('should resolve a same-document conrefend range against the passed-in root, without touching the filesystem', () => {
+    const ownDoc = parseDita(`<topic id="t1"><body><section id="s1"><p>One</p></section><section id="s2"><p>Two</p></section><section id="s3"><p>Three</p></section></body></topic>`);
+    const resolver = makeConrefRangeResolver(dir, ownDoc.root);
+    const range = resolver('#s1', '#s2');
+    assert.ok(range, 'should resolve a same-document range');
+    assert.deepStrictEqual(range!.map((n) => n.attributes?.id), ['s1', 's2']);
+  });
+
+  it('should resolve the "#./id" same-document shorthand for conref/conrefend, same as makeConrefResolver does for a single conref', () => {
+    const ownDoc = parseDita(`<topic id="t1"><body><section id="s1"><p>One</p></section><section id="s2"><p>Two</p></section><section id="s3"><p>Three</p></section></body></topic>`);
+    const resolver = makeConrefRangeResolver(dir, ownDoc.root);
+    const range = resolver('#./s1', '#./s2');
+    assert.ok(range, 'should resolve a same-document range written with the "./" shorthand');
+    assert.deepStrictEqual(range!.map((n) => n.attributes?.id), ['s1', 's2']);
+  });
+
+  it('should return undefined for a same-document conrefend range when no root was passed in (rather than throwing)', () => {
+    const resolver = makeConrefRangeResolver(dir);
+    assert.doesNotThrow(() => resolver('#s1', '#s2'));
+    assert.strictEqual(resolver('#s1', '#s2'), undefined);
+  });
+
   it('should render the full conrefend range end-to-end, matching only the first element to the referencing element', () => {
     const rangeResolver = makeConrefRangeResolver(dir);
     const sourceXml = `<topic id="main">
@@ -827,5 +1258,1137 @@ describe('findTextMatches', () => {
   it('should cap matches per text node at 1000', () => {
     const m = findTextMatches('a'.repeat(5000), 'a', false, true);
     assert.strictEqual(m!.length, 1000);
+  });
+});
+
+describe('planCurrentMarkMove', () => {
+  it('moves the highlight by naming only the mark it leaves and the mark it lands on', () => {
+    // The whole point of the function: the loop this replaced named all five.
+    assert.deepStrictEqual(planCurrentMarkMove(2, 3, 5), { clear: 2, set: 3 });
+  });
+
+  it('names nothing to clear when no mark is lit yet', () => {
+    // The state performSearch leaves behind: it has just built a fresh set of
+    // marks, none of which carries '__current', so clearing is work for nothing.
+    assert.deepStrictEqual(planCurrentMarkMove(-1, 0, 5), { clear: -1, set: 0 });
+  });
+
+  it('handles wrap-around in both directions', () => {
+    assert.deepStrictEqual(planCurrentMarkMove(4, 0, 5), { clear: 4, set: 0 });
+    assert.deepStrictEqual(planCurrentMarkMove(0, 4, 5), { clear: 0, set: 4 });
+  });
+
+  it('does not clear and re-set the mark that is already current', () => {
+    // gotoNextMatch on a single-match search lands back where it started.
+    // Clearing first would take the highlight off and put it back on within one
+    // task -- a visible flash if the browser happens to paint in between, and
+    // pointless work either way.
+    assert.deepStrictEqual(planCurrentMarkMove(2, 2, 5), { clear: -1, set: 2 });
+    assert.deepStrictEqual(planCurrentMarkMove(0, 0, 1), { clear: -1, set: 0 });
+  });
+
+  it('takes the highlight off entirely when there is no next match', () => {
+    assert.deepStrictEqual(planCurrentMarkMove(2, -1, 5), { clear: 2, set: -1 });
+  });
+
+  it('does nothing at all when there are no marks, stale index included', () => {
+    assert.deepStrictEqual(planCurrentMarkMove(-1, -1, 0), { clear: -1, set: -1 });
+    assert.deepStrictEqual(planCurrentMarkMove(3, 0, 0), { clear: -1, set: -1 });
+  });
+
+  it('drops a stale previous index rather than naming a mark that no longer exists', () => {
+    // Reachable, not theoretical: the document changed under an open search bar,
+    // so the match list shrank while the index tracked from the longer list
+    // survived it by one update.
+    assert.deepStrictEqual(planCurrentMarkMove(7, 0, 3), { clear: -1, set: 0 });
+  });
+
+  it('drops a stale next index but still clears the mark it left', () => {
+    assert.deepStrictEqual(planCurrentMarkMove(1, 9, 3), { clear: 1, set: -1 });
+  });
+
+  it('never names an index outside the list', () => {
+    // The caller uses these to index a real array, so this is the property that
+    // turns any future slip in the decision table into a no-op instead of a
+    // silent write to the wrong mark. Covers negative and past-the-end inputs on
+    // both sides, including an empty list.
+    for (let count = 0; count <= 6; count++) {
+      for (let previous = -2; previous <= 8; previous++) {
+        for (let next = -2; next <= 8; next++) {
+          const move = planCurrentMarkMove(previous, next, count);
+          for (const index of [move.clear, move.set]) {
+            assert.ok(
+              index === -1 || (index >= 0 && index < count),
+              `planCurrentMarkMove(${previous}, ${next}, ${count}) named ${index}`,
+            );
+          }
+        }
+      }
+    }
+  });
+
+  it('leaves exactly the marks lit that walking all of them would have left lit', () => {
+    // Exhaustive over a small grid rather than a hand-picked sequence, because
+    // the optimisation is only worth having if it is equivalent to the O(n) loop
+    // it replaced. `expected` is that loop's output verbatim: it lit the current
+    // match and cleared every other one. `marks` is the state the loop would
+    // have left behind on the previous move, which is what makes the two
+    // comparable -- the optimised path only ever sees one mark lit, and if that
+    // ever stopped being true the divergence would show up here.
+    const count = 4;
+    for (let previous = -1; previous < count; previous++) {
+      for (let next = -1; next < count; next++) {
+        const marks = Array.from({ length: count }, (_, i) => i === previous);
+        const expected = Array.from({ length: count }, (_, i) => i === next);
+        const move = planCurrentMarkMove(previous, next, count);
+        if (move.clear >= 0) marks[move.clear] = false;
+        if (move.set >= 0) marks[move.set] = true;
+        assert.deepStrictEqual(marks, expected, `move from ${previous} to ${next} of ${count}`);
+      }
+    }
+  });
+});
+
+describe('getSearchOverlayScript', () => {
+  const opts = {
+    placeholder: 'Find',
+    nextMatch: 'Next match',
+    prevMatch: 'Previous match',
+    close: 'Close',
+    matchCase: 'Match case',
+    useRegex: 'Use regular expression',
+    invalidRegex: 'Invalid regular expression',
+  };
+
+  it('emits a script that parses as JavaScript', () => {
+    // The overlay is one long template literal with a dozen interpolations in
+    // it, so a stray backtick or an unescaped interpolation anywhere ships a
+    // search bar that silently never runs. Nothing else in the suite would
+    // notice: there is no DOM here to execute it against, and the e2e harness
+    // cannot reach into a webview. Compiling it is the cheapest assertion that
+    // catches the whole class -- new Function parses the body without running
+    // it, so the document and NodeFilter references inside are never touched.
+    assert.doesNotThrow(() => new Function(getSearchOverlayScript(opts)));
+  });
+
+  it('injects the exported planCurrentMarkMove rather than a second copy of its rules', () => {
+    // The comment at the injection site promises webview and tests always run
+    // the same algorithm. Comparing the emitted text against the function's own
+    // source is what makes that promise load-bearing instead of decorative: it
+    // fails the moment someone hand-copies the decision table into the template,
+    // which is the natural thing to do and the natural way for the two to drift.
+    const script = getSearchOverlayScript(opts);
+    assert.ok(
+      script.includes('var planCurrentMarkMoveCore = ' + planCurrentMarkMove.toString() + ';'),
+      'expected the overlay script to inject the exported planCurrentMarkMove verbatim',
+    );
+  });
+
+  it('injects a body that still works once lifted out of this module', () => {
+    // The webview has none of this module's bindings, so an injected function
+    // that reaches for one is dead on arrival -- and it would look perfectly
+    // healthy here, where the binding is in scope. new Function builds the
+    // function against the global scope instead, which turns that free
+    // identifier into a ReferenceError the first time it is called.
+    const revived = new Function(
+      'return (' + planCurrentMarkMove.toString() + ')',
+    )() as typeof planCurrentMarkMove;
+    assert.deepStrictEqual(revived(2, 3, 5), { clear: 2, set: 3 });
+    assert.deepStrictEqual(revived(-1, 0, 5), { clear: -1, set: 0 });
+    assert.deepStrictEqual(revived(2, 2, 5), { clear: -1, set: 2 });
+    assert.deepStrictEqual(revived(7, 0, 3), { clear: -1, set: 0 });
+    assert.deepStrictEqual(revived(2, -1, 0), { clear: -1, set: -1 });
+  });
+
+  it('excludes docsite mode\'s sidebar (.site-nav) from search matches, not just the toolbar/search bar', () => {
+    // Regression guard, not a behavioral test: there's no DOM here to
+    // actually run the TreeWalker filter against (see the parse-check
+    // test's own comment on why), so this only confirms the source text
+    // still contains the sidebar exclusion rather than someone quietly
+    // dropping it in a future refactor of this same walk-up loop. Without
+    // it, Ctrl+F in site mode would also match/highlight sidebar topic
+    // titles and chips -- .site-nav sits beside #dita-content-root as a
+    // sibling under body, not inside it, and isn't caught by the existing
+    // __toolbar/__search_bar id checks.
+    const script = getSearchOverlayScript(opts);
+    assert.ok(script.includes("classList.contains('site-nav')"), 'search TreeWalker filter should exclude the sidebar');
+  });
+});
+
+describe('toolbar scaffold/font-prefs/font-width-tag-tooltips scripts (a3\' extraction)', () => {
+  // These three cover the code both DitaViewerProvider.ts and
+  // MapViewerProvider.ts used to carry two byte-for-byte copies of. Same
+  // reasoning as getSearchOverlayScript above: there is no DOM here to
+  // actually run these against, so new Function's parse-only check is the
+  // cheapest thing that still catches a broken template literal.
+
+  it('getToolbarScaffoldScript emits a script that parses as JavaScript', () => {
+    assert.doesNotThrow(() => new Function(getToolbarScaffoldScript({ previewToolbar: 'Preview toolbar' })));
+  });
+
+  it('getFontPrefsScript emits a script that parses as JavaScript', () => {
+    assert.doesNotThrow(() => new Function(getFontPrefsScript({ setFontPrefsMsgType: 'setFontPrefs' })));
+  });
+
+  const buttonsOpts = {
+    decreaseFontSize: 'Decrease font size',
+    increaseFontSize: 'Increase font size',
+    fontSans: 'Sans',
+    fontSerif: 'Serif',
+    fontCurrentSans: 'Current: Sans-serif',
+    fontCurrentSerif: 'Current: Serif',
+    fontSizeButtonExtraStyle: '',
+    includeFontReset: false,
+    widthAuto: 'Auto',
+    widthFull: 'Full',
+    widthWide: 'Wide',
+    widthDesktop: 'Desktop',
+    widthNarrow: 'Narrow',
+    pageWidth: 'Page width',
+    setWidthSelectionMsgType: 'setWidthSelection',
+    tagTooltipsLabel: 'Tags',
+    tagTooltipsOnTitle: 'Tags on',
+    tagTooltipsOffTitle: 'Tags off',
+    setTagTooltipsMsgType: 'setTagTooltips',
+  };
+
+  it('getToolbarFontWidthTagTooltipsButtonsScript emits a script that parses as JavaScript, with and without the font-reset button', () => {
+    assert.doesNotThrow(() => new Function(getToolbarFontWidthTagTooltipsButtonsScript(buttonsOpts)));
+    assert.doesNotThrow(() => new Function(getToolbarFontWidthTagTooltipsButtonsScript({
+      ...buttonsOpts,
+      includeFontReset: true,
+      resetFont: 'Reset font',
+    })));
+  });
+
+  it('includes a font-reset button only when includeFontReset is true -- the topic viewer has one, the map viewer does not', () => {
+    const without = getToolbarFontWidthTagTooltipsButtonsScript(buttonsOpts);
+    assert.ok(!without.includes('fontResetBtn'), 'expected no fontResetBtn when includeFontReset is false');
+    const withReset = getToolbarFontWidthTagTooltipsButtonsScript({
+      ...buttonsOpts,
+      includeFontReset: true,
+      resetFont: 'Reset font',
+    });
+    assert.ok(withReset.includes('fontResetBtn'), 'expected fontResetBtn when includeFontReset is true');
+  });
+
+  it('applies fontSizeButtonExtraStyle to the font-size buttons only -- the map viewer bolds them, the topic viewer does not', () => {
+    const plain = getToolbarFontWidthTagTooltipsButtonsScript(buttonsOpts);
+    assert.ok(plain.includes("fsDown.style.cssText = btnStyle + '';"));
+    assert.ok(plain.includes("fsUp.style.cssText = btnStyle + '';"));
+    const bold = getToolbarFontWidthTagTooltipsButtonsScript({ ...buttonsOpts, fontSizeButtonExtraStyle: 'font-weight:bold;' });
+    assert.ok(bold.includes("fsDown.style.cssText = btnStyle + 'font-weight:bold;';"));
+    assert.ok(bold.includes("fsUp.style.cssText = btnStyle + 'font-weight:bold;';"));
+  });
+
+  it('applies the page-width selection as the --max-width custom property (not just body.style.maxWidth), so it also reaches #dita-content-root.site-main in docsite mode -- body.style.maxWidth alone only ever affected the outer flex row body becomes in site mode, which site mode\'s own CSS already resets to none, making every width selection a no-op there', () => {
+    const script = getToolbarFontWidthTagTooltipsButtonsScript(buttonsOpts);
+    const setProps: Array<[string, string]> = [];
+    const removedProps: string[] = [];
+    const fakeSelect = {
+      style: {},
+      setAttribute: () => {},
+      appendChild: () => {},
+      addEventListener: () => {},
+    };
+    const fakeOption = { value: '', textContent: '', selected: false };
+    const fakeButtons: Array<{ style: Record<string, unknown>; setAttribute: () => void; addEventListener: () => void }> = [];
+    const fakeDocument = {
+      createElement: (tag: string) => {
+        if (tag === 'select') return fakeSelect;
+        if (tag === 'option') return { ...fakeOption };
+        const btn = { style: {}, setAttribute: () => {}, addEventListener: () => {} };
+        fakeButtons.push(btn);
+        return btn;
+      },
+      getElementById: () => null,
+    };
+    const bodyStyle = {
+      maxWidth: '',
+      margin: '',
+      fontSize: '',
+      fontFamily: '',
+      setProperty: (name: string, value: string) => { setProps.push([name, value]); },
+      removeProperty: (name: string) => { removedProps.push(name); },
+    };
+    // fontSize/isSerif/SERIF_STACK are declared by getFontPrefsScript in
+    // production, always concatenated ahead of this one (see
+    // MapViewerProvider.ts/DitaViewerProvider.ts's own script assembly);
+    // stub them the same way here since this script alone references them
+    // (fontBtn's initial label) without declaring them itself.
+    const fontPrefsStub = 'var fontSize = 100; var isSerif = false; var SERIF_STACK = "serif";';
+    const fn = new Function(
+      'document', 'btnStyle', 'ddStyle', 'window',
+      fontPrefsStub + script + '; return applyWidth;',
+    );
+    const applyWidth = fn(fakeDocument, '', '', { __fontPrefs: undefined, __widthSelection: undefined, __tagTooltips: undefined });
+    // applyWidth is a closure over the real document.body from the script's
+    // own top-level scope in production; here it closes over whatever
+    // `document` this test handed the function, so point document.body at
+    // the fake style object before calling it.
+    (fakeDocument as unknown as { body: { style: typeof bodyStyle } }).body = { style: bodyStyle };
+    applyWidth('1400px');
+    assert.deepStrictEqual(setProps, [['--max-width', '1400px']], 'expected the CSS custom property to be set, not just body.style.maxWidth');
+    applyWidth('');
+    assert.deepStrictEqual(removedProps, ['--max-width'], 'expected the property to be cleared (falling back to :root\'s default), not set to an empty/invalid value');
+  });
+
+  it('does not append any of its buttons to a toolbar itself -- ordering stays with the caller', () => {
+    // The two providers interleave these buttons with their own
+    // (theme CSS dropdown, mode toggle, refresh, Flags, Filter) in
+    // different orders; this function only builds and wires them up.
+    const script = getToolbarFontWidthTagTooltipsButtonsScript(buttonsOpts);
+    assert.ok(!script.includes('toolbar.appendChild'));
+  });
+});
+
+describe('getSiteNavClickHandlerScript (docsite mode)', () => {
+  it('emits a script that parses as JavaScript', () => {
+    assert.doesNotThrow(() => new Function(getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' })));
+  });
+
+  it('posts the configured message type, not a hardcoded one', () => {
+    const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'someOtherType' });
+    assert.ok(script.includes("type: 'someOtherType'"));
+    assert.ok(!script.includes("type: 'switchSitePage'"));
+  });
+
+  it('defines updatePrevNextButtons as a no-op when neither prev/next button exists in the DOM', () => {
+    // Combined with getSitePrevNextButtonsScript below, this is what lets
+    // tree/book mode run the exact same click-handler script as site mode
+    // without erroring on document.getElementById returning null for
+    // buttons that were never appended there.
+    const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
+    const fn = new Function('document', 'vscode', script + '; return typeof updatePrevNextButtons;');
+    const fakeDocument = {
+      getElementById: () => null,
+      querySelectorAll: () => [],
+      addEventListener: () => {},
+    };
+    assert.doesNotThrow(() => fn(fakeDocument, { postMessage: () => {} }));
+  });
+
+  // --- book-internal cross-topic xref clicks (docsite design doc, 3.2/4.5) ---
+  //
+  // These simulate real DOM click delegation (multiple document-level
+  // 'click' listeners, each independently checking e.target.closest(...))
+  // rather than calling switchToSitePage directly, since the thing under
+  // test IS the delegation wiring: does a click on a data-dita-book-xref
+  // link actually find the matching sidebar link and drive it the same
+  // way a real sidebar click would.
+  function makeFakeElement(opts: { classes?: string[]; attrs?: Record<string, string> }) {
+    const classes = new Set(opts.classes || []);
+    const attrs = opts.attrs || {};
+    const el = {
+      classList: {
+        contains: (c: string) => classes.has(c),
+        add: (c: string) => classes.add(c),
+        remove: (c: string) => classes.delete(c),
+      },
+      getAttribute: (name: string) => (name in attrs ? attrs[name] : null),
+      closest(selector: string): unknown {
+        if (selector.startsWith('.')) return classes.has(selector.slice(1)) ? el : null;
+        if (selector.startsWith('[') && selector.endsWith(']')) {
+          const attr = selector.slice(1, -1);
+          return attr in attrs ? el : null;
+        }
+        return null;
+      },
+    };
+    return el;
+  }
+
+  function makeFakeSiteDocument(navLinks: ReturnType<typeof makeFakeElement>[], elementsById: Record<string, { scrollIntoView: () => void }>) {
+    const listeners: Record<string, Array<(e: unknown) => void>> = {};
+    const document = {
+      addEventListener: (evt: string, fn: (e: unknown) => void) => {
+        (listeners[evt] = listeners[evt] || []).push(fn);
+      },
+      querySelectorAll: (sel: string) => (sel === '.site-nav-link' ? navLinks : []),
+      querySelector: (sel: string) =>
+        sel === '.site-nav-link.active' ? navLinks.find((l) => l.classList.contains('active')) ?? null : null,
+      getElementById: (id: string) => elementsById[id] ?? null,
+    };
+    return {
+      document,
+      click(target: ReturnType<typeof makeFakeElement>) {
+        for (const fn of listeners['click'] || []) fn({ target, preventDefault: () => {} });
+      },
+    };
+  }
+
+  it('clicking a book-xref link switches to the matching sidebar page and posts its target', () => {
+    const posted: Array<{ type: string; target: string }> = [];
+    const bTopic = makeFakeElement({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/book/b.dita' } });
+    const aTopic = makeFakeElement({ classes: ['site-nav-link', 'active'], attrs: { 'data-site-target': '/book/a.dita' } });
+    const { document, click } = makeFakeSiteDocument([aTopic, bTopic], {});
+    const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
+    new Function('document', 'vscode', script)(document, { postMessage: (m: { type: string; target: string }) => posted.push(m) });
+
+    const xrefLink = makeFakeElement({ attrs: { 'data-dita-book-xref': '/book/b.dita#sec1' } });
+    click(xrefLink);
+
+    assert.deepStrictEqual(posted, [{ type: 'switchSitePage', target: '/book/b.dita' }]);
+    assert.strictEqual(bTopic.classList.contains('active'), true, 'clicking the xref should switch the sidebar to the target page');
+    assert.strictEqual(aTopic.classList.contains('active'), false);
+  });
+
+  it('clicking a book-xref link to the page already open just scrolls, without posting a page switch', () => {
+    const posted: unknown[] = [];
+    const scrolled: string[] = [];
+    const aTopic = makeFakeElement({ classes: ['site-nav-link', 'active'], attrs: { 'data-site-target': '/book/a.dita' } });
+    const { document, click } = makeFakeSiteDocument([aTopic], {
+      'sec2': { scrollIntoView: () => scrolled.push('sec2') },
+    });
+    const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
+    new Function('document', 'vscode', script)(document, { postMessage: (m: unknown) => posted.push(m) });
+
+    const xrefLink = makeFakeElement({ attrs: { 'data-dita-book-xref': '/book/a.dita#sec2' } });
+    click(xrefLink);
+
+    assert.deepStrictEqual(posted, [], 'the target page is already open -- no page switch to ask for');
+    assert.deepStrictEqual(scrolled, ['sec2'], 'but it should still scroll to the anchor on the current page');
+  });
+
+  it('clicking a book-xref with no matching sidebar entry does nothing, rather than throwing', () => {
+    const posted: unknown[] = [];
+    const { document, click } = makeFakeSiteDocument([], {});
+    const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
+    new Function('document', 'vscode', script)(document, { postMessage: (m: unknown) => posted.push(m) });
+
+    const xrefLink = makeFakeElement({ attrs: { 'data-dita-book-xref': '/book/nowhere.dita' } });
+    assert.doesNotThrow(() => click(xrefLink));
+    assert.deepStrictEqual(posted, []);
+  });
+
+  it('clicking a book-xref with no fragment switches pages without attempting to scroll to an empty id', () => {
+    const scrolled: string[] = [];
+    const bTopic = makeFakeElement({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/book/b.dita' } });
+    const aTopic = makeFakeElement({ classes: ['site-nav-link', 'active'], attrs: { 'data-site-target': '/book/a.dita' } });
+    const { document, click } = makeFakeSiteDocument([aTopic, bTopic], {
+      '': { scrollIntoView: () => scrolled.push('') },
+    });
+    const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
+    new Function('document', 'vscode', script)(document, { postMessage: () => {} });
+
+    const xrefLink = makeFakeElement({ attrs: { 'data-dita-book-xref': '/book/b.dita' } });
+    click(xrefLink);
+
+    assert.strictEqual(bTopic.classList.contains('active'), true);
+  });
+});
+
+describe('getSiteNavToggleScript (docsite mode)', () => {
+  it('emits a script that parses as JavaScript', () => {
+    assert.doesNotThrow(() => new Function(getSiteNavToggleScript()));
+  });
+
+  // Minimal standalone fakes (deliberately not reusing
+  // getSiteNavClickHandlerScript's own makeFakeElement above, which is
+  // scoped to that describe block) -- a fake .site-nav-item with a real
+  // Set-backed classList (so classList.toggle's own add/remove-and-report
+  // semantics are exercised, not just stubbed to a fixed return value) and
+  // a fake .site-nav-toggle button whose closest('.site-nav-item') points
+  // back at it, mirroring the actual parent/child DOM shape
+  // renderSiteNavHtml produces.
+  function makeFakeItem() {
+    const classes = new Set<string>();
+    const attrs: Record<string, string> = {};
+    return {
+      classList: {
+        contains: (c: string) => classes.has(c),
+        add: (c: string) => classes.add(c),
+        remove: (c: string) => classes.delete(c),
+        toggle: (c: string) => {
+          if (classes.has(c)) { classes.delete(c); return false; }
+          classes.add(c);
+          return true;
+        },
+      },
+      getAttribute: (name: string) => (name in attrs ? attrs[name] : null),
+      setAttribute: (name: string, val: string) => { attrs[name] = val; },
+      attrs,
+    };
+  }
+
+  function makeFakeToggle(item: ReturnType<typeof makeFakeItem>, initialAttrs?: Record<string, string>) {
+    const attrs: Record<string, string> = { ...(initialAttrs || {}) };
+    const toggle: { getAttribute: (n: string) => string | null; setAttribute: (n: string, v: string) => void; closest: (s: string) => unknown } = {
+      getAttribute: (name: string) => (name in attrs ? attrs[name] : null),
+      setAttribute: (name: string, val: string) => { attrs[name] = val; },
+      closest: (selector: string) => {
+        if (selector === '.site-nav-toggle') return toggle;
+        if (selector === '.site-nav-item') return item;
+        return null;
+      },
+    };
+    return toggle;
+  }
+
+  function makeFakeToggleDocument() {
+    const listeners: Array<(e: unknown) => void> = [];
+    const document = {
+      addEventListener: (evt: string, fn: (e: unknown) => void) => { if (evt === 'click') listeners.push(fn); },
+    };
+    return {
+      document,
+      click(target: unknown) {
+        for (const fn of listeners) fn({ target, preventDefault: () => {} });
+      },
+    };
+  }
+
+  it('clicking a toggle collapses its own .site-nav-item and flips its aria-expanded to false', () => {
+    const item = makeFakeItem();
+    item.setAttribute('aria-expanded', 'true');
+    const toggle = makeFakeToggle(item, { 'aria-expanded': 'true', 'data-expand-label': 'Expand', 'data-collapse-label': 'Collapse' });
+    const { document, click } = makeFakeToggleDocument();
+    new Function('document', getSiteNavToggleScript())(document);
+
+    click(toggle);
+
+    assert.strictEqual(item.classList.contains('collapsed'), true);
+    assert.strictEqual(toggle.getAttribute('aria-expanded'), 'false');
+    assert.strictEqual(item.getAttribute('aria-expanded'), 'false');
+  });
+
+  it('clicking an already-collapsed toggle expands it again, restoring aria-expanded to true', () => {
+    const item = makeFakeItem();
+    const toggle = makeFakeToggle(item, { 'aria-expanded': 'true', 'data-expand-label': 'Expand', 'data-collapse-label': 'Collapse' });
+    const { document, click } = makeFakeToggleDocument();
+    new Function('document', getSiteNavToggleScript())(document);
+
+    click(toggle); // collapse
+    click(toggle); // expand again
+
+    assert.strictEqual(item.classList.contains('collapsed'), false);
+    assert.strictEqual(toggle.getAttribute('aria-expanded'), 'true');
+  });
+
+  it('swaps the toggle\'s aria-label between its data-collapse-label and data-expand-label as it flips', () => {
+    const item = makeFakeItem();
+    const toggle = makeFakeToggle(item, { 'aria-expanded': 'true', 'data-expand-label': '\u5c55\u5f00', 'data-collapse-label': '\u6298\u53e0' });
+    const { document, click } = makeFakeToggleDocument();
+    new Function('document', getSiteNavToggleScript())(document);
+
+    click(toggle); // now collapsed -- label should offer the "expand" verb
+    assert.strictEqual(toggle.getAttribute('aria-label'), '\u5c55\u5f00');
+
+    click(toggle); // expanded again -- label should offer the "collapse" verb
+    assert.strictEqual(toggle.getAttribute('aria-label'), '\u6298\u53e0');
+  });
+
+  it('a click that does not hit a .site-nav-toggle (e.g. the link itself) does nothing, rather than throwing', () => {
+    const item = makeFakeItem();
+    const { document, click } = makeFakeToggleDocument();
+    new Function('document', getSiteNavToggleScript())(document);
+
+    const link = { closest: () => null };
+    assert.doesNotThrow(() => click(link));
+    assert.strictEqual(item.classList.contains('collapsed'), false);
+  });
+});
+
+describe('getSitePrevNextButtonsScript (docsite mode)', () => {
+  const opts = { prevLabel: '\u2039', prevTitle: 'Previous topic', nextLabel: '\u203a', nextTitle: 'Next topic' };
+
+  it('emits a script that parses as JavaScript', () => {
+    assert.doesNotThrow(() => new Function(getSitePrevNextButtonsScript(opts)));
+  });
+
+  it('creates elements with the ids getSiteNavClickHandlerScript looks them up by', () => {
+    const script = getSitePrevNextButtonsScript(opts);
+    assert.ok(script.includes("sitePrevBtn.id = '__site-prev-btn'"));
+    assert.ok(script.includes("siteNextBtn.id = '__site-next-btn'"));
+  });
+
+  it('does not append the buttons to a toolbar itself -- same convention as the other shared button scripts, caller decides whether/where', () => {
+    const script = getSitePrevNextButtonsScript(opts);
+    assert.ok(!script.includes('toolbar.appendChild'));
+  });
+
+  it('uses the configured labels/titles, not hardcoded English text', () => {
+    const custom = { prevLabel: 'PREV', prevTitle: 'Go back', nextLabel: 'NEXT', nextTitle: 'Go forward' };
+    const script = getSitePrevNextButtonsScript(custom);
+    assert.ok(script.includes(JSON.stringify('PREV')));
+    assert.ok(script.includes(JSON.stringify('Go back')));
+    assert.ok(script.includes(JSON.stringify('NEXT')));
+    assert.ok(script.includes(JSON.stringify('Go forward')));
+  });
+});
+
+describe('getSiteSidebarToggleScript (docsite mode)', () => {
+  const opts = { toggleTitle: 'Toggle topic list' };
+
+  it('emits a script that parses as JavaScript', () => {
+    assert.doesNotThrow(() => new Function(getSiteSidebarToggleScript(opts)));
+  });
+
+  it('creates a button with the id the click handler can be wired to', () => {
+    const script = getSiteSidebarToggleScript(opts);
+    assert.ok(script.includes("siteSidebarToggleBtn.id = '__site-sidebar-toggle-btn'"));
+  });
+
+  it('toggles the site-nav-collapsed class on body when clicked', () => {
+    const script = getSiteSidebarToggleScript(opts);
+    const listeners: Record<string, () => void> = {};
+    const fakeBtn = {
+      style: {},
+      setAttribute: () => {},
+      addEventListener: (evt: string, fn: () => void) => { listeners[evt] = fn; },
+    };
+    const fakeBody = {
+      classList: {
+        toggled: false,
+        toggle(cls: string) { if (cls === 'site-nav-collapsed') this.toggled = !this.toggled; },
+      },
+    };
+    const fn = new Function('document', 'btnStyle', script + '; return siteSidebarToggleBtn;');
+    const fakeDocument = { createElement: () => fakeBtn, body: fakeBody };
+    const btn = fn(fakeDocument, '');
+    assert.strictEqual(btn, fakeBtn);
+    listeners['click']();
+    assert.strictEqual(fakeBody.classList.toggled, true, 'clicking the button should flip site-nav-collapsed on body');
+  });
+
+  it('does not append the button to a toolbar itself -- same convention as the other shared button scripts, caller decides whether/where', () => {
+    const script = getSiteSidebarToggleScript(opts);
+    assert.ok(!script.includes('toolbar.appendChild'));
+  });
+
+  it('uses the configured title, not hardcoded English text', () => {
+    const custom = { toggleTitle: 'Afficher/masquer les sujets' };
+    const script = getSiteSidebarToggleScript(custom);
+    assert.ok(script.includes(JSON.stringify('Afficher/masquer les sujets')));
+  });
+});
+
+describe('getModeToggleScript (docsite mode)', () => {
+  const opts = {
+    switchModeTitle: 'Switch mode',
+    modeOutline: 'Outline',
+    modeBook: 'Book',
+    modeSite: 'Site',
+    switchModeMsgType: 'switchMode',
+  };
+
+  it('emits a script that parses as JavaScript', () => {
+    assert.doesNotThrow(() => new Function('currentMode', opts.switchModeMsgType, getModeToggleScript(opts)));
+  });
+
+  function run(currentMode: string) {
+    const script = getModeToggleScript(opts);
+    const fakeBtn = { style: {}, setAttribute: () => {}, addEventListener: () => {} };
+    const fakeDocument = { createElement: () => fakeBtn };
+    const fn = new Function('currentMode', 'btnStyle', 'document', 'vscode', script + '; return { btn: modeBtn, getMode: function() { return currentMode; } };');
+    return fn(currentMode, '', fakeDocument, { postMessage: () => {} });
+  }
+
+  it('labels the button with the CURRENT mode, not the mode a click switches to -- the earlier version showed the target mode, which read backwards', () => {
+    assert.strictEqual(run('book').btn.textContent, 'Book', 'in book mode, the button should say "Book", not "Site" (the mode a click would switch to)');
+    assert.strictEqual(run('site').btn.textContent, 'Site');
+    assert.strictEqual(run('tree').btn.textContent, 'Outline');
+  });
+
+  it('still cycles tree -> book -> site -> tree on click, and posts the new mode', () => {
+    const posted: Array<{ type: string; mode: string }> = [];
+    const script = getModeToggleScript(opts);
+    const listeners: Record<string, () => void> = {};
+    const fakeBtn = {
+      style: {},
+      setAttribute: () => {},
+      addEventListener: (evt: string, fn: () => void) => { listeners[evt] = fn; },
+    };
+    const fakeDocument = { createElement: () => fakeBtn };
+    const fn = new Function('currentMode', 'btnStyle', 'document', 'vscode', script + '; return modeBtn;');
+    const btn = fn('tree', '', fakeDocument, { postMessage: (m: { type: string; mode: string }) => posted.push(m) });
+    assert.strictEqual(btn.textContent, 'Outline');
+    listeners['click']();
+    assert.strictEqual(btn.textContent, 'Book', 'first click from tree should switch to book and relabel to the new current mode');
+    listeners['click']();
+    assert.strictEqual(btn.textContent, 'Site');
+    listeners['click']();
+    assert.strictEqual(btn.textContent, 'Outline');
+    assert.deepStrictEqual(posted.map(m => m.mode), ['book', 'site', 'tree']);
+    assert.ok(posted.every(m => m.type === 'switchMode'));
+  });
+
+  it('does not append the button to a toolbar itself', () => {
+    const script = getModeToggleScript(opts);
+    assert.ok(!script.includes('toolbar.appendChild'));
+  });
+});
+
+describe('clampSidebarWidth (docsite mode sidebar resize)', () => {
+  it('passes values already inside the range through unchanged', () => {
+    assert.strictEqual(clampSidebarWidth(300), 300);
+  });
+
+  it('clamps to the default minimum (160) and maximum (560)', () => {
+    assert.strictEqual(clampSidebarWidth(50), 160);
+    assert.strictEqual(clampSidebarWidth(9999), 560);
+  });
+
+  it('honors explicit min/max overrides', () => {
+    assert.strictEqual(clampSidebarWidth(50, 100, 200), 100);
+    assert.strictEqual(clampSidebarWidth(9999, 100, 200), 200);
+    assert.strictEqual(clampSidebarWidth(150, 100, 200), 150);
+  });
+});
+
+describe('getSiteSidebarResizerScript (docsite mode)', () => {
+  it('emits a script that parses as JavaScript', () => {
+    assert.doesNotThrow(() => new Function('document', getSiteSidebarResizerScript()));
+  });
+
+  it('no-ops without throwing when the resizer/.site-nav elements are not in the DOM (tree/book mode pages)', () => {
+    const fakeDocument = { getElementById: () => null, querySelector: () => null };
+    const fn = new Function('document', getSiteSidebarResizerScript());
+    assert.doesNotThrow(() => fn(fakeDocument));
+  });
+
+  it('injects the exported clampSidebarWidth rather than re-deriving the clamp math inline', () => {
+    const script = getSiteSidebarResizerScript();
+    assert.ok(
+      script.includes('var clampSidebarWidth = ' + clampSidebarWidth.toString() + ';'),
+      'expected the resizer script to inject the exported clampSidebarWidth verbatim',
+    );
+  });
+});
+
+describe('getImageLightboxScript', () => {
+  // A minimal, hand-rolled fake DOM -- same spirit as
+  // getSiteNavClickHandlerScript/getSiteNavToggleScript's own fake
+  // elements above, just enough real behavior (attributes, classList,
+  // a small CSS-selector matcher for the handful of selectors this
+  // script actually uses, event delegation via document-level
+  // listeners) to exercise the synchronous, clipboard/fetch-independent
+  // parts of the lightbox: opening/closing, arrow-key stepping, error
+  // marking, and the right-click menu's own open/close/label.
+  //
+  // NOT covered here: copyImageToClipboard's own body (fetch +
+  // createImageBitmap + navigator.clipboard.write) -- those are real
+  // browser APIs with no meaningful fake in a plain Node test, so the
+  // Ctrl+C-copies / right-click "Copy Image" *outcome* isn't
+  // exercised, only that the menu opens with the right label and can
+  // be dismissed.
+
+  /** Minimal stand-in for a DOM Event -- just the fields
+   *  getImageLightboxScript's own handlers actually read. */
+  interface FakeDomEvent {
+    target?: FakeElement;
+    key?: string;
+    clientX?: number;
+    clientY?: number;
+    ctrlKey?: boolean;
+    metaKey?: boolean;
+    preventDefault?: () => void;
+  }
+
+  interface FakeElement {
+    tagName: string;
+    attrs: Record<string, string>;
+    style: Record<string, string>;
+    classListSet: Set<string>;
+    children: FakeElement[];
+    parentNode: FakeElement | FakeDocument | null;
+    listeners: Record<string, Array<(e: FakeDomEvent) => void>>;
+    src: string;
+    alt: string;
+    title: string;
+    textContent: string;
+    disabled: boolean;
+    offsetWidth: number;
+    offsetHeight: number;
+    getAttribute(name: string): string | null;
+    setAttribute(name: string, value: string): void;
+    hasAttribute(name: string): boolean;
+    removeAttribute(name: string): void;
+    classList: { add(c: string): void; contains(c: string): boolean; remove(c: string): void };
+    appendChild(child: FakeElement): FakeElement;
+    remove(): void;
+    addEventListener(type: string, fn: (e: FakeDomEvent) => void): void;
+    closest(selector: string): FakeElement | null;
+    contains(el: FakeElement): boolean;
+  }
+
+  interface FakeDocument {
+    body: FakeElement;
+    listeners: Record<string, Array<(e: FakeDomEvent) => void>>;
+    createElement(tag: string): FakeElement;
+    addEventListener(type: string, fn: (e: FakeDomEvent) => void, _capture?: boolean): void;
+    removeEventListener(type: string, fn: (e: FakeDomEvent) => void): void;
+    querySelector(selector: string): FakeElement | null;
+    querySelectorAll(selector: string): FakeElement[];
+    dispatch(type: string, e: FakeDomEvent): void;
+  }
+
+  // Supports exactly the selectors getImageLightboxScript's own source
+  // uses: a tag name, [attr]/: not([attr]), and .class, ORed together
+  // with commas ('a, b'). Not a general CSS engine -- just enough to
+  // drive this one script's own delegation logic faithfully.
+  function matchesSimple(el: FakeElement, simple: string): boolean {
+    const tagMatch = simple.match(/^[a-zA-Z]+/);
+    if (tagMatch && el.tagName.toLowerCase() !== tagMatch[0].toLowerCase()) return false;
+    const classMatches = simple.match(/\.[\w-]+/g) || [];
+    for (const c of classMatches) if (!el.classListSet.has(c.slice(1))) return false;
+    const notMatches = simple.match(/:not\(\[([\w-]+)\]\)/g) || [];
+    for (const n of notMatches) {
+      const attr = /:not\(\[([\w-]+)\]\)/.exec(n)![1];
+      if (el.attrs[attr] !== undefined) return false;
+    }
+    const attrPresence = simple.replace(/:not\(\[[\w-]+\]\)/g, '').match(/\[([\w-]+)\]/g) || [];
+    for (const a of attrPresence) {
+      const attr = /\[([\w-]+)\]/.exec(a)![1];
+      if (el.attrs[attr] === undefined) return false;
+    }
+    return true;
+  }
+
+  function matches(el: FakeElement, selector: string): boolean {
+    return selector.split(',').some((s) => matchesSimple(el, s.trim()));
+  }
+
+  function makeFakeElement(tag: string): FakeElement {
+    const el: FakeElement = {
+      tagName: tag.toUpperCase(),
+      attrs: {},
+      style: {},
+      classListSet: new Set<string>(),
+      children: [],
+      parentNode: null,
+      listeners: {},
+      src: '',
+      alt: '',
+      title: '',
+      textContent: '',
+      disabled: false,
+      offsetWidth: 100,
+      offsetHeight: 40,
+      getAttribute(name) { return name in el.attrs ? el.attrs[name] : null; },
+      setAttribute(name, value) { el.attrs[name] = value; },
+      hasAttribute(name) { return name in el.attrs; },
+      removeAttribute(name) { delete el.attrs[name]; },
+      classList: undefined as unknown as FakeElement['classList'],
+      appendChild(child) { child.parentNode = el; el.children.push(child); return child; },
+      remove() {
+        if (el.parentNode && 'children' in el.parentNode) {
+          const idx = (el.parentNode as FakeElement).children.indexOf(el);
+          if (idx !== -1) (el.parentNode as FakeElement).children.splice(idx, 1);
+        }
+        el.parentNode = null;
+      },
+      addEventListener(type, fn) {
+        if (!el.listeners[type]) el.listeners[type] = [];
+        el.listeners[type].push(fn);
+      },
+      closest(selector) {
+        let cur: FakeElement | null = el;
+        while (cur) {
+          if (matches(cur, selector)) return cur;
+          cur = cur.parentNode && 'children' in cur.parentNode ? (cur.parentNode as FakeElement) : null;
+        }
+        return null;
+      },
+      contains(other) {
+        let cur: FakeElement | null = other;
+        while (cur) {
+          if (cur === el) return true;
+          cur = cur.parentNode && 'children' in cur.parentNode ? (cur.parentNode as FakeElement) : null;
+        }
+        return false;
+      },
+    };
+    el.classList = {
+      add: (c: string) => el.classListSet.add(c),
+      contains: (c: string) => el.classListSet.has(c),
+      remove: (c: string) => el.classListSet.delete(c),
+    };
+    // className is read by matchesSimple via classListSet directly, but
+    // the real DOM also lets code set `el.className = '...'` --
+    // getImageLightboxScript only ever uses el.className = 'x' (single
+    // class) for its own created elements, so mirror that one case.
+    Object.defineProperty(el, 'className', {
+      set(v: string) { el.classListSet = new Set(v.split(/\s+/).filter(Boolean)); },
+      get() { return Array.from(el.classListSet).join(' '); },
+    });
+    return el;
+  }
+
+  function walk(el: FakeElement, out: FakeElement[]): void {
+    out.push(el);
+    for (const c of el.children) walk(c, out);
+  }
+
+  function makeFakeDocument(): FakeDocument {
+    const body = makeFakeElement('body');
+    const doc: FakeDocument = {
+      body,
+      listeners: {},
+      createElement: (tag: string) => makeFakeElement(tag),
+      addEventListener(type, fn) {
+        if (!this.listeners[type]) this.listeners[type] = [];
+        this.listeners[type].push(fn);
+      },
+      removeEventListener(type, fn) {
+        if (!this.listeners[type]) return;
+        const idx = this.listeners[type].indexOf(fn);
+        if (idx !== -1) this.listeners[type].splice(idx, 1);
+      },
+      querySelector(selector) {
+        const all: FakeElement[] = [];
+        walk(body, all);
+        return all.find((el) => el !== body && matches(el, selector)) || null;
+      },
+      querySelectorAll(selector) {
+        const all: FakeElement[] = [];
+        walk(body, all);
+        return all.filter((el) => el !== body && matches(el, selector));
+      },
+      dispatch(type, e) {
+        for (const fn of (this.listeners[type] || []).slice()) fn(e);
+      },
+    };
+    return doc;
+  }
+
+  const opts = {
+    copyMenuItem: 'Copy Image',
+    copyDoneLabel: 'Copied',
+    copyFailedLabel: 'Copy failed',
+    copyUnsupportedLabel: 'Not supported',
+    copyToastDone: 'Copied to clipboard',
+    copyToastFailed: 'Copy failed',
+  };
+
+  function run(doc: FakeDocument) {
+    const fakeWindow = { innerWidth: 1024, innerHeight: 768 };
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    new Function('document', 'window', getImageLightboxScript(opts))(doc, fakeWindow);
+  }
+
+  it('emits a script that parses as JavaScript', () => {
+    assert.doesNotThrow(() => new Function(getImageLightboxScript(opts)));
+  });
+
+  it('marks a broken data-dita-src image with data-load-error, an alt/title failure message, and a red outline', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const img = makeFakeElement('img');
+    img.setAttribute('data-dita-src', 'diagram.png');
+    doc.dispatch('error', { target: img });
+    assert.strictEqual(img.getAttribute('data-load-error'), 'true');
+    assert.ok(img.alt.includes('diagram.png'));
+    assert.ok(img.title.includes('diagram.png'));
+    assert.strictEqual(img.style.outline, '3px solid red');
+  });
+
+  it('does not overwrite an image\'s own pre-existing alt text with the failure message', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const img = makeFakeElement('img');
+    img.setAttribute('data-dita-src', 'diagram.png');
+    img.setAttribute('alt', 'A real DITA <alt>');
+    doc.dispatch('error', { target: img });
+    // The script's guard reads via getAttribute('alt') and only assigns
+    // img.alt = msg when that's falsy -- asserting the .alt property was
+    // never touched (still its default) is the real signal that the
+    // guard actually short-circuited, not just that nothing called
+    // setAttribute('alt', ...) afterward (this fake element's .alt
+    // property and its 'alt' attribute aren't auto-reflected the way a
+    // real DOM element's are, so checking getAttribute alone wouldn't
+    // prove the assignment itself was skipped).
+    assert.strictEqual(img.alt, '', 'img.alt = msg should never have run');
+    assert.ok(img.title.includes('diagram.png'), 'title still gets the failure text even though alt is left alone');
+  });
+
+  it('ignores an error event whose target is not an IMG, or an IMG with no data-dita-src', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const div = makeFakeElement('div');
+    assert.doesNotThrow(() => doc.dispatch('error', { target: div }));
+    assert.strictEqual(div.getAttribute('data-load-error'), null);
+    const plainImg = makeFakeElement('img');
+    doc.dispatch('error', { target: plainImg });
+    assert.strictEqual(plainImg.getAttribute('data-load-error'), null);
+  });
+
+  it('clicking an eligible image opens the lightbox: an overlay + enlarged <img> appended to body, src/alt copied from the clicked image', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const img = makeFakeElement('img');
+    img.setAttribute('data-dita-src', 'diagram.png');
+    img.src = 'webview-resource://diagram.png';
+    img.alt = 'A diagram';
+    doc.body.appendChild(img);
+    doc.dispatch('click', { target: img, preventDefault() {} });
+    assert.strictEqual(doc.body.children.length, 2, 'the overlay should be appended alongside the clicked image');
+    const overlay = doc.body.children[1];
+    assert.strictEqual(overlay.children.length, 1);
+    const big = overlay.children[0];
+    assert.strictEqual(big.tagName, 'IMG');
+    assert.strictEqual(big.src, 'webview-resource://diagram.png');
+    assert.strictEqual(big.alt, 'A diagram');
+  });
+
+  it('clicking a broken (data-load-error) image does not open the lightbox', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const img = makeFakeElement('img');
+    img.setAttribute('data-dita-src', 'diagram.png');
+    img.setAttribute('data-load-error', 'true');
+    doc.body.appendChild(img);
+    doc.dispatch('click', { target: img, preventDefault() {} });
+    assert.strictEqual(doc.body.children.length, 1, 'only the original image, no overlay was added');
+  });
+
+  it('clicking a plain non-image element does nothing', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const div = makeFakeElement('div');
+    doc.body.appendChild(div);
+    assert.doesNotThrow(() => doc.dispatch('click', { target: div, preventDefault() {} }));
+    assert.strictEqual(doc.body.children.length, 1);
+  });
+
+  it('pressing Escape while the lightbox is open closes it (overlay removed from body)', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const img = makeFakeElement('img');
+    img.setAttribute('data-dita-src', 'a.png');
+    doc.body.appendChild(img);
+    doc.dispatch('click', { target: img, preventDefault() {} });
+    assert.strictEqual(doc.body.children.length, 2);
+    doc.dispatch('keydown', { key: 'Escape', preventDefault() {} });
+    assert.strictEqual(doc.body.children.length, 1, 'the overlay should have removed itself');
+  });
+
+  it('clicking the overlay background closes the lightbox', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const img = makeFakeElement('img');
+    img.setAttribute('data-dita-src', 'a.png');
+    doc.body.appendChild(img);
+    doc.dispatch('click', { target: img, preventDefault() {} });
+    const overlay = doc.body.children[1];
+    // The overlay's own click listener was registered directly on it
+    // (addEventListener('click', closeLightbox)), not via document
+    // delegation -- fire it the same way a real click would.
+    overlay.listeners.click[0]({ target: overlay });
+    assert.strictEqual(doc.body.children.length, 1);
+  });
+
+  it('ArrowRight/ArrowLeft step through every eligible image on the page, in document order, wrapping around', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const imgs = ['a.png', 'b.png', 'c.png'].map((src) => {
+      const img = makeFakeElement('img');
+      img.setAttribute('data-dita-src', src);
+      img.src = src;
+      doc.body.appendChild(img);
+      return img;
+    });
+    doc.dispatch('click', { target: imgs[0], preventDefault() {} });
+    const overlay = doc.body.children[doc.body.children.length - 1];
+    const big = overlay.children[0];
+    assert.strictEqual(big.src, 'a.png');
+    doc.dispatch('keydown', { key: 'ArrowRight', preventDefault() {} });
+    assert.strictEqual(big.src, 'b.png');
+    doc.dispatch('keydown', { key: 'ArrowRight', preventDefault() {} });
+    assert.strictEqual(big.src, 'c.png');
+    doc.dispatch('keydown', { key: 'ArrowRight', preventDefault() {} });
+    assert.strictEqual(big.src, 'a.png', 'wraps back around to the first image');
+    doc.dispatch('keydown', { key: 'ArrowLeft', preventDefault() {} });
+    assert.strictEqual(big.src, 'c.png', 'wraps the other direction too');
+  });
+
+  it('ArrowRight skips images marked data-load-error when stepping', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const a = makeFakeElement('img');
+    a.setAttribute('data-dita-src', 'a.png');
+    a.src = 'a.png';
+    const broken = makeFakeElement('img');
+    broken.setAttribute('data-dita-src', 'broken.png');
+    broken.setAttribute('data-load-error', 'true');
+    const c = makeFakeElement('img');
+    c.setAttribute('data-dita-src', 'c.png');
+    c.src = 'c.png';
+    doc.body.appendChild(a);
+    doc.body.appendChild(broken);
+    doc.body.appendChild(c);
+    doc.dispatch('click', { target: a, preventDefault() {} });
+    const overlay = doc.body.children[doc.body.children.length - 1];
+    const big = overlay.children[0];
+    doc.dispatch('keydown', { key: 'ArrowRight', preventDefault() {} });
+    assert.strictEqual(big.src, 'c.png', 'broken.png was never a lightbox candidate to begin with');
+  });
+
+  it('right-clicking an eligible image opens the copy-image menu with the supplied copyMenuItem label, positioned near the click', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const img = makeFakeElement('img');
+    img.setAttribute('data-dita-src', 'a.png');
+    doc.body.appendChild(img);
+    doc.dispatch('contextmenu', { target: img, clientX: 50, clientY: 60, preventDefault() {} });
+    const menu = doc.querySelector('.dita-img-ctxmenu');
+    assert.ok(menu, 'the context menu should have been appended to the document');
+    assert.strictEqual(menu!.children[0].textContent, 'Copy Image');
+  });
+
+  it('right-clicking a non-image element closes any open menu instead of opening a new one', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const img = makeFakeElement('img');
+    img.setAttribute('data-dita-src', 'a.png');
+    doc.body.appendChild(img);
+    doc.dispatch('contextmenu', { target: img, clientX: 0, clientY: 0, preventDefault() {} });
+    assert.ok(doc.querySelector('.dita-img-ctxmenu'));
+    const div = makeFakeElement('div');
+    doc.body.appendChild(div);
+    doc.dispatch('contextmenu', { target: div, clientX: 0, clientY: 0, preventDefault() {} });
+    assert.strictEqual(doc.querySelector('.dita-img-ctxmenu'), null);
+  });
+
+  it('clicking outside the open context menu closes it', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const img = makeFakeElement('img');
+    img.setAttribute('data-dita-src', 'a.png');
+    doc.body.appendChild(img);
+    doc.dispatch('contextmenu', { target: img, clientX: 0, clientY: 0, preventDefault() {} });
+    assert.ok(doc.querySelector('.dita-img-ctxmenu'));
+    const outside = makeFakeElement('div');
+    doc.body.appendChild(outside);
+    doc.dispatch('click', { target: outside, preventDefault() {} });
+    assert.strictEqual(doc.querySelector('.dita-img-ctxmenu'), null);
+  });
+
+  it('pressing Escape closes an open context menu', () => {
+    const doc = makeFakeDocument();
+    run(doc);
+    const img = makeFakeElement('img');
+    img.setAttribute('data-dita-src', 'a.png');
+    doc.body.appendChild(img);
+    doc.dispatch('contextmenu', { target: img, clientX: 0, clientY: 0, preventDefault() {} });
+    assert.ok(doc.querySelector('.dita-img-ctxmenu'));
+    doc.dispatch('keydown', { key: 'Escape' });
+    assert.strictEqual(doc.querySelector('.dita-img-ctxmenu'), null);
+  });
+
+  it('embeds each opts string via JSON.stringify -- a value containing quotes/backslashes still round-trips exactly, rather than breaking the generated script', () => {
+    const tricky = { ...opts, copyMenuItem: 'Copy "the" image\\thing' };
+    const doc = makeFakeDocument();
+    const fakeWindow = { innerWidth: 1024, innerHeight: 768 };
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    assert.doesNotThrow(() => new Function('document', 'window', getImageLightboxScript(tricky))(doc, fakeWindow));
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    new Function('document', 'window', getImageLightboxScript(tricky))(doc, fakeWindow);
+    const img = makeFakeElement('img');
+    img.setAttribute('data-dita-src', 'a.png');
+    doc.body.appendChild(img);
+    doc.dispatch('contextmenu', { target: img, clientX: 0, clientY: 0, preventDefault() {} });
+    const menu = doc.querySelector('.dita-img-ctxmenu');
+    assert.strictEqual(menu!.children[0].textContent, 'Copy "the" image\\thing');
   });
 });

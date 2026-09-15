@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="maintenance_general" xml:lang="zh-CN">
+  <title>日常维护概述</title>
+  <shortdesc>坚持简单的周期性维护可以保持主机长期稳定运行，本主题给出推荐的维护周期与自检项目。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>维护</indexterm>
+        <indexterm>保养</indexterm>
+        <indexterm>自检</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <conbody>
+<p><ph keyref="product-name"/> 基本免维护，但以下周期性检查有助于提前发现问题：</p>
+    <section>
+      <title>维护周期表</title>
+      <table id="maintenance-plan">
+        <title>推荐维护周期</title>
+        <tgroup cols="3">
+          <thead><row><entry>周期</entry><entry>项目</entry><entry>参考</entry></row></thead>
+          <tbody>
+            <row><entry>每周</entry><entry>查看控制台是否有设备离线告警</entry><entry><xref href="ts_offline.dita"/></entry></row>
+            <row><entry>每月</entry><entry>检查固件更新并升级</entry><entry><xref href="firmware_update.dita"/></entry></row>
+            <row><entry>每季度</entry><entry>清洁机身与散热孔</entry><entry><xref href="clean_device.dita"/></entry></row>
+            <row><entry>每季度</entry><entry>确认家庭配置备份为最新</entry><entry><xref href="backup_restore.dita"/></entry></row>
+            <row><entry>每年</entry><entry>检查壁挂支架紧固与线材老化</entry><entry><xref href="wall_mount.dita"/></entry></row>
+          </tbody>
+        </tgroup>
+      </table>
+    </section>    <section>
+      <title>自检清单</title>
+      <p>怀疑主机状态异常时，依次检查：</p>
+      <ol>
+        <li>氛围灯是否为白色常亮（状态表见 <xref href="led_status.dita"/>）。</li>
+        <li>主机剩余存储空间是否大于 20%。</li>
+        <li>Zigbee 子设备在线比例是否超过 95%。</li>
+        <li>自动化执行记录中最近一次失败时间。</li>
+      </ol>
+    </section>
+  </conbody>
+</concept>

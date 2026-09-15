@@ -1,5 +1,7 @@
 import * as assert from 'assert';
 import { join } from 'path';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
 import {
   resolveDitaOtExecutable,
   buildDitaOtArgs,
@@ -279,7 +281,7 @@ describe('buildDitaOtArgs', () => {
 
 describe('buildNavManifest', () => {
   it('should build manifest from test ditamap', () => {
-    const manifest = buildNavManifest(join(__dirname, '..', '..', '..', 'test-dita-file', 'test.ditamap'));
+    const manifest = buildNavManifest(join(__dirname, '..', '..', '..', 'test-dita-file', 'fixture', 'test.ditamap'));
     assert.ok(Array.isArray(manifest));
     assert.ok(manifest.length > 0);
     // All entries should have .html extension
@@ -295,11 +297,41 @@ describe('buildNavManifest', () => {
   });
 
   it('should skip ditamap references', () => {
-    const manifest = buildNavManifest(join(__dirname, '..', '..', '..', 'test-dita-file', 'test.ditamap'));
+    const manifest = buildNavManifest(join(__dirname, '..', '..', '..', 'test-dita-file', 'fixture', 'test.ditamap'));
     // keys.ditamap is referenced with format="ditamap", should not appear
     for (const entry of manifest) {
       assert.ok(!entry.file.endsWith('.ditamap'), 'should not contain ditamap entries');
       assert.ok(!entry.file.includes('keys.ditamap'));
+    }
+  });
+
+  it('should skip a resource-only entry (a <keydef>, or an explicit processing-role="resource-only") -- it exists purely to be pulled in via keyref/conref, never as its own page in the nav', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'dita-ot-navmanifest-'));
+    try {
+      mkdirSync(join(tmpDir, 'topics'));
+      writeFileSync(
+        join(tmpDir, 'topics', 'real.dita'),
+        '<?xml version="1.0" encoding="UTF-8"?>\n<topic id="real"><title>Real Topic</title><body/></topic>',
+      );
+      writeFileSync(
+        join(tmpDir, 'topics', 'hidden.dita'),
+        '<?xml version="1.0" encoding="UTF-8"?>\n<topic id="hidden"><title>Hidden Resource</title><body/></topic>',
+      );
+      writeFileSync(
+        join(tmpDir, 'main.ditamap'),
+        `<?xml version="1.0" encoding="UTF-8"?>
+<map>
+  <title>T</title>
+  <keydef keys="brand" href="topics/hidden.dita"/>
+  <topicref href="topics/hidden.dita" processing-role="resource-only"/>
+  <topicref href="topics/real.dita"/>
+</map>`,
+      );
+      const manifest = buildNavManifest(join(tmpDir, 'main.ditamap'));
+      assert.strictEqual(manifest.length, 1, 'only the real, non-resource-only topic should reach the nav manifest');
+      assert.strictEqual(manifest[0].file, 'real.html');
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 });

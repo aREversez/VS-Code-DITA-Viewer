@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="safety_general" xml:lang="zh-CN">
+  <title>安全须知</title>
+  <shortdesc>安装与使用本产品前，请务必完整阅读本安全须知。违规操作可能导致触电、火灾、设备损坏或人身伤害。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>安全须知</indexterm>
+        <indexterm>警告</indexterm>
+        <indexterm>注意事项</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <conbody>
+<p>以下安全要求适用于<ph keyref="product-name"/>主机及全部随附配件。请妥善保管本手册以备查阅，并将安全须知转达给所有可能接触本产品的家庭成员。</p>
+    <section>
+      <title>基本安全要求</title>
+      <ul>
+        <li>请勿自行拆卸、改装或维修主机，内部无用户可维修部件。</li>
+        <li>请仅使用包装内附带的专用电源适配器供电。</li>
+        <li>请勿让儿童接触电源线与适配器。</li>
+        <li>发现外壳破裂、异味、异响或过热时，立即断电并参见 <xref href="ts_overheat.dita"/> 处理。</li>
+        <li>清洁前请先断电，方法参见 <xref href="clean_device.dita"/>。</li>
+      </ul>
+    </section>    <section>
+      <title>安装环境安全</title>
+      <p>主机应安装在远离水源、热源与强电磁干扰的位置。壁挂安装时必须使用附带的膨胀螺栓并确认墙体承重能力，步骤参见 <xref href="wall_mount.dita"/>。</p>
+<note type="warning"><p>严禁在雷雨天气进行任何接线操作。</p></note><note type="caution"><p>主机与适配器不得被毛毯、纸张等易燃物覆盖，以免影响散热。</p></note>
+    </section>    <section>
+      <title>电池安全</title>
+      <p>选配遥控器内置锂离子电池。请勿将其投入火中、挤压或拆解；长期停用请每三个月充电一次。废弃时请交由指定回收点处理。</p>
+    </section>
+  </conbody>
+</concept>

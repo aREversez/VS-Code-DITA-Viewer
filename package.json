@@ -2,7 +2,7 @@
   "name": "dita-viewer",
   "displayName": "DITA Viewer",
   "description": "%extension.description%",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "publisher": "dita-viewer",
   "license": "MIT",
   "repository": {
@@ -14,17 +14,27 @@
     "url": "https://github.com/aREversez/VS-Code-DITA-Viewer/issues"
   },
   "icon": "media/icons/extension-icon.png",
+  "galleryBanner": {
+    "color": "#1E1E1E",
+    "theme": "dark"
+  },
   "keywords": [
     "dita",
     "xml",
+    "ditamap",
     "documentation",
     "preview",
-    "ditamap"
+    "docs-as-code",
+    "technical writing",
+    "dita-ot",
+    "oasis",
+    "bookmap"
   ],
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
+    "Visualization",
     "Other"
   ],
   "main": "./dist/extension.js",
@@ -78,10 +88,7 @@
       {
         "command": "ditaViewer.showRendered",
         "title": "%command.showRendered.title%",
-        "icon": {
-          "light": "media/icons/preview.svg",
-          "dark": "media/icons/preview~dark.svg"
-        }
+        "icon": "$(dita-preview)"
       },
       {
         "command": "ditaViewer.showSource",
@@ -91,10 +98,7 @@
       {
         "command": "ditaViewer.showMapRendered",
         "title": "%command.showMapRendered.title%",
-        "icon": {
-          "light": "media/icons/map-preview.svg",
-          "dark": "media/icons/map-preview~dark.svg"
-        }
+        "icon": "$(dita-map-preview)"
       },
       {
         "command": "ditaViewer.showMapSource",
@@ -104,10 +108,7 @@
       {
         "command": "ditaViewer.transformWithDitaOt",
         "title": "%command.transformWithDitaOt.title%",
-        "icon": {
-          "light": "media/icons/transform.svg",
-          "dark": "media/icons/transform~dark.svg"
-        }
+        "icon": "$(dita-transform)"
       },
       {
         "command": "ditaViewer.exportHtml",
@@ -115,11 +116,39 @@
         "icon": "$(export)"
       },
       {
+        "command": "ditaViewer.compareWithGit",
+        "title": "%command.compareWithGit.title%",
+        "icon": "$(diff)"
+      },
+      {
         "command": "ditaViewer.mapExplorer.refresh",
         "title": "%command.mapExplorerRefresh.title%",
         "icon": "$(refresh)"
       }
     ],
+    "icons": {
+      "dita-preview": {
+        "description": "%icon.ditaPreview.description%",
+        "default": {
+          "fontPath": "media/fonts/dita-viewer-icons.woff",
+          "fontCharacter": "\\E900"
+        }
+      },
+      "dita-map-preview": {
+        "description": "%icon.ditaMapPreview.description%",
+        "default": {
+          "fontPath": "media/fonts/dita-viewer-icons.woff",
+          "fontCharacter": "\\E901"
+        }
+      },
+      "dita-transform": {
+        "description": "%icon.ditaTransform.description%",
+        "default": {
+          "fontPath": "media/fonts/dita-viewer-icons.woff",
+          "fontCharacter": "\\E902"
+        }
+      }
+    },
     "keybindings": [
       {
         "command": "ditaViewer.showRendered",
@@ -129,6 +158,16 @@
       {
         "command": "ditaViewer.showMapRendered",
         "key": "ctrl+shift+alt+m",
+        "when": "editorLangId == ditamap || resourceExtname == .ditamap"
+      },
+      {
+        "command": "ditaViewer.showRendered",
+        "key": "ctrl+k v",
+        "when": "editorLangId == dita || resourceExtname == .dita"
+      },
+      {
+        "command": "ditaViewer.showMapRendered",
+        "key": "ctrl+k v",
         "when": "editorLangId == ditamap || resourceExtname == .ditamap"
       }
     ],
@@ -213,6 +252,11 @@
           "command": "ditaViewer.exportHtml",
           "when": "resourceExtname == .dita || resourceExtname == .ditamap",
           "group": "1_export"
+        },
+        {
+          "command": "ditaViewer.compareWithGit",
+          "when": "resourceExtname == .dita",
+          "group": "1_export"
         }
       ],
       "commandPalette": [
@@ -239,6 +283,10 @@
         {
           "command": "ditaViewer.exportHtml",
           "when": "resourceExtname == .dita || resourceExtname == .ditamap || activeCustomEditorId == ditaViewer.preview || activeCustomEditorId == ditaViewer.mapPreview"
+        },
+        {
+          "command": "ditaViewer.compareWithGit",
+          "when": "resourceExtname == .dita"
         },
         {
           "command": "ditaViewer.mapExplorer.refresh",
@@ -284,7 +332,10 @@
     "watch": "node esbuild.config.js --watch",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "check:l10n": "node scripts/check-l10n.cjs",
+  "bench:book-render": "node scripts/bench-book-render.js",
+    "build:icons": "node scripts/build-icon-font.js",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "pretest": "tsc -p tsconfig.test.json",
     "test": "mocha --config .mocharc.json",
@@ -298,14 +349,24 @@
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
     "@vscode/test-electron": "^3.1.0",
-    "esbuild": "^0.24.0",
+    "cheerio": "^1.2.0",
+    "esbuild": "^0.28.2",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
-    "mocha": "^10.8.0",
+    "mocha": "^11.8.0",
+    "opentype.js": "^2.0.0",
     "pngjs": "^7.0.0",
     "prettier": "^3.4.0",
     "sax": "^1.4.1",
     "sharp": "^0.35.3",
+    "svgpath": "^2.6.0",
+    "ttf2woff": "^3.0.0",
     "typescript": "^5.7.0"
+  },
+  "overrides": {
+    "serialize-javascript": "^7.0.5",
+    "brace-expansion": "^2.1.4",
+    "js-yaml": "^4.3.1",
+    "diff": "^8.0.3"
   }
 }

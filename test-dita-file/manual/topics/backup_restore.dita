@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<task id="backup_restore" xml:lang="zh-CN" audience="admin">
+  <title>数据备份与恢复</title>
+  <shortdesc>为家庭配置做完整备份，并在更换主机或恢复出厂后还原配置。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>备份</indexterm>
+        <indexterm>恢复</indexterm>
+        <indexterm>配置迁移</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <taskbody>
+    <prereq>
+<p>您具有管理员及以上角色。备份包含设备列表、房间划分、场景与自动化规则，不包含历史记录与传感器数据。</p>
+    </prereq>
+    <context>
+<note type="warning"><p>备份文件包含设备网络密钥等敏感信息，请妥善保管，不要通过不可信渠道传输。</p></note>
+    </context>
+    <steps>
+<step>
+        <cmd>创建备份：在 <menucascade><uicontrol>家庭管理</uicontrol><uicontrol>备份与恢复</uicontrol></menucascade> 点击 <uicontrol>立即备份</uicontrol>。</cmd>
+      </step>
+      <step>
+        <cmd>选择备份位置。</cmd>
+      <choices>
+          <choice>云端：随账号保存，保留最近 5 份。</choice>
+          <choice>本地文件：导出 .hubbak 文件到手机存储，可自行转存。</choice>
+        </choices>
+      </step>
+        <step>
+        <cmd>记录备份时间与版本号。</cmd>
+      </step>
+      <step>
+        <cmd>恢复时在同一入口点击 <uicontrol>从备份恢复</uicontrol>，选择备份文件并确认。</cmd>
+      <info>
+          <p>恢复过程约 2 分钟，期间主机会重启一次，完成后所有设备自动重新入网。</p>
+        </info>
+</step>
+        
+    </steps>
+    <result>
+<p>配置按备份时的状态还原，场景与自动化立即可用。</p>
+    </result>
+    <example>
+<note type="important"><p>跨版本恢复时，若备份来自更高固件版本，部分新特性配置将被忽略，建议先升级主机固件（<xref href="firmware_update.dita"/>）再恢复。</p></note>
+    </example>
+  </taskbody>
+</task>

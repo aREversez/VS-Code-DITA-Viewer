@@ -1,5 +1,5 @@
 {
   "dita-viewer.customCss": [
-    "test-dita-file/custom.css"
+    "test-dita-file/fixture/custom.css"
   ]
 }

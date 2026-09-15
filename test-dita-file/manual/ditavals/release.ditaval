@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  release.ditaval — 正式发布版条件处理文件
+  - 剔除面向开发者的内容（audience="developer"）
+  - 剔除规划中特性（rev="planned"，仅在开发版出现）
+  - 剔除品牌 B 专属内容（product="brandB"）
+-->
+<val>
+  <prop action="exclude" att="audience" val="developer"/>
+  <prop action="exclude" att="rev" val="planned"/>
+  <prop action="exclude" att="product" val="brandB"/>
+  <prop action="include" att="product" val="brandA"/>
+  <prop action="include" att="platform" val="ios"/>
+  <prop action="include" att="platform" val="android"/>
+</val>

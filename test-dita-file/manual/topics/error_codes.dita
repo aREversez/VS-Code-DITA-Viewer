@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE reference PUBLIC "-//OASIS//DTD DITA Reference//EN" "reference.dtd">
+<reference id="error_codes" xml:lang="zh-CN">
+  <title>错误代码参考</title>
+  <shortdesc>主机屏幕、应用日志与售后报修单中出现的错误代码含义速查。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>错误代码</indexterm>
+        <indexterm>E101</indexterm>
+        <indexterm>报错</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <refbody>
+<section>
+      <title>错误代码表</title>
+    <table id="error-code-table">
+      <title>错误代码一览</title>
+      <tgroup cols="3">
+        <thead><row><entry>代码</entry><entry>含义</entry><entry>处理建议</entry></row></thead>
+        <tbody>
+          <row><entry>E101</entry><entry>存储空间不足</entry><entry>删除过期录像或备份，参见 <xref href="maintenance_general.dita"/></entry></row>
+          <row><entry>E102</entry><entry>固件包校验失败</entry><entry>重新下载升级包，参见 <xref href="firmware_update.dita"/></entry></row>
+          <row><entry>E201</entry><entry>Zigbee 网络初始化失败</entry><entry>重启主机；持续出现则参见 <xref href="ts_pairing.dita"/></entry></row>
+          <row><entry>E202</entry><entry>子设备无响应超时</entry><entry>按 <xref href="ts_offline.dita"/> 排查</entry></row>
+          <row><entry>E301</entry><entry>云端连接失败</entry><entry>按 <xref href="ts_network.dita"/> 检查网络</entry></row>
+          <row><entry>E401</entry><entry>账号鉴权过期</entry><entry>应用退出重新登录</entry></row>
+          <row><entry>E501</entry><entry>温度传感器读数异常</entry><entry>按 <xref href="ts_overheat.dita"/> 处理</entry></row>
+          <row><entry>E601</entry><entry>本地服务端口冲突</entry><entry>检查路由器 DHCP 配置，联系网络管理员</entry></row>
+        </tbody>
+      </tgroup>
+    </table>
+    <note type="tip"><p>未列出的错误代码请在应用中导出诊断日志后联系客服（<xref href="contact_support.dita"/>）。</p></note></section>
+  </refbody>
+</reference>

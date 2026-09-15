@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<task id="before_install" xml:lang="zh-CN">
+  <title>安装前准备</title>
+  <shortdesc>正式安装之前，确认安装位置、网络环境与所需工具均已就绪，可避免安装过程中的返工。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>安装准备</indexterm>
+        <indexterm>安装位置</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <taskbody>
+    <prereq>
+      <p>请已完成包装清单核对（<xref href="package_contents.dita"/>），并阅读用电安全要求（<xref href="electrical_safety.dita"/>）。</p>
+    </prereq>
+    <context>
+      <p>主机支持平放与壁挂两种安装方式。安装位置应满足以下条件：</p>
+      <ul>
+        <li>距路由器不超过 10 米（无线）或具备布线条件（有线）。</li>
+        <li>语音唤醒的有效拾音范围内无强噪声源。</li>
+        <li>远离金属遮挡物、微波炉与无线鼠标接收器等 2.4 GHz 干扰源。</li>
+        <li>附近 1 米内有可用电源插座。</li>
+      </ul>
+      <p>所需工具：十字螺丝刀（壁挂时）、水平尺（可选）。</p>
+    </context>
+    <steps>
+<step>
+        <cmd>确定安装方式。</cmd>
+      <choices>
+          <choice>平放：直接摆放在电视柜、书架等平整台面。</choice>
+          <choice>壁挂：确认墙体为实心砖墙或承重混凝土墙，参见 <xref href="wall_mount.dita"/>。</choice>
+        </choices>
+      </step>
+        <step>
+        <cmd>确认网络环境。</cmd>
+      <info>
+          <p>推荐使用网线直连路由器，稳定性最佳；也可在初始化阶段配置 Wi-Fi，参见 <xref href="network_setup.dita"/>。</p>
+        </info>
+      </step>
+        <step>
+        <cmd>预留安装时间约 15 分钟，其中首次初始化需要联网下载固件资源。</cmd>
+      </step>
+
+    </steps>
+    <result>
+<p>安装位置确定，工具与网络条件就绪。</p>
+    </result>
+    <postreq>
+<p>接下来进行主机安装：<xref href="install_hardware.dita"/>。</p>
+    </postreq>
+  </taskbody>
+</task>

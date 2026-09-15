@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE reference PUBLIC "-//OASIS//DTD DITA Reference//EN" "reference.dtd">
+<reference id="package_contents" xml:lang="zh-CN">
+  <title>包装清单</title>
+  <shortdesc>开箱时请对照下表核对物品是否齐全，如有缺失或损坏请勿使用，并及时联系销售渠道。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>包装清单</indexterm>
+        <indexterm>配件</indexterm>
+        <indexterm>开箱</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <refbody>
+<section>
+      <title>标准配件</title>
+    <p>标准包装内含以下物品：</p>
+    <table id="packing-list">
+      <title>包装清单</title>
+      <tgroup cols="4">
+        <thead><row><entry>物品</entry><entry>数量</entry><entry>用途</entry><entry>备注</entry></row></thead>
+        <tbody>
+          <row><entry>中控主机</entry><entry>1 台</entry><entry>智能家居控制中枢</entry><entry>—</entry></row>
+          <row><entry>电源适配器</entry><entry>1 个</entry><entry>为主机供电</entry><entry>12V/2A，不可替换其他规格</entry></row>
+          <row><entry>网线</entry><entry>1 根</entry><entry>有线接入路由器</entry><entry>1.5 米，Cat5e</entry></row>
+          <row><entry>壁挂支架</entry><entry>1 套</entry><entry>墙面安装</entry><entry>含膨胀螺栓 2 颗</entry></row>
+          <row><entry>快速入门指南</entry><entry>1 份</entry><entry>基础安装指引</entry><entry>—</entry></row>
+          <row><entry>保修卡</entry><entry>1 份</entry><entry>保修凭证</entry><entry>详见 <xref href="warranty.dita"/></entry></row>
+        </tbody>
+      </tgroup>
+    </table>
+    </section>    <section>
+      <title>选配配件</title>
+    <p>以下配件视销售套餐而定，可能不在标准包装内：</p>
+    <ul>
+      <li>门窗传感器（用于安防布防，参见 <xref href="feature_security.dita"/>）</li>
+      <li>温湿度传感器（用于环境联动，参见 <xref href="feature_sensor.dita"/>）</li>
+      <li>可充电遥控器（电池更换方法参见 <xref href="battery_replace.dita"/>）</li>
+    </ul>
+    <note type="warning"><p>电源适配器为专用配件。使用第三方适配器可能导致主机损坏并失去保修资格。</p></note></section>
+  </refbody>
+</reference>

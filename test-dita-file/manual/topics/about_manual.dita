@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="about_manual" xml:lang="zh-CN">
+  <title>关于本手册</title>
+  <shortdesc>本手册介绍 <ph keyref="product-name"/> 智能家居中控的安装、配置、使用与维护方法，适用于全部随附配件与可选扩展模块的日常操作场景。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>用户手册</indexterm>
+        <indexterm>阅读约定</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <conbody>
+<p>本手册面向<ph keyref="product-name"/>的最终用户、家庭管理员与系统集成人员。手册内容按使用顺序编排：先了解产品与安全信息，再完成安装与初始化，然后深入各项功能，最后掌握维护与故障排查方法。</p>
+    <p>在阅读本手册之前，请先确认包装内物品完好（参见 <xref href="package_contents.dita"/>），并仔细阅读安全须知（参见 <xref href="safety_general.dita"/>）。</p>
+    <section>
+      <title>阅读约定</title>
+      <p>本手册使用以下排版约定：</p>
+      <ul>
+        <li>界面按钮与菜单路径使用 <codeph>&lt;uicontrol&gt;</codeph> 标注，例如 <menucascade><uicontrol>设置</uicontrol><uicontrol>网络</uicontrol><uicontrol>Wi-Fi 配置</uicontrol></menucascade>。</li>
+        <li>需要输入的内容使用 <codeph>&lt;codeph&gt;</codeph> 等宽字体标注。</li>
+        <li><note type="tip">提示提供省时省力的替代做法。</note></li>
+        <li><note type="important">重要信息描述可能导致配置失败的操作细节。</note></li>
+        <li><note type="warning">警告说明若不遵守可能造成人身伤害或财产损失的注意事项。</note></li>
+      </ul>
+    </section>    <section>
+      <title>符号说明</title>
+      <p>手册中的图形符号含义如下：</p>
+      <simpletable id="symbol-table">
+        <sthead><stentry>符号</stentry><stentry>含义</stentry></sthead>
+        <strow><stentry>⚠</stentry><stentry>警告：操作不当可能造成伤害</stentry></strow>
+        <strow><stentry>ⓘ</stentry><stentry>提示：有助于更好使用产品的信息</stentry></strow>
+        <strow><stentry>⚡</stentry><stentry>用电安全相关内容</stentry></strow>
+      </simpletable>
+    </section>    <example>
+      <title>获取最新版本</title>
+      <p>本手册随固件版本 <keyword keyref="version"/> 发布。最新版手册可在支持网站 <xref href="https://support.example-starlumos.com/manual" format="html" scope="external"/> 获取，也可在手机应用中通过 <menucascade><uicontrol>我的</uicontrol><uicontrol>帮助与反馈</uicontrol><uicontrol>用户手册</uicontrol></menucascade> 在线查看。</p>
+    </example>
+  </conbody>
+</concept>

@@ -42,7 +42,7 @@ describe('renderer', () => {
       makeEl('topic/title', [makeText('My Title')]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('title="title"'));
+    assert.ok(html.includes('data-dita-tagname="title"'));
     assert.ok(html.includes('My Title'));
     assert.ok(html.includes('</h1>'));
   });
@@ -84,7 +84,7 @@ describe('renderer', () => {
       ]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('title="p"'));
+    assert.ok(html.includes('data-dita-tagname="p"'));
     assert.ok(html.includes('Hello world'));
   });
 
@@ -147,9 +147,9 @@ describe('renderer', () => {
       ]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('title="ul"'));
-    assert.ok(html.includes('title="ol"'));
-    assert.ok(html.includes('title="li"'));
+    assert.ok(html.includes('data-dita-tagname="ul"'));
+    assert.ok(html.includes('data-dita-tagname="ol"'));
+    assert.ok(html.includes('data-dita-tagname="li"'));
     assert.ok(html.includes('>A<'));
     assert.ok(html.includes('>1<'));
   });
@@ -164,9 +164,9 @@ describe('renderer', () => {
       ]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('title="dl"'));
-    assert.ok(html.includes('title="dt"'));
-    assert.ok(html.includes('title="dd"'));
+    assert.ok(html.includes('data-dita-tagname="dl"'));
+    assert.ok(html.includes('data-dita-tagname="dt"'));
+    assert.ok(html.includes('data-dita-tagname="dd"'));
     assert.ok(html.includes('>term<'));
     assert.ok(html.includes('>definition<'));
   });
@@ -193,6 +193,114 @@ describe('renderer', () => {
     assert.ok(html.includes('class="cals-table"'));
     assert.ok(/<th\b[^>]*>Header<\/th>/.test(html), `header entry should render as th, got: ${html}`);
     assert.ok(/<td\b[^>]*>Data<\/td>/.test(html), `body entry should render as td, got: ${html}`);
+  });
+
+  it('marks a CALS table with real colwidth hints as fixed-layout so a wide colgroup width is authoritative regardless of cell content (regression: default table-layout:auto only treats colgroup widths as a hint, so a column with a long unbroken run of content could still force the browser to redistribute space away from a short-content column, leaving some tables with backwards-looking proportions while others -- with less demanding content -- happened to render fine)', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/table', [
+        makeEl('topic/tgroup', [
+          makeEl('topic/colspec', [], { colname: 'c1', colwidth: '1*' }),
+          makeEl('topic/colspec', [], { colname: 'c2', colwidth: '3*' }),
+          makeEl('topic/tbody', [
+            makeEl('topic/row', [
+              makeEl('topic/entry', [makeText('A')]),
+              makeEl('topic/entry', [makeText('B')]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(
+      html.includes('class="cals-table cals-table--fixed-layout"'),
+      `expected the table to carry the fixed-layout class when colspecs declare colwidth, got: ${html}`,
+    );
+  });
+
+  it('does NOT mark a CALS table as fixed-layout when no colspec declares a colwidth (nothing to make authoritative, so content-driven auto layout should stay the default)', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/table', [
+        makeEl('topic/tgroup', [
+          makeEl('topic/colspec', [], { colname: 'c1' }),
+          makeEl('topic/tbody', [
+            makeEl('topic/row', [makeEl('topic/entry', [makeText('A')])]),
+          ]),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('cals-table--fixed-layout'), `expected no fixed-layout class, got: ${html}`);
+  });
+
+  it('treats a colwidth with a stray trailing dot before the star ("3.*") the same as "3*" (regression: Oxygen and most DITA-OT transforms tolerate this malformed-but-common CALS notation, but the colwidth regex required digits after any decimal point, so "3.*" silently matched neither the proportional-width branch nor the bare-pixel branch and fell through to an unweighted <col> with no width at all)', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/table', [
+        makeEl('topic/tgroup', [
+          makeEl('topic/colspec', [], { colname: 'c1', colwidth: '3.*' }),
+          makeEl('topic/colspec', [], { colname: 'c2', colwidth: '1*' }),
+          makeEl('topic/tbody', [
+            makeEl('topic/row', [
+              makeEl('topic/entry', [makeText('A')]),
+              makeEl('topic/entry', [makeText('B')]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('width: 75.00%'), `expected "3.*" to count as 3 parts out of 4, got: ${html}`);
+    assert.ok(html.includes('width: 25.00%'), `expected "1*" to count as 1 part out of 4, got: ${html}`);
+  });
+
+  it('applies tgroup @align as the default column alignment, colspec @align to override it per column, and entry @align to override that per cell (regression: CALS table alignment was parsed nowhere in the renderer, so align="center" on tgroup/colspec/entry was silently dropped and every cell rendered left-aligned; alignment is threaded onto each td/th\'s own style rather than the <col>, since CSS only lets width/border/background/visibility apply to <col>/<colgroup> -- a <col style="text-align:...">, which an earlier version of this fix tried, is silently ignored by every browser)', () => {
+    const doc = makeEl(
+      'topic/topic',
+      [
+        makeEl('topic/table', [
+          makeEl(
+            'topic/tgroup',
+            [
+              makeEl('topic/colspec', [], { colname: 'c1' }),
+              makeEl('topic/colspec', [], { colname: 'c2', align: 'right' }),
+              makeEl('topic/tbody', [
+                makeEl('topic/row', [
+                  makeEl('topic/entry', [makeText('A')]),
+                  makeEl('topic/entry', [makeText('B')]),
+                ]),
+                makeEl('topic/row', [
+                  makeEl('topic/entry', [makeText('C')], { align: 'left' }),
+                  makeEl('topic/entry', [makeText('D')]),
+                ]),
+              ]),
+            ],
+            { align: 'center' },
+          ),
+        ]),
+      ],
+    );
+    const html = renderDocument(doc, defaultCtx);
+    // Entry A has no @align of its own and sits in column 1, which has no
+    // colspec @align either, so it should inherit the tgroup's centered default.
+    assert.ok(
+      html.includes('style="text-align: center">A'),
+      `expected entry A to inherit tgroup's centered default, got: ${html}`,
+    );
+    // Entry B sits in column 2, whose own colspec @align="right" should
+    // win over the tgroup's centered default.
+    assert.ok(
+      html.includes('style="text-align: right">B'),
+      `expected entry B to use its column's own align over the tgroup default, got: ${html}`,
+    );
+    // Entry C's own @align="left" should win over its column's centered default.
+    assert.ok(
+      html.includes('style="text-align: left">C'),
+      `expected entry C's own align to override its column's default, got: ${html}`,
+    );
+    // Entry D: same column as B (right-aligned), no @align of its own.
+    assert.ok(
+      html.includes('style="text-align: right">D'),
+      `expected entry D to also use column 2's right alignment, got: ${html}`,
+    );
   });
 
   it('should render simple table header stentry as th and row stentry as td', () => {
@@ -224,7 +332,7 @@ describe('renderer', () => {
     ]);
     const html = renderDocument(doc, defaultCtx);
     assert.ok(html.includes('class="simple-table"'));
-    assert.ok(html.includes('title="stentry"'));
+    assert.ok(html.includes('data-dita-tagname="stentry"'));
     assert.ok(html.includes('>OS<'));
     assert.ok(html.includes('>Linux<'));
   });
@@ -393,7 +501,7 @@ describe('renderer', () => {
     assert.ok(html.includes('title="From attribute"'));
   });
 
-  it('should omit a fabricated alt="" but keep the generic title="image" tooltip when no alt info is provided', () => {
+  it('should omit a fabricated alt="" but keep the generic tag-name tooltip data attribute when no alt info is provided', () => {
     const doc = makeEl('topic/topic', [
       makeEl('topic/image', [], { href: 'pic.png' }),
     ]);
@@ -402,10 +510,10 @@ describe('renderer', () => {
     assert.ok(!imgTag.includes('alt='), 'should not fabricate an empty alt="" on the <img> tag');
     // injectAttributes' generic tagName-as-tooltip fallback still applies
     // here since the renderer itself has nothing more specific to offer.
-    assert.ok(imgTag.includes('title="image"'));
+    assert.ok(imgTag.includes('data-dita-tagname="image"'));
   });
 
-  it('should not duplicate the title attribute: alt-derived title wins over the generic tagName tooltip', () => {
+  it('should not add the generic tag-name data attribute when the renderer already set its own title', () => {
     const doc = makeEl('topic/topic', [
       makeEl('topic/image', [], { href: 'pic.png', alt: 'Real description' }),
     ]);
@@ -414,6 +522,12 @@ describe('renderer', () => {
     const titleMatches = imgTag.match(/ title="/g) || [];
     assert.strictEqual(titleMatches.length, 1, 'the <img> tag should carry exactly one title attribute, not two');
     assert.ok(imgTag.includes('title="Real description"'));
+    // The failure mode this guards against isn't a second title= anymore --
+    // that was only possible while the generic fallback was itself a
+    // title=. Now it would be a data-dita-tagname sitting alongside the
+    // real title, which the "Tags" toggle would then show as "image"
+    // instead of leaving the meaningful alt text alone.
+    assert.ok(!imgTag.includes('data-dita-tagname'), 'the alt-derived title should suppress the generic fallback entirely, not just avoid duplicating title=');
   });
 
   it('should apply @scale as a --dita-scale style hint when width/height are absent', () => {
@@ -528,7 +642,7 @@ describe('renderer', () => {
     // real parseDita() here (rather than the makeRaw()/makeEl() synthetic
     // tree above) catches any surprises from how sax hands tagNames back,
     // which the unit-level test can't see.
-    const fixturePath = join(__dirname, '..', '..', '..', 'test-dita-file', 'topics', 'mathml_prefixed_test.dita');
+    const fixturePath = join(__dirname, '..', '..', '..', 'test-dita-file', 'fixture', 'topics', 'mathml_prefixed_test.dita');
     const xml = readFileSync(fixturePath, 'utf-8');
     const doc = parseDita(xml);
     const html = renderDocument(doc.root, defaultCtx);
@@ -642,7 +756,7 @@ describe('renderer', () => {
     // catches anything the sax parser does differently with mfenced's
     // attributes (e.g. attribute name casing/ordering) that the unit-level
     // tests above can't see.
-    const fixturePath = join(__dirname, '..', '..', '..', 'test-dita-file', 'topics', 'mathml_mfenced_test.dita');
+    const fixturePath = join(__dirname, '..', '..', '..', 'test-dita-file', 'fixture', 'topics', 'mathml_mfenced_test.dita');
     const xml = readFileSync(fixturePath, 'utf-8');
     const doc = parseDita(xml);
     const html = renderDocument(doc.root, defaultCtx);
@@ -672,7 +786,7 @@ describe('renderer', () => {
       makeEl('topic/xref', [makeText('see section')], { href: '#section1' }),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('title="xref"'));
+    assert.ok(html.includes('data-dita-tagname="xref"'));
     assert.ok(html.includes('href="#section1"'));
     assert.ok(html.includes('see section'));
   });
@@ -703,12 +817,12 @@ describe('renderer', () => {
       makeEl('topic/sub', [makeText('sub')]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('title="b"'));
-    assert.ok(html.includes('title="i"'));
-    assert.ok(html.includes('title="u"'));
-    assert.ok(html.includes('title="tt"'));
-    assert.ok(html.includes('title="sup"'));
-    assert.ok(html.includes('title="sub"'));
+    assert.ok(html.includes('data-dita-tagname="b"'));
+    assert.ok(html.includes('data-dita-tagname="i"'));
+    assert.ok(html.includes('data-dita-tagname="u"'));
+    assert.ok(html.includes('data-dita-tagname="tt"'));
+    assert.ok(html.includes('data-dita-tagname="sup"'));
+    assert.ok(html.includes('data-dita-tagname="sub"'));
     assert.ok(html.includes('>bold<'));
     assert.ok(html.includes('>italic<'));
     assert.ok(html.includes('>underline<'));
@@ -723,8 +837,8 @@ describe('renderer', () => {
       makeEl('topic/lq', [makeText('block quote')]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('title="q"'));
-    assert.ok(html.includes('title="lq"'));
+    assert.ok(html.includes('data-dita-tagname="q"'));
+    assert.ok(html.includes('data-dita-tagname="lq"'));
     assert.ok(html.includes('>inline quote<'));
     assert.ok(html.includes('>block quote<'));
   });
@@ -735,8 +849,8 @@ describe('renderer', () => {
       makeEl('topic/term', [makeText('term')]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('title="keyword"'));
-    assert.ok(html.includes('title="term"'));
+    assert.ok(html.includes('data-dita-tagname="keyword"'));
+    assert.ok(html.includes('data-dita-tagname="term"'));
     assert.ok(html.includes('class="keyword"'));
     assert.ok(html.includes('class="term"'));
     assert.ok(html.includes('>kw<'));
@@ -820,6 +934,57 @@ describe('renderer', () => {
     ]);
     const html = renderDocument(doc, ctx);
     assert.ok(html.includes('missing.dita'), 'should fall back to raw href');
+  });
+
+  it('should render a book-internal cross-file xref as a clickable link with a resolved target', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveTitle: (id: string) => (id === 'other.dita#sec1' ? 'Other Topic' : undefined),
+      isInCurrentBook: (href: string) => (href === 'other.dita#sec1' ? '/book/other.dita' : undefined),
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/xref', [], { href: 'other.dita#sec1' }),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('data-dita-book-xref="/book/other.dita#sec1"'), 'should carry the resolved absolute path + anchor');
+    assert.ok(html.includes('class="xref"'), 'should use the real link style, not xref-external');
+    assert.ok(!html.includes('xref-external'), 'should not fall back to the non-clickable hint span');
+    assert.ok(html.includes('Other Topic'));
+  });
+
+  it('should render a book-internal cross-file xref without a fragment using just the resolved file path', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      isInCurrentBook: (href: string) => (href === 'other.dita' ? '/book/other.dita' : undefined),
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/xref', [], { href: 'other.dita' }),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('data-dita-book-xref="/book/other.dita"'));
+    assert.ok(!html.includes('/book/other.dita#'), 'no trailing fragment when the href had none');
+  });
+
+  it('should keep the non-clickable xref-external span when isInCurrentBook says the target is not in this book', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      isInCurrentBook: () => undefined,
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/xref', [], { href: 'outside.dita' }),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('xref-external'));
+    assert.ok(!html.includes('data-dita-book-xref'));
+  });
+
+  it('should behave exactly as before when isInCurrentBook is not supplied (standalone preview / export)', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/xref', [], { href: 'other.dita' }),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('xref-external'));
+    assert.ok(!html.includes('data-dita-book-xref'));
   });
 
   it('should prefer xref text content over resolveTitle', () => {
@@ -908,7 +1073,7 @@ describe('renderer', () => {
       ]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('title="title"'));
+    assert.ok(html.includes('data-dita-tagname="title"'));
     assert.ok(html.includes('>Main<'));
     assert.ok(/<h1[\s>]/.test(html));
     assert.ok(/<h2[\s>]/.test(html));
@@ -1229,6 +1394,72 @@ describe('renderer', () => {
     assert.ok(innerLabelIdx < outerLabelIdx, 'the inner (nested) li\'s label should appear before the outer li\'s label in document order');
   });
 
+  it('should apply profiling class/data-attribute directly onto a profiled table <row>\'s own rendered <tr> tag, and land the label inside its last cell rather than as an invalid direct child of <tr>', () => {
+    // Regression: <row>'s DITA source tagName ("row") differs from the tag
+    // it renders as (<tr>). injectBlockProfiling used to build its
+    // closing-tag search from the source tagName, which never matched the
+    // rendered </tr>, and a naive fix that just inserted a <span> as the
+    // row's own last child would still be invalid HTML -- <tr>'s only
+    // legal direct children are <td>/<th>, so a browser foster-parents
+    // any other element out of the table entirely, detaching the label
+    // from its row and corrupting the row's border-sharing with its
+    // neighbour.
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/table', [
+          makeEl('topic/tgroup', [
+            makeEl('topic/tbody', [
+              makeEl('topic/row', [
+                makeEl('topic/entry', [makeText('A1')]),
+                makeEl('topic/entry', [makeText('B1')]),
+              ], { audience: 'internal' }),
+              makeEl('topic/row', [
+                makeEl('topic/entry', [makeText('A2')]),
+                makeEl('topic/entry', [makeText('B2')]),
+              ]),
+            ]),
+          ], { cols: '2' }),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!/<tr[^>]*>(?:(?!<td|<th)[\s\S])*?<span/.test(html), 'no <span> should appear as a direct child of <tr> before its first <td>/<th> -- that is invalid HTML');
+    const trMatch = html.match(/<tr\b[^>]*>/);
+    assert.ok(trMatch, 'profiled row should still render as <tr>');
+    assert.ok(trMatch![0].includes('class="profiled"'), 'class="profiled" must be an attribute on the tr\'s own opening tag');
+    assert.ok(trMatch![0].includes('data-profile-keys="audience:internal"'), 'data-profile-keys must be an attribute on the tr\'s own opening tag');
+    const lastCellMatch = html.match(/<td\b[^>]*>B1[\s\S]*?<\/td>/);
+    assert.ok(lastCellMatch, 'row\'s last cell should be found');
+    assert.ok(lastCellMatch![0].includes('class="profiling-label"'), 'the profiling label should be nested inside the row\'s last cell, not as a direct child of <tr>');
+    assert.ok(lastCellMatch![0].trim().endsWith('</span></td>'), 'the label span should be the last thing before the cell\'s own closing tag');
+    // Second (unprofiled) row must not pick up any stray label.
+    const secondRowLabelCount = (html.slice(html.indexOf('A2')).match(/profiling-label/g) || []).length;
+    assert.strictEqual(secondRowLabelCount, 0, 'the unprofiled second row should have no profiling label');
+  });
+
+  it('should apply profiling class/data-attribute directly onto a profiled table <entry>\'s own rendered <td>/<th> tag (regression: source tagName "entry"/"stentry" never matched the rendered </td>/</th>, silently dropping the label)', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/table', [
+          makeEl('topic/tgroup', [
+            makeEl('topic/tbody', [
+              makeEl('topic/row', [
+                makeEl('topic/entry', [makeText('A1')], { platform: 'windows' }),
+                makeEl('topic/entry', [makeText('B1')]),
+              ]),
+            ]),
+          ], { cols: '2' }),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    const cellMatch = html.match(/<td\b[^>]*>A1[\s\S]*?<\/td>/);
+    assert.ok(cellMatch, 'profiled entry should render as <td>');
+    assert.ok(cellMatch![0].includes('class="profiled"'), 'class="profiled" must be an attribute on the td\'s own opening tag');
+    assert.ok(cellMatch![0].includes('data-profile-keys="platform:windows"'));
+    assert.ok(cellMatch![0].includes('class="profiling-label"'), 'the profiling label must actually be inserted for a profiled cell');
+  });
+
   it('should highlight nested profiled elements independently (parent and child both flagged)', () => {
     const doc = makeEl('topic/topic', [
       makeEl('topic/body', [
@@ -1427,6 +1658,83 @@ describe('renderer', () => {
     assert.ok(!html.includes('height='));
   });
 
+  // Regression: the natural-dimensions fallback above fills in width/height
+  // for aspect-ratio reservation even when no @width/@height was authored,
+  // and the @scale gate used to check "!width && !height" -- which was
+  // always false once that fallback ran, so @scale silently stopped
+  // applying for any image whose file dimensions were readable at all.
+  it('should still apply @scale when getImageDimensions also supplies natural dimensions', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      getImageDimensions: () => ({ width: 300, height: 200 }),
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [], { href: 'pic.png', scale: '70' }),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('style="--dita-scale:0.7"'), '@scale must not be masked by the width/height fallback');
+  });
+
+  it('should apply a data-dita-default-scale marker when no @scale/@width/@height is given', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [], { href: 'pic.png' }),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('data-dita-default-scale="1"'));
+    // Orientation (landscape vs portrait) is only knowable once the browser
+    // has actually decoded the file, so this marker is deliberately generic
+    // -- the webview script reads img.naturalWidth/naturalHeight once
+    // loaded and picks 75%/50% from there. No --dita-scale here: that CSS
+    // 'zoom' mechanism scales relative to the image's own natural size, so
+    // it visibly does nothing once the image is already being clamped down
+    // to the container by img{max-width:100%} -- exactly the oversized
+    // images this default is meant to shrink. See applyDefaultPreviewScale
+    // in DitaViewerProvider.ts for the container-relative fix.
+    assert.ok(!html.includes('--dita-scale'));
+  });
+
+  it('should still mark for the default preview scale even when the file\'s dimensions can\'t be read server-side', () => {
+    // getImageDimensions absent/undefined entirely -- e.g. a remote image,
+    // or a format readImageDimensions doesn't parse. Eligibility no longer
+    // depends on server-side dimensions at all, since the webview measures
+    // the real loaded image itself.
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [], { href: 'pic.png' }),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('data-dita-default-scale="1"'));
+  });
+
+  it('should not mark for the default preview scale when @scale is explicit', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [], { href: 'pic.png', scale: '70' }),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('--dita-scale:0.7'));
+    assert.ok(!html.includes('data-dita-default-scale'));
+  });
+
+  it('should not mark for the default preview scale when an explicit @width/@height is given', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      getImageDimensions: () => ({ width: 200, height: 400 }),
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [], { href: 'pic.png', width: '150', height: '300' }),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(!html.includes('data-dita-default-scale'));
+  });
+
+  it('should not mark for the default preview scale when @scalefit="yes"', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/image', [], { href: 'pic.png', scalefit: 'yes' }),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(!html.includes('data-dita-default-scale'));
+    assert.ok(!html.includes('--dita-scale'));
+  });
+
   // ── Prolog suppression tests ──
 
   it('should not render prolog metadata content in the body', () => {
@@ -1460,5 +1768,177 @@ describe('renderer', () => {
     assert.ok(!html.includes('SECRET_KEYWORD_TOKEN'), 'prolog keyword must not leak');
     assert.ok(!html.includes('class="keyword"'), 'prolog keyword span must not render');
     assert.ok(html.includes('Visible'), 'body content should still render');
+  });
+
+  describe('indexterm', () => {
+    it('renders a single-level term as a visible chip (was previously invisible)', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [
+          makeEl('topic/p', [makeText('See the '), makeEl('topic/indexterm', [makeText('glossary')]), makeText(' for more.')]),
+        ]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(html.includes('indexterm-chip'), 'expected a visible indexterm chip');
+      assert.ok(html.includes('glossary'));
+      assert.ok(html.includes('See the '), 'surrounding text must be preserved');
+    });
+
+    it('joins nested indexterm levels into one chip (primary, secondary)', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [
+          makeEl('topic/p', [
+            makeEl('topic/indexterm', [makeText('Database'), makeEl('topic/indexterm', [makeText('backup')])]),
+          ]),
+        ]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      // Exactly one chip -- the intermediate "Database" level alone must
+      // NOT also render as its own separate chip (that would be the
+      // double-render bug this structure is specifically at risk of).
+      const chipCount = (html.match(/indexterm-chip"/g) || []).length;
+      assert.strictEqual(chipCount, 1, `expected exactly 1 chip, got ${chipCount} in: ${html}`);
+      assert.ok(html.includes('Database'));
+      assert.ok(html.includes('backup'));
+    });
+
+    it('emits one chip per sibling sub-entry sharing the same prefix', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [
+          makeEl('topic/p', [
+            makeEl('topic/indexterm', [
+              makeText('Database'),
+              makeEl('topic/indexterm', [makeText('backup')]),
+              makeEl('topic/indexterm', [makeText('restore')]),
+            ]),
+          ]),
+        ]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      const chipCount = (html.match(/indexterm-chip"/g) || []).length;
+      assert.strictEqual(chipCount, 2, `expected 2 sibling chips, got ${chipCount} in: ${html}`);
+      assert.ok(html.includes('backup'));
+      assert.ok(html.includes('restore'));
+    });
+
+    it('renders an index-see annotation attached to its chip', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [
+          makeEl('topic/p', [
+            makeEl('topic/indexterm', [
+              makeText('DB'),
+              makeEl('topic/index-see', [makeEl('topic/indexterm', [makeText('Database')])]),
+            ]),
+          ]),
+        ]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(html.includes('see: Database') || html.includes('see:'), `expected a see annotation in: ${html}`);
+    });
+
+    it('renders indextermref with its keyref value', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [makeEl('topic/indextermref', [], { keyref: 'shared-index-entry' })]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(html.includes('shared-index-entry'));
+    });
+
+    it('renders nothing for an indexterm with no text content at all (no crash, no empty chip noise)', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [makeEl('topic/p', [makeEl('topic/indexterm', [])])]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(!html.includes('indexterm-chip'), `expected no chip for an empty indexterm, got: ${html}`);
+    });
+
+    it('falls back to the English "Index" label when indexLabel is not supplied', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [makeEl('topic/p', [makeEl('topic/indexterm', [makeText('term')])])]),
+      ]);
+      const html = renderDocument(doc, defaultCtx); // no indexLabel in defaultCtx
+      assert.ok(html.includes('title="Index:'), `expected default Index label in: ${html}`);
+    });
+
+    it('uses the supplied localized indexLabel instead of the default', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [makeEl('topic/p', [makeEl('topic/indexterm', [makeText('term')])])]),
+      ]);
+      const html = renderDocument(doc, { ...defaultCtx, indexLabel: '索引' });
+      assert.ok(html.includes('title="索引:'), `expected localized label in: ${html}`);
+    });
+
+    it('surfaces indexterm declared inside prolog/metadata/keywords (regression: the whole prolog subtree used to be suppressed unconditionally, silently dropping this very common topic-level index-entry placement)', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/title', [makeText('T')]),
+        makeEl('topic/prolog', [
+          makeEl('topic/metadata', [
+            makeEl('topic/keywords', [
+              makeEl('topic/indexterm', [makeText('glossary')]),
+            ], undefined, 'keywords'),
+          ], undefined, 'metadata'),
+        ], undefined, 'prolog'),
+        makeEl('topic/body', [makeEl('topic/p', [makeText('Body text.')])]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(html.includes('indexterm-chip'), `expected an indexterm chip surfaced from prolog in: ${html}`);
+      assert.ok(html.includes('glossary'));
+    });
+
+    it('still suppresses every OTHER prolog descendant even when an indexterm is present alongside it', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/title', [makeText('T')]),
+        makeEl('topic/prolog', [
+          makeText('Jane Secret Author'),
+          makeEl('topic/keyword', [makeText('SECRET_KEYWORD_TOKEN')], undefined, 'keyword'),
+          makeEl('topic/metadata', [
+            makeEl('topic/keywords', [
+              makeEl('topic/indexterm', [makeText('glossary')]),
+            ], undefined, 'keywords'),
+          ], undefined, 'metadata'),
+        ], undefined, 'prolog'),
+        makeEl('topic/body', [makeEl('topic/p', [makeText('Visible')])]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(!html.includes('Jane Secret Author'), 'prolog author text must still not leak');
+      assert.ok(!html.includes('SECRET_KEYWORD_TOKEN'), 'prolog keyword must still not leak');
+      assert.ok(html.includes('indexterm-chip'), 'indexterm chip should still surface');
+      assert.ok(html.includes('Visible'), 'body content should still render');
+    });
+
+    it('suppresses an inline indexterm chip in the body when ctx.suppressIndexterm is set (Export as HTML: index entries are authoring metadata, not reading content)', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [makeEl('topic/p', [makeText('See the '), makeEl('topic/indexterm', [makeText('glossary')]), makeText(' for more.')])]),
+      ]);
+      const html = renderDocument(doc, { ...defaultCtx, suppressIndexterm: true });
+      assert.ok(!html.includes('indexterm-chip'), `expected no chip when suppressed, got: ${html}`);
+      assert.ok(!html.includes('glossary'), 'index term text itself must not leak either');
+      assert.ok(html.includes('See the'), 'surrounding body text must still render');
+    });
+
+    it('suppresses prolog/metadata/keywords indexterm chips when ctx.suppressIndexterm is set', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/title', [makeText('T')]),
+        makeEl('topic/prolog', [
+          makeEl('topic/metadata', [
+            makeEl('topic/keywords', [
+              makeEl('topic/indexterm', [makeText('glossary')]),
+            ], undefined, 'keywords'),
+          ], undefined, 'metadata'),
+        ], undefined, 'prolog'),
+        makeEl('topic/body', [makeEl('topic/p', [makeText('Body text.')])]),
+      ]);
+      const html = renderDocument(doc, { ...defaultCtx, suppressIndexterm: true });
+      assert.ok(!html.includes('indexterm-chip'), `expected no prolog-sourced chip when suppressed, got: ${html}`);
+      assert.ok(!html.includes('glossary'));
+      assert.ok(html.includes('Body text.'));
+    });
+
+    it('leaves indexterm rendering unaffected when suppressIndexterm is left unset (interactive preview default)', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [makeEl('topic/p', [makeEl('topic/indexterm', [makeText('term')])])]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(html.includes('indexterm-chip'), 'preview default must keep showing chips');
+    });
   });
 });

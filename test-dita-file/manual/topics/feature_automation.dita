@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="feature_automation" xml:lang="zh-CN">
+  <title>自动化引擎</title>
+  <shortdesc>自动化规则将「触发条件 + 判断条件 + 执行动作」组合起来，让设备在无人干预的情况下协同工作。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>自动化</indexterm>
+        <indexterm>规则引擎</indexterm>
+        <indexterm>联动</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <conbody>
+<p>自动化规则在本机本地执行，外网中断不影响已保存规则的运行。规则由三部分组成：</p>
+    <ul>
+      <li><b>触发器</b>：什么时候开始判断，如传感器状态变化、时间到达、设备开关。</li>
+      <li><b>条件</b>：附加判断，如「当前光照低于 50 lux」「处于在家状态」。</li>
+      <li><b>动作</b>：要执行的内容，可包含设备控制、场景执行、通知推送。</li>
+    </ul>
+    <note type="important"><p>自动化规则改动会同步到所有家庭成员的应用中，删除规则前请与家人确认。</p></note><section>
+      <title>执行模型</title>
+      <p>规则引擎每秒轮询触发器状态；命中后先评估全部条件，全部满足才执行动作。同一规则的两次执行之间设有 5 秒防抖间隔，避免传感器抖动导致重复执行。</p>
+      <codeblock>规则示例（日落自动开灯）:
+  触发器: 日落事件
+  条件:   在家状态 == 在家
+  动作:   玄关灯 -&gt; 开启（亮度 60%）
+          客厅灯 -&gt; 开启（暖白色温）</codeblock>
+    </section>    <section>
+      <title>规则优先级</title>
+      <p>当多条规则的动作冲突（如一条开灯、一条关灯）时，按规则创建时间由新到旧执行，最后创建的规则生效。</p>
+    </section>    <section rev="planned">
+      <title>开发者接口（规划中）</title>
+      <p>即将开放本地 WebSocket 订阅接口，供第三方面板接收设备状态变更事件；事件负载采用 JSON 格式，字段以发布版文档为准。</p>
+<note type="caution" audience="developer"><p>该接口属开发中特性，仅在开发版固件中可见，字段命名与行为可能调整。</p></note>
+    </section>
+  </conbody>
+</concept>

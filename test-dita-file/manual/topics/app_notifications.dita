@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<task id="app_notifications" xml:lang="zh-CN">
+  <title>消息与通知设置</title>
+  <shortdesc>配置应用推送通知的类型与免打扰时段，确保重要告警不被遗漏。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>通知</indexterm>
+        <indexterm>推送</indexterm>
+        <indexterm>免打扰</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <taskbody>
+    <context>
+      <p>通知分为三类：<b>告警</b>（安防触发、设备离线）、<b>提醒</b>（定时任务完成、固件可升级）、<b>营销</b>（活动推送，默认关闭）。</p>
+    </context>
+    <steps>
+<step>
+        <cmd>进入通知设置页：<menucascade><uicontrol>我的</uicontrol><uicontrol>消息通知</uicontrol></menucascade>。</cmd>
+      </step>
+      <step>
+        <cmd>按类别开启或关闭推送开关。</cmd>
+      <info><note type="important"><p>建议保持「告警」类通知始终开启，否则安防事件无法及时送达。</p></note>      </info></step>
+<step>
+        <cmd>点击 <uicontrol>免打扰时段</uicontrol>，设置生效时间段。</cmd>
+      <info>
+          <p>免打扰时段内仅拦截「提醒」与「营销」消息，<b>告警</b>消息仍会正常推送。</p>
+        </info>
+      </step>
+        <step>
+        <cmd>（可选）开启 <uicontrol>重要告警强提醒</uicontrol>，告警将以持续响铃方式提示。</cmd>
+      </step>
+
+    </steps>
+    <result>
+<p>通知策略即时生效，可在 <uicontrol>消息中心</uicontrol> 查看历史消息。</p>
+    </result>
+  </taskbody>
+</task>

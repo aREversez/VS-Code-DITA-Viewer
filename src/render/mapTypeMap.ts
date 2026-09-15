@@ -1,3 +1,4 @@
+import { isAbsolute } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { mergeProfilingAttrs, profilingKeysAttr, profilingChipsHtml } from './renderer';
 
@@ -187,6 +188,19 @@ function getNodeText(node: DitaNode, childBaseTypes: string[], resolveKey?: Reso
 }
 
 export function getDisplayName(node: DitaNode, resolveKey?: ResolveKey): string {
+  return getDisplayNameInfo(node, resolveKey).text;
+}
+
+/**
+ * Same resolution as getDisplayName, but also reports whether the map
+ * itself actually named this entry (an explicit navtitle/linktext/
+ * shortdesc/keyword) versus a fallback that isn't really a title at all
+ * (the href's own filename, or the raw `keys` value) -- docsite mode's
+ * sidebar (buildBookNavManifest/MapViewerProvider.ts) uses `explicit` to
+ * decide when it's worth reading the target topic's own <title> off disk
+ * instead of showing something that was never meant to be read as a title.
+ */
+export function getDisplayNameInfo(node: DitaNode, resolveKey?: ResolveKey): { text: string; explicit: boolean } {
   const keys = getAttr(node, 'keys');
   const href = getAttr(node, 'href');
 
@@ -197,31 +211,43 @@ export function getDisplayName(node: DitaNode, resolveKey?: ResolveKey): string 
   );
   if (topicmeta) {
     const metaText = getNodeText(topicmeta, ['map/navtitle', 'map/linktext', 'map/shortdesc'], resolveKey);
-    if (metaText) return metaText;
+    if (metaText) return { text: metaText, explicit: true };
     // keyword within topicmeta > keywords > keyword
     const keywords = topicmeta.children.find(
       (c) => c.type === 'element' && c.baseType === 'map/keywords',
     );
     if (keywords) {
       const kwText = getNodeText(keywords, ['map/keyword'], resolveKey);
-      if (kwText) return kwText;
+      if (kwText) return { text: kwText, explicit: true };
     }
   }
 
-  // Priority 3: href filename without extension
+  // Priority 3: @navtitle attribute -- a valid DITA shortcut form for
+  // naming a topicref/topichead without a full <topicmeta>, and the *only*
+  // way to name a topichead at all when it carries neither. Authored
+  // content, same as Priority 1/2, so `explicit: true`. This mirrors
+  // ditaLanguageUtils.ts's getMapRefName (the outline/tree-view path),
+  // which already checked this attribute -- book/site mode and HTML
+  // export (both built on this function) did not, so a topichead named
+  // only this way rendered as a literal "(unnamed)" heading in those
+  // views while showing correctly in the outline.
+  const navtitleAttr = getAttr(node, 'navtitle');
+  if (navtitleAttr) return { text: navtitleAttr, explicit: true };
+
+  // Priority 4: href filename without extension -- not really a title, just
+  // the only thing left to call this entry.
   if (href) {
     const parts = href.replace(/\\/g, '/').split('/');
     const file = parts[parts.length - 1] || '';
     const dotIdx = file.lastIndexOf('.');
-    if (dotIdx > 0) return file.substring(0, dotIdx);
-    return file;
+    return { text: dotIdx > 0 ? file.substring(0, dotIdx) : file, explicit: false };
   }
 
-  // Priority 4: keys attribute
-  if (keys) return keys;
+  // Priority 5: keys attribute -- a machine-readable identifier, not a title either.
+  if (keys) return { text: keys, explicit: false };
 
   // Fallback
-  return '(unnamed)';
+  return { text: '(unnamed)', explicit: false };
 }
 
 function isNavigable(node: DitaNode): boolean {
@@ -293,24 +319,24 @@ function renderRef(node: DitaNode, ctx: MapRenderContext, renderChildren: (node:
   const { boxClass, label: profileLabel } = ownProfilingMarkup(node);
 
   const icon = nav
-    ? '<span class="map-tree-icon map-tree-icon--file">\u{1F4C4}</span>'
-    : '<span class="map-tree-icon map-tree-icon--key">\u{1F511}</span>';
+    ? '<span class="map-tree-icon map-tree-icon--file" aria-hidden="true">\u{1F4C4}</span>'
+    : '<span class="map-tree-icon map-tree-icon--key" aria-hidden="true">\u{1F511}</span>';
 
   const nameAttr = escapeAttr(displayName);
   const keyAttr = safeAttr('data-keys', keys);
   const hrefAttr = href ? safeAttr('data-href', href) : '';
 
   if (nav) {
-    return `<li class="map-tree-item map-tree-item--nav${boxClass}"${keyAttr}${hrefAttr}${profileAttr}>
+    return `<li class="map-tree-item map-tree-item--nav${boxClass}" role="treeitem"${keyAttr}${hrefAttr}${profileAttr}>
       <a href="#" class="map-tree-link" data-href="${escapeAttr(href)}">${icon}${badge}<span class="map-tree-label">${nameAttr}</span></a>
-      ${childrenHtml ? `<ul class="map-tree">${childrenHtml}</ul>` : ''}
+      ${childrenHtml ? `<ul class="map-tree" role="group">${childrenHtml}</ul>` : ''}
       ${profileLabel}
     </li>`;
   }
 
-  return `<li class="map-tree-item map-tree-item--keydef${boxClass}"${keyAttr}${hrefAttr}${profileAttr}>
+  return `<li class="map-tree-item map-tree-item--keydef${boxClass}" role="treeitem"${keyAttr}${hrefAttr}${profileAttr}>
     ${icon}${badge}<span class="map-tree-label map-tree-label--keydef">${nameAttr}</span>
-    ${childrenHtml ? `<ul class="map-tree">${childrenHtml}</ul>` : ''}
+    ${childrenHtml ? `<ul class="map-tree" role="group">${childrenHtml}</ul>` : ''}
     ${profileLabel}
   </li>`;
 }
@@ -326,6 +352,10 @@ export interface MapRenderContext {
   roleLabel?: RoleLabeler;
   /** Current nesting depth (for depth-aware role numbering) */
   depth?: number;
+  /** Localized aria-label for the root outline tree (role="tree"); falls
+   *  back to a plain English default when the caller doesn't supply one
+   *  (e.g. in pure-function tests) so this stays vscode-free. */
+  treeLabel?: string;
   /**
    * The effective (already-cascaded) profiling/conditional-processing
    * attributes inherited from this node's ancestor topicrefs in the map --
@@ -379,7 +409,7 @@ const MAP_BASE_TYPE_RENDERERS: Record<string, Renderer> = {
       .join('');
     return `<div class="ditamap-container">
       ${titleHtml}
-      <ul class="map-tree">${bodyHtml}</ul>
+      <ul class="map-tree" role="tree" aria-label="${escapeAttr(ctx.treeLabel || 'Document outline')}">${bodyHtml}</ul>
     </div>`;
   },
 
@@ -395,9 +425,9 @@ const MAP_BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     const profileKeys = profilingKeysAttr(effectiveProfiling);
     const profileAttr = profileKeys ? safeAttr('data-profile-keys', profileKeys) : '';
     const { boxClass, label: profileLabel } = ownProfilingMarkup(node);
-    return `<li class="map-tree-item map-tree-item--head${boxClass}"${profileAttr}>
+    return `<li class="map-tree-item map-tree-item--head${boxClass}" role="treeitem"${profileAttr}>
       <span class="map-tree-label map-tree-label--head">${escapeAttr(displayName)}</span>
-      ${childrenHtml ? `<ul class="map-tree">${childrenHtml}</ul>` : ''}
+      ${childrenHtml ? `<ul class="map-tree" role="group">${childrenHtml}</ul>` : ''}
       ${profileLabel}
     </li>`;
   },
@@ -407,8 +437,12 @@ const MAP_BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     const effectiveProfiling = mergeProfilingAttrs(node.attributes, ctx.inheritedProfiling || {});
     const childCtx: MapRenderContext = { ...ctx, inheritedProfiling: effectiveProfiling };
     const childrenHtml = renderChildrenForNode(node, childCtx, renderChildren);
-    return `<li class="map-tree-item map-tree-item--group">
-      <ul class="map-tree">${childrenHtml}</ul>
+    // No visible label of its own (topicgroup is purely a profiling
+    // grouping), so it isn't a distinct treeitem -- role="group" alone,
+    // wrapping its children as if they were direct siblings of whatever
+    // contains this topicgroup.
+    return `<li class="map-tree-item map-tree-item--group" role="none">
+      <ul class="map-tree" role="group">${childrenHtml}</ul>
     </li>`;
   },
   'map/bookmap-structural': (node, ctx, renderChildren) => {
@@ -423,9 +457,9 @@ const MAP_BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     const profileKeys = profilingKeysAttr(effectiveProfiling);
     const profileAttr = profileKeys ? safeAttr('data-profile-keys', profileKeys) : '';
     const { boxClass, label: profileLabel } = ownProfilingMarkup(node);
-    return `<li class="map-tree-item map-tree-item--structural${boxClass}"${profileAttr}>
+    return `<li class="map-tree-item map-tree-item--structural${boxClass}" role="treeitem"${profileAttr}>
       <span class="map-tree-label map-tree-label--structural">${escapeAttr(displayName)}</span>
-      ${childrenHtml ? `<ul class="map-tree">${childrenHtml}</ul>` : ''}
+      ${childrenHtml ? `<ul class="map-tree" role="group">${childrenHtml}</ul>` : ''}
       ${profileLabel}
     </li>`;
   },
@@ -475,13 +509,69 @@ const MAP_BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   'map/mapref': renderRef,
 };
 
+/** True when a bare href isn't a scoped/absolute/scheme'd reference to
+ *  somewhere outside the local doc tree -- copy of ditaRenderUtils.ts's
+ *  own private isLocalHref (kept private and duplicated here, not
+ *  exported/shared, since it's a 4-line pure classification helper and
+ *  this file otherwise has no runtime dependency on ditaRenderUtils.ts;
+ *  see isDitamapRef below for why this file needs its own copy at all). */
+function isLocalHref(href: string, scope?: string): boolean {
+  if (!href || href.startsWith('#')) return false;
+  if (scope === 'external' || scope === 'peer') return false;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(href)) return false;
+  if (isAbsolute(href)) return false;
+  return true;
+}
+
+/** True when the node is a topicref/keydef/mapref pointing at another
+ *  local .ditamap -- i.e. a node expandDitamapRefs (ditaRenderUtils.ts)
+ *  inlines the referenced map's own top-level children into, in place of
+ *  this node ever representing a page of its own. ditaRenderUtils.ts
+ *  imports this rather than the other way around (this file has no
+ *  runtime dependency on ditaRenderUtils.ts) since collectEntriesRecursive
+ *  below needs the exact same definition expandDitamapRefs itself uses --
+ *  a node this function says isn't a ditamap ref never gets its children
+ *  spliced in by expandDitamapRefs in the first place, so the two must
+ *  agree on every case. */
+export function isDitamapRef(node: DitaNode): boolean {
+  if (node.type !== 'element') return false;
+  const baseType = node.baseType;
+  if (baseType !== 'map/topicref' && baseType !== 'map/keydef' && baseType !== 'map/mapref') return false;
+  const href = node.attributes?.href;
+  if (!href || !isLocalHref(href, node.attributes?.scope)) return false;
+  const pathPart = href.split('#')[0].toLowerCase();
+  return pathPart.endsWith('.ditamap') || node.attributes?.format === 'ditamap';
+}
+
 export interface MapEntry {
   href?: string;
   displayName: string;
+  /** True when displayName came from an actual navtitle/linktext/shortdesc/
+   *  keyword in the map -- false when it's the href's own filename, the raw
+   *  `keys` value, or the "(unnamed)" fallback (see getDisplayNameInfo).
+   *  Consumers that want a "is this worth reading the topic's own <title>
+   *  instead" signal (docsite mode's sidebar) key off this rather than
+   *  guessing from the string itself. */
+  displayNameExplicit: boolean;
   depth: number;
   keys?: string;
   /** BookMap structural role, numbered in document order ("Chapter 1", "Appendix A", …) */
   role?: string;
+  /** True when this entry's effective DITA processing-role -- its own
+   *  processing-role attribute if set, else inherited down from the
+   *  nearest ancestor that set one, defaulting to 'normal' at the map's
+   *  own root -- is 'resource-only'. A <keydef> is resource-only by this
+   *  same default even with no processing-role attribute of its own (DITA
+   *  spec: keydef's processing-role itself defaults to resource-only),
+   *  though an explicit processing-role="normal" directly on the keydef
+   *  still overrides that back to navigable, same as for any other
+   *  topicref. Left true on every entry it applies to (not filtered out
+   *  of collectMapEntries' own result here) since this function has other
+   *  consumers -- keyref completion/outline/go-to-definition -- that need
+   *  to see every keydef and resource-only branch regardless; it's the
+   *  reading-oriented consumers (buildBookNavManifest, renderBookParts,
+   *  exportHtml.ts) that skip an entry once they see resourceOnly true. */
+  resourceOnly?: boolean;
 }
 
 function collectEntriesRecursive(
@@ -490,6 +580,7 @@ function collectEntriesRecursive(
   result: MapEntry[],
   resolveKey: ResolveKey | undefined,
   roleLabel: RoleLabeler,
+  inheritedProcessingRole: 'normal' | 'resource-only' = 'normal',
 ): void {
   if (node.type !== 'element') return;
   const baseType = node.baseType;
@@ -497,28 +588,75 @@ function collectEntriesRecursive(
   // Skip reltable and its children
   if (baseType === 'map/reltable') return;
 
+  if (isDitamapRef(node)) {
+    // A transparent transclusion wrapper: expandDitamapRefs (called before
+    // collectMapEntries always runs) has already spliced the referenced
+    // map's own top-level children in as this node's own children, in
+    // place of this node ever being a page of its own -- a .ditamap href
+    // never resolves to a real topic file (resolveBookTopicPath in
+    // ditaRenderUtils.ts returns undefined for one), so this node was
+    // never going to survive downstream filtering as an entry anyway.
+    // More importantly: recursing at the SAME depth (not depth + 1) means
+    // the referenced map's own chapters/sections become peers of whatever
+    // this node itself would have been a peer of, continuing the same
+    // role-numbering sequence (createBookRoleLabeler's depth-keyed
+    // counters, below) rather than restarting from "Chapter 1" one nesting
+    // level deeper just because expandDitamapRefs happened to splice them
+    // in as DOM children of this wrapper node.
+    for (const child of node.children || []) {
+      collectEntriesRecursive(child, depth, result, resolveKey, roleLabel, inheritedProcessingRole);
+    }
+    return;
+  }
+
+  // DITA processing-role inheritance: an explicit attribute on this node
+  // wins outright; failing that, a bare <keydef> defaults to resource-only
+  // (the one place a tag itself carries a different default than its
+  // ancestors, per spec) same as it would if it explicitly wrote
+  // processing-role="resource-only" itself; failing that, this node
+  // inherits whatever its own parent resolved to (passed in as
+  // inheritedProcessingRole), which is 'normal' unless some ancestor
+  // upstream already opted the branch into resource-only.
+  const ownProcessingRole = getAttr(node, 'processing-role');
+  const effectiveProcessingRole: 'normal' | 'resource-only' =
+    ownProcessingRole === 'resource-only'
+      ? 'resource-only'
+      : ownProcessingRole === 'normal'
+        ? 'normal'
+        : baseType === 'map/keydef'
+          ? 'resource-only'
+          : inheritedProcessingRole;
+
   if (baseType === 'map/topicref' || baseType === 'map/keydef' || baseType === 'map/mapref' || baseType === 'map/topichead') {
     const href = getAttr(node, 'href');
     const keys = getAttr(node, 'keys');
+    const nameInfo = getDisplayNameInfo(node, resolveKey);
     result.push({
       href,
-      displayName: getDisplayName(node, resolveKey),
+      displayName: nameInfo.text,
+      displayNameExplicit: nameInfo.explicit,
       depth,
       keys,
-      role: roleLabel(node.tagName, depth),
+      // A resource-only branch never burns/bumps a chapter-style counter
+      // slot -- it's never going to appear in a reading nav that shows
+      // role numbers, so numbering a chapter that will never be seen
+      // (and, worse, leaving a visible gap where its number would have
+      // been) serves no one.
+      role: effectiveProcessingRole === 'resource-only' ? undefined : roleLabel(node.tagName, depth),
+      resourceOnly: effectiveProcessingRole === 'resource-only',
     });
     // Recurse children at depth+1
     for (const child of node.children || []) {
-      collectEntriesRecursive(child, depth + 1, result, resolveKey, roleLabel);
+      collectEntriesRecursive(child, depth + 1, result, resolveKey, roleLabel, effectiveProcessingRole);
     }
   } else if (baseType === 'map/topicgroup' || baseType === 'map/bookmap-structural') {
     // topicgroup / bookmap-structural: no entry itself, but recurse at same depth
     for (const child of node.children || []) {
-      collectEntriesRecursive(child, depth, result, resolveKey, roleLabel);
+      collectEntriesRecursive(child, depth, result, resolveKey, roleLabel, effectiveProcessingRole);
     }
   } else {
     for (const child of node.children || []) {
-      collectEntriesRecursive(child, depth, result, resolveKey, roleLabel);
+      collectEntriesRecursive(child, depth, result, resolveKey, roleLabel, effectiveProcessingRole);
     }
   }
 }
@@ -539,7 +677,7 @@ export function collectMapEntries(
 
 export function renderMapDocument(
   root: DitaNode,
-  options: { docDir: string; resolveKey?: ResolveKey; roleFormat?: RoleLabelFormatter },
+  options: { docDir: string; resolveKey?: ResolveKey; roleFormat?: RoleLabelFormatter; treeLabel?: string },
 ): string {
   function renderElement(node: DitaNode, ctx: MapRenderContext): string {
     if (node.type === 'text') return '';
@@ -556,6 +694,7 @@ export function renderMapDocument(
     resolveKey: options.resolveKey,
     roleLabel: createBookRoleLabeler(options.roleFormat),
     depth: 0,
+    treeLabel: options.treeLabel,
   };
 
   return renderElement(root, ctx);

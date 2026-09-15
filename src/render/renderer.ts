@@ -24,6 +24,43 @@ export interface RenderContext {
    * source itself has no @width/@height, which always wins when present.
    */
   getImageDimensions?: (relPath: string) => { width: number; height: number } | undefined;
+  /** Localized "Index" label used in indexterm chip tooltips -- resolved
+   *  upstream (see detectIndexLabel in ditaRenderUtils.ts) the same way
+   *  noteLabels is, so this module stays free of any locale logic of its
+   *  own. Falls back to 'Index' when not supplied. */
+  indexLabel?: string;
+  /**
+   * When true, <indexterm> content is never rendered -- neither as an
+   * inline chip in the body nor pulled out of <prolog><metadata><keywords>.
+   * Index terms are authoring metadata (an index-generation hint for a
+   * publishing toolchain), and the interactive preview surfaces them as
+   * chips only as an editing aid; a standalone "Export as HTML" file has no
+   * such editing context and no index to build, so they'd just be stray
+   * clutter in the shipped document. Left undefined/false everywhere except
+   * the export path so the interactive preview (DitaViewerProvider /
+   * MapViewerProvider) keeps showing chips exactly as before.
+   */
+  suppressIndexterm?: boolean;
+  /**
+   * Resolves a cross-file xref's raw href to an absolute path IF the
+   * referenced topic is part of the book/docsite this topic is itself
+   * being rendered as part of, and undefined otherwise (target isn't in
+   * this book, or isn't a resolvable local .dita reference at all). Only
+   * set by callers assembling a book (renderBookParts) or a docsite page
+   * (MapViewerProvider's site mode) -- standalone single-topic preview
+   * (DitaViewerProvider) and "Export as HTML" never set this, so a
+   * cross-file xref there keeps rendering as the existing non-clickable
+   * <span class="xref-external"> hint (docsite design doc, 3.2/4.5).
+   *
+   * Deliberately returns the resolved path rather than a plain boolean:
+   * the caller (MapViewerProvider's webview click handler) needs an
+   * address to act on, not just a yes/no, and resolving the href against
+   * the right base directory (this topic's own directory, not the map's)
+   * is something only the caller building this closure can do correctly
+   * -- see makeFileTitleResolver's own resolution for the same rule
+   * applied to xref titles.
+   */
+  isInCurrentBook?: (href: string) => string | undefined;
 }
 
 const CONTAINER_BASETYPES = new Set([
@@ -150,6 +187,24 @@ function injectBlockProfiling(html: string, tagName: string, keysAttr: string, l
     ? html.replace(/ class="([^"]*)"/, (_m, existing) => ` class="${existing ? `${existing} profiled` : 'profiled'}"`)
     : html.replace(/^<([a-zA-Z][a-zA-Z0-9]*)/, '<$1 class="profiled"');
   out = out.replace(/^<([a-zA-Z][a-zA-Z0-9]*)/, `<$1 data-profile-keys="${keysAttr}"`);
+
+  // `tagName` is the *DITA source* element name (e.g. "row", "entry",
+  // "stentry"), passed through from effectiveNode.tagName purely so
+  // injectAttributes can stamp the original authoring tag onto
+  // data-dita-tagname for tooltips. It is NOT reliable for finding this
+  // element's own closing tag in `html`: several base types render under a
+  // different HTML tag than their DITA element name -- a <row> renders as
+  // <tr>, and <entry>/<stentry> render as <td> or <th> depending on
+  // header context. Building the close-tag search from `tagName` in that
+  // case (`</row>`, `</entry>`) never matches anything in `html` (which
+  // actually contains `</tr>`/`</td>`/`</th>`), so the lookup below fell
+  // through its "not found" branch and silently dropped the label for
+  // every profiled table row or cell. Reading the real tag straight out of
+  // the opening tag we just edited keeps this correct regardless of what
+  // the DITA source called the element.
+  const actualTagMatch = /^<([a-zA-Z][a-zA-Z0-9]*)/.exec(out);
+  const actualTag = actualTagMatch ? actualTagMatch[1] : tagName;
+
   // html is always exactly one complete element at this point in the
   // pipeline (possibly with same-named descendants nested inside, e.g. a
   // <li> containing a nested <ul><li>...) -- proper nesting guarantees any
@@ -157,9 +212,32 @@ function injectBlockProfiling(html: string, tagName: string, keysAttr: string, l
   // occurrence of this tag's own closing tag in the string is always the
   // outermost (real) one, letting the label be inserted as the true last
   // child without needing a full tag-depth parser.
-  const closeTag = `</${tagName}>`;
+  const closeTag = `</${actualTag}>`;
   const closeIdx = out.lastIndexOf(closeTag);
   if (closeIdx === -1) return out;
+
+  if (actualTag === 'tr') {
+    // A <tr>'s only legal direct children are <td>/<th> (plus
+    // script/template) -- inserting the label <span> as the row's own
+    // last child, the way every other block element is handled below, is
+    // invalid content. The HTML parser "fixes" that by foster-parenting
+    // the span out of the table entirely (per the "in row"/"in table"
+    // insertion modes: anything that isn't a cell gets relocated to just
+    // before the <table>, not left where it was written). That relocation
+    // is exactly what produced both reported symptoms: the label render­
+    // ing detached from its own row -- so it shows up vertically offset,
+    // stacked wherever the parser moved it rather than next to its row --
+    // and the <tr>'s child list no longer matching what was authored,
+    // which breaks the shared collapsed-border edge with the row below
+    // it. The fix is to anchor the label inside the row's own last cell
+    // instead, which is valid content there.
+    const lastTd = out.lastIndexOf('</td>', closeIdx);
+    const lastTh = out.lastIndexOf('</th>', closeIdx);
+    const lastCellClose = Math.max(lastTd, lastTh);
+    if (lastCellClose === -1) return out; // no cells to anchor the label to
+    return `${out.slice(0, lastCellClose)}<span class="profiling-label">${labelHtml}</span>${out.slice(lastCellClose)}`;
+  }
+
   return `${out.slice(0, closeIdx)}<span class="profiling-label">${labelHtml}</span>${out.slice(closeIdx)}`;
 }
 
@@ -200,13 +278,22 @@ function injectAttributes(html: string, tagName: string, range: SourceRange): st
   // in the tag and, per HTML5's first-duplicate-wins parsing rule, silently
   // shadows whatever the renderer intended (e.g. topic/image using the
   // resolved alt text as its tooltip instead of the literal word "image").
+  //
+  // The generic fallback itself is a data attribute, not a second title=:
+  // baking "every element gets a native browser tooltip reading its raw
+  // tag name" straight into the HTML made it impossible to turn off without
+  // a full re-render, and reading the tag name on hover is useful while
+  // learning DITA but noisy otherwise. data-dita-tagname carries the same
+  // information; the "Tags" toolbar toggle promotes it to a real title
+  // attribute only when the reader has asked for it (see applyTagTooltips
+  // in DitaViewerProvider.ts/MapViewerProvider.ts's webview scripts).
   const openTagEnd = html.indexOf('>');
   const openTag = openTagEnd >= 0 ? html.slice(0, openTagEnd) : html;
   const hasOwnTitle = / title="/.test(openTag);
-  const titlePart = hasOwnTitle ? '' : ` title="${tagName}"`;
+  const tagNamePart = hasOwnTitle ? '' : ` data-dita-tagname="${tagName}"`;
   return html.replace(
     /^<([a-zA-Z][a-zA-Z0-9]*)/,
-    `<$1${titlePart} data-line="${range.startLine}" data-end-line="${range.endLine}" data-start-col="${range.startCol}" data-end-col="${range.endCol}"`,
+    `<$1${tagNamePart} data-line="${range.startLine}" data-end-line="${range.endLine}" data-start-col="${range.startCol}" data-end-col="${range.endCol}"`,
   );
 }
 
@@ -327,7 +414,7 @@ function renderConrefRange(node: DitaNode, range: DitaNode[], context: RenderCon
     .join('');
 }
 
-function renderElement(node: DitaNode, context: RenderContext): string {
+export function renderElement(node: DitaNode, context: RenderContext): string {
   if (node.type === 'text') {
     return escapeHtml(node.text || '');
   }

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<task id="app_account" xml:lang="zh-CN">
+  <title>注册与登录</title>
+  <shortdesc>创建 <ph keyref="company-name"/> 账号并在手机应用中登录。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>注册</indexterm>
+        <indexterm>登录</indexterm>
+        <indexterm>账号</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <taskbody>
+    <context>
+      <p>一个账号可管理多套住房；家庭成员无需各自注册管理员账号，详见 <xref href="family_manage.dita"/>。</p>
+    </context>
+    <steps>
+<step>
+        <cmd>在应用登录界面点击 <uicontrol>注册新账号</uicontrol>。</cmd>
+      </step>
+      <step>
+        <cmd>输入手机号，获取并填写短信验证码。</cmd>
+      </step>
+      <step>
+        <cmd>设置登录密码。</cmd>
+      <info>
+          <p>密码需 8-32 位，包含字母与数字。请勿与其他网站复用相同密码。</p>
+        </info>
+      </step>
+        <step>
+        <cmd>勾选同意《用户协议》与《隐私政策》后点击 <uicontrol>注册</uicontrol>。</cmd>
+      </step>
+      <step>
+        <cmd>返回登录界面，使用手机号与密码登录。</cmd>
+      </step>
+      <step>
+        <cmd>（可选）在 <menucascade><uicontrol>我的</uicontrol><uicontrol>账号与安全</uicontrol></menucascade> 中开启指纹或面容解锁。</cmd>
+      </step>
+
+    </steps>
+    <result>
+<p>应用显示「我的家庭」空页面，表示登录成功。</p>
+    </result>
+    <postreq>
+<p>绑定中控主机：<xref href="app_pairing.dita"/>。</p>
+    </postreq>
+  </taskbody>
+</task>

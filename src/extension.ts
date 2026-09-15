@@ -2,8 +2,8 @@ import * as vscode from 'vscode';
 import { spawn } from 'child_process';
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs';
 import { basename, dirname, isAbsolute, join, resolve } from 'path';
-import { DitaViewerProvider, findDitamapFiles, getLastRenderedHtmlForTesting } from './editor/DitaViewerProvider';
-import { MapViewerProvider, getLastRenderedMapHtmlForTesting } from './editor/MapViewerProvider';
+import { DitaViewerProvider, findDitamapFiles, getLastRenderedHtmlForTesting, clearAllCaches } from './editor/DitaViewerProvider';
+import { MapViewerProvider, getLastRenderedMapHtmlForTesting, clearMapCache } from './editor/MapViewerProvider';
 import {
   resolveDitaOtExecutable,
   buildDitaOtArgs,
@@ -16,7 +16,9 @@ import {
 } from './editor/ditaOtUtils';
 import { registerLanguageFeatures } from './language/ditaLanguageFeatures';
 import { registerMapTreeView } from './language/ditaMapTreeProvider';
+import { ditaFileWatcherCounts } from './editor/ditaFileWatcher';
 import { registerExportHtmlCommand } from './editor/exportHtml';
+import { registerCompareCommand } from './editor/ditaDiffProvider';
 
 const TRANSFORM_CMD = 'ditaViewer.transformWithDitaOt';
 
@@ -30,6 +32,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   // "Export as HTML" command (self-contained file, no DITA-OT needed)
   registerExportHtmlCommand(context);
+
+  // "Compare with Git Version" — rendered diff view for .dita files
+  registerCompareCommand(context);
 
   // DITA topic preview (.dita)
   context.subscriptions.push(
@@ -210,7 +215,9 @@ export function activate(context: vscode.ExtensionContext) {
             );
             if (overwrite !== overwriteLabel) return;
           }
-        } catch {}
+        } catch (e) {
+          console.warn(`Failed to check output directory contents: ${outputDir}`, e instanceof Error ? e.message : e);
+        }
       }
 
       // 5. Pick optional CSS (html5/xhtml only)
@@ -317,12 +324,20 @@ export function activate(context: vscode.ExtensionContext) {
               if (process.platform === 'win32' && child.pid) {
                 // Kill the whole tree — terminating the cmd.exe wrapper alone
                 // leaves the DITA-OT Java process running.
-                try { spawn('taskkill', ['/pid', String(child.pid), '/t', '/f']); } catch {}
+                try {
+                  spawn('taskkill', ['/pid', String(child.pid), '/t', '/f']);
+                } catch (e) {
+                  console.warn('Failed to kill Windows process tree:', e instanceof Error ? e.message : e);
+                }
               } else {
                 child.kill('SIGTERM');
                 // Give it a moment, then SIGKILL
                 killTimer = setTimeout(() => {
-                  try { child.kill('SIGKILL'); } catch {}
+                  try {
+                    child.kill('SIGKILL');
+                  } catch (e) {
+                    console.warn('Failed to send SIGKILL:', e instanceof Error ? e.message : e);
+                  }
                 }, 3000);
               }
             });
@@ -439,7 +454,11 @@ export function activate(context: vscode.ExtensionContext) {
       }
     } finally {
       for (const d of disposables) {
-        try { d.dispose(); } catch {}
+        try {
+          d.dispose();
+        } catch (e) {
+          console.warn('Failed to dispose disposable:', e instanceof Error ? e.message : e);
+        }
       }
     }
   });
@@ -451,10 +470,24 @@ export function activate(context: vscode.ExtensionContext) {
   // content without VS Code providing a public API to read a custom
   // editor's WebviewPanel from outside its own provider. Not used by the
   // extension itself at runtime.
+  //
+  // ditaFileWatcherCounts is here for the same reason: whether N open panels
+  // really do share one FileSystemWatcher per folder is not observable from
+  // outside the extension host, and it is the whole claim of ditaFileWatcher.ts.
   return {
     _test: {
       getLastRenderedHtml: getLastRenderedHtmlForTesting,
       getLastRenderedMapHtml: getLastRenderedMapHtmlForTesting,
+      ditaFileWatcherCounts,
+      // Font-size/typeface and page-width preferences are read from
+      // globalState at render time (FONT_PREFS_KEY, WIDTH_SELECTION_KEY in
+      // DitaViewerProvider.ts) and there is no command or webview click the
+      // harness can use to set them from outside -- @vscode/test-electron
+      // cannot reach into a webview to operate its toolbar. Exposing the
+      // Memento directly lets a test set a preference and then open a
+      // preview to check the bootstrap script it renders, rather than only
+      // being able to assert the default.
+      globalState: context.globalState,
     },
   };
 }
@@ -536,7 +569,9 @@ function scanCssFiles(mapDir: string): string[] {
         if (existsSync(abs)) dirs.add(abs);
       }
     }
-  } catch {}
+  } catch (e) {
+    console.warn('Failed to read CSS directory configuration:', e instanceof Error ? e.message : e);
+  }
 
   for (const d of dirs) {
     try {
@@ -545,7 +580,9 @@ function scanCssFiles(mapDir: string): string[] {
           files.set(entry, join(d, entry));
         }
       }
-    } catch {}
+    } catch (e) {
+      console.warn(`Failed to read CSS directory ${d}:`, e instanceof Error ? e.message : e);
+    }
   }
 
   try {
@@ -559,7 +596,9 @@ function scanCssFiles(mapDir: string): string[] {
         }
       }
     }
-  } catch {}
+  } catch (e) {
+    console.warn('Failed to read custom CSS configuration:', e instanceof Error ? e.message : e);
+  }
 
   return [...files.values()];
 }
@@ -599,4 +638,20 @@ async function resolveMapFile(): Promise<vscode.Uri | undefined> {
   }
 
   return undefined;
+}
+
+// Module-level caches in DitaViewerProvider/MapViewerProvider/ditaRenderUtils
+// are already self-bounded (keyMapCache and imageDimensionsCache have hard
+// entry caps, and the book-mode topic render cache has a byte budget; the
+// per-panel render caches are cleaned as each webview panel disposes -- see
+// each provider's onDidDispose), so this isn't fixing a leak. It's a
+// defensive reset for the case VS Code deactivates the extension without
+// disposing every panel first (window close, extension host restart, manual
+// disable), so nothing from this session's caches lingers into whatever runs
+// next in the same process. The topic render cache is the one that outlives
+// panels deliberately -- reuse across two panels showing the same book is
+// part of what makes it worth having -- so deactivation is what clears it.
+export function deactivate(): void {
+  clearAllCaches();
+  clearMapCache();
 }

@@ -1,19 +1,25 @@
 // VS Code glue for the DITA language features: go-to-definition,
 // completion, document symbols and broken-reference diagnostics.
-// The text/offset logic lives in ditaLanguageUtils.ts (unit-tested).
+// The text/offset logic lives in ditaLanguageUtils.ts and the folder walk
+// behind href/conref completion in referenceableFiles.ts -- both unit-tested,
+// and neither imports vscode, which is what keeps them testable that way.
 
 import * as vscode from 'vscode';
-import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
-import { dirname, isAbsolute, join, relative, resolve } from 'path';
+import { existsSync, readFileSync } from 'fs';
+import { dirname, isAbsolute, resolve, normalize } from 'path';
 import { formatLocalizedRole } from './bookRoleL10n';
 import {
   collectIds,
   collectMapSymbols,
   collectRefEntries,
   collectTopicSymbols,
+  collectUnknownElements,
   DocSymbolSpec,
   findConrefTargetOffset,
+  findEnclosingKeydefKeys,
+  findIdAttrAt,
   findKeyDefinitionOffset,
+  findKeysAttrAt,
   findRefAttrAt,
   findUnclosedTag,
   getAttributesForTag,
@@ -22,10 +28,13 @@ import {
   getCompletionContext,
   isExternalRef,
   offsetToLineCol,
+  splitRefFragment,
 } from './ditaLanguageUtils';
+import { collectReferenceableFiles, WalkEntry } from './referenceableFiles';
 import { buildKeyMap, findDitamapFiles } from '../editor/DitaViewerProvider';
 import { decodeHrefPart } from '../editor/ditaRenderUtils';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
+import { DitaNode } from '../parser/domTypes';
 import { STANDARD_TAG_TO_BASETYPE } from '../parser/standardTagMap';
 import { MAP_STANDARD_TAG_TO_BASETYPE } from '../parser/mapTagMap';
 
@@ -125,40 +134,240 @@ class DitaDefinitionProvider implements vscode.DefinitionProvider {
   }
 }
 
-// ── Completion provider ──
+// ── Reference provider (Find All References) ──
+//
+// The reverse of go-to-definition: given a definition site (an id="..." or
+// a keydef's keys="...") or a reference site (href/conref/keyref/conkeyref
+// value), finds every OTHER place in the workspace that points at the same
+// thing. Unlike go-to-definition, which only needs the current document's
+// text, this has to scan every .dita/.ditamap file in the workspace --
+// there's no index, so every invocation is a fresh read+regex pass over
+// each candidate file. That's the same cost class as VS Code's built-in
+// text search and is fine for an on-demand (not automatic) action, but
+// will get slower, not faster, as a workspace grows into the tens of
+// thousands of files; there's no artificial result cap here on purpose --
+// silently truncating "Find All References" results would be worse than
+// a slow-but-complete answer.
+const REFERENCE_SCAN_GLOB = '**/*.{dita,ditamap}';
+const REFERENCE_SCAN_EXCLUDE = '**/{node_modules,out,dist}/**';
 
-/** Lists referenceable files under a directory (recursive, depth-limited). */
-function listReferenceableFiles(baseDir: string, maxDepth = 3): string[] {
-  const results: string[] = [];
-  function walk(dir: string, depth: number) {
-    if (depth > maxDepth || results.length >= 200) return;
-    let entries: string[];
-    try {
-      entries = readdirSync(dir);
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      if (entry.startsWith('.') || entry === 'node_modules' || entry === 'out') continue;
-      const full = join(dir, entry);
-      try {
-        if (statSync(full).isDirectory()) {
-          walk(full, depth + 1);
-        } else if (/\.(dita|ditamap|xml)$/i.test(entry)) {
-          results.push(relative(baseDir, full).replace(/\\/g, '/'));
+interface ReferenceTarget {
+  kind: 'key' | 'id' | 'file';
+  /** For kind 'key': every key name to search for (a keydef's keys="a b c"
+   *  declares several aliases for the same target -- clicking anywhere in
+   *  that keydef other than one specific key token should search for
+   *  usages of ALL of them, not just the first). For kind 'id': the
+   *  target topic id (always exactly one). */
+  names?: string[];
+  /** For kind 'id' | 'file': absolute path of the target file. */
+  filePath?: string;
+  /** Location of the definition/declaration itself, if resolvable, so it
+   *  can be included in results when the caller asked for it. */
+  declaration?: vscode.Location;
+}
+
+/** Figures out what the cursor is "on" in reference-search terms: a key
+ *  definition, an id declaration, a reference to either of those (resolved
+ *  to its target the same way go-to-definition would), or -- falling all
+ *  the way back -- nothing specific, in which case the whole containing
+ *  file becomes the target ("who references this topic"). */
+function resolveReferenceTarget(document: vscode.TextDocument, text: string, offset: number): ReferenceTarget {
+  const keysHit = findKeysAttrAt(text, offset);
+  if (keysHit) {
+    return {
+      kind: 'key',
+      names: [keysHit.key],
+      declaration: new vscode.Location(document.uri, document.positionAt(keysHit.valueStart)),
+    };
+  }
+
+  // Broader than the exact-token match above: cursor anywhere else inside
+  // the enclosing <keydef> element (its <keyword> display text, href,
+  // topicmeta, whitespace) -- see findEnclosingKeydefKeys' own comment for
+  // why this matters. Falls through to the generic "file" case below
+  // otherwise, which technically returns results but answers a different,
+  // confusing question ("who references this ditamap") for someone who
+  // clicked the key's human-readable label expecting "who uses this key".
+  const keydefHit = findEnclosingKeydefKeys(text, offset);
+  if (keydefHit) {
+    return { kind: 'key', names: keydefHit.keys };
+  }
+
+  const idHit = findIdAttrAt(text, offset);
+  if (idHit) {
+    return {
+      kind: 'id',
+      names: [idHit.id],
+      filePath: document.uri.fsPath,
+      declaration: new vscode.Location(document.uri, document.positionAt(idHit.valueStart)),
+    };
+  }
+
+  // Cursor on a reference value itself (not a declaration) -- resolve it to
+  // its target the same way DitaDefinitionProvider does, then search for
+  // OTHER referencers of that same target rather than of this document.
+  const refHit = findRefAttrAt(text, offset);
+  if (refHit && refHit.value) {
+    if (refHit.attr === 'keyref' || refHit.attr === 'conkeyref') {
+      const key = refHit.value.split('/')[0];
+      if (key) {
+        const declLoc = findKeyDefinitionLocation(document.uri, key);
+        return { kind: 'key', names: [key], declaration: declLoc };
+      }
+    } else if (!isExternalRef(refHit.value, refHit.scope)) {
+      const hashIdx = refHit.value.indexOf('#');
+      const filePart = hashIdx >= 0 ? refHit.value.substring(0, hashIdx) : refHit.value;
+      const fragment = hashIdx >= 0 ? refHit.value.substring(hashIdx + 1) : '';
+      const docDir = dirname(document.uri.fsPath);
+      const targetPath = filePart ? resolve(docDir, decodeHrefPart(filePart)) : document.uri.fsPath;
+      if (existsSync(targetPath)) {
+        // The addressed element id, not the topic-scope segment. This has to
+        // name the same thing the declaration site above names -- an
+        // id="..." value -- and the same thing Go to Definition lands on,
+        // since findConrefTargetOffset scopes by topicId but resolves to the
+        // element. Naming the topic here made "find references" from a conref
+        // answer the broader "who references anything in that topic", and
+        // made this path disagree with the declaration-site path below.
+        const { elementId } = splitRefFragment(fragment);
+        if (elementId) {
+          return { kind: 'id', names: [elementId], filePath: targetPath };
         }
-      } catch {}
+        return { kind: 'file', filePath: targetPath };
+      }
     }
   }
-  walk(baseDir, 0);
-  return results;
+
+  // Nothing specific under the cursor -- fall back to "who references this
+  // file", which is the most common ask ("what points at this topic?").
+  return { kind: 'file', filePath: document.uri.fsPath };
+}
+
+class DitaReferenceProvider implements vscode.ReferenceProvider {
+  async provideReferences(
+    document: vscode.TextDocument,
+    position: vscode.Position,
+    context: vscode.ReferenceContext,
+    token: vscode.CancellationToken,
+  ): Promise<vscode.Location[]> {
+    const text = document.getText();
+    const offset = document.offsetAt(position);
+    const target = resolveReferenceTarget(document, text, offset);
+
+    const results: vscode.Location[] = [];
+    if (context.includeDeclaration && target.declaration) {
+      results.push(target.declaration);
+    }
+
+    const docFsPath = document.uri.fsPath;
+    let candidateUris: vscode.Uri[];
+    try {
+      candidateUris = await vscode.workspace.findFiles(REFERENCE_SCAN_GLOB, REFERENCE_SCAN_EXCLUDE);
+    } catch (e) {
+      console.warn('Find All References: workspace file scan failed:', e instanceof Error ? e.message : e);
+      return results;
+    }
+
+    for (const uri of candidateUris) {
+      if (token.isCancellationRequested) break;
+      let candidateText: string;
+      try {
+        candidateText = uri.fsPath === docFsPath ? text : readFileSync(uri.fsPath, 'utf-8');
+      } catch (e) {
+        console.warn(`Find All References: could not read ${uri.fsPath}:`, e instanceof Error ? e.message : e);
+        continue;
+      }
+
+      const candidateDir = dirname(uri.fsPath);
+      for (const entry of collectRefEntries(candidateText)) {
+        if (isExternalRef(entry.value, entry.scope)) continue;
+
+        if (target.kind === 'key') {
+          if (entry.attr !== 'keyref' && entry.attr !== 'conkeyref') continue;
+          if (!target.names?.includes(entry.value.split('/')[0])) continue;
+        } else {
+          if (entry.attr !== 'href' && entry.attr !== 'conref') continue;
+          const hashIdx = entry.value.indexOf('#');
+          const filePart = hashIdx >= 0 ? entry.value.substring(0, hashIdx) : entry.value;
+          const fragment = hashIdx >= 0 ? entry.value.substring(hashIdx + 1) : '';
+          const resolvedPath = filePart ? resolve(candidateDir, decodeHrefPart(filePart)) : uri.fsPath;
+          if (normalize(resolvedPath) !== normalize(target.filePath || '')) continue;
+          // Compare the addressed element id, not the topic-scope segment.
+          // In the standard two-part "topicId/elementId" form those are
+          // different strings by definition, so matching on the first segment
+          // could never equal an id="..." value: every conref was skipped and
+          // Find All References from a declaration returned the declaration
+          // itself and nothing else. A one-part fragment addresses the topic,
+          // where the element id IS the topic id -- that case is unchanged.
+          if (target.kind === 'id' && splitRefFragment(fragment).elementId !== target.names?.[0]) {
+            continue;
+          }
+          // target.kind === 'file': any href/conref resolving to the file
+          // counts, fragment or not.
+        }
+
+        const { line, col } = offsetToLineCol(candidateText, entry.valueStart);
+        results.push(new vscode.Location(uri, new vscode.Position(line, col)));
+      }
+    }
+
+    return results;
+  }
+}
+
+// ── Completion provider ──
+
+/**
+ * Lists referenceable files under a directory (recursive, depth-limited).
+ *
+ * The rules live in referenceableFiles.ts and are unit-tested there against a
+ * synthetic tree; this is only the vscode adapter, responsible for two things.
+ *
+ * Reading directories through workspace.fs.readDirectory rather than
+ * readdirSync. That call returns names and types together, which is also why
+ * the per-entry statSync this used to do is gone: on an image-heavy document
+ * set the synchronous version measured 158ms for 43 directory reads plus 6044
+ * stats, and every one of those stats was only being asked "is this a
+ * directory". Awaiting the reads is what keeps that work off the extension
+ * host's JS thread while the user is typing.
+ *
+ * Passing the cancellation token down. VS Code abandons a completion request
+ * the moment the next character is typed, so the walk checks between
+ * directories and stops instead of finishing work nobody will see.
+ */
+async function listReferenceableFiles(
+  baseDir: string,
+  token: vscode.CancellationToken,
+): Promise<string[]> {
+  return collectReferenceableFiles(
+    baseDir,
+    async (dir: string): Promise<WalkEntry[]> => {
+      const entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dir));
+      return entries.map(([name, type]) => ({
+        name,
+        // FileType is a bitmask: a symlink to a directory reports
+        // Directory | SymbolicLink. Testing the bit rather than equality keeps
+        // the behaviour of the statSync this replaces, which followed symlinks.
+        isDirectory: (type & vscode.FileType.Directory) !== 0,
+      }));
+    },
+    { isCancelled: (): boolean => token.isCancellationRequested },
+  );
 }
 
 class DitaCompletionProvider implements vscode.CompletionItemProvider {
-  provideCompletionItems(
+  /**
+   * Async because the href/conref branch walks the folder tree. VS Code calls
+   * this on every trigger character -- '<', '"', ' ', '#' -- so a synchronous
+   * walk of a document set with a few thousand images blocks the extension
+   * host for the length of that walk on every keystroke, and the block is
+   * global: nothing else in the extension runs meanwhile either. The other
+   * branches return straight away, so awaiting costs them nothing.
+   */
+  async provideCompletionItems(
     document: vscode.TextDocument,
     position: vscode.Position,
-  ): vscode.CompletionItem[] | undefined {
+    token: vscode.CancellationToken,
+  ): Promise<vscode.CompletionItem[] | undefined> {
     const text = document.getText();
     const offset = document.offsetAt(position);
     const ctx = getCompletionContext(text, offset);
@@ -228,7 +437,8 @@ class DitaCompletionProvider implements vscode.CompletionItemProvider {
           return item;
         });
       }
-      return listReferenceableFiles(docDir).map((rel) => {
+      const files = await listReferenceableFiles(docDir, token);
+      return files.map((rel) => {
         const item = new vscode.CompletionItem(rel, vscode.CompletionItemKind.File);
         if (ctx.valueStart !== undefined) {
           item.range = new vscode.Range(document.positionAt(ctx.valueStart), position);
@@ -379,7 +589,56 @@ function validateDocument(document: vscode.TextDocument, collection: vscode.Diag
     }
   }
 
+  diagnostics.push(...collectUnknownElementDiagnostics(document));
+
   collection.set(document.uri, diagnostics);
+}
+
+// renderEffectiveNode() in renderer.ts drops any element the parser could not
+// assign a base type to -- silently rendering its children in its place, no
+// visual trace the element itself existed. Parsing here is a second parse
+// of the same document provideDocumentSymbols() already does independently
+// (both run on their own VS Code-driven schedule; there is no shared cache
+// between them), which costs one document's worth of SAX parsing on this
+// validator's own 700ms debounce -- proportional to a single open file, not
+// the book-mode multi-topic assembly the render-cache work above is about.
+// A malformed document while typing is expected and not an error to
+// surface here; provideDocumentSymbols already tolerates the same failure
+// the same way, by returning nothing rather than throwing through the
+// caller.
+function collectUnknownElementDiagnostics(document: vscode.TextDocument): vscode.Diagnostic[] {
+  let root: DitaNode;
+  try {
+    const xml = preprocessEntities(document.getText());
+    const isMap = isMapDocument(document);
+    root = (isMap ? parseDitamap(xml) : parseDita(xml)).root;
+  } catch {
+    return [];
+  }
+
+  const maxLine = Math.max(0, document.lineCount - 1);
+  return collectUnknownElements(root).map((entry) => {
+    const startLine = Math.min(Math.max(entry.sourceRange.startLine, 0), maxLine);
+    const endLine = Math.min(Math.max(entry.sourceRange.endLine, startLine), maxLine);
+    let start = new vscode.Position(startLine, Math.max(0, entry.sourceRange.startCol));
+    let end = new vscode.Position(endLine, Math.max(0, entry.sourceRange.endCol));
+    if (!end.isAfter(start)) {
+      // A self-closing unknown element (sax fires onopentag/onclosetag at
+      // the same position for one) would otherwise produce a zero-width
+      // range, which VS Code will not draw a squiggle under.
+      const lineLength = document.lineAt(startLine).text.length;
+      start = new vscode.Position(startLine, Math.min(start.character, lineLength));
+      end = new vscode.Position(startLine, Math.min(start.character + entry.tagName.length + 1, lineLength));
+    }
+    const d = new vscode.Diagnostic(
+      new vscode.Range(start, end),
+      vscode.l10n.t('Unknown element <{0}>: not a standard DITA element and has no @class specialization DITA Viewer recognizes. It will render, but its own tag is dropped and only its content shows.', entry.tagName),
+      vscode.DiagnosticSeverity.Warning,
+    );
+    d.source = 'dita';
+    d.code = 'unknown-element';
+    return d;
+  });
 }
 
 // ── Tag auto-closing (mirrors VS Code's built-in HTML behaviour) ──
@@ -417,6 +676,7 @@ function registerAutoCloseTag(context: vscode.ExtensionContext): void {
 export function registerLanguageFeatures(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.languages.registerDefinitionProvider(DITA_SELECTOR, new DitaDefinitionProvider()),
+    vscode.languages.registerReferenceProvider(DITA_SELECTOR, new DitaReferenceProvider()),
     vscode.languages.registerCompletionItemProvider(
       DITA_SELECTOR,
       new DitaCompletionProvider(),

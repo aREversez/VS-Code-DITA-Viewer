@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="feature_security" xml:lang="zh-CN">
+  <title>安防监控</title>
+  <shortdesc>接入门窗、人体、烟雾等传感器后，主机可提供布防、告警推送与联动响应能力。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>安防</indexterm>
+        <indexterm>布防</indexterm>
+        <indexterm>告警</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <conbody>
+<p>安防功能围绕「布防状态」工作：布防后，任何被触发的传感器都会立即产生告警，并执行预设的联动动作。</p>
+<note type="important"><p>安防功能是辅助手段，不能替代专业安防系统或人身安全保障。</p></note>    <note type="warning"><p>烟雾传感器告警不设缓冲延迟，也不受免打扰时段影响。</p></note><section>
+      <title>布防模式</title>
+      <simpletable id="arm-modes">
+        <sthead><stentry>模式</stentry><stentry>在家布防</stentry><stentry>离家布防</stentry></sthead>
+        <strow><stentry>触发范围</stentry><stentry>仅门窗与周界传感器</stentry><stentry>全部传感器</stentry></strow>
+        <strow><stentry>延迟</stentry><stentry>进门后 20 秒缓冲</stentry><stentry>出门后 60 秒生效</stentry></strow>
+        <strow><stentry>适用场景</stentry><stentry>夜间睡眠</stentry><stentry>全家外出</stentry></strow>
+      </simpletable>
+    </section>    <section>
+      <title>告警响应链</title>
+      <p>传感器触发后，主机按以下顺序响应：</p>
+      <ol>
+        <li>本地鸣笛（可配置音量或关闭）。</li>
+        <li>向所有家庭成员推送告警（参见 <xref href="app_notifications.dita"/>）。</li>
+        <li>执行联动动作，例如全屋灯光爆闪以震慑闯入。</li>
+      </ol>
+    </section>
+  </conbody>
+</concept>

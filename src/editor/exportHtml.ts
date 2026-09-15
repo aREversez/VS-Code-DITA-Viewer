@@ -10,7 +10,7 @@ import { collectMapEntries, getMapTitleText } from '../render/mapTypeMap';
 import { formatLocalizedRole } from '../language/bookRoleL10n';
 import { expandDitamapRefs, renderTopicToHtml, decodeHrefPart } from './ditaRenderUtils';
 import { buildKeyMap } from './DitaViewerProvider';
-import { buildStandaloneHtml, makeDataUriInliner, buildBookHeading } from './exportHtmlHelpers';
+import { buildStandaloneHtml, makeDataUriInliner, buildBookHeading, classifyMapExportEntry } from './exportHtmlHelpers';
 
 // ── Pure helpers (re-exported from exportHtmlHelpers, unit-tested there) ──
 
@@ -26,6 +26,10 @@ function buildTopicExport(fsPath: string): { title: string; bodyHtml: string; er
     asWebviewUri: makeDataUriInliner(dirname(fsPath)),
     headingLevel: 1,
     uiLanguage: vscode.env.language,
+    // Index terms are authoring/publishing metadata, not reading content --
+    // the interactive preview's indexterm chips are an editing aid that
+    // doesn't belong in a standalone shipped HTML file.
+    suppressIndexterm: true,
   });
   return {
     title: result.title || basename(fsPath),
@@ -50,8 +54,10 @@ function buildMapExport(fsPath: string): { title: string; bodyHtml: string; erro
   const heading = buildBookHeading;
 
   for (const entry of entries) {
-    if (entry.href && !entry.href.split('#')[0].toLowerCase().endsWith('.ditamap')) {
-      const absPath = resolve(docDir, decodeHrefPart(entry.href.split('#')[0]));
+    const action = classifyMapExportEntry(entry);
+    if (action === 'skip') continue;
+    if (action === 'render-topic') {
+      const absPath = resolve(docDir, decodeHrefPart(entry.href!.split('#')[0]));
       if (visited.has(absPath)) continue;
       visited.add(absPath);
       const result = renderTopicToHtml({
@@ -60,6 +66,7 @@ function buildMapExport(fsPath: string): { title: string; bodyHtml: string; erro
         asWebviewUri: makeDataUriInliner(dirname(absPath)),
         headingLevel: Math.min(1 + entry.depth, 6),
         uiLanguage: vscode.env.language,
+        suppressIndexterm: true,
       });
       if (result.error) {
         parts.push(heading(entry.displayName, entry.depth, entry.role));
@@ -67,9 +74,8 @@ function buildMapExport(fsPath: string): { title: string; bodyHtml: string; erro
         if (entry.role) parts.push(heading(entry.displayName, entry.depth, entry.role));
         parts.push(`<div class="book-entry">${result.html}</div>`);
       }
-    } else if (!entry.keys) {
-      // Structural heading (topichead / chapter without href / sub-map label);
-      // pure keydefs are definitions, not content
+    } else {
+      // structural-heading: topichead / chapter without href / sub-map label
       parts.push(heading(entry.displayName, entry.depth, entry.role));
     }
   }
@@ -78,7 +84,7 @@ function buildMapExport(fsPath: string): { title: string; bodyHtml: string; erro
 
 // ── Command ──
 
-function getActiveDitaUri(): vscode.Uri | undefined {
+export function getActiveDitaUri(): vscode.Uri | undefined {
   const editor = vscode.window.activeTextEditor;
   if (editor && /\.(dita|ditamap)$/i.test(editor.document.uri.fsPath)) {
     return editor.document.uri;

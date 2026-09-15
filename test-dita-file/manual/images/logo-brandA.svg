@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 80" width="240" height="80">
+  <rect x="0" y="0" width="240" height="80" rx="10" fill="#1a2340"/>
+  <path d="M40 16 L46 32 L63 32 L49 42 L55 59 L40 48 L25 59 L31 42 L17 32 L34 32 Z" fill="#ffd257"/>
+  <text x="78" y="50" font-family="'Microsoft YaHei', sans-serif" font-size="28" fill="#ffffff">星枢 N1</text>
+</svg>

@@ -1,11 +1,15 @@
 import * as vscode from 'vscode';
-import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
+import { parseDita, preprocessEntities } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
-import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
-import { dirname, isAbsolute, join, resolve, basename } from 'path';
+import { dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
-import { DitaNode } from '../parser/domTypes';
-import { buildTitleMap, expandDitamapRefs, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, decodeHrefPart, detectNoteLabels, readImageDimensions, FileReader } from './ditaRenderUtils';
+import { buildTitleMap, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, detectNoteLabels, detectIndexLabel, readImageDimensions, clearImageDimensionsCache, clearTopicRenderCache, clearBookMembersCache } from './ditaRenderUtils';
+import { clearBookSearchIndexCache } from './bookSearchIndex';
+import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
+import { foldPendingRender, PendingRender } from './pendingRender';
+import { sharedWebviewStrings } from './webviewL10n';
+import { discoverCssFiles } from './cssDiscovery';
+import { findDitamapFiles, buildKeyMap, clearKeyMapCache } from './keyMap';
 
 // Test-only hook: @vscode/test-electron integration tests can't read a
 // webview's rendered HTML directly (VS Code doesn't expose the WebviewPanel
@@ -19,10 +23,46 @@ export function getLastRenderedHtmlForTesting(uriString: string): string | undef
   return lastRenderedHtmlByUri.get(uriString);
 }
 
+/**
+ * Clears every in-memory cache the extension keeps (the test-only render
+ * cache above, the keymap cache below, and the image-dimensions and
+ * book-mode topic-render caches in ditaRenderUtils.ts). lastRenderedHtmlByUri
+ * entries are already removed individually as each webview panel disposes
+ * (see onDidDispose in resolveCustomTextEditor), and the rest are already
+ * bounded by their own caps -- this is a defensive full reset for extension
+ * deactivation, not a fix for an actual leak in any of them.
+ * Wired into extension.ts's deactivate().
+ */
+export function clearAllCaches(): void {
+  lastRenderedHtmlByUri.clear();
+  clearKeyMapCache();
+  clearImageDimensionsCache();
+  clearTopicRenderCache();
+  clearBookMembersCache();
+  clearBookSearchIndexCache();
+}
+
 // Font preferences (size % + serif toggle) are global rather than per-document:
-// they describe how the user likes to read, not something tied to one file.
-const FONT_PREFS_KEY = 'ditaViewer.fontPrefs';
-const DEFAULT_FONT_PREFS = { size: 100, serif: false };
+// they describe how the user likes to read, not something tied to one file --
+// and not to which kind of preview is showing it either, which is why
+// MapViewerProvider.ts imports these two rather than declaring its own copy.
+// A person who has already picked a size and a typeface for reading DITA
+// content does not have a second, unrelated preference for reading it
+// assembled into a book; there is one reading experience, in two providers.
+export const FONT_PREFS_KEY = 'ditaViewer.fontPrefs';
+export const DEFAULT_FONT_PREFS = { size: 100, serif: false };
+
+// Same reasoning as font prefs: whether the reader wants every element's
+// tag name as a hover tooltip is a reading preference, not something tied
+// to one file or to which provider is showing it, so both providers share
+// this key rather than each keeping their own copy of the default.
+// Defaults off -- injectAttributes() in renderer.ts still injects the tag
+// name into every element as data-dita-tagname regardless, so turning
+// this on needs no re-render, only a DOM walk promoting that data
+// attribute to a real title= (see applyTagTooltips() in both providers'
+// webview scripts).
+export const TAG_TOOLTIPS_KEY = 'ditaViewer.tagTooltips';
+export const DEFAULT_TAG_TOOLTIPS = false;
 
 // CSS theme and page-width choices, unlike font prefs, ARE tied to one
 // document -- discoverCssFiles() scans relative to each document's own
@@ -35,43 +75,37 @@ const DEFAULT_FONT_PREFS = { size: 100, serif: false };
 // discoverCssFiles()'s own always-recomputed default was the only thing
 // ever fed back in -- whatever the person had picked at runtime lived
 // only in the old page's now-discarded JS state.
+//
+// WIDTH_SELECTION_KEY is exported for the same reason FONT_PREFS_KEY is: a
+// ditamap has its own uri, distinct from any topic's, so the two providers
+// sharing this map's key space costs nothing and avoids a second constant
+// that could name a different globalState key by a future typo.
+// CSS_SELECTION_KEY stays private -- discoverCssFiles() and the dropdown it
+// feeds are specific to a single topic's own directory and have no map-mode
+// counterpart to share it with.
 const CSS_SELECTION_KEY = 'ditaViewer.cssSelectionByUri';
-const WIDTH_SELECTION_KEY = 'ditaViewer.widthSelectionByUri';
+export const WIDTH_SELECTION_KEY = 'ditaViewer.widthSelectionByUri';
 
 function getWebviewScript(): string {
   const L = {
+    // Everything the map preview's toolbar says too: the toolbar label, the
+    // font and page-width controls, the Flags toggle, and the option sets for
+    // both overlays. Kept in one table so the two previews cannot drift apart
+    // on a control they share -- see webviewL10n.ts. What follows is wording
+    // that exists only here.
+    ...sharedWebviewStrings(),
     selectThemeCss: JSON.stringify(vscode.l10n.t('Select theme CSS')),
-    decreaseFontSize: JSON.stringify(vscode.l10n.t('Decrease font size')),
-    increaseFontSize: JSON.stringify(vscode.l10n.t('Increase font size')),
-    fontSans: JSON.stringify(vscode.l10n.t('Sans')),
-    fontSerif: JSON.stringify(vscode.l10n.t('Serif')),
-    fontCurrentSans: JSON.stringify(vscode.l10n.t('Current: Sans-serif. Click to switch to Serif')),
-    fontCurrentSerif: JSON.stringify(vscode.l10n.t('Current: Serif. Click to switch to Sans-serif')),
-    resetFont: JSON.stringify(vscode.l10n.t('Reset font size and family to default')),
+    resetFont: vscode.l10n.t('Reset font size and family to default'),
+    // Only the per-image zoom toolbar's own tooltips stay local now: the map
+    // preview deliberately has no −/+/maximize controls (its images stay at
+    // natural rendered size), so there is nothing there to label. The
+    // lightbox and copy strings this table used to carry moved into
+    // sharedWebviewStrings() -- both previews show the same lightbox now
+    // (see getImageLightboxScript), and one table for both is the whole
+    // point of webviewL10n.ts.
     imgZoomOutTitle: JSON.stringify(vscode.l10n.t('Zoom out this image (preview only)')),
     imgZoomInTitle: JSON.stringify(vscode.l10n.t('Zoom in this image (preview only)')),
     imgMaximizeTitle: JSON.stringify(vscode.l10n.t('View full-screen (use ←/→ to switch images)')),
-    profilingLabel: JSON.stringify(vscode.l10n.t('Flags')),
-    profilingOnTitle: JSON.stringify(vscode.l10n.t('Profiling attributes (props/otherprops/audience/...) are highlighted. Click to hide the highlighting.')),
-    profilingOffTitle: JSON.stringify(vscode.l10n.t('Profiling attribute highlighting is hidden. Click to show which content is flagged and with what.')),
-    pageWidth: JSON.stringify(vscode.l10n.t('Page width')),
-    widthAuto: JSON.stringify(vscode.l10n.t('Auto')),
-    widthFull: JSON.stringify(vscode.l10n.t('Full')),
-    widthWide: JSON.stringify(vscode.l10n.t('Wide')),
-    widthDesktop: JSON.stringify(vscode.l10n.t('Desktop')),
-    widthNarrow: JSON.stringify(vscode.l10n.t('Narrow')),
-    reloadContent: JSON.stringify(vscode.l10n.t('Reload DITA content')),
-    searchPlaceholder: vscode.l10n.t('Search'),
-    searchNext: vscode.l10n.t('Next match'),
-    searchPrev: vscode.l10n.t('Previous match'),
-    searchClose: vscode.l10n.t('Close search'),
-    searchMatchCase: vscode.l10n.t('Match case'),
-    searchUseRegex: vscode.l10n.t('Use regex'),
-    searchInvalidRegex: vscode.l10n.t('Invalid regex'),
-    filterLabel: vscode.l10n.t('Filter'),
-    filterTitle: vscode.l10n.t('Show/hide content by profiling attribute value (actually hides matching content, unlike the Flags toggle which only shows/hides the highlight)'),
-    filterClose: vscode.l10n.t('Close'),
-    filterEmpty: vscode.l10n.t('No profiling attributes in this document'),
   };
   return `
 (function() {
@@ -191,110 +225,33 @@ function getWebviewScript(): string {
     }
   }
 
-  var fontPrefs = window.__fontPrefs || { size: 100, serif: false };
-  var fontSize = typeof fontPrefs.size === 'number' ? fontPrefs.size : 100;
-  var isSerif = fontPrefs.serif === true;
-  var SERIF_STACK = "Georgia,'Times New Roman','Noto Serif SC','Songti SC',STSong,SimSun,serif";
+  ${getFontPrefsScript({ setFontPrefsMsgType: 'setFontPrefs' })}
 
-  function applyFontPrefs() {
-    document.body.style.fontSize = fontSize + '%';
-    document.body.style.fontFamily = isSerif ? SERIF_STACK : '';
-  }
-  applyFontPrefs();
-
-  function saveFontPrefs() {
-    vscode.postMessage({ type: 'setFontPrefs', size: fontSize, serif: isSerif });
-  }
-
-  // Static highlight (no animation)
+  // Highlight box, with a fade-out transition -- highlightElement() above
+  // adds '__hl-fade' shortly before removing '__hl' entirely, so the box
+  // eases out instead of just vanishing or (the actual bug) never going
+  // away at all.
   var hlStyle = document.createElement('style');
-  hlStyle.textContent = '.__hl{outline:2px solid var(--vscode-textLink-foreground,#4a90d9);outline-offset:2px;border-radius:3px;background:color-mix(in srgb,var(--vscode-textLink-foreground,#4a90d9) 12%,transparent);}';
+  hlStyle.textContent = '.__hl{outline:2px solid var(--vscode-textLink-foreground,#4a90d9);outline-offset:2px;border-radius:3px;background:color-mix(in srgb,var(--vscode-textLink-foreground,#4a90d9) 12%,transparent);transition:outline-color 0.6s ease,background-color 0.6s ease;}.__hl.__hl-fade{outline-color:transparent;background-color:transparent;}';
   document.head.appendChild(hlStyle);
 
-  // Image error handling (event delegation, nonce-safe)
-  document.addEventListener('error', function(e) {
-    var img = e.target;
-    if (img.tagName !== 'IMG' || !img.hasAttribute('data-dita-src')) return;
-    var src = img.getAttribute('data-dita-src') || 'unknown';
-    var msg = 'Image fail: ' + src;
-    // Only use the failure text as alt if the author never supplied one —
-    // a real DITA <alt>/@alt is more useful than a load-failure string and
-    // shouldn't be overwritten by it. The failure is still surfaced via
-    // title (hover) and the red outline either way.
-    if (!img.getAttribute('alt')) img.alt = msg;
-    img.title = msg;
-    img.setAttribute('data-load-error', 'true');
-    img.style.outline = '3px solid red';
-    img.style.outlineOffset = '-1px';
-  }, true);
-
-  // Click-to-enlarge lightbox. The whole image is still a click target
-  // (cursor:zoom-in hints this) in addition to the per-image maximize
-  // button below — either way opens the same lightbox. Broken images are
-  // excluded from both. While the lightbox is open, ←/→ step through every
-  // eligible image on the page in document order without closing the
-  // overlay, so browsing a page of screenshots doesn't require reopening
-  // the lightbox for each one.
-  var lightboxOverlay = null;
-  var lightboxBigImg = null;
-  var lightboxImgs = [];
-  var lightboxIdx = -1;
-
-  function lightboxCandidates() {
-    return Array.prototype.slice.call(document.querySelectorAll('img[data-dita-src]:not([data-load-error])'));
-  }
-
-  function onLightboxKeydown(e) {
-    if (e.key === 'Escape') { closeLightbox(); return; }
-    if (e.key === 'ArrowLeft') { e.preventDefault(); lightboxStep(-1); return; }
-    if (e.key === 'ArrowRight') { e.preventDefault(); lightboxStep(1); return; }
-  }
-
-  function closeLightbox() {
-    if (!lightboxOverlay) return;
-    lightboxOverlay.remove();
-    lightboxOverlay = null;
-    lightboxBigImg = null;
-    lightboxImgs = [];
-    lightboxIdx = -1;
-    document.removeEventListener('keydown', onLightboxKeydown);
-  }
-
-  function showLightboxImage() {
-    if (!lightboxBigImg || lightboxIdx < 0 || lightboxIdx >= lightboxImgs.length) return;
-    var img = lightboxImgs[lightboxIdx];
-    lightboxBigImg.src = img.src;
-    lightboxBigImg.alt = img.alt || '';
-  }
-
-  function lightboxStep(delta) {
-    if (lightboxImgs.length < 2) return;
-    lightboxIdx = (lightboxIdx + delta + lightboxImgs.length) % lightboxImgs.length;
-    showLightboxImage();
-  }
-
-  function openLightbox(img) {
-    closeLightbox();
-    lightboxImgs = lightboxCandidates();
-    lightboxIdx = lightboxImgs.indexOf(img);
-    if (lightboxIdx === -1) { lightboxImgs = [img]; lightboxIdx = 0; }
-    var overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;cursor:zoom-out;';
-    var big = document.createElement('img');
-    big.style.cssText = 'max-width:92vw;max-height:92vh;object-fit:contain;box-shadow:0 4px 24px rgba(0,0,0,0.5);border-radius:4px;';
-    overlay.appendChild(big);
-    overlay.addEventListener('click', closeLightbox);
-    document.addEventListener('keydown', onLightboxKeydown);
-    document.body.appendChild(overlay);
-    lightboxOverlay = overlay;
-    lightboxBigImg = big;
-    showLightboxImage();
-  }
-  document.addEventListener('click', function(e) {
-    var img = e.target.closest ? e.target.closest('img[data-dita-src]') : null;
-    if (!img || img.getAttribute('data-load-error') === 'true') return;
-    openLightbox(img);
-  });
+  // Image error handling, click-to-enlarge lightbox, clipboard copy and the
+  // right-click "Copy Image" menu: shared verbatim with the map preview --
+  // both webviews render <img data-dita-src> and both keep styles.css's
+  // cursor:zoom-in promise on them, so neither may show the magnifying-glass
+  // cursor without the behavior behind it. Document-level delegation
+  // throughout, so content-only updates never orphan the listeners, and
+  // openLightbox() below stays callable from the maximize button via normal
+  // function-declaration hoisting. See getImageLightboxScript in
+  // ditaRenderUtils.ts.
+  ${getImageLightboxScript({
+    copyMenuItem: L.imgCopyMenuItem,
+    copyDoneLabel: L.imgCopyDoneLabel,
+    copyFailedLabel: L.imgCopyFailedLabel,
+    copyUnsupportedLabel: L.imgCopyUnsupportedLabel,
+    copyToastDone: L.imgCopyToastDone,
+    copyToastFailed: L.imgCopyToastFailed,
+  })}
 
   // Per-image zoom controls: a small hover toolbar pinned to each image's
   // own top-right corner (−, +, maximize), replacing the old page-wide
@@ -367,12 +324,42 @@ function getWebviewScript(): string {
     }
   }
 
+  // Applies the default preview-size reduction (marked server-side via
+  // data-dita-default-scale, see topic/image in baseTypeMap.ts) once the
+  // image's real dimensions are known. This deliberately reuses setImgZoom
+  // / imgBaseWidth -- the same rendered, already-max-width-clamped size the
+  // toolbar's own "100%" means -- rather than a CSS 'zoom' relative to the
+  // image's own natural pixel size. A 'zoom' scales the image relative to
+  // ITSELF: a large image already being clamped down to the container's
+  // width by img{max-width:100%} stays clamped to that same width after
+  // zoom<1 too (natural-size * zoom can still exceed the container), so it
+  // visibly does nothing for exactly the oversized images this is meant to
+  // shrink -- only images whose natural size was already small enough to
+  // escape the clamp would visibly change. Sizing off imgBaseWidth() (a
+  // getBoundingClientRect() measurement taken after the clamp) fixes that:
+  // the reduction is always relative to how large the image currently
+  // renders on the page, regardless of its file resolution.
+  //
+  // Skips images that already have an explicit zoom-idx (a real user zoom
+  // click landed before this ran) so it never clobbers deliberate input,
+  // and is idempotent per image (checks isn't re-run after its own
+  // setImgZoom call sets data-dita-zoom-idx).
+  function applyDefaultPreviewScale(img) {
+    if (img.getAttribute('data-dita-default-scale') !== '1') return;
+    if (img.getAttribute('data-dita-zoom-idx') !== null) return;
+    if (!(img.naturalWidth > 0)) return;
+    var isPortrait = img.naturalHeight > img.naturalWidth;
+    var idx = IMG_ZOOM_STEPS.indexOf(isPortrait ? 50 : 75);
+    if (idx !== -1) setImgZoom(img, idx);
+  }
+
   function makeImgToolbarBtn(label, title, onClick) {
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'dita-img-btn';
     btn.textContent = label;
     btn.title = title;
+    btn.setAttribute('aria-label', title);
     btn.addEventListener('click', function(e) {
       // Buttons sit inside the same wrapper as the image but are not
       // themselves the image, so the document-level click-to-lightbox
@@ -418,11 +405,19 @@ function getWebviewScript(): string {
     // the click applies a size computed from an unreliable in-flight
     // measurement. Once the image actually finishes loading, snap it to
     // whatever zoom level is currently set so it settles on the correct
-    // size instead of staying at that first, unreliable guess.
+    // size instead of staying at that first, unreliable guess. The default
+    // preview scale (see applyDefaultPreviewScale) needs the same real
+    // dimensions, so it's applied here too, before that reapply -- it's a
+    // no-op once a real zoom-idx exists, from either source.
     img.addEventListener('load', function() {
+      applyDefaultPreviewScale(img);
       var idx = currentZoomIdx(img);
       if (idx !== DEFAULT_ZOOM_IDX) setImgZoom(img, idx);
     });
+    // Images already decoded by the time this script runs (cached/data-URI
+    // images commonly don't fire 'load' again for a freshly created <img>
+    // in some engines) still need the same treatment immediately.
+    if (img.complete && img.naturalWidth > 0) applyDefaultPreviewScale(img);
 
     var tb = document.createElement('span');
     tb.className = 'dita-img-toolbar';
@@ -450,11 +445,33 @@ function getWebviewScript(): string {
     if (tb) tb.remove();
   }, true);
 
+  // A highlight is meant to be a momentary "here's where the cursor is"
+  // cue, not a permanent marker -- previously nothing ever removed the
+  // '__hl' class except a *later* highlight replacing it, so if the user
+  // stopped moving the source cursor (or switched away from the editor)
+  // the box stayed on screen indefinitely. hlClearTimer/hlFadeTimer below
+  // give it a lifetime: it sits fully visible briefly, then CSS-fades out
+  // over HL_FADE_MS, then the class is removed entirely so a stale
+  // reference to el isn't left sitting in a closure.
+  var HL_VISIBLE_MS = 1500;
+  var HL_FADE_MS = 600;
+  var hlFadeTimer = null;
+  var hlClearTimer = null;
   function highlightElement(el) {
     if (!el) return;
+    if (hlFadeTimer) { clearTimeout(hlFadeTimer); hlFadeTimer = null; }
+    if (hlClearTimer) { clearTimeout(hlClearTimer); hlClearTimer = null; }
     var prev = document.querySelector('.__hl');
-    if (prev) prev.classList.remove('__hl');
+    if (prev) { prev.classList.remove('__hl'); prev.classList.remove('__hl-fade'); }
+    el.classList.remove('__hl-fade');
     el.classList.add('__hl');
+    hlFadeTimer = setTimeout(function() {
+      el.classList.add('__hl-fade');
+      hlClearTimer = setTimeout(function() {
+        el.classList.remove('__hl');
+        el.classList.remove('__hl-fade');
+      }, HL_FADE_MS);
+    }, HL_VISIBLE_MS);
   }
 
   function isElementVisible(el) {
@@ -489,7 +506,19 @@ function getWebviewScript(): string {
     var el = e.target.closest ? e.target.closest('[data-line]') : null;
     if (!el) return;
     var line = parseInt(el.getAttribute('data-line'), 10);
-    if (!isNaN(line)) vscode.postMessage({ type: 'navigateToLine', line: line });
+    if (isNaN(line)) return;
+    // el is already the innermost [data-line] element under the cursor
+    // (closest() searches from the click target outward), so its own
+    // data-start-col is exactly where its content begins on that line --
+    // e.g. an inline <uicontrol> nested in a <p> that starts on the same
+    // source line. Without this, the source cursor always lands at column
+    // 0, which for a same-line inline element falls *before* its column
+    // range -- so the highlightLine echo that follows (see
+    // onDidChangeTextEditorSelection below) picks the <p> back up instead
+    // of the <uicontrol> that was actually double-clicked.
+    var col = parseInt(el.getAttribute('data-start-col'), 10);
+    if (isNaN(col)) col = 0;
+    vscode.postMessage({ type: 'navigateToLine', line: line, col: col });
   });
 
   // Tracked so a content swap (updateContent below) that lands mid-flight
@@ -537,6 +566,12 @@ function getWebviewScript(): string {
         // to pick up the new one, though:
         contentRoot.innerHTML = e.data.html;
         enhanceImages(); // per-image zoom toolbars -- idempotent, only wraps images not already wrapped
+        // Off (the default) needs no walk here: fresh HTML only ever carries
+        // data-dita-tagname, never a stray title= from this feature, so
+        // there is nothing to remove. On is the one case a walk is needed,
+        // to promote the new content's data attributes the same way the
+        // old content's already were.
+        if (tagTooltipsOn) applyTagTooltips();
         if (typeof pfApplyFilter === 'function') pfApplyFilter(); // re-apply the current filter selection to the new content's [data-profile-keys] elements
         if (typeof pfPanel !== 'undefined' && pfPanel) { // filter panel was open -- refresh its checkbox list against the new content rather than leaving it showing stale attribute/value options
           pfPanel.remove();
@@ -559,15 +594,7 @@ function getWebviewScript(): string {
   });
 
   // Toolbar
-  var tbStyle = 'position:fixed;top:4px;right:8px;z-index:9999;display:flex;align-items:center;gap:4px;padding:3px 6px;border-radius:5px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;background:var(--vscode-editor-background,rgba(30,30,30,0.88));border:1px solid var(--vscode-widget-border,rgba(255,255,255,0.12));backdrop-filter:blur(4px);opacity:0.75;transition:opacity 0.15s;';
-  var ddStyle = 'padding:1px 4px;border-radius:3px;border:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));background:var(--vscode-dropdown-background,#333);color:var(--vscode-dropdown-foreground,#eee);font-size:11px;outline:none;cursor:pointer;';
-  var btnStyle = 'padding:1px 5px;border-radius:3px;border:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));background:var(--vscode-dropdown-background,#333);color:var(--vscode-dropdown-foreground,#eee);cursor:pointer;font-size:13px;line-height:1;outline:none;display:flex;align-items:center;';
-
-  var toolbar = document.createElement('div');
-  toolbar.id = '__toolbar';
-  toolbar.style.cssText = tbStyle;
-  toolbar.addEventListener('mouseenter', function() { toolbar.style.opacity = '1'; });
-  toolbar.addEventListener('mouseleave', function() { toolbar.style.opacity = '0.75'; });
+  ${getToolbarScaffoldScript({ previewToolbar: L.previewToolbar })}
 
   // Theme CSS dropdown
   var cssFiles = window.__cssFiles || {};
@@ -580,6 +607,7 @@ function getWebviewScript(): string {
     document.head.appendChild(styleEl);
     var sel = document.createElement('select');
     sel.title = ${L.selectThemeCss};
+    sel.setAttribute('aria-label', ${L.selectThemeCss});
     sel.style.cssText = 'max-width:130px;' + ddStyle;
     for (var i = 0; i < cssKeys.length; i++) {
       var opt = document.createElement('option');
@@ -595,56 +623,31 @@ function getWebviewScript(): string {
     toolbar.appendChild(sel);
   }
 
-  // Font size controls
-  var fsDown = document.createElement('button');
-  fsDown.innerHTML = 'A−';
-  fsDown.title = ${L.decreaseFontSize};
-  fsDown.style.cssText = btnStyle + 'font-weight:bold;';
-  fsDown.addEventListener('click', function() {
-    fontSize = Math.max(60, fontSize - 10);
-    document.body.style.fontSize = fontSize + '%';
-    saveFontPrefs();
-  });
+  ${getToolbarFontWidthTagTooltipsButtonsScript({
+    decreaseFontSize: L.decreaseFontSize,
+    increaseFontSize: L.increaseFontSize,
+    fontSans: L.fontSans,
+    fontSerif: L.fontSerif,
+    fontCurrentSans: L.fontCurrentSans,
+    fontCurrentSerif: L.fontCurrentSerif,
+    fontSizeButtonExtraStyle: '',
+    includeFontReset: true,
+    resetFont: L.resetFont,
+    widthAuto: L.widthAuto,
+    widthFull: L.widthFull,
+    widthWide: L.widthWide,
+    widthDesktop: L.widthDesktop,
+    widthNarrow: L.widthNarrow,
+    pageWidth: L.pageWidth,
+    setWidthSelectionMsgType: 'setWidthSelection',
+    tagTooltipsLabel: L.tagTooltipsLabel,
+    tagTooltipsOnTitle: L.tagTooltipsOnTitle,
+    tagTooltipsOffTitle: L.tagTooltipsOffTitle,
+    setTagTooltipsMsgType: 'setTagTooltips',
+  })}
   toolbar.appendChild(fsDown);
-
-  var fsUp = document.createElement('button');
-  fsUp.innerHTML = 'A+';
-  fsUp.title = ${L.increaseFontSize};
-  fsUp.style.cssText = btnStyle + 'font-weight:bold;';
-  fsUp.addEventListener('click', function() {
-    fontSize = Math.min(200, fontSize + 10);
-    document.body.style.fontSize = fontSize + '%';
-    saveFontPrefs();
-  });
   toolbar.appendChild(fsUp);
-
-  // Font toggle (serif / sans-serif) — reflects the persisted state on open
-  var fontBtn = document.createElement('button');
-  fontBtn.textContent = isSerif ? ${L.fontSerif} : ${L.fontSans};
-  fontBtn.title = isSerif ? ${L.fontCurrentSerif} : ${L.fontCurrentSans};
-  fontBtn.style.cssText = btnStyle + 'font-size:11px;';
-  fontBtn.addEventListener('click', function() {
-    isSerif = !isSerif;
-    fontBtn.textContent = isSerif ? ${L.fontSerif} : ${L.fontSans};
-    fontBtn.title = isSerif ? ${L.fontCurrentSerif} : ${L.fontCurrentSans};
-    document.body.style.fontFamily = isSerif ? SERIF_STACK : '';
-    saveFontPrefs();
-  });
   toolbar.appendChild(fontBtn);
-
-  // Reset font size + family to default in one click
-  var fontResetBtn = document.createElement('button');
-  fontResetBtn.innerHTML = '&#8635;';
-  fontResetBtn.title = ${L.resetFont};
-  fontResetBtn.style.cssText = btnStyle + 'font-size:12px;';
-  fontResetBtn.addEventListener('click', function() {
-    fontSize = 100;
-    isSerif = false;
-    applyFontPrefs();
-    fontBtn.textContent = ${L.fontSans};
-    fontBtn.title = ${L.fontCurrentSans};
-    saveFontPrefs();
-  });
   toolbar.appendChild(fontResetBtn);
 
   // Image display zoom is no longer a page-wide toolbar control — see
@@ -666,6 +669,7 @@ function getWebviewScript(): string {
     profilingBtn.style.background = profilingOn ? 'var(--color-profiling-label-bg)' : '';
     profilingBtn.style.color = profilingOn ? 'var(--color-profiling-label-text)' : '';
     profilingBtn.title = profilingOn ? ${L.profilingOnTitle} : ${L.profilingOffTitle};
+    profilingBtn.setAttribute('aria-label', profilingOn ? ${L.profilingOnTitle} : ${L.profilingOffTitle});
   }
   profilingBtn.addEventListener('click', function() {
     profilingOn = !profilingOn;
@@ -673,6 +677,17 @@ function getWebviewScript(): string {
   });
   applyProfilingToggle();
   toolbar.appendChild(profilingBtn);
+
+  // Tag-name tooltip toggle. injectAttributes() in renderer.ts already puts
+  // the tag name on every element without a more specific title of its own
+  // as data-dita-tagname -- see the constant's own comment in
+  // DitaViewerProvider.ts for why a data attribute and not title= directly.
+  // Off by default: useful while learning DITA's vocabulary, otherwise a
+  // native browser tooltip firing on every hover, everywhere, is just
+  // noise. Persisted like font prefs, since it is the same kind of
+  // preference -- how the reader wants to read, not something tied to
+  // this one file.
+  toolbar.appendChild(tagTooltipsBtn);
 
   // Filter button goes immediately next to Flags -- "show me what's
   // flagged" and "actually hide what's flagged" are closely related
@@ -685,40 +700,13 @@ function getWebviewScript(): string {
     emptyLabel: L.filterEmpty,
   })}
 
-  // Page width dropdown
-  var widths = [
-    { label: ${L.widthAuto}, value: '' },
-    { label: ${L.widthFull}, value: '100%' },
-    { label: ${L.widthWide}, value: '1400px' },
-    { label: ${L.widthDesktop}, value: '1280px' },
-    { label: ${L.widthNarrow}, value: '720px' },
-  ];
-  var wSel = document.createElement('select');
-  wSel.title = ${L.pageWidth};
-  wSel.style.cssText = 'max-width:72px;' + ddStyle;
-  var restoredWidth = window.__widthSelection || '';
-  for (var i = 0; i < widths.length; i++) {
-    var opt = document.createElement('option');
-    opt.value = widths[i].value;
-    opt.textContent = widths[i].label;
-    if (widths[i].value === restoredWidth) opt.selected = true;
-    wSel.appendChild(opt);
-  }
-  function applyWidth(value) {
-    document.body.style.maxWidth = value;
-    document.body.style.margin = value ? '0 auto' : '';
-  }
-  if (restoredWidth) applyWidth(restoredWidth);
-  wSel.addEventListener('change', function() {
-    applyWidth(wSel.value);
-    vscode.postMessage({ type: 'setWidthSelection', value: wSel.value });
-  });
   toolbar.appendChild(wSel);
 
   // Refresh button
   var refreshBtn = document.createElement('button');
   refreshBtn.innerHTML = '&#x21bb;';
   refreshBtn.title = ${L.reloadContent};
+  refreshBtn.setAttribute('aria-label', ${L.reloadContent});
   refreshBtn.style.cssText = btnStyle;
   refreshBtn.addEventListener('click', function() { vscode.postMessage({ type: 'refresh' }); });
   toolbar.appendChild(refreshBtn);
@@ -789,7 +777,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
 
     webviewPanel.webview.onDidReceiveMessage((message) => {
       if (message.type === 'refresh') {
-        updateWebview();
+        requestUpdate('full');
       } else if (message.type === 'scrollSync') {
         // Reveal the matching source line as the user scrolls the preview,
         // but deliberately do NOT move editor.selection here — unlike
@@ -820,7 +808,18 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
           if (!inView) {
             editor.revealRange(new vscode.Range(line, 0, line, 0), vscode.TextEditorRevealType.AtTop);
           }
-          editor.selection = new vscode.Selection(new vscode.Position(line, 0), new vscode.Position(line, 0));
+          // Column matters here, not just the line: an inline element (e.g.
+          // <uicontrol>) sharing its source line with its containing block
+          // (e.g. <p>) is only distinguished by column range, and the
+          // selection change below is what triggers the highlightLine echo
+          // back to the webview (see onDidChangeTextEditorSelection) that
+          // re-picks the element to highlight. Always landing on column 0
+          // meant that echo re-picked the containing <p> instead of
+          // whichever inline element was actually double-clicked.
+          const col = Math.max(0, typeof message.col === 'number' ? message.col : 0);
+          const lineLength = document.lineAt(line).text.length;
+          const character = Math.min(col, lineLength);
+          editor.selection = new vscode.Selection(new vscode.Position(line, character), new vscode.Position(line, character));
         }
       } else if (message.type === 'setFontPrefs') {
         // Persist across webview reopens/reloads — same size/family applies
@@ -828,6 +827,8 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
         const size = typeof message.size === 'number' ? message.size : DEFAULT_FONT_PREFS.size;
         const serif = message.serif === true;
         this.context.globalState.update(FONT_PREFS_KEY, { size, serif });
+      } else if (message.type === 'setTagTooltips') {
+        this.context.globalState.update(TAG_TOOLTIPS_KEY, message.value === true);
       } else if (message.type === 'setCssSelection') {
         // Persisted per-document (see CSS_SELECTION_KEY above) so the next
         // re-render (every edit reassigns webview.html wholesale, which
@@ -887,11 +888,51 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     });
 
     let renderDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+    // The render a currently-hidden panel is owed, if any. 'content' is a
+    // source edit, satisfied by postContentUpdate; 'full' is a theme switch
+    // or manual refresh, which has to reassign webview.html because the
+    // light/dark class lives on <html>, outside the content div a
+    // content-only update touches. Escalates only -- a theme switch landing
+    // while an edit is already pending must not be downgraded, or the class
+    // stays stale until some later unrelated re-render. The fold itself
+    // lives in pendingRender.ts -- see foldPendingRender -- so the rule is
+    // pinned by a unit test rather than only by this comment.
+    let pendingUpdate: PendingRender = 'none';
     const changeSubscription = vscode.workspace.onDidChangeTextDocument((e) => {
       if (e.document.uri.toString() !== document.uri.toString()) return;
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
       renderDebounceTimer = setTimeout(() => {
-        postContentUpdate();
+        requestUpdate('content');
+      }, 300);
+    });
+
+    // Refresh on changes to files this topic may reference (conref/keyref
+    // targets, other .dita/.ditamap files, images, custom CSS) that live
+    // outside this document and therefore never fire onDidChangeTextDocument
+    // above -- previously the only way to pick these up was the manual
+    // reload button. This intentionally watches the whole containing
+    // workspace folder rather than precisely tracking this document's own
+    // resolved dependency set. That set IS knowable now -- buildKeyMap below
+    // already records every map it read so it can fingerprint them, and
+    // renderTopicCached takes a collectDependencies sink for the render's own
+    // reads -- but a per-document watcher built from either would have to be
+    // torn down and rebuilt after every render, because editing a topic changes
+    // what it references, and getting that wrong means silently missing the
+    // cross-folder conref this exists to catch. Sharing one folder-wide watcher
+    // is the cheaper half of that win: every panel used to create its own, so a
+    // map open next to three topic previews meant four watchers each matching
+    // every file event in the folder. See ditaFileWatcher.ts.
+    //
+    // The tradeoff is unchanged: a refresh check fires for edits unrelated to
+    // this document. That's a cheap no-op for a single topic, and for a large
+    // open book-mode map it re-runs the assembly pass, which is now mostly
+    // cache hits (see scripts/bench-book-render.js).
+    const referencedFilesWatcher = acquireDitaFileWatcher(ditaWatchBase(document.uri), (event) => {
+      if (disposed) return;
+      if (event.uri.toString() === document.uri.toString()) return; // already handled above
+      if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
+      renderDebounceTimer = setTimeout(() => {
+        requestUpdate('content');
       }, 300);
     });
 
@@ -902,7 +943,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     // below -- the CSS class lives on <html>, outside the content div a
     // content-only update touches.
     const themeSubscription = vscode.window.onDidChangeActiveColorTheme(() => {
-      updateWebview();
+      requestUpdate('full');
     });
 
     const updateWebview = () => {
@@ -947,6 +988,39 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       webviewPanel.webview.postMessage({ type: 'updateContent', html: result.html });
     };
 
+    // A hidden panel (tabbed behind another editor, or sitting in a
+    // collapsed group) still has a live webview under
+    // retainContextWhenHidden, so without this every edit anywhere in the
+    // watched set pays for a full re-render nobody is looking at -- and the
+    // extension host is single-threaded, so that cost lands on every other
+    // extension's completions and hovers too. Record the debt instead and
+    // settle it once, when the panel comes back.
+    const requestUpdate = (kind: 'content' | 'full') => {
+      if (disposed) return;
+      if (!webviewPanel.visible) {
+        pendingUpdate = foldPendingRender(pendingUpdate, kind);
+        return;
+      }
+      if (kind === 'full') updateWebview();
+      else postContentUpdate();
+    };
+
+    // Only renders are deferred. The scroll-sync traffic above (editorSub
+    // -> postRevealLine) is a bare postMessage rather than a render, and
+    // suppressing it while hidden would leave the preview scrolled to
+    // wherever it sat when the panel was hidden -- pendingUpdate is 'none'
+    // in that case, so nothing would flush on reveal to correct it.
+    const viewStateSubscription = webviewPanel.onDidChangeViewState((e) => {
+      if (!e.webviewPanel.visible || pendingUpdate === 'none') return;
+      // Clear before rendering: postContentUpdate falls back to
+      // updateWebview when rendering fails, and re-entering with a stale
+      // pendingUpdate would render twice.
+      const owed = pendingUpdate;
+      pendingUpdate = 'none';
+      if (owed === 'full') updateWebview();
+      else postContentUpdate();
+    });
+
     updateWebview();
 
     webviewPanel.onDidDispose(() => {
@@ -954,9 +1028,11 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       if (visibleRangeTimer) clearTimeout(visibleRangeTimer);
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
       changeSubscription.dispose();
+      referencedFilesWatcher.dispose();
       editorSub.dispose();
       selectionSub.dispose();
       themeSubscription.dispose();
+      viewStateSubscription.dispose();
       lastRenderedHtmlByUri.delete(document.uri.toString());
     });
   }
@@ -979,7 +1055,11 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       try {
         const resolvedPath = resolve(docRootDir, decodeHrefPart(relPath));
         return webview.asWebviewUri(vscode.Uri.file(resolvedPath)).toString();
-      } catch {
+      } catch (e) {
+        // The empty src still surfaces as a visibly broken image (the
+        // webview script's document-level error listener marks it); log
+        // the cause so path-resolution failures are debuggable.
+        console.warn(`Failed to resolve webview URI for ${relPath}:`, e instanceof Error ? e.message : e);
         return '';
       }
     };
@@ -999,13 +1079,14 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       // implementation from ditaRenderUtils.ts instead of the separate,
       // partial (7 of 13 types) local copy this used to carry.
       const noteLabels = detectNoteLabels(ditaDoc.root, vscode.env.language);
+      const indexLabel = detectIndexLabel(ditaDoc.root, vscode.env.language);
 
       // Build key map from DITAMAP
       const keyMap = buildKeyMap(document.uri);
 
       // Build conref resolver
-      const conrefResolver = makeConrefResolver(docRootDir);
-      const conrefRangeResolver = makeConrefRangeResolver(docRootDir);
+      const conrefResolver = makeConrefResolver(docRootDir, ditaDoc.root);
+      const conrefRangeResolver = makeConrefRangeResolver(docRootDir, ditaDoc.root);
       const fileTitleResolver = makeFileTitleResolver(docRootDir);
 
       const resolveTitle = (id: string): string | undefined => {
@@ -1025,6 +1106,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
         resolveConref: (conref: string) => conrefResolver(conref),
         resolveConrefRange: (conref: string, conrefend: string) => conrefRangeResolver(conref, conrefend),
         noteLabels,
+        indexLabel,
         getImageDimensions: (relPath: string) => {
           try {
             return readImageDimensions(resolve(docRootDir, decodeHrefPart(relPath)));
@@ -1088,6 +1170,8 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       const widthSelectionJson = escapeJson(JSON.stringify(widthSelection));
       const fontPrefs = this.context.globalState.get(FONT_PREFS_KEY, DEFAULT_FONT_PREFS);
       const fontPrefsJson = escapeJson(JSON.stringify(fontPrefs));
+      const tagTooltips = this.context.globalState.get(TAG_TOOLTIPS_KEY, DEFAULT_TAG_TOOLTIPS);
+      const tagTooltipsJson = escapeJson(JSON.stringify(tagTooltips));
       const initialScrollLineJs = typeof initialScrollLine === 'number' && Number.isFinite(initialScrollLine)
         ? String(Math.max(0, Math.floor(initialScrollLine)))
         : 'null';
@@ -1100,11 +1184,11 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src ${webview.cspSource} data:; base-uri 'none';">
 <link rel="stylesheet" href="${stylesUri}">
 ${defaultContent ? `<style>\n${defaultContent}\n</style>` : ''}
-<title>${document.fileName}</title>
-<script nonce="${nonce}">window.__cssFiles=${cssFilesJson};window.__defaultCss=${defaultNameJson};window.__widthSelection=${widthSelectionJson};window.__fontPrefs=${fontPrefsJson};window.__initialScrollLine=${initialScrollLineJs};</script>
+<title>${escapeHtml(document.fileName)}</title>
+<script nonce="${nonce}">window.__cssFiles=${cssFilesJson};window.__defaultCss=${defaultNameJson};window.__widthSelection=${widthSelectionJson};window.__fontPrefs=${fontPrefsJson};window.__tagTooltips=${tagTooltipsJson};window.__initialScrollLine=${initialScrollLineJs};</script>
 </head>
 <body>
 <div id="dita-content-root">${content}</div>
@@ -1135,279 +1219,20 @@ function escapeHtml(text: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function escapeJson(text: string): string {
+// Exported so MapViewerProvider.ts's own <script> bootstrap (font prefs and
+// width selection, the two pieces of state it shares with this provider --
+// see FONT_PREFS_KEY and WIDTH_SELECTION_KEY above) escapes the same way
+// rather than carrying a second copy of a one-line regex to drift from.
+export function escapeJson(text: string): string {
   return text.replace(/<\/script>/gi, '<\\/script>');
 }
 
 // ── Keyref: parse DITAMAP for key→value mappings ──
 
-export function findDitamapFiles(docUri: vscode.Uri, stopAtFirstMatch = true): string[] {
-  const results: string[] = [];
-  const docDir = dirname(docUri.fsPath);
-  const root = parseDocRoot(docDir);
-  let dir = docDir;
-  while (dir.length >= root.length) {
-    try {
-      for (const entry of readdirSync(dir)) {
-        if (entry.toLowerCase().endsWith('.ditamap')) results.push(join(dir, entry));
-      }
-    } catch {}
-    if (stopAtFirstMatch && results.length > 0) return results;
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return results;
-}
-
-function extractTextFromNode(node: DitaNode): string {
-  if (node.type === 'text') return node.text || '';
-  return (node.children || []).map(extractTextFromNode).join('');
-}
-
-function getNodeValue(node: DitaNode, childBaseTypes: string[]): string | undefined {
-  for (const bt of childBaseTypes) {
-    const child = (node.children || []).find(
-      (c) => c.type === 'element' && c.baseType === bt,
-    );
-    if (child) {
-      const text = extractTextFromNode(child).trim();
-      if (text) return text;
-    }
-    // DITA wraps <keyword> inside <keywords>; also search inside known wrappers
-    const wrapper = (node.children || []).find(
-      (c) => c.type === 'element' && (c.baseType === 'map/keywords'),
-    );
-    if (wrapper) {
-      const inner = (wrapper.children || []).find(
-        (c) => c.type === 'element' && c.baseType === bt,
-      );
-      if (inner) {
-        const text = extractTextFromNode(inner).trim();
-        if (text) return text;
-      }
-    }
-  }
-  return undefined;
-}
-
-function getKeyValueFromRef(node: DitaNode): string | undefined {
-  // Priority: keyword > linktext > navtitle > shortdesc > indexterm
-  const topicmeta = (node.children || []).find(
-    (c) => c.type === 'element' && (c.baseType === 'map/topicmeta'),
-  );
-  if (!topicmeta) return undefined; // No topicmeta, no value
-  return getNodeValue(topicmeta, [
-    'map/keyword',
-    'map/linktext',
-    'map/navtitle',
-    'map/shortdesc',
-  ]);
-}
-
-// buildKeyMap sits on hot paths (preview re-render, completion, diagnostics,
-// map tree) and used to re-read and re-parse every ancestor ditamap each
-// call. Cache per document directory; invalidated when the set of ancestor
-// maps changes or any involved file's mtime changes (including maps pulled
-// in via expandDitamapRefs, tracked through the recording reader).
-interface KeyMapCacheEntry {
-  mapFilesKey: string;
-  stamps: string;
-  files: string[];
-  map: Map<string, string>;
-}
-const keyMapCache = new Map<string, KeyMapCacheEntry>();
-// One entry per document directory; bound it so long sessions touching many
-// folders cannot grow the cache without limit (evicts oldest-inserted first).
-const KEY_MAP_CACHE_MAX = 50;
-
-function stampFiles(files: string[]): string {
-  return files
-    .map((f) => {
-      try {
-        return String(statSync(f).mtimeMs);
-      } catch {
-        return '?';
-      }
-    })
-    .join('|');
-}
-
-export function buildKeyMap(docUri: vscode.Uri): Map<string, string> {
-  const docDir = dirname(docUri.fsPath);
-  // Scan all ancestor folders (not just the nearest one with a map) so keydef
-  // maps living in outer folders are still picked up; maps referenced from any
-  // scanned map are followed via expandDitamapRefs regardless of location.
-  const mapFiles = findDitamapFiles(docUri, false);
-  const mapFilesKey = mapFiles.join('|');
-
-  const cached = keyMapCache.get(docDir);
-  if (cached && cached.mapFilesKey === mapFilesKey && stampFiles(cached.files) === cached.stamps) {
-    return cached.map;
-  }
-
-  const map = new Map<string, string>();
-  const involvedFiles = [...mapFiles];
-  const recordingRead: FileReader = (path, encoding) => {
-    involvedFiles.push(path);
-    return readFileSync(path, encoding);
-  };
-  for (const mf of mapFiles) {
-    try {
-      const content = readFileSync(mf, 'utf-8');
-      const doc = parseDitamap(preprocessEntities(content));
-      const mapRoot = doc.root;
-      // Expand referenced ditamaps so keydefs from included maps are visible
-      expandDitamapRefs(mapRoot, dirname(mf), recordingRead);
-      function walk(node: DitaNode) {
-        if (node.type !== 'element') return;
-        const baseType = node.baseType;
-        if ((baseType === 'map/topicref' || baseType === 'map/keydef') && node.attributes?.keys) {
-          const keys = node.attributes.keys;
-          const value = getKeyValueFromRef(node);
-          // First definition wins (DITA precedence; nearest map scanned first)
-          if (!map.has(keys)) map.set(keys, value || keys);
-        }
-        for (const child of node.children || []) walk(child);
-      }
-      for (const child of mapRoot.children || []) walk(child);
-    } catch {}
-  }
-
-  if (keyMapCache.size >= KEY_MAP_CACHE_MAX && !keyMapCache.has(docDir)) {
-    const oldest = keyMapCache.keys().next().value;
-    if (oldest !== undefined) keyMapCache.delete(oldest);
-  }
-  keyMapCache.set(docDir, {
-    mapFilesKey,
-    stamps: stampFiles(involvedFiles),
-    files: involvedFiles,
-    map,
-  });
-  return map;
-}
-
-// (cross-file helpers now in ditaRenderUtils.ts)
-
-// ── CSS file discovery ──
-
-function discoverCssFiles(docUri: vscode.Uri): { files: Record<string, string>; defaultName: string } {
-  const files: Record<string, string> = {};
-  const loadedNames = new Set<string>();
-
-  const addFile = (filePath: string) => {
-    const name = basename(filePath);
-    if (!loadedNames.has(name) && existsSync(filePath)) {
-      try {
-        files[name] = readFileSync(filePath, 'utf-8');
-        loadedNames.add(name);
-      } catch {}
-    }
-  };
-
-  const docDir = dirname(docUri.fsPath);
-  const root = parseDocRoot(docDir);
-  const cssDir = findCustomCssDir(docDir);
-
-  // Scan directories for .css files
-  const scanDirs = new Set<string>();
-  scanDirs.add(cssDir);
-  if (root !== cssDir) scanDirs.add(root);
-  // Add configured CSS directories
-  try {
-    const config = vscode.workspace.getConfiguration('dita-viewer');
-    const cssDirConfigs: string[] | undefined = config.get('cssDirectory');
-    if (cssDirConfigs) {
-      for (const dir of cssDirConfigs) {
-        const resolvedDir = resolveDirectoryPath(dir, docDir);
-        if (resolvedDir && existsSync(resolvedDir) && !scanDirs.has(resolvedDir)) {
-          scanDirs.add(resolvedDir);
-        }
-      }
-    }
-  } catch {}
-
-  for (const sd of scanDirs) {
-    try {
-      for (const entry of readdirSync(sd)) {
-        if (entry.toLowerCase().endsWith('.css')) addFile(join(sd, entry));
-      }
-    } catch {}
-  }
-
-  // Add explicitly configured CSS files
-  try {
-    const config = vscode.workspace.getConfiguration('dita-viewer');
-    const paths: string[] | undefined = config.get('customCss');
-    if (paths) {
-      for (const p of paths) {
-        const resolvedPath = resolveCssFilePath(p, docDir);
-        if (resolvedPath) addFile(resolvedPath);
-      }
-    }
-  } catch {}
-
-  const defaultName = files['custom.css'] ? 'custom.css' : (Object.keys(files)[0] || '');
-  return { files, defaultName };
-}
-
-function findCustomCssDir(docDir: string): string {
-  const root = parseDocRoot(docDir);
-  let dir = docDir;
-  while (dir.length >= root.length) {
-    if (existsSync(join(dir, 'custom.css'))) return dir;
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return docDir;
-}
-
-function parseDocRoot(dir: string): string {
-  // Multi-root workspaces: bound upward walks by the folder that actually
-  // contains the document, not always the first folder.
-  const owner = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(dir));
-  if (owner) return owner.uri.fsPath;
-  const folders = vscode.workspace.workspaceFolders;
-  if (folders && folders.length > 0) return folders[0].uri.fsPath;
-  const sep = dir.includes('/') ? '/' : '\\';
-  const parts = dir.split(/[\\/]/);
-  // POSIX: root is "/", Windows: root is "C:\"
-  if (sep === '/') return '/' + parts.slice(1, 2).join('/');
-  return parts.length > 2 ? parts.slice(0, 2).join('\\') : dir;
-}
-
-function resolveCssFilePath(cssPath: string, docDir: string): string | undefined {
-  if (isAbsolute(cssPath) && existsSync(cssPath)) {
-    return cssPath;
-  }
-  const resolved = resolve(docDir, cssPath);
-  if (existsSync(resolved)) return resolved;
-  const folders = vscode.workspace.workspaceFolders;
-  if (folders) {
-    for (const f of folders) {
-      const wsPath = resolve(f.uri.fsPath, cssPath);
-      if (existsSync(wsPath)) return wsPath;
-    }
-  }
-  return undefined;
-}
-
-function resolveDirectoryPath(dirPath: string, docDir: string): string | undefined {
-  // Absolute path
-  if (isAbsolute(dirPath)) {
-    return existsSync(dirPath) ? dirPath : undefined;
-  }
-  // Relative to doc directory
-  const fromDoc = resolve(docDir, dirPath);
-  if (existsSync(fromDoc)) return fromDoc;
-  // Relative to workspace root
-  const folders = vscode.workspace.workspaceFolders;
-  if (folders) {
-    for (const f of folders) {
-      const wsPath = resolve(f.uri.fsPath, dirPath);
-      if (existsSync(wsPath)) return wsPath;
-    }
-  }
-  return undefined;
-}
+// findDitamapFiles/buildKeyMap and discoverCssFiles now live in
+// ./keyMap and ./cssDiscovery respectively -- extracted verbatim, see those
+// files for the byte-for-byte-unchanged implementations. Re-exported here
+// so MapViewerProvider.ts, ditaDiffProvider.ts, exportHtml.ts,
+// extension.ts, ditaLanguageFeatures.ts and ditaMapTreeProvider.ts don't
+// need their import paths touched.
+export { findDitamapFiles, buildKeyMap };

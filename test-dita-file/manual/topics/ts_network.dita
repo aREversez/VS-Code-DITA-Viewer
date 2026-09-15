@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE troubleshooting PUBLIC "-//OASIS//DTD DITA Troubleshooting//EN" "troubleshooting.dtd">
+<troubleshooting id="ts_network" xml:lang="zh-CN">
+  <title>网络连接失败</title>
+  <shortdesc>主机无法连接路由器、频繁掉线或获取不到 IP 地址时的排查方法。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>网络故障</indexterm>
+        <indexterm>Wi-Fi</indexterm>
+        <indexterm>掉线</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <troublebody>
+    <condition>
+      <p>存在以下任一现象：</p>
+      <ul>
+        <li>初始化向导中 Wi-Fi 连接失败。</li>
+        <li>氛围灯黄色慢闪，控制台显示主机离线。</li>
+        <li>静态 IP 配置后无法访问任何服务。</li>
+      </ul>
+    </condition>
+    <troubleSolution>
+      <cause>
+      <p>常见原因：</p>
+      <ol>
+        <li>Wi-Fi 密码错误或路由器开启了 MAC 白名单。</li>
+        <li>路由器仅开启 5 GHz 且信道为主机不支持的 DFS 信道。</li>
+        <li>网线或网口故障。</li>
+        <li>路由器 AP 隔离功能阻止了主机与其他设备的互访。</li>
+      </ol>
+      </cause>
+      <remedy>
+<steps>
+        <step><cmd>在屏幕网络列表中确认目标 Wi-Fi 名称无误，重新输入密码。</cmd></step>
+        <step><cmd>将路由器 2.4 GHz 与 5 GHz 双频合一功能关闭，分别广播，主机优先连 2.4 GHz。</cmd></step>
+        <step><cmd>有线方式时更换网线与路由器端口，观察网口指示灯是否点亮。</cmd></step>
+        <step><cmd>检查路由器是否开启 AP 隔离 / 访客网络隔离，将其对主机所在网段关闭。</cmd></step>
+        <step><cmd>将主机移近路由器 1 米内重试，排除信号强度问题。</cmd><info><note type="tip"><p>使用静态 IP 时请确认网关与 DNS 配置正确，参考配置见 <xref href="network_setup.dita"/> 中的示例。</p></note></info></step>
+      </steps>
+
+      </remedy>
+    </troubleSolution>
+  </troublebody>
+</troubleshooting>

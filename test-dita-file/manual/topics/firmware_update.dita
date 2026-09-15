@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<task id="firmware_update" xml:lang="zh-CN">
+  <title>固件升级</title>
+  <shortdesc>通过屏幕或手机应用将主机固件升级到最新版本。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>固件升级</indexterm>
+        <indexterm>OTA</indexterm>
+        <indexterm>系统更新</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <taskbody>
+    <prereq>
+      <ul>
+        <li>主机已联网（<xref href="network_setup.dita"/>）。</li>
+        <li>主机剩余存储空间大于 2 GB。</li>
+      </ul>
+    </prereq>
+    <context>
+<note type="warning"><p>升级过程中请勿断电或断网，否则可能导致系统损坏。主机在升级期间会自动重启 1-2 次，属正常现象。</p></note>
+    </context>
+    <steps>
+<step>
+        <cmd>打开升级检查入口。</cmd>
+      <info>
+          <p>屏幕路径：<menucascade><uicontrol>设置</uicontrol><uicontrol>系统</uicontrol><uicontrol>固件升级</uicontrol></menucascade>；应用路径：<menucascade><uicontrol>我的设备</uicontrol><uicontrol>固件版本</uicontrol></menucascade>。</p>
+        </info>
+      </step>
+        <step>
+        <cmd>点击 <uicontrol>检查更新</uicontrol>，等待版本检测结果。</cmd>
+      </step>
+      <step>
+        <cmd>查看更新说明后点击 <uicontrol>立即升级</uicontrol>。</cmd>
+      </step>
+      <step>
+        <cmd>等待下载与校验完成（视网络情况约 3-15 分钟，支持断点续传）。</cmd>
+      </step>
+      <step>
+        <cmd>在提示框中点击 <uicontrol>重启安装</uicontrol>，主机将自动完成剩余流程。</cmd>
+      </step>
+
+    </steps>
+    <result>
+<p>重启后屏幕显示新版本号，升级成功。可在 <menucascade><uicontrol>设置</uicontrol><uicontrol>系统</uicontrol></menucascade> 中核对版本。</p>
+    </result>
+    <postreq>
+<p>如需回退到上一版本或切换开发版，参见 <xref href="firmware_rollback.dita"/>。</p>
+    </postreq>
+  </taskbody>
+</task>

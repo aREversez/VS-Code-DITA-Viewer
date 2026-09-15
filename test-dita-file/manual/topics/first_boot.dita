@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<task id="first_boot" xml:lang="zh-CN">
+  <title>首次开机与初始化</title>
+  <shortdesc>完成语言选择、账号登录与固件版本确认，使主机进入可用状态。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>初始化</indexterm>
+        <indexterm>首次开机</indexterm>
+        <indexterm>激活</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <taskbody>
+    <context>
+      <p>初始化向导共 4 步，全程约 5 分钟。请保持主机与手机在同一网络。</p>
+    </context>
+    <steps>
+<step>
+        <cmd>选择系统语言与所在时区。</cmd>
+      </step>
+      <step>
+        <cmd>在屏幕上阅读并勾选用户协议与隐私政策。</cmd>
+      </step>
+      <step>
+        <cmd>登录 <ph keyref="company-name"/> 账号。</cmd>
+      <info>
+          <p>可直接在屏幕输入账号密码，或用手机应用扫码登录，应用安装参见 <xref href="app_install.dita"/>。</p>
+        </info>
+      </step>
+        <step>
+        <cmd>确认固件版本。</cmd>
+      <info>
+          <p>若提示有新版本（当前 <keyword keyref="version"/>），建议立即升级，参见 <xref href="firmware_update.dita"/>。开发版固件包含未发布功能，切换方式参见 <xref href="firmware_rollback.dita"/>。</p>
+        </info>
+      </step>
+        <step>
+        <cmd>点击 <uicontrol>完成</uicontrol> 进入主界面。</cmd>
+      </step>
+
+    </steps>
+    <result>
+<p>主机进入桌面，顶部状态栏显示网络与账号信息，初始化完成。</p>
+    </result>
+    <postreq>
+<p>建议立即用手机应用绑定本机：<xref href="app_pairing.dita"/>。</p>
+    </postreq>
+  </taskbody>
+</task>

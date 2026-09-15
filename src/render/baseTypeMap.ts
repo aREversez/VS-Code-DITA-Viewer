@@ -33,6 +33,28 @@ function escapeAttr(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// CALS colwidth proportional notation: "N*" (e.g. "3*"), a bare "*" (= 1*),
+// or "N.*"/"N.5*" with a decimal. A trailing dot with nothing after it
+// ("3.*") is strictly malformed CALS, but Oxygen (and most DITA-OT
+// transforms) tolerate it and just treat it as "3*" -- so this parses it
+// the same way rather than silently falling through to "no colwidth", which
+// used to make every column of a table with even ONE such colspec collapse
+// to unweighted 'auto' sizing.
+function parseColwidthStar(w: string): number | undefined {
+  const m = w.match(/^(\d+(?:\.\d*)?)?\*$/);
+  if (!m) return undefined;
+  return m[1] ? parseFloat(m[1]) : 1;
+}
+
+// Maps a CALS/DITA @align value to its direct CSS text-align equivalent.
+// "char" (align relative to a specific character, e.g. lining up decimal
+// points) has no simple CSS equivalent and is intentionally left
+// unhandled -- falls back to whatever alignment the column/browser would
+// otherwise use, rather than guessing at a character-alignment approximation.
+function mapCalsAlign(value: string | undefined): string | undefined {
+  return value === 'left' || value === 'right' || value === 'center' || value === 'justify' ? value : undefined;
+}
+
 // Recursively flattens an element's descendants to plain text, dropping all
 // markup. Used for attribute-value contexts (alt/title) where HTML tags
 // would just show up as literal escaped text if renderChildren() were used
@@ -42,6 +64,104 @@ function escapeAttr(s: string): string {
 function extractPlainText(node: DitaNode): string {
   if (node.type === 'text') return node.text || '';
   return (node.children || []).map(extractPlainText).join('');
+}
+
+// ── Index term extraction ──
+//
+// <indexterm> nesting encodes index levels: <indexterm>A<indexterm>B
+// <indexterm>C</indexterm></indexterm></indexterm> is a three-level entry
+// "A, B, C". Sibling nested indexterms under the same parent are separate
+// entries sharing the same prefix, e.g. <indexterm>A<indexterm>B</indexterm>
+// <indexterm>C</indexterm></indexterm> means "A, B" and "A, C". This walks
+// that structure directly (not via the generic renderChildren dispatch --
+// see the topic/indexterm renderer below) and produces one chip per leaf
+// path, each with own text plus any index-see/index-see-also attached at
+// that level.
+export interface IndextermChip {
+  /** Term levels from outermost to innermost, e.g. ['Database', 'backup']. */
+  path: string[];
+  /** Rendered "see: X" / "see also: X" annotations attached at this level. */
+  seeAnnotations: string[];
+}
+
+function directTermText(node: DitaNode): string {
+  return (node.children || [])
+    .filter((c) => c.type === 'text')
+    .map((c) => c.text || '')
+    .join('')
+    .trim();
+}
+
+/**
+ * Exported for the full-book search index (docsite design doc, 4.4):
+ * findTopLevelIndextermsInSubtree finds every independent indexterm tree in
+ * a topic (body and prolog/keywords alike), and this turns each one into
+ * its leaf-path chips -- the same two-step extraction the topic/indexterm
+ * renderer below already does for on-page display.
+ */
+export function collectIndextermChips(node: DitaNode, ancestorPath: string[] = []): IndextermChip[] {
+  const ownTerm = directTermText(node);
+  const path = ownTerm ? [...ancestorPath, ownTerm] : ancestorPath;
+  const children = node.children || [];
+  const nestedTerms = children.filter((c) => c.type === 'element' && c.baseType === 'topic/indexterm');
+  const seeNodes = children.filter(
+    (c) => c.type === 'element' && (c.baseType === 'topic/index-see' || c.baseType === 'topic/index-see-also'),
+  );
+
+  const seeAnnotations = seeNodes
+    .map((s) => {
+      // index-see/index-see-also's own content is itself indexterm(s)
+      // naming the target entry, not plain text -- reuse the same
+      // extraction rather than a separate plain-text read so a
+      // multi-level "see" target (rare but valid) still reads correctly.
+      const targets = collectIndextermChips(s).map((c) => c.path.join(', '));
+      const label = s.baseType === 'topic/index-see-also' ? 'see also' : 'see';
+      return targets.length ? `${label}: ${targets.join('; ')}` : '';
+    })
+    .filter(Boolean);
+
+  if (nestedTerms.length === 0) {
+    return path.length > 0 ? [{ path, seeAnnotations }] : [];
+  }
+
+  const childChips = nestedTerms.flatMap((child) => collectIndextermChips(child, path));
+  // A see-annotation attached at an intermediate level (this node has both
+  // its own term text AND nested sub-entries) would otherwise be silently
+  // dropped -- surface it as its own chip alongside the leaf chips rather
+  // than losing it.
+  if (seeAnnotations.length > 0 && path.length > 0) {
+    return [{ path, seeAnnotations }, ...childChips];
+  }
+  return childChips;
+}
+
+/** Finds every topic/indexterm node in a subtree, but does NOT recurse
+ *  into an indexterm's own children once found -- collectIndextermChips
+ *  already walks that internal nesting (primary/secondary/... levels)
+ *  itself, so recursing here too would double-collect the same entries.
+ *  Used to pull indexterm chips out of <prolog><metadata><keywords>
+ *  without also rendering the other, genuinely-private prolog content
+ *  that happens to be a sibling of the keywords container. */
+export function findTopLevelIndextermsInSubtree(node: DitaNode): DitaNode[] {
+  const results: DitaNode[] = [];
+  for (const child of node.children || []) {
+    if (child.type !== 'element') continue;
+    if (child.baseType === 'topic/indexterm') {
+      results.push(child);
+      continue;
+    }
+    results.push(...findTopLevelIndextermsInSubtree(child));
+  }
+  return results;
+}
+
+function renderIndextermChip(chip: IndextermChip, ctx: RenderContext): string {
+  const pathText = chip.path.map(escapeAttr).join(' \u203A ');
+  const seeText = chip.seeAnnotations.length
+    ? ` <span class="indexterm-chip__see">(${chip.seeAnnotations.map(escapeAttr).join('; ')})</span>`
+    : '';
+  const label = ctx.indexLabel || 'Index';
+  return `<span class="indexterm-chip" title="${escapeAttr(label)}: ${pathText}">\u{1F4D1} ${pathText}${seeText}</span>`;
 }
 
 function escapeHtml(text: string): string {
@@ -280,7 +400,30 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
   'topic/table': (node, ctx, renderChildren) => {
     const id = getAttr(node, 'id');
-    return `<table${safeAttr('id', id)} class="cals-table">${renderChildren(node, ctx)}</table>`;
+    // If any tgroup declares colspecs, its <colgroup> gives every column an
+    // authoritative width -- but the default 'auto' table layout treats
+    // that width as only a hint: the browser still redistributes space
+    // based on each cell's own content (a long-unbroken run of CJK text or
+    // a single wide token can force its column wider than specified, at
+    // the expense of others), which is why some tables render with columns
+    // in roughly the proportions the author specified and others don't --
+    // it depends on what that particular table's cell content happens to
+    // do to the 'auto' algorithm's per-column min/max content width, not
+    // on anything wrong with the colspec/colwidth parsing itself. Forcing
+    // 'table-layout: fixed' (see styles.css's .cals-table--fixed-layout)
+    // makes the colgroup widths authoritative instead of a mere hint. Only
+    // applied when a colgroup actually exists -- tables with no colwidth
+    // hints at all should keep sizing themselves from content as before.
+    const hasColspec = (node.children || []).some(
+      (tgroup) =>
+        tgroup.type === 'element' &&
+        tgroup.baseType === 'topic/tgroup' &&
+        (tgroup.children || []).some(
+          (c) => c.type === 'element' && c.baseType === 'topic/colspec' && !!c.attributes?.colwidth,
+        ),
+    );
+    const cls = hasColspec ? 'cals-table cals-table--fixed-layout' : 'cals-table';
+    return `<table${safeAttr('id', id)} class="${cls}">${renderChildren(node, ctx)}</table>`;
   },
 
   'topic/tgroup': (node, ctx, renderChildren) => {
@@ -299,11 +442,54 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
       }
     });
 
+    // Table-wide default alignment (CALS @align on <tgroup>), overridden
+    // per-column by @align on that column's own <colspec>. Resolved once,
+    // up front, into an array indexed by colnum - 1, and applied per-cell
+    // below (an entry's own @align, when present, wins over this — see the
+    // cursor-tracking pass right below). NOTE: CSS explicitly restricts
+    // <col>/<colgroup> to only 'width', 'border', 'background' and
+    // 'visibility' — a <col style="text-align:...">, which an earlier
+    // version of this fix tried, is simply ignored by every browser, so
+    // this has to be threaded onto each individual <td>/<th> instead.
+    const tgroupAlign = mapCalsAlign(getAttr(node, 'align'));
+    const colAlignByIndex: (string | undefined)[] = colspecs.map(
+      (cs) => mapCalsAlign(cs.attributes?.align) || tgroupAlign,
+    );
+
     // Pre-process entries: add colspan/rowspan attributes derived from
     // CALS namest/nameend and morerows so the entry renderer can emit
-    // them as standard HTML attributes.
+    // them as standard HTML attributes, and (when the entry has no @align
+    // of its own) fill in the alignment its column resolves to above, so
+    // the 'topic/entry' renderer's "own @align wins" check picks it up as
+    // if the source had declared it explicitly. Column position is
+    // tracked per row via a left-to-right cursor that advances by each
+    // entry's colspan -- this doesn't account for columns already
+    // occupied by an earlier row's @morerows/rowspan (CALS technically
+    // requires a full row/column occupancy grid for that), matching the
+    // same scope the existing colspan derivation below already had.
     function addSpans(el: DitaNode): DitaNode {
       if (el.type !== 'element') return el;
+
+      if (el.baseType === 'topic/row') {
+        let cursor = 1;
+        const children = (el.children || []).map((child) => {
+          const processed = addSpans(child);
+          if (processed.type !== 'element' || processed.baseType !== 'topic/entry') {
+            return processed;
+          }
+          const attrs = { ...processed.attributes };
+          const colStart = attrs.namest && colMap.has(attrs.namest) ? colMap.get(attrs.namest)! : cursor;
+          const span = attrs.colspan ? parseInt(attrs.colspan, 10) : 1;
+          if (!attrs.align) {
+            const resolved = colAlignByIndex[colStart - 1];
+            if (resolved) attrs.align = resolved;
+          }
+          cursor = colStart + (isNaN(span) || span < 1 ? 1 : span);
+          return { ...processed, attributes: attrs };
+        });
+        return { ...el, children };
+      }
+
       const processedChildren = (el.children || []).map(addSpans);
       if (el.baseType === 'topic/entry') {
         const attrs = { ...el.attributes };
@@ -326,9 +512,13 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
     const processedNode = addSpans(node);
 
-    // Generate <colgroup> with column widths
+    // Generate <colgroup> with column widths.
     // CALS colwidth can be: "5*" or "1.5*" (proportional), "*" (= 1*),
-    // "50px", "30%", "2in", or a bare number (treated as pixels).
+    // "50px", "30%", "2in", or a bare number (treated as pixels). Column
+    // alignment is handled per-cell above (in addSpans), not here -- CSS
+    // restricts <col> to only 'width', 'border', 'background', and
+    // 'visibility', so a <col style="text-align:...">, tried in an earlier
+    // version of this fix, is simply ignored by every browser.
     let colgroup = '';
     if (colspecs.length > 0) {
       // Calculate total proportional parts for "*" notation
@@ -336,12 +526,10 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
       let hasStars = false;
       for (const cs of colspecs) {
         const w = cs.attributes?.colwidth;
-        if (w) {
-          const m = w.match(/^(\d+(?:\.\d+)?)?\*$/);
-          if (m) {
-            hasStars = true;
-            totalStars += m[1] ? parseFloat(m[1]) : 1;
-          }
+        const stars = w ? parseColwidthStar(w) : undefined;
+        if (stars !== undefined) {
+          hasStars = true;
+          totalStars += stars;
         }
       }
       const cols = colspecs
@@ -349,11 +537,9 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
           const w = cs.attributes?.colwidth;
           if (!w) return '<col>';
           // Convert CALS proportional notation (N*) to percentage
-          const starMatch = w.match(/^(\d+(?:\.\d+)?)?\*$/);
-          if (starMatch && hasStars && totalStars > 0) {
-            const parts = starMatch[1] ? parseFloat(starMatch[1]) : 1;
-            const pct = (parts / totalStars) * 100;
-            return `<col style="width: ${pct.toFixed(2)}%">`;
+          const stars = parseColwidthStar(w);
+          if (stars !== undefined && hasStars && totalStars > 0) {
+            return `<col style="width: ${((stars / totalStars) * 100).toFixed(2)}%">`;
           }
           // Bare number → treat as pixels
           if (/^\d+(?:\.\d+)?$/.test(w)) {
@@ -387,7 +573,11 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     const tag = isInTableHeader(ctx) ? 'th' : 'td';
     const colspan = getAttr(node, 'colspan');
     const rowspan = getAttr(node, 'rowspan');
-    const attrs = `${safeAttr('colspan', colspan)}${safeAttr('rowspan', rowspan)}`;
+    // Overrides the column's own alignment (set via <colspec>/<tgroup>
+    // @align, see 'topic/tgroup' above) for just this cell, same as CALS
+    // precedence: entry > colspec > tgroup.
+    const align = mapCalsAlign(getAttr(node, 'align'));
+    const attrs = `${safeAttr('colspan', colspan)}${safeAttr('rowspan', rowspan)}${align ? ` style="text-align: ${align}"` : ''}`;
     return `<${tag}${attrs}>${renderChildren(node, ctx)}</${tag}>`;
   },
 
@@ -412,6 +602,11 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     let height = getAttr(node, 'height');
     const scale = getAttr(node, 'scale');
     const scalefit = getAttr(node, 'scalefit');
+    // Captured before the natural-dimensions fallback below overwrites
+    // width/height for aspect-ratio reservation, so the @scale gate further
+    // down can still tell "the author actually gave a size" apart from "we
+    // filled one in ourselves" — see the bug this fixes at that gate.
+    const hadAuthorSize = !!(width || height);
 
     // Author-specified @width/@height on the <image> element always wins;
     // only fall back to the file's own natural dimensions (read from disk,
@@ -455,18 +650,34 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     // every image (img{max-width:100%}); so scalefit=yes just needs to
     // suppress scale/width/height rather than actively doing anything.
     let scaleStyle: string | undefined;
-    if (scalefit !== 'yes' && scale && !width && !height) {
+    if (scalefit !== 'yes' && scale && !hadAuthorSize) {
       const pct = parseFloat(scale);
       if (!isNaN(pct) && pct > 0) {
         scaleStyle = `--dita-scale:${pct / 100}`;
       }
     }
 
+    // Preview-default downscale flag: for an image with no @scale/@width/
+    // @height of its own, the preview should start smaller than full size
+    // -- but @scale's zoom-relative-to-natural-size mechanism above is the
+    // wrong tool for this, because zoom only shrinks what's already fitting
+    // under the container's max-width:100% clamp. A large image already
+    // being clamped down to the container's width stays clamped to that
+    // same width after a zoom<1 is applied (natural-size * zoom can still
+    // exceed the container), so "shrink by X%" would visibly do nothing
+    // for exactly the images most in need of shrinking. The actual pixel
+    // width of that clamped box is only known in the browser, at layout
+    // time -- see the webview script's use of this attribute, which reads
+    // getBoundingClientRect() (the same measurement the zoom toolbar's
+    // "100%" already means) and applies the reduction from there instead.
+    const useDefaultPreviewScale = scalefit !== 'yes' && !scale && !hadAuthorSize;
+
     const altAttr = alt !== undefined ? safeAttr('alt', alt) : '';
     const titleAttr = alt ? safeAttr('title', alt) : '';
     const styleAttr = safeAttr('style', scaleStyle);
+    const defaultScaleAttr = useDefaultPreviewScale ? ' data-dita-default-scale="1"' : '';
 
-    return `<img src="${escapeAttr(imgSrc)}"${altAttr}${titleAttr}${extra}${cls}${styleAttr} loading="lazy" data-dita-src="${escapeAttr(href)}">`;
+    return `<img src="${escapeAttr(imgSrc)}"${altAttr}${titleAttr}${extra}${cls}${styleAttr}${defaultScaleAttr} loading="lazy" data-dita-src="${escapeAttr(href)}">`;
   },
 
   'topic/fig': (node, ctx, renderChildren) => {
@@ -487,8 +698,17 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   'topic/codeblock': (node, ctx, renderChildren) => {
     const outputClass = getAttr(node, 'outputclass') || '';
     const lang = outputClass.replace(/^language-/, '');
-    const langLabel = lang ? `<div class="codeblock-lang">${escapeAttr(lang)}</div>` : '';
-    return `<pre class="codeblock ${escapeAttr(outputClass)}"><code>${renderChildren(node, ctx)}</code>${langLabel}</pre>`;
+    const pre = `<pre class="codeblock ${escapeAttr(outputClass)}"><code>${renderChildren(node, ctx)}</code></pre>`;
+    if (!lang) return pre;
+    // The label used to live *inside* <pre>, which has overflow-x:auto for
+    // wide code -- an absolutely-positioned child of a scrolling element
+    // scrolls along with that element's content, so the label drifted off
+    // to the left as soon as the user scrolled the code horizontally
+    // instead of staying pinned to the corner. Moving it to a sibling of
+    // <pre>, wrapped in a non-scrolling container, keeps it fixed in place;
+    // .codeblock-wrap in styles.css supplies the positioning context.
+    const langLabel = `<div class="codeblock-lang">${escapeAttr(lang)}</div>`;
+    return `<div class="codeblock-wrap">${pre}${langLabel}</div>`;
   },
 
   'topic/pre': (_node, ctx, renderChildren) =>
@@ -513,6 +733,25 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     if (href.startsWith('#')) {
       const anchor = href.includes('/') ? '#' + href.split('/').pop()! : href;
       return `<a href="${escapeAttr(anchor)}" class="xref">${content}</a>`;
+    }
+
+    // Cross-file: when the target topic is part of the book/docsite this
+    // topic is itself being rendered as part of, isInCurrentBook resolves
+    // it to an absolute path and this becomes a real, clickable link
+    // instead of the plain hint text below -- the webview's click handler
+    // reads data-dita-book-xref to ask the extension host to switch pages
+    // (see getSiteNavClickHandlerScript in ditaRenderUtils.ts). The
+    // anchor id reuses the same "last path segment" convention the
+    // same-page branch above already uses, so a nested
+    // "topicId/elementId" fragment still resolves to the specific element
+    // to scroll to, not just the topic root.
+    const bookTarget = ctx.isInCurrentBook?.(href);
+    if (bookTarget) {
+      const hashIdx = href.indexOf('#');
+      const idPart = hashIdx >= 0 ? href.slice(hashIdx + 1) : '';
+      const anchorId = idPart ? (idPart.includes('/') ? idPart.split('/').pop()! : idPart) : '';
+      const target = bookTarget + (anchorId ? '#' + anchorId : '');
+      return `<a href="#" class="xref" data-dita-book-xref="${escapeAttr(target)}">${content}</a>`;
     }
 
     return `<span class="xref-external">→ ${content}</span>`;
@@ -665,8 +904,36 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   },
   'topic/tm': (_node, ctx, renderChildren) =>
     `<span class="tm">${renderChildren(_node, ctx)}</span>`,
-  'topic/indexterm': () => '',
-  'topic/indextermref': () => '',
+  // Index terms carried no visual representation at all before this --
+  // <indexterm> rendered to '', so authored index entries were invisible
+  // in preview even though they're routinely used to check placement and
+  // wording while writing. This renders each indexterm as a small inline
+  // chip showing its full term path (indexterm nesting encodes
+  // primary/secondary/tertiary levels: <indexterm>A<indexterm>B</indexterm>
+  // </indexterm> means "A, B" as a two-level entry), plus any index-see/
+  // index-see-also cross-reference. Deliberately NOT a compiled, sorted
+  // index page the way a printed book's back-of-book index works --
+  // sorting only makes sense for scripts with a stable alphabetic/stroke
+  // order, and silently doing nothing useful (or something arbitrary) for
+  // e.g. Chinese content would be worse than not having a generated index
+  // at all. Showing the term(s) inline, right where they're authored, is
+  // useful in every language and needs no sort-order decision.
+  'topic/indexterm': (node, ctx) =>
+    ctx.suppressIndexterm ? '' : collectIndextermChips(node).map((chip) => renderIndextermChip(chip, ctx)).join(''),
+  'topic/indextermref': (node) => {
+    const key = getAttr(node, 'keyref');
+    return key ? `<span class="indexterm-chip indexterm-chip--ref" title="indextermref">\u{1F4D1} ${escapeAttr(key)}</span>` : '';
+  },
+  // index-see / index-see-also / index-sort-as are only ever meaningful as
+  // children consumed directly by their parent topic/indexterm's own
+  // renderer above (collectIndextermChips walks node.children itself
+  // rather than going through the generic renderChildren dispatch for
+  // these) -- if one of these somehow gets visited on its own (malformed
+  // markup with the referencing indexterm parent missing, or ctx.uiLanguage
+  // paths hitting some node.children traversal outside indexterm's own
+  // renderer), rendering empty is right: there is no sensible standalone
+  // presentation for "the target of a see-reference" with no surrounding
+  // indexterm chip to attach it to.
   'topic/index-see': () => '',
   'topic/index-see-also': () => '',
   'topic/index-sort-as': () => '',
@@ -749,7 +1016,27 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   // "- topic/prolog " — appears between title and body in topic/concept/
   // task/reference. Without this entry the fallback renderer recurses into
   // children, causing author/keyword content to appear in the body.
-  'topic/prolog': () => '',
+  //
+  // EXCEPT <indexterm>: declaring topic-level index entries inside
+  // <prolog><metadata><keywords> (rather than as an inline marker inside
+  // <body>) is a very common, arguably more common, real-world authoring
+  // pattern -- and blanket-suppressing all of prolog meant those index
+  // entries were silently invisible in preview for exactly that pattern,
+  // even though the whole point of adding indexterm rendering (see
+  // topic/indexterm below) was to make them visible. Every OTHER prolog
+  // descendant (author, critdates, plain keyword text meant only for
+  // search metadata, etc.) is still fully suppressed -- only indexterm
+  // chips get pulled out.
+  'topic/prolog': (node, ctx) => {
+    if (ctx.suppressIndexterm) return '';
+    const topLevelTerms = findTopLevelIndextermsInSubtree(node);
+    if (topLevelTerms.length === 0) return '';
+    const chips = topLevelTerms
+      .flatMap((termNode) => collectIndextermChips(termNode))
+      .map((chip) => renderIndextermChip(chip, ctx))
+      .join('');
+    return chips ? `<div class="indexterm-chip-group" title="${escapeAttr(ctx.indexLabel || 'Index')}">${chips}</div>` : '';
+  },
 
   // These three (topic/keywords, topic/metadata, topic/publisher) are always
   // nested inside <prolog> in valid DITA — topic/prolog already suppresses

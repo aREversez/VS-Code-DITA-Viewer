@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<task id="firmware_rollback" xml:lang="zh-CN" audience="admin">
+  <title>固件版本切换与回退</title>
+  <shortdesc>在正式版与开发版固件之间切换，或回退到上一版本以规避新版本问题。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>固件回退</indexterm>
+        <indexterm>开发版</indexterm>
+        <indexterm>版本切换</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <taskbody>
+    <prereq>
+      <ul>
+        <li>您具有管理员权限的家庭账号。</li>
+        <li>主机已联网且存储空间充足。</li>
+      </ul>
+    </prereq>
+    <context>
+<note type="warning"><p>开发版固件包含未发布功能（参见 <xref href="whats_new.dita"/>），稳定性低于正式版，请勿在生产环境使用。</p></note>
+    </context>
+    <steps>
+<step>
+        <cmd>进入版本管理页：<menucascade><uicontrol>设置</uicontrol><uicontrol>系统</uicontrol><uicontrol>固件升级</uicontrol><uicontrol>其他版本</uicontrol></menucascade>。</cmd>
+      </step>
+      <step>
+        <cmd>在版本列表中选择目标版本。</cmd>
+      <choices>
+          <choice>回退到上一正式版：适合规避新版本回归问题。</choice>
+          <choice>切换到开发版：勾选「我了解开发版风险」后可用。</choice>
+        </choices>
+      </step>
+        <step>
+        <cmd>点击 <uicontrol>下载并安装</uicontrol>，等待升级流程完成（同 <xref href="firmware_update.dita"/>）。</cmd>
+      </step>
+      <step>
+        <cmd>切换通道后，后续更新将默认跟随所选通道推送。</cmd>
+      </step>
+
+    </steps>
+    <result>
+<p>主机运行所选版本，可在版本管理页核对通道与版本号。</p>
+    </result>
+    <example>
+<note type="important"><p>从开发版切回正式版时，若配置中包含开发版专属特性，这些配置会被自动重置。</p></note>
+    </example>
+  </taskbody>
+</task>

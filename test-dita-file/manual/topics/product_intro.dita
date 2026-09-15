@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="product_intro" xml:lang="zh-CN">
+  <title>产品简介</title>
+  <shortdesc><ph keyref="product-name"/> 是一台集 Zigbee 网关、红外遥控、语音助手与本地自动化引擎于一体的智能家居中控主机，可将家中各类智能设备统一接入、统一控制。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>智能家居中控</indexterm>
+        <indexterm>产品简介</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <conbody>
+<p><ph keyref="product-name"/>（以下简称"中控主机"）采用四核处理器与本地场景引擎，即使外网中断，已配置的自动化场景依然可以在局域网内正常运行。主机正面配备触摸屏与环形氛围灯，背面提供千兆网口、USB 与电源接口。</p>
+    <fig><title>中控主机正面视图</title>
+      <image href="../images/front-panel.svg" format="svg" placement="break"><alt>中控主机正面：触摸屏居中，底部为麦克风阵列，顶部为环形氛围灯</alt></image>
+    </fig>
+    <note type="important"><p>本手册中的部分高级功能仅面向管理员账户开放，请参见 <xref href="family_manage.dita"/> 了解角色权限。</p></note><section>
+      <title>核心能力</title>
+      <ul>
+        <li><b>统一接入</b>：支持 Zigbee 3.0、红外与 Wi-Fi 设备接入，详见 <xref href="feature_zigbee.dita"/> 与 <xref href="feature_ir.dita"/>。</li>
+        <li><b>本地自动化</b>：场景与自动化规则存储在本机，详见 <xref href="feature_automation.dita"/>。</li>
+        <li><b>语音控制</b>：内置双麦克风阵列，支持远场语音唤醒，详见 <xref href="feature_voice.dita"/>。</li>
+        <li><b>安防联动</b>：可接入门窗、人体、烟雾等传感器，详见 <xref href="feature_security.dita"/>。</li>
+      </ul>
+    </section>    <section>
+      <title>典型应用场景</title>
+      <ol>
+        <li>回家模式：门锁开启后自动点亮玄关灯并打开空调。</li>
+        <li>睡眠模式：一句话关闭全屋灯光，窗帘闭合，安防布防。</li>
+        <li>离家布防：人体传感器触发后推送告警到手机。</li>
+      </ol>
+      <p>更多场景玩法参见 <xref href="feature_scene.dita"/>。</p>
+    </section>
+  </conbody>
+</concept>

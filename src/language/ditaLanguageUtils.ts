@@ -110,22 +110,189 @@ export function findKeyDefinitionOffset(mapText: string, key: string): number {
 }
 
 /**
+ * Strips the same-document marker some authors prefix onto a conref/href
+ * fragment -- the "./id" (or "./topicId/elementId") shorthand, carried over
+ * from relative-file-path conventions, that some tools accept as another
+ * way of writing a bare "#id". Once stripped, the rest of the fragment
+ * parses exactly like a plain "topicId/elementId" or bare "elementId"
+ * fragment. A fragment with no such prefix is returned unchanged.
+ *
+ * This is the single place that understands the "./" shorthand -- every
+ * caller that splits a fragment into a topic-scope part and an element-id
+ * part should normalize through here first, rather than special-casing
+ * "." locally, so the same-document marker is handled consistently
+ * wherever fragments are parsed (go-to-definition, find-references, and
+ * this file's own findConrefTargetOffset all split fragments this way).
+ */
+export function stripSameDocumentFragmentPrefix(fragment: string): string {
+  return fragment.replace(/^\.\/+/, '');
+}
+
+/**
+ * Splits a conref/href fragment into the two parts the DITA addressing
+ * grammar defines -- "topicId" or "topicId/elementId" -- after normalizing
+ * the "./" same-document shorthand. A one-part fragment addresses the topic
+ * itself, so topicId is undefined and the whole fragment is the id named.
+ *
+ * This is the single place that splits a fragment. Callers must not do their
+ * own split('/')[0]: that answers "which topic" when the question is nearly
+ * always "which element", and for the standard two-part form the two are
+ * different strings by definition. ditaRenderUtils resolves conref content
+ * this way already (parts.length > 1 ? parts[1] : parts[0]); find-references
+ * took parts[0] instead, which is why conrefs rendered fine but could not be
+ * found from their declaration.
+ */
+export function splitRefFragment(fragment: string): { topicId: string | undefined; elementId: string } {
+  const normalized = stripSameDocumentFragmentPrefix(fragment);
+  const slashIdx = normalized.indexOf('/');
+  return slashIdx >= 0
+    ? { topicId: normalized.substring(0, slashIdx), elementId: normalized.substring(slashIdx + 1) }
+    : { topicId: undefined, elementId: normalized };
+}
+
+/**
  * Resolves a conref/href fragment ("topicId" or "topicId/elementId") to the
  * offset of the target id="..." attribute in the target file's text, or -1.
  */
 export function findConrefTargetOffset(text: string, fragment: string): number {
-  const [topicId, elementId] = fragment.split('/');
-  if (!topicId) return -1;
+  const { topicId, elementId } = splitRefFragment(fragment);
+  if (!elementId) return -1;
+
   const findId = (id: string, from: number): number => {
     const re = new RegExp(`\\bid\\s*=\\s*"${escapeRegExp(id)}"`, 'g');
     re.lastIndex = from;
     const m = re.exec(text);
     return m ? m.index : -1;
   };
+
+  // A bare elementId (no "/" at all) has no real topic to scope the search
+  // by. Before the stripSameDocumentFragmentPrefix normalization above, a
+  // same-document self-reference marker (e.g. conref="#./noteId") landed
+  // here as a literal "." topicId, which could never match a real
+  // id="..." and always reported the target as missing -- normalizing the
+  // fragment first means that case now falls into the same "no scope"
+  // bucket as a plain "#noteId" bare id.
+  if (topicId === undefined || topicId === '') {
+    return findId(elementId, 0);
+  }
+
   const topicOff = findId(topicId, 0);
   if (topicOff < 0) return -1;
-  if (!elementId) return topicOff;
   return findId(elementId, topicOff);
+}
+
+// ── Reverse lookup (Find All References) ──
+//
+// Go-to-definition above answers "what does this reference point at?"
+// These two answer the opposite question for the two things DITA content
+// can be "the definition of": an element's id="..." (targeted by
+// conref/href fragments) and a keydef's keys="..." (targeted by
+// keyref/conkeyref). The actual workspace scan that uses these to find
+// callers lives in ditaLanguageFeatures.ts's DitaReferenceProvider --
+// kept here, offset-based and file-agnostic, so it stays unit-testable.
+
+export interface IdAttrHit {
+  id: string;
+  valueStart: number;
+  valueEnd: number;
+}
+
+/** If the offset falls inside an id="..." attribute value, returns that id
+ *  and the value's span; otherwise undefined. */
+export function findIdAttrAt(text: string, offset: number): IdAttrHit | undefined {
+  const re = /\bid\s*=\s*"([^"]*)"/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const valueStart = m.index + m[0].indexOf('"') + 1;
+    const valueEnd = valueStart + m[1].length;
+    if (offset >= valueStart && offset <= valueEnd) {
+      return { id: m[1], valueStart, valueEnd };
+    }
+  }
+  return undefined;
+}
+
+export interface KeysAttrHit {
+  /** The single key token the offset lands on (keys="a b c" can hold several). */
+  key: string;
+  valueStart: number;
+  valueEnd: number;
+}
+
+/** If the offset falls inside one key of a keydef's keys="..." attribute
+ *  value, returns that specific key token (not the whole space-separated
+ *  list) and its span; otherwise undefined. Only matches on a <keydef> (or
+ *  <topicref>/<mapref> carrying its own keys attribute) tag, not any other
+ *  element that happens to have a "keys" attribute. */
+export function findKeysAttrAt(text: string, offset: number): KeysAttrHit | undefined {
+  const re = /\bkeys\s*=\s*"([^"]*)"/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const listStart = m.index + m[0].indexOf('"') + 1;
+    const listEnd = listStart + m[1].length;
+    if (offset < listStart || offset > listEnd) continue;
+    const relOffset = offset - listStart;
+    let tokenStart = 0;
+    for (const token of m[1].split(/(\s+)/)) {
+      const tokenEnd = tokenStart + token.length;
+      if (!/^\s*$/.test(token) && relOffset >= tokenStart && relOffset <= tokenEnd) {
+        return { key: token, valueStart: listStart + tokenStart, valueEnd: listStart + tokenEnd };
+      }
+      tokenStart = tokenEnd;
+    }
+    return undefined;
+  }
+  return undefined;
+}
+
+export interface KeydefHit {
+  /** All key names declared via keys="..." on the enclosing keydef, in
+   *  document order. Usually one, but keys="a b c" declares several
+   *  aliases for the same target -- all of them are valid search targets
+   *  since they all resolve to the same content. */
+  keys: string[];
+}
+
+/** If the offset falls ANYWHERE inside a <keydef> element -- not just
+ *  literally inside its keys="..." attribute value the way findKeysAttrAt
+ *  above requires -- returns every key that keydef declares.
+ *
+ *  This exists specifically for Find All References: clicking on some
+ *  OTHER part of a keydef (its <keyword> display text, its href, its
+ *  topicmeta, whitespace inside a multi-line keydef) is an easy mistake
+ *  for someone unfamiliar with the extension to make when trying to find
+ *  where a key is used -- especially the keyword text, which is the
+ *  human-readable label a reader would naturally click on. Silently
+ *  falling through to the generic "who references this ditamap file"
+ *  answer in that case is actively confusing: it still returns results,
+ *  so it looks like it worked, but it answers a different question than
+ *  the one being asked. findKeysAttrAt's narrower, attribute-value-only
+ *  match still takes priority when it hits (see ditaLanguageFeatures.ts'
+ *  resolveReferenceTarget) so clicking the exact key name still resolves
+ *  to just that one key rather than every alias on the keydef. */
+export function findEnclosingKeydefKeys(text: string, offset: number): KeydefHit | undefined {
+  const tagRe = /<keydef\b[^>]*>/g;
+  let m: RegExpExecArray | null;
+  while ((m = tagRe.exec(text)) !== null) {
+    const tagStart = m.index;
+    const tagText = m[0];
+    const selfClosing = /\/\s*>$/.test(tagText);
+    let elementEnd: number;
+    if (selfClosing) {
+      elementEnd = tagStart + tagText.length;
+    } else {
+      const closeTag = '</keydef>';
+      const closeIdx = text.indexOf(closeTag, tagStart + tagText.length);
+      elementEnd = closeIdx >= 0 ? closeIdx + closeTag.length : tagStart + tagText.length;
+    }
+    if (offset < tagStart || offset > elementEnd) continue;
+
+    const keysMatch = /\bkeys\s*=\s*"([^"]*)"/.exec(tagText);
+    if (!keysMatch) return undefined;
+    const keys = keysMatch[1].split(/\s+/).filter(Boolean);
+    return keys.length ? { keys } : undefined;
+  }
+  return undefined;
 }
 
 /** Collects all id="..." values declared in a document text. */
@@ -475,4 +642,113 @@ export function collectMapSymbols(root: DitaNode, roleFormat?: RoleLabelFormatte
     return result;
   }
   return walk(root, 0);
+}
+
+// ── Unknown-element detection ──
+
+/** An element the parser could not assign a DITA base type to. */
+export interface UnknownElementEntry {
+  tagName: string;
+  sourceRange: SourceRange;
+}
+
+// Base types whose own renderer takes full, exclusive ownership of its
+// subtree instead of generically dispatching to each child by its own
+// baseType. An unmapped tag name underneath one of these causes no silent
+// content loss -- the reason this diagnostic exists at all -- because
+// nothing under them is shown via the generic per-child path regardless of
+// whether the parser could classify it:
+//
+// - topic/foreign (<foreign>, <mathml>, and this project's 'svg-container'
+//   convenience mapping in standardTagMap.ts): BASE_TYPE_RENDERERS in
+//   baseTypeMap.ts serializes its children as raw markup directly, without
+//   ever consulting each descendant's own baseType. Every MathML/SVG tag
+//   underneath is correctly unrecognized by parseBaseType() -- that is the
+//   point, it is not DITA -- so walking in and reporting its contents would
+//   just relabel valid MathML/SVG markup as "unknown DITA elements".
+// - topic/prolog: its renderer (baseTypeMap.ts) extracts only top-level
+//   indexterm chips via a dedicated traversal and returns '' for
+//   everything else -- by its own comment, "every OTHER prolog descendant
+//   ... is still fully suppressed". author, critdate, metadata, audience,
+//   keywords and the rest of DITA's prolog vocabulary are real, valid,
+//   commonly-used elements; several (metadata, keywords, navtitle, author,
+//   critdate, ...) simply have no entry of their own in standardTagMap.ts,
+//   because nothing before this diagnostic ever needed one -- prolog's own
+//   renderer already hides the entire subtree, mapped or not.
+// - map/topicmeta: the same shape one level up, for maps -- its renderer
+//   (mapTypeMap.ts) also returns '' unconditionally, with the topicref's
+//   navtitle/keyword text pulled out separately via getNodeText() rather
+//   than the generic per-child dispatch. indexterm is valid inside a map's
+//   <topicmeta><keywords> (DITA maps reuse several topic-level metadata
+//   elements verbatim) but was never given its own entry in mapTagMap.ts
+//   for the same reason: nothing needed it before.
+// - map/map-title: the map's own <title> (and <booktitle>/<mainbooktitle>/
+//   <booktitlealt>/<subtitle>, which specialize the same base type) is
+//   rendered by extractText() -- a dedicated, baseType-agnostic recursive
+//   text walk with its own <ph keyref="..."> substitution built in, not
+//   the generic per-child dispatch either. Nothing under a map's <title>
+//   goes missing for being unmapped: extractText() walks every descendant
+//   by its .children/.text shape alone and does not consult baseType at
+//   all, which is exactly why a keyref-only <ph/> in a map title already
+//   resolves correctly -- and why flagging it here was never accurate.
+//
+// Skipping these four is about what the renderer actually does with a
+// subtree, not about the elements in it being any less real or valid DITA
+// than a <p> or a <note> -- unlike topic/foreign, which is correctly
+// non-DITA content.
+const SUBTREE_OWNED_BASETYPES = new Set([
+  'topic/foreign',
+  'topic/prolog',
+  'map/topicmeta',
+  'map/map-title',
+  // topic/indexterm's own renderer (collectIndextermChips() in
+  // baseTypeMap.ts) walks node.children itself -- direct text nodes plus
+  // nested topic/indexterm, topic/index-see and topic/index-see-also by
+  // baseType -- and never dispatches through the generic recursive
+  // renderer for anything else, so an unmapped tag anywhere inside an
+  // indexterm causes no additional silent content loss to report here.
+  // topic/index-see-also (and its siblings, all only ever valid inside an
+  // indexterm) are included defensively for the case where the enclosing
+  // indexterm itself failed to classify and so was not skipped.
+  'topic/indexterm',
+  'topic/index-see',
+  'topic/index-see-also',
+  'topic/index-sort-as',
+  'topic/index-base',
+  // map/relheader falls back to a baseType-agnostic extractText() walk for
+  // a relcolspec's column title whenever @navtitle is absent (mapTypeMap.ts)
+  // -- same shape as map/map-title above, content is never actually lost.
+  'map/relcolspec',
+]);
+
+/**
+ * Walks a parsed document and collects every element the parser fell
+ * through on: neither its tag name nor an explicit @class attribute (DITA's
+ * own mechanism for a specialized element to say what it specializes)
+ * resolved to a known base type. renderEffectiveNode() in renderer.ts
+ * treats exactly this case as "render the children, drop the element" --
+ * silently, with no visual indication -- so from the reader's side a typo
+ * here looks identical to the content simply not being there. Reusing
+ * node.baseType, already computed by the same parseBaseType() the renderer
+ * itself relies on, means this can never disagree with what actually gets
+ * dropped: there is one source of truth for "does DITA Viewer recognize
+ * this element", not a second copy of the classification logic that could
+ * drift from it.
+ */
+export function collectUnknownElements(root: DitaNode): UnknownElementEntry[] {
+  const results: UnknownElementEntry[] = [];
+
+  function walk(node: DitaNode): void {
+    if (node.type !== 'element') return;
+    if (node.baseType && SUBTREE_OWNED_BASETYPES.has(node.baseType)) return;
+    if (!node.baseType && node.tagName) {
+      results.push({ tagName: node.tagName, sourceRange: node.sourceRange });
+    }
+    for (const child of node.children) {
+      walk(child);
+    }
+  }
+
+  walk(root);
+  return results;
 }

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 400" width="680" height="400">
+  <rect x="0" y="0" width="680" height="400" fill="#f4f6fa"/>
+  <rect x="220" y="40" width="240" height="320" rx="36" fill="#22262e" stroke="#3a4150" stroke-width="4"/>
+  <rect x="240" y="86" width="200" height="200" rx="12" fill="#10141c"/>
+  <text x="340" y="170" text-anchor="middle" font-family="sans-serif" font-size="20" fill="#9fd8ff">4 英寸触摸屏</text>
+  <text x="340" y="200" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#5b6b80">480 x 800</text>
+  <circle cx="340" cy="66" r="10" fill="#2f6fed"/>
+  <text x="340" y="46" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#7c8aa0">环形氛围灯（顶部）</text>
+  <circle cx="300" cy="322" r="4" fill="#555"/>
+  <circle cx="340" cy="322" r="4" fill="#555"/>
+  <circle cx="380" cy="322" r="4" fill="#555"/>
+  <text x="340" y="350" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#7c8aa0">双麦克风阵列（底部）</text>
+  <rect x="480" y="120" width="160" height="180" rx="8" fill="#ffffff" stroke="#c9d2e0"/>
+  <text x="560" y="150" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#334155" font-weight="bold">背面接口</text>
+  <rect x="500" y="168" width="120" height="14" rx="4" fill="#94a3b8"/>
+  <text x="560" y="200" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#64748b">LAN 网口</text>
+  <rect x="500" y="212" width="120" height="14" rx="4" fill="#94a3b8"/>
+  <text x="560" y="244" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#64748b">USB-A</text>
+  <rect x="500" y="256" width="120" height="14" rx="4" fill="#94a3b8"/>
+  <text x="560" y="288" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#64748b">DC 12V</text>
+  <text x="120" y="120" font-family="sans-serif" font-size="14" fill="#334155" font-weight="bold">正面视图</text>
+  <text x="120" y="145" font-family="sans-serif" font-size="12" fill="#64748b">红外发射窗口位于屏幕上方边缘</text>
+</svg>

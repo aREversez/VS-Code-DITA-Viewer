@@ -1,8 +1,11 @@
-import { existsSync, readFileSync, openSync, readSync, closeSync, statSync } from 'fs';
-import { resolve, dirname, relative, isAbsolute, extname } from 'path';
+import { existsSync, readFileSync, openSync, readSync, closeSync, statSync, readdirSync } from 'fs';
+import { resolve, join, dirname, relative, isAbsolute, extname, normalize } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
+import type { MapEntry } from '../render/mapTypeMap';
+import { isDitamapRef } from '../render/mapTypeMap';
+import type { BookPart } from './bookPatch';
 
 // ── Image dimensions (for reserving layout space before the image loads) ──
 //
@@ -136,12 +139,21 @@ const IMAGE_DIMENSION_READERS: Record<string, (buf: Buffer) => { width: number; 
  * stat() to check mtime, versus re-opening and re-parsing the header, is
  * the difference that matters for a topic with a lot of images -- the
  * common case is the same unchanged images on every keystroke, not new
- * ones. Unbounded on purpose: entries are tiny (a path plus two numbers),
- * and a documentation project's total distinct image count is nowhere
- * near where that would matter in practice for a long-running extension
- * host process.
+ * ones. Bounded by IMAGE_DIMENSIONS_CACHE_MAX with oldest-unused-first
+ * eviction (a cache hit re-inserts the entry, so it counts as recently
+ * used), keeping long sessions that preview many distinct images from
+ * growing the Map without limit -- entries are tiny (a path plus two
+ * numbers), but the project's rule is that every cache stays bounded and
+ * clearable, and this one is cleared alongside the rest on deactivation.
  */
 const imageDimensionsCache = new Map<string, { mtimeMs: number; dimensions: { width: number; height: number } | undefined }>();
+// One entry per distinct image file ever previewed; bound it the same way
+// keyMapCache is bounded in DitaViewerProvider.ts.
+export const IMAGE_DIMENSIONS_CACHE_MAX = 1000;
+
+export function clearImageDimensionsCache(): void {
+  imageDimensionsCache.clear();
+}
 
 export function readImageDimensions(filePath: string): { width: number; height: number } | undefined {
   let mtimeMs: number;
@@ -156,6 +168,10 @@ export function readImageDimensions(filePath: string): { width: number; height: 
 
   const cached = imageDimensionsCache.get(filePath);
   if (cached && cached.mtimeMs === mtimeMs) {
+    // Re-insert so a cache hit keeps the entry from being the oldest
+    // (and therefore first-evicted) candidate.
+    imageDimensionsCache.delete(filePath);
+    imageDimensionsCache.set(filePath, cached);
     return cached.dimensions;
   }
 
@@ -170,6 +186,10 @@ export function readImageDimensions(filePath: string): { width: number; height: 
         dimensions = undefined;
       }
     }
+  }
+  if (imageDimensionsCache.size >= IMAGE_DIMENSIONS_CACHE_MAX) {
+    const oldest = imageDimensionsCache.keys().next().value;
+    if (oldest !== undefined) imageDimensionsCache.delete(oldest);
   }
   imageDimensionsCache.set(filePath, { mtimeMs, dimensions });
   return dimensions;
@@ -243,11 +263,27 @@ export function makeFileCache(docDir: string) {
     return collectText(titleChild);
   }
 
-  return { loadFile, findElementById, findTitleOfElement };
+  /**
+   * Every absolute path this cache was asked for, including ones that turned
+   * out not to exist (those are memoized as undefined). Callers use it as the
+   * dependency set of a render: rendered HTML can only be reused for as long
+   * as none of these files changes. A missing file has to be reported as
+   * carefully as a present one, since creating it later is exactly the kind
+   * of change that must invalidate.
+   */
+  function touchedFiles(): string[] {
+    return [...cache.keys()];
+  }
+
+  return { loadFile, findElementById, findTitleOfElement, touchedFiles };
 }
 
-export function makeConrefResolver(docDir: string): (conref: string) => DitaNode | undefined {
-  const cache = makeFileCache(docDir);
+export function makeConrefResolver(
+  docDir: string,
+  ownRoot?: DitaNode,
+  sharedCache?: ReturnType<typeof makeFileCache>,
+): (conref: string) => DitaNode | undefined {
+  const cache = sharedCache ?? makeFileCache(docDir);
 
   return (conref: string): DitaNode | undefined => {
     const hashIdx = conref.indexOf('#');
@@ -256,6 +292,19 @@ export function makeConrefResolver(docDir: string): (conref: string) => DitaNode
     const idPart = conref.substring(hashIdx + 1);
     const parts = idPart.split('/');
     const elementId = parts.length > 1 ? parts[1] : parts[0];
+    if (!elementId) return undefined;
+
+    // No file path before "#" -- a same-document reference, e.g.
+    // conref="#noteId" or the "#./noteId" shorthand some authors use
+    // (treating the current file as if it were "./" of itself). docDir on
+    // its own resolves to a *directory*, not a file, so handing an empty
+    // filePath to loadFile always failed here: existsSync passed (the
+    // directory exists), but reading a directory as a file then threw and
+    // got silently cached as "not found". Search the document already
+    // being rendered instead of touching the filesystem at all.
+    if (!filePath) {
+      return ownRoot ? cache.findElementById(ownRoot, elementId) : undefined;
+    }
 
     const root = cache.loadFile(filePath);
     if (!root) return undefined;
@@ -276,16 +325,38 @@ export function makeConrefResolver(docDir: string): (conref: string) => DitaNode
 // this returns undefined (letting the caller fall back to normal
 // single-target conref handling) rather than guessing at some other
 // relationship when that's not the case.
-export function makeConrefRangeResolver(docDir: string): (conref: string, conrefend: string) => DitaNode[] | undefined {
-  const cache = makeFileCache(docDir);
+export function makeConrefRangeResolver(
+  docDir: string,
+  ownRoot?: DitaNode,
+  sharedCache?: ReturnType<typeof makeFileCache>,
+): (conref: string, conrefend: string) => DitaNode[] | undefined {
+  const cache = sharedCache ?? makeFileCache(docDir);
 
   function resolveRef(ref: string): { root: DitaNode; id: string } | undefined {
     const hashIdx = ref.indexOf('#');
     if (hashIdx < 0) return undefined;
     const filePath = ref.substring(0, hashIdx);
-    const idPart = ref.substring(hashIdx + 1);
+    // Strip the "./" same-document marker before splitting on "/" so a
+    // topic-scoped same-document range (e.g. "#./topicId/elementId") lands
+    // on the real topic/element pair instead of misreading "." as the
+    // topic id and folding the rest of the fragment into a single
+    // (unmatchable) id.
+    const idPart = ref.substring(hashIdx + 1).replace(/^\.\/+/, '');
     const parts = idPart.split('/');
     const id = parts.length > 1 ? parts[1] : parts[0];
+
+    // No file path before "#" -- a same-document reference, same as the
+    // single-target makeConrefResolver above. docDir on its own resolves
+    // to a *directory*, not a file, so handing an empty filePath to
+    // loadFile always failed here the same way: existsSync passed, but
+    // reading a directory as a file then threw and got silently cached as
+    // "not found". Search the document already being rendered instead of
+    // touching the filesystem at all.
+    if (!filePath) {
+      if (!ownRoot) return undefined;
+      return { root: ownRoot, id };
+    }
+
     const root = cache.loadFile(filePath);
     if (!root) return undefined;
     return { root, id };
@@ -325,8 +396,11 @@ export function makeConrefRangeResolver(docDir: string): (conref: string, conref
   };
 }
 
-export function makeFileTitleResolver(docDir: string): (href: string) => string | undefined {
-  const cache = makeFileCache(docDir);
+export function makeFileTitleResolver(
+  docDir: string,
+  sharedCache?: ReturnType<typeof makeFileCache>,
+): (href: string) => string | undefined {
+  const cache = sharedCache ?? makeFileCache(docDir);
 
   return (href: string): string | undefined => {
     // Only local relative references can be resolved from disk — never probe
@@ -354,6 +428,139 @@ export function makeFileTitleResolver(docDir: string): (href: string) => string 
     const root = cache.loadFile(filePath);
     if (!root) return undefined;
     return cache.findTitleOfElement(root, topicId);
+  };
+}
+
+/**
+ * Default topic-type labeler used when no localized labeler is injected.
+ * Returns undefined for the generic `<topic>` root (every entry would
+ * otherwise carry an identical "Topic" chip, which adds visual noise
+ * without any information), and a simple capitalized tag name for any
+ * specialization (`concept` -> "Concept", `task` -> "Task", ...). Callers
+ * that want localized labels (MapViewerProvider in VS Code) inject their
+ * own labeler; pure-function tests use this default to stay vscode-free.
+ */
+function defaultTopicTypeLabel(tagName: string): string | undefined {
+  if (!tagName || tagName === 'topic') return undefined;
+  return tagName.charAt(0).toUpperCase() + tagName.slice(1);
+}
+
+// Read at most this many bytes before falling back to the whole file --
+// generous enough to clear an XML declaration, a handful of comments, and
+// a DOCTYPE with a modest internal entity subset (the overwhelming
+// majority of real DITA files), while still being a small, bounded read
+// rather than the whole file.
+const ROOT_TAG_SNIFF_BYTES = 8192;
+
+// Matches one leading "preamble" construct at the start of a string: an
+// XML declaration, a comment, a DOCTYPE (with or without a `[...]`
+// internal subset), another processing instruction, or plain whitespace.
+// sniffRootTagName below strips these one at a time until only the root
+// element itself is left at the front of the string.
+const PREAMBLE_CONSTRUCT_RE =
+  /^(?:<\?xml[^>]*\?>|<!--[\s\S]*?-->|<!DOCTYPE[^[>]*(?:\[[\s\S]*?\])?\s*>|<\?[^>]*\?>|\s+)/;
+
+/**
+ * Extracts the root element's tag name from a string already known to
+ * start (after any preamble) with that element -- the actual scan logic
+ * sniffRootTagName below is built around; split out so it can be re-run
+ * against progressively more of the file (the bounded chunk, then, only if
+ * that wasn't enough, the whole file) without duplicating the preamble-
+ * stripping loop.
+ */
+function extractRootTagName(content: string): string | undefined {
+  let rest = content;
+  // Realistically at most a handful of these constructs precede the root
+  // element in any real document; the iteration cap is defensive against
+  // a pathological input looping here, not a real limit on well-formed XML.
+  for (let i = 0; i < 20; i++) {
+    const m = PREAMBLE_CONSTRUCT_RE.exec(rest);
+    if (!m || m[0].length === 0) break;
+    rest = rest.slice(m[0].length);
+  }
+  const tagMatch = /^<([A-Za-z_][\w.-]*)/.exec(rest);
+  return tagMatch ? tagMatch[1] : undefined;
+}
+
+/**
+ * Reads just enough of a file to name its root element, without parsing it
+ * -- makeFileTopicTypeResolver's whole reason to exist rather than reusing
+ * makeFileTitleResolver's cache.loadFile(), which runs the file through
+ * the full DITA parser (parseDita) to build a complete DOM. For a sidebar
+ * chip that only needs one tag name, and that -- unlike the title fallback,
+ * which only fires for entries the map itself left unnamed -- is
+ * unconditional on every entry with an href, paying for a full parse of
+ * every referenced topic on every docsite render would reintroduce exactly
+ * the O(topics-in-book) cost docsite mode exists to avoid.
+ *
+ * Reads a bounded leading chunk first (ROOT_TAG_SNIFF_BYTES) and only
+ * falls back to the whole file if the root tag wasn't found in it and
+ * there was more file left to read -- a huge DOCTYPE internal subset is
+ * rare, but should still resolve correctly rather than silently return
+ * nothing.
+ */
+function sniffRootTagName(absPath: string): string | undefined {
+  let fd: number | undefined;
+  try {
+    fd = openSync(absPath, 'r');
+    const buf = Buffer.alloc(ROOT_TAG_SNIFF_BYTES);
+    const bytesRead = readSync(fd, buf, 0, ROOT_TAG_SNIFF_BYTES, 0);
+    const chunk = buf.toString('utf-8', 0, bytesRead);
+    const tag = extractRootTagName(chunk);
+    if (tag !== undefined || bytesRead < ROOT_TAG_SNIFF_BYTES) return tag;
+  } catch {
+    return undefined;
+  } finally {
+    if (fd !== undefined) {
+      try { closeSync(fd); } catch { /* already closed or never opened successfully */ }
+    }
+  }
+  // The bounded chunk didn't contain the root tag and the file is bigger
+  // than that chunk -- fall back to reading (not parsing) the whole thing.
+  try {
+    return extractRootTagName(readFileSync(absPath, 'utf-8'));
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Resolves a topic href to its root element's displayable type label
+ * ("Concept", "Task", "Reference", ...) for the docsite-mode sidebar's
+ * per-entry chip. Mirrors makeFileTitleResolver's guard rules exactly
+ * (local relative .dita/.xml hrefs only, fragment stripped since the
+ * sidebar links to files and a fragment points inside one) but resolves
+ * the root tag via sniffRootTagName instead of a full parse -- see that
+ * function's own comment for why that distinction matters here
+ * specifically. Has its own small per-resolver cache (path -> tag name)
+ * rather than sharing makeFileTitleResolver's file-cache: there is no DOM
+ * to share, and a de-duplicated entries list (buildBookNavManifest's own
+ * contract) means this cache mostly guards against a resolver being
+ * handed to buildBookNavManifest more than once, not a hot path.
+ */
+export function makeFileTopicTypeResolver(
+  docDir: string,
+  labeler: (tagName: string) => string | undefined = defaultTopicTypeLabel,
+): (href: string) => string | undefined {
+  const cache = new Map<string, string | undefined>();
+
+  return (href: string): string | undefined => {
+    if (!href || URL_SCHEME_RE.test(href) || isAbsolute(href)) return undefined;
+    const hashIdx = href.indexOf('#');
+    // Same file-level-only resolution makeFileTitleResolver uses for its
+    // no-fragment branch: a bare id is not a filename and must not be
+    // probed as one, and a fragment points inside the current topic file
+    // (whose type this resolver already reports for the file itself).
+    const filePath = hashIdx < 0 ? href : href.substring(0, hashIdx);
+    if (!filePath || !/\.(dita|xml)$/i.test(filePath)) return undefined;
+    const absPath = resolve(docDir, decodeHrefPart(filePath));
+    if (cache.has(absPath)) {
+      const tagName = cache.get(absPath);
+      return tagName === undefined ? undefined : labeler(tagName);
+    }
+    const tagName = sniffRootTagName(absPath);
+    cache.set(absPath, tagName);
+    return tagName === undefined ? undefined : labeler(tagName);
   };
 }
 
@@ -391,6 +598,45 @@ export function findTextMatches(
   return matches;
 }
 
+// Decides which search marks have to be touched to move the '__current' class
+// from one match to another. Shared between unit tests and the webview search
+// overlay (injected there via planCurrentMarkMove.toString(), so it must stay
+// fully self-contained — no references to other module-level bindings).
+//
+// The point of this existing at all: without it, moving the highlight one step
+// means walking every mark in the document and calling classList.add or
+// .remove on each, which in book mode is tens of thousands of style
+// invalidations per arrow key. With it, the caller touches two. That trade is
+// only sound for as long as exactly one mark carries the class and the caller
+// knows which — hence `previous`, and hence the cases below where the two
+// disagree.
+//
+// Returns indices into the caller's mark list; -1 means "nothing to do".
+//   clear — the mark to remove '__current' from
+//   set   — the mark to add it to
+export function planCurrentMarkMove(
+  previous: number,
+  next: number,
+  count: number,
+): { clear: number; set: number } {
+  // An index outside the list names no mark, and an empty list puts both of them
+  // outside it, so these two guards are the entire decision -- there is no
+  // separate no-marks case that has to be kept in step with them. That they are
+  // reachable rather than theoretical: the match list shrinks whenever the
+  // document changes under an open search bar, and the index tracked from the
+  // previous, longer list outlives it by one update. Clearing "mark 7" of a
+  // 3-mark list would be a silent no-op at best, so drop it and let the caller's
+  // own bounds check be the second line of defence.
+  const previousIsValid = previous >= 0 && previous < count;
+  const nextIsValid = next >= 0 && next < count;
+  // previous === next is the mark that already carries the class. Reporting it
+  // as something to clear first would take the highlight off and put it back
+  // on within one task — invisible normally, but a flash when the browser
+  // happens to paint in between, and pointless work either way.
+  const clear = previousIsValid && previous !== next ? previous : -1;
+  return { clear, set: nextIsValid ? next : -1 };
+}
+
 // ── Default note labels ──
 // Values follow DITA-OT's own strings-en-us.xml / strings-zh-cn.xml bundles
 // (org.dita.base/xsl/common) so the preview matches what a real DITA-OT
@@ -405,6 +651,15 @@ export function findTextMatches(
 // Covers the full DITA 1.3 note/@type enumeration (13 values); 'other' is
 // handled separately via @othertype in the topic/note renderer, since its
 // label isn't a fixed string.
+//
+// zh-cn deviations from a literal DITA-OT mirror (both fixes, not stylistic):
+//   - attention/caution previously collided with notice/warning (all four
+//     rendered '注意'/'警告'), making the two pairs visually indistinguishable
+//     in the preview. attention -> '留意', caution -> '小心' to disambiguate;
+//     '小心'/'警告'/'危险' also matches the conventional CN safety-signage
+//     triad for Caution/Warning/Danger.
+//   - trouble -> '故障排除' ("troubleshooting"), not '故障' ("fault"); the
+//     DITA semantic is remedy guidance, which '故障' alone doesn't convey.
 
 export const DEFAULT_NOTE_LABELS: Record<string, string> = {
   note: 'Note', notice: 'Notice', warning: 'Warning', danger: 'Danger',
@@ -416,13 +671,22 @@ export const DEFAULT_NOTE_LABELS: Record<string, string> = {
 export const ZH_NOTE_LABELS: Record<string, string> = {
   note: '注', notice: '注意', warning: '警告', danger: '危险',
   important: '重要', tip: '提示', restriction: '限制',
-  attention: '注意', caution: '警告', fastpath: '捷径',
-  remember: '切记', trouble: '故障',
+  attention: '留意', caution: '小心', fastpath: '捷径',
+  remember: '切记', trouble: '故障排除',
 };
 
 export function detectNoteLabels(root: DitaNode, uiLanguage?: string): Record<string, string> {
   const lang = root.attributes?.['xml:lang'] || uiLanguage || '';
   return lang.startsWith('zh') ? ZH_NOTE_LABELS : DEFAULT_NOTE_LABELS;
+}
+
+/** Same xml:lang-first, uiLanguage-fallback resolution as detectNoteLabels,
+ *  for the "Index" label shown in indexterm chip tooltips. Kept separate
+ *  rather than folded into noteLabels since it isn't a note type and has
+ *  its own (much smaller) two-language set. */
+export function detectIndexLabel(root: DitaNode, uiLanguage?: string): string {
+  const lang = root.attributes?.['xml:lang'] || uiLanguage || '';
+  return lang.startsWith('zh') ? '\u7d22\u5f15' : 'Index';
 }
 
 // ── Escaping (single source of truth for non-renderer code) ──
@@ -488,9 +752,59 @@ export interface TopicRenderInput {
    * display language.
    */
   uiLanguage?: string;
+  /** See RenderContext.suppressIndexterm (render/renderer.ts) -- passed
+   *  through untouched; only the "Export as HTML" command sets this. */
+  suppressIndexterm?: boolean;
+  /**
+   * Optional sink: absolute paths of every file this render read -- the
+   * topic itself, each conref/conrefend target, each file consulted for an
+   * xref title, and each image whose dimensions were emitted. Callers that
+   * cache rendered output use it as their invalidation set; renderTopicCached
+   * is the only caller that does. Left unset by "Export as HTML", which
+   * renders once and has nothing to invalidate.
+   */
+  collectDependencies?: Set<string>;
+  /** See TopicXmlRenderInput.bookMembers below; passed through untouched. */
+  bookMembers?: ReadonlySet<string>;
 }
 
 export interface TopicRenderResult {
+  html: string;
+  title?: string;
+  error?: string;
+}
+
+export interface TopicXmlRenderInput {
+  xml: string;
+  docDir: string;
+  keyMap: Map<string, string>;
+  asWebviewUri: (relPath: string) => string;
+  headingLevel: number;
+  uiLanguage?: string;
+  /** See TopicRenderInput.suppressIndexterm above. */
+  suppressIndexterm?: boolean;
+  /** See TopicRenderInput.collectDependencies above. */
+  collectDependencies?: Set<string>;
+  /**
+   * Absolute paths of every topic that is part of the current book/docsite
+   * render -- passed straight to RenderContext.isInCurrentBook (see that
+   * field's own doc comment for why a cross-file xref's clickability
+   * depends on this). Undefined for standalone single-topic preview and
+   * "Export as HTML", which is exactly when a cross-file xref should keep
+   * rendering as the non-clickable xref-external hint it always has.
+   *
+   * A ReadonlySet, not a plain array: renderBookParts/MapViewerProvider
+   * build this once per book and hand the SAME instance to every topic's
+   * render call, which renderTopicCached leans on for its own cache key
+   * (compared by identity, exactly like keyMap) -- membership lookups
+   * would work the same with an array, but identity comparison is the
+   * whole point here.
+   */
+  bookMembers?: ReadonlySet<string>;
+}
+
+export interface ParsedTopicResult {
+  doc?: import('../parser/domTypes').DitaDocument;
   html: string;
   title?: string;
   error?: string;
@@ -527,17 +841,6 @@ function isLocalHref(href: string, scope?: string): boolean {
   return true;
 }
 
-/** True when the node is a topicref/keydef/mapref pointing at another local .ditamap. */
-export function isDitamapRef(node: DitaNode): boolean {
-  if (node.type !== 'element') return false;
-  const baseType = node.baseType;
-  if (baseType !== 'map/topicref' && baseType !== 'map/keydef' && baseType !== 'map/mapref') return false;
-  const href = node.attributes?.href;
-  if (!href || !isLocalHref(href, node.attributes?.scope)) return false;
-  const pathPart = href.split('#')[0].toLowerCase();
-  return pathPart.endsWith('.ditamap') || node.attributes?.format === 'ditamap';
-}
-
 // Hrefs inside a referenced map are relative to that map's own folder.
 // When its children are inlined into the root map's tree, rewrite them so
 // they stay valid relative to the root map's folder — otherwise nested
@@ -551,7 +854,7 @@ function rebaseHrefs(node: DitaNode, fromDir: string, toDir: string): void {
     const fragment = hashIdx >= 0 ? href.substring(hashIdx) : '';
     if (pathPart) {
       const abs = resolve(fromDir, pathPart);
-      node.attributes.href = relative(toDir, abs).replace(/\\/g, '/') + fragment;
+      node.attributes.href = normalize(relative(toDir, abs)).replace(/\\/g, '/') + fragment;
     }
   }
   for (const child of node.children || []) rebaseHrefs(child, fromDir, toDir);
@@ -598,57 +901,1319 @@ export function expandDitamapRefs(
   }
 }
 
-export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
-  const { filePath, keyMap, asWebviewUri, headingLevel, uiLanguage } = input;
+export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
+  const { xml, docDir, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, collectDependencies, bookMembers } = input;
   try {
-    if (!existsSync(filePath)) {
-      return { html: '', error: `File not found: ${filePath}` };
-    }
-    const rawXml = readFileSync(filePath, 'utf-8');
-    const preprocessedXml = preprocessEntities(rawXml);
+    const preprocessedXml = preprocessEntities(xml);
     const ditaDoc = parseDita(preprocessedXml);
     const titleMap = buildTitleMap(ditaDoc.root);
     const noteLabels = detectNoteLabels(ditaDoc.root, uiLanguage);
-    const docDir = dirname(filePath);
+    const indexLabel = detectIndexLabel(ditaDoc.root, uiLanguage);
 
-    const conrefResolver = makeConrefResolver(docDir);
-    const conrefRangeResolver = makeConrefRangeResolver(docDir);
-    const fileTitleResolver = makeFileTitleResolver(docDir);
+    // One cache shared by all three resolvers. They routinely load the same
+    // conref/title target, and three independent caches each parsed it again;
+    // sharing also gives a single place to read back the complete set of
+    // files this render touched, which is what lets renderTopicCached key its
+    // reuse on something both narrower and more correct than "some file in
+    // the workspace changed".
+    const fileCache = makeFileCache(docDir);
+    const conrefResolver = makeConrefResolver(docDir, ditaDoc.root, fileCache);
+    const conrefRangeResolver = makeConrefRangeResolver(docDir, ditaDoc.root, fileCache);
+    const fileTitleResolver = makeFileTitleResolver(docDir, fileCache);
 
     const resolveTitle = (id: string): string | undefined => {
       const local = titleMap.get(id);
       if (local) return local;
-      // Cross-file: id may be "file.dita#topicId" or just "file.dita"
       return fileTitleResolver(id);
     };
+
+    // Same local-reference guard makeFileTitleResolver applies before ever
+    // touching the filesystem: never probe for a URL-scheme or absolute
+    // href, and a fragment-only href has no file part to resolve.
+    const isInCurrentBook = bookMembers
+      ? (href: string): string | undefined => {
+          if (!href || URL_SCHEME_RE.test(href) || isAbsolute(href)) return undefined;
+          const pathPart = href.split('#')[0];
+          if (!pathPart) return undefined;
+          const absPath = resolve(docDir, decodeHrefPart(pathPart));
+          return bookMembers.has(absPath) ? absPath : undefined;
+        }
+      : undefined;
 
     const html = renderDocument(ditaDoc.root, {
       headingLevel,
       asWebviewUri,
       documentDir: docDir,
       resolveTitle,
+      isInCurrentBook,
       resolveKey: (key: string) => keyMap.get(key),
       resolveConref: (conref: string) => conrefResolver(conref),
       resolveConrefRange: (conref: string, conrefend: string) => conrefRangeResolver(conref, conrefend),
       noteLabels,
+      indexLabel,
+      suppressIndexterm,
       getImageDimensions: (relPath: string) => {
         try {
-          return readImageDimensions(resolve(docDir, decodeHrefPart(relPath)));
+          const absPath = resolve(docDir, decodeHrefPart(relPath));
+          // An image's bytes are not parsed into the output, but its
+          // dimensions are (the width/height attributes), so the file is a
+          // genuine dependency of the rendered HTML and has to be recorded
+          // alongside the conref/title targets. readImageDimensions caches
+          // dimensions on its own, so without this a replaced image would
+          // slip through an otherwise-valid topic cache entry.
+          collectDependencies?.add(absPath);
+          return readImageDimensions(absPath);
         } catch {
           return undefined;
         }
       },
     });
 
+    if (collectDependencies) {
+      for (const touched of fileCache.touchedFiles()) collectDependencies.add(touched);
+    }
+
     const titleNode = (ditaDoc.root.children || []).find(
       (c) => c.type === 'element' && c.baseType === 'topic/title',
     );
     const title = titleNode ? collectText(titleNode) : undefined;
-   return { html, title };
+    return { doc: ditaDoc, html, title };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { html: '', error: `Error rendering topic: ${message}` };
+  }
+}
+
+export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
+  const { filePath, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, collectDependencies, bookMembers } = input;
+  try {
+    if (!existsSync(filePath)) {
+      return { html: '', error: `File not found: ${filePath}` };
+    }
+    // The topic's own file is a dependency of its own render even though it
+    // is read here rather than through the shared file cache.
+    collectDependencies?.add(filePath);
+    const rawXml = readFileSync(filePath, 'utf-8');
+    const result = renderTopicXml({
+      xml: rawXml,
+      docDir: dirname(filePath),
+      keyMap,
+      asWebviewUri,
+      headingLevel,
+      uiLanguage,
+      suppressIndexterm,
+      collectDependencies,
+      bookMembers,
+    });
+    return { html: result.html, title: result.title, error: result.error };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { html: '', error: `Error rendering ${filePath}: ${message}` };
   }
+}
+
+// ── Topic render cache (book mode) ──
+
+/**
+ * Fingerprint of a set of files' mtimes, used to decide whether a cached
+ * result derived from them is still valid. A file that cannot be statted
+ * contributes "?" rather than being dropped, so deleting a dependency
+ * invalidates exactly as a modification does -- and creating a file that was
+ * previously missing turns "?" into a real timestamp, which is the other half
+ * of the same requirement.
+ *
+ * Shared by buildKeyMap's cache (DitaViewerProvider.ts) and renderTopicCached
+ * below. It lived privately in the former until the topic cache needed the
+ * identical logic; keeping one copy is the point.
+ */
+export function stampFiles(files: string[]): string {
+  return files
+    .map((f) => {
+      try {
+        return String(statSync(f).mtimeMs);
+      } catch {
+        return '?';
+      }
+    })
+    .join('|');
+}
+
+/**
+ * Pure directory-walking core of findDitamapFiles (keyMap.ts). Lives here
+ * rather than there for the same reason stampFiles above does: keyMap.ts
+ * imports vscode at module scope for parseDocRoot/vscode.Uri, so nothing
+ * defined there can be unit tested without a vscode.Uri/workspace, even
+ * logic like this that never touches vscode itself.
+ *
+ * Walks upward from startDir to root (inclusive); at *each* level it scans
+ * that directory's whole subtree, not just its direct children, for
+ * .ditamap files -- layouts that keep maps/ and topics/ as siblings (see
+ * test-dita-file/manual) put the nearest map one directory below the
+ * ancestor level being scanned, so a direct-children-only scan at each
+ * ancestor silently misses it and buildKeyMap falls back to whichever
+ * unrelated .ditamap happens to sit directly in a further-up ancestor, if
+ * any, instead of the real one (kill test: keyMap.test.ts).
+ */
+export function collectDitamapFilesUpward(startDir: string, root: string, stopAtFirstMatch: boolean): string[] {
+  const results: string[] = [];
+  // A directory two ancestor levels up recursively covers everything a
+  // closer level already scanned, so without this a .ditamap nested a
+  // couple of directories down would be reported once per ancestor level
+  // that subsumes it, not once.
+  const visited = new Set<string>();
+  let dir = startDir;
+  while (dir.length >= root.length) {
+    collectDitamapFilesRecursive(dir, results, visited);
+    if (stopAtFirstMatch && results.length > 0) return results;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return results;
+}
+
+function collectDitamapFilesRecursive(dir: string, results: string[], visited: Set<string>): void {
+  if (visited.has(dir)) return;
+  visited.add(dir);
+  let entries: import('fs').Dirent[];
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch (e) {
+    console.warn(`Failed to read directory ${dir}:`, e instanceof Error ? e.message : e);
+    return;
+  }
+  for (const entry of entries) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      collectDitamapFilesRecursive(full, results, visited);
+    } else if (entry.name.toLowerCase().endsWith('.ditamap')) {
+      results.push(full);
+    }
+  }
+}
+
+/**
+ * Budget for the topic render cache below, in bytes of rendered HTML.
+ *
+ * Bounded and clearable like every other cache in this file, per the rule
+ * stated at imageDimensionsCache -- but bounded by bytes rather than by entry
+ * count, because count is not a meaningful unit here. The other caches hold
+ * fixed-size entries (a dimension pair, a keymap), so capping their count caps
+ * their memory; a topic's HTML varies by orders of magnitude between a stub
+ * and a full reference topic, so any count cap is either far too generous in
+ * bytes or, set low enough to be safe, far too tight in entries.
+ *
+ * Too tight in entries is the failure that matters, and it is not gradual: a
+ * book with more topics than the cap gets NO reuse at all. Each pass renders
+ * in map order, so once the cache is full every insertion evicts an entry the
+ * same pass has not reached again yet -- a cyclic access pattern, LRU's
+ * classic worst case. Budgeting by bytes puts the cliff where it belongs: a
+ * book whose entire HTML exceeds the budget is already costing at least that
+ * much to hold as one assembled string (plus the webview DOM built from it),
+ * so that is the point at which caching more stops being worth it.
+ *
+ * 32MB holds roughly 4,500 typical topics -- any realistic book, with room
+ * for several open at once. Cleared from clearAllCaches() on deactivation.
+ */
+export const TOPIC_RENDER_CACHE_MAX_BYTES = 32 * 1024 * 1024;
+
+interface TopicRenderCacheEntry {
+  html: string;
+  title: string | undefined;
+  /** Absolute paths the render read; see TopicRenderInput.collectDependencies. */
+  files: string[];
+  stamps: string;
+  /**
+   * Compared by identity, not by content: buildKeyMap hands back the same Map
+   * instance for as long as its own cache entry is valid, so identity is a
+   * cheap proxy for "the key values this HTML was rendered with". If that
+   * cache is evicted and rebuilt with identical contents the check fails and
+   * the topic re-renders -- a false invalidation, never a stale hit, which is
+   * the safe direction to be wrong in.
+   */
+  keyMap: Map<string, string>;
+  uiLanguage: string | undefined;
+  suppressIndexterm: boolean | undefined;
+  /** Compared by identity, same rationale as keyMap above -- the same
+   *  topic renders different HTML (a cross-file xref is a real link or
+   *  not) depending on which book's membership set it was rendered
+   *  against, so a stale entry from a different book must never answer
+   *  for this one. renderBookParts/MapViewerProvider hand the same Set
+   *  instance to every topic in one book's render pass, so this stays a
+   *  cheap identity check rather than a per-render content comparison. */
+  bookMembers: ReadonlySet<string> | undefined;
+  /** Retained size of html, stored so eviction can subtract it without
+   *  re-measuring every entry. */
+  bytes: number;
+}
+
+const topicRenderCache = new Map<string, TopicRenderCacheEntry>();
+let topicRenderCacheBytes = 0;
+let topicRenderCacheBudget = TOPIC_RENDER_CACHE_MAX_BYTES;
+
+/**
+ * Keeps the same bookMembers Set instance alive across render passes of the
+ * same open map when its actual membership hasn't changed -- which is the
+ * overwhelmingly common case (editing a topic's own content, the debounced
+ * trigger for nearly every book-mode re-render, changes nothing about which
+ * topics the book references). renderTopicCached's own cache keys the
+ * bookMembers field by identity, same rationale as keyMap (see
+ * TopicRenderCacheEntry.bookMembers) -- without this, renderBookParts
+ * handing a freshly `new Set()`-built membership to every single pass would
+ * silently defeat topic-render reuse across every re-render, not just ones
+ * that actually changed the map's topicref list.
+ *
+ * Keyed by docDir (one open map, one docDir -- matches buildKeyMap's own
+ * cache granularity in keyMap.ts) and fingerprinted by the resolved
+ * absolute-path list itself (cheap: pure path resolution already computed
+ * to build the set, no extra disk I/O), not by entries' own object
+ * identity -- entries is rebuilt fresh from freshly re-parsed map XML on
+ * every render pass regardless of whether anything in it actually changed.
+ */
+interface BookMembersCacheEntry {
+  fingerprint: string;
+  members: Set<string>;
+}
+const bookMembersCache = new Map<string, BookMembersCacheEntry>();
+const BOOK_MEMBERS_CACHE_MAX = 50;
+
+/** Part of clearAllCaches() in DitaViewerProvider.ts, same as clearKeyMapCache. */
+export function clearBookMembersCache(): void {
+  bookMembersCache.clear();
+}
+
+function getStableBookMembers(entries: MapEntry[], docDir: string): ReadonlySet<string> {
+  const paths: string[] = [];
+  for (const entry of entries) {
+    if (entry.resourceOnly) continue; // never rendered as its own page -- not a book member for xref-target purposes either
+    const absPath = resolveBookTopicPath(entry, docDir);
+    if (absPath) paths.push(absPath);
+  }
+  // \u0000 can't appear in a filesystem path, so this join is collision-free
+  // the same way TopicRenderCacheEntry's own cache key delimiter is.
+  const fingerprint = paths.join('\u0000');
+  const cached = bookMembersCache.get(docDir);
+  if (cached && cached.fingerprint === fingerprint) return cached.members;
+
+  if (bookMembersCache.size >= BOOK_MEMBERS_CACHE_MAX && !bookMembersCache.has(docDir)) {
+    const oldest = bookMembersCache.keys().next().value;
+    if (oldest !== undefined) bookMembersCache.delete(oldest);
+  }
+  const members = new Set(paths);
+  bookMembersCache.set(docDir, { fingerprint, members });
+  return members;
+}
+
+export function clearTopicRenderCache(): void {
+  topicRenderCache.clear();
+  topicRenderCacheBytes = 0;
+}
+
+/** How many topic renders are currently held -- test hook for eviction/clear. */
+export function topicRenderCacheSize(): number {
+  return topicRenderCache.size;
+}
+
+/** Bytes of HTML currently held -- test hook, paired with the size above. */
+export function topicRenderCacheBytesHeld(): number {
+  return topicRenderCacheBytes;
+}
+
+/**
+ * Test hook: shrinks the budget so eviction can be exercised without first
+ * rendering 32MB of real topics. Called with no argument it restores the
+ * production budget. Nothing outside the test suite calls this.
+ */
+export function setTopicRenderCacheBudgetForTesting(bytes?: number): void {
+  topicRenderCacheBudget = bytes ?? TOPIC_RENDER_CACHE_MAX_BYTES;
+}
+
+function dropTopicEntry(key: string): void {
+  const entry = topicRenderCache.get(key);
+  if (!entry) return;
+  topicRenderCache.delete(key);
+  topicRenderCacheBytes -= entry.bytes;
+}
+
+function dropOldestTopicEntry(): void {
+  const oldest = topicRenderCache.keys().next().value;
+  if (oldest !== undefined) dropTopicEntry(oldest);
+}
+
+/**
+ * renderTopicToHtml with reuse across passes -- the difference between "one
+ * keystroke in one topic" and "the whole book again" in book mode, which
+ * otherwise re-renders every referenced topic on each debounced pass (see
+ * scripts/bench-book-render.js for the measured cost, and the budget note
+ * above for why reuse is bounded in bytes).
+ *
+ * Deliberately opt-in and separate rather than built into renderTopicToHtml:
+ * "Export as HTML" calls that one with its own asWebviewUri, and sharing a
+ * single cache between the two would hand book-mode HTML to an exported
+ * standalone file.
+ *
+ * Two assumptions worth stating, since neither is enforced by the key.
+ *
+ * asWebviewUri output depends only on the local URI and the window's remote
+ * info, never on which webview asked: VS Code builds it as
+ * `https://<scheme>+<authority>.vscode-resource.vscode-cdn.net<path>` in a
+ * module-level helper with no panel in scope, and cspSource is likewise the
+ * constant `'self' https://*.vscode-cdn.net` (both checked against the
+ * shipped extension host bundle, not assumed). So HTML built for one map
+ * panel is valid in another, and the caller's asWebviewUri closure is not
+ * part of the cache key.
+ *
+ * headingLevel is part of the key rather than a merely validated field
+ * because the same topic legitimately sits at different depths across two
+ * open books -- validating it instead would make those two entries evict each
+ * other on every pass.
+ */
+export function renderTopicCached(input: TopicRenderInput): TopicRenderResult {
+  const key = `${input.filePath}\u0000${input.headingLevel}`;
+
+  const cached = topicRenderCache.get(key);
+  if (
+    cached &&
+    cached.keyMap === input.keyMap &&
+    cached.uiLanguage === input.uiLanguage &&
+    cached.suppressIndexterm === input.suppressIndexterm &&
+    cached.bookMembers === input.bookMembers &&
+    stampFiles(cached.files) === cached.stamps
+  ) {
+    // Re-insert so a hit keeps the entry from being the oldest (and therefore
+    // first-evicted) candidate -- same LRU-by-reinsertion as
+    // imageDimensionsCache above.
+    topicRenderCache.delete(key);
+    topicRenderCache.set(key, cached);
+    return { html: cached.html, title: cached.title };
+  }
+
+  // Honour a caller-supplied sink as well, so anyone who passed one still
+  // sees the dependency set instead of having it silently replaced.
+  const dependencies = input.collectDependencies ?? new Set<string>();
+  const result = renderTopicToHtml({ ...input, collectDependencies: dependencies });
+  if (result.error) {
+    // Never cache a failure. A malformed mid-edit save is exactly the
+    // transient case this path sees, and pinning it would keep serving the
+    // error page after the file was fixed -- the dependency stamps would
+    // still match, because the file that failed to parse is the very file
+    // whose mtime gets compared.
+    dropTopicEntry(key);
+    return result;
+  }
+
+  const files = [...dependencies];
+  // UTF-8 bytes, not html.length: DITA content is frequently CJK, where the
+  // character count understates what is actually retained by up to 3x.
+  const bytes = Buffer.byteLength(result.html, 'utf8');
+  if (bytes > topicRenderCacheBudget) {
+    // A single topic larger than the entire budget. Caching it would evict
+    // everything else and then be evicted itself on the next insert, so skip
+    // it: that entry alone falls back to uncached rendering.
+    dropTopicEntry(key);
+    return result;
+  }
+
+  // Make room before inserting, and account for any stale entry this key
+  // already holds -- overwriting it in place would otherwise leak its bytes
+  // out of the running total and shrink the effective budget permanently.
+  dropTopicEntry(key);
+  while (topicRenderCache.size > 0 && topicRenderCacheBytes + bytes > topicRenderCacheBudget) {
+    dropOldestTopicEntry();
+  }
+  topicRenderCache.set(key, {
+    html: result.html,
+    title: result.title,
+    files,
+    stamps: stampFiles(files),
+    keyMap: input.keyMap,
+    uiLanguage: input.uiLanguage,
+    suppressIndexterm: input.suppressIndexterm,
+    bookMembers: input.bookMembers,
+    bytes,
+  });
+  topicRenderCacheBytes += bytes;
+  return result;
+}
+
+// ── Book mode assembly ──
+
+/**
+ * Resolves one map entry's href to the absolute path renderBookParts (and
+ * the docsite-mode nav manifest below, which must agree with it exactly --
+ * a sidebar listing a topic this book doesn't actually render, or vice
+ * versa, is worse than either one being wrong consistently) would treat as
+ * "this topic". Returns undefined for anything that isn't a renderable
+ * .dita topic: no href, a fragment-only self-reference, or a .ditamap --
+ * by the time entries reach here they should already be flattened by
+ * expandDitamapRefs, so a .ditamap entry surviving to this point means the
+ * caller skipped that step, not that this is a legitimate case to render.
+ */
+export function resolveBookTopicPath(entry: MapEntry, docDir: string): string | undefined {
+  if (!entry.href) return undefined;
+  const refPath = entry.href.split('#')[0];
+  if (!refPath || refPath.toLowerCase().endsWith('.ditamap')) return undefined;
+  // External resources (keydefs/topicrefs pointing at https:, mailto:, ...)
+  // are links, not book members. Without this guard resolve() would splice
+  // the URL onto docDir -- on Windows a topicref/keydef href of
+  // "https://support.example.com" used to surface as the nonsense path
+  // <docDir>\https:\support.example.com and blow up docsite/book mode with
+  // "File not found". Same guard isInCurrentBook and the title/type
+  // resolvers apply before touching the filesystem. (Drive-rooted hrefs
+  // like "/topics/x.dita" stay resolvable on purpose -- resolve() already
+  // handles them against docDir's own drive.)
+  if (URL_SCHEME_RE.test(refPath)) return undefined;
+  return resolve(docDir, decodeHrefPart(refPath));
+}
+
+export interface DocsiteNavEntry {
+  /** Resolved absolute path -- the same identity renderBookParts's own
+   *  `visited` set and de-duplication use, and what a future "is this xref
+   *  target part of the current book" check (docsite design doc, 3.2/4.5)
+   *  will key off of. Undefined exactly when isGroup is true (see below) --
+   *  a group entry has no topic file of its own to resolve one from. */
+  absPath?: string;
+  title: string;
+  /** Nesting level, 0 at the map's own top level -- for sidebar indentation. */
+  depth: number;
+  /** BookMap structural role ("Chapter 1", "Appendix A", ...), when the
+   *  entry has one -- see collectMapEntries/createBookRoleLabeler. */
+  role?: string;
+  /** Displayable type label for the referenced topic's own root element
+   *  ("Concept", "Task", "Reference", ...), when a resolveTopicType was
+   *  passed to buildBookNavManifest and the topic file's root tag is one
+   *  the labeler recognized. The generic `<topic>` root yields undefined
+   *  (see makeFileTopicTypeResolver's default labeler) so a plain map
+   *  full of `<topic>` files doesn't get a row of identical "Topic"
+   *  chips with no information -- only specializations get a chip. */
+  topicType?: string;
+  /** True for an entry with no topic of its own to navigate to -- a
+   *  <topichead> (pure heading, no href by definition) or an href-less
+   *  topicref used purely as a grouping container -- kept in the
+   *  manifest anyway (rather than dropped, which is what happened before
+   *  this field existed) purely so its real, navigable descendants have
+   *  a labeled branch to nest under in the sidebar tree. See
+   *  buildBookNavManifest's own comment for why an href-less entry with
+   *  no descendants (a bare key-only topicref/keydef used only for
+   *  keyref text substitution) is dropped rather than becoming an empty
+   *  isGroup entry. Matches how tree mode already renders a topichead as
+   *  a non-clickable heading with the same nested-children shape
+   *  (map/topichead in mapTypeMap.ts) and how book mode already renders
+   *  one as a plain section heading (renderBookParts's own `struct:`
+   *  placeholder branch). renderSiteNavHtml skips the link markup
+   *  entirely for a group entry -- title text only, no data-site-target,
+   *  no click-to-navigate -- and every consumer that otherwise assumes
+   *  every manifest entry has a real topic file behind it (search
+   *  indexing, the initial/fallback page, book-membership checks) must
+   *  filter these out first; see MapViewerProvider.ts's own
+   *  siteNavigableEntries. */
+  isGroup?: boolean;
+}
+
+/**
+ * Builds the docsite-mode sidebar/prev-next data source from the same
+ * flattened entries list renderBookParts renders from -- pass it the exact
+ * same `entries` (and `docDir`) used for the content render, not a
+ * separately-collected one, so the nav can never list a topic the book
+ * doesn't actually contain or omit one it does. Order matches document
+ * order (collectMapEntries' own order), which is what a reading-order
+ * prev/next needs.
+ *
+ * resolveTopicTitle, when given, is called for every entry that has an
+ * href -- regardless of MapEntry.displayNameExplicit -- and its result, if
+ * any, wins over entry.displayName. This deliberately overrides an
+ * explicit map-authored navtitle/linktext/keyword too: the sidebar is
+ * showing the reader a list of topics, and a book's own rendered content
+ * (tree mode's tooltip aside) always shows a topic's real <title>
+ * regardless of what the map called it, so the sidebar should match that
+ * rather than surface the map's own label for it, which can drift from the
+ * topic's actual title over time. entry.displayName is still the fallback
+ * when resolveTopicTitle finds nothing (topic has no <title>, or the file
+ * failed to read) -- an explicit navtitle beats no title at all. Passed
+ * entry.href (the original relative href, not the resolved absPath) so a
+ * caller can hand this makeFileTitleResolver(docDir) directly.
+ *
+ * resolveTopicType, when given, is called for every entry with a real
+ * href (regardless of role -- a chapter can still be a <task>, and
+ * showing both chips lets the sidebar answer "structural role" and
+ * "information type" independently) and produces the sidebar's per-entry
+ * type chip. Pass makeFileTopicTypeResolver(docDir); unlike
+ * resolveTopicTitle this isn't conditioned on the map having left the
+ * entry unnamed, since a topic's type isn't something the map ever states
+ * on its own -- but the resolver itself stays cheap by design (a bounded
+ * sniff of the root tag, not a full parse; see sniffRootTagName's own
+ * comment), specifically so this being unconditional doesn't reintroduce
+ * an O(topics-in-book) cost on every docsite render.
+ *
+ * entry.resourceOnly is checked before anything else, group entries
+ * included -- a resource-only <topichead> (unusual, but not invalid) is
+ * skipped outright rather than surfaced as an empty group, same as a
+ * resource-only real topic is skipped rather than surfaced as a page.
+ *
+ * The returned entries' depth values are COMPACTED, not copied straight
+ * from MapEntry.depth: skipping an entry (resource-only, a duplicate
+ * topic, a dropped childless hrefless entry) also promotes everything
+ * that survives underneath it by however many ancestors were skipped, so
+ * the output tree never has a surviving entry stranded one level deeper
+ * than a parent that no longer exists in it.
+ */
+export function buildBookNavManifest(
+  entries: MapEntry[],
+  docDir: string,
+  resolveTopicTitle?: (href: string) => string | undefined,
+  resolveTopicType?: (href: string) => string | undefined,
+): DocsiteNavEntry[] {
+  const seen = new Set<string>();
+  const result: DocsiteNavEntry[] = [];
+  // Depth compaction: entries carry their ORIGINAL depth from the full,
+  // unfiltered map structure (collectMapEntries) -- but a skipped entry
+  // (resource-only, a duplicate reference, or a childless hrefless entry
+  // dropped outright below) must not leave a "hole" that pushes its own
+  // surviving descendants one level deeper in the sidebar tree than they
+  // should sit. survivingAncestors holds the ORIGINAL depth of every
+  // still-open ancestor that DID make it into the manifest, in nesting
+  // order; its length at any point is exactly the entry now being
+  // considered own compacted depth (no surviving ancestor open above it
+  // -> depth 0; one -> depth 1; and so on). A skipped entry is simply
+  // never pushed onto it, so whatever survives right after it re-parents
+  // to the next real ancestor still on the stack -- e.g. a topichead
+  // marked resource-only that would otherwise have grouped three real
+  // topics underneath it: those three now surface as depth-0 siblings
+  // instead of stranded, unreachable depth-1 orphans with no depth-0
+  // parent left in the output tree for buildSiteNavTree
+  // (renderSiteNavHtml) to nest them under.
+  const survivingAncestors: number[] = [];
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    while (survivingAncestors.length > 0 && survivingAncestors[survivingAncestors.length - 1] >= entry.depth) {
+      survivingAncestors.pop();
+    }
+    const depth = survivingAncestors.length;
+
+    if (entry.resourceOnly) continue; // exists purely to be pulled in via keyref/conref elsewhere, never its own page
+    if (!entry.href) {
+      // No topic file of its own -- either a <topichead> (which by
+      // definition never has one) or a bare key-only topicref/keydef
+      // (used purely for keyref text substitution, e.g.
+      // <topicref keys="product_version"><topicmeta><linktext>1.0
+      // </linktext></topicmeta></topicref>, with no navigable content of
+      // its own either). Those two cases look identical on a MapEntry (no
+      // baseType/tagName carried through), so they're told apart the only
+      // way that's actually meaningful for the sidebar: does this entry
+      // have anything nested under it. A topichead grouping real
+      // topicrefs has entries[i+1..] at a deeper ORIGINAL depth right
+      // after it (compaction doesn't change whether one entry nests
+      // under another in the source map, only what depth number a
+      // surviving entry is labeled with) and becomes a group header
+      // (DocsiteNavEntry.isGroup); a leaf key-only topicref has nothing
+      // deeper following it and is dropped, exactly as it always was
+      // before isGroup existed -- showing an unclickable, childless
+      // "V1.0.0" row in the reading sidebar for what is really just a
+      // keyref variable would be pure noise, not navigation.
+      const hasChildren = i + 1 < entries.length && entries[i + 1].depth > entry.depth;
+      if (hasChildren) {
+        result.push({ title: entry.displayName, depth, role: entry.role, isGroup: true });
+        survivingAncestors.push(entry.depth);
+      }
+      continue;
+    }
+    const absPath = resolveBookTopicPath(entry, docDir);
+    if (!absPath || seen.has(absPath)) continue; // same one-entry-per-topic rule renderBookParts's own `visited` set enforces
+    seen.add(absPath);
+    let title = entry.displayName;
+    if (resolveTopicTitle) {
+      const realTitle = resolveTopicTitle(entry.href);
+      if (realTitle) title = realTitle;
+    }
+    const topicType = resolveTopicType ? resolveTopicType(entry.href) : undefined;
+    result.push({ absPath, title, depth, role: entry.role, topicType });
+    survivingAncestors.push(entry.depth);
+  }
+  return result;
+}
+
+/**
+ * The subset of a docsite manifest that actually has a topic file behind
+ * it -- every entry except a group header (DocsiteNavEntry.isGroup; see
+ * its own comment). buildBookNavManifest's result is the sidebar's own
+ * data source and needs the group headers to build its nested tree, but
+ * anything treating the manifest as "the list of pages/files in this
+ * book" (full-text search indexing, the book-membership set xref
+ * resolution checks against, picking a fallback/first page to land on)
+ * would misbehave on an absPath-less entry -- this is the one place that
+ * filter lives, rather than every one of those call sites repeating
+ * `.filter((m) => m.absPath !== undefined)` (and the type narrowing that
+ * goes with it) on its own.
+ */
+export function siteNavigableEntries(manifest: DocsiteNavEntry[]): (DocsiteNavEntry & { absPath: string })[] {
+  return manifest.filter((entry): entry is DocsiteNavEntry & { absPath: string } => entry.absPath !== undefined);
+}
+
+/** One manifest entry plus the direct children nested under it, built by
+ *  buildSiteNavTree below. The manifest itself never carries parent/child
+ *  links (see DocsiteNavEntry's own comment -- it's a flat, already-in-
+ *  reading-order list keyed only by depth), so this is the one place that
+ *  shape gets turned into an actual tree, purely for renderSiteNavHtml's
+ *  own nested-<ul> output. */
+interface SiteNavTreeNode {
+  entry: DocsiteNavEntry;
+  children: SiteNavTreeNode[];
+}
+
+/**
+ * Groups a flat, depth-annotated manifest into a tree via a simple
+ * ancestor stack: each entry becomes a child of the most recent
+ * still-open entry with a strictly shallower depth (popping anything at
+ * the same depth or deeper off the stack first, since those branches are
+ * now closed). Works for irregular depth jumps the same way a strictly-
+ * incrementing manifest would -- it only ever compares each entry's depth
+ * to the stack, never assumes a fixed step of 1.
+ */
+function buildSiteNavTree(manifest: readonly DocsiteNavEntry[]): SiteNavTreeNode[] {
+  const roots: SiteNavTreeNode[] = [];
+  const stack: SiteNavTreeNode[] = [];
+  for (const entry of manifest) {
+    const node: SiteNavTreeNode = { entry, children: [] };
+    while (stack.length > 0 && stack[stack.length - 1].entry.depth >= entry.depth) stack.pop();
+    const parent = stack[stack.length - 1];
+    if (parent) parent.children.push(node);
+    else roots.push(node);
+    stack.push(node);
+  }
+  return roots;
+}
+
+/** Width, in px, reserved in front of every entry's title for the
+ *  expand/collapse toggle -- reserved at every depth (not just where a
+ *  toggle actually renders) so a leaf's title still lines up under its
+ *  parent's title rather than jumping left by one toggle's width. */
+const SITE_NAV_TOGGLE_SLOT = 16;
+
+/**
+ * Docsite mode's sidebar -- one link per topic, nested and indented by
+ * depth to match the map's own structure, the current page marked active.
+ * Parent entries (anything with at least one entry nested under it) get an
+ * expand/collapse toggle to their left, Oxygen-style; leaves don't, but
+ * still reserve that same width (SITE_NAV_TOGGLE_SLOT) so titles at a
+ * given depth line up whether or not that particular row has a toggle.
+ * Collapsing/expanding is pure client-side state (getSiteNavToggleScript)
+ * -- which topics exist and how they nest never changes just because a
+ * branch is tucked away, so this function never needs to know about
+ * collapsed state at all, and this HTML is still rendered exactly once and
+ * left alone afterward: switching pages toggles the `active` class
+ * client-side (see the webview script's .site-nav-link click handler)
+ * rather than re-rendering this nav on every page change.
+ *
+ * currentAbsPath must be one of manifest's own absPath values (generateHtml
+ * resolves an unknown/stale one back to the first entry before calling
+ * this) -- if it somehow isn't, nothing throws, the sidebar just renders
+ * with no active entry.
+ *
+ * Each entry can carry up to two chips in front of its title: a role chip
+ * for the bookmap's structural role ("Chapter 1", "Appendix A", ...) and a
+ * type chip for the topic's own root element type ("Concept", "Task", ...).
+ * Both are optional per entry; missing chips simply don't render, which
+ * keeps a plain map full of generic `<topic>` files from getting a row of
+ * identical "Topic" labels with no information value (see
+ * makeFileTopicTypeResolver's default labeler for that filter). The title
+ * text is wrapped in its own span so the link's flex layout can ellipsis
+ * the title without ever clipping the chips -- the chips are short fixed
+ * labels and the title is the part that overflows on narrow sidebars.
+ *
+ * toggleLabels is optional (defaults to English) rather than required so
+ * every existing caller/test that only cares about the link markup itself
+ * doesn't have to thread localized strings through just to satisfy the
+ * type checker.
+ */
+export function renderSiteNavHtml(
+  manifest: DocsiteNavEntry[],
+  currentAbsPath: string,
+  navLabel: string,
+  toggleLabels: { expand: string; collapse: string } = { expand: 'Expand', collapse: 'Collapse' },
+): string {
+  const expandLabel = escapeAttr(toggleLabels.expand);
+  const collapseLabel = escapeAttr(toggleLabels.collapse);
+
+  const renderNode = (node: SiteNavTreeNode): string => {
+    const entry = node.entry;
+    const hasChildren = node.children.length > 0;
+    // The link's own padding-left carries the full indent, toggle slot
+    // included, exactly as before this feature -- the toggle itself is a
+    // sibling, absolutely positioned into that reserved slot (see
+    // .site-nav-toggle/.site-nav-item in media/styles.css) rather than an
+    // inline child of the link, so a click on it can be told apart from a
+    // click on the link (the .site-nav-link click delegation only ever
+    // matches inside the <a> itself).
+    const indent = 8 + SITE_NAV_TOGGLE_SLOT + entry.depth * 16;
+    const toggleLeft = 8 + entry.depth * 16;
+    // Role chip first (the rarer, more specific signal), then the type
+    // chip (the topic's information type), then the title. Both chips
+    // are escaped the same way the title is -- they're already display
+    // strings produced by labelers, but a labeler fed a malicious tag
+    // name (from a parsed topic a user controls) shouldn't be able to
+    // inject markup into the sidebar.
+    const roleChip = entry.role
+      ? `<span class="site-nav-chip site-nav-chip--role">${escapeHtml(entry.role)}</span>`
+      : '';
+    const typeChip = entry.topicType
+      ? `<span class="site-nav-chip site-nav-chip--type">${escapeHtml(entry.topicType)}</span>`
+      : '';
+    // Starts expanded (no `collapsed` class, aria-expanded="true") --
+    // matches the flat list's own old behavior of showing every entry,
+    // and getSiteNavToggleScript is the only thing that ever adds
+    // `collapsed` afterward.
+    const toggleHtml = hasChildren
+      ? `<button type="button" class="site-nav-toggle" style="left:${toggleLeft}px" aria-expanded="true" aria-label="${collapseLabel}" data-expand-label="${expandLabel}" data-collapse-label="${collapseLabel}"></button>`
+      : '';
+    const childrenHtml = hasChildren
+      ? `<ul class="site-nav-children" role="group">${node.children.map(renderNode).join('')}</ul>`
+      : '';
+    const itemClass = hasChildren ? ' has-children' : '';
+    const itemAriaExpanded = hasChildren ? ' aria-expanded="true"' : '';
+    // A group entry (DocsiteNavEntry.isGroup -- a <topichead> or a bare
+    // key-only topicref, see that field's own comment) has no topic file
+    // to navigate to, so it renders as a plain non-clickable label -- no
+    // <a>, no data-site-target, no href -- instead of renderSiteNavHtml's
+    // usual link markup. Its own expand/collapse toggle (if it has
+    // children) still works exactly like any other parent's; only the
+    // click-to-navigate behavior is missing, matching how tree mode
+    // already renders a topichead as a non-clickable heading
+    // (map/topichead in mapTypeMap.ts) and book mode renders one as a
+    // plain section heading (renderBookParts's own `struct:` branch).
+    if (entry.isGroup) {
+      const label = `<span class="site-nav-group-label" style="padding-left:${indent}px" title="${escapeAttr(entry.title)}">${roleChip}<span class="site-nav-link-text">${escapeHtml(entry.title)}</span></span>`;
+      return `<li class="site-nav-item site-nav-item--group${itemClass}" role="treeitem"${itemAriaExpanded}>${toggleHtml}${label}${childrenHtml}</li>`;
+    }
+    const activeClass = entry.absPath === currentAbsPath ? ' active' : '';
+    const link = `<a href="#" class="site-nav-link${activeClass}" data-site-target="${escapeAttr(entry.absPath as string)}" style="padding-left:${indent}px" title="${escapeAttr(entry.title)}">${roleChip}${typeChip}<span class="site-nav-link-text">${escapeHtml(entry.title)}</span></a>`;
+    return `<li class="site-nav-item${itemClass}" role="treeitem"${itemAriaExpanded}>${toggleHtml}${link}${childrenHtml}</li>`;
+  };
+
+  const tree = buildSiteNavTree(manifest);
+  const items = tree.map(renderNode).join('');
+  return `<nav class="site-nav" aria-label="${escapeAttr(navLabel)}"><ul class="site-nav-tree" role="tree">${items}</ul></nav>`;
+}
+
+/**
+ * Docsite mode's sidebar click handler -- flips which .site-nav-link
+ * carries the `active` class (client-side, no server round-trip for that
+ * part; see renderSiteNavHtml's own comment for why) and asks the
+ * extension host to render the newly-selected topic. Extracted into its
+ * own testable function rather than left inline in getMapWebviewScript
+ * (MapViewerProvider.ts, which isn't reachable from mocha -- it imports
+ * vscode) for the same reason getSearchOverlayScript/
+ * getProfilingFilterScript above are: new Function(script) is the cheapest
+ * check that still catches a broken template literal.
+ */
+export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: string }): string {
+  return `
+  // Shared by the sidebar's own click handler and the prev/next buttons
+  // (getSitePrevNextButtonsScript below) -- switching pages always means
+  // the same three things: flip which sidebar link is 'active', refresh
+  // prev/next's own enabled state and click targets against the new
+  // active link, and ask the extension host to render it. Takes the
+  // .site-nav-link element itself (not just its target path) so
+  // updatePrevNextButtons can read the *next* prev/next targets' own
+  // title attribute for free.
+  //
+  // The optional anchor is for book-internal xref jumps (docsite design
+  // doc, 3.2/4.5): a plain sidebar/prev-next click never has one. When
+  // present, it's an element id on the TARGET page to scroll to once its
+  // HTML actually lands -- remembered in pendingSiteAnchor rather than
+  // acted on here, since the new content doesn't exist in the DOM yet at
+  // click time (it's still an async render on the extension host side).
+  function switchToSitePage(link, anchor) {
+    if (!link) return;
+    if (link.classList.contains('active')) {
+      // Same page already showing -- an xref jump still needs to scroll,
+      // a plain nav click has no anchor and this is just a no-op.
+      if (anchor) scrollToSiteAnchor(anchor);
+      return;
+    }
+    var target = link.getAttribute('data-site-target');
+    if (!target) return;
+    var prevActive = document.querySelector('.site-nav-link.active');
+    if (prevActive) prevActive.classList.remove('active');
+    link.classList.add('active');
+    updatePrevNextButtons();
+    pendingSiteAnchor = anchor || null;
+    vscode.postMessage({ type: '${opts.switchSitePageMsgType}', target: target });
+  }
+
+  // Set right before the page-switch postMessage above and consumed once
+  // by the MSG_UPDATE_CONTENT handler when the new page's HTML actually
+  // arrives (see getMapWebviewScript) -- cleared immediately after so a
+  // later plain sidebar/prev-next switch (no anchor) doesn't accidentally
+  // replay a stale scroll target.
+  var pendingSiteAnchor = null;
+
+  function scrollToSiteAnchor(anchor) {
+    var el = document.getElementById(anchor);
+    if (el && el.scrollIntoView) el.scrollIntoView();
+  }
+
+  // Prev/next's targets are derived from the sidebar's own link order
+  // rather than tracked separately -- buildBookNavManifest's own contract
+  // is that its entries (and so the sidebar links built from them) are
+  // already in document/reading order, so the sidebar IS the ordering,
+  // not just a display of it. A no-op wherever the buttons don't exist
+  // (only site mode creates them; see getSitePrevNextButtonsScript).
+  function updatePrevNextButtons() {
+    var prevBtn = document.getElementById('__site-prev-btn');
+    var nextBtn = document.getElementById('__site-next-btn');
+    if (!prevBtn && !nextBtn) return;
+    var links = Array.prototype.slice.call(document.querySelectorAll('.site-nav-link'));
+    var activeIdx = -1;
+    for (var i = 0; i < links.length; i++) {
+      if (links[i].classList.contains('active')) { activeIdx = i; break; }
+    }
+    var prevLink = activeIdx > 0 ? links[activeIdx - 1] : null;
+    var nextLink = activeIdx >= 0 && activeIdx < links.length - 1 ? links[activeIdx + 1] : null;
+    if (prevBtn) {
+      prevBtn.disabled = !prevLink;
+      prevBtn.onclick = prevLink ? function() { switchToSitePage(prevLink); } : null;
+    }
+    if (nextBtn) {
+      nextBtn.disabled = !nextLink;
+      nextBtn.onclick = nextLink ? function() { switchToSitePage(nextLink); } : null;
+    }
+  }
+
+  document.addEventListener('click', function(e) {
+    var siteLink = e.target.closest ? e.target.closest('.site-nav-link') : null;
+    if (!siteLink) return;
+    e.preventDefault();
+    switchToSitePage(siteLink);
+  });
+
+  // Book-internal cross-topic xref (docsite design doc, 3.2/4.5): the
+  // renderer only ever emits data-dita-book-xref for a target it already
+  // confirmed is part of this book (RenderContext.isInCurrentBook), so
+  // the matching sidebar link should always exist -- if it doesn't
+  // (shouldn't happen, but the manifest and the render pass could in
+  // principle disagree), this silently does nothing rather than throwing.
+  document.addEventListener('click', function(e) {
+    var xrefLink = e.target.closest ? e.target.closest('[data-dita-book-xref]') : null;
+    if (!xrefLink) return;
+    e.preventDefault();
+    var raw = xrefLink.getAttribute('data-dita-book-xref');
+    if (!raw) return;
+    var hashIdx = raw.indexOf('#');
+    var targetPath = hashIdx >= 0 ? raw.slice(0, hashIdx) : raw;
+    var anchor = hashIdx >= 0 ? raw.slice(hashIdx + 1) : '';
+    var navLinks = document.querySelectorAll('.site-nav-link');
+    var navLink = null;
+    for (var j = 0; j < navLinks.length; j++) {
+      if (navLinks[j].getAttribute('data-site-target') === targetPath) { navLink = navLinks[j]; break; }
+    }
+    if (navLink) switchToSitePage(navLink, anchor);
+  });
+
+  updatePrevNextButtons(); // establish initial state on load, same as the sidebar's own active link is already set server-side
+`;
+}
+
+/**
+ * Docsite mode's sidebar expand/collapse toggle (Oxygen-style triangle in
+ * front of a parent entry) -- click delegation only, same one-listener-per-
+ * concern pattern as the .site-nav-link and [data-dita-book-xref] listeners
+ * in getSiteNavClickHandlerScript above (a separate function, and a
+ * separate document-level listener, rather than folded into that one,
+ * since this is a genuinely different concern: it never posts a message to
+ * the extension host or touches which page is showing, only whether a
+ * branch of the sidebar's own tree is visible).
+ *
+ * Purely a `collapsed` class flip on the entry's own <li class="site-nav-
+ * item"> -- media/styles.css hides `.site-nav-item.collapsed >
+ * .site-nav-children` (the direct child <ul>, so a collapsed grandparent's
+ * hidden subtree doesn't need this script to separately walk into and
+ * re-hide already-hidden descendants; the cascade is free). No state is
+ * kept anywhere outside that class: renderSiteNavHtml (ditaRenderUtils.ts)
+ * is called exactly once per mode-switch/refresh and always renders every
+ * branch open, so collapsing a branch and then switching pages (which only
+ * ever replaces the topic content pane, never re-renders the sidebar --
+ * see renderSiteNavHtml's own doc comment) leaves it collapsed, same as a
+ * real file explorer.
+ *
+ * The toggle button itself (renderSiteNavHtml) carries its own expand/
+ * collapse aria-label strings as data-expand-label/data-collapse-label so
+ * this script doesn't need its own copies threaded in as opts just to
+ * flip aria-label text along with aria-expanded.
+ */
+export function getSiteNavToggleScript(): string {
+  return `
+  document.addEventListener('click', function(e) {
+    var toggle = e.target.closest ? e.target.closest('.site-nav-toggle') : null;
+    if (!toggle) return;
+    e.preventDefault();
+    var item = toggle.closest ? toggle.closest('.site-nav-item') : null;
+    if (!item) return;
+    var collapsed = item.classList.toggle('collapsed');
+    toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    item.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    var label = collapsed ? toggle.getAttribute('data-expand-label') : toggle.getAttribute('data-collapse-label');
+    if (label) toggle.setAttribute('aria-label', label);
+  });
+`;
+}
+
+/**
+ * Docsite mode's prev/next buttons -- built but, same convention as
+ * getToolbarFontWidthTagTooltipsButtonsScript, NOT appended to the toolbar
+ * here; the caller decides where in its own button order they belong
+ * (design doc: "跟字号/页宽那些按钮放一起"). Their actual enabled state and
+ * click targets are established by updatePrevNextButtons() in
+ * getSiteNavClickHandlerScript above, called once these exist -- so this
+ * function only needs to create the two elements, not wire them up.
+ */
+export function getSitePrevNextButtonsScript(opts: { prevLabel: string; prevTitle: string; nextLabel: string; nextTitle: string }): string {
+  const prevLabel = JSON.stringify(opts.prevLabel);
+  const prevTitle = JSON.stringify(opts.prevTitle);
+  const nextLabel = JSON.stringify(opts.nextLabel);
+  const nextTitle = JSON.stringify(opts.nextTitle);
+  return `
+  var sitePrevBtn = document.createElement('button');
+  sitePrevBtn.id = '__site-prev-btn';
+  sitePrevBtn.textContent = ${prevLabel};
+  sitePrevBtn.title = ${prevTitle};
+  sitePrevBtn.setAttribute('aria-label', ${prevTitle});
+  sitePrevBtn.style.cssText = btnStyle + 'font-size:14px;padding:1px 9px;justify-content:center;';
+
+  var siteNextBtn = document.createElement('button');
+  siteNextBtn.id = '__site-next-btn';
+  siteNextBtn.textContent = ${nextLabel};
+  siteNextBtn.title = ${nextTitle};
+  siteNextBtn.setAttribute('aria-label', ${nextTitle});
+  siteNextBtn.style.cssText = btnStyle + 'font-size:14px;padding:1px 9px;justify-content:center;';
+`;
+}
+
+/**
+ * Docsite mode's sidebar collapse toggle -- a single button that flips
+ * `site-nav-collapsed` on document.body. The sidebar itself starts open
+ * (see MapViewerProvider.ts's body class construction for site mode); this
+ * is how a reader tucks it away when they don't need it and gets it back
+ * the same way. Deliberately a plain class toggle on body rather than
+ * anything that touches the sidebar's own markup or posts a message to the
+ * extension host: nothing here needs to survive a page switch through any
+ * path other than "the class is already sitting on body, which page
+ * switches never touch" (see postSitePageUpdate's own comment on why the
+ * sidebar element itself is left alone by a content-only update) -- so
+ * this one class flip is also, for free, exactly what keeps the sidebar's
+ * open/closed state stable across clicking from topic to topic.
+ * Same convention as getSitePrevNextButtonsScript: builds the element but
+ * does not append it anywhere, so the caller decides where in the toolbar
+ * it belongs.
+ */
+export function getSiteSidebarToggleScript(opts: { toggleTitle: string }): string {
+  const toggleTitle = JSON.stringify(opts.toggleTitle);
+  return `
+  var siteSidebarToggleBtn = document.createElement('button');
+  siteSidebarToggleBtn.id = '__site-sidebar-toggle-btn';
+  siteSidebarToggleBtn.textContent = '\\u2630';
+  siteSidebarToggleBtn.title = ${toggleTitle};
+  siteSidebarToggleBtn.setAttribute('aria-label', ${toggleTitle});
+  siteSidebarToggleBtn.style.cssText = btnStyle + 'font-size:14px;';
+  siteSidebarToggleBtn.addEventListener('click', function() {
+    document.body.classList.toggle('site-nav-collapsed');
+  });
+`;
+}
+
+/**
+ * Docsite mode's mode-cycle toggle button (tree -> book -> site -> tree).
+ * The button's label always names the CURRENT mode, not the mode a click
+ * switches to -- an earlier version showed the target mode ("reads as a
+ * destination button"), but in practice that reads backwards: seeing
+ * "Site" while already in Book mode looks like the button is claiming
+ * you're in Site mode, not offering to take you there. Relies on the
+ * caller's own `currentMode` variable (declared once near the top of
+ * getMapWebviewScript, updated by this same click handler) and `btnStyle`
+ * (getToolbarScaffoldScript) already being in scope -- same closure
+ * convention as the other button scripts in this file, and why this one
+ * isn't reusable outside MapViewerProvider.ts's own script the way some of
+ * the docsite-specific ones already aren't (getSiteNavClickHandlerScript's
+ * switchToSitePage, for instance, also assumes an outer `vscode`).
+ * Does not call toolbar.appendChild itself, same convention as
+ * getSitePrevNextButtonsScript/getSiteSidebarToggleScript above.
+ */
+export function getModeToggleScript(opts: {
+  switchModeTitle: string;
+  modeOutline: string;
+  modeBook: string;
+  modeSite: string;
+  switchModeMsgType: string; // raw, e.g. 'switchMode'
+}): string {
+  const switchModeTitle = JSON.stringify(opts.switchModeTitle);
+  const modeOutline = JSON.stringify(opts.modeOutline);
+  const modeBook = JSON.stringify(opts.modeBook);
+  const modeSite = JSON.stringify(opts.modeSite);
+  return `
+  var modeBtn = document.createElement('button');
+  modeBtn.title = ${switchModeTitle};
+  modeBtn.setAttribute('aria-label', ${switchModeTitle});
+  modeBtn.style.cssText = btnStyle + 'font-size:11px;';
+  function nextMapMode(m) {
+    return m === 'tree' ? 'book' : m === 'book' ? 'site' : 'tree';
+  }
+  function modeLabel(m) {
+    return m === 'book' ? ${modeBook} : m === 'site' ? ${modeSite} : ${modeOutline};
+  }
+  function updateModeLabel() {
+    modeBtn.textContent = modeLabel(currentMode);
+  }
+  updateModeLabel();
+  modeBtn.addEventListener('click', function() {
+    var newMode = nextMapMode(currentMode);
+    currentMode = newMode;
+    updateModeLabel();
+    vscode.postMessage({ type: '${opts.switchModeMsgType}', mode: newMode });
+  });
+`;
+}
+
+/**
+ * Clamps a docsite-mode sidebar width (px) a drag gesture produced to a
+ * sane range. Pure and exported so the clamping math itself is unit
+ * tested; the drag wiring around it (getSiteSidebarResizerScript below)
+ * has no DOM in this test suite to actually drag through, same situation
+ * as isSearchExcludedAncestor/planCurrentMarkMove above -- this is the
+ * piece of that feature that can be tested directly, so it is.
+ */
+export function clampSidebarWidth(width: number, min = 160, max = 560): number {
+  if (width < min) return min;
+  if (width > max) return max;
+  return width;
+}
+
+/**
+ * Docsite mode's sidebar resize handle -- lets a reader drag the sidebar
+ * wider or narrower than its 240px default. A self-contained IIFE rather
+ * than something that needs appending to a toolbar: #__site-nav-resizer is
+ * already sitting in the page markup as a sibling of .site-nav (see
+ * MapViewerProvider.ts's body markup), one per docsite-mode page, so this
+ * only needs to find it and wire it up -- same "no-op if the element isn't
+ * there" safety the other docsite scripts get from their own id lookups,
+ * which is what makes it safe to always emit this call regardless of mode
+ * (tree/book pages never have #__site-nav-resizer in the DOM at all).
+ * Widens via el.style.flexBasis rather than a fixed width: .site-nav's own
+ * `flex: 0 0 240px` rule already fixes flex-grow/flex-shrink at 0, so only
+ * the flex-basis longhand needs an inline override to resize without also
+ * fighting the flex layout on every other axis.
+ * Keyboard support (ArrowLeft/ArrowRight nudge by 20px) comes from the
+ * element's own role="separator" tabindex="0" in the markup -- a
+ * mouse-only drag target with that role and no keyboard handler would be
+ * reachable by keyboard but do nothing once focused, which is worse than
+ * not being focusable at all.
+ */
+export function getSiteSidebarResizerScript(): string {
+  return `
+  (function() {
+    var resizer = document.getElementById('__site-nav-resizer');
+    var nav = document.querySelector('.site-nav');
+    if (!resizer || !nav) return;
+    var clampSidebarWidth = ${clampSidebarWidth.toString()};
+    var startX = 0;
+    var startWidth = 0;
+    function onMouseMove(e) {
+      nav.style.flexBasis = clampSidebarWidth(startWidth + (e.clientX - startX)) + 'px';
+    }
+    function onMouseUp() {
+      resizer.classList.remove('resizing');
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    }
+    resizer.addEventListener('mousedown', function(e) {
+      startX = e.clientX;
+      startWidth = nav.getBoundingClientRect().width;
+      resizer.classList.add('resizing');
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+      e.preventDefault();
+    });
+    resizer.addEventListener('keydown', function(e) {
+      var current = nav.getBoundingClientRect().width;
+      if (e.key === 'ArrowLeft') {
+        nav.style.flexBasis = clampSidebarWidth(current - 20) + 'px';
+        e.preventDefault();
+      } else if (e.key === 'ArrowRight') {
+        nav.style.flexBasis = clampSidebarWidth(current + 20) + 'px';
+        e.preventDefault();
+      }
+    });
+  })();
+`;
+}
+
+export interface BookRenderInput {
+  /** Flattened topicref list, in map order -- see collectMapEntries. */
+  entries: MapEntry[];
+  /** Directory the map itself lives in; entry hrefs resolve against it. */
+  docDir: string;
+  /**
+   * One instance for the whole pass. renderTopicCached compares it by
+   * identity, so a fresh Map per entry would defeat reuse entirely -- which
+   * is what the benchmark script used to do, and why the assembly loop now
+   * lives here where both callers share it.
+   */
+  keyMap: Map<string, string>;
+  /**
+   * Converts an absolute local path into a URI the webview can load. This is
+   * the only vscode-specific primitive in a book render; everything else
+   * (resolving hrefs against each topic's own directory, de-duplicating,
+   * heading depth, error and placeholder markup) lives here so it can be
+   * tested -- and benchmarked -- without a VS Code instance.
+   */
+  fileToWebviewUri: (absPath: string) => string;
+  uiLanguage?: string;
+}
+
+/**
+ * Assembles every topic a map references into the ordered parts that Book
+ * mode shows as one long document. Called by MapViewerProvider's
+ * collectBookParts and by scripts/bench-book-render.js.
+ *
+ * It used to be a private method on the provider, with the benchmark keeping
+ * its own hand-copied version of the loop. That copy had already drifted once
+ * (it built a fresh keyMap per topic), and once rendering became cached the
+ * drift stopped being cosmetic: the benchmark would have measured zero reuse
+ * and reported that the cache did not work. One loop, two callers.
+ *
+ * Returns the parts rather than the joined document so MapViewerProvider can
+ * diff two renders of the same map and send only the entries that changed
+ * (see bookPatch.ts). wrapBookParts turns them back into exactly the document
+ * this function used to return, byte for byte.
+ */
+export function renderBookParts(input: BookRenderInput): BookPart[] {
+  const { entries, docDir, keyMap, fileToWebviewUri, uiLanguage } = input;
+
+  // Track visited absolute paths to avoid duplicates
+  const visited = new Set<string>();
+
+  // The full set of topics this book contains, computed once up front --
+  // deliberately NOT the same thing as `visited` above, which only grows
+  // as the loop below reaches each entry. A topic near the start of the
+  // book can legitimately xref one near the end (docsite design doc,
+  // 3.2/4.5): by the time that early topic is rendered, `visited` would
+  // not yet contain the later one, and an xref renderer keying off it
+  // would wrongly treat an in-book target as outside the book. Same
+  // one-entry-per-topic identity resolveBookTopicPath/buildBookNavManifest
+  // already use, so this set agrees with the sidebar on exactly which
+  // topics "this book" means. getStableBookMembers (not a plain `new
+  // Set()` built inline here) keeps the same Set instance across passes
+  // where membership hasn't actually changed -- see its own comment for
+  // why that identity has to survive a re-render for renderTopicCached's
+  // reuse to work at all.
+  const bookMembers = getStableBookMembers(entries, docDir);
+
+  const parts: BookPart[] = [];
+  // A key per part, so two renders of the same map can be compared part by
+  // part. Uniqueness is enforced here rather than assumed: a topic's resolved
+  // path cannot repeat (the visited set above already de-duplicates those),
+  // but two sub-maps, two skip notes or two structural headings can easily
+  // collide, and a repeated key would make the diff read two different
+  // entries as the same one. The suffix comes from the collision count, so it
+  // is itself stable across re-renders of an unchanged map.
+  const usedKeys = new Map<string, number>();
+  const push = (keyBase: string, html: string): void => {
+    const seen = usedKeys.get(keyBase) ?? 0;
+    usedKeys.set(keyBase, seen + 1);
+    parts.push({ key: seen === 0 ? keyBase : `${keyBase}~${seen + 1}`, html });
+  };
+  for (const entry of entries) {
+    if (entry.resourceOnly) continue; // exists purely to be pulled in via keyref/conref elsewhere, never its own page or heading
+    if (entry.href) {
+      // Sub-map reference: its contents were already inlined as child
+      // entries by expandDitamapRefs — render a section heading only
+      // instead of parsing the map file as a topic.
+      const refPath = entry.href.split('#')[0];
+      if (refPath.toLowerCase().endsWith('.ditamap')) {
+        push(
+          `map:${resolve(docDir, decodeHrefPart(refPath))}`,
+          renderBookPlaceholder(entry.displayName, entry.depth),
+        );
+        continue;
+      }
+      const absPath = resolveBookTopicPath(entry, docDir);
+      if (!absPath) {
+        // External resource (https:, mailto:, absolute path) -- a link, not
+        // a book member; getStableBookMembers already excluded it, so there
+        // is nothing to render inline.
+        continue;
+      }
+      if (visited.has(absPath)) {
+        push(`skip:${entry.href}`, renderBookSkipMessage(entry.href));
+        continue;
+      }
+      visited.add(absPath);
+
+      // Per-topic asWebviewUri: image hrefs inside a topic are relative to
+      // that topic's own directory, not to the map's.
+      const topicDir = dirname(absPath);
+      const asWebviewUri = (relPath: string): string => {
+        try {
+          return fileToWebviewUri(resolve(topicDir, decodeHrefPart(relPath)));
+        } catch (e) {
+          // The empty src still surfaces as a visibly broken image (the
+          // webview script's document-level error listener marks it);
+          // log the cause so path-resolution failures are debuggable.
+          console.warn(`Failed to resolve webview URI for ${relPath}:`, e instanceof Error ? e.message : e);
+          return '';
+        }
+      };
+
+      const headingLevel = Math.min(1 + entry.depth, 6);
+      // Cached, unlike the equivalent call in exportHtml.ts (which renders
+      // once into a standalone file and has nothing to invalidate). Book
+      // mode re-renders the whole map on every edit to any watched file,
+      // and reuse keyed on the set of files each render actually read
+      // turns that from "every topic again" into "the edited topic, plus
+      // whatever conrefs it".
+      const result = renderTopicCached({
+        filePath: absPath,
+        keyMap,
+        asWebviewUri,
+        headingLevel,
+        uiLanguage,
+        bookMembers,
+      });
+
+      if (result.error) {
+        // Keyed like the topic it stands in for, so a topic that starts or
+        // stops failing to parse patches that one entry in place instead of
+        // forcing a whole-document replace.
+        push(`topic:${absPath}`, renderBookError(entry.displayName, result.error, entry.depth));
+      } else {
+        // Book mode is just each referenced topic's own content, one
+        // after another -- the same profiling/highlighting a topic
+        // already renders when opened directly (via renderTopicCached
+        // above) carries straight through here unchanged. No separate
+        // topicref-level (ditamap-source) profiling layered on top of
+        // it; that scope is exclusive to Outline mode's tree.
+        push(`topic:${absPath}`, `<div class="book-entry">${result.html}</div>`);
+      }
+    } else {
+      push(`struct:${entry.depth}:${entry.displayName}`, renderBookPlaceholder(entry.displayName, entry.depth));
+    }
+  }
+
+  return parts;
+}
+
+/**
+ * Joins parts into the single container that both the stylesheet and the
+ * webview script address as .ditamap-book. Kept apart from renderBookParts so
+ * the incremental path can diff the parts and still produce exactly the same
+ * document whenever it has to fall back to sending all of them.
+ */
+export function wrapBookParts(parts: BookPart[]): string {
+  return `<div class="ditamap-book">${parts.map((part) => part.html).join('\n')}</div>`;
+}
+
+export function renderBookEntries(input: BookRenderInput): string {
+  return wrapBookParts(renderBookParts(input));
 }
 
 // ── Webview search overlay (Ctrl+F) ──
@@ -676,6 +2241,10 @@ export function getSearchOverlayScript(opts: {
   // ── Search overlay (Ctrl+F) ──
   var searchMarks = [];
   var currentMatch = -1;
+  // Which mark actually carries '__current' right now, or -1 if none does.
+  // Tracked apart from currentMatch so that moving the highlight touches two
+  // marks instead of every mark in the document -- see updateCurrentMatch.
+  var highlightedMatch = -1;
   var useRegex = false;
   var caseSensitive = false;
 
@@ -692,40 +2261,48 @@ export function getSearchOverlayScript(opts: {
 
   var sb = document.createElement('div');
   sb.id = '__search_bar';
+  sb.setAttribute('role', 'search');
   sb.style.cssText = sbStyle;
 
   var searchInput = document.createElement('input');
   searchInput.type = 'text';
   searchInput.placeholder = ${ph};
+  searchInput.setAttribute('aria-label', ${ph});
   searchInput.style.cssText = sbInputStyle;
 
   var searchCount = document.createElement('span');
   searchCount.style.cssText = sbCountStyle;
   searchCount.textContent = '';
+  searchCount.setAttribute('aria-live', 'polite');
 
   var caseBtn = document.createElement('button');
   caseBtn.textContent = 'Aa';
   caseBtn.title = ${mc};
+  caseBtn.setAttribute('aria-label', ${mc});
   caseBtn.style.cssText = sbToggleStyleOff;
 
   var regexBtn = document.createElement('button');
   regexBtn.textContent = '.*';
   regexBtn.title = ${re};
+  regexBtn.setAttribute('aria-label', ${re});
   regexBtn.style.cssText = sbToggleStyleOff + 'font-family:monospace;';
 
   var searchPrev = document.createElement('button');
   searchPrev.innerHTML = '&uarr;';
   searchPrev.title = ${prev};
+  searchPrev.setAttribute('aria-label', ${prev});
   searchPrev.style.cssText = sbBtnStyle;
 
   var searchNext = document.createElement('button');
   searchNext.innerHTML = '&darr;';
   searchNext.title = ${next};
+  searchNext.setAttribute('aria-label', ${next});
   searchNext.style.cssText = sbBtnStyle;
 
   var searchClose = document.createElement('button');
   searchClose.innerHTML = '&times;';
   searchClose.title = ${cls};
+  searchClose.setAttribute('aria-label', ${cls});
   searchClose.style.cssText = sbBtnStyle + 'font-size:16px;';
 
   sb.appendChild(searchInput);
@@ -765,6 +2342,7 @@ export function getSearchOverlayScript(opts: {
     }
     searchMarks = [];
     currentMatch = -1;
+    highlightedMatch = -1;
   }
 
   // Returns array of {start, end} match positions within a text string.
@@ -774,6 +2352,11 @@ export function getSearchOverlayScript(opts: {
   function findMatchesInText(text, term) {
     return findTextMatchesCore(text, term, useRegex, caseSensitive);
   }
+
+  // Which marks to touch when the current match moves. Same arrangement: the
+  // exported planCurrentMarkMove is unit-tested TS, injected here so webview
+  // and tests always run the same algorithm.
+  var planCurrentMarkMoveCore = ${planCurrentMarkMove.toString()};
 
   function performSearch(term) {
     clearSearchHighlights();
@@ -802,6 +2385,11 @@ export function getSearchOverlayScript(opts: {
         var el = parent;
         while (el && el !== document.body) {
           if (el.id === '__toolbar' || el.id === '__search_bar') return NodeFilter.FILTER_REJECT;
+          // Docsite mode's sidebar (.site-nav) sits beside #dita-content-root
+          // as a sibling under body, not inside it -- without this, Ctrl+F
+          // would also match/highlight topic titles and chips in the
+          // sidebar, which isn't "the page" the reader is searching.
+          if (el.classList && el.classList.contains('site-nav')) return NodeFilter.FILTER_REJECT;
           el = el.parentNode;
         }
         return NodeFilter.FILTER_ACCEPT;
@@ -850,13 +2438,23 @@ export function getSearchOverlayScript(opts: {
   }
 
   function updateCurrentMatch() {
-    for (var i = 0; i < searchMarks.length; i++) {
-      if (i === currentMatch) {
-        searchMarks[i].classList.add('__current');
-      } else {
-        searchMarks[i].classList.remove('__current');
-      }
+    // Two marks rather than all of them, which is the whole reason
+    // highlightedMatch is tracked. That is only sound while exactly one mark
+    // carries '__current' and highlightedMatch names it; both ends hold
+    // because every mark is created fresh (performSearch) and every mark is
+    // destroyed through clearSearchHighlights, which resets the tracker.
+    // Should the two ever drift, the failure is a mark left lit rather than a
+    // crash -- classList.add and .remove are no-ops when the token is already
+    // in the wanted state, and the bounds checks below catch a stale index
+    // into a list that has since shrunk.
+    var move = planCurrentMarkMoveCore(highlightedMatch, currentMatch, searchMarks.length);
+    if (move.clear >= 0 && searchMarks[move.clear]) {
+      searchMarks[move.clear].classList.remove('__current');
     }
+    if (move.set >= 0 && searchMarks[move.set]) {
+      searchMarks[move.set].classList.add('__current');
+    }
+    highlightedMatch = move.set;
     if (currentMatch >= 0 && searchMarks[currentMatch]) {
       searchMarks[currentMatch].scrollIntoView({ block: 'center', behavior: 'smooth' });
     }
@@ -1018,6 +2616,8 @@ export function getProfilingFilterScript(opts: {
     var toolbarRect = toolbar.getBoundingClientRect();
     var panel = document.createElement('div');
     panel.id = '__profiling_filter_panel';
+    panel.setAttribute('role', 'region');
+    panel.setAttribute('aria-label', ${btnLabel});
     panel.style.cssText = 'position:fixed;top:' + (toolbarRect.bottom + 6) + 'px;right:8px;z-index:10000;max-height:70vh;overflow:auto;padding:8px 10px;border-radius:5px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;background:var(--vscode-editor-background,rgba(30,30,30,0.95));border:1px solid var(--vscode-widget-border,rgba(255,255,255,0.12));backdrop-filter:blur(4px);box-shadow:0 2px 8px rgba(0,0,0,0.2);color:var(--vscode-foreground,#ccc);min-width:160px;';
 
     if (groupOrder.length === 0) {
@@ -1060,6 +2660,7 @@ export function getProfilingFilterScript(opts: {
 
     var closeLink = document.createElement('a');
     closeLink.href = '#';
+    closeLink.setAttribute('role', 'button');
     closeLink.textContent = ${closeLabel};
     closeLink.style.cssText = 'display:block;margin-top:8px;color:var(--vscode-textLink-foreground,#3794ff);cursor:pointer;';
     closeLink.addEventListener('click', function(e) { e.preventDefault(); pfTogglePanel(); });
@@ -1081,9 +2682,541 @@ export function getProfilingFilterScript(opts: {
   var pfFilterBtn = document.createElement('button');
   pfFilterBtn.textContent = ${btnLabel};
   pfFilterBtn.title = ${btnTitle};
+  pfFilterBtn.setAttribute('aria-label', ${btnTitle});
   pfFilterBtn.style.cssText = btnStyle + 'font-size:11px;';
   pfFilterBtn.addEventListener('click', pfTogglePanel);
   pfUpdateButtonState();
   toolbar.appendChild(pfFilterBtn);
+`;
+}
+
+// ── Click-to-enlarge lightbox + image copy affordances ──
+//
+// Both previews render <img data-dita-src> content, and media/styles.css
+// gives every such image `cursor: zoom-in` -- a promise that clicking will
+// enlarge it. That promise was only kept in the single-topic preview, whose
+// inline script carried the lightbox; the map preview (book/site/tree) never
+// injected any of this, so its images showed the magnifying-glass cursor but
+// clicking did nothing. Extracting the whole image surface here (error
+// marking, lightbox, clipboard copy, right-click menu) lets both providers
+// embed the identical behavior and keeps them from drifting apart again --
+// the same reasoning that moved the search overlay and the profiling filter
+// into this file.
+//
+// Content-swap safe by construction: every listener here is registered on
+// `document` (delegation), never on the images themselves, so replacing
+// #dita-content-root's HTML -- or book mode's per-entry outerHTML patches --
+// never orphans them and nothing needs re-running from afterContentSwap /
+// the topic viewer's own updateContent handler. lightboxCandidates()
+// re-queries the DOM on every open, so a lightbox always steps through
+// whatever content is currently on screen.
+//
+// Deliberately NOT here: the per-image zoom toolbar (enhanceImages/
+// setImgZoom). That stays a single-topic-preview affordance -- the map
+// preview's design keeps images at their natural rendered size -- but its
+// maximize button calls openLightbox(), which is a hoisted function
+// declaration inside each provider's IIFE, so embedding this chunk anywhere
+// in the script keeps that call working.
+//
+// All six strings are raw values, quoted here internally -- same convention
+// as getSearchOverlayScript/getProfilingFilterScript: sharedWebviewStrings()
+// hands them out for both providers to pass into this call, so they belong
+// to the raw-string group, not the pre-JSON.stringify'd group (see the
+// comment on sharedWebviewStrings() itself for why the two groups aren't
+// interchangeable).
+export function getImageLightboxScript(opts: {
+  copyMenuItem: string;
+  copyDoneLabel: string;
+  copyFailedLabel: string;
+  copyUnsupportedLabel: string;
+  copyToastDone: string;
+  copyToastFailed: string;
+}): string {
+  const copyMenuItem = JSON.stringify(opts.copyMenuItem);
+  const copyDone = JSON.stringify(opts.copyDoneLabel);
+  const copyFailed = JSON.stringify(opts.copyFailedLabel);
+  const copyUnsupported = JSON.stringify(opts.copyUnsupportedLabel);
+  const toastDone = JSON.stringify(opts.copyToastDone);
+  const toastFailed = JSON.stringify(opts.copyToastFailed);
+  return `
+  // Image error handling (event delegation, nonce-safe). Marks broken
+  // images with data-load-error, which the lightbox and its candidates
+  // below exclude -- without this, a broken image would open an empty
+  // overlay. Also styles media/styles.css's img[data-load-error] rule
+  // (cursor back to default) from the script side.
+  document.addEventListener('error', function(e) {
+    var img = e.target;
+    if (img.tagName !== 'IMG' || !img.hasAttribute('data-dita-src')) return;
+    var src = img.getAttribute('data-dita-src') || 'unknown';
+    var msg = 'Image fail: ' + src;
+    // Only use the failure text as alt if the author never supplied one —
+    // a real DITA <alt>/@alt is more useful than a load-failure string and
+    // shouldn't be overwritten by it. The failure is still surfaced via
+    // title (hover) and the red outline either way.
+    if (!img.getAttribute('alt')) img.alt = msg;
+    img.title = msg;
+    img.setAttribute('data-load-error', 'true');
+    img.style.outline = '3px solid red';
+    img.style.outlineOffset = '-1px';
+  }, true);
+
+  // Click-to-enlarge lightbox. The whole image is a click target
+  // (cursor:zoom-in from styles.css hints this). Broken images are
+  // excluded. While the lightbox is open, ←/→ step through every
+  // eligible image on the page in document order without closing the
+  // overlay, so browsing a page of screenshots doesn't require reopening
+  // the lightbox for each one.
+  var lightboxOverlay = null;
+  var lightboxBigImg = null;
+  var lightboxImgs = [];
+  var lightboxIdx = -1;
+
+  function lightboxCandidates() {
+    return Array.prototype.slice.call(document.querySelectorAll('img[data-dita-src]:not([data-load-error])'));
+  }
+
+  function onLightboxKeydown(e) {
+    if (e.key === 'Escape') { closeLightbox(); return; }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); lightboxStep(-1); return; }
+    if (e.key === 'ArrowRight') { e.preventDefault(); lightboxStep(1); return; }
+    // Ctrl+C / Cmd+C copies the currently-displayed image, mirroring what a
+    // user would expect from any other "enlarged preview" surface — there's
+    // no text selection to steal focus from inside the lightbox, so this
+    // doesn't collide with a real copy-text intent the way it might
+    // elsewhere on the page.
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
+      e.preventDefault();
+      if (!lightboxBigImg) return;
+      copyImageToClipboard(lightboxBigImg).then(function(ok) {
+        showCenteredToast(ok ? ${toastDone} : ${toastFailed});
+      });
+      return;
+    }
+  }
+
+  function closeLightbox() {
+    if (!lightboxOverlay) return;
+    lightboxOverlay.remove();
+    lightboxOverlay = null;
+    lightboxBigImg = null;
+    lightboxImgs = [];
+    lightboxIdx = -1;
+    document.removeEventListener('keydown', onLightboxKeydown);
+  }
+
+  function showLightboxImage() {
+    if (!lightboxBigImg || lightboxIdx < 0 || lightboxIdx >= lightboxImgs.length) return;
+    var img = lightboxImgs[lightboxIdx];
+    lightboxBigImg.src = img.src;
+    lightboxBigImg.alt = img.alt || '';
+  }
+
+  function lightboxStep(delta) {
+    if (lightboxImgs.length < 2) return;
+    lightboxIdx = (lightboxIdx + delta + lightboxImgs.length) % lightboxImgs.length;
+    showLightboxImage();
+  }
+
+  function openLightbox(img) {
+    closeLightbox();
+    lightboxImgs = lightboxCandidates();
+    lightboxIdx = lightboxImgs.indexOf(img);
+    if (lightboxIdx === -1) { lightboxImgs = [img]; lightboxIdx = 0; }
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;cursor:zoom-out;';
+    var big = document.createElement('img');
+    big.className = 'dita-lightbox-img';
+    big.style.cssText = 'max-width:92vw;max-height:92vh;object-fit:contain;box-shadow:0 4px 24px rgba(0,0,0,0.5);border-radius:4px;';
+    overlay.appendChild(big);
+    overlay.addEventListener('click', closeLightbox);
+    document.addEventListener('keydown', onLightboxKeydown);
+    document.body.appendChild(overlay);
+    lightboxOverlay = overlay;
+    lightboxBigImg = big;
+    showLightboxImage();
+  }
+  document.addEventListener('click', function(e) {
+    var img = e.target.closest ? e.target.closest('img[data-dita-src]') : null;
+    if (!img || img.getAttribute('data-load-error') === 'true') return;
+    openLightbox(img);
+  });
+
+  // Copies the rendered image to the system clipboard. Chromium's Async
+  // Clipboard API only reliably accepts image/png for image writes, so
+  // anything else (jpg/gif/webp/svg/bmp) is decoded and re-encoded to PNG
+  // first. Decoding goes through createImageBitmap() on the bytes fetched
+  // directly from img.src -- NOT by drawing the existing <img> element onto
+  // a canvas -- because a canvas fed from a cross-origin-flagged <img> (the
+  // webview-resource: scheme this project's images load through) can come
+  // back "tainted", throwing on toBlob/getImageData; a canvas built from
+  // bytes the page fetched itself isn't subject to that. Resolves to
+  // true/false rather than throwing, so every caller (right-click menu,
+  // lightbox Ctrl+C) can show its own success/failure feedback without its
+  // own try/catch.
+  function copyImageToClipboard(img) {
+    if (!window.ClipboardItem || !navigator.clipboard || !navigator.clipboard.write) {
+      return Promise.resolve(false);
+    }
+    return fetch(img.currentSrc || img.src)
+      .then(function(resp) { return resp.blob(); })
+      .then(function(sourceBlob) {
+        if (sourceBlob.type === 'image/png') return sourceBlob;
+        return createImageBitmap(sourceBlob).then(function(bitmap) {
+          var canvas = document.createElement('canvas');
+          canvas.width = bitmap.width;
+          canvas.height = bitmap.height;
+          canvas.getContext('2d').drawImage(bitmap, 0, 0);
+          return new Promise(function(resolve, reject) {
+            canvas.toBlob(function(pngBlob) {
+              if (pngBlob) resolve(pngBlob); else reject(new Error('toBlob failed'));
+            }, 'image/png');
+          });
+        });
+      })
+      .then(function(pngBlob) {
+        return navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
+      })
+      .then(function() { return true; })
+      .catch(function() { return false; });
+  }
+
+  // Small floating pill used for feedback that isn't anchored to a
+  // still-open menu item (the lightbox Ctrl+C copy path has no menu to
+  // update), fixed at the bottom-center of the viewport so it reads fine
+  // whether or not the lightbox overlay is open. Auto-removes itself; never
+  // accumulates if fired repeatedly, since each call removes any toast
+  // still showing before adding its own.
+  function showCenteredToast(text) {
+    var existing = document.querySelector('.dita-img-toast');
+    if (existing) existing.remove();
+    var toast = document.createElement('div');
+    toast.className = 'dita-img-toast';
+    toast.textContent = text;
+    document.body.appendChild(toast);
+    setTimeout(function() { toast.remove(); }, 1200);
+  }
+
+  // Custom right-click "Copy Image" menu for both the inline preview images
+  // and the lightbox's enlarged image. A real browser/Electron context menu
+  // isn't used here because VS Code webviews don't reliably expose a native
+  // "Copy Image" item across every host (desktop Electron vs. vscode.dev's
+  // browser-hosted iframe), so this reimplements just the one item needed,
+  // reusing the exact same copyImageToClipboard() as the lightbox's Ctrl+C.
+  var imgCtxMenu = null;
+
+  function closeImgCtxMenu() {
+    if (!imgCtxMenu) return;
+    imgCtxMenu.remove();
+    imgCtxMenu = null;
+  }
+
+  function openImgCtxMenu(img, x, y) {
+    closeImgCtxMenu();
+    var menu = document.createElement('div');
+    menu.className = 'dita-img-ctxmenu';
+    var item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'dita-img-ctxmenu-item';
+    item.textContent = ${copyMenuItem};
+    item.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (!window.ClipboardItem || !navigator.clipboard || !navigator.clipboard.write) {
+        item.textContent = ${copyUnsupported};
+        setTimeout(closeImgCtxMenu, 900);
+        return;
+      }
+      item.disabled = true;
+      copyImageToClipboard(img).then(function(ok) {
+        item.textContent = ok ? ${copyDone} : ${copyFailed};
+        setTimeout(closeImgCtxMenu, 700);
+      });
+    });
+    menu.appendChild(item);
+    document.body.appendChild(menu);
+    // Positioned and clamped after insertion, once its real size is known
+    // (offsetWidth/Height are 0 before the element is in the DOM) -- clamped
+    // to the viewport so a right-click near the right/bottom edge doesn't
+    // open a menu that's partly cut off screen.
+    var menuW = menu.offsetWidth, menuH = menu.offsetHeight;
+    menu.style.left = Math.min(x, window.innerWidth - menuW - 4) + 'px';
+    menu.style.top = Math.min(y, window.innerHeight - menuH - 4) + 'px';
+    imgCtxMenu = menu;
+  }
+
+  document.addEventListener('contextmenu', function(e) {
+    var img = e.target.closest
+      ? e.target.closest('img[data-dita-src]:not([data-load-error]), img.dita-lightbox-img')
+      : null;
+    if (!img) { closeImgCtxMenu(); return; }
+    e.preventDefault();
+    openImgCtxMenu(img, e.clientX, e.clientY);
+  });
+  document.addEventListener('click', function(e) {
+    if (imgCtxMenu && !imgCtxMenu.contains(e.target)) closeImgCtxMenu();
+  });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeImgCtxMenu();
+  });
+`;
+}
+
+// ── Shared toolbar scaffolding (style constants + the toolbar container
+// itself) ──
+//
+// DitaViewerProvider.ts and MapViewerProvider.ts built this same handful of
+// lines independently: same style strings, same element, same hover
+// behavior. Each provider still owns appendChild ordering for its own
+// buttons -- this only emits the shared setup, declaring `tbStyle`,
+// `ddStyle`, `btnStyle` and `toolbar` for the rest of each provider's own
+// toolbar-building code (including getProfilingFilterScript above, which
+// already assumes both) to use.
+//
+// `previewToolbar` is a raw string, quoted here internally -- same
+// convention as getSearchOverlayScript/getProfilingFilterScript above, and
+// required by it: sharedWebviewStrings() hands this out as a value both
+// providers pass into a function call rather than interpolating directly,
+// so it belongs in that function's raw-string group, not the
+// pre-JSON.stringify'd group (see the comment on sharedWebviewStrings()
+// itself for why the two groups aren't interchangeable).
+export function getToolbarScaffoldScript(opts: { previewToolbar: string }): string {
+  const previewToolbar = JSON.stringify(opts.previewToolbar);
+  return `
+  // Toolbar
+  var tbStyle = 'position:fixed;top:4px;right:8px;z-index:9999;display:flex;align-items:center;gap:4px;padding:3px 6px;border-radius:5px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;background:var(--vscode-editor-background,rgba(30,30,30,0.88));border:1px solid var(--vscode-widget-border,rgba(255,255,255,0.12));backdrop-filter:blur(4px);opacity:0.75;transition:opacity 0.15s;';
+  var ddStyle = 'padding:1px 4px;border-radius:3px;border:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));background:var(--vscode-dropdown-background,#333);color:var(--vscode-dropdown-foreground,#eee);font-size:11px;outline:none;cursor:pointer;';
+  var btnStyle = 'padding:1px 5px;border-radius:3px;border:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));background:var(--vscode-dropdown-background,#333);color:var(--vscode-dropdown-foreground,#eee);cursor:pointer;font-size:13px;line-height:1;outline:none;display:flex;align-items:center;';
+
+  var toolbar = document.createElement('div');
+  toolbar.id = '__toolbar';
+  toolbar.setAttribute('role', 'toolbar');
+  toolbar.setAttribute('aria-label', ${previewToolbar});
+  toolbar.style.cssText = tbStyle;
+  toolbar.addEventListener('mouseenter', function() { toolbar.style.opacity = '1'; });
+  toolbar.addEventListener('mouseleave', function() { toolbar.style.opacity = '0.75'; });
+`;
+}
+
+// ── Shared font-preference state (read-back, apply, persist) ──
+//
+// Declares fontSize/isSerif/SERIF_STACK and the apply/save functions the
+// font buttons (getToolbarFontWidthTagTooltipsButtonsScript below) close
+// over. Kept as its own script rather than folded into that one: the topic
+// viewer applies these prefs immediately on load, before the toolbar itself
+// is built, while the map viewer builds them together with the toolbar --
+// each provider calls this wherever its own script needs fontSize/isSerif
+// to already exist, same effective timing (applied once, immediately) even
+// though the textual position differs between the two files.
+//
+// `setFontPrefsMsgType` is the raw (unquoted) postMessage type string, e.g.
+// 'setFontPrefs' -- both providers currently use the exact same value, one
+// as a literal and one via a same-valued constant.
+export function getFontPrefsScript(opts: { setFontPrefsMsgType: string }): string {
+  return `
+  var fontPrefs = window.__fontPrefs || { size: 100, serif: false };
+  var fontSize = typeof fontPrefs.size === 'number' ? fontPrefs.size : 100;
+  var isSerif = fontPrefs.serif === true;
+  var SERIF_STACK = "Georgia,'Times New Roman','Noto Serif SC','Songti SC',STSong,SimSun,serif";
+
+  function applyFontPrefs() {
+    document.body.style.fontSize = fontSize + '%';
+    document.body.style.fontFamily = isSerif ? SERIF_STACK : '';
+  }
+  applyFontPrefs();
+
+  function saveFontPrefs() {
+    vscode.postMessage({ type: '${opts.setFontPrefsMsgType}', size: fontSize, serif: isSerif });
+  }
+`;
+}
+
+// ── Shared font-size/typeface, page-width and tag-tooltip toolbar buttons ──
+//
+// Builds fsDown/fsUp/fontBtn(/fontResetBtn)/wSel/tagTooltipsBtn and their
+// listeners -- everything both providers' toolbars have always agreed on
+// byte-for-byte except for two deliberate, still-preserved differences:
+// the topic viewer alone has a font-reset button, and the map viewer's
+// font-size buttons carry an extra 'font-weight:bold;' the topic viewer's
+// don't. Both are opts here rather than silently unified, so this
+// extraction doesn't change what either toolbar looks like.
+//
+// Deliberately does NOT call toolbar.appendChild for any of these: the two
+// providers interleave them with their own buttons (theme CSS dropdown,
+// mode toggle, refresh, Flags, Filter) in different orders, and forcing one
+// shared order would be a visible behavior change this extraction isn't
+// meant to make. Each provider appends fsDown/fsUp/fontBtn/(fontResetBtn)/
+// wSel/tagTooltipsBtn itself, in whatever order it already used.
+//
+// All *Label/*Title opts are raw strings, quoted internally -- same
+// convention as getSearchOverlayScript/getProfilingFilterScript above (see
+// the comment on getToolbarScaffoldScript for why: sharedWebviewStrings()
+// hands these out as values passed into a function call, which belongs in
+// that function's raw-string group).
+export function getToolbarFontWidthTagTooltipsButtonsScript(opts: {
+  decreaseFontSize: string;
+  increaseFontSize: string;
+  fontSans: string;
+  fontSerif: string;
+  fontCurrentSans: string;
+  fontCurrentSerif: string;
+  fontSizeButtonExtraStyle: string; // raw CSS text appended after btnStyle, e.g. '' or 'font-weight:bold;'
+  includeFontReset: boolean;
+  resetFont?: string; // required (raw string) when includeFontReset is true
+  widthAuto: string;
+  widthFull: string;
+  widthWide: string;
+  widthDesktop: string;
+  widthNarrow: string;
+  pageWidth: string;
+  setWidthSelectionMsgType: string; // raw, e.g. 'setWidthSelection'
+  tagTooltipsLabel: string;
+  tagTooltipsOnTitle: string;
+  tagTooltipsOffTitle: string;
+  setTagTooltipsMsgType: string; // raw, e.g. 'setTagTooltips'
+}): string {
+  const decreaseFontSize = JSON.stringify(opts.decreaseFontSize);
+  const increaseFontSize = JSON.stringify(opts.increaseFontSize);
+  const fontSans = JSON.stringify(opts.fontSans);
+  const fontSerif = JSON.stringify(opts.fontSerif);
+  const fontCurrentSans = JSON.stringify(opts.fontCurrentSans);
+  const fontCurrentSerif = JSON.stringify(opts.fontCurrentSerif);
+  const widthAuto = JSON.stringify(opts.widthAuto);
+  const widthFull = JSON.stringify(opts.widthFull);
+  const widthWide = JSON.stringify(opts.widthWide);
+  const widthDesktop = JSON.stringify(opts.widthDesktop);
+  const widthNarrow = JSON.stringify(opts.widthNarrow);
+  const pageWidth = JSON.stringify(opts.pageWidth);
+  const tagTooltipsLabel = JSON.stringify(opts.tagTooltipsLabel);
+  const tagTooltipsOnTitle = JSON.stringify(opts.tagTooltipsOnTitle);
+  const tagTooltipsOffTitle = JSON.stringify(opts.tagTooltipsOffTitle);
+  const fsExtra = opts.fontSizeButtonExtraStyle;
+  const fontResetBlock = opts.includeFontReset ? `
+  // Reset font size + family to default in one click
+  var fontResetBtn = document.createElement('button');
+  fontResetBtn.innerHTML = '&#8635;';
+  fontResetBtn.title = ${JSON.stringify(opts.resetFont)};
+  fontResetBtn.setAttribute('aria-label', ${JSON.stringify(opts.resetFont)});
+  fontResetBtn.style.cssText = btnStyle + 'font-size:12px;';
+  fontResetBtn.addEventListener('click', function() {
+    fontSize = 100;
+    isSerif = false;
+    applyFontPrefs();
+    fontBtn.textContent = ${fontSans};
+    fontBtn.title = ${fontCurrentSans};
+    fontBtn.setAttribute('aria-label', ${fontCurrentSans});
+    saveFontPrefs();
+  });
+` : '';
+  return `
+  // Font size controls
+  var fsDown = document.createElement('button');
+  fsDown.innerHTML = 'A\u2212';
+  fsDown.title = ${decreaseFontSize};
+  fsDown.setAttribute('aria-label', ${decreaseFontSize});
+  fsDown.style.cssText = btnStyle + '${fsExtra}';
+  fsDown.addEventListener('click', function() {
+    fontSize = Math.max(60, fontSize - 10);
+    document.body.style.fontSize = fontSize + '%';
+    saveFontPrefs();
+  });
+
+  var fsUp = document.createElement('button');
+  fsUp.innerHTML = 'A+';
+  fsUp.title = ${increaseFontSize};
+  fsUp.setAttribute('aria-label', ${increaseFontSize});
+  fsUp.style.cssText = btnStyle + '${fsExtra}';
+  fsUp.addEventListener('click', function() {
+    fontSize = Math.min(200, fontSize + 10);
+    document.body.style.fontSize = fontSize + '%';
+    saveFontPrefs();
+  });
+
+  // Font toggle (serif / sans-serif) -- reflects the persisted state on open
+  var fontBtn = document.createElement('button');
+  fontBtn.textContent = isSerif ? ${fontSerif} : ${fontSans};
+  fontBtn.title = isSerif ? ${fontCurrentSerif} : ${fontCurrentSans};
+  fontBtn.setAttribute('aria-label', isSerif ? ${fontCurrentSerif} : ${fontCurrentSans});
+  fontBtn.style.cssText = btnStyle + 'font-size:11px;';
+  fontBtn.addEventListener('click', function() {
+    isSerif = !isSerif;
+    fontBtn.textContent = isSerif ? ${fontSerif} : ${fontSans};
+    fontBtn.title = isSerif ? ${fontCurrentSerif} : ${fontCurrentSans};
+    fontBtn.setAttribute('aria-label', isSerif ? ${fontCurrentSerif} : ${fontCurrentSans});
+    document.body.style.fontFamily = isSerif ? SERIF_STACK : '';
+    saveFontPrefs();
+  });
+${fontResetBlock}
+  // Page width dropdown
+  var widths = [
+    { label: ${widthAuto}, value: '' },
+    { label: ${widthFull}, value: '100%' },
+    { label: ${widthWide}, value: '1400px' },
+    { label: ${widthDesktop}, value: '1280px' },
+    { label: ${widthNarrow}, value: '720px' },
+  ];
+  var wSel = document.createElement('select');
+  wSel.title = ${pageWidth};
+  wSel.setAttribute('aria-label', ${pageWidth});
+  wSel.style.cssText = 'max-width:72px;' + ddStyle;
+  var restoredWidth = window.__widthSelection || '';
+  for (var i = 0; i < widths.length; i++) {
+    var opt = document.createElement('option');
+    opt.value = widths[i].value;
+    opt.textContent = widths[i].label;
+    if (widths[i].value === restoredWidth) opt.selected = true;
+    wSel.appendChild(opt);
+  }
+  function applyWidth(value) {
+    document.body.style.maxWidth = value;
+    document.body.style.margin = value ? '0 auto' : '';
+    // #dita-content-root.site-main (docsite mode) has its own
+    // max-width:var(--max-width); margin:0 auto -- a separate box from
+    // body, which in site mode is just the outer flex row holding the
+    // sidebar and the content pane side by side (see body.mode-site in
+    // styles.css). Setting body.style.maxWidth above only ever affected
+    // body itself, which is exactly the box site mode's own CSS already
+    // resets to max-width:none -- so every width selection was a no-op
+    // there: "Full" looked identical to "Auto" because neither one was
+    // reaching the box that actually determines the reading column's
+    // width. Setting the --max-width custom property instead reaches
+    // both: body's own rule already reads max-width:var(--max-width) (the
+    // property this used to set directly is now just a more specific
+    // duplicate of what the variable already produces in tree/book mode),
+    // and .site-main's rule, which the class-based override in site mode
+    // never touched, now tracks the same selection.
+    if (value) {
+      document.body.style.setProperty('--max-width', value);
+    } else {
+      document.body.style.removeProperty('--max-width');
+    }
+  }
+  if (restoredWidth) applyWidth(restoredWidth);
+  wSel.addEventListener('change', function() {
+    applyWidth(wSel.value);
+    vscode.postMessage({ type: '${opts.setWidthSelectionMsgType}', value: wSel.value });
+  });
+
+  // Tag-name tooltip toggle
+  var tagTooltipsOn = window.__tagTooltips === true;
+  var tagTooltipsBtn = document.createElement('button');
+  tagTooltipsBtn.textContent = ${tagTooltipsLabel};
+  tagTooltipsBtn.style.cssText = btnStyle + 'font-size:11px;';
+  function applyTagTooltips() {
+    var contentRoot = document.getElementById('dita-content-root');
+    var els = contentRoot ? contentRoot.querySelectorAll('[data-dita-tagname]') : [];
+    for (var i = 0; i < els.length; i++) {
+      if (tagTooltipsOn) els[i].setAttribute('title', els[i].getAttribute('data-dita-tagname'));
+      else els[i].removeAttribute('title');
+    }
+    tagTooltipsBtn.style.background = tagTooltipsOn ? 'var(--color-profiling-label-bg)' : '';
+    tagTooltipsBtn.style.color = tagTooltipsOn ? 'var(--color-profiling-label-text)' : '';
+    tagTooltipsBtn.title = tagTooltipsOn ? ${tagTooltipsOnTitle} : ${tagTooltipsOffTitle};
+    tagTooltipsBtn.setAttribute('aria-label', tagTooltipsOn ? ${tagTooltipsOnTitle} : ${tagTooltipsOffTitle});
+  }
+  tagTooltipsBtn.addEventListener('click', function() {
+    tagTooltipsOn = !tagTooltipsOn;
+    applyTagTooltips();
+    vscode.postMessage({ type: '${opts.setTagTooltipsMsgType}', value: tagTooltipsOn });
+  });
+  applyTagTooltips(); // reflects a persisted "on" against the initial content; a no-op walk when off, but only once per panel open
 `;
 }

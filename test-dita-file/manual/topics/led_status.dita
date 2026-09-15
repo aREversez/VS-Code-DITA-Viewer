@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE reference PUBLIC "-//OASIS//DTD DITA Reference//EN" "reference.dtd">
+<reference id="led_status" xml:lang="zh-CN">
+  <title>指示灯状态说明</title>
+  <shortdesc>环形氛围灯的不同颜色与闪烁方式代表主机的工作状态，可用于快速判断设备健康状况。</shortdesc>
+  <prolog>
+    <author type="organization"><keyword keyref="company-name"/></author>
+    <metadata>
+      <keywords>
+        <indexterm>指示灯</indexterm>
+        <indexterm>状态灯</indexterm>
+        <indexterm>LED</indexterm>
+      </keywords>
+      <prodinfo>
+        <prodname><keyword keyref="product-name"/></prodname>
+        <vrmlist><vrm version="1.0"/></vrmlist>
+      </prodinfo>
+    </metadata>
+  </prolog>
+  <refbody>
+<section>
+      <title>状态灯含义</title>
+    <table id="led-table">
+      <title>氛围灯状态一览</title>
+      <tgroup cols="3">
+        <thead><row><entry>灯效</entry><entry>状态</entry><entry>需要处理吗</entry></row></thead>
+        <tbody>
+          <row><entry>白色常亮</entry><entry>正常运行</entry><entry>否</entry></row>
+          <row><entry>白色呼吸</entry><entry>开机自检中</entry><entry>否，稍候即可</entry></row>
+          <row><entry>青色渐变</entry><entry>正在语音交互</entry><entry>否</entry></row>
+          <row><entry>绿色快闪</entry><entry>固件升级中</entry><entry>否，切勿断电</entry></row>
+          <row><entry>黄色慢闪</entry><entry>网络已断开</entry><entry>是，参见 <xref href="ts_network.dita"/></entry></row>
+          <row><entry>红色常亮</entry><entry>系统异常</entry><entry>是，参见 <xref href="ts_power.dita"/></entry></row>
+          <row><entry>红色快闪</entry><entry>温度过高保护</entry><entry>是，参见 <xref href="ts_overheat.dita"/></entry></row>
+        </tbody>
+      </tgroup>
+    </table>
+    </section>    <section>
+      <title>灯效示意</title>
+    <fig><title>常见灯效示意</title>
+      <image href="../images/led-indicators.svg" format="svg" placement="break"><alt>从左到右：白色常亮、青色渐变、黄色慢闪、红色常亮四种灯效</alt></image>
+    </fig>
+    <note type="tip"><p>可在 <menucascade><uicontrol>设置</uicontrol><uicontrol>氛围灯</uicontrol></menucascade> 中关闭夜间灯效或调整亮度。</p></note></section>
+  </refbody>
+</reference>

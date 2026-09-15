@@ -1,0 +1,19 @@
+# Normalize line endings to LF for every text file this repo tracks,
+# regardless of what a contributor's local core.autocrlf setting does on
+# checkin, and regardless of a CI runner's own git defaults on checkout
+# (GitHub-hosted windows-latest runners historically default to
+# core.autocrlf=true, which converts LF -> CRLF on checkout unless a
+# .gitattributes here overrides it). This repo had no .gitattributes at
+# all before this file, so a Windows checkout's line endings were left
+# entirely to whatever the runner's global git config happened to be.
+*                 text=auto eol=lf
+
+# Binary formats: never touch line endings, on any platform.
+*.png             binary
+*.jpg             binary
+*.jpeg            binary
+*.gif             binary
+*.ico             binary
+*.woff            binary
+*.woff2           binary
+*.ttf             binary
