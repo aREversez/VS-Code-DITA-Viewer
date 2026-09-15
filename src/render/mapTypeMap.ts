@@ -1,3 +1,4 @@
+import { isAbsolute } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { mergeProfilingAttrs, profilingKeysAttr, profilingChipsHtml } from './renderer';
 
@@ -508,6 +509,40 @@ const MAP_BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   'map/mapref': renderRef,
 };
 
+/** True when a bare href isn't a scoped/absolute/scheme'd reference to
+ *  somewhere outside the local doc tree -- copy of ditaRenderUtils.ts's
+ *  own private isLocalHref (kept private and duplicated here, not
+ *  exported/shared, since it's a 4-line pure classification helper and
+ *  this file otherwise has no runtime dependency on ditaRenderUtils.ts;
+ *  see isDitamapRef below for why this file needs its own copy at all). */
+function isLocalHref(href: string, scope?: string): boolean {
+  if (!href || href.startsWith('#')) return false;
+  if (scope === 'external' || scope === 'peer') return false;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(href)) return false;
+  if (isAbsolute(href)) return false;
+  return true;
+}
+
+/** True when the node is a topicref/keydef/mapref pointing at another
+ *  local .ditamap -- i.e. a node expandDitamapRefs (ditaRenderUtils.ts)
+ *  inlines the referenced map's own top-level children into, in place of
+ *  this node ever representing a page of its own. ditaRenderUtils.ts
+ *  imports this rather than the other way around (this file has no
+ *  runtime dependency on ditaRenderUtils.ts) since collectEntriesRecursive
+ *  below needs the exact same definition expandDitamapRefs itself uses --
+ *  a node this function says isn't a ditamap ref never gets its children
+ *  spliced in by expandDitamapRefs in the first place, so the two must
+ *  agree on every case. */
+export function isDitamapRef(node: DitaNode): boolean {
+  if (node.type !== 'element') return false;
+  const baseType = node.baseType;
+  if (baseType !== 'map/topicref' && baseType !== 'map/keydef' && baseType !== 'map/mapref') return false;
+  const href = node.attributes?.href;
+  if (!href || !isLocalHref(href, node.attributes?.scope)) return false;
+  const pathPart = href.split('#')[0].toLowerCase();
+  return pathPart.endsWith('.ditamap') || node.attributes?.format === 'ditamap';
+}
+
 export interface MapEntry {
   href?: string;
   displayName: string;
@@ -522,6 +557,21 @@ export interface MapEntry {
   keys?: string;
   /** BookMap structural role, numbered in document order ("Chapter 1", "Appendix A", …) */
   role?: string;
+  /** True when this entry's effective DITA processing-role -- its own
+   *  processing-role attribute if set, else inherited down from the
+   *  nearest ancestor that set one, defaulting to 'normal' at the map's
+   *  own root -- is 'resource-only'. A <keydef> is resource-only by this
+   *  same default even with no processing-role attribute of its own (DITA
+   *  spec: keydef's processing-role itself defaults to resource-only),
+   *  though an explicit processing-role="normal" directly on the keydef
+   *  still overrides that back to navigable, same as for any other
+   *  topicref. Left true on every entry it applies to (not filtered out
+   *  of collectMapEntries' own result here) since this function has other
+   *  consumers -- keyref completion/outline/go-to-definition -- that need
+   *  to see every keydef and resource-only branch regardless; it's the
+   *  reading-oriented consumers (buildBookNavManifest, renderBookParts,
+   *  exportHtml.ts) that skip an entry once they see resourceOnly true. */
+  resourceOnly?: boolean;
 }
 
 function collectEntriesRecursive(
@@ -530,12 +580,52 @@ function collectEntriesRecursive(
   result: MapEntry[],
   resolveKey: ResolveKey | undefined,
   roleLabel: RoleLabeler,
+  inheritedProcessingRole: 'normal' | 'resource-only' = 'normal',
 ): void {
   if (node.type !== 'element') return;
   const baseType = node.baseType;
 
   // Skip reltable and its children
   if (baseType === 'map/reltable') return;
+
+  if (isDitamapRef(node)) {
+    // A transparent transclusion wrapper: expandDitamapRefs (called before
+    // collectMapEntries always runs) has already spliced the referenced
+    // map's own top-level children in as this node's own children, in
+    // place of this node ever being a page of its own -- a .ditamap href
+    // never resolves to a real topic file (resolveBookTopicPath in
+    // ditaRenderUtils.ts returns undefined for one), so this node was
+    // never going to survive downstream filtering as an entry anyway.
+    // More importantly: recursing at the SAME depth (not depth + 1) means
+    // the referenced map's own chapters/sections become peers of whatever
+    // this node itself would have been a peer of, continuing the same
+    // role-numbering sequence (createBookRoleLabeler's depth-keyed
+    // counters, below) rather than restarting from "Chapter 1" one nesting
+    // level deeper just because expandDitamapRefs happened to splice them
+    // in as DOM children of this wrapper node.
+    for (const child of node.children || []) {
+      collectEntriesRecursive(child, depth, result, resolveKey, roleLabel, inheritedProcessingRole);
+    }
+    return;
+  }
+
+  // DITA processing-role inheritance: an explicit attribute on this node
+  // wins outright; failing that, a bare <keydef> defaults to resource-only
+  // (the one place a tag itself carries a different default than its
+  // ancestors, per spec) same as it would if it explicitly wrote
+  // processing-role="resource-only" itself; failing that, this node
+  // inherits whatever its own parent resolved to (passed in as
+  // inheritedProcessingRole), which is 'normal' unless some ancestor
+  // upstream already opted the branch into resource-only.
+  const ownProcessingRole = getAttr(node, 'processing-role');
+  const effectiveProcessingRole: 'normal' | 'resource-only' =
+    ownProcessingRole === 'resource-only'
+      ? 'resource-only'
+      : ownProcessingRole === 'normal'
+        ? 'normal'
+        : baseType === 'map/keydef'
+          ? 'resource-only'
+          : inheritedProcessingRole;
 
   if (baseType === 'map/topicref' || baseType === 'map/keydef' || baseType === 'map/mapref' || baseType === 'map/topichead') {
     const href = getAttr(node, 'href');
@@ -547,20 +637,26 @@ function collectEntriesRecursive(
       displayNameExplicit: nameInfo.explicit,
       depth,
       keys,
-      role: roleLabel(node.tagName, depth),
+      // A resource-only branch never burns/bumps a chapter-style counter
+      // slot -- it's never going to appear in a reading nav that shows
+      // role numbers, so numbering a chapter that will never be seen
+      // (and, worse, leaving a visible gap where its number would have
+      // been) serves no one.
+      role: effectiveProcessingRole === 'resource-only' ? undefined : roleLabel(node.tagName, depth),
+      resourceOnly: effectiveProcessingRole === 'resource-only',
     });
     // Recurse children at depth+1
     for (const child of node.children || []) {
-      collectEntriesRecursive(child, depth + 1, result, resolveKey, roleLabel);
+      collectEntriesRecursive(child, depth + 1, result, resolveKey, roleLabel, effectiveProcessingRole);
     }
   } else if (baseType === 'map/topicgroup' || baseType === 'map/bookmap-structural') {
     // topicgroup / bookmap-structural: no entry itself, but recurse at same depth
     for (const child of node.children || []) {
-      collectEntriesRecursive(child, depth, result, resolveKey, roleLabel);
+      collectEntriesRecursive(child, depth, result, resolveKey, roleLabel, effectiveProcessingRole);
     }
   } else {
     for (const child of node.children || []) {
-      collectEntriesRecursive(child, depth, result, resolveKey, roleLabel);
+      collectEntriesRecursive(child, depth, result, resolveKey, roleLabel, effectiveProcessingRole);
     }
   }
 }
