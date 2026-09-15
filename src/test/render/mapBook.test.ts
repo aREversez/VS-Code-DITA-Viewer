@@ -354,6 +354,106 @@ describe('collectMapEntries', () => {
     assert.strictEqual(entries[3].role, 'Chapter 3');
     assert.strictEqual(entries[4].role, 'Chapter 1');
   });
+
+  // --- resourceOnly (processing-role) ---
+
+  it('marks a <keydef> resourceOnly by default even with no processing-role attribute of its own (DITA spec default)', () => {
+    const doc = parseMap('<map><title>T</title><keydef keys="k" href="a.dita"/></map>');
+    const entries = collectMapEntries(doc.root);
+    assert.strictEqual(entries[0].resourceOnly, true);
+  });
+
+  it('does not mark a plain topicref resourceOnly by default -- only <keydef> gets that implicit default', () => {
+    const doc = parseMap('<map><title>T</title><topicref href="a.dita"/></map>');
+    const entries = collectMapEntries(doc.root);
+    assert.strictEqual(entries[0].resourceOnly, false);
+  });
+
+  it('respects an explicit processing-role="resource-only" on a plain topicref', () => {
+    const doc = parseMap('<map><title>T</title><topicref href="a.dita" processing-role="resource-only"/></map>');
+    const entries = collectMapEntries(doc.root);
+    assert.strictEqual(entries[0].resourceOnly, true);
+  });
+
+  it('lets an explicit processing-role="normal" on a <keydef> override its own resource-only default', () => {
+    const doc = parseMap('<map><title>T</title><keydef keys="k" href="a.dita" processing-role="normal"/></map>');
+    const entries = collectMapEntries(doc.root);
+    assert.strictEqual(entries[0].resourceOnly, false);
+  });
+
+  it('inherits resourceOnly down to children with no processing-role of their own', () => {
+    const doc = parseMap('<map><title>T</title><topicref href="a.dita" processing-role="resource-only"><topicref href="b.dita"/></topicref></map>');
+    const entries = collectMapEntries(doc.root);
+    assert.strictEqual(entries[0].resourceOnly, true);
+    assert.strictEqual(entries[1].resourceOnly, true, 'child inherits from its resource-only parent');
+  });
+
+  it('lets a child override an inherited resourceOnly back to normal with its own explicit processing-role', () => {
+    const doc = parseMap('<map><title>T</title><topicref href="a.dita" processing-role="resource-only"><topicref href="b.dita" processing-role="normal"/></topicref></map>');
+    const entries = collectMapEntries(doc.root);
+    assert.strictEqual(entries[0].resourceOnly, true);
+    assert.strictEqual(entries[1].resourceOnly, false, 'explicit override wins over the inherited value');
+  });
+
+  it('never burns a role/chapter-number slot on a resource-only chapter', () => {
+    const doc = parseMap('<bookmap><chapter href="a.dita" processing-role="resource-only"/><chapter href="b.dita"/></bookmap>');
+    const entries = collectMapEntries(doc.root);
+    assert.strictEqual(entries[0].role, undefined, 'resource-only chapter gets no role at all');
+    assert.strictEqual(entries[1].role, 'Chapter 1', 'and the next real chapter is still 1, not 2 -- no slot was consumed');
+  });
+
+  // --- isDitamapRef depth-transparency (mapref/keydef/chapter pointing at another .ditamap) ---
+
+  it('recurses into a <mapref href="...ditamap"> at the SAME depth as the mapref itself, not one level deeper', () => {
+    // Hand-authoring the mapref's own children directly here rather than
+    // going through expandDitamapRefs + real files on disk -- this is
+    // exactly the shape expandDitamapRefs leaves behind (the referenced
+    // map's own top-level children spliced in as this node's DOM
+    // children), and collectEntriesRecursive doesn't care how they got
+    // there.
+    const doc = parseMap(`<bookmap>
+      <chapter href="local1.dita"/>
+      <mapref href="sub.ditamap">
+        <chapter href="sub1.dita"/>
+        <chapter href="sub2.dita"/>
+      </mapref>
+      <chapter href="local2.dita"/>
+    </bookmap>`);
+    const entries = collectMapEntries(doc.root);
+    // The mapref itself never becomes its own entry (a .ditamap href is
+    // never a real topic), so all four chapters land as siblings, same
+    // depth, numbered continuously.
+    assert.strictEqual(entries.length, 4);
+    assert.deepStrictEqual(entries.map((e) => e.href), ['local1.dita', 'sub1.dita', 'sub2.dita', 'local2.dita']);
+    assert.deepStrictEqual(entries.map((e) => e.depth), [0, 0, 0, 0]);
+    assert.deepStrictEqual(entries.map((e) => e.role), ['Chapter 1', 'Chapter 2', 'Chapter 3', 'Chapter 4']);
+  });
+
+  it('applies the same depth-transparency to a <chapter href="...ditamap" format="ditamap"> (the more common real-world authoring pattern than a bare <mapref>)', () => {
+    const doc = parseMap(`<bookmap>
+      <chapter href="local1.dita"/>
+      <chapter href="sub.ditamap" format="ditamap">
+        <chapter href="sub1.dita"/>
+      </chapter>
+    </bookmap>`);
+    const entries = collectMapEntries(doc.root);
+    assert.strictEqual(entries.length, 2, 'the wrapper chapter itself never becomes an entry -- a .ditamap href is never a real topic');
+    assert.deepStrictEqual(entries.map((e) => e.href), ['local1.dita', 'sub1.dita']);
+    assert.deepStrictEqual(entries.map((e) => e.role), ['Chapter 1', 'Chapter 2'], 'sub1 continues the outer sequence rather than nesting as a new "Chapter 1" one level deeper');
+  });
+
+  it('does not apply depth-transparency to an ordinary nested topicref/chapter with real (non-ditamap) content -- normal nesting still restarts the counter one level deeper', () => {
+    const doc = parseMap(`<bookmap>
+      <chapter href="a.dita">
+        <chapter href="a1.dita"/>
+      </chapter>
+    </bookmap>`);
+    const entries = collectMapEntries(doc.root);
+    assert.strictEqual(entries.length, 2);
+    assert.strictEqual(entries[0].depth, 0);
+    assert.strictEqual(entries[1].depth, 1, 'a real (non-ditamap-ref) nested chapter still goes one level deeper');
+    assert.strictEqual(entries[1].role, 'Chapter 1', 'and still gets its own restarted counter at that deeper level');
+  });
 });
 
 describe('bookRendering', () => {
@@ -855,13 +955,60 @@ describe('resolveBookTopicPath / buildBookNavManifest (docsite nav manifest)', (
     const entries: MapEntry[] = [
       { href: 'topics/ch1.dita', displayName: 'Chapter One', displayNameExplicit: true, depth: 0, role: 'Chapter 1' },
       { href: 'topics/ch1-s1.dita', displayName: 'Section 1.1', displayNameExplicit: true, depth: 1 },
-      { href: undefined, displayName: 'No target', displayNameExplicit: true, depth: 0 }, // e.g. a keydef
+      { href: undefined, displayName: 'No target', displayNameExplicit: true, depth: 0 }, // childless keys-only topicref, not a topichead -- see buildBookNavManifest's own comment
     ];
     const manifest = buildBookNavManifest(entries, docDir);
     assert.deepStrictEqual(manifest, [
       { absPath: join(docDir, 'topics/ch1.dita'), title: 'Chapter One', depth: 0, role: 'Chapter 1', topicType: undefined },
       { absPath: join(docDir, 'topics/ch1-s1.dita'), title: 'Section 1.1', depth: 1, role: undefined, topicType: undefined },
+      // The trailing hrefless entry has nothing deeper following it, so
+      // it's dropped rather than becoming an empty group header.
     ]);
+  });
+
+  it('keeps a hrefless entry as a non-navigable group header when it has real descendants nested under it (a <topichead>, in practice)', () => {
+    const entries: MapEntry[] = [
+      { href: undefined, displayName: 'Chapter 1: Intro', displayNameExplicit: true, depth: 0 },
+      { href: 'topics/about.dita', displayName: 'About', displayNameExplicit: true, depth: 1 },
+      { href: 'topics/overview.dita', displayName: 'Overview', displayNameExplicit: true, depth: 1 },
+    ];
+    const manifest = buildBookNavManifest(entries, docDir);
+    assert.deepStrictEqual(manifest, [
+      { title: 'Chapter 1: Intro', depth: 0, role: undefined, isGroup: true },
+      { absPath: join(docDir, 'topics/about.dita'), title: 'About', depth: 1, role: undefined, topicType: undefined },
+      { absPath: join(docDir, 'topics/overview.dita'), title: 'Overview', depth: 1, role: undefined, topicType: undefined },
+    ]);
+  });
+
+  it('drops a hrefless entry with no descendants (a bare key-only topicref/keydef used only for keyref substitution) rather than showing an empty group', () => {
+    const entries: MapEntry[] = [
+      { href: undefined, displayName: 'V1.0.0', displayNameExplicit: true, depth: 0 },
+      { href: 'topics/real.dita', displayName: 'Real Topic', displayNameExplicit: true, depth: 0 },
+    ];
+    const manifest = buildBookNavManifest(entries, docDir);
+    assert.strictEqual(manifest.length, 1, 'the childless hrefless entry contributes nothing');
+    assert.strictEqual(manifest[0].title, 'Real Topic');
+  });
+
+  it('drops a trailing hrefless entry with no descendants even when it is the very last entry in the map (no entries[i+1] to look at at all)', () => {
+    const entries: MapEntry[] = [
+      { href: 'topics/real.dita', displayName: 'Real Topic', displayNameExplicit: true, depth: 0 },
+      { href: undefined, displayName: 'V1.0.0', displayNameExplicit: true, depth: 0 },
+    ];
+    assert.doesNotThrow(() => buildBookNavManifest(entries, docDir));
+    const manifest = buildBookNavManifest(entries, docDir);
+    assert.strictEqual(manifest.length, 1);
+  });
+
+  it('a resource-only hrefless entry never becomes a group header, even with real descendants nested under it', () => {
+    const entries: MapEntry[] = [
+      { href: undefined, displayName: 'Hidden Group', displayNameExplicit: true, depth: 0, resourceOnly: true },
+      { href: 'topics/child.dita', displayName: 'Child', displayNameExplicit: true, depth: 1 },
+    ];
+    const manifest = buildBookNavManifest(entries, docDir);
+    assert.strictEqual(manifest.length, 1, 'the resource-only group header itself is skipped, but its child is not resource-only and still shows');
+    assert.strictEqual(manifest[0].title, 'Child');
+    assert.strictEqual(manifest[0].depth, 1, 'depth is untouched -- the child keeps its original nesting level even though its group header did not survive');
   });
 
   it('calls resolveTopicType for every entry with a real href and stores its return as topicType, regardless of whether role is also present', () => {
@@ -870,10 +1017,9 @@ describe('resolveBookTopicPath / buildBookNavManifest (docsite nav manifest)', (
       { href: 'topics/ch1.dita', displayName: 'Chapter One', displayNameExplicit: true, depth: 0, role: 'Chapter 1' },
       // Plain topicref whose target is a <concept> -- only the type chip fires.
       { href: 'topics/c.dita', displayName: 'Concept X', displayNameExplicit: true, depth: 1 },
-      // Keydef with no href -- no file to read, no type chip. Excluded from
-      // the manifest entirely by resolveBookTopicPath (it returns undefined
-      // for hrefless entries), so this entry contributes nothing to either
-      // the call list or the result.
+      // Childless keys-only topicref, no href -- no file to read, no type
+      // chip, and (per buildBookNavManifest's own comment) not even
+      // surfaced as a group header since it has nothing nested under it.
       { href: undefined, displayName: 'No target', displayNameExplicit: true, depth: 0 },
     ];
     const calls: string[] = [];
@@ -884,11 +1030,11 @@ describe('resolveBookTopicPath / buildBookNavManifest (docsite nav manifest)', (
       if (href === 'topics/c.dita') return 'Concept';
       return undefined;
     });
-    // resolveTopicType was called for both real-href entries, NOT the keydef
-    // (which never reached the resolver because resolveBookTopicPath filters
-    // hrefless entries out before the resolver is consulted).
+    // resolveTopicType was called for both real-href entries, NOT the
+    // hrefless one (which never reached the resolver -- it has no href
+    // to pass it in the first place).
     assert.deepStrictEqual(calls, ['topics/ch1.dita', 'topics/c.dita']);
-    assert.strictEqual(manifest.length, 2, 'keydef entry was filtered out, manifest has the two real-href entries');
+    assert.strictEqual(manifest.length, 2, 'the childless hrefless entry was dropped, manifest has the two real-href entries');
     assert.strictEqual(manifest[0].topicType, 'Task', 'chapter entry still gets its topic type');
     assert.strictEqual(manifest[1].topicType, 'Concept', 'plain topicref gets its topic type');
   });
@@ -1162,5 +1308,62 @@ describe('renderSiteNavHtml', () => {
     const html = renderSiteNavHtml(manifest, manifest[0].absPath, 'Topics', evil);
     assert.ok(!html.includes('<script>'), 'no raw script tag anywhere, including from the toggle labels');
     assert.ok(html.includes('&lt;script&gt;'));
+  });
+
+  // --- group entries (DocsiteNavEntry.isGroup -- a topichead, in practice) ---
+
+  it('renders a group entry as a non-clickable label -- no <a>, no data-site-target -- with its real children nested under it', () => {
+    const withGroup = [
+      { title: 'Chapter 1: Intro', depth: 0, isGroup: true },
+      { absPath: '/proj/docs/topics/about.dita', title: 'About', depth: 1 },
+    ];
+    const html = renderSiteNavHtml(withGroup, withGroup[1].absPath as string, 'Topics');
+    const groupLi = /<li class="site-nav-item site-nav-item--group[^>]*>.*<\/li>/s.exec(html);
+    assert.ok(groupLi, 'the group entry should render with the site-nav-item--group class');
+    assert.ok(!groupLi![0].startsWith('') || !/<a[ >]/.test(groupLi![0].split('site-nav-children')[0]), 'no <a> tag before the nested children -- the group label itself is not a link');
+    assert.ok(groupLi![0].includes('data-site-target="/proj/docs/topics/about.dita"'), 'the real child link should still be nested inside the group\'s own <li>');
+    assert.ok(!html.includes('data-site-target="Chapter 1: Intro"'), 'the group entry itself never gets a data-site-target');
+  });
+
+  it('still gives a group entry with children an expand/collapse toggle, same as any other parent', () => {
+    const withGroup = [
+      { title: 'Chapter 1', depth: 0, isGroup: true },
+      { absPath: '/proj/docs/topics/a.dita', title: 'A', depth: 1 },
+    ];
+    const html = renderSiteNavHtml(withGroup, withGroup[1].absPath as string, 'Topics');
+    assert.strictEqual((html.match(/class="site-nav-toggle"/g) || []).length, 1);
+  });
+
+  it('a group entry with no children at all still renders (no toggle, just the bare label) rather than throwing', () => {
+    const bareGroup = [{ title: 'Empty Section', depth: 0, isGroup: true }];
+    assert.doesNotThrow(() => renderSiteNavHtml(bareGroup, '', 'Topics'));
+    const html = renderSiteNavHtml(bareGroup, '', 'Topics');
+    assert.ok(!html.includes('site-nav-toggle'));
+    assert.ok(html.includes('Empty Section'));
+  });
+
+  it('escapes a group entry\'s own title the same way a real link\'s title is escaped', () => {
+    const evilGroup = [{ title: '<script>alert(1)</script>', depth: 0, isGroup: true }];
+    const html = renderSiteNavHtml(evilGroup, '', 'Topics');
+    assert.ok(!html.includes('<script>alert'));
+    assert.ok(html.includes('&lt;script&gt;'));
+  });
+
+  it('nests two sibling groups\' children correctly (the manual.ditamap regression this feature exists for): each topichead\'s own topics stay under it, not flattened together', () => {
+    const twoChapters = [
+      { title: 'Chapter 1', depth: 0, isGroup: true },
+      { absPath: '/proj/docs/topics/a.dita', title: 'A', depth: 1 },
+      { absPath: '/proj/docs/topics/b.dita', title: 'B', depth: 1 },
+      { title: 'Chapter 2', depth: 0, isGroup: true },
+      { absPath: '/proj/docs/topics/c.dita', title: 'C', depth: 1 },
+    ];
+    const html = renderSiteNavHtml(twoChapters, twoChapters[1].absPath as string, 'Topics');
+    // Two top-level <li>s (one per chapter), not four/five flattened siblings.
+    assert.strictEqual((html.match(/class="site-nav-item site-nav-item--group/g) || []).length, 2);
+    const chapter1Li = /<li class="site-nav-item site-nav-item--group[^"]*"[^>]*>.*?(?=<li class="site-nav-item site-nav-item--group)/s.exec(html);
+    assert.ok(chapter1Li, 'chapter 1\'s own <li> should be extractable up to the start of chapter 2\'s');
+    assert.ok(chapter1Li![0].includes('data-site-target="/proj/docs/topics/a.dita"'));
+    assert.ok(chapter1Li![0].includes('data-site-target="/proj/docs/topics/b.dita"'));
+    assert.ok(!chapter1Li![0].includes('data-site-target="/proj/docs/topics/c.dita"'), 'chapter 2\'s topic C must not leak into chapter 1\'s own subtree');
   });
 });

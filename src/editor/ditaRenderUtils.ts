@@ -4,6 +4,7 @@ import { DitaNode } from '../parser/domTypes';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
 import type { MapEntry } from '../render/mapTypeMap';
+import { isDitamapRef } from '../render/mapTypeMap';
 import type { BookPart } from './bookPatch';
 
 // ── Image dimensions (for reserving layout space before the image loads) ──
@@ -840,17 +841,6 @@ function isLocalHref(href: string, scope?: string): boolean {
   return true;
 }
 
-/** True when the node is a topicref/keydef/mapref pointing at another local .ditamap. */
-export function isDitamapRef(node: DitaNode): boolean {
-  if (node.type !== 'element') return false;
-  const baseType = node.baseType;
-  if (baseType !== 'map/topicref' && baseType !== 'map/keydef' && baseType !== 'map/mapref') return false;
-  const href = node.attributes?.href;
-  if (!href || !isLocalHref(href, node.attributes?.scope)) return false;
-  const pathPart = href.split('#')[0].toLowerCase();
-  return pathPart.endsWith('.ditamap') || node.attributes?.format === 'ditamap';
-}
-
 // Hrefs inside a referenced map are relative to that map's own folder.
 // When its children are inlined into the root map's tree, rewrite them so
 // they stay valid relative to the root map's folder — otherwise nested
@@ -1195,6 +1185,7 @@ export function clearBookMembersCache(): void {
 function getStableBookMembers(entries: MapEntry[], docDir: string): ReadonlySet<string> {
   const paths: string[] = [];
   for (const entry of entries) {
+    if (entry.resourceOnly) continue; // never rendered as its own page -- not a book member for xref-target purposes either
     const absPath = resolveBookTopicPath(entry, docDir);
     if (absPath) paths.push(absPath);
   }
@@ -1379,8 +1370,9 @@ export interface DocsiteNavEntry {
   /** Resolved absolute path -- the same identity renderBookParts's own
    *  `visited` set and de-duplication use, and what a future "is this xref
    *  target part of the current book" check (docsite design doc, 3.2/4.5)
-   *  will key off of. */
-  absPath: string;
+   *  will key off of. Undefined exactly when isGroup is true (see below) --
+   *  a group entry has no topic file of its own to resolve one from. */
+  absPath?: string;
   title: string;
   /** Nesting level, 0 at the map's own top level -- for sidebar indentation. */
   depth: number;
@@ -1395,6 +1387,27 @@ export interface DocsiteNavEntry {
    *  full of `<topic>` files doesn't get a row of identical "Topic"
    *  chips with no information -- only specializations get a chip. */
   topicType?: string;
+  /** True for an entry with no topic of its own to navigate to -- a
+   *  <topichead> (pure heading, no href by definition) or an href-less
+   *  topicref used purely as a grouping container -- kept in the
+   *  manifest anyway (rather than dropped, which is what happened before
+   *  this field existed) purely so its real, navigable descendants have
+   *  a labeled branch to nest under in the sidebar tree. See
+   *  buildBookNavManifest's own comment for why an href-less entry with
+   *  no descendants (a bare key-only topicref/keydef used only for
+   *  keyref text substitution) is dropped rather than becoming an empty
+   *  isGroup entry. Matches how tree mode already renders a topichead as
+   *  a non-clickable heading with the same nested-children shape
+   *  (map/topichead in mapTypeMap.ts) and how book mode already renders
+   *  one as a plain section heading (renderBookParts's own `struct:`
+   *  placeholder branch). renderSiteNavHtml skips the link markup
+   *  entirely for a group entry -- title text only, no data-site-target,
+   *  no click-to-navigate -- and every consumer that otherwise assumes
+   *  every manifest entry has a real topic file behind it (search
+   *  indexing, the initial/fallback page, book-membership checks) must
+   *  filter these out first; see MapViewerProvider.ts's own
+   *  siteNavigableEntries. */
+  isGroup?: boolean;
 }
 
 /**
@@ -1431,6 +1444,11 @@ export interface DocsiteNavEntry {
  * sniff of the root tag, not a full parse; see sniffRootTagName's own
  * comment), specifically so this being unconditional doesn't reintroduce
  * an O(topics-in-book) cost on every docsite render.
+ *
+ * entry.resourceOnly is checked before anything else, group entries
+ * included -- a resource-only <topichead> (unusual, but not invalid) is
+ * skipped outright rather than surfaced as an empty group, same as a
+ * resource-only real topic is skipped rather than surfaced as a page.
  */
 export function buildBookNavManifest(
   entries: MapEntry[],
@@ -1440,24 +1458,61 @@ export function buildBookNavManifest(
 ): DocsiteNavEntry[] {
   const seen = new Set<string>();
   const result: DocsiteNavEntry[] = [];
-  for (const entry of entries) {
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    if (entry.resourceOnly) continue; // exists purely to be pulled in via keyref/conref elsewhere, never its own page
+    if (!entry.href) {
+      // No topic file of its own -- either a <topichead> (which by
+      // definition never has one) or a bare key-only topicref/keydef
+      // (used purely for keyref text substitution, e.g.
+      // <topicref keys="product_version"><topicmeta><linktext>1.0
+      // </linktext></topicmeta></topicref>, with no navigable content of
+      // its own either). Those two cases look identical on a MapEntry (no
+      // baseType/tagName carried through), so they're told apart the only
+      // way that's actually meaningful for the sidebar: does this entry
+      // have anything nested under it. A topichead grouping real
+      // topicrefs has entries[i+1..] at a deeper depth right after it and
+      // becomes a group header (DocsiteNavEntry.isGroup); a leaf
+      // key-only topicref has nothing deeper following it and is
+      // dropped, exactly as it always was before isGroup existed --
+      // showing an unclickable, childless "V1.0.0" row in the reading
+      // sidebar for what is really just a keyref variable would be pure
+      // noise, not navigation.
+      const hasChildren = i + 1 < entries.length && entries[i + 1].depth > entry.depth;
+      if (hasChildren) {
+        result.push({ title: entry.displayName, depth: entry.depth, role: entry.role, isGroup: true });
+      }
+      continue;
+    }
     const absPath = resolveBookTopicPath(entry, docDir);
     if (!absPath || seen.has(absPath)) continue; // same one-entry-per-topic rule renderBookParts's own `visited` set enforces
     seen.add(absPath);
     let title = entry.displayName;
-    if (resolveTopicTitle && entry.href) {
+    if (resolveTopicTitle) {
       const realTitle = resolveTopicTitle(entry.href);
       if (realTitle) title = realTitle;
     }
-    // Topic type is read straight off the topic file (not the map), so a
-    // missing href (keydef-only entry, fragment-only self-reference) has
-    // no file to read from and therefore no type chip -- skipped here
-    // rather than calling the resolver with an undefined href, matching
-    // resolveTopicTitle's own guard above.
-    const topicType = entry.href && resolveTopicType ? resolveTopicType(entry.href) : undefined;
+    const topicType = resolveTopicType ? resolveTopicType(entry.href) : undefined;
     result.push({ absPath, title, depth: entry.depth, role: entry.role, topicType });
   }
   return result;
+}
+
+/**
+ * The subset of a docsite manifest that actually has a topic file behind
+ * it -- every entry except a group header (DocsiteNavEntry.isGroup; see
+ * its own comment). buildBookNavManifest's result is the sidebar's own
+ * data source and needs the group headers to build its nested tree, but
+ * anything treating the manifest as "the list of pages/files in this
+ * book" (full-text search indexing, the book-membership set xref
+ * resolution checks against, picking a fallback/first page to land on)
+ * would misbehave on an absPath-less entry -- this is the one place that
+ * filter lives, rather than every one of those call sites repeating
+ * `.filter((m) => m.absPath !== undefined)` (and the type narrowing that
+ * goes with it) on its own.
+ */
+export function siteNavigableEntries(manifest: DocsiteNavEntry[]): (DocsiteNavEntry & { absPath: string })[] {
+  return manifest.filter((entry): entry is DocsiteNavEntry & { absPath: string } => entry.absPath !== undefined);
 }
 
 /** One manifest entry plus the direct children nested under it, built by
@@ -1548,7 +1603,6 @@ export function renderSiteNavHtml(
   const renderNode = (node: SiteNavTreeNode): string => {
     const entry = node.entry;
     const hasChildren = node.children.length > 0;
-    const activeClass = entry.absPath === currentAbsPath ? ' active' : '';
     // The link's own padding-left carries the full indent, toggle slot
     // included, exactly as before this feature -- the toggle itself is a
     // sibling, absolutely positioned into that reserved slot (see
@@ -1577,12 +1631,27 @@ export function renderSiteNavHtml(
     const toggleHtml = hasChildren
       ? `<button type="button" class="site-nav-toggle" style="left:${toggleLeft}px" aria-expanded="true" aria-label="${collapseLabel}" data-expand-label="${expandLabel}" data-collapse-label="${collapseLabel}"></button>`
       : '';
-    const link = `<a href="#" class="site-nav-link${activeClass}" data-site-target="${escapeAttr(entry.absPath)}" style="padding-left:${indent}px" title="${escapeAttr(entry.title)}">${roleChip}${typeChip}<span class="site-nav-link-text">${escapeHtml(entry.title)}</span></a>`;
     const childrenHtml = hasChildren
       ? `<ul class="site-nav-children" role="group">${node.children.map(renderNode).join('')}</ul>`
       : '';
     const itemClass = hasChildren ? ' has-children' : '';
     const itemAriaExpanded = hasChildren ? ' aria-expanded="true"' : '';
+    // A group entry (DocsiteNavEntry.isGroup -- a <topichead> or a bare
+    // key-only topicref, see that field's own comment) has no topic file
+    // to navigate to, so it renders as a plain non-clickable label -- no
+    // <a>, no data-site-target, no href -- instead of renderSiteNavHtml's
+    // usual link markup. Its own expand/collapse toggle (if it has
+    // children) still works exactly like any other parent's; only the
+    // click-to-navigate behavior is missing, matching how tree mode
+    // already renders a topichead as a non-clickable heading
+    // (map/topichead in mapTypeMap.ts) and book mode renders one as a
+    // plain section heading (renderBookParts's own `struct:` branch).
+    if (entry.isGroup) {
+      const label = `<span class="site-nav-group-label" style="padding-left:${indent}px" title="${escapeAttr(entry.title)}">${roleChip}<span class="site-nav-link-text">${escapeHtml(entry.title)}</span></span>`;
+      return `<li class="site-nav-item site-nav-item--group${itemClass}" role="treeitem"${itemAriaExpanded}>${toggleHtml}${label}${childrenHtml}</li>`;
+    }
+    const activeClass = entry.absPath === currentAbsPath ? ' active' : '';
+    const link = `<a href="#" class="site-nav-link${activeClass}" data-site-target="${escapeAttr(entry.absPath as string)}" style="padding-left:${indent}px" title="${escapeAttr(entry.title)}">${roleChip}${typeChip}<span class="site-nav-link-text">${escapeHtml(entry.title)}</span></a>`;
     return `<li class="site-nav-item${itemClass}" role="treeitem"${itemAriaExpanded}>${toggleHtml}${link}${childrenHtml}</li>`;
   };
 
@@ -2020,6 +2089,7 @@ export function renderBookParts(input: BookRenderInput): BookPart[] {
     parts.push({ key: seen === 0 ? keyBase : `${keyBase}~${seen + 1}`, html });
   };
   for (const entry of entries) {
+    if (entry.resourceOnly) continue; // exists purely to be pulled in via keyref/conref elsewhere, never its own page or heading
     if (entry.href) {
       // Sub-map reference: its contents were already inlined as child
       // entries by expandDitamapRefs — render a section heading only

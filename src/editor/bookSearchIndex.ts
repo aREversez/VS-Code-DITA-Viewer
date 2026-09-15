@@ -107,6 +107,7 @@ export function extractBookSearchEntry(filePath: string): BookSearchEntry | unde
 export function buildBookSearchIndex(manifest: DocsiteNavEntry[]): Map<string, BookSearchEntry> {
   const index = new Map<string, BookSearchEntry>();
   for (const item of manifest) {
+    if (!item.absPath) continue; // a group header (DocsiteNavEntry.isGroup) has no topic file to extract text from
     const entry = extractBookSearchEntry(item.absPath);
     if (entry) index.set(item.absPath, entry);
   }
@@ -157,7 +158,7 @@ export function invalidateBookSearchIndex(docDir: string): void {
  * topicref list changing at all).
  */
 export function getBookSearchIndex(docDir: string, manifest: DocsiteNavEntry[]): Map<string, BookSearchEntry> {
-  const files = manifest.map((m) => m.absPath);
+  const files = manifest.map((m) => m.absPath).filter((p): p is string => p !== undefined); // group headers have no file to stamp
   const filesKey = files.join('|');
   const stamps = stampFiles(files);
 

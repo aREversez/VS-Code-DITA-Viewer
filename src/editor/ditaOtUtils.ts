@@ -22,7 +22,7 @@ export function buildNavManifest(mapPath: string): NavManifestEntry[] {
   const doc = parseDitamap(preprocessEntities(raw));
   const entries = collectMapEntries(doc.root);
   return entries
-    .filter((e) => e.href && e.href.toLowerCase().endsWith('.dita'))
+    .filter((e) => !e.resourceOnly && e.href && e.href.toLowerCase().endsWith('.dita'))
     .map((e) => ({
       file: basename(e.href!, extname(e.href!)) + '.html',
       title: e.displayName,

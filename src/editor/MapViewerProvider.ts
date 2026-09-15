@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, renderSiteNavHtml, getSiteNavClickHandlerScript, getSiteNavToggleScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
+import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, siteNavigableEntries, renderSiteNavHtml, getSiteNavClickHandlerScript, getSiteNavToggleScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
 import { getBookSearchIndex, searchBookIndex, getBookSearchScript, invalidateBookSearchIndex } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
@@ -509,12 +509,13 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         // the reassurance case of forcing a rebuild anyway.
         if (message.refresh === true) invalidateBookSearchIndex(searchDocDir);
         const searchIndex = getBookSearchIndex(searchDocDir, site.manifest);
-        const outcome = searchBookIndex(searchIndex, query, site.manifest.map((m) => m.absPath), searchOptions);
+        const navigable = siteNavigableEntries(site.manifest);
+        const outcome = searchBookIndex(searchIndex, query, navigable.map((m) => m.absPath), searchOptions);
         if (outcome.error) {
           webviewPanel.webview.postMessage({ type: MSG_BOOK_SEARCH_RESULTS, results: [], error: outcome.error });
           return;
         }
-        const titleByPath = new Map(site.manifest.map((m) => [m.absPath, m.title] as const));
+        const titleByPath = new Map(navigable.map((m) => [m.absPath, m.title] as const));
         // Capped rather than sent in full: a broad query against a very
         // large book could otherwise match most of it, and the panel
         // (docsite design doc, 6.3: a simple first version) has no
@@ -672,9 +673,14 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         updateWebview(); // show whatever error/empty state a full render produces
         return;
       }
-      const resolvedSitePage = currentSitePage && site.manifest.some((m) => m.absPath === currentSitePage)
+      const navigable = siteNavigableEntries(site.manifest);
+      if (navigable.length === 0) {
+        updateWebview(); // every entry is a group header / resource-only -- nothing to actually show
+        return;
+      }
+      const resolvedSitePage = currentSitePage && navigable.some((m) => m.absPath === currentSitePage)
         ? currentSitePage
-        : site.manifest[0].absPath;
+        : navigable[0].absPath;
       currentSitePage = resolvedSitePage;
       const topic = this.renderSiteTopicContent(resolvedSitePage, webviewPanel.webview, site.keyMap, site.bookMembers);
       if (topic.error !== undefined) {
@@ -817,7 +823,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     // keys bookMembers by identity, so reusing this instance rather than
     // building a fresh Set per page switch is what keeps switching pages
     // back and forth cheap instead of silently re-rendering every time.
-    const bookMembers = new Set(manifest.map((entry) => entry.absPath));
+    const bookMembers = new Set(siteNavigableEntries(manifest).map((entry) => entry.absPath));
     return { keyMap, manifest, bookMembers };
   }
 
@@ -902,16 +908,17 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         // re-parses from document.getText() for postSitePageUpdate's
         // benefit, where there is no already-parsed mapDoc to hand it).
         const { keyMap, manifest, bookMembers } = this.buildSiteManifestFromParsedMap(mapDoc.root, document, docDir);
-        if (manifest.length === 0) {
+        const navigable = siteNavigableEntries(manifest);
+        if (navigable.length === 0) {
           return { error: vscode.l10n.t('This map has no topics to show in site view.') };
         }
         // sitePageHint is whatever the caller last knew as "current" -- stale
         // (the map was edited and that topic's entry is gone) or never set
         // (first render) both fall back to the first entry, same as opening
         // a book always starts at its first topic.
-        const resolvedSitePage = sitePageHint && manifest.some((m) => m.absPath === sitePageHint)
+        const resolvedSitePage = sitePageHint && navigable.some((m) => m.absPath === sitePageHint)
           ? sitePageHint
-          : manifest[0].absPath;
+          : navigable[0].absPath;
         const topic = this.renderSiteTopicContent(resolvedSitePage, webview, keyMap, bookMembers);
         if (topic.error !== undefined) return { error: topic.error };
         const sidebarHtml = renderSiteNavHtml(manifest, resolvedSitePage, vscode.l10n.t('Topics'), {

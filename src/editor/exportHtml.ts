@@ -54,6 +54,7 @@ function buildMapExport(fsPath: string): { title: string; bodyHtml: string; erro
   const heading = buildBookHeading;
 
   for (const entry of entries) {
+    if (entry.resourceOnly) continue; // exists purely to be pulled in via keyref/conref elsewhere, never its own page or heading
     if (entry.href && !entry.href.split('#')[0].toLowerCase().endsWith('.ditamap')) {
       const absPath = resolve(docDir, decodeHrefPart(entry.href.split('#')[0]));
       if (visited.has(absPath)) continue;

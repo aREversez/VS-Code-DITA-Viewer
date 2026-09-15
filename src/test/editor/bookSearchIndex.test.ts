@@ -24,6 +24,16 @@ function entry(absPath: string, title: string, depth = 0): DocsiteNavEntry {
   return { absPath, title, depth };
 }
 
+// Every fixture in this file uses entry() above, which always sets a real
+// absPath -- so, unlike the general DocsiteNavEntry[] type (where absPath
+// is optional to allow for a group-header entry; see that field's own
+// comment in ditaRenderUtils.ts), the manifests built here never contain
+// one. This narrows back to string[] for searchBookIndex's `order` param
+// without repeating a `.filter(...)`/cast at every call site below.
+function absPaths(manifest: DocsiteNavEntry[]): string[] {
+  return manifest.map((m) => m.absPath as string);
+}
+
 describe('bookSearchIndex', () => {
   let dir: string;
 
@@ -140,7 +150,7 @@ describe('bookSearchIndex', () => {
       const b = writeTopic('b.dita', '<p>unrelated content</p><indexterm>widget</indexterm>');
       const manifest = [entry(a, 'Topic A'), entry(b, 'Topic B')];
       const index = buildBookSearchIndex(manifest);
-      const { hits } = searchBookIndex(index, 'widget', manifest.map((m) => m.absPath));
+      const { hits } = searchBookIndex(index, 'widget', absPaths(manifest));
       assert.strictEqual(hits.length, 2);
       assert.strictEqual(hits[0].absPath, b, 'the indexterm hit (topic B) must come first despite topic A being earlier in the book');
       assert.strictEqual(hits[0].kind, 'indexterm');
@@ -152,7 +162,7 @@ describe('bookSearchIndex', () => {
       const a = writeTopic('a.dita', '<p>Widget Assembly</p>');
       const manifest = [entry(a, 'A')];
       const index = buildBookSearchIndex(manifest);
-      const { hits } = searchBookIndex(index, 'WIDGET', manifest.map((m) => m.absPath));
+      const { hits } = searchBookIndex(index, 'WIDGET', absPaths(manifest));
       assert.strictEqual(hits.length, 1);
     });
 
@@ -160,9 +170,9 @@ describe('bookSearchIndex', () => {
       const a = writeTopic('a.dita', '<p>Widget Assembly</p>');
       const manifest = [entry(a, 'A')];
       const index = buildBookSearchIndex(manifest);
-      const insensitive = searchBookIndex(index, 'WIDGET', manifest.map((m) => m.absPath), { caseSensitive: true });
+      const insensitive = searchBookIndex(index, 'WIDGET', absPaths(manifest), { caseSensitive: true });
       assert.strictEqual(insensitive.hits.length, 0, 'wrong case should not match once case sensitivity is on');
-      const sensitive = searchBookIndex(index, 'Widget', manifest.map((m) => m.absPath), { caseSensitive: true });
+      const sensitive = searchBookIndex(index, 'Widget', absPaths(manifest), { caseSensitive: true });
       assert.strictEqual(sensitive.hits.length, 1);
     });
 
@@ -170,7 +180,7 @@ describe('bookSearchIndex', () => {
       const a = writeTopic('a.dita', '<p>widget1 widget2 gadget3</p>');
       const manifest = [entry(a, 'A')];
       const index = buildBookSearchIndex(manifest);
-      const { hits } = searchBookIndex(index, '\\w+get\\d', manifest.map((m) => m.absPath), { useRegex: true });
+      const { hits } = searchBookIndex(index, '\\w+get\\d', absPaths(manifest), { useRegex: true });
       assert.strictEqual(hits.length, 1);
     });
 
@@ -178,7 +188,7 @@ describe('bookSearchIndex', () => {
       const a = writeTopic('a.dita', '<p>Some content that would otherwise match plenty.</p>');
       const manifest = [entry(a, 'A')];
       const index = buildBookSearchIndex(manifest);
-      const result = searchBookIndex(index, '(unterminated', manifest.map((m) => m.absPath), { useRegex: true });
+      const result = searchBookIndex(index, '(unterminated', absPaths(manifest), { useRegex: true });
       assert.strictEqual(result.error, 'invalid-regex');
       assert.deepStrictEqual(result.hits, []);
     });
@@ -187,9 +197,9 @@ describe('bookSearchIndex', () => {
       const a = writeTopic('a.dita', '<indexterm>Widget</indexterm>');
       const manifest = [entry(a, 'A')];
       const index = buildBookSearchIndex(manifest);
-      const insensitiveMiss = searchBookIndex(index, 'widget', manifest.map((m) => m.absPath), { caseSensitive: true });
+      const insensitiveMiss = searchBookIndex(index, 'widget', absPaths(manifest), { caseSensitive: true });
       assert.strictEqual(insensitiveMiss.hits.length, 0);
-      const hit = searchBookIndex(index, 'Widget', manifest.map((m) => m.absPath), { caseSensitive: true });
+      const hit = searchBookIndex(index, 'Widget', absPaths(manifest), { caseSensitive: true });
       assert.strictEqual(hit.hits.length, 1);
       assert.strictEqual(hit.hits[0].kind, 'indexterm');
     });
@@ -198,7 +208,7 @@ describe('bookSearchIndex', () => {
       const a = writeTopic('a.dita', '<p>Before context widget after context text here for padding.</p>');
       const manifest = [entry(a, 'A')];
       const index = buildBookSearchIndex(manifest);
-      const { hits } = searchBookIndex(index, 'widget', manifest.map((m) => m.absPath));
+      const { hits } = searchBookIndex(index, 'widget', absPaths(manifest));
       assert.strictEqual(hits.length, 1);
       assert.ok(hits[0].snippet.toLowerCase().includes('widget'));
       assert.ok(hits[0].snippet.length < 'Before context widget after context text here for padding.'.length + 20);
@@ -208,15 +218,15 @@ describe('bookSearchIndex', () => {
       const a = writeTopic('a.dita', '<p>Some content.</p>');
       const manifest = [entry(a, 'A')];
       const index = buildBookSearchIndex(manifest);
-      assert.deepStrictEqual(searchBookIndex(index, '', manifest.map((m) => m.absPath)).hits, []);
-      assert.deepStrictEqual(searchBookIndex(index, '   ', manifest.map((m) => m.absPath)).hits, []);
+      assert.deepStrictEqual(searchBookIndex(index, '', absPaths(manifest)).hits, []);
+      assert.deepStrictEqual(searchBookIndex(index, '   ', absPaths(manifest)).hits, []);
     });
 
     it('returns no results when nothing matches', () => {
       const a = writeTopic('a.dita', '<p>Some content.</p>');
       const manifest = [entry(a, 'A')];
       const index = buildBookSearchIndex(manifest);
-      assert.deepStrictEqual(searchBookIndex(index, 'nonexistentword', manifest.map((m) => m.absPath)).hits, []);
+      assert.deepStrictEqual(searchBookIndex(index, 'nonexistentword', absPaths(manifest)).hits, []);
     });
   });
 
