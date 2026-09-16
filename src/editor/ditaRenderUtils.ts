@@ -715,16 +715,28 @@ export function escapeAttr(s: string): string {
 // how a topic opened directly never reflects what any ditamap referencing
 // it says either.
 
-export function renderBookPlaceholder(displayName: string, depth: number): string {
+/** Renders `<div data-book-anchor="...">` when anchorId is given, nothing
+ *  extra otherwise -- shared by renderBookPlaceholder/renderBookError/
+ *  renderBookParts' own inline topic wrapper so the three places book mode
+ *  writes a `.book-entry` root all spell the attribute the same way. See
+ *  renderBookParts' own comment for where anchorId comes from and why it is
+ *  absent for some parts (a duplicate reference, an external/.ditamap href,
+ *  a childless hrefless entry -- anything buildBookNavManifest itself drops
+ *  and the sidebar therefore never links to). */
+function bookAnchorAttr(anchorId: string | undefined): string {
+  return anchorId ? ` data-book-anchor="${escapeAttr(anchorId)}"` : '';
+}
+
+export function renderBookPlaceholder(displayName: string, depth: number, anchorId?: string): string {
   const level = Math.min(1 + depth, 6);
-  return `<div class="book-entry book-entry--placeholder">
+  return `<div class="book-entry book-entry--placeholder"${bookAnchorAttr(anchorId)}>
   <h${level} class="book-section-heading">${escapeAttr(displayName)}</h${level}>
 </div>`;
 }
 
-export function renderBookError(displayName: string, errorMsg: string, depth: number): string {
+export function renderBookError(displayName: string, errorMsg: string, depth: number, anchorId?: string): string {
   const level = Math.min(1 + depth, 6);
-  return `<div class="book-entry book-entry--error">
+  return `<div class="book-entry book-entry--error"${bookAnchorAttr(anchorId)}>
   <h${level} class="book-entry-title">${escapeHtml(displayName)}</h${level}>
   <p class="book-error">${escapeHtml(errorMsg)}</p>
 </div>`;
@@ -1466,59 +1478,75 @@ export interface DocsiteNavEntry {
  * the output tree never has a surviving entry stranded one level deeper
  * than a parent that no longer exists in it.
  */
-export function buildBookNavManifest(
+/**
+ * The per-entry position (stable id + compacted depth) buildBookNavManifest
+ * itself gives each surviving entry -- or undefined for one it drops
+ * entirely (resource-only, a duplicate topic path already seen earlier in
+ * this same pass, or a childless hrefless entry). Parallel to `entries`:
+ * same length, same order, index-for-index.
+ *
+ * Factored out of buildBookNavManifest so a second consumer needing the
+ * exact same per-entry id -- renderBookParts, for book mode's own scroll-to
+ * anchors (nested-fold-and-highlight-plan.md item 1) -- reads it off
+ * directly instead of re-deriving this stack a second time. Two independent
+ * copies of "which sibling number is this" is exactly the kind of drift a
+ * prior fix (mapref depth transparency, 2ae5729) already had to clean up
+ * once for the depth side of this same stack; the id side deserves the same
+ * caution. Fresh state every call -- calling this twice on the same
+ * entries/docDir (as buildBookNavManifest and renderBookParts each do) is
+ * safe and gives identical results, since nothing is cached or shared
+ * across calls.
+ *
+ * Depth compaction: entries carry their ORIGINAL depth from the full,
+ * unfiltered map structure (collectMapEntries) -- but a skipped entry
+ * (resource-only, a duplicate reference, or a childless hrefless entry
+ * dropped outright below) must not leave a "hole" that pushes its own
+ * surviving descendants one level deeper in the sidebar tree than they
+ * should sit. survivingAncestors holds the ORIGINAL depth of every
+ * still-open ancestor that DID survive, in nesting order; its length at
+ * any point is exactly the entry now being considered's own compacted
+ * depth (no surviving ancestor open above it -> depth 0; one -> depth 1;
+ * and so on). A skipped entry is simply never pushed onto it, so whatever
+ * survives right after it re-parents to the next real ancestor still on
+ * the stack -- e.g. a topichead marked resource-only that would otherwise
+ * have grouped three real topics underneath it: those three now surface
+ * as depth-0 siblings instead of stranded, unreachable depth-1 orphans
+ * with no depth-0 parent left in the output tree for buildSiteNavTree
+ * (renderSiteNavHtml) to nest them under.
+ *
+ * id computation runs alongside the depth-compaction stack, on exactly the
+ * same "did this entry actually survive" logic -- a skipped entry consumes
+ * no sibling slot, for the same reason it leaves no depth hole: a later
+ * sibling's id must not depend on how many entries ahead of it happened to
+ * get filtered out, or persisted collapsed state would silently point at
+ * the wrong node the next time the map gains or loses an unrelated
+ * resource-only entry.
+ *
+ * ancestorIndices holds, for every still-open surviving ancestor (kept in
+ * lockstep with survivingAncestors -- same push/pop sites), the sibling
+ * index THAT ancestor was itself given when it was emitted; a group's own
+ * id is 'grp:' + those ancestor indices plus its own, dot-joined (e.g.
+ * 'grp:0.2' for the third child of the first top-level group) --
+ * positional, not title-based, since two <topichead> group headers
+ * commonly share the exact same navtitle text, and the same title can also
+ * be re-localized out from under a stored id when the UI language changes.
+ *
+ * childCounts[d] is the next sibling index to hand out at compacted depth
+ * d under the currently-open parent chain; truncated to exactly depth+1
+ * entries every iteration (dropping any deeper level's leftover counter
+ * from a now-closed branch, extending with a fresh 0 the first time this
+ * depth is reached under the current parent) so numbering restarts
+ * correctly every time a shallower sibling closes off a branch, the same
+ * "no ancestor -> depth 0" invariant survivingAncestors itself already
+ * relies on.
+ */
+function computeManifestEntryPositions(
   entries: MapEntry[],
   docDir: string,
-  resolveTopicTitle?: (href: string) => string | undefined,
-  resolveTopicType?: (href: string) => string | undefined,
-): DocsiteNavEntry[] {
+): ({ id: string; depth: number } | undefined)[] {
   const seen = new Set<string>();
-  const result: DocsiteNavEntry[] = [];
-  // Depth compaction: entries carry their ORIGINAL depth from the full,
-  // unfiltered map structure (collectMapEntries) -- but a skipped entry
-  // (resource-only, a duplicate reference, or a childless hrefless entry
-  // dropped outright below) must not leave a "hole" that pushes its own
-  // surviving descendants one level deeper in the sidebar tree than they
-  // should sit. survivingAncestors holds the ORIGINAL depth of every
-  // still-open ancestor that DID make it into the manifest, in nesting
-  // order; its length at any point is exactly the entry now being
-  // considered own compacted depth (no surviving ancestor open above it
-  // -> depth 0; one -> depth 1; and so on). A skipped entry is simply
-  // never pushed onto it, so whatever survives right after it re-parents
-  // to the next real ancestor still on the stack -- e.g. a topichead
-  // marked resource-only that would otherwise have grouped three real
-  // topics underneath it: those three now surface as depth-0 siblings
-  // instead of stranded, unreachable depth-1 orphans with no depth-0
-  // parent left in the output tree for buildSiteNavTree
-  // (renderSiteNavHtml) to nest them under.
+  const positions: ({ id: string; depth: number } | undefined)[] = [];
   const survivingAncestors: number[] = [];
-  // id computation runs alongside the depth-compaction stack above, on
-  // exactly the same "did this entry actually survive into the manifest"
-  // logic -- a skipped entry (resource-only, hrefless-and-childless,
-  // duplicate) consumes no sibling slot, for the same reason it leaves no
-  // depth hole: a later sibling's id must not depend on how many entries
-  // ahead of it happened to get filtered out, or persisted collapsed
-  // state would silently point at the wrong node the next time the map
-  // gains or loses an unrelated resource-only entry.
-  //
-  // ancestorIndices holds, for every still-open surviving ancestor (kept
-  // in lockstep with survivingAncestors -- same push/pop sites), the
-  // sibling index THAT ancestor was itself given when it was emitted; a
-  // group's own id is 'grp:' + those ancestor indices plus its own,
-  // dot-joined (e.g. 'grp:0.2' for the third child of the first
-  // top-level group) -- positional, not title-based, since two
-  // <topichead> group headers commonly share the exact same navtitle
-  // text, and the same title can also be re-localized out from under a
-  // stored id when the UI language changes.
-  //
-  // childCounts[d] is the next sibling index to hand out at compacted
-  // depth d under the currently-open parent chain; truncated to exactly
-  // depth+1 entries every iteration (dropping any deeper level's leftover
-  // counter from a now-closed branch, extending with a fresh 0 the first
-  // time this depth is reached under the current parent) so numbering
-  // restarts correctly every time a shallower sibling closes off a
-  // branch, the same "no ancestor -> depth 0" invariant survivingAncestors
-  // itself already relies on.
   const ancestorIndices: number[] = [];
   const childCounts: number[] = [];
   for (let i = 0; i < entries.length; i++) {
@@ -1531,7 +1559,7 @@ export function buildBookNavManifest(
     if (childCounts.length > depth + 1) childCounts.length = depth + 1;
     if (childCounts.length <= depth) childCounts.push(0);
 
-    if (entry.resourceOnly) continue; // exists purely to be pulled in via keyref/conref elsewhere, never its own page
+    if (entry.resourceOnly) { positions.push(undefined); continue; } // exists purely to be pulled in via keyref/conref elsewhere, never its own page
     if (!entry.href) {
       // No topic file of its own -- either a <topichead> (which by
       // definition never has one) or a bare key-only topicref/keydef
@@ -1545,31 +1573,27 @@ export function buildBookNavManifest(
       // topicrefs has entries[i+1..] at a deeper ORIGINAL depth right
       // after it (compaction doesn't change whether one entry nests
       // under another in the source map, only what depth number a
-      // surviving entry is labeled with) and becomes a group header
-      // (DocsiteNavEntry.isGroup); a leaf key-only topicref has nothing
-      // deeper following it and is dropped, exactly as it always was
-      // before isGroup existed -- showing an unclickable, childless
-      // "V1.0.0" row in the reading sidebar for what is really just a
-      // keyref variable would be pure noise, not navigation.
+      // surviving entry is labeled with) and becomes a group header; a
+      // leaf key-only topicref has nothing deeper following it and is
+      // dropped, exactly as it always was before group headers existed
+      // -- showing an unclickable, childless "V1.0.0" row in the reading
+      // sidebar for what is really just a keyref variable would be pure
+      // noise, not navigation.
       const hasChildren = i + 1 < entries.length && entries[i + 1].depth > entry.depth;
       if (hasChildren) {
         const siblingIndex = childCounts[depth]++;
         const id = 'grp:' + [...ancestorIndices, siblingIndex].join('.');
-        result.push({ id, title: entry.displayName, depth, role: entry.role, isGroup: true });
+        positions.push({ id, depth });
         survivingAncestors.push(entry.depth);
         ancestorIndices.push(siblingIndex);
+      } else {
+        positions.push(undefined);
       }
       continue;
     }
     const absPath = resolveBookTopicPath(entry, docDir);
-    if (!absPath || seen.has(absPath)) continue; // same one-entry-per-topic rule renderBookParts's own `visited` set enforces
+    if (!absPath || seen.has(absPath)) { positions.push(undefined); continue; } // same one-entry-per-topic rule renderBookParts's own `visited` set enforces
     seen.add(absPath);
-    let title = entry.displayName;
-    if (resolveTopicTitle) {
-      const realTitle = resolveTopicTitle(entry.href);
-      if (realTitle) title = realTitle;
-    }
-    const topicType = resolveTopicType ? resolveTopicType(entry.href) : undefined;
     // A navigable entry's absPath is already unique (the `seen` dedup
     // above guarantees it) and stays meaningful across a document's own
     // edits in a way a positional path wouldn't, so it doubles as the
@@ -1580,9 +1604,38 @@ export function buildBookNavManifest(
     // real topic can itself have further topicrefs nested under it in
     // the map, same as a topichead can.
     const siblingIndex = childCounts[depth]++;
-    result.push({ id: absPath, absPath, title, depth, role: entry.role, topicType });
+    positions.push({ id: absPath, depth });
     survivingAncestors.push(entry.depth);
     ancestorIndices.push(siblingIndex);
+  }
+  return positions;
+}
+
+export function buildBookNavManifest(
+  entries: MapEntry[],
+  docDir: string,
+  resolveTopicTitle?: (href: string) => string | undefined,
+  resolveTopicType?: (href: string) => string | undefined,
+): DocsiteNavEntry[] {
+  const positions = computeManifestEntryPositions(entries, docDir);
+  const result: DocsiteNavEntry[] = [];
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    const pos = positions[i];
+    if (!pos) continue;
+    if (!entry.href) {
+      result.push({ id: pos.id, title: entry.displayName, depth: pos.depth, role: entry.role, isGroup: true });
+      continue;
+    }
+    let title = entry.displayName;
+    if (resolveTopicTitle) {
+      const realTitle = resolveTopicTitle(entry.href);
+      if (realTitle) title = realTitle;
+    }
+    const topicType = resolveTopicType ? resolveTopicType(entry.href) : undefined;
+    // pos.id is this navigable entry's absPath (see computeManifestEntryPositions),
+    // so it doubles as `absPath` directly rather than resolving it again here.
+    result.push({ id: pos.id, absPath: pos.id, title, depth: pos.depth, role: entry.role, topicType });
   }
   return result;
 }
@@ -2163,6 +2216,18 @@ export function renderBookParts(input: BookRenderInput): BookPart[] {
   // reuse to work at all.
   const bookMembers = getStableBookMembers(entries, docDir);
 
+  // Parallel to `entries`: entries[i]'s stable sidebar-manifest id, or
+  // undefined when buildBookNavManifest itself would drop this entry (a
+  // duplicate reference, an external/.ditamap href, a childless hrefless
+  // entry) -- see computeManifestEntryPositions' own comment. A future
+  // book-mode sidebar (nested-fold-and-highlight-plan.md item 1) scrolls
+  // to `[data-book-anchor="id"]`, so every part whose entry buildBookNavManifest
+  // keeps gets that same id stamped onto its own root element here, computed
+  // once from the exact same shared helper the sidebar manifest itself is
+  // built from -- not re-derived independently, so the two can never point
+  // at different nodes for the same entry.
+  const anchorIds = computeManifestEntryPositions(entries, docDir);
+
   const parts: BookPart[] = [];
   // A key per part, so two renders of the same map can be compared part by
   // part. Uniqueness is enforced here rather than assumed: a topic's resolved
@@ -2177,7 +2242,9 @@ export function renderBookParts(input: BookRenderInput): BookPart[] {
     usedKeys.set(keyBase, seen + 1);
     parts.push({ key: seen === 0 ? keyBase : `${keyBase}~${seen + 1}`, html });
   };
-  for (const entry of entries) {
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    const anchorId = anchorIds[i]?.id;
     if (entry.resourceOnly) continue; // exists purely to be pulled in via keyref/conref elsewhere, never its own page or heading
     if (entry.href) {
       // Sub-map reference: its contents were already inlined as child
@@ -2187,7 +2254,13 @@ export function renderBookParts(input: BookRenderInput): BookPart[] {
       if (refPath.toLowerCase().endsWith('.ditamap')) {
         push(
           `map:${resolve(docDir, decodeHrefPart(refPath))}`,
-          renderBookPlaceholder(entry.displayName, entry.depth),
+          // anchorId is always undefined here -- computeManifestEntryPositions
+          // resolves this same entry's absPath via resolveBookTopicPath too,
+          // which returns undefined for a .ditamap href (see its own test),
+          // so buildBookNavManifest drops this entry and the sidebar never
+          // links to it. Passed through anyway for symmetry with the other
+          // two renderBook* call sites, rather than hand-omitting it here.
+          renderBookPlaceholder(entry.displayName, entry.depth, anchorId),
         );
         continue;
       }
@@ -2238,8 +2311,12 @@ export function renderBookParts(input: BookRenderInput): BookPart[] {
       if (result.error) {
         // Keyed like the topic it stands in for, so a topic that starts or
         // stops failing to parse patches that one entry in place instead of
-        // forcing a whole-document replace.
-        push(`topic:${absPath}`, renderBookError(entry.displayName, result.error, entry.depth));
+        // forcing a whole-document replace. Still gets its anchorId (the
+        // sidebar shows it under its fallback title regardless of whether
+        // the topic file itself parses -- see buildBookNavManifest, which
+        // doesn't condition on that either) so a broken topic is still
+        // reachable by scrolling to it.
+        push(`topic:${absPath}`, renderBookError(entry.displayName, result.error, entry.depth, anchorId));
       } else {
         // Book mode is just each referenced topic's own content, one
         // after another -- the same profiling/highlighting a topic
@@ -2247,10 +2324,10 @@ export function renderBookParts(input: BookRenderInput): BookPart[] {
         // above) carries straight through here unchanged. No separate
         // topicref-level (ditamap-source) profiling layered on top of
         // it; that scope is exclusive to Outline mode's tree.
-        push(`topic:${absPath}`, `<div class="book-entry">${result.html}</div>`);
+        push(`topic:${absPath}`, `<div class="book-entry"${bookAnchorAttr(anchorId)}>${result.html}</div>`);
       }
     } else {
-      push(`struct:${entry.depth}:${entry.displayName}`, renderBookPlaceholder(entry.displayName, entry.depth));
+      push(`struct:${entry.depth}:${entry.displayName}`, renderBookPlaceholder(entry.displayName, entry.depth, anchorId));
     }
   }
 

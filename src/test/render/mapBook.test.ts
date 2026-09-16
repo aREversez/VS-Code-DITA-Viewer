@@ -577,8 +577,16 @@ describe('renderBookEntries', () => {
 
     assert.ok(html.startsWith('<div class="ditamap-book">'), 'the wrapper styles.css and the toolbar script look for');
     assert.ok(html.endsWith('</div>'));
-    assert.strictEqual(countOf(html, '<div class="book-entry">'), 2, 'one wrapper per rendered topic');
+    assert.strictEqual((html.match(/<div class="book-entry"/g) || []).length, 2, 'one wrapper per rendered topic');
     assert.ok(html.indexOf('alpha') < html.indexOf('beta'), 'map order, not filesystem order');
+    // Each topic's own resolved path doubles as its book-mode scroll anchor
+    // (nested-fold-and-highlight-plan.md item 1) -- the exact same id
+    // buildBookNavManifest would give the same entry in its own manifest,
+    // computed from the one shared computeManifestEntryPositions helper
+    // rather than re-derived here, so the sidebar and the book content can
+    // never disagree about where a topic's anchor sits.
+    assert.ok(html.includes(`data-book-anchor="${join(dir, 'topics', 'order-a.dita')}"`));
+    assert.ok(html.includes(`data-book-anchor="${join(dir, 'topics', 'order-b.dita')}"`));
   });
 
   it('should render a book-internal cross-file xref as a clickable link even when it points FORWARD to a topic later in reading order (membership must be known for the whole book up front, not built incrementally as each topic is rendered)', () => {
@@ -643,11 +651,18 @@ describe('renderBookEntries', () => {
       topicRef('topics/dup.dita', 'Dup'),
     ]);
 
-    assert.strictEqual(countOf(html, '<div class="book-entry">'), 2, 'the repeat contributes no second copy');
+    assert.strictEqual((html.match(/<div class="book-entry"/g) || []).length, 2, 'the repeat contributes no second copy');
     assert.strictEqual(countOf(html, 'once'), 1, 'a book that repeats a topic would also repeat its ids');
     assert.ok(html.includes('class="book-skip"'), 'and it says so, rather than silently dropping the reference');
     assert.ok(html.includes('topics/dup.dita'), 'the skip message names the href it skipped');
     assert.ok(html.indexOf('between') < html.indexOf('book-skip'), 'the skip lands where the third reference was');
+    // The duplicate reference itself gets no second anchor -- there is only
+    // ever one manifest entry (and one sidebar row) for a repeated topic.
+    assert.strictEqual(
+      countOf(html, `data-book-anchor="${join(dir, 'topics', 'dup.dita')}"`),
+      1,
+      'the repeated reference does not get its own anchor',
+    );
   });
 
   it('should turn an unreadable topic into an inline error block and carry on with the rest of the book', () => {
@@ -903,6 +918,74 @@ describe('renderBookEntries', () => {
       ];
 
       assert.strictEqual(wrapBookParts(renderParts(entries)), renderBook(entries));
+    });
+
+    // nested-fold-and-highlight-plan.md item 1: book mode's own sidebar
+    // scrolls to a part by this same id, computed by the one shared helper
+    // buildBookNavManifest itself builds its ids from (computeManifestEntryPositions,
+    // not exported -- exercised here through renderBookParts' own output
+    // and cross-checked against buildBookNavManifest directly below).
+    describe('anchor ids (data-book-anchor)', () => {
+      it("should stamp a navigable topic's part with its own resolved path, matching buildBookNavManifest's id for the same entry", () => {
+        writeTopic('topics/anchor-a.dita', '<p>a</p>');
+        const entries = [topicRef('topics/anchor-a.dita', 'A')];
+
+        const parts = renderParts(entries);
+        const manifest = buildBookNavManifest(entries, dir);
+
+        const expectedId = join(dir, 'topics', 'anchor-a.dita');
+        assert.ok(parts[0].html.includes(`data-book-anchor="${expectedId}"`));
+        assert.strictEqual(manifest[0].id, expectedId, 'sidebar and book content must agree on this entry\'s id');
+      });
+
+      it('should stamp a hrefless group heading (one with real descendants) with its positional grp: id, matching buildBookNavManifest', () => {
+        const entries = [
+          topicRef(undefined, 'Chapter 1: Intro'),
+          topicRef('topics/anchor-b.dita', 'About', 1),
+        ];
+        writeTopic('topics/anchor-b.dita', '<p>b</p>');
+
+        const parts = renderParts(entries);
+        const manifest = buildBookNavManifest(entries, dir);
+
+        assert.ok(parts[0].html.includes('data-book-anchor="grp:0"'));
+        assert.strictEqual(manifest[0].id, 'grp:0');
+      });
+
+      it('should NOT stamp a childless hrefless entry (a bare key-only topicref) -- buildBookNavManifest drops it, so the sidebar never links to it', () => {
+        const entries = [topicRef(undefined, 'V1.0.0')];
+
+        const parts = renderParts(entries);
+        const manifest = buildBookNavManifest(entries, dir);
+
+        assert.ok(!parts[0].html.includes('data-book-anchor'));
+        assert.strictEqual(manifest.length, 0, 'confirms this entry really has no sidebar row to scroll to');
+      });
+
+      it('should NOT stamp the second of two references to the same topic -- there is only one manifest entry (and sidebar row) for it', () => {
+        writeTopic('topics/anchor-dup.dita', '<p>d</p>');
+        const entries = [
+          topicRef('topics/anchor-dup.dita', 'D'),
+          topicRef('topics/anchor-dup.dita', 'D again'),
+        ];
+
+        const parts = renderParts(entries);
+
+        assert.ok(parts[0].html.includes('data-book-anchor='));
+        assert.ok(!parts[1].html.includes('data-book-anchor'), 'the skip note is not a second addressable copy');
+      });
+
+      it('should NOT stamp an unreadable/.ditamap-referencing entry with no absPath of its own', () => {
+        writeFileSync(
+          join(dir, 'topics', 'anchor-sub.ditamap'),
+          '<?xml version="1.0" encoding="UTF-8"?>\n<map><title>X</title></map>',
+        );
+        const entries = [topicRef('topics/anchor-sub.ditamap', 'Sub')];
+
+        const parts = renderParts(entries);
+
+        assert.ok(!parts[0].html.includes('data-book-anchor'));
+      });
     });
   });
 });
