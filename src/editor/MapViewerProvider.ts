@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, siteNavigableEntries, renderSiteNavHtml, renderSiteNavTreeHtml, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getSiteNavToggleScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
+import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, siteNavigableEntries, renderSiteNavHtml, renderSiteNavTreeHtml, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
 import { getBookSearchIndex, searchBookIndex, getBookSearchScript, invalidateBookSearchIndex } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
@@ -120,6 +120,8 @@ function getMapWebviewScript(mode: 'tree' | 'book' | 'site'): string {
     sitePrevTopic: vscode.l10n.t('Previous topic'),
     siteNextTopic: vscode.l10n.t('Next topic'),
     siteToggleSidebar: vscode.l10n.t('Show/hide topic list'),
+    siteExpandAll: vscode.l10n.t('Expand all topics'),
+    siteCollapseAll: vscode.l10n.t('Collapse all topics'),
     siteSearchTitle: vscode.l10n.t('Search this book'),
     siteSearchPlaceholder: vscode.l10n.t('Search all topics...'),
     siteSearchNoResults: vscode.l10n.t('No matches found'),
@@ -138,6 +140,7 @@ function getMapWebviewScript(mode: 'tree' | 'book' | 'site'): string {
 
   ${mode === 'site' ? getSiteNavClickHandlerScript({ switchSitePageMsgType: MSG_SWITCH_SITE_PAGE }) : ''}
   ${mode === 'book' ? getBookNavClickHandlerScript() : ''}
+  ${getSiteNavCollapseStateHelperScript()}
   ${getSiteNavToggleScript()}
   ${getSiteSidebarResizerScript()}
 
@@ -200,6 +203,21 @@ function getMapWebviewScript(mode: 'tree' | 'book' | 'site'): string {
   ${getSiteSidebarToggleScript({ toggleTitle: L.siteToggleSidebar })}
   if (currentMode === 'site' || currentMode === 'book') {
     toolbar.appendChild(siteSidebarToggleBtn);
+  }
+
+  // Expand-all / collapse-all, right after the sidebar toggle they
+  // operate on. Same build-always/append-conditionally convention; both
+  // sidebar modes get them, since book and site render the identical
+  // sidebar markup (renderSiteNavTreeHtml).
+  ${getSiteNavExpandCollapseAllButtonsScript({
+    expandAllLabel: '\u229e',
+    expandAllTitle: L.siteExpandAll,
+    collapseAllLabel: '\u229f',
+    collapseAllTitle: L.siteCollapseAll,
+  })}
+  if (currentMode === 'site' || currentMode === 'book') {
+    toolbar.appendChild(siteExpandAllBtn);
+    toolbar.appendChild(siteCollapseAllBtn);
   }
 
   // Prev/next topic buttons -- docsite mode only. Built unconditionally

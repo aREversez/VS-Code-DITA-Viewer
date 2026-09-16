@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getSiteNavToggleScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -1787,7 +1787,7 @@ describe('getBookNavClickHandlerScript (book mode sidebar, nested-fold-and-highl
 
 describe('getSiteNavToggleScript (docsite mode)', () => {
   it('emits a script that parses as JavaScript', () => {
-    assert.doesNotThrow(() => new Function(getSiteNavToggleScript()));
+    assert.doesNotThrow(() => new Function(getSiteNavCollapseStateHelperScript() + getSiteNavToggleScript()));
   });
 
   // Minimal standalone fakes (deliberately not reusing
@@ -1814,6 +1814,11 @@ describe('getSiteNavToggleScript (docsite mode)', () => {
       },
       getAttribute: (name: string) => (name in attrs ? attrs[name] : null),
       setAttribute: (name: string, val: string) => { attrs[name] = val; },
+      // The shared setter (getSiteNavCollapseStateHelperScript) reaches the
+      // row's own toggle by querying down from the item rather than taking
+      // it as an argument, since expand-all has no click event to read it
+      // off. makeFakeToggle wires this up once it exists.
+      querySelector: (_sel: string): unknown => null,
       attrs,
     };
   }
@@ -1829,6 +1834,7 @@ describe('getSiteNavToggleScript (docsite mode)', () => {
         return null;
       },
     };
+    item.querySelector = (sel: string) => (sel === ':scope > .site-nav-toggle' ? toggle : null);
     return toggle;
   }
 
@@ -1850,7 +1856,7 @@ describe('getSiteNavToggleScript (docsite mode)', () => {
     item.setAttribute('aria-expanded', 'true');
     const toggle = makeFakeToggle(item, { 'aria-expanded': 'true', 'data-expand-label': 'Expand', 'data-collapse-label': 'Collapse' });
     const { document, click } = makeFakeToggleDocument();
-    new Function('document', getSiteNavToggleScript())(document);
+    new Function('document', getSiteNavCollapseStateHelperScript() + getSiteNavToggleScript())(document);
 
     click(toggle);
 
@@ -1863,7 +1869,7 @@ describe('getSiteNavToggleScript (docsite mode)', () => {
     const item = makeFakeItem();
     const toggle = makeFakeToggle(item, { 'aria-expanded': 'true', 'data-expand-label': 'Expand', 'data-collapse-label': 'Collapse' });
     const { document, click } = makeFakeToggleDocument();
-    new Function('document', getSiteNavToggleScript())(document);
+    new Function('document', getSiteNavCollapseStateHelperScript() + getSiteNavToggleScript())(document);
 
     click(toggle); // collapse
     click(toggle); // expand again
@@ -1876,7 +1882,7 @@ describe('getSiteNavToggleScript (docsite mode)', () => {
     const item = makeFakeItem();
     const toggle = makeFakeToggle(item, { 'aria-expanded': 'true', 'data-expand-label': '\u5c55\u5f00', 'data-collapse-label': '\u6298\u53e0' });
     const { document, click } = makeFakeToggleDocument();
-    new Function('document', getSiteNavToggleScript())(document);
+    new Function('document', getSiteNavCollapseStateHelperScript() + getSiteNavToggleScript())(document);
 
     click(toggle); // now collapsed -- label should offer the "expand" verb
     assert.strictEqual(toggle.getAttribute('aria-label'), '\u5c55\u5f00');
@@ -1888,7 +1894,7 @@ describe('getSiteNavToggleScript (docsite mode)', () => {
   it('a click that does not hit a .site-nav-toggle (e.g. the link itself) does nothing, rather than throwing', () => {
     const item = makeFakeItem();
     const { document, click } = makeFakeToggleDocument();
-    new Function('document', getSiteNavToggleScript())(document);
+    new Function('document', getSiteNavCollapseStateHelperScript() + getSiteNavToggleScript())(document);
 
     const link = { closest: () => null };
     assert.doesNotThrow(() => click(link));
@@ -2497,5 +2503,120 @@ describe('getImageLightboxScript', () => {
     doc.dispatch('contextmenu', { target: img, clientX: 0, clientY: 0, preventDefault() {} });
     const menu = doc.querySelector('.dita-img-ctxmenu');
     assert.strictEqual(menu!.children[0].textContent, 'Copy "the" image\\thing');
+  });
+});
+
+describe('getSiteNavExpandCollapseAllButtonsScript + getSiteNavCollapseStateHelperScript', () => {
+  // The buttons script depends on setSiteNavItemCollapsed, declared by the
+  // helper script and shared with getSiteNavToggleScript -- so these run
+  // the two (or three) emitted pieces together, the way
+  // getMapWebviewScript concatenates them, rather than in isolation.
+  const helper = getSiteNavCollapseStateHelperScript();
+  const buttons = getSiteNavExpandCollapseAllButtonsScript({
+    expandAllLabel: '+', expandAllTitle: 'Expand all topics',
+    collapseAllLabel: '-', collapseAllTitle: 'Collapse all topics',
+  });
+
+  interface FakeToggle { attrs: Record<string, string>; getAttribute(n: string): string | null; setAttribute(n: string, v: string): void }
+  interface FakeItem {
+    classes: Set<string>;
+    attrs: Record<string, string>;
+    toggle: FakeToggle | null;
+    classList: { add(c: string): void; remove(c: string): void; contains(c: string): boolean };
+    setAttribute(n: string, v: string): void;
+    querySelector(sel: string): FakeToggle | null;
+  }
+
+  function makeItem(hasToggle = true): FakeItem {
+    const classes = new Set<string>(['site-nav-item', 'has-children']);
+    const toggle: FakeToggle | null = hasToggle
+      ? {
+          attrs: { 'data-expand-label': 'Expand', 'data-collapse-label': 'Collapse', 'aria-expanded': 'true' },
+          getAttribute(n: string) { return n in this.attrs ? this.attrs[n] : null; },
+          setAttribute(n: string, v: string) { this.attrs[n] = v; },
+        }
+      : null;
+    return {
+      classes,
+      attrs: {},
+      toggle,
+      classList: { add: (c) => classes.add(c), remove: (c) => classes.delete(c), contains: (c) => classes.has(c) },
+      setAttribute(n: string, v: string) { this.attrs[n] = v; },
+      querySelector(sel: string) { return sel === ':scope > .site-nav-toggle' ? this.toggle : null; },
+    };
+  }
+
+  it('emits scripts that parse as JavaScript, helper and buttons together', () => {
+    assert.doesNotThrow(() => new Function('document', 'btnStyle', helper + buttons));
+  });
+
+  it('collapse-all sets collapsed on every has-children item, and expand-all clears it, keeping both aria-expanded attributes and the toggle aria-label in step', () => {
+    const items = [makeItem(), makeItem(), makeItem()];
+    const clicks: Record<string, () => void> = {};
+    const document = {
+      querySelectorAll: (sel: string) => (sel === '.site-nav-item.has-children' ? items : []),
+      createElement: () => {
+        const el = { id: '', style: { cssText: '' }, setAttribute: () => {}, addEventListener(_e: string, fn: () => void) { clicks[el.id] = fn; } };
+        return el;
+      },
+    };
+    new Function('document', 'btnStyle', helper + buttons)(document, '');
+
+    clicks['__site-collapse-all-btn']();
+    for (const it of items) {
+      assert.strictEqual(it.classes.has('collapsed'), true);
+      assert.strictEqual(it.attrs['aria-expanded'], 'false');
+      assert.strictEqual(it.toggle!.attrs['aria-expanded'], 'false');
+      assert.strictEqual(it.toggle!.attrs['aria-label'], 'Expand', 'a collapsed row offers to expand');
+    }
+
+    clicks['__site-expand-all-btn']();
+    for (const it of items) {
+      assert.strictEqual(it.classes.has('collapsed'), false);
+      assert.strictEqual(it.attrs['aria-expanded'], 'true');
+      assert.strictEqual(it.toggle!.attrs['aria-expanded'], 'true');
+      assert.strictEqual(it.toggle!.attrs['aria-label'], 'Collapse');
+    }
+  });
+
+  it('is idempotent: collapse-all twice leaves the same state, rather than toggling back open', () => {
+    const items = [makeItem()];
+    const clicks: Record<string, () => void> = {};
+    const document = {
+      querySelectorAll: () => items,
+      createElement: () => {
+        const el = { id: '', style: { cssText: '' }, setAttribute: () => {}, addEventListener(_e: string, fn: () => void) { clicks[el.id] = fn; } };
+        return el;
+      },
+    };
+    new Function('document', 'btnStyle', helper + buttons)(document, '');
+
+    clicks['__site-collapse-all-btn']();
+    clicks['__site-collapse-all-btn']();
+
+    assert.strictEqual(items[0].classes.has('collapsed'), true, 'a set-to-state API, not a per-item toggle');
+  });
+
+  it('does not throw on an item with no toggle element', () => {
+    const items = [makeItem(false)];
+    const clicks: Record<string, () => void> = {};
+    const document = {
+      querySelectorAll: () => items,
+      createElement: () => {
+        const el = { id: '', style: { cssText: '' }, setAttribute: () => {}, addEventListener(_e: string, fn: () => void) { clicks[el.id] = fn; } };
+        return el;
+      },
+    };
+    new Function('document', 'btnStyle', helper + buttons)(document, '');
+
+    assert.doesNotThrow(() => clicks['__site-collapse-all-btn']());
+    assert.strictEqual(items[0].classes.has('collapsed'), true, 'the class still lands even without a toggle to relabel');
+  });
+
+  it('getSiteNavToggleScript routes its own single-item flip through the same shared setter rather than declaring its own', () => {
+    const toggleScript = getSiteNavToggleScript();
+    assert.ok(toggleScript.includes('setSiteNavItemCollapsed'), 'uses the shared setter');
+    assert.ok(!/function\s+setSiteNavItemCollapsed/.test(toggleScript), 'does not declare a second copy of it');
+    assert.ok(/function\s+setSiteNavItemCollapsed/.test(helper), 'the helper script is the one declaring it');
   });
 });

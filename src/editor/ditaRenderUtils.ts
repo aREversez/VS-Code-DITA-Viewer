@@ -2027,6 +2027,82 @@ export function getBookNavClickHandlerScript(): string {
  * this script doesn't need its own copies threaded in as opts just to
  * flip aria-label text along with aria-expanded.
  */
+/**
+ * The one place that actually applies a collapsed/expanded state to a
+ * sidebar <li class="site-nav-item">. Emitted once per webview script and
+ * consumed by BOTH getSiteNavToggleScript (one item, on its own toggle
+ * click) and getSiteNavExpandCollapseAllButtonsScript (every item at once)
+ * -- a collapse touches four things that must move together (the item's
+ * own `collapsed` class, aria-expanded on both the item and its toggle,
+ * and the toggle's aria-label), and two copies of that bookkeeping would
+ * drift the moment one of them gained a fifth. Callers must emit this
+ * before/alongside either consumer; getMapWebviewScript does.
+ *
+ * Purely a `collapsed` class flip -- media/styles.css hides
+ * `.site-nav-item.collapsed > .site-nav-children` (the DIRECT child <ul>),
+ * so a collapsed ancestor's already-hidden subtree needs no separate walk;
+ * the cascade is free. That is also why collapse-all can set the class on
+ * every item indiscriminately without worrying about order.
+ */
+export function getSiteNavCollapseStateHelperScript(): string {
+  return `
+  function setSiteNavItemCollapsed(item, collapsed) {
+    if (!item) return;
+    if (collapsed) item.classList.add('collapsed');
+    else item.classList.remove('collapsed');
+    item.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    var toggle = item.querySelector(':scope > .site-nav-toggle');
+    if (!toggle) return;
+    toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    var label = collapsed ? toggle.getAttribute('data-expand-label') : toggle.getAttribute('data-collapse-label');
+    if (label) toggle.setAttribute('aria-label', label);
+  }
+`;
+}
+
+/**
+ * Expand-all / collapse-all: two separate buttons (not one tri-state
+ * toggle -- with a partly-expanded tree there is no defensible answer to
+ * which direction a single button should go, and guessing wrong undoes
+ * the reader's own work). Built but NOT appended to the toolbar here,
+ * same convention as getToolbarFontWidthTagTooltipsButtonsScript and
+ * getSitePrevNextButtonsScript: the caller decides placement.
+ *
+ * Operates on `.site-nav-item.has-children` only -- a leaf item has no
+ * toggle and no children <ul>, so giving it a `collapsed` class would be
+ * inert but misleading in the DOM. Shared verbatim by book and site mode:
+ * both now render the same sidebar markup (renderSiteNavTreeHtml), so this
+ * takes no mode parameter and needs no per-mode branch.
+ */
+export function getSiteNavExpandCollapseAllButtonsScript(opts: { expandAllLabel: string; expandAllTitle: string; collapseAllLabel: string; collapseAllTitle: string }): string {
+  const expandAllLabel = JSON.stringify(opts.expandAllLabel);
+  const expandAllTitle = JSON.stringify(opts.expandAllTitle);
+  const collapseAllLabel = JSON.stringify(opts.collapseAllLabel);
+  const collapseAllTitle = JSON.stringify(opts.collapseAllTitle);
+  return `
+  function setAllSiteNavCollapsed(collapsed) {
+    var items = document.querySelectorAll('.site-nav-item.has-children');
+    for (var i = 0; i < items.length; i++) setSiteNavItemCollapsed(items[i], collapsed);
+  }
+
+  var siteExpandAllBtn = document.createElement('button');
+  siteExpandAllBtn.id = '__site-expand-all-btn';
+  siteExpandAllBtn.textContent = ${expandAllLabel};
+  siteExpandAllBtn.title = ${expandAllTitle};
+  siteExpandAllBtn.setAttribute('aria-label', ${expandAllTitle});
+  siteExpandAllBtn.style.cssText = btnStyle + 'font-size:14px;padding:1px 9px;justify-content:center;';
+  siteExpandAllBtn.addEventListener('click', function() { setAllSiteNavCollapsed(false); });
+
+  var siteCollapseAllBtn = document.createElement('button');
+  siteCollapseAllBtn.id = '__site-collapse-all-btn';
+  siteCollapseAllBtn.textContent = ${collapseAllLabel};
+  siteCollapseAllBtn.title = ${collapseAllTitle};
+  siteCollapseAllBtn.setAttribute('aria-label', ${collapseAllTitle});
+  siteCollapseAllBtn.style.cssText = btnStyle + 'font-size:14px;padding:1px 9px;justify-content:center;';
+  siteCollapseAllBtn.addEventListener('click', function() { setAllSiteNavCollapsed(true); });
+`;
+}
+
 export function getSiteNavToggleScript(): string {
   return `
   document.addEventListener('click', function(e) {
@@ -2035,11 +2111,11 @@ export function getSiteNavToggleScript(): string {
     e.preventDefault();
     var item = toggle.closest ? toggle.closest('.site-nav-item') : null;
     if (!item) return;
-    var collapsed = item.classList.toggle('collapsed');
-    toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-    item.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-    var label = collapsed ? toggle.getAttribute('data-expand-label') : toggle.getAttribute('data-collapse-label');
-    if (label) toggle.setAttribute('aria-label', label);
+    // Reads the current state off the class rather than using
+    // classList.toggle's return value, so the actual state change goes
+    // through the one shared setter (setSiteNavItemCollapsed) that
+    // expand-all/collapse-all uses too.
+    setSiteNavItemCollapsed(item, !item.classList.contains('collapsed'));
   });
 `;
 }
