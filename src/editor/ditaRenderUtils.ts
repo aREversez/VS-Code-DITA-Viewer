@@ -1733,10 +1733,26 @@ const SITE_NAV_TOGGLE_SLOT = 16;
  * doesn't have to thread localized strings through just to satisfy the
  * type checker.
  */
-export function renderSiteNavHtml(
+/**
+ * Just the `<ul class="site-nav-tree">` of sidebar rows -- renderSiteNavHtml
+ * below wraps this in `<nav class="site-nav">`. Split out so a content-only
+ * refresh (book mode's own incremental sidebar update,
+ * nested-fold-and-highlight-plan.md item 1 -- see MSG_UPDATE_SIDEBAR in
+ * MapViewerProvider.ts) can replace just this element's innerHTML client-
+ * side, leaving the outer `<nav class="site-nav">` DOM node itself
+ * untouched. That matters because getSiteSidebarResizerScript captures
+ * that exact node once, at script-init time (`document.querySelector(
+ * '.site-nav')`), and never re-queries it afterward -- replacing the whole
+ * `<nav>` via outerHTML on every content edit would leave the resizer
+ * silently holding a reference to a now-detached element, and dragging it
+ * would do nothing. Site mode never needs this: its own page-switch
+ * content-only update intentionally leaves the sidebar alone entirely (see
+ * postSitePageUpdate's own comment) rather than refreshing it, so
+ * renderSiteNavHtml stays the only entry point there.
+ */
+export function renderSiteNavTreeHtml(
   manifest: DocsiteNavEntry[],
   currentAbsPath: string,
-  navLabel: string,
   toggleLabels: { expand: string; collapse: string } = { expand: 'Expand', collapse: 'Collapse' },
 ): string {
   const expandLabel = escapeAttr(toggleLabels.expand);
@@ -1799,7 +1815,16 @@ export function renderSiteNavHtml(
 
   const tree = buildSiteNavTree(manifest);
   const items = tree.map(renderNode).join('');
-  return `<nav class="site-nav" aria-label="${escapeAttr(navLabel)}"><ul class="site-nav-tree" role="tree">${items}</ul></nav>`;
+  return `<ul class="site-nav-tree" role="tree">${items}</ul>`;
+}
+
+export function renderSiteNavHtml(
+  manifest: DocsiteNavEntry[],
+  currentAbsPath: string,
+  navLabel: string,
+  toggleLabels: { expand: string; collapse: string } = { expand: 'Expand', collapse: 'Collapse' },
+): string {
+  return `<nav class="site-nav" aria-label="${escapeAttr(navLabel)}">${renderSiteNavTreeHtml(manifest, currentAbsPath, toggleLabels)}</nav>`;
 }
 
 /**
@@ -1918,6 +1943,60 @@ export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: stri
   });
 
   updatePrevNextButtons(); // establish initial state on load, same as the sidebar's own active link is already set server-side
+`;
+}
+
+/**
+ * Book mode's own sidebar click handler (nested-fold-and-highlight-plan.md
+ * item 1) -- deliberately NOT getSiteNavClickHandlerScript's
+ * switchToSitePage. Book mode is already one single page with every
+ * topic's content already in the DOM (renderBookParts stamped a
+ * data-book-anchor attribute onto each surviving entry's own root element,
+ * matching this same sidebar link's own data-site-target -- both trace
+ * back to the one shared computeManifestEntryPositions helper, see its own
+ * comment), so a sidebar click here only needs to scroll to that element
+ * locally; there is no separate page for the extension host to render, and
+ * so no postMessage round-trip either.
+ *
+ * The target element is found by iterating every [data-book-anchor] node
+ * and comparing its attribute value directly, rather than building a CSS
+ * attribute-selector string (`document.querySelector('[data-book-anchor="'
+ * + id + '"]')`): id is an absolute filesystem path, which on Windows
+ * contains backslashes -- CSS-special inside a quoted attribute-selector
+ * string the same way they are inside a JS string literal -- so a selector
+ * built from one without CSS.escape (not universally available) would
+ * mis-match or throw on exactly the paths this project's own Windows-path
+ * tests already flag as a recurring gotcha (see resolveBookTopicPath's own
+ * tests). Plain string comparison sidesteps that entirely.
+ *
+ * Only ever emitted for book mode (see getMapWebviewScript, which
+ * generates a fresh script per mode rather than branching this one at
+ * runtime) -- MapViewerProvider.ts's currentMode variable exists for the
+ * mode-toggle button only, not to gate this.
+ */
+export function getBookNavClickHandlerScript(): string {
+  return `
+  function findBookAnchor(id) {
+    var candidates = document.querySelectorAll('[data-book-anchor]');
+    for (var i = 0; i < candidates.length; i++) {
+      if (candidates[i].getAttribute('data-book-anchor') === id) return candidates[i];
+    }
+    return null;
+  }
+
+  document.addEventListener('click', function(e) {
+    var link = e.target.closest ? e.target.closest('.site-nav-link') : null;
+    if (!link) return;
+    e.preventDefault();
+    var target = link.getAttribute('data-site-target');
+    if (!target) return;
+    var el = findBookAnchor(target);
+    if (!el) return;
+    var prevActive = document.querySelector('.site-nav-link.active');
+    if (prevActive) prevActive.classList.remove('active');
+    link.classList.add('active');
+    if (el.scrollIntoView) el.scrollIntoView();
+  });
 `;
 }
 

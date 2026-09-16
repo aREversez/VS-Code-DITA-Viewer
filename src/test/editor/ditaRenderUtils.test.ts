@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getSiteNavToggleScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getSiteNavToggleScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -1675,6 +1675,113 @@ describe('getSiteNavClickHandlerScript (docsite mode)', () => {
     click(xrefLink);
 
     assert.strictEqual(bTopic.classList.contains('active'), true);
+  });
+});
+
+describe('getBookNavClickHandlerScript (book mode sidebar, nested-fold-and-highlight-plan.md item 1)', () => {
+  it('emits a script that parses as JavaScript', () => {
+    assert.doesNotThrow(() => new Function(getBookNavClickHandlerScript()));
+  });
+
+  // Book mode has no separate page-fetch to simulate (unlike
+  // getSiteNavClickHandlerScript's switchToSitePage) -- clicking a sidebar
+  // link should just find the matching [data-book-anchor] element already
+  // sitting in the DOM and scroll to it, so the fakes here model that
+  // directly rather than a page-switch postMessage.
+  function makeFakeElement(opts: { classes?: string[]; attrs?: Record<string, string> }) {
+    const classes = new Set(opts.classes || []);
+    const attrs = opts.attrs || {};
+    const el = {
+      classList: {
+        contains: (c: string) => classes.has(c),
+        add: (c: string) => classes.add(c),
+        remove: (c: string) => classes.delete(c),
+      },
+      getAttribute: (name: string) => (name in attrs ? attrs[name] : null),
+      closest(selector: string): unknown {
+        if (selector.startsWith('.')) return classes.has(selector.slice(1)) ? el : null;
+        return null;
+      },
+    };
+    return el;
+  }
+
+  function makeFakeAnchor(id: string, scrolled: string[]) {
+    return {
+      getAttribute: (name: string) => (name === 'data-book-anchor' ? id : null),
+      scrollIntoView: () => scrolled.push(id),
+    };
+  }
+
+  function makeFakeBookDocument(
+    navLinks: ReturnType<typeof makeFakeElement>[],
+    anchors: ReturnType<typeof makeFakeAnchor>[],
+  ) {
+    const listeners: Array<(e: unknown) => void> = [];
+    const document = {
+      addEventListener: (evt: string, fn: (e: unknown) => void) => {
+        if (evt === 'click') listeners.push(fn);
+      },
+      querySelectorAll: (sel: string) => (sel === '[data-book-anchor]' ? anchors : []),
+      querySelector: (sel: string) =>
+        sel === '.site-nav-link.active' ? navLinks.find((l) => l.classList.contains('active')) ?? null : null,
+    };
+    return {
+      document,
+      click(target: ReturnType<typeof makeFakeElement>) {
+        for (const fn of listeners) fn({ target, preventDefault: () => {} });
+      },
+    };
+  }
+
+  it('scrolls to the matching data-book-anchor element and marks the clicked link active', () => {
+    const scrolled: string[] = [];
+    const bLink = makeFakeElement({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/book/b.dita' } });
+    const aLink = makeFakeElement({ classes: ['site-nav-link', 'active'], attrs: { 'data-site-target': '/book/a.dita' } });
+    const bAnchor = makeFakeAnchor('/book/b.dita', scrolled);
+    const { document, click } = makeFakeBookDocument([aLink, bLink], [makeFakeAnchor('/book/a.dita', scrolled), bAnchor]);
+    const script = getBookNavClickHandlerScript();
+    new Function('document', script)(document);
+
+    click(bLink);
+
+    assert.deepStrictEqual(scrolled, ['/book/b.dita']);
+    assert.strictEqual(bLink.classList.contains('active'), true);
+    assert.strictEqual(aLink.classList.contains('active'), false, 'the previously active link loses it');
+  });
+
+  it('compares data-book-anchor by exact string value rather than building a CSS selector, so a Windows-style backslash path matches instead of throwing or silently mismatching', () => {
+    const scrolled: string[] = [];
+    const target = 'C:\\proj\\docs\\topics\\ch1.dita';
+    const link = makeFakeElement({ classes: ['site-nav-link'], attrs: { 'data-site-target': target } });
+    const anchor = makeFakeAnchor(target, scrolled);
+    const { document, click } = makeFakeBookDocument([link], [anchor]);
+    const script = getBookNavClickHandlerScript();
+    new Function('document', script)(document);
+
+    assert.doesNotThrow(() => click(link));
+    assert.deepStrictEqual(scrolled, [target]);
+  });
+
+  it('does nothing when the clicked link has no matching anchor in the DOM, rather than throwing', () => {
+    const link = makeFakeElement({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/book/missing.dita' } });
+    const { document, click } = makeFakeBookDocument([link], []);
+    const script = getBookNavClickHandlerScript();
+    new Function('document', script)(document);
+
+    assert.doesNotThrow(() => click(link));
+    assert.strictEqual(link.classList.contains('active'), false, 'no anchor found, so no state change either');
+  });
+
+  it('ignores a click outside .site-nav-link entirely', () => {
+    const scrolled: string[] = [];
+    const { document, click } = makeFakeBookDocument([], [makeFakeAnchor('/book/a.dita', scrolled)]);
+    const script = getBookNavClickHandlerScript();
+    new Function('document', script)(document);
+
+    const outsideEl = makeFakeElement({});
+    assert.doesNotThrow(() => click(outsideEl));
+    assert.deepStrictEqual(scrolled, []);
   });
 });
 

@@ -17,6 +17,7 @@ import {
   resolveBookTopicPath,
   buildBookNavManifest,
   renderSiteNavHtml,
+  renderSiteNavTreeHtml,
 } from '../../editor/ditaRenderUtils';
 import type { BookPart } from '../../editor/bookPatch';
 
@@ -1555,5 +1556,41 @@ describe('renderSiteNavHtml', () => {
     assert.ok(chapter1Li![0].includes('data-site-target="/proj/docs/topics/a.dita"'));
     assert.ok(chapter1Li![0].includes('data-site-target="/proj/docs/topics/b.dita"'));
     assert.ok(!chapter1Li![0].includes('data-site-target="/proj/docs/topics/c.dita"'), 'chapter 2\'s topic C must not leak into chapter 1\'s own subtree');
+  });
+});
+
+// nested-fold-and-highlight-plan.md item 1's side-channel sidebar refresh
+// (MapViewerProvider.ts MSG_UPDATE_SIDEBAR) replaces .site-nav's innerHTML
+// with renderSiteNavTreeHtml's output directly, leaving the <nav> element
+// itself untouched -- so composition with the <nav> wrapper has to be
+// exact, not just visually equivalent, or the refresh would leave the
+// wrapper's own content duplicated or mismatched.
+describe('renderSiteNavTreeHtml (extracted for MapViewerProvider\'s incremental sidebar refresh)', () => {
+  const manifest = [
+    { absPath: '/proj/docs/topics/a.dita', title: 'Topic A', depth: 0 },
+    { absPath: '/proj/docs/topics/b.dita', title: 'Topic B', depth: 1 },
+  ];
+
+  it('renderSiteNavHtml is exactly <nav class="site-nav" aria-label="...">renderSiteNavTreeHtml(...)</nav>, byte for byte', () => {
+    const treeHtml = renderSiteNavTreeHtml(manifest, manifest[0].absPath, { expand: 'Expand', collapse: 'Collapse' });
+    const navHtml = renderSiteNavHtml(manifest, manifest[0].absPath, 'Topics', { expand: 'Expand', collapse: 'Collapse' });
+    assert.strictEqual(navHtml, `<nav class="site-nav" aria-label="Topics">${treeHtml}</nav>`);
+  });
+
+  it('starts with <ul class="site-nav-tree" and ends with </ul>, with no <nav> wrapper of its own', () => {
+    const treeHtml = renderSiteNavTreeHtml(manifest, manifest[0].absPath, { expand: 'Expand', collapse: 'Collapse' });
+    assert.ok(treeHtml.startsWith('<ul class="site-nav-tree"'));
+    assert.ok(treeHtml.endsWith('</ul>'));
+    assert.ok(!treeHtml.includes('<nav'));
+  });
+
+  it('defaults toggleLabels the same way renderSiteNavHtml does, when called with none', () => {
+    const grouped = [
+      { title: 'Chapter 1', depth: 0, isGroup: true },
+      { absPath: '/proj/docs/topics/a.dita', title: 'A', depth: 1 },
+    ];
+    const treeHtml = renderSiteNavTreeHtml(grouped, grouped[1].absPath as string);
+    assert.ok(treeHtml.includes('data-expand-label="Expand"'));
+    assert.ok(treeHtml.includes('data-collapse-label="Collapse"'));
   });
 });

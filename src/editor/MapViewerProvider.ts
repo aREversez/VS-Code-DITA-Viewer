@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, siteNavigableEntries, renderSiteNavHtml, getSiteNavClickHandlerScript, getSiteNavToggleScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
+import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, siteNavigableEntries, renderSiteNavHtml, renderSiteNavTreeHtml, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getSiteNavToggleScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
 import { getBookSearchIndex, searchBookIndex, getBookSearchScript, invalidateBookSearchIndex } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
@@ -58,6 +58,13 @@ const MSG_SET_TAG_TOOLTIPS = 'setTagTooltips';
 // against (nothing else reads this literal), so it stays a plain constant
 // rather than getting the MSG_UPDATE_CONTENT treatment above.
 const MSG_SWITCH_SITE_PAGE = 'switchSitePage';
+// Book mode's own sidebar refresh (nested-fold-and-highlight-plan.md item
+// 1) -- host -> webview only, sent alongside (not instead of)
+// MSG_PATCH_CONTENT/MSG_UPDATE_CONTENT on every source edit in book mode.
+// See postContentUpdate's own comment for why the sidebar needs this
+// separate, always-full-replace path rather than riding along with
+// diffBookParts' incremental content patch.
+const MSG_UPDATE_SIDEBAR = 'updateSidebar';
 // Full-book search (docsite design doc, 4.4) -- webview -> host request and
 // host -> webview response, same pairing convention as MSG_UPDATE_CONTENT
 // above (both spellings live in this one file already, but the pair is
@@ -96,7 +103,7 @@ function localizeTopicTypeLabel(tagName: string): string | undefined {
   return tagName.charAt(0).toUpperCase() + tagName.slice(1);
 }
 
-function getMapWebviewScript(): string {
+function getMapWebviewScript(mode: 'tree' | 'book' | 'site'): string {
   const L = {
     // Everything the single-topic preview's toolbar says too: the toolbar
     // label, the font and page-width controls, the Flags toggle, and the
@@ -129,7 +136,8 @@ function getMapWebviewScript(): string {
   var currentMode = document.body.classList.contains('mode-book') ? 'book'
     : document.body.classList.contains('mode-site') ? 'site' : 'tree';
 
-  ${getSiteNavClickHandlerScript({ switchSitePageMsgType: MSG_SWITCH_SITE_PAGE })}
+  ${mode === 'site' ? getSiteNavClickHandlerScript({ switchSitePageMsgType: MSG_SWITCH_SITE_PAGE }) : ''}
+  ${mode === 'book' ? getBookNavClickHandlerScript() : ''}
   ${getSiteNavToggleScript()}
   ${getSiteSidebarResizerScript()}
 
@@ -190,7 +198,7 @@ function getMapWebviewScript(): string {
   // site-nav-collapsed by default); this is how a reader tucks the topic
   // list away once they don't need it, and gets it back the same way.
   ${getSiteSidebarToggleScript({ toggleTitle: L.siteToggleSidebar })}
-  if (currentMode === 'site') {
+  if (currentMode === 'site' || currentMode === 'book') {
     toolbar.appendChild(siteSidebarToggleBtn);
   }
 
@@ -220,10 +228,15 @@ function getMapWebviewScript(): string {
   // off to it directly to actually highlight a picked result rather than
   // duplicating that mechanism. This is the separate, whole-book version,
   // backed by the lazy per-book text index built on the extension host
-  // side (see bookSearchIndex.ts). getBookSearchScript inserts itself
-  // into .site-nav directly (a no-op if that element does not exist, i.e.
-  // tree/book mode), so there is no toolbar wiring needed here at all.
-  ${getBookSearchScript({
+  // side (see bookSearchIndex.ts). getBookSearchScript inserts itself into
+  // .site-nav directly, so there is no toolbar wiring needed here at all --
+  // but book mode now has its own .site-nav too (nested-fold-and-highlight-
+  // plan.md item 1), and getBookSearchScript's own click-through
+  // (switchToSitePage, a genuine page fetch) has no book-mode equivalent,
+  // so this stays explicitly gated to 'site' rather than relying on the
+  // element-presence no-op the way it used to when only site mode ever had
+  // a .site-nav to find.
+  ${mode === 'site' ? getBookSearchScript({
     searchLabel: L.siteSearchTitle,
     placeholder: L.siteSearchPlaceholder,
     noResultsLabel: L.siteSearchNoResults,
@@ -234,7 +247,7 @@ function getMapWebviewScript(): string {
     clearLabel: L.siteSearchClear,
     requestMsgType: MSG_BOOK_SEARCH,
     responseMsgType: MSG_BOOK_SEARCH_RESULTS,
-  })}
+  }) : ''}
 
   // Tag-name tooltip toggle -- same feature and same persisted preference
   // as the topic viewer's own (see TAG_TOOLTIPS_KEY in
@@ -371,11 +384,27 @@ function getMapWebviewScript(): string {
       if (contentRoot) {
         contentRoot.innerHTML = e.data.html;
         afterContentSwap();
+        ${mode === 'site' ? `
         // Site mode's book-internal xref jump (docsite design doc,
         // 3.2/4.5): switchToSitePage stashed the target anchor before the
         // page-switch postMessage, since the element it names doesn't
         // exist until this new HTML lands. A plain sidebar/prev-next
         // switch never sets this, so it's a no-op there.
+        //
+        // Emitted in site mode only, because the identifiers these two
+        // blocks read (pendingSiteAnchor/scrollToSiteAnchor from
+        // getSiteNavClickHandlerScript, pendingSiteSearchHighlight/
+        // bsApplyPageSearch from getBookSearchScript) are DECLARED by
+        // those same site-mode-only scripts -- gate them out of the
+        // script and these references have nothing to resolve against.
+        // The currentMode === 'site' runtime guards below do happen to
+        // short-circuit before evaluating them, but that is the wrong
+        // thing to depend on: the guard and the declaration live in
+        // different files, and neither tsc nor eslint sees inside this
+        // injected string, so a later edit that reorders or splits a
+        // guard would produce a ReferenceError only a running webview
+        // would ever show. Gating at generation time makes the
+        // declaration and the use appear or disappear together.
         if (currentMode === 'site' && pendingSiteAnchor) {
           scrollToSiteAnchor(pendingSiteAnchor);
           pendingSiteAnchor = null;
@@ -388,7 +417,7 @@ function getMapWebviewScript(): string {
         if (currentMode === 'site' && pendingSiteSearchHighlight) {
           bsApplyPageSearch(pendingSiteSearchHighlight);
           pendingSiteSearchHighlight = null;
-        }
+        }` : ''}
       }
     } else if (e.data.type === '${MSG_PATCH_CONTENT}') {
       // Book mode's incremental update: replace only the entries whose HTML
@@ -416,6 +445,22 @@ function getMapWebviewScript(): string {
         if (entry) entry.outerHTML = updates[i].html;
       }
       afterContentSwap();
+    } else if (e.data.type === '${MSG_UPDATE_SIDEBAR}') {
+      // Book mode's own sidebar refresh (nested-fold-and-highlight-plan.md
+      // item 1) -- always a full innerHTML replace of the tree, never a
+      // diff: the sidebar itself is cheap to rebuild (it's just the
+      // manifest's own titles/structure, not a whole book's worth of
+      // rendered topic content), so there is no equivalent need for
+      // bookPatch.ts's per-entry patching here. Deliberately replaces only
+      // .site-nav's INNER content, not the .site-nav element itself
+      // (nav.outerHTML = ...) -- getSiteSidebarResizerScript captured that
+      // exact node once at script-init time and never re-queries it, so an
+      // outerHTML replace would leave the resizer silently pointing at a
+      // detached element afterward. See renderSiteNavTreeHtml's own
+      // comment (ditaRenderUtils.ts) for the same reasoning on the host
+      // side.
+      var nav = document.querySelector('.site-nav');
+      if (nav) nav.innerHTML = e.data.html;
     }
   });
 })();
@@ -581,6 +626,17 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     // the first render, after any full page render in tree mode, and after a
     // render error -- all of which must fall back to sending the document.
     let lastBookParts: BookPart[] | undefined;
+    // Book mode's own sidebar refresh baseline (nested-fold-and-highlight-
+    // plan.md item 1) -- compared by string equality in postContentUpdate
+    // below so an edit that leaves the manifest itself unchanged (most
+    // edits: they touch a topic's body, not its title/structure) sends no
+    // MSG_UPDATE_SIDEBAR at all, same "nothing changed, nothing sent"
+    // discipline diffBookParts already applies to content. Reset to
+    // undefined by updateWebview (a full render) for the same reason
+    // lastBookParts is: after that, whatever the fresh full render just put
+    // in the DOM IS the baseline, and the next edit's comparison must be
+    // against that, not against a stale value from before the reload.
+    let lastBookSidebarTreeHtml: string | undefined;
     const changeSubscription = vscode.workspace.onDidChangeTextDocument((e) => {
       if (e.document.uri.toString() !== document.uri.toString()) return;
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
@@ -636,6 +692,12 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       // becomes whatever this render produced -- including nothing at all in
       // tree mode and on the error page, where there are no parts to diff.
       lastBookParts = rendered.parts;
+      // Same baseline-reset reasoning as lastBookParts just above: whatever
+      // this full render just embedded in the DOM (or undefined, in
+      // tree/site mode or on the error page, where there is no book
+      // sidebar at all) is what the next postContentUpdate must diff
+      // against.
+      lastBookSidebarTreeHtml = rendered.sidebarTreeHtml;
       // Site mode may have fallen back to the manifest's first entry (no
       // hint yet, or the hint no longer names a topic this map has) --
       // adopt whatever it actually rendered, so the next page-switch click
@@ -729,6 +791,25 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       // Recorded before sending: the baseline describes what the webview will
       // be showing once this message lands, whichever branch it takes.
       lastBookParts = parts;
+      // Book mode's sidebar refresh (nested-fold-and-highlight-plan.md item
+      // 1), sent alongside the content patch rather than replacing it --
+      // this is the whole point of choosing a side-channel over site mode's
+      // updateWebview(): the incremental content patch below (bookPatch.ts,
+      // load-bearing for large-map edit latency) is preserved, and only the
+      // cheap sidebar markup is re-sent in full.
+      //
+      // Deliberately ABOVE the `patch.kind === 'none'` early return: the
+      // sidebar and the content can change independently. A <topichead>
+      // renamed, or a topicref reordered among its siblings, moves the
+      // sidebar without necessarily producing any different rendered HTML
+      // for any part -- returning early on 'none' before this point would
+      // leave exactly that edit's sidebar stale. The string comparison
+      // here is what keeps the common case (a body edit, sidebar
+      // unchanged) from sending anything at all.
+      if (result.sidebarTreeHtml !== undefined && result.sidebarTreeHtml !== lastBookSidebarTreeHtml) {
+        lastBookSidebarTreeHtml = result.sidebarTreeHtml;
+        webviewPanel.webview.postMessage({ type: MSG_UPDATE_SIDEBAR, html: result.sidebarTreeHtml });
+      }
       if (patch.kind === 'none') return;
       if (patch.kind === 'patch') {
         // count rides along so the webview can decline to patch a document it
@@ -891,7 +972,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     webview: vscode.Webview,
     mode: 'tree' | 'book' | 'site',
     sitePageHint?: string,
-  ): { html: string; parts?: BookPart[]; sidebarHtml?: string; resolvedSitePage?: string; siteManifest?: DocsiteNavEntry[]; siteKeyMap?: Map<string, string>; siteBookMembers?: ReadonlySet<string>; error?: undefined } | { html?: undefined; error: string } {
+  ): { html: string; parts?: BookPart[]; sidebarHtml?: string; sidebarTreeHtml?: string; resolvedSitePage?: string; siteManifest?: DocsiteNavEntry[]; siteKeyMap?: Map<string, string>; siteBookMembers?: ReadonlySet<string>; error?: undefined } | { html?: undefined; error: string } {
     const docDir = dirname(document.uri.fsPath);
     try {
       const rawXml = document.getText();
@@ -940,8 +1021,13 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       // stable identity, and it is the one that grows to megabytes. Outline
       // mode's tree is small and still goes out whole.
       let parts: BookPart[] | undefined;
+      let sidebarHtml: string | undefined;
+      let sidebarTreeHtml: string | undefined;
       if (mode === 'book') {
-        parts = this.collectBookParts(mapDoc.root, document, webview, docDir);
+        const book = this.collectBookParts(mapDoc.root, document, webview, docDir);
+        parts = book.parts;
+        sidebarHtml = book.sidebarHtml;
+        sidebarTreeHtml = book.sidebarTreeHtml;
         content = wrapBookParts(parts);
       } else {
         // Resolve <ph keyref="..."/> etc. in the map title and navtitles
@@ -953,7 +1039,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
           treeLabel: vscode.l10n.t('Document outline'),
         });
       }
-      return { html: content, parts };
+      return { html: content, parts, sidebarHtml, sidebarTreeHtml };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { error: message };
@@ -987,7 +1073,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     webview: vscode.Webview,
     mode: 'tree' | 'book' | 'site',
     sitePageHint?: string,
-  ): { html: string; parts?: BookPart[]; resolvedSitePage?: string; siteManifest?: DocsiteNavEntry[]; siteKeyMap?: Map<string, string>; siteBookMembers?: ReadonlySet<string> } {
+  ): { html: string; parts?: BookPart[]; sidebarTreeHtml?: string; resolvedSitePage?: string; siteManifest?: DocsiteNavEntry[]; siteKeyMap?: Map<string, string>; siteBookMembers?: ReadonlySet<string> } {
     const stylesUri = webview.asWebviewUri(
       vscode.Uri.file(join(this.context.extensionPath, 'media', 'styles.css')),
     );
@@ -1012,7 +1098,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       };
     }
 
-    const script = getMapWebviewScript();
+    const script = getMapWebviewScript(mode);
     const nonce = randomBytes(16).toString('base64');
     const theme = vscode.window.activeColorTheme;
     const isDark = theme.kind === vscode.ColorThemeKind.Dark || theme.kind === vscode.ColorThemeKind.HighContrast;
@@ -1029,6 +1115,18 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     const tagTooltips = this.context.globalState.get(TAG_TOOLTIPS_KEY, DEFAULT_TAG_TOOLTIPS);
     const tagTooltipsJson = escapeJson(JSON.stringify(tagTooltips));
 
+    // The sidebar shell below (nav + resizer + the content pane's own
+    // .site-main class) is keyed on whether a sidebar was actually
+    // produced, not on mode. Site mode always has one (renderMapContent
+    // errors out earlier if the map has no navigable entries at all), but
+    // book mode renders a map with no navigable entries -- every entry
+    // resource-only, or a map of nothing but childless keydefs -- as a
+    // book with an empty sidebar string. Keying the resizer and
+    // .site-main on mode === 'book' instead would leave that book with a
+    // drag handle attached to no sidebar, and a content pane flexed as if
+    // one were there. media/styles.css's own flex shell rule is scoped the
+    // matching way (body.mode-book:has(.site-nav)).
+
     return {
       html: `<!DOCTYPE html>
 <html lang="en"${isDark ? ' class="vscode-dark"' : ''}>
@@ -1041,13 +1139,14 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
 </head>
 <body class="mode-${mode}">
 ${result.sidebarHtml ?? ''}
-${mode === 'site' ? '<div id="__site-nav-resizer" class="site-nav-resizer" role="separator" aria-orientation="vertical" tabindex="0"></div>' : ''}
-<div id="dita-content-root"${mode === 'site' ? ' class="site-main"' : ''}>${result.html}</div>
+${(result.sidebarHtml ? '<div id="__site-nav-resizer" class="site-nav-resizer" role="separator" aria-orientation="vertical" tabindex="0"></div>' : '')}
+<div id="dita-content-root"${result.sidebarHtml ? ' class="site-main"' : ''}>${result.html}</div>
 <script nonce="${nonce}">window.__fontPrefs=${fontPrefsJson};window.__widthSelection=${widthSelectionJson};window.__tagTooltips=${tagTooltipsJson};</script>
 <script nonce="${nonce}">${script}</script>
 </body>
 </html>`,
       parts: result.parts,
+      sidebarTreeHtml: result.sidebarTreeHtml,
       resolvedSitePage: result.resolvedSitePage,
       siteManifest: result.siteManifest,
       siteKeyMap: result.siteKeyMap,
@@ -1060,7 +1159,7 @@ ${mode === 'site' ? '<div id="__site-nav-resizer" class="site-nav-resizer" role=
     document: vscode.TextDocument,
     webview: vscode.Webview,
     docDir: string,
-  ): BookPart[] {
+  ): { parts: BookPart[]; sidebarHtml: string; sidebarTreeHtml: string } {
     // Build key map once for all entries. renderTopicCached compares it by
     // identity, so one instance for the whole pass is what makes reuse work.
     const keyMap = buildKeyMap(document.uri);
@@ -1072,13 +1171,47 @@ ${mode === 'site' ? '<div id="__site-nav-resizer" class="site-nav-resizer" role=
     // without a VS Code instance. This method contributes the two things that
     // genuinely need one: the map's key definitions and the webview's
     // resource-URI conversion.
-    return renderBookParts({
+    const parts = renderBookParts({
       entries,
       docDir,
       keyMap,
       fileToWebviewUri: (absPath) => webview.asWebviewUri(vscode.Uri.file(absPath)).toString(),
       uiLanguage: vscode.env.language,
     });
+
+    // Book mode's own sidebar (nested-fold-and-highlight-plan.md item 1) --
+    // built from the exact same entries/docDir renderBookParts itself just
+    // consumed, so the ids buildBookNavManifest hands the sidebar links
+    // (data-site-target) can never disagree with the ids renderBookParts
+    // already stamped onto the matching part's own root element
+    // (data-book-anchor) -- both trace back to the one shared
+    // computeManifestEntryPositions helper (ditaRenderUtils.ts). currentAbsPath
+    // (renderSiteNavHtml/renderSiteNavTreeHtml's "which link is active"
+    // argument) has no real meaning for a single-page book the way it does
+    // for site mode's one-topic-at-a-time pages; the first navigable entry
+    // is passed purely so the sidebar starts with its top row visually
+    // marked, matching where the book itself opens -- the book-mode click
+    // handler (getBookNavClickHandlerScript) moves that mark as the reader
+    // clicks, same as site mode's does.
+    //
+    // sidebarTreeHtml (just the <ul>, no <nav> wrapper) is what
+    // postContentUpdate's book branch sends as MSG_UPDATE_SIDEBAR on every
+    // source edit, alongside -- not instead of -- the existing incremental
+    // content patch: see that call site's own comment for why the sidebar
+    // needs its own refresh path rather than riding along with
+    // diffBookParts.
+    const manifest = buildBookNavManifest(
+      entries,
+      docDir,
+      makeFileTitleResolver(docDir),
+      makeFileTopicTypeResolver(docDir, localizeTopicTypeLabel),
+    );
+    const navigable = siteNavigableEntries(manifest);
+    const toggleLabels = { expand: vscode.l10n.t('Expand'), collapse: vscode.l10n.t('Collapse') };
+    const sidebarTreeHtml = navigable.length > 0 ? renderSiteNavTreeHtml(manifest, navigable[0].absPath, toggleLabels) : '';
+    const sidebarHtml = navigable.length > 0 ? renderSiteNavHtml(manifest, navigable[0].absPath, vscode.l10n.t('Topics'), toggleLabels) : '';
+
+    return { parts, sidebarHtml, sidebarTreeHtml };
   }
 }
 
