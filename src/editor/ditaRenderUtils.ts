@@ -1367,6 +1367,15 @@ export function resolveBookTopicPath(entry: MapEntry, docDir: string): string | 
 }
 
 export interface DocsiteNavEntry {
+  /** Stable identifier for this entry, used to key persisted UI state
+   *  (sidebar collapsed/expanded) across re-renders of the same map --
+   *  see buildBookNavManifest's own comment for how it's computed.
+   *  Optional (rather than required) so every existing call site that
+   *  constructs a DocsiteNavEntry by hand for a test of renderSiteNavHtml/
+   *  buildSiteNavTree/buildBookSearchIndex, none of which read this
+   *  field, doesn't have to grow one just to satisfy the type checker;
+   *  buildBookNavManifest itself always populates it. */
+  id?: string;
   /** Resolved absolute path -- the same identity renderBookParts's own
    *  `visited` set and de-duplication use, and what a future "is this xref
    *  target part of the current book" check (docsite design doc, 3.2/4.5)
@@ -1483,12 +1492,44 @@ export function buildBookNavManifest(
   // parent left in the output tree for buildSiteNavTree
   // (renderSiteNavHtml) to nest them under.
   const survivingAncestors: number[] = [];
+  // id computation runs alongside the depth-compaction stack above, on
+  // exactly the same "did this entry actually survive into the manifest"
+  // logic -- a skipped entry (resource-only, hrefless-and-childless,
+  // duplicate) consumes no sibling slot, for the same reason it leaves no
+  // depth hole: a later sibling's id must not depend on how many entries
+  // ahead of it happened to get filtered out, or persisted collapsed
+  // state would silently point at the wrong node the next time the map
+  // gains or loses an unrelated resource-only entry.
+  //
+  // ancestorIndices holds, for every still-open surviving ancestor (kept
+  // in lockstep with survivingAncestors -- same push/pop sites), the
+  // sibling index THAT ancestor was itself given when it was emitted; a
+  // group's own id is 'grp:' + those ancestor indices plus its own,
+  // dot-joined (e.g. 'grp:0.2' for the third child of the first
+  // top-level group) -- positional, not title-based, since two
+  // <topichead> group headers commonly share the exact same navtitle
+  // text, and the same title can also be re-localized out from under a
+  // stored id when the UI language changes.
+  //
+  // childCounts[d] is the next sibling index to hand out at compacted
+  // depth d under the currently-open parent chain; truncated to exactly
+  // depth+1 entries every iteration (dropping any deeper level's leftover
+  // counter from a now-closed branch, extending with a fresh 0 the first
+  // time this depth is reached under the current parent) so numbering
+  // restarts correctly every time a shallower sibling closes off a
+  // branch, the same "no ancestor -> depth 0" invariant survivingAncestors
+  // itself already relies on.
+  const ancestorIndices: number[] = [];
+  const childCounts: number[] = [];
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
     while (survivingAncestors.length > 0 && survivingAncestors[survivingAncestors.length - 1] >= entry.depth) {
       survivingAncestors.pop();
+      ancestorIndices.pop();
     }
     const depth = survivingAncestors.length;
+    if (childCounts.length > depth + 1) childCounts.length = depth + 1;
+    if (childCounts.length <= depth) childCounts.push(0);
 
     if (entry.resourceOnly) continue; // exists purely to be pulled in via keyref/conref elsewhere, never its own page
     if (!entry.href) {
@@ -1512,8 +1553,11 @@ export function buildBookNavManifest(
       // keyref variable would be pure noise, not navigation.
       const hasChildren = i + 1 < entries.length && entries[i + 1].depth > entry.depth;
       if (hasChildren) {
-        result.push({ title: entry.displayName, depth, role: entry.role, isGroup: true });
+        const siblingIndex = childCounts[depth]++;
+        const id = 'grp:' + [...ancestorIndices, siblingIndex].join('.');
+        result.push({ id, title: entry.displayName, depth, role: entry.role, isGroup: true });
         survivingAncestors.push(entry.depth);
+        ancestorIndices.push(siblingIndex);
       }
       continue;
     }
@@ -1526,8 +1570,19 @@ export function buildBookNavManifest(
       if (realTitle) title = realTitle;
     }
     const topicType = resolveTopicType ? resolveTopicType(entry.href) : undefined;
-    result.push({ absPath, title, depth, role: entry.role, topicType });
+    // A navigable entry's absPath is already unique (the `seen` dedup
+    // above guarantees it) and stays meaningful across a document's own
+    // edits in a way a positional path wouldn't, so it doubles as the
+    // entry's id directly rather than getting its own 'grp:'-style
+    // synthetic one. It still consumes a sibling slot in childCounts
+    // (via siblingIndex below) purely so a LATER, deeper group nested
+    // under this entry gets a correctly-numbered ancestor prefix -- a
+    // real topic can itself have further topicrefs nested under it in
+    // the map, same as a topichead can.
+    const siblingIndex = childCounts[depth]++;
+    result.push({ id: absPath, absPath, title, depth, role: entry.role, topicType });
     survivingAncestors.push(entry.depth);
+    ancestorIndices.push(siblingIndex);
   }
   return result;
 }

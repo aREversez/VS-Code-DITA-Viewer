@@ -959,8 +959,8 @@ describe('resolveBookTopicPath / buildBookNavManifest (docsite nav manifest)', (
     ];
     const manifest = buildBookNavManifest(entries, docDir);
     assert.deepStrictEqual(manifest, [
-      { absPath: join(docDir, 'topics/ch1.dita'), title: 'Chapter One', depth: 0, role: 'Chapter 1', topicType: undefined },
-      { absPath: join(docDir, 'topics/ch1-s1.dita'), title: 'Section 1.1', depth: 1, role: undefined, topicType: undefined },
+      { id: join(docDir, 'topics/ch1.dita'), absPath: join(docDir, 'topics/ch1.dita'), title: 'Chapter One', depth: 0, role: 'Chapter 1', topicType: undefined },
+      { id: join(docDir, 'topics/ch1-s1.dita'), absPath: join(docDir, 'topics/ch1-s1.dita'), title: 'Section 1.1', depth: 1, role: undefined, topicType: undefined },
       // The trailing hrefless entry has nothing deeper following it, so
       // it's dropped rather than becoming an empty group header.
     ]);
@@ -974,9 +974,9 @@ describe('resolveBookTopicPath / buildBookNavManifest (docsite nav manifest)', (
     ];
     const manifest = buildBookNavManifest(entries, docDir);
     assert.deepStrictEqual(manifest, [
-      { title: 'Chapter 1: Intro', depth: 0, role: undefined, isGroup: true },
-      { absPath: join(docDir, 'topics/about.dita'), title: 'About', depth: 1, role: undefined, topicType: undefined },
-      { absPath: join(docDir, 'topics/overview.dita'), title: 'Overview', depth: 1, role: undefined, topicType: undefined },
+      { id: 'grp:0', title: 'Chapter 1: Intro', depth: 0, role: undefined, isGroup: true },
+      { id: join(docDir, 'topics/about.dita'), absPath: join(docDir, 'topics/about.dita'), title: 'About', depth: 1, role: undefined, topicType: undefined },
+      { id: join(docDir, 'topics/overview.dita'), absPath: join(docDir, 'topics/overview.dita'), title: 'Overview', depth: 1, role: undefined, topicType: undefined },
     ]);
   });
 
@@ -1187,6 +1187,51 @@ describe('resolveBookTopicPath / buildBookNavManifest (docsite nav manifest)', (
         join(docDir, 'topics/db_ui_test.dita'),
       ],
     );
+  });
+
+  // --- stable id (sidebar collapsed-state persistence keys off this) ---
+
+  it('gives every entry a stable, unique id -- navigable entries use their absPath, group entries a positional grp: path', () => {
+    const entries: MapEntry[] = [
+      { href: undefined, displayName: 'Chapter 1', displayNameExplicit: true, depth: 0 },
+      { href: 'topics/a.dita', displayName: 'A', displayNameExplicit: true, depth: 1 },
+      // Second top-level group shares the exact same title as the first --
+      // title can't be the id (two <topichead>s commonly share text, and
+      // the title itself is re-localized when the UI language changes),
+      // so this must not collide with the first group's id.
+      { href: undefined, displayName: 'Chapter 1', displayNameExplicit: true, depth: 0 },
+      { href: 'topics/b.dita', displayName: 'B', displayNameExplicit: true, depth: 1 },
+    ];
+    const manifest = buildBookNavManifest(entries, docDir);
+    assert.strictEqual(manifest.length, 4);
+    const ids = manifest.map((e) => e.id);
+    assert.strictEqual(new Set(ids).size, 4, 'all four ids must be unique even though two group headers share the exact same title');
+    assert.strictEqual(manifest[0].id, 'grp:0');
+    assert.strictEqual(manifest[1].id, join(docDir, 'topics/a.dita'));
+    assert.strictEqual(manifest[2].id, 'grp:1', 'the second same-titled group header gets a different positional id, not the first one\'s');
+    assert.strictEqual(manifest[3].id, join(docDir, 'topics/b.dita'));
+  });
+
+  it('id is deterministic across repeated builds of the exact same entries', () => {
+    const entries: MapEntry[] = [
+      { href: undefined, displayName: 'Group', displayNameExplicit: true, depth: 0 },
+      { href: 'topics/x.dita', displayName: 'X', displayNameExplicit: true, depth: 1 },
+    ];
+    const first = buildBookNavManifest(entries, docDir).map((e) => e.id);
+    const second = buildBookNavManifest(entries, docDir).map((e) => e.id);
+    assert.deepStrictEqual(first, second);
+  });
+
+  it('nested group ids are dot-joined by ancestor position, not just their own sibling index', () => {
+    const entries: MapEntry[] = [
+      { href: undefined, displayName: 'Outer', displayNameExplicit: true, depth: 0 },
+      { href: undefined, displayName: 'Inner', displayNameExplicit: true, depth: 1 },
+      { href: 'topics/leaf.dita', displayName: 'Leaf', displayNameExplicit: true, depth: 2 },
+    ];
+    const manifest = buildBookNavManifest(entries, docDir);
+    assert.strictEqual(manifest[0].id, 'grp:0');
+    assert.strictEqual(manifest[1].id, 'grp:0.0');
+    assert.strictEqual(manifest[2].id, join(docDir, 'topics/leaf.dita'));
   });
 });
 
