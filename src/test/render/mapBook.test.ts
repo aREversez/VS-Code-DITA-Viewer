@@ -1593,4 +1593,66 @@ describe('renderSiteNavTreeHtml (extracted for MapViewerProvider\'s incremental 
     assert.ok(treeHtml.includes('data-expand-label="Expand"'));
     assert.ok(treeHtml.includes('data-collapse-label="Collapse"'));
   });
+
+  // nested-fold-and-highlight-plan.md item 3: persisted collapse state.
+  // Rendering the matching rows already collapsed on arrival is what makes
+  // this "persisted" rather than "collapsed then immediately expanded"
+  // (there is no script pass that walks the tree collapsing rows after
+  // load -- everything here happens in the markup renderSiteNavTreeHtml
+  // itself produces).
+  describe('data-nav-id and collapsedIds', () => {
+    const grouped = [
+      { id: 'grp:0', title: 'Chapter 1', depth: 0, isGroup: true },
+      { id: '/proj/docs/topics/a.dita', absPath: '/proj/docs/topics/a.dita', title: 'A', depth: 1 },
+    ];
+
+    it('stamps data-nav-id from DocsiteNavEntry.id on every row that has one, group and link alike', () => {
+      const treeHtml = renderSiteNavTreeHtml(grouped, grouped[1].absPath as string);
+      assert.ok(treeHtml.includes('data-nav-id="grp:0"'));
+      assert.ok(treeHtml.includes('data-nav-id="/proj/docs/topics/a.dita"'));
+    });
+
+    it('omits data-nav-id entirely for a hand-built entry with no id, rather than falling back to title or position', () => {
+      const noId = [{ title: 'Chapter 1', depth: 0, isGroup: true }];
+      const treeHtml = renderSiteNavTreeHtml(noId, '');
+      assert.ok(!treeHtml.includes('data-nav-id'));
+    });
+
+    it('a group entry whose id is in collapsedIds renders collapsed on arrival: the class, both aria-expanded attributes, and the expand-label all set together', () => {
+      const treeHtml = renderSiteNavTreeHtml(
+        grouped,
+        grouped[1].absPath as string,
+        { expand: 'Expand', collapse: 'Collapse' },
+        new Set(['grp:0']),
+      );
+      const itemMatch = /<li class="site-nav-item site-nav-item--group has-children collapsed" role="treeitem" aria-expanded="false"[^>]*>/.exec(treeHtml);
+      assert.ok(itemMatch, 'the <li> itself carries both the collapsed class and aria-expanded="false"');
+      assert.ok(treeHtml.includes('aria-expanded="false" aria-label="Expand"'), 'the toggle button itself is also collapsed, offering to expand');
+      // The children <ul> is still rendered (media/styles.css hides it via
+      // the .collapsed cascade, not a server-side omission) -- so a
+      // collapsed group's contents are still in the DOM for
+      // getBookNavClickHandlerScript/full-book search to find, just
+      // visually hidden.
+      assert.ok(treeHtml.includes('data-site-target="/proj/docs/topics/a.dita"'));
+    });
+
+    it('an id in collapsedIds that does not belong to any has-children row (e.g. a leaf, or one from a map that has since changed) is silently ignored', () => {
+      const leafOnly = [{ id: '/proj/docs/topics/a.dita', absPath: '/proj/docs/topics/a.dita', title: 'A', depth: 0 }];
+      assert.doesNotThrow(() => renderSiteNavTreeHtml(leafOnly, '', undefined, new Set(['/proj/docs/topics/a.dita', 'grp:99'])));
+      const treeHtml = renderSiteNavTreeHtml(leafOnly, '', undefined, new Set(['/proj/docs/topics/a.dita']));
+      assert.ok(!treeHtml.includes('collapsed'), 'a leaf never gets a toggle or a collapsed class regardless of collapsedIds');
+    });
+
+    it('defaults to an empty set (everything expanded) when collapsedIds is omitted, unchanged from before this feature', () => {
+      const treeHtml = renderSiteNavTreeHtml(grouped, grouped[1].absPath as string);
+      assert.ok(!treeHtml.includes('collapsed'));
+      assert.ok(treeHtml.includes('aria-expanded="true"'));
+    });
+
+    it('renderSiteNavHtml threads collapsedIds through to renderSiteNavTreeHtml unchanged', () => {
+      const withHelper = renderSiteNavTreeHtml(grouped, grouped[1].absPath as string, { expand: 'Expand', collapse: 'Collapse' }, new Set(['grp:0']));
+      const navHtml = renderSiteNavHtml(grouped, grouped[1].absPath as string, 'Topics', { expand: 'Expand', collapse: 'Collapse' }, new Set(['grp:0']));
+      assert.strictEqual(navHtml, `<nav class="site-nav" aria-label="Topics">${withHelper}</nav>`);
+    });
+  });
 });

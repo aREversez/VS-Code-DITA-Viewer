@@ -1749,11 +1749,28 @@ const SITE_NAV_TOGGLE_SLOT = 16;
  * content-only update intentionally leaves the sidebar alone entirely (see
  * postSitePageUpdate's own comment) rather than refreshing it, so
  * renderSiteNavHtml stays the only entry point there.
+ *
+ * `collapsedIds` (nested-fold-and-highlight-plan.md item 3, persisted
+ * collapse state) renders the matching rows already collapsed on arrival,
+ * rather than rendering everything expanded and having a script collapse
+ * them afterward -- that would flash open before snapping shut on every
+ * load, exactly the "render collapsed initial state directly" requirement
+ * the plan itself calls out. Membership is checked against
+ * DocsiteNavEntry.id (buildBookNavManifest's stable id -- see its own
+ * comment), which is also what gets stamped onto the row as
+ * data-nav-id so the client can report it back after a toggle
+ * (getSiteNavCollapseStateHelperScript's reportSiteNavCollapseState). A
+ * hand-built manifest in a test that never sets `id` simply never
+ * matches and never gets the attribute -- both are optional, not a
+ * fallback onto title or position, for the exact reason buildBookNavManifest's
+ * own id computation avoids title-keying: it would silently merge two
+ * same-named branches' collapse state.
  */
 export function renderSiteNavTreeHtml(
   manifest: DocsiteNavEntry[],
   currentAbsPath: string,
   toggleLabels: { expand: string; collapse: string } = { expand: 'Expand', collapse: 'Collapse' },
+  collapsedIds: ReadonlySet<string> = new Set(),
 ): string {
   const expandLabel = escapeAttr(toggleLabels.expand);
   const collapseLabel = escapeAttr(toggleLabels.collapse);
@@ -1782,18 +1799,23 @@ export function renderSiteNavTreeHtml(
     const typeChip = entry.topicType
       ? `<span class="site-nav-chip site-nav-chip--type">${escapeHtml(entry.topicType)}</span>`
       : '';
-    // Starts expanded (no `collapsed` class, aria-expanded="true") --
-    // matches the flat list's own old behavior of showing every entry,
-    // and getSiteNavToggleScript is the only thing that ever adds
-    // `collapsed` afterward.
+    const navIdAttr = entry.id ? ` data-nav-id="${escapeAttr(entry.id)}"` : '';
+    // Collapsed on arrival when this row's own id is in the persisted set
+    // -- everything else defaults to expanded, matching the "only the
+    // non-default state is ever stored" design (see MapViewerProvider.ts's
+    // COLLAPSED_NAV_KEY comment). A row with no id (only possible from a
+    // hand-built test manifest -- buildBookNavManifest always sets one)
+    // can never match and is always rendered expanded, same as before
+    // this feature existed.
+    const isCollapsed = hasChildren && entry.id !== undefined && collapsedIds.has(entry.id);
     const toggleHtml = hasChildren
-      ? `<button type="button" class="site-nav-toggle" style="left:${toggleLeft}px" aria-expanded="true" aria-label="${collapseLabel}" data-expand-label="${expandLabel}" data-collapse-label="${collapseLabel}"></button>`
+      ? `<button type="button" class="site-nav-toggle" style="left:${toggleLeft}px" aria-expanded="${isCollapsed ? 'false' : 'true'}" aria-label="${isCollapsed ? expandLabel : collapseLabel}" data-expand-label="${expandLabel}" data-collapse-label="${collapseLabel}"></button>`
       : '';
     const childrenHtml = hasChildren
       ? `<ul class="site-nav-children" role="group">${node.children.map(renderNode).join('')}</ul>`
       : '';
-    const itemClass = hasChildren ? ' has-children' : '';
-    const itemAriaExpanded = hasChildren ? ' aria-expanded="true"' : '';
+    const itemClass = hasChildren ? (isCollapsed ? ' has-children collapsed' : ' has-children') : '';
+    const itemAriaExpanded = hasChildren ? ` aria-expanded="${isCollapsed ? 'false' : 'true'}"` : '';
     // A group entry (DocsiteNavEntry.isGroup -- a <topichead> or a bare
     // key-only topicref, see that field's own comment) has no topic file
     // to navigate to, so it renders as a plain non-clickable label -- no
@@ -1806,11 +1828,11 @@ export function renderSiteNavTreeHtml(
     // plain section heading (renderBookParts's own `struct:` branch).
     if (entry.isGroup) {
       const label = `<span class="site-nav-group-label" style="padding-left:${indent}px" title="${escapeAttr(entry.title)}">${roleChip}<span class="site-nav-link-text">${escapeHtml(entry.title)}</span></span>`;
-      return `<li class="site-nav-item site-nav-item--group${itemClass}" role="treeitem"${itemAriaExpanded}>${toggleHtml}${label}${childrenHtml}</li>`;
+      return `<li class="site-nav-item site-nav-item--group${itemClass}" role="treeitem"${itemAriaExpanded}${navIdAttr}>${toggleHtml}${label}${childrenHtml}</li>`;
     }
     const activeClass = entry.absPath === currentAbsPath ? ' active' : '';
     const link = `<a href="#" class="site-nav-link${activeClass}" data-site-target="${escapeAttr(entry.absPath as string)}" style="padding-left:${indent}px" title="${escapeAttr(entry.title)}">${roleChip}${typeChip}<span class="site-nav-link-text">${escapeHtml(entry.title)}</span></a>`;
-    return `<li class="site-nav-item${itemClass}" role="treeitem"${itemAriaExpanded}>${toggleHtml}${link}${childrenHtml}</li>`;
+    return `<li class="site-nav-item${itemClass}" role="treeitem"${itemAriaExpanded}${navIdAttr}>${toggleHtml}${link}${childrenHtml}</li>`;
   };
 
   const tree = buildSiteNavTree(manifest);
@@ -1823,8 +1845,9 @@ export function renderSiteNavHtml(
   currentAbsPath: string,
   navLabel: string,
   toggleLabels: { expand: string; collapse: string } = { expand: 'Expand', collapse: 'Collapse' },
+  collapsedIds: ReadonlySet<string> = new Set(),
 ): string {
-  return `<nav class="site-nav" aria-label="${escapeAttr(navLabel)}">${renderSiteNavTreeHtml(manifest, currentAbsPath, toggleLabels)}</nav>`;
+  return `<nav class="site-nav" aria-label="${escapeAttr(navLabel)}">${renderSiteNavTreeHtml(manifest, currentAbsPath, toggleLabels, collapsedIds)}</nav>`;
 }
 
 /**
@@ -2044,7 +2067,36 @@ export function getBookNavClickHandlerScript(): string {
  * the cascade is free. That is also why collapse-all can set the class on
  * every item indiscriminately without worrying about order.
  */
-export function getSiteNavCollapseStateHelperScript(): string {
+export function getSiteNavCollapseStateHelperScript(opts: { reportCollapseMsgType?: string } = {}): string {
+  // reportSiteNavCollapseState -- item 3's persistence side channel. Called
+  // once per user action (a toggle click, or a whole expand/collapse-all
+  // sweep), not once per item mutated: it re-scans the DOM for the FULL
+  // current set of collapsed ids and posts that whole set, rather than
+  // sending an incremental {id, collapsed} delta per change. A whole-set
+  // replace is simpler on the host side (one array write, no partial-
+  // update bookkeeping to keep consistent with what a full render would
+  // have produced) and collapse-all would otherwise fire the same number
+  // of messages as items in the tree instead of one.
+  //
+  // Only emitted when a message type is supplied -- getSiteNavToggleScript
+  // and getSiteNavExpandCollapseAllButtonsScript both guard their own call
+  // to it with `typeof reportSiteNavCollapseState === 'function'`, so a
+  // caller that renders a sidebar with no persistence wired up (or a test
+  // exercising the toggle/batch scripts in isolation) gets the same
+  // collapse/expand behavior as before this feature, just without the
+  // report.
+  const report = opts.reportCollapseMsgType
+    ? `
+  function reportSiteNavCollapseState() {
+    var ids = [];
+    var items = document.querySelectorAll('.site-nav-item.has-children[data-nav-id]');
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].classList.contains('collapsed')) ids.push(items[i].getAttribute('data-nav-id'));
+    }
+    vscode.postMessage({ type: ${JSON.stringify(opts.reportCollapseMsgType)}, ids: ids });
+  }
+`
+    : '';
   return `
   function setSiteNavItemCollapsed(item, collapsed) {
     if (!item) return;
@@ -2057,7 +2109,7 @@ export function getSiteNavCollapseStateHelperScript(): string {
     var label = collapsed ? toggle.getAttribute('data-expand-label') : toggle.getAttribute('data-collapse-label');
     if (label) toggle.setAttribute('aria-label', label);
   }
-`;
+${report}`;
 }
 
 /**
@@ -2083,6 +2135,7 @@ export function getSiteNavExpandCollapseAllButtonsScript(opts: { expandAllLabel:
   function setAllSiteNavCollapsed(collapsed) {
     var items = document.querySelectorAll('.site-nav-item.has-children');
     for (var i = 0; i < items.length; i++) setSiteNavItemCollapsed(items[i], collapsed);
+    if (typeof reportSiteNavCollapseState === 'function') reportSiteNavCollapseState();
   }
 
   var siteExpandAllBtn = document.createElement('button');
@@ -2116,6 +2169,7 @@ export function getSiteNavToggleScript(): string {
     // through the one shared setter (setSiteNavItemCollapsed) that
     // expand-all/collapse-all uses too.
     setSiteNavItemCollapsed(item, !item.classList.contains('collapsed'));
+    if (typeof reportSiteNavCollapseState === 'function') reportSiteNavCollapseState();
   });
 `;
 }

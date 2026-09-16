@@ -2619,4 +2619,110 @@ describe('getSiteNavExpandCollapseAllButtonsScript + getSiteNavCollapseStateHelp
     assert.ok(!/function\s+setSiteNavItemCollapsed/.test(toggleScript), 'does not declare a second copy of it');
     assert.ok(/function\s+setSiteNavItemCollapsed/.test(helper), 'the helper script is the one declaring it');
   });
+
+  // nested-fold-and-highlight-plan.md item 3: persisted collapse state.
+  // reportSiteNavCollapseState is only declared when a message type is
+  // supplied -- these exercise that opt-in path specifically, wiring it
+  // together with the toggle/batch scripts the same way getMapWebviewScript
+  // does, since reportSiteNavCollapseState's own correctness only matters
+  // in combination with what calls it.
+  describe('reportSiteNavCollapseState (nested-fold-and-highlight-plan.md item 3)', () => {
+    const helperWithReport = getSiteNavCollapseStateHelperScript({ reportCollapseMsgType: 'setNavCollapsed' });
+
+    function makeItemWithId(id: string | null, hasToggle = true): FakeItem & { navId: string | null } {
+      const it = makeItem(hasToggle) as FakeItem & { navId: string | null };
+      it.navId = id;
+      return it;
+    }
+
+    function makeReportDocument(items: (FakeItem & { navId: string | null })[]) {
+      const posted: unknown[] = [];
+      const vscode = { postMessage: (m: unknown) => posted.push(m) };
+      const document = {
+        querySelectorAll: (sel: string) =>
+          sel === '.site-nav-item.has-children[data-nav-id]' ? items.filter((it) => it.navId !== null) : items,
+      };
+      // getAttribute('data-nav-id') added directly on the fakes here rather
+      // than in the shared makeItem helper above -- only this describe
+      // block's tests care about it.
+      for (const it of items) {
+        const original = it.attrs;
+        (it as unknown as { getAttribute(n: string): string | null }).getAttribute = (n: string) =>
+          n === 'data-nav-id' ? it.navId : (n in original ? original[n] : null);
+      }
+      return { document, vscode, posted };
+    }
+
+    it('is not declared at all when no message type is supplied, so calling it is left to the typeof guard', () => {
+      assert.ok(!/function\s+reportSiteNavCollapseState/.test(helper));
+    });
+
+    it('reports only the collapsed ids among has-children[data-nav-id] items, omitting expanded ones and items with no id', () => {
+      const collapsedWithId = makeItemWithId('grp:0');
+      collapsedWithId.classes.add('collapsed');
+      const expandedWithId = makeItemWithId('grp:1');
+      const collapsedNoId = makeItemWithId(null);
+      collapsedNoId.classes.add('collapsed');
+      const { document, vscode, posted } = makeReportDocument([collapsedWithId, expandedWithId, collapsedNoId]);
+
+      new Function('document', 'vscode', helperWithReport + '\nreportSiteNavCollapseState();')(document, vscode);
+
+      assert.strictEqual(posted.length, 1);
+      assert.deepStrictEqual(posted[0], { type: 'setNavCollapsed', ids: ['grp:0'] });
+    });
+
+    it('a single toggle click reports the resulting full set exactly once', () => {
+      const grpA = makeItemWithId('grp:0');
+      const { document: qDoc } = makeReportDocument([grpA]);
+      const posted: unknown[] = [];
+      const vscode = { postMessage: (m: unknown) => posted.push(m) };
+      const listeners: Array<(e: unknown) => void> = [];
+      const document = {
+        addEventListener: (evt: string, fn: (e: unknown) => void) => { if (evt === 'click') listeners.push(fn); },
+        querySelectorAll: qDoc.querySelectorAll,
+      };
+      // A minimal click-capable pair: getSiteNavToggleScript's own handler
+      // walks target -> closest('.site-nav-toggle') -> closest('.site-nav-item'),
+      // which the shared FakeItem/FakeToggle above were never built for
+      // (they only support the batch scripts' querySelectorAll-based path).
+      const toggleEl = {
+        closest: (sel: string) => {
+          if (sel === '.site-nav-toggle') return toggleEl;
+          if (sel === '.site-nav-item') return grpA;
+          return null;
+        },
+      };
+      new Function('document', 'vscode', helperWithReport + getSiteNavToggleScript())(document, vscode);
+
+      for (const fn of listeners) fn({ target: toggleEl, preventDefault: () => {} });
+
+      assert.strictEqual(posted.length, 1, 'exactly one report per click, not one per DOM item scanned');
+      assert.deepStrictEqual(posted[0], { type: 'setNavCollapsed', ids: ['grp:0'] });
+    });
+
+    it('collapse-all reports the full set exactly once for the whole batch, not once per item', () => {
+      const items = [makeItemWithId('a'), makeItemWithId('b'), makeItemWithId('c')];
+      const { document: qDoc } = makeReportDocument(items);
+      const posted: unknown[] = [];
+      const vscode = { postMessage: (m: unknown) => posted.push(m) };
+      const clicks: Record<string, () => void> = {};
+      const document = {
+        querySelectorAll: qDoc.querySelectorAll,
+        createElement: () => {
+          const el = { id: '', style: { cssText: '' }, setAttribute: () => {}, addEventListener(_e: string, fn: () => void) { clicks[el.id] = fn; } };
+          return el;
+        },
+      };
+      const buttonsScript = getSiteNavExpandCollapseAllButtonsScript({
+        expandAllLabel: '+', expandAllTitle: 'Expand all', collapseAllLabel: '-', collapseAllTitle: 'Collapse all',
+      });
+      new Function('document', 'btnStyle', 'vscode', helperWithReport + buttonsScript)(document, '', vscode);
+
+      clicks['__site-collapse-all-btn']();
+
+      assert.strictEqual(posted.length, 1, 'one message for the whole sweep, not three');
+      const ids = (posted[0] as { ids: string[] }).ids.slice().sort();
+      assert.deepStrictEqual(ids, ['a', 'b', 'c']);
+    });
+  });
 });

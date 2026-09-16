@@ -65,6 +65,30 @@ const MSG_SWITCH_SITE_PAGE = 'switchSitePage';
 // separate, always-full-replace path rather than riding along with
 // diffBookParts' incremental content patch.
 const MSG_UPDATE_SIDEBAR = 'updateSidebar';
+// Persisted sidebar collapse state (nested-fold-and-highlight-plan.md item
+// 3) -- webview -> host, one message per user action (a single toggle
+// click, or a whole expand/collapse-all sweep), always carrying the FULL
+// current set of collapsed ids rather than an incremental delta (see
+// reportSiteNavCollapseState's own comment in ditaRenderUtils.ts). Stored
+// under COLLAPSED_NAV_KEY, per document, the same shape/keying convention
+// as WIDTH_SELECTION_KEY above.
+const MSG_SET_NAV_COLLAPSED = 'setNavCollapsed';
+// Only the non-default state is ever stored -- a sidebar row defaults to
+// expanded (see renderSiteNavTreeHtml's own comment), so this is the set
+// of ids that are collapsed, not a full expanded/collapsed map of every
+// row. Local to this file (unlike FONT_PREFS_KEY/WIDTH_SELECTION_KEY,
+// which the topic viewer also reads/writes): the sidebar this state
+// describes only exists in MapViewerProvider's own book/site modes.
+//
+// Ids that no longer correspond to anything in the current map (a branch
+// that was deleted, or renamed such that its positional grp: id shifted)
+// are never actively pruned here -- they simply never match a rendered
+// row's own id again (see renderSiteNavTreeHtml's `collapsedIds.has`
+// check) and sit inert in storage. A person editing one map rarely
+// accumulates enough dead ids for this to matter, and pruning would need
+// the full current manifest at write time, which the message handler
+// below does not have to hand.
+const COLLAPSED_NAV_KEY = 'ditaViewer.collapsedNavNodes';
 // Full-book search (docsite design doc, 4.4) -- webview -> host request and
 // host -> webview response, same pairing convention as MSG_UPDATE_CONTENT
 // above (both spellings live in this one file already, but the pair is
@@ -140,7 +164,7 @@ function getMapWebviewScript(mode: 'tree' | 'book' | 'site'): string {
 
   ${mode === 'site' ? getSiteNavClickHandlerScript({ switchSitePageMsgType: MSG_SWITCH_SITE_PAGE }) : ''}
   ${mode === 'book' ? getBookNavClickHandlerScript() : ''}
-  ${getSiteNavCollapseStateHelperScript()}
+  ${getSiteNavCollapseStateHelperScript({ reportCollapseMsgType: MSG_SET_NAV_COLLAPSED })}
   ${getSiteNavToggleScript()}
   ${getSiteSidebarResizerScript()}
 
@@ -619,6 +643,17 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         }
       } else if (message.type === MSG_SET_TAG_TOOLTIPS) {
         this.context.globalState.update(TAG_TOOLTIPS_KEY, message.value === true);
+      } else if (message.type === MSG_SET_NAV_COLLAPSED) {
+        // Full-set replace, matching what reportSiteNavCollapseState always
+        // sends (see its own comment) -- never a merge with the previous
+        // value, so a row expanded client-side is reliably absent from the
+        // next render even though this handler never sees which id changed.
+        if (Array.isArray(message.ids)) {
+          const ids = message.ids.filter((id: unknown): id is string => typeof id === 'string');
+          const store = this.context.globalState.get<Record<string, string[]>>(COLLAPSED_NAV_KEY, {});
+          store[document.uri.toString()] = ids;
+          this.context.globalState.update(COLLAPSED_NAV_KEY, store);
+        }
       }
     });
 
@@ -1023,7 +1058,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         const sidebarHtml = renderSiteNavHtml(manifest, resolvedSitePage, vscode.l10n.t('Topics'), {
           expand: vscode.l10n.t('Expand'),
           collapse: vscode.l10n.t('Collapse'),
-        });
+        }, this.getCollapsedNavIds(document));
         // manifest/keyMap/bookMembers go back to the caller too
         // (updateWebview) so a page switch (postSitePageUpdate) can reuse
         // them instead of re-parsing the map, re-reading every
@@ -1172,6 +1207,18 @@ ${(result.sidebarHtml ? '<div id="__site-nav-resizer" class="site-nav-resizer" r
     };
   }
 
+  // nested-fold-and-highlight-plan.md item 3: persisted sidebar collapse
+  // state, keyed per document the same way WIDTH_SELECTION_KEY is. Read
+  // fresh on every call rather than cached on the class instance -- this
+  // provider instance is long-lived across the panel's whole session, and
+  // globalState.get is an in-memory lookup already (VS Code owns the
+  // actual persistence), so there is no cost caching would save, only a
+  // staleness risk if some other code path ever updates the same key.
+  private getCollapsedNavIds(document: vscode.TextDocument): ReadonlySet<string> {
+    const store = this.context.globalState.get<Record<string, string[]>>(COLLAPSED_NAV_KEY, {});
+    return new Set(store[document.uri.toString()] ?? []);
+  }
+
   private collectBookParts(
     mapRoot: import('../parser/domTypes').DitaNode,
     document: vscode.TextDocument,
@@ -1226,8 +1273,17 @@ ${(result.sidebarHtml ? '<div id="__site-nav-resizer" class="site-nav-resizer" r
     );
     const navigable = siteNavigableEntries(manifest);
     const toggleLabels = { expand: vscode.l10n.t('Expand'), collapse: vscode.l10n.t('Collapse') };
-    const sidebarTreeHtml = navigable.length > 0 ? renderSiteNavTreeHtml(manifest, navigable[0].absPath, toggleLabels) : '';
-    const sidebarHtml = navigable.length > 0 ? renderSiteNavHtml(manifest, navigable[0].absPath, vscode.l10n.t('Topics'), toggleLabels) : '';
+    // Read fresh on every call (including the incremental refresh path,
+    // postContentUpdate -> collectBookParts -> MSG_UPDATE_SIDEBAR) rather
+    // than threaded in from a caller -- an edit that only touches a
+    // topic's body, with no collapse-state message in between, must still
+    // re-render the sidebar with whatever was collapsed before that edit,
+    // or the "keep the incremental content patch, side-band-refresh the
+    // sidebar" design (nested-fold-and-highlight-plan.md item 1, option C)
+    // would quietly blow away item 3's persisted state on every keystroke.
+    const collapsedIds = this.getCollapsedNavIds(document);
+    const sidebarTreeHtml = navigable.length > 0 ? renderSiteNavTreeHtml(manifest, navigable[0].absPath, toggleLabels, collapsedIds) : '';
+    const sidebarHtml = navigable.length > 0 ? renderSiteNavHtml(manifest, navigable[0].absPath, vscode.l10n.t('Topics'), toggleLabels, collapsedIds) : '';
 
     return { parts, sidebarHtml, sidebarTreeHtml };
   }
