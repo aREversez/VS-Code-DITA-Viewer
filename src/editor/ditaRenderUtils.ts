@@ -2112,32 +2112,34 @@ export function getSiteNavCollapseStateHelperScript(opts: { reportCollapseMsgTyp
 ${report}`;
 }
 
-// Oxygen's own Expand All / Collapse All toolbar icons, pixel-identical
-// (same 32x32 grid, same two-tone gray/white "stacked windows" glyph with
-// a blue +/- badge) rather than a from-scratch design -- Oxygen is this
-// project's own reference standard for expected rendering elsewhere
-// (memory: "Oxygen XML Editor -- reference standard for expected rendering
-// and UI behavior"), and there is no reason for a reader familiar with
-// Oxygen's icon to relearn a different one here. Base64-encoded once at
-// module load rather than URI-encoded inline: the raw markup uses single
-// quotes throughout (fine embedded directly in a double-quoted HTML
-// attribute), but base64 sidesteps having to reason about that at all if
-// either SVG is ever touched again.
-//
-// The first actual image icon in this toolbar -- every other button here
-// (font size, width, tag tooltips, sidebar toggle, prev/next, search) uses
-// a text glyph or HTML entity styled through the shared btnStyle string,
-// never an <img>. That is a deliberate difference from those, not an
-// oversight: Oxygen's own icon is what was asked for here, verbatim.
-function svgIconDataUri(svg: string): string {
-  return `data:image/svg+xml;base64,${Buffer.from(svg, 'utf8').toString('base64')}`;
-}
-const EXPAND_ALL_ICON_DATA_URI = svgIconDataUri(
-  "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 32 32' shape-rendering='crispEdges'><rect x='4' y='2' width='22' height='22' fill='#808080'/><rect x='6' y='4' width='18' height='18' fill='#FFFFFF'/><rect x='8' y='6' width='22' height='22' fill='#808080'/><rect x='10' y='8' width='18' height='18' fill='#FFFFFF'/><rect x='18' y='12' width='2' height='10' fill='#2072B2'/><rect x='14' y='16' width='10' height='2' fill='#2072B2'/></svg>",
-);
-const COLLAPSE_ALL_ICON_DATA_URI = svgIconDataUri(
-  "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 32 32' shape-rendering='crispEdges'><rect x='4' y='2' width='22' height='22' fill='#808080'/><rect x='6' y='4' width='18' height='18' fill='#FFFFFF'/><rect x='8' y='6' width='22' height='22' fill='#808080'/><rect x='10' y='8' width='18' height='18' fill='#FFFFFF'/><rect x='14' y='16' width='10' height='2' fill='#2072B2'/></svg>",
-);
+// Expand All / Collapse All icons -- Oxygen's own icon (two overlapping
+// "window" squares with a blue +/- badge) is the semantic reference for
+// what these two actions should read as, not something copied verbatim:
+// Oxygen's version is a fixed-color raster-style glyph (hardcoded gray/
+// white/blue), which would sit as a flat, wrong-toned image next to
+// every other button in this toolbar, all of which are themed through
+// currentColor / the same --vscode-dropdown-* variables btnStyle itself
+// uses (font size, width, tag tooltips, sidebar toggle, prev/next,
+// search). These two keep that same two-overlapping-squares-plus-badge
+// silhouette -- legible as "more than one node, all at once" the same
+// way Oxygen's is -- but as inline <svg> using currentColor for the
+// outline and the button's own --vscode-dropdown-background for the
+// front square's fill, so the icon repaints itself with every theme
+// switch exactly like the rest of the toolbar already does, rather than
+// carrying a fixed palette of its own. Inline markup (not a data: URI on
+// an <img>, this function's own previous approach) is what makes
+// currentColor/var(...) resolution possible at all: an <img>'s SVG
+// renders in its own separate resource context and cannot see the
+// page's CSS custom properties or inherited color.
+const NAV_ALL_ICON_SQUARES =
+  '<rect x="1.5" y="1.5" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.1"/>' +
+  '<rect x="6.5" y="6.5" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.1" fill="var(--vscode-dropdown-background,#333)"/>';
+const EXPAND_ALL_ICON_SVG =
+  `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${NAV_ALL_ICON_SQUARES}` +
+  '<path d="M10.5 8.7V12.3M8.7 10.5H12.3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>';
+const COLLAPSE_ALL_ICON_SVG =
+  `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${NAV_ALL_ICON_SQUARES}` +
+  '<path d="M8.7 10.5H12.3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>';
 
 /**
  * Expand-all / collapse-all: two separate buttons (not one tri-state
@@ -2165,10 +2167,11 @@ export function getSiteNavExpandCollapseAllButtonsScript(opts: { expandAllTitle:
 
   var siteExpandAllBtn = document.createElement('button');
   siteExpandAllBtn.id = '__site-expand-all-btn';
-  // alt left empty: the button's own title/aria-label already carry the
-  // accessible name, so a non-empty alt here would have a screen reader
+  // aria-hidden on the <svg> itself (baked into the markup above) plus no
+  // separate alt text here: the button's own title/aria-label already
+  // carry the accessible name, so a screen reader would otherwise
   // announce it twice.
-  siteExpandAllBtn.innerHTML = '<img src="${EXPAND_ALL_ICON_DATA_URI}" width="16" height="16" alt="" />';
+  siteExpandAllBtn.innerHTML = '${EXPAND_ALL_ICON_SVG}';
   siteExpandAllBtn.title = ${expandAllTitle};
   siteExpandAllBtn.setAttribute('aria-label', ${expandAllTitle});
   siteExpandAllBtn.style.cssText = btnStyle + 'padding:2px 6px;justify-content:center;';
@@ -2176,13 +2179,14 @@ export function getSiteNavExpandCollapseAllButtonsScript(opts: { expandAllTitle:
 
   var siteCollapseAllBtn = document.createElement('button');
   siteCollapseAllBtn.id = '__site-collapse-all-btn';
-  siteCollapseAllBtn.innerHTML = '<img src="${COLLAPSE_ALL_ICON_DATA_URI}" width="16" height="16" alt="" />';
+  siteCollapseAllBtn.innerHTML = '${COLLAPSE_ALL_ICON_SVG}';
   siteCollapseAllBtn.title = ${collapseAllTitle};
   siteCollapseAllBtn.setAttribute('aria-label', ${collapseAllTitle});
   siteCollapseAllBtn.style.cssText = btnStyle + 'padding:2px 6px;justify-content:center;';
   siteCollapseAllBtn.addEventListener('click', function() { setAllSiteNavCollapsed(true); });
 `;
 }
+
 
 export function getSiteNavToggleScript(): string {
   return `

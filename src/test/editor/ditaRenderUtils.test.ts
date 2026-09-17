@@ -2554,17 +2554,32 @@ describe('getSiteNavExpandCollapseAllButtonsScript + getSiteNavCollapseStateHelp
   // project's Oxygen-as-reference-standard convention), embedded as base64
   // data URIs rather than the text glyphs every other toolbar button here
   // uses.
-  it('sets each button\'s own icon via an <img> data URI rather than a text glyph, and the two icons differ from each other', () => {
-    const expandImg = /<img src="data:image\/svg\+xml;base64,([^"]+)"/.exec(buttons.split('__site-collapse-all-btn')[0]);
-    const collapseImg = /<img src="data:image\/svg\+xml;base64,([^"]+)"/.exec(buttons.split('__site-collapse-all-btn')[1]);
-    assert.ok(expandImg, 'expand-all button has an <img> icon');
-    assert.ok(collapseImg, 'collapse-all button has an <img> icon');
-    assert.notStrictEqual(expandImg![1], collapseImg![1], 'the two icons must not be the same image');
-    // Round-trips to real SVG markup, not garbage -- decoding is cheap
-    // insurance against a base64 typo silently shipping a broken icon.
-    const decoded = Buffer.from(expandImg![1], 'base64').toString('utf8');
-    assert.ok(decoded.startsWith('<svg'));
-    assert.ok(decoded.includes('viewBox=\'0 0 32 32\''));
+  it('sets each button\'s own icon via an inline <svg> using currentColor/theme variables, not a fixed-color image, and the two icons differ from each other', () => {
+    const expandChunk = buttons.split('__site-collapse-all-btn')[0];
+    const collapseChunk = buttons.split('__site-collapse-all-btn')[1];
+    const expandSvg = /innerHTML = '(<svg[^;]+<\/svg>)'/.exec(expandChunk);
+    const collapseSvg = /innerHTML = '(<svg[^;]+<\/svg>)'/.exec(collapseChunk);
+    assert.ok(expandSvg, 'expand-all button gets an inline <svg> icon');
+    assert.ok(collapseSvg, 'collapse-all button gets an inline <svg> icon');
+    assert.notStrictEqual(expandSvg![1], collapseSvg![1], 'the two icons must not be identical');
+    // currentColor (not a hardcoded hex) is what lets the icon repaint
+    // itself on a theme switch along with the rest of this toolbar's
+    // already-themed buttons -- a regression back to a fixed palette
+    // would not be caught by "the script parses" alone.
+    for (const svg of [expandSvg![1], collapseSvg![1]]) {
+      assert.ok(svg.includes('stroke="currentColor"'), 'outline follows the button\'s own text color');
+      // A hex color is fine as a var(...) fallback (the same pattern
+      // btnStyle's own color/background already use) but not as a
+      // standalone attribute value -- that would be a fixed color baked
+      // into the icon regardless of theme, the exact thing this redesign
+      // moved away from.
+      assert.ok(!/="#[0-9a-fA-F]{3,6}"/.test(svg), 'no color attribute is a bare hex value');
+    }
+    // No <img>/data: URI at all -- that approach cannot resolve
+    // currentColor or var(...) in the first place, since an <img>'s SVG
+    // renders in its own separate resource context.
+    assert.ok(!buttons.includes('<img'));
+    assert.ok(!buttons.includes('data:image'));
   });
 
   it('collapse-all sets collapsed on every has-children item, and expand-all clears it, keeping both aria-expanded attributes and the toggle aria-label in step', () => {
