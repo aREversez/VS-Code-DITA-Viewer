@@ -2112,6 +2112,33 @@ export function getSiteNavCollapseStateHelperScript(opts: { reportCollapseMsgTyp
 ${report}`;
 }
 
+// Oxygen's own Expand All / Collapse All toolbar icons, pixel-identical
+// (same 32x32 grid, same two-tone gray/white "stacked windows" glyph with
+// a blue +/- badge) rather than a from-scratch design -- Oxygen is this
+// project's own reference standard for expected rendering elsewhere
+// (memory: "Oxygen XML Editor -- reference standard for expected rendering
+// and UI behavior"), and there is no reason for a reader familiar with
+// Oxygen's icon to relearn a different one here. Base64-encoded once at
+// module load rather than URI-encoded inline: the raw markup uses single
+// quotes throughout (fine embedded directly in a double-quoted HTML
+// attribute), but base64 sidesteps having to reason about that at all if
+// either SVG is ever touched again.
+//
+// The first actual image icon in this toolbar -- every other button here
+// (font size, width, tag tooltips, sidebar toggle, prev/next, search) uses
+// a text glyph or HTML entity styled through the shared btnStyle string,
+// never an <img>. That is a deliberate difference from those, not an
+// oversight: Oxygen's own icon is what was asked for here, verbatim.
+function svgIconDataUri(svg: string): string {
+  return `data:image/svg+xml;base64,${Buffer.from(svg, 'utf8').toString('base64')}`;
+}
+const EXPAND_ALL_ICON_DATA_URI = svgIconDataUri(
+  "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 32 32' shape-rendering='crispEdges'><rect x='4' y='2' width='22' height='22' fill='#808080'/><rect x='6' y='4' width='18' height='18' fill='#FFFFFF'/><rect x='8' y='6' width='22' height='22' fill='#808080'/><rect x='10' y='8' width='18' height='18' fill='#FFFFFF'/><rect x='18' y='12' width='2' height='10' fill='#2072B2'/><rect x='14' y='16' width='10' height='2' fill='#2072B2'/></svg>",
+);
+const COLLAPSE_ALL_ICON_DATA_URI = svgIconDataUri(
+  "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 32 32' shape-rendering='crispEdges'><rect x='4' y='2' width='22' height='22' fill='#808080'/><rect x='6' y='4' width='18' height='18' fill='#FFFFFF'/><rect x='8' y='6' width='22' height='22' fill='#808080'/><rect x='10' y='8' width='18' height='18' fill='#FFFFFF'/><rect x='14' y='16' width='10' height='2' fill='#2072B2'/></svg>",
+);
+
 /**
  * Expand-all / collapse-all: two separate buttons (not one tri-state
  * toggle -- with a partly-expanded tree there is no defensible answer to
@@ -2126,10 +2153,8 @@ ${report}`;
  * both now render the same sidebar markup (renderSiteNavTreeHtml), so this
  * takes no mode parameter and needs no per-mode branch.
  */
-export function getSiteNavExpandCollapseAllButtonsScript(opts: { expandAllLabel: string; expandAllTitle: string; collapseAllLabel: string; collapseAllTitle: string }): string {
-  const expandAllLabel = JSON.stringify(opts.expandAllLabel);
+export function getSiteNavExpandCollapseAllButtonsScript(opts: { expandAllTitle: string; collapseAllTitle: string }): string {
   const expandAllTitle = JSON.stringify(opts.expandAllTitle);
-  const collapseAllLabel = JSON.stringify(opts.collapseAllLabel);
   const collapseAllTitle = JSON.stringify(opts.collapseAllTitle);
   return `
   function setAllSiteNavCollapsed(collapsed) {
@@ -2140,18 +2165,21 @@ export function getSiteNavExpandCollapseAllButtonsScript(opts: { expandAllLabel:
 
   var siteExpandAllBtn = document.createElement('button');
   siteExpandAllBtn.id = '__site-expand-all-btn';
-  siteExpandAllBtn.textContent = ${expandAllLabel};
+  // alt left empty: the button's own title/aria-label already carry the
+  // accessible name, so a non-empty alt here would have a screen reader
+  // announce it twice.
+  siteExpandAllBtn.innerHTML = '<img src="${EXPAND_ALL_ICON_DATA_URI}" width="16" height="16" alt="" />';
   siteExpandAllBtn.title = ${expandAllTitle};
   siteExpandAllBtn.setAttribute('aria-label', ${expandAllTitle});
-  siteExpandAllBtn.style.cssText = btnStyle + 'font-size:14px;padding:1px 9px;justify-content:center;';
+  siteExpandAllBtn.style.cssText = btnStyle + 'padding:2px 6px;justify-content:center;';
   siteExpandAllBtn.addEventListener('click', function() { setAllSiteNavCollapsed(false); });
 
   var siteCollapseAllBtn = document.createElement('button');
   siteCollapseAllBtn.id = '__site-collapse-all-btn';
-  siteCollapseAllBtn.textContent = ${collapseAllLabel};
+  siteCollapseAllBtn.innerHTML = '<img src="${COLLAPSE_ALL_ICON_DATA_URI}" width="16" height="16" alt="" />';
   siteCollapseAllBtn.title = ${collapseAllTitle};
   siteCollapseAllBtn.setAttribute('aria-label', ${collapseAllTitle});
-  siteCollapseAllBtn.style.cssText = btnStyle + 'font-size:14px;padding:1px 9px;justify-content:center;';
+  siteCollapseAllBtn.style.cssText = btnStyle + 'padding:2px 6px;justify-content:center;';
   siteCollapseAllBtn.addEventListener('click', function() { setAllSiteNavCollapsed(true); });
 `;
 }

@@ -234,9 +234,7 @@ function getMapWebviewScript(mode: 'tree' | 'book' | 'site'): string {
   // sidebar modes get them, since book and site render the identical
   // sidebar markup (renderSiteNavTreeHtml).
   ${getSiteNavExpandCollapseAllButtonsScript({
-    expandAllLabel: '\u229e',
     expandAllTitle: L.siteExpandAll,
-    collapseAllLabel: '\u229f',
     collapseAllTitle: L.siteCollapseAll,
   })}
   if (currentMode === 'site' || currentMode === 'book') {

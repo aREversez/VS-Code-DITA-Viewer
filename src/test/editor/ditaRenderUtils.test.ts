@@ -2513,8 +2513,7 @@ describe('getSiteNavExpandCollapseAllButtonsScript + getSiteNavCollapseStateHelp
   // getMapWebviewScript concatenates them, rather than in isolation.
   const helper = getSiteNavCollapseStateHelperScript();
   const buttons = getSiteNavExpandCollapseAllButtonsScript({
-    expandAllLabel: '+', expandAllTitle: 'Expand all topics',
-    collapseAllLabel: '-', collapseAllTitle: 'Collapse all topics',
+    expandAllTitle: 'Expand all topics', collapseAllTitle: 'Collapse all topics',
   });
 
   interface FakeToggle { attrs: Record<string, string>; getAttribute(n: string): string | null; setAttribute(n: string, v: string): void }
@@ -2548,6 +2547,24 @@ describe('getSiteNavExpandCollapseAllButtonsScript + getSiteNavCollapseStateHelp
 
   it('emits scripts that parse as JavaScript, helper and buttons together', () => {
     assert.doesNotThrow(() => new Function('document', 'btnStyle', helper + buttons));
+  });
+
+  // Oxygen's own icons (nested-fold-and-highlight-plan.md item 2 follow-up
+  // -- matched pixel-for-pixel rather than a from-scratch design, per this
+  // project's Oxygen-as-reference-standard convention), embedded as base64
+  // data URIs rather than the text glyphs every other toolbar button here
+  // uses.
+  it('sets each button\'s own icon via an <img> data URI rather than a text glyph, and the two icons differ from each other', () => {
+    const expandImg = /<img src="data:image\/svg\+xml;base64,([^"]+)"/.exec(buttons.split('__site-collapse-all-btn')[0]);
+    const collapseImg = /<img src="data:image\/svg\+xml;base64,([^"]+)"/.exec(buttons.split('__site-collapse-all-btn')[1]);
+    assert.ok(expandImg, 'expand-all button has an <img> icon');
+    assert.ok(collapseImg, 'collapse-all button has an <img> icon');
+    assert.notStrictEqual(expandImg![1], collapseImg![1], 'the two icons must not be the same image');
+    // Round-trips to real SVG markup, not garbage -- decoding is cheap
+    // insurance against a base64 typo silently shipping a broken icon.
+    const decoded = Buffer.from(expandImg![1], 'base64').toString('utf8');
+    assert.ok(decoded.startsWith('<svg'));
+    assert.ok(decoded.includes('viewBox=\'0 0 32 32\''));
   });
 
   it('collapse-all sets collapsed on every has-children item, and expand-all clears it, keeping both aria-expanded attributes and the toggle aria-label in step', () => {
@@ -2714,7 +2731,7 @@ describe('getSiteNavExpandCollapseAllButtonsScript + getSiteNavCollapseStateHelp
         },
       };
       const buttonsScript = getSiteNavExpandCollapseAllButtonsScript({
-        expandAllLabel: '+', expandAllTitle: 'Expand all', collapseAllLabel: '-', collapseAllTitle: 'Collapse all',
+        expandAllTitle: 'Expand all', collapseAllTitle: 'Collapse all',
       });
       new Function('document', 'btnStyle', 'vscode', helperWithReport + buttonsScript)(document, '', vscode);
 
