@@ -1752,6 +1752,49 @@ describe('getSiteNavClickHandlerScript (docsite mode)', () => {
     assert.doesNotThrow(() => fn(fakeDocument, { postMessage: () => {} }));
   });
 
+  it('does not try to wire up prev/next buttons until they actually exist in the DOM (deferred to next tick)', () => {
+    // Regression test for a reported bug: MapViewerProvider.ts injects
+    // getSiteNavClickHandlerScript (which is what calls
+    // updatePrevNextButtons() to establish initial state) *before*
+    // getSitePrevNextButtonsScript creates the prev/next buttons and before
+    // the toolbar containing them is appended to the page. Calling
+    // updatePrevNextButtons() synchronously at that point, as it used to,
+    // ran while document.getElementById('__site-prev-btn') still returned
+    // null -- a silent no-op (see the test above) -- so the buttons were
+    // left with no onclick handler at all until the first manual sidebar
+    // click called updatePrevNextButtons() again, by which point the
+    // buttons did exist. Reported symptom: prev/next do nothing until you
+    // switch topics once by hand.
+    //
+    // Deferring the initial call to a macrotask means it always runs after
+    // the rest of the synchronous page-load script (wherever the buttons
+    // get created) has finished, regardless of which order the two scripts
+    // happen to be textually assembled in -- so this is simulated here by
+    // running the script against a document where the buttons genuinely
+    // don't exist yet, then only creating them before letting the deferred
+    // callback fire, the same way the real page-load script creates them
+    // later than this one runs.
+    const timers: Array<() => void> = [];
+    const fakeSetTimeout = (fn: () => void) => { timers.push(fn); return 0; };
+    const bTopic = makeFakeElement({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/book/b.dita' } });
+    const aTopic = makeFakeElement({ classes: ['site-nav-link', 'active'], attrs: { 'data-site-target': '/book/a.dita' } });
+    const elementsById: Record<string, { scrollIntoView?: () => void; disabled?: boolean; onclick?: (() => void) | null }> = {};
+    const { document } = makeFakeSiteDocument([aTopic, bTopic], elementsById);
+
+    const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
+    new Function('document', 'vscode', 'setTimeout', script)(document, { postMessage: () => {} }, fakeSetTimeout);
+
+    assert.strictEqual(timers.length, 1, 'expected the initial updatePrevNextButtons() call to be deferred exactly once');
+
+    const nextBtn = { disabled: true, onclick: null as (() => void) | null };
+    elementsById['__site-next-btn'] = nextBtn;
+
+    timers[0]();
+
+    assert.strictEqual(nextBtn.disabled, false, 'expected next to be enabled once the buttons exist when the deferred call actually runs');
+    assert.strictEqual(typeof nextBtn.onclick, 'function', 'expected next to have a click handler wired up on the very first load, not only after a manual sidebar click');
+  });
+
   // --- book-internal cross-topic xref clicks (docsite design doc, 3.2/4.5) ---
   //
   // These simulate real DOM click delegation (multiple document-level
@@ -1782,7 +1825,7 @@ describe('getSiteNavClickHandlerScript (docsite mode)', () => {
     return el;
   }
 
-  function makeFakeSiteDocument(navLinks: ReturnType<typeof makeFakeElement>[], elementsById: Record<string, { scrollIntoView: () => void }>) {
+  function makeFakeSiteDocument(navLinks: ReturnType<typeof makeFakeElement>[], elementsById: Record<string, { scrollIntoView?: () => void; disabled?: boolean; onclick?: (() => void) | null }>) {
     const listeners: Record<string, Array<(e: unknown) => void>> = {};
     const document = {
       addEventListener: (evt: string, fn: (e: unknown) => void) => {

@@ -1927,7 +1927,17 @@ export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: stri
     if (navLink) switchToSitePage(navLink, anchor);
   });
 
-  updatePrevNextButtons(); // establish initial state on load, same as the sidebar's own active link is already set server-side
+  // Deferred rather than called inline: this script is injected into the
+  // page (MapViewerProvider.ts) before getSitePrevNextButtonsScript creates
+  // the prev/next buttons and before they're appended to the toolbar, so an
+  // inline call here used to run while document.getElementById('__site-
+  // prev-btn') still returned null -- a silent no-op -- leaving the buttons
+  // unresponsive until the first manual sidebar click called
+  // updatePrevNextButtons() again (switchToSitePage above already does,
+  // on every subsequent switch). setTimeout(..., 0) runs after the rest of
+  // the synchronous page-load script finishes, by which point the buttons
+  // exist no matter which order the two scripts happen to be assembled in.
+  setTimeout(function() { updatePrevNextButtons(); }, 0);
 `;
 }
 
