@@ -1570,6 +1570,46 @@ describe('toolbar scaffold/font-prefs/font-width-tag-tooltips scripts (a3\' extr
     assert.doesNotThrow(() => new Function(getToolbarScaffoldScript({ previewToolbar: 'Preview toolbar' })));
   });
 
+  it('gives every toolbar button and dropdown the same fixed, border-box height', () => {
+    // Root cause of the reported unevenness: btnStyle used line-height:1
+    // with no explicit height, so a button's rendered height tracked
+    // whatever font-size it happened to carry -- and toolbar buttons carry
+    // several different ones (11/12/13/14px, see fontBtn/fontResetBtn/
+    // fsDown/siteSidebarToggleBtn etc. below in this same file). Pinning
+    // the box height directly, via box-sizing:border-box, makes every
+    // button's box the same regardless of its own font-size or padding
+    // overrides layered on afterward in the same cssText string.
+    const script = getToolbarScaffoldScript({ previewToolbar: 'Preview toolbar' });
+    const btnStyleMatch = /var btnStyle = '([^']*)'/.exec(script);
+    const ddStyleMatch = /var ddStyle = '([^']*)'/.exec(script);
+    assert.ok(btnStyleMatch, 'expected to find the btnStyle declaration');
+    assert.ok(ddStyleMatch, 'expected to find the ddStyle declaration');
+    const btnStyle = btnStyleMatch![1];
+    const ddStyle = ddStyleMatch![1];
+
+    const heightOf = (style: string) => /height:(\d+px)/.exec(style)?.[1];
+    assert.ok(btnStyle.includes('box-sizing:border-box'), 'btnStyle should fix its own box height regardless of padding/font-size');
+    assert.ok(ddStyle.includes('box-sizing:border-box'), 'ddStyle should fix its own box height regardless of padding/font-size');
+    assert.ok(heightOf(btnStyle), 'btnStyle should set an explicit height');
+    assert.strictEqual(
+      heightOf(btnStyle),
+      heightOf(ddStyle),
+      'buttons and dropdowns (select elements) should share the exact same height so the toolbar reads as one even row',
+    );
+  });
+
+  it('strips native <select> chrome from the dropdown style so its box height actually matches a button\'s', () => {
+    // box-sizing/height alone don't reach a <select>'s own UA styling (the
+    // built-in chevron and its reserved padding) in every browser -- without
+    // appearance:none, the two dropdowns (theme CSS, page width) can still
+    // render taller than a same-height button even with identical CSS height.
+    const script = getToolbarScaffoldScript({ previewToolbar: 'Preview toolbar' });
+    const ddStyleMatch = /var ddStyle = '([^']*)'/.exec(script);
+    assert.ok(ddStyleMatch, 'expected to find the ddStyle declaration');
+    const ddStyle = ddStyleMatch![1];
+    assert.ok(ddStyle.includes('appearance:none'), 'expected ddStyle to neutralize the select\'s native appearance');
+  });
+
   it('getFontPrefsScript emits a script that parses as JavaScript', () => {
     assert.doesNotThrow(() => new Function(getFontPrefsScript({ setFontPrefsMsgType: 'setFontPrefs' })));
   });
