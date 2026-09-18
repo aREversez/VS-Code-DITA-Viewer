@@ -598,44 +598,6 @@ export function findTextMatches(
   return matches;
 }
 
-// Decides which search marks have to be touched to move the '__current' class
-// from one match to another. Shared between unit tests and the webview search
-// overlay (injected there via planCurrentMarkMove.toString(), so it must stay
-// fully self-contained — no references to other module-level bindings).
-//
-// The point of this existing at all: without it, moving the highlight one step
-// means walking every mark in the document and calling classList.add or
-// .remove on each, which in book mode is tens of thousands of style
-// invalidations per arrow key. With it, the caller touches two. That trade is
-// only sound for as long as exactly one mark carries the class and the caller
-// knows which — hence `previous`, and hence the cases below where the two
-// disagree.
-//
-// Returns indices into the caller's mark list; -1 means "nothing to do".
-//   clear — the mark to remove '__current' from
-//   set   — the mark to add it to
-export function planCurrentMarkMove(
-  previous: number,
-  next: number,
-  count: number,
-): { clear: number; set: number } {
-  // An index outside the list names no mark, and an empty list puts both of them
-  // outside it, so these two guards are the entire decision -- there is no
-  // separate no-marks case that has to be kept in step with them. That they are
-  // reachable rather than theoretical: the match list shrinks whenever the
-  // document changes under an open search bar, and the index tracked from the
-  // previous, longer list outlives it by one update. Clearing "mark 7" of a
-  // 3-mark list would be a silent no-op at best, so drop it and let the caller's
-  // own bounds check be the second line of defence.
-  const previousIsValid = previous >= 0 && previous < count;
-  const nextIsValid = next >= 0 && next < count;
-  // previous === next is the mark that already carries the class. Reporting it
-  // as something to clear first would take the highlight off and put it back
-  // on within one task — invisible normally, but a flash when the browser
-  // happens to paint in between, and pointless work either way.
-  const clear = previousIsValid && previous !== next ? previous : -1;
-  return { clear, set: nextIsValid ? next : -1 };
-}
 
 // ── Default note labels ──
 // Values follow DITA-OT's own strings-en-us.xml / strings-zh-cn.xml bundles
@@ -2512,7 +2474,7 @@ export function getModeToggleScript(opts: {
  * sane range. Pure and exported so the clamping math itself is unit
  * tested; the drag wiring around it (getSiteSidebarResizerScript below)
  * has no DOM in this test suite to actually drag through, same situation
- * as isSearchExcludedAncestor/planCurrentMarkMove above -- this is the
+ * as findTextMatches above -- this is the
  * piece of that feature that can be tested directly, so it is.
  */
 export function clampSidebarWidth(width: number, min = 160, max = 560): number {
@@ -2798,14 +2760,21 @@ export function getSearchOverlayScript(opts: {
   const ir = JSON.stringify(opts.invalidRegex);
   return `
   // ── Search overlay (Ctrl+F) ──
-  var searchMarks = [];
+  var searchRanges = [];
   var currentMatch = -1;
-  // Which mark actually carries '__current' right now, or -1 if none does.
-  // Tracked apart from currentMatch so that moving the highlight touches two
-  // marks instead of every mark in the document -- see updateCurrentMatch.
-  var highlightedMatch = -1;
   var useRegex = false;
   var caseSensitive = false;
+
+  // CSS Custom Highlight API: matches are Range objects registered here,
+  // never DOM elements spliced into the page. Two registrations rather than
+  // one plus a per-range class, since Range has no classList -- 'current'
+  // is just a second Highlight holding (at most) one of the same Range
+  // objects, styled to stand out via ::highlight(dita-search-current)'s
+  // higher-priority rule below.
+  var searchHighlightAll = new Highlight();
+  var searchHighlightCurrent = new Highlight();
+  CSS.highlights.set('dita-search-all', searchHighlightAll);
+  CSS.highlights.set('dita-search-current', searchHighlightCurrent);
 
   var sbStyle = 'position:fixed;top:40px;right:8px;z-index:10000;display:none;align-items:center;gap:4px;padding:4px 8px;border-radius:5px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;background:var(--vscode-editor-background,rgba(30,30,30,0.95));border:1px solid var(--vscode-widget-border,rgba(255,255,255,0.12));backdrop-filter:blur(4px);box-shadow:0 2px 8px rgba(0,0,0,0.2);';
   var sbInputStyle = 'width:180px;padding:2px 6px;border-radius:3px;border:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));background:var(--vscode-dropdown-background,#333);color:var(--vscode-dropdown-foreground,#eee);font-size:12px;outline:none;';
@@ -2874,7 +2843,7 @@ export function getSearchOverlayScript(opts: {
   document.body.appendChild(sb);
 
   var searchHlStyle = document.createElement('style');
-  searchHlStyle.textContent = 'mark.__search_mark{background:rgba(255,213,0,0.35);color:inherit;border-radius:2px;padding:0;}mark.__search_mark.__current{background:rgba(255,165,0,0.6);outline:2px solid rgba(255,165,0,0.8);border-radius:2px;}';
+  searchHlStyle.textContent = '::highlight(dita-search-all){background-color:rgba(255,213,0,0.35);color:inherit;}::highlight(dita-search-current){background-color:rgba(255,165,0,0.6);}';
   document.head.appendChild(searchHlStyle);
 
   function updateToggleVisual(btn, active) {
@@ -2890,18 +2859,10 @@ export function getSearchOverlayScript(opts: {
   }
 
   function clearSearchHighlights() {
-    var marks = document.querySelectorAll('mark.__search_mark');
-    for (var i = 0; i < marks.length; i++) {
-      var m = marks[i];
-      var p = m.parentNode;
-      if (!p) continue;
-      while (m.firstChild) p.insertBefore(m.firstChild, m);
-      p.removeChild(m);
-      p.normalize();
-    }
-    searchMarks = [];
+    searchHighlightAll.clear();
+    searchHighlightCurrent.clear();
+    searchRanges = [];
     currentMatch = -1;
-    highlightedMatch = -1;
   }
 
   // Returns array of {start, end} match positions within a text string.
@@ -2911,11 +2872,6 @@ export function getSearchOverlayScript(opts: {
   function findMatchesInText(text, term) {
     return findTextMatchesCore(text, term, useRegex, caseSensitive);
   }
-
-  // Which marks to touch when the current match moves. Same arrangement: the
-  // exported planCurrentMarkMove is unit-tested TS, injected here so webview
-  // and tests always run the same algorithm.
-  var planCurrentMarkMoveCore = ${planCurrentMarkMove.toString()};
 
   function performSearch(term) {
     clearSearchHighlights();
@@ -2940,7 +2896,7 @@ export function getSearchOverlayScript(opts: {
         var parent = node.parentNode;
         if (!parent) return NodeFilter.FILTER_REJECT;
         var tag = parent.tagName;
-        if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'MARK') return NodeFilter.FILTER_REJECT;
+        if (tag === 'SCRIPT' || tag === 'STYLE') return NodeFilter.FILTER_REJECT;
         var el = parent;
         while (el && el !== document.body) {
           if (el.id === '__toolbar' || el.id === '__search_bar') return NodeFilter.FILTER_REJECT;
@@ -2964,30 +2920,16 @@ export function getSearchOverlayScript(opts: {
       var matches = findMatchesInText(text, term);
       if (!matches || matches.length === 0) continue;
 
-      var lastIndex = 0;
-      var fragments = [];
       for (var j = 0; j < matches.length; j++) {
-        if (matches[j].start > lastIndex) {
-          fragments.push(document.createTextNode(text.substring(lastIndex, matches[j].start)));
-        }
-        var mark = document.createElement('mark');
-        mark.className = '__search_mark';
-        mark.textContent = text.substring(matches[j].start, matches[j].end);
-        fragments.push(mark);
-        lastIndex = matches[j].end;
+        var range = document.createRange();
+        range.setStart(node, matches[j].start);
+        range.setEnd(node, matches[j].end);
+        searchRanges.push(range);
+        searchHighlightAll.add(range);
       }
-      if (lastIndex < text.length) {
-        fragments.push(document.createTextNode(text.substring(lastIndex)));
-      }
-      var p = node.parentNode;
-      for (var k = 0; k < fragments.length; k++) {
-        p.insertBefore(fragments[k], node);
-      }
-      p.removeChild(node);
     }
 
-    searchMarks = Array.prototype.slice.call(document.querySelectorAll('mark.__search_mark'));
-    if (searchMarks.length > 0) {
+    if (searchRanges.length > 0) {
       currentMatch = 0;
       updateCurrentMatch();
     } else {
@@ -2997,38 +2939,31 @@ export function getSearchOverlayScript(opts: {
   }
 
   function updateCurrentMatch() {
-    // Two marks rather than all of them, which is the whole reason
-    // highlightedMatch is tracked. That is only sound while exactly one mark
-    // carries '__current' and highlightedMatch names it; both ends hold
-    // because every mark is created fresh (performSearch) and every mark is
-    // destroyed through clearSearchHighlights, which resets the tracker.
-    // Should the two ever drift, the failure is a mark left lit rather than a
-    // crash -- classList.add and .remove are no-ops when the token is already
-    // in the wanted state, and the bounds checks below catch a stale index
-    // into a list that has since shrunk.
-    var move = planCurrentMarkMoveCore(highlightedMatch, currentMatch, searchMarks.length);
-    if (move.clear >= 0 && searchMarks[move.clear]) {
-      searchMarks[move.clear].classList.remove('__current');
+    // Only ever holds one Range (or none) -- clear+add is already O(1),
+    // there being no marks left to walk is what makes this simpler than the
+    // <mark>-based version this replaced.
+    searchHighlightCurrent.clear();
+    if (currentMatch >= 0 && searchRanges[currentMatch]) {
+      var range = searchRanges[currentMatch];
+      searchHighlightCurrent.add(range);
+      // Range has no scrollIntoView (that's an Element method), so scroll
+      // position is computed from its own bounding rect instead.
+      var rect = range.getBoundingClientRect();
+      var targetTop = window.scrollY + rect.top - (window.innerHeight / 2) + (rect.height / 2);
+      window.scrollTo({ top: targetTop, behavior: 'smooth' });
     }
-    if (move.set >= 0 && searchMarks[move.set]) {
-      searchMarks[move.set].classList.add('__current');
-    }
-    highlightedMatch = move.set;
-    if (currentMatch >= 0 && searchMarks[currentMatch]) {
-      searchMarks[currentMatch].scrollIntoView({ block: 'center', behavior: 'smooth' });
-    }
-    searchCount.textContent = (currentMatch + 1) + '/' + searchMarks.length;
+    searchCount.textContent = (currentMatch + 1) + '/' + searchRanges.length;
   }
 
   function gotoNextMatch() {
-    if (searchMarks.length === 0) return;
-    currentMatch = (currentMatch + 1) % searchMarks.length;
+    if (searchRanges.length === 0) return;
+    currentMatch = (currentMatch + 1) % searchRanges.length;
     updateCurrentMatch();
   }
 
   function gotoPrevMatch() {
-    if (searchMarks.length === 0) return;
-    currentMatch = (currentMatch - 1 + searchMarks.length) % searchMarks.length;
+    if (searchRanges.length === 0) return;
+    currentMatch = (currentMatch - 1 + searchRanges.length) % searchRanges.length;
     updateCurrentMatch();
   }
 

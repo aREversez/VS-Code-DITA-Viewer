@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -1261,94 +1261,6 @@ describe('findTextMatches', () => {
   });
 });
 
-describe('planCurrentMarkMove', () => {
-  it('moves the highlight by naming only the mark it leaves and the mark it lands on', () => {
-    // The whole point of the function: the loop this replaced named all five.
-    assert.deepStrictEqual(planCurrentMarkMove(2, 3, 5), { clear: 2, set: 3 });
-  });
-
-  it('names nothing to clear when no mark is lit yet', () => {
-    // The state performSearch leaves behind: it has just built a fresh set of
-    // marks, none of which carries '__current', so clearing is work for nothing.
-    assert.deepStrictEqual(planCurrentMarkMove(-1, 0, 5), { clear: -1, set: 0 });
-  });
-
-  it('handles wrap-around in both directions', () => {
-    assert.deepStrictEqual(planCurrentMarkMove(4, 0, 5), { clear: 4, set: 0 });
-    assert.deepStrictEqual(planCurrentMarkMove(0, 4, 5), { clear: 0, set: 4 });
-  });
-
-  it('does not clear and re-set the mark that is already current', () => {
-    // gotoNextMatch on a single-match search lands back where it started.
-    // Clearing first would take the highlight off and put it back on within one
-    // task -- a visible flash if the browser happens to paint in between, and
-    // pointless work either way.
-    assert.deepStrictEqual(planCurrentMarkMove(2, 2, 5), { clear: -1, set: 2 });
-    assert.deepStrictEqual(planCurrentMarkMove(0, 0, 1), { clear: -1, set: 0 });
-  });
-
-  it('takes the highlight off entirely when there is no next match', () => {
-    assert.deepStrictEqual(planCurrentMarkMove(2, -1, 5), { clear: 2, set: -1 });
-  });
-
-  it('does nothing at all when there are no marks, stale index included', () => {
-    assert.deepStrictEqual(planCurrentMarkMove(-1, -1, 0), { clear: -1, set: -1 });
-    assert.deepStrictEqual(planCurrentMarkMove(3, 0, 0), { clear: -1, set: -1 });
-  });
-
-  it('drops a stale previous index rather than naming a mark that no longer exists', () => {
-    // Reachable, not theoretical: the document changed under an open search bar,
-    // so the match list shrank while the index tracked from the longer list
-    // survived it by one update.
-    assert.deepStrictEqual(planCurrentMarkMove(7, 0, 3), { clear: -1, set: 0 });
-  });
-
-  it('drops a stale next index but still clears the mark it left', () => {
-    assert.deepStrictEqual(planCurrentMarkMove(1, 9, 3), { clear: 1, set: -1 });
-  });
-
-  it('never names an index outside the list', () => {
-    // The caller uses these to index a real array, so this is the property that
-    // turns any future slip in the decision table into a no-op instead of a
-    // silent write to the wrong mark. Covers negative and past-the-end inputs on
-    // both sides, including an empty list.
-    for (let count = 0; count <= 6; count++) {
-      for (let previous = -2; previous <= 8; previous++) {
-        for (let next = -2; next <= 8; next++) {
-          const move = planCurrentMarkMove(previous, next, count);
-          for (const index of [move.clear, move.set]) {
-            assert.ok(
-              index === -1 || (index >= 0 && index < count),
-              `planCurrentMarkMove(${previous}, ${next}, ${count}) named ${index}`,
-            );
-          }
-        }
-      }
-    }
-  });
-
-  it('leaves exactly the marks lit that walking all of them would have left lit', () => {
-    // Exhaustive over a small grid rather than a hand-picked sequence, because
-    // the optimisation is only worth having if it is equivalent to the O(n) loop
-    // it replaced. `expected` is that loop's output verbatim: it lit the current
-    // match and cleared every other one. `marks` is the state the loop would
-    // have left behind on the previous move, which is what makes the two
-    // comparable -- the optimised path only ever sees one mark lit, and if that
-    // ever stopped being true the divergence would show up here.
-    const count = 4;
-    for (let previous = -1; previous < count; previous++) {
-      for (let next = -1; next < count; next++) {
-        const marks = Array.from({ length: count }, (_, i) => i === previous);
-        const expected = Array.from({ length: count }, (_, i) => i === next);
-        const move = planCurrentMarkMove(previous, next, count);
-        if (move.clear >= 0) marks[move.clear] = false;
-        if (move.set >= 0) marks[move.set] = true;
-        assert.deepStrictEqual(marks, expected, `move from ${previous} to ${next} of ${count}`);
-      }
-    }
-  });
-});
-
 describe('getSearchOverlayScript', () => {
   const opts = {
     placeholder: 'Find',
@@ -1363,55 +1275,287 @@ describe('getSearchOverlayScript', () => {
   it('emits a script that parses as JavaScript', () => {
     // The overlay is one long template literal with a dozen interpolations in
     // it, so a stray backtick or an unescaped interpolation anywhere ships a
-    // search bar that silently never runs. Nothing else in the suite would
-    // notice: there is no DOM here to execute it against, and the e2e harness
-    // cannot reach into a webview. Compiling it is the cheapest assertion that
-    // catches the whole class -- new Function parses the body without running
-    // it, so the document and NodeFilter references inside are never touched.
+    // search bar that silently never runs. new Function parses the body
+    // without running it, so this only catches syntax errors -- the fake-DOM
+    // harness further below is what actually executes it.
     assert.doesNotThrow(() => new Function(getSearchOverlayScript(opts)));
   });
 
-  it('injects the exported planCurrentMarkMove rather than a second copy of its rules', () => {
+  it('injects the exported findTextMatches verbatim rather than a second copy of its rules', () => {
     // The comment at the injection site promises webview and tests always run
-    // the same algorithm. Comparing the emitted text against the function's own
-    // source is what makes that promise load-bearing instead of decorative: it
-    // fails the moment someone hand-copies the decision table into the template,
-    // which is the natural thing to do and the natural way for the two to drift.
+    // the same matching algorithm. Comparing the emitted text against the
+    // function's own source is what makes that promise load-bearing instead
+    // of decorative: it fails the moment someone hand-copies the regex logic
+    // into the template, which is the natural way for the two to drift.
     const script = getSearchOverlayScript(opts);
     assert.ok(
-      script.includes('var planCurrentMarkMoveCore = ' + planCurrentMarkMove.toString() + ';'),
-      'expected the overlay script to inject the exported planCurrentMarkMove verbatim',
+      script.includes('var findTextMatchesCore = ' + findTextMatches.toString() + ';'),
+      'expected the overlay script to inject the exported findTextMatches verbatim',
     );
   });
 
-  it('injects a body that still works once lifted out of this module', () => {
-    // The webview has none of this module's bindings, so an injected function
-    // that reaches for one is dead on arrival -- and it would look perfectly
-    // healthy here, where the binding is in scope. new Function builds the
-    // function against the global scope instead, which turns that free
-    // identifier into a ReferenceError the first time it is called.
-    const revived = new Function(
-      'return (' + planCurrentMarkMove.toString() + ')',
-    )() as typeof planCurrentMarkMove;
-    assert.deepStrictEqual(revived(2, 3, 5), { clear: 2, set: 3 });
-    assert.deepStrictEqual(revived(-1, 0, 5), { clear: -1, set: 0 });
-    assert.deepStrictEqual(revived(2, 2, 5), { clear: -1, set: 2 });
-    assert.deepStrictEqual(revived(7, 0, 3), { clear: -1, set: 0 });
-    assert.deepStrictEqual(revived(2, -1, 0), { clear: -1, set: -1 });
-  });
-
   it('excludes docsite mode\'s sidebar (.site-nav) from search matches, not just the toolbar/search bar', () => {
-    // Regression guard, not a behavioral test: there's no DOM here to
-    // actually run the TreeWalker filter against (see the parse-check
-    // test's own comment on why), so this only confirms the source text
-    // still contains the sidebar exclusion rather than someone quietly
-    // dropping it in a future refactor of this same walk-up loop. Without
-    // it, Ctrl+F in site mode would also match/highlight sidebar topic
-    // titles and chips -- .site-nav sits beside #dita-content-root as a
-    // sibling under body, not inside it, and isn't caught by the existing
-    // __toolbar/__search_bar id checks.
+    // Source-text regression guard, kept alongside the behavioral fake-DOM
+    // test below ('does not create highlight ranges inside the .site-nav
+    // sidebar') which exercises the same rule end to end.
     const script = getSearchOverlayScript(opts);
     assert.ok(script.includes("classList.contains('site-nav')"), 'search TreeWalker filter should exclude the sidebar');
+  });
+
+  // ── CSS Custom Highlight API behavior ──
+  // jsdom has no Range/TreeWalker/CSS.highlights support, and the e2e harness
+  // only captures rendered HTML strings -- it cannot reach into a webview to
+  // run script and read state back (see extension.ts's own _test export
+  // comment). So, same spirit as getImageLightboxScript's fake DOM further
+  // down this file, this hand-rolls just enough of document/Range/
+  // TreeWalker/CSS to actually execute performSearch and assert on what it
+  // did, rather than only pinning source text.
+  interface FakeTextNode {
+    nodeType: 3;
+    textContent: string;
+    parentNode: FakeElement | null;
+  }
+  type FakeNode = FakeElement | FakeTextNode;
+  interface FakeElement {
+    nodeType: 1;
+    tagName: string;
+    id: string;
+    classListSet: Set<string>;
+    classList: { contains: (c: string) => boolean; add: (c: string) => void; remove: (c: string) => void };
+    style: Record<string, string>;
+    children: FakeNode[];
+    parentNode: FakeElement | null;
+    listeners: Record<string, Array<(e: Record<string, unknown>) => void>>;
+    attrs: Record<string, string>;
+    textContent: string;
+    innerHTML: string;
+    title: string;
+    placeholder: string;
+    value: string;
+    appendChild: <T extends FakeNode>(child: T) => T;
+    setAttribute: (name: string, value: string) => void;
+    addEventListener: (type: string, fn: (e: Record<string, unknown>) => void) => void;
+  }
+
+  function makeFakeText(text: string): FakeTextNode {
+    return { nodeType: 3, textContent: text, parentNode: null };
+  }
+
+  function makeFakeElement(tag: string): FakeElement {
+    const el: FakeElement = {
+      nodeType: 1,
+      tagName: tag.toUpperCase(),
+      id: '',
+      classListSet: new Set<string>(),
+      classList: undefined as unknown as FakeElement['classList'],
+      style: {},
+      children: [],
+      parentNode: null,
+      listeners: {},
+      attrs: {},
+      textContent: '',
+      innerHTML: '',
+      title: '',
+      placeholder: '',
+      value: '',
+      appendChild(child) {
+        child.parentNode = el;
+        el.children.push(child);
+        return child;
+      },
+      setAttribute(name, value) { el.attrs[name] = value; },
+      addEventListener(type, fn) {
+        if (!el.listeners[type]) el.listeners[type] = [];
+        el.listeners[type].push(fn);
+      },
+    };
+    el.classList = {
+      contains: (c) => el.classListSet.has(c),
+      add: (c) => { el.classListSet.add(c); },
+      remove: (c) => { el.classListSet.delete(c); },
+    };
+    return el;
+  }
+
+  function collectTextNodes(root: FakeElement): FakeTextNode[] {
+    const out: FakeTextNode[] = [];
+    (function walk(node: FakeElement) {
+      for (const c of node.children) {
+        if (c.nodeType === 3) out.push(c);
+        else walk(c);
+      }
+    })(root);
+    return out;
+  }
+
+  /** Fake Range: only what performSearch/updateCurrentMatch actually use --
+   *  setStart/setEnd on a single text node, toString() for the matched
+   *  substring, and a stubbed rect (scroll-position math isn't asserted on
+   *  here, only that scrollTo gets called). */
+  class FakeRange {
+    startNode: FakeTextNode | null = null;
+    startOffset = 0;
+    endNode: FakeTextNode | null = null;
+    endOffset = 0;
+    setStart(node: FakeTextNode, offset: number): void { this.startNode = node; this.startOffset = offset; }
+    setEnd(node: FakeTextNode, offset: number): void { this.endNode = node; this.endOffset = offset; }
+    toString(): string {
+      if (this.startNode && this.startNode === this.endNode) {
+        return this.startNode.textContent.substring(this.startOffset, this.endOffset);
+      }
+      return '';
+    }
+    getBoundingClientRect() { return { top: 0, left: 0, width: 0, height: 0 }; }
+  }
+
+  /** Fake Highlight: a plain Set of ranges is all the real Highlight class
+   *  is from the outside (it implements Set<Range>), and all this script
+   *  ever does with one. */
+  class FakeHighlight {
+    items = new Set<FakeRange>();
+    add(r: FakeRange): void { this.items.add(r); }
+    clear(): void { this.items.clear(); }
+  }
+
+  const FAKE_NODE_FILTER = { SHOW_TEXT: 4, FILTER_ACCEPT: 1, FILTER_REJECT: 2 };
+
+  /** Runs the overlay script against a fake body tree and returns the
+   *  CSS.highlights registry (a real Map -- HighlightRegistry is Map-shaped
+   *  from the outside), every fake element the script created (so the test
+   *  can find its search input/buttons the same way a real DOM query would),
+   *  and every window.scrollTo call. */
+  function runOverlay(body: FakeElement) {
+    const created: FakeElement[] = [];
+    const head = makeFakeElement('head');
+    const doc = {
+      body,
+      head,
+      createElement: (tag: string) => { const el = makeFakeElement(tag); created.push(el); return el; },
+      createRange: () => new FakeRange(),
+      createTreeWalker(root: FakeElement, _whatToShow: number, filter: { acceptNode: (n: FakeTextNode) => number }) {
+        const all = collectTextNodes(root);
+        let idx = -1;
+        return {
+          get currentNode() { return all[idx]; },
+          nextNode() {
+            while (idx + 1 < all.length) {
+              idx++;
+              if (filter.acceptNode(all[idx]) === FAKE_NODE_FILTER.FILTER_ACCEPT) return all[idx];
+            }
+            return null;
+          },
+        };
+      },
+      addEventListener: () => {},
+      querySelectorAll: () => [] as FakeElement[],
+    };
+    const highlights = new Map<string, FakeHighlight>();
+    const css = { highlights };
+    const scrollCalls: Record<string, unknown>[] = [];
+    const win = { scrollY: 0, innerHeight: 768, scrollTo: (o: Record<string, unknown>) => { scrollCalls.push(o); } };
+    const script = getSearchOverlayScript(opts);
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    new Function('document', 'window', 'NodeFilter', 'CSS', 'Highlight', script)(
+      doc, win, FAKE_NODE_FILTER, css, FakeHighlight,
+    );
+    return { highlights, elements: created, scrollCalls };
+  }
+
+  function findInput(elements: FakeElement[]): FakeElement {
+    return elements.find((e) => e.tagName === 'INPUT')!;
+  }
+  function findCaseBtn(elements: FakeElement[]): FakeElement {
+    return elements.find((e) => e.tagName === 'BUTTON' && e.textContent === 'Aa')!;
+  }
+  function findNextBtn(elements: FakeElement[]): FakeElement {
+    return elements.find((e) => e.tagName === 'BUTTON' && e.innerHTML === '&darr;')!;
+  }
+  function findCloseBtn(elements: FakeElement[]): FakeElement {
+    return elements.find((e) => e.tagName === 'BUTTON' && e.innerHTML === '&times;')!;
+  }
+  /** Runs a search the same way a reader toggling "Match case" would --
+   *  that click handler calls performSearch synchronously, unlike the
+   *  search input's own debounced 'input' listener. */
+  function runSearch(elements: FakeElement[], term: string): void {
+    findInput(elements).value = term;
+    findCaseBtn(elements).listeners['click'][0]({});
+  }
+
+  it('highlights matches via CSS.highlights instead of wrapping them in <mark> elements', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('the quick fox and the quick hare'));
+
+    const { highlights, elements } = runOverlay(body);
+    runSearch(elements, 'quick');
+
+    const allHl = highlights.get('dita-search-all')!;
+    assert.ok(allHl, 'expected an "all matches" highlight to be registered');
+    assert.strictEqual(allHl.items.size, 2, 'expected two "quick" matches to be registered as highlight ranges');
+    assert.deepStrictEqual(
+      Array.from(allHl.items).map((r) => r.toString()).sort(),
+      ['quick', 'quick'],
+    );
+    assert.ok(!elements.some((e) => e.tagName === 'MARK'), 'expected no <mark> elements to be created');
+  });
+
+  it('tracks the current match in a separate CSS.highlights entry from all matches, and advances it on next', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('cat cat cat'));
+
+    const { highlights, elements, scrollCalls } = runOverlay(body);
+    runSearch(elements, 'cat');
+
+    const currentOffset = () => {
+      const cur = Array.from(highlights.get('dita-search-current')!.items)[0];
+      return cur ? cur.startOffset : -1;
+    };
+    assert.strictEqual(highlights.get('dita-search-current')!.items.size, 1);
+    assert.strictEqual(currentOffset(), 0);
+    assert.strictEqual(scrollCalls.length, 1, 'expected the initial match to scroll into view once');
+
+    const nextBtn = findNextBtn(elements);
+    nextBtn.listeners['click'][0]({});
+    assert.strictEqual(currentOffset(), 4);
+    nextBtn.listeners['click'][0]({});
+    assert.strictEqual(currentOffset(), 8);
+    nextBtn.listeners['click'][0]({});
+    assert.strictEqual(currentOffset(), 0, 'expected next to wrap back to the first match');
+  });
+
+  it('clears both highlight registries when the search bar is closed', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('dog dog'));
+
+    const { highlights, elements } = runOverlay(body);
+    runSearch(elements, 'dog');
+    assert.strictEqual(highlights.get('dita-search-all')!.items.size, 2);
+    assert.strictEqual(highlights.get('dita-search-current')!.items.size, 1);
+
+    findCloseBtn(elements).listeners['click'][0]({});
+
+    assert.strictEqual(highlights.get('dita-search-all')!.items.size, 0);
+    assert.strictEqual(highlights.get('dita-search-current')!.items.size, 0);
+  });
+
+  it('does not create highlight ranges inside the .site-nav sidebar', () => {
+    const body = makeFakeElement('body');
+    const nav = body.appendChild(makeFakeElement('div'));
+    nav.classList.add('site-nav');
+    nav.appendChild(makeFakeText('quick reference'));
+    const p = body.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('a quick fox'));
+
+    const { highlights, elements } = runOverlay(body);
+    runSearch(elements, 'quick');
+
+    assert.strictEqual(
+      highlights.get('dita-search-all')!.items.size,
+      1,
+      'expected the sidebar\'s own "quick" text to be excluded from search matches',
+    );
   });
 });
 
