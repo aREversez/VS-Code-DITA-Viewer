@@ -2942,6 +2942,12 @@ describe('getSiteNavExpandCollapseAllButtonsScript + getSiteNavCollapseStateHelp
     assert.doesNotThrow(() => new Function('document', 'btnStyle', helper + buttons));
   });
 
+  it('keeps the expand/collapse buttons a little tighter than the shared toolbar while leaving the toolbar itself shorter overall', () => {
+    assert.ok(buttons.includes("siteExpandAllBtn.style.cssText = btnStyle + 'padding:1px 6px;justify-content:center;';"), 'expand-all button should stay compact without fighting the shared control height');
+    assert.ok(buttons.includes("siteCollapseAllBtn.style.cssText = btnStyle + 'padding:1px 6px;justify-content:center;';"), 'collapse-all button should stay compact without fighting the shared control height');
+    assert.ok(buttons.includes('width="14" height="14"'), 'icons stay readable while being slightly tighter than the prior 16px versions');
+  });
+
   // Oxygen's own icons (nested-fold-and-highlight-plan.md item 2 follow-up
   // -- matched pixel-for-pixel rather than a from-scratch design, per this
   // project's Oxygen-as-reference-standard convention), embedded as base64

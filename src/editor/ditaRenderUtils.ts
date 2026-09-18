@@ -2280,10 +2280,10 @@ const NAV_ALL_ICON_SQUARES =
   '<rect x="1.5" y="1.5" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.1"/>' +
   '<rect x="6.5" y="6.5" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.1" fill="var(--vscode-dropdown-background,#333)"/>';
 const EXPAND_ALL_ICON_SVG =
-  `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${NAV_ALL_ICON_SQUARES}` +
+  `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${NAV_ALL_ICON_SQUARES}` +
   '<path d="M10.5 8.7V12.3M8.7 10.5H12.3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>';
 const COLLAPSE_ALL_ICON_SVG =
-  `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${NAV_ALL_ICON_SQUARES}` +
+  `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${NAV_ALL_ICON_SQUARES}` +
   '<path d="M8.7 10.5H12.3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>';
 
 /**
@@ -2319,7 +2319,7 @@ export function getSiteNavExpandCollapseAllButtonsScript(opts: { expandAllTitle:
   siteExpandAllBtn.innerHTML = '${EXPAND_ALL_ICON_SVG}';
   siteExpandAllBtn.title = ${expandAllTitle};
   siteExpandAllBtn.setAttribute('aria-label', ${expandAllTitle});
-  siteExpandAllBtn.style.cssText = btnStyle + 'padding:2px 6px;justify-content:center;';
+  siteExpandAllBtn.style.cssText = btnStyle + 'padding:1px 6px;justify-content:center;';
   siteExpandAllBtn.addEventListener('click', function() { setAllSiteNavCollapsed(false); });
 
   var siteCollapseAllBtn = document.createElement('button');
@@ -2327,7 +2327,7 @@ export function getSiteNavExpandCollapseAllButtonsScript(opts: { expandAllTitle:
   siteCollapseAllBtn.innerHTML = '${COLLAPSE_ALL_ICON_SVG}';
   siteCollapseAllBtn.title = ${collapseAllTitle};
   siteCollapseAllBtn.setAttribute('aria-label', ${collapseAllTitle});
-  siteCollapseAllBtn.style.cssText = btnStyle + 'padding:2px 6px;justify-content:center;';
+  siteCollapseAllBtn.style.cssText = btnStyle + 'padding:1px 6px;justify-content:center;';
   siteCollapseAllBtn.addEventListener('click', function() { setAllSiteNavCollapsed(true); });
 `;
 }
@@ -3477,8 +3477,8 @@ export function getToolbarScaffoldScript(opts: { previewToolbar: string }): stri
   return `
   // Toolbar
   var tbStyle = 'position:fixed;top:4px;right:8px;z-index:9999;display:flex;align-items:center;gap:4px;padding:3px 6px;border-radius:5px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;background:var(--vscode-editor-background,rgba(30,30,30,0.88));border:1px solid var(--vscode-widget-border,rgba(255,255,255,0.12));backdrop-filter:blur(4px);opacity:0.75;transition:opacity 0.15s;';
-  var ddStyle = 'box-sizing:border-box;height:20px;appearance:none;-webkit-appearance:none;padding:1px 4px;border-radius:3px;border:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));background:var(--vscode-dropdown-background,#333);color:var(--vscode-dropdown-foreground,#eee);font-size:11px;outline:none;cursor:pointer;';
-  var btnStyle = 'box-sizing:border-box;height:20px;padding:1px 5px;border-radius:3px;border:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));background:var(--vscode-dropdown-background,#333);color:var(--vscode-dropdown-foreground,#eee);cursor:pointer;font-size:13px;line-height:1;outline:none;display:flex;align-items:center;';
+  var ddStyle = 'box-sizing:border-box;height:18px;appearance:none;-webkit-appearance:none;padding:1px 4px;border-radius:3px;border:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));background:var(--vscode-dropdown-background,#333);color:var(--vscode-dropdown-foreground,#eee);font-size:11px;outline:none;cursor:pointer;';
+  var btnStyle = 'box-sizing:border-box;height:18px;padding:1px 5px;border-radius:3px;border:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));background:var(--vscode-dropdown-background,#333);color:var(--vscode-dropdown-foreground,#eee);cursor:pointer;font-size:13px;line-height:1;outline:none;display:flex;align-items:center;';
 
   var toolbar = document.createElement('div');
   toolbar.id = '__toolbar';
