@@ -2119,18 +2119,41 @@ describe('getBookScrollSyncScript (book mode sidebar, nested-fold-and-highlight-
       this.options = options;
       FakeIntersectionObserver.instances.push(this);
     }
+    disconnected = false;
     observe(el: unknown) {
       this.observed.push(el);
+    }
+    disconnect() {
+      this.disconnected = true;
     }
     trigger(entries: Array<{ target: unknown; isIntersecting: boolean }>) {
       this.callback(entries);
     }
   }
 
-  function run(document: unknown, vscode: unknown = { postMessage: () => {} }) {
+  class FakeMutationObserver {
+    static instances: FakeMutationObserver[] = [];
+    observed: Array<{ target: unknown; options: unknown }> = [];
+    callback: () => void;
+    constructor(callback: () => void) {
+      this.callback = callback;
+      FakeMutationObserver.instances.push(this);
+    }
+    observe(target: unknown, options: unknown) {
+      this.observed.push({ target, options });
+    }
+    trigger() {
+      this.callback();
+    }
+  }
+
+  function run(document: unknown, vscode: unknown = { postMessage: () => {} }, withMutationObserver = false) {
     FakeIntersectionObserver.instances.length = 0;
+    FakeMutationObserver.instances.length = 0;
     const script = getSiteNavCollapseStateHelperScript({ reportCollapseMsgType: 'setNavCollapsed' }) + getBookScrollSyncScript();
-    new Function('document', 'IntersectionObserver', 'vscode', script)(document, FakeIntersectionObserver, vscode);
+    new Function('document', 'IntersectionObserver', 'vscode', 'MutationObserver', script)(
+      document, FakeIntersectionObserver, vscode, withMutationObserver ? FakeMutationObserver : undefined,
+    );
     return FakeIntersectionObserver.instances[0];
   }
 
@@ -2219,6 +2242,68 @@ describe('getBookScrollSyncScript (book mode sidebar, nested-fold-and-highlight-
 
     assert.strictEqual(linkA.classList.contains('active'), true);
     assert.deepStrictEqual(posted, []);
+  });
+
+  it('rebinds to the new anchors when a live edit swaps the book\'s DOM out from under the observer', () => {
+    // MSG_UPDATE_CONTENT / MSG_PATCH_CONTENT replace anchor elements; an
+    // observer bound once at init keeps watching detached nodes, so the
+    // sidebar highlight silently stops following the scroll.
+    const oldAnchor = makeFakeAnchor('/a.dita');
+    const linkA = makeNode({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/a.dita' } });
+    const opts = { contentRoot: {}, anchors: [oldAnchor], navLinks: [linkA] };
+    const document = makeFakeBookScrollDocument(opts);
+    const oldObserver = run(document, undefined, true);
+    assert.strictEqual(FakeMutationObserver.instances.length, 1, 'expected a MutationObserver watching for DOM swaps');
+
+    const newAnchor = makeFakeAnchor('/a.dita');
+    opts.anchors = [newAnchor];
+    FakeMutationObserver.instances[0].trigger();
+
+    const observers = FakeIntersectionObserver.instances;
+    assert.strictEqual(observers.length, 2, 'expected a fresh IntersectionObserver after the swap');
+    assert.strictEqual(oldObserver.disconnected, true, 'the stale observer should be disconnected');
+    assert.deepStrictEqual(observers[1].observed, [newAnchor]);
+    observers[1].trigger([{ target: newAnchor, isIntersecting: true }]);
+    assert.strictEqual(linkA.classList.contains('active'), true);
+  });
+
+  it('keeps the reader\'s current highlight when the sidebar\'s own markup is replaced (MSG_UPDATE_SIDEBAR marks the first link active)', () => {
+    const anchorA = makeFakeAnchor('/a.dita');
+    const anchorB = makeFakeAnchor('/b.dita');
+    const oldLinkA = makeNode({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/a.dita' } });
+    const oldLinkB = makeNode({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/b.dita' } });
+    const opts = { contentRoot: {}, anchors: [anchorA, anchorB], navLinks: [oldLinkA, oldLinkB] };
+    const observer = run(makeFakeBookScrollDocument(opts), undefined, true);
+    observer.trigger([{ target: anchorB, isIntersecting: true }]);
+    assert.strictEqual(oldLinkB.classList.contains('active'), true);
+
+    // Host re-renders the sidebar with navigable[0] active, as collectBookParts does.
+    const newLinkA = makeNode({ classes: ['site-nav-link', 'active'], attrs: { 'data-site-target': '/a.dita' } });
+    const newLinkB = makeNode({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/b.dita' } });
+    opts.navLinks = [newLinkA, newLinkB];
+    FakeMutationObserver.instances[0].trigger();
+
+    assert.strictEqual(newLinkB.classList.contains('active'), true, 'reader is still on B');
+    assert.strictEqual(newLinkA.classList.contains('active'), false, 'the host\'s default first-link mark must not survive the swap');
+  });
+
+  it('skips a group-heading anchor (no sidebar link) instead of clearing the highlight when it is the topmost visible one', () => {
+    const groupAnchor = makeFakeAnchor('grp:0');
+    const anchorA = makeFakeAnchor('/a.dita');
+    const linkA = makeNode({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/a.dita' } });
+    const document = makeFakeBookScrollDocument({ contentRoot: {}, anchors: [groupAnchor, anchorA], navLinks: [linkA] });
+    const observer = run(document);
+
+    observer.trigger([
+      { target: groupAnchor, isIntersecting: true },
+      { target: anchorA, isIntersecting: true },
+    ]);
+    assert.strictEqual(linkA.classList.contains('active'), true, 'the first topic under the group heading should be active');
+
+    // Reader scrolls so only the (link-less) heading of the next group is in the band.
+    observer.trigger([{ target: anchorA, isIntersecting: false }]);
+    observer.trigger([{ target: groupAnchor, isIntersecting: true }]);
+    assert.strictEqual(linkA.classList.contains('active'), true, 'a heading with no link must not wipe the last-known active link');
   });
 
   it('does nothing when no anchor is currently visible, rather than clearing active for an unrelated reason', () => {

@@ -2064,6 +2064,12 @@ export function getBookNavClickHandlerScript(): string {
  * a reader who scrolled past a folded section shouldn't have it fold shut
  * again the next time they open this document.
  *
+ * The observer is rebound (sync() inside the script) whenever
+ * #dita-content-root's subtree or .site-nav's children change, because a
+ * live edit replaces anchor elements and MSG_UPDATE_SIDEBAR replaces every
+ * link -- see sync()'s own comment. Anchors with no matching sidebar link
+ * (topichead section headings) are never picked as active.
+ *
  * Deliberately does not scroll the sidebar itself to reveal the newly-
  * active row: nothing asked for that, and doing it unconditionally could
  * fight a reader who has the sidebar scrolled somewhere on purpose.
@@ -2081,16 +2087,30 @@ export function getBookScrollSyncScript(): string {
   return `
   (function() {
     var contentRoot = document.getElementById('dita-content-root');
-    var anchors = Array.prototype.slice.call(document.querySelectorAll('[data-book-anchor]'));
-    if (!contentRoot || !anchors.length || typeof IntersectionObserver === 'undefined') return;
+    if (!contentRoot || typeof IntersectionObserver === 'undefined') return;
 
+    var anchors = [];
     var visibleIds = [];
     var currentActiveId = null;
+    var scrollObserver = null;
 
+    function findNavLink(id) {
+      var navLinks = document.querySelectorAll('.site-nav-link');
+      for (var j = 0; j < navLinks.length; j++) {
+        if (navLinks[j].getAttribute('data-site-target') === id) return navLinks[j];
+      }
+      return null;
+    }
+
+    // Topmost visible anchor THAT HAS A SIDEBAR LINK. renderBookParts also
+    // stamps data-book-anchor onto topichead section headings, but a group
+    // is a plain label in the sidebar, not a link -- picking one would
+    // resolve to no link at all and (as this used to) wipe the highlight
+    // every time a group heading was the topmost thing in the band.
     function pickActiveId() {
       for (var i = 0; i < anchors.length; i++) {
         var id = anchors[i].getAttribute('data-book-anchor');
-        if (visibleIds.indexOf(id) !== -1) return id;
+        if (visibleIds.indexOf(id) !== -1 && findNavLink(id)) return id;
       }
       return null;
     }
@@ -2110,25 +2130,22 @@ export function getBookScrollSyncScript(): string {
       return changed;
     }
 
+    // A null pick (nothing with a link is in the band right now) keeps the
+    // last-known active link rather than clearing it to nothing.
     function applyActive(id) {
-      if (id === currentActiveId) return;
+      if (!id || id === currentActiveId) return;
+      var navLink = findNavLink(id);
+      if (!navLink) return;
       currentActiveId = id;
       var prevActive = document.querySelector('.site-nav-link.active');
       if (prevActive) prevActive.classList.remove('active');
-      if (!id) return;
-      var navLinks = document.querySelectorAll('.site-nav-link');
-      var navLink = null;
-      for (var j = 0; j < navLinks.length; j++) {
-        if (navLinks[j].getAttribute('data-site-target') === id) { navLink = navLinks[j]; break; }
-      }
-      if (!navLink) return;
       navLink.classList.add('active');
       var navItem = navLink.closest ? navLink.closest('.site-nav-item') : null;
       var ancestorsExpanded = navItem ? expandAncestorsOf(navItem) : false;
       if (ancestorsExpanded && typeof reportSiteNavCollapseState === 'function') reportSiteNavCollapseState();
     }
 
-    var bookScrollSyncObserver = new IntersectionObserver(function(entries) {
+    function onIntersect(entries) {
       for (var i = 0; i < entries.length; i++) {
         var id = entries[i].target.getAttribute('data-book-anchor');
         var idx = visibleIds.indexOf(id);
@@ -2139,9 +2156,43 @@ export function getBookScrollSyncScript(): string {
         }
       }
       applyActive(pickActiveId());
-    }, { root: contentRoot, rootMargin: '0px 0px -70% 0px', threshold: 0 });
+    }
 
-    for (var k = 0; k < anchors.length; k++) bookScrollSyncObserver.observe(anchors[k]);
+    // (Re)binds the observer to whatever data-book-anchor elements exist
+    // right now. Runs once at init and again after every DOM swap below:
+    // a live edit replaces anchor elements (MSG_UPDATE_CONTENT swaps all
+    // of them, MSG_PATCH_CONTENT the changed ones) and the host's
+    // MSG_UPDATE_SIDEBAR replaces every sidebar link -- with the observer
+    // bound once at init it would keep watching detached nodes and the
+    // highlight would silently stop following the scroll.
+    //
+    // The previously-active id is re-applied synchronously: the sidebar
+    // markup the host sends marks the FIRST link active (it has no idea
+    // where the reader is), and waiting for the new observer's first
+    // callback would leave that wrong mark on screen until then.
+    function sync() {
+      var prevActiveId = currentActiveId;
+      if (scrollObserver) { scrollObserver.disconnect(); scrollObserver = null; }
+      anchors = Array.prototype.slice.call(document.querySelectorAll('[data-book-anchor]'));
+      visibleIds = [];
+      currentActiveId = null;
+      if (!anchors.length) return;
+      scrollObserver = new IntersectionObserver(onIntersect, { root: contentRoot, rootMargin: '0px 0px -70% 0px', threshold: 0 });
+      for (var k = 0; k < anchors.length; k++) scrollObserver.observe(anchors[k]);
+      if (prevActiveId) applyActive(prevActiveId);
+    }
+
+    sync();
+
+    // Self-contained swap detection rather than a call from each message
+    // handler in MapViewerProvider.ts: one place owns this script's own
+    // lifecycle, and a future third swap path can't forget to call it.
+    if (typeof MutationObserver !== 'undefined') {
+      var swapObserver = new MutationObserver(function() { sync(); });
+      swapObserver.observe(contentRoot, { childList: true, subtree: true });
+      var siteNav = document.querySelector('.site-nav');
+      if (siteNav) swapObserver.observe(siteNav, { childList: true });
+    }
   })();
 `;
 }
