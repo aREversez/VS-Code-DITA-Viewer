@@ -2024,6 +2024,189 @@ export function getBookNavClickHandlerScript(): string {
 }
 
 /**
+ * Book mode's scroll-position -> sidebar highlight sync
+ * (nested-fold-and-highlight-plan.md item 5). getBookNavClickHandlerScript
+ * above only covers sidebar-click -> scroll; this is the reverse direction
+ * -- scrolling the book's own content pane should keep the sidebar's
+ * `.active` link (and, if necessary, the collapsed state around it)
+ * pointed at whatever part is actually on screen, the same way a PDF
+ * reader's bookmark panel tracks the current page.
+ *
+ * Only ever emitted for book mode, same one-script-per-mode convention as
+ * getBookNavClickHandlerScript (see getMapWebviewScript) -- site mode has
+ * no equivalent because each topic there is its own page load, so the
+ * server-rendered `.active` class on load already IS the answer; nothing
+ * to track as the reader scrolls one topic's own content.
+ *
+ * Picking the active anchor: `entries[i].isIntersecting` from
+ * IntersectionObserver only tells you which anchors are inside the
+ * observed band right now, not which one the reader would call "the
+ * current part" -- for a long part that fills the whole viewport, that
+ * band can hold exactly one anchor (itself) while a short part just above
+ * or below it slips in and out. Comparing intersection *ratio* to break
+ * ties would favor whichever part happens to be longer, not whichever one
+ * is actually nearest the top of the reading area. Instead this keeps a
+ * running `visibleIds` list (anchors currently inside the band, in
+ * whatever order the observer reports them) and, every time that set
+ * changes, re-derives the active id by walking `anchors` -- which is
+ * already in document/reading order, see computeManifestEntryPositions'
+ * own comment, renderBookParts stamps data-book-anchor while walking the
+ * manifest linearly in that same order -- and taking the first one that's
+ * currently in `visibleIds`. That is "the topmost visible anchor" without
+ * ever touching getBoundingClientRect.
+ *
+ * `rootMargin: '0px 0px -70% 0px'` shrinks the observed band to the
+ * viewport's own top 30% (root is #dita-content-root, the actual scrolling
+ * element in book mode -- see media/styles.css's own
+ * `#dita-content-root.site-main { overflow-y: auto }` -- not the window)
+ * so a part only becomes "current" once its top has scrolled into that
+ * region, rather than the moment any sliver of it appears at the very
+ * bottom of the pane.
+ *
+ * applyActive bails out immediately when the newly-picked id is the same
+ * one already active: besides being the obvious no-op, this is also the
+ * only debouncing this needs. A fast scroll can fire the observer callback
+ * many times in a row, but almost all of those calls still resolve to the
+ * same topmost-visible id as last time (the set of anchors inside a fixed-
+ * size band changes far less often than the callback fires), so the actual
+ * DOM writes below (class flips, ancestor expansion) only happen on a
+ * genuine change, not on every callback tick.
+ *
+ * A highlighted node whose sidebar row is hidden by a collapsed ancestor
+ * is worse than no highlight at all -- it looks like the sync silently
+ * broke. expandAncestorsOf walks up from the matching `.site-nav-item`
+ * through every ancestor `.site-nav-item.collapsed` (there can be more
+ * than one: media/styles.css only hides the DIRECT child
+ * `.site-nav-children`, so a grandparent being collapsed hides everything
+ * under it regardless of the immediate parent's own state -- same fact
+ * getSiteNavCollapseStateHelperScript's own comment already relies on for
+ * collapse-all) and un-collapses each one with the same
+ * setSiteNavItemCollapsed helper the click-driven toggle and expand/
+ * collapse-all buttons already share (getSiteNavCollapseStateHelperScript,
+ * emitted once per script and relied on here rather than duplicated) --
+ * one shared implementation for "flip a nav item's collapsed state",
+ * whatever triggered the flip. If that expansion actually changed
+ * anything, reportSiteNavCollapseState() (also from that same shared
+ * script, present whenever persistence is wired up) is called so an
+ * auto-expand from scrolling persists exactly like a manual toggle would --
+ * a reader who scrolled past a folded section shouldn't have it fold shut
+ * again the next time they open this document.
+ *
+ * Deliberately does not scroll the sidebar itself to reveal the newly-
+ * active row: nothing asked for that, and doing it unconditionally could
+ * fight a reader who has the sidebar scrolled somewhere on purpose.
+ *
+ * No-ops entirely (before ever constructing an IntersectionObserver) when
+ * `#dita-content-root` or any `[data-book-anchor]` element is missing --
+ * the same "book with an empty sidebar" cases getMapWebviewScript's other
+ * book-only scripts already have to tolerate (a map of nothing but
+ * resource-only entries or childless keydefs) -- and when IntersectionObserver
+ * itself isn't defined, which no real target for this extension lacks
+ * but keeps this from being the one script that throws first if it ever
+ * ran somewhere unexpected.
+ */
+export function getBookScrollSyncScript(): string {
+  return `
+  (function() {
+    var contentRoot = document.getElementById('dita-content-root');
+    var anchors = Array.prototype.slice.call(document.querySelectorAll('[data-book-anchor]'));
+    if (!contentRoot || !anchors.length || typeof IntersectionObserver === 'undefined') return;
+
+    var visibleIds = [];
+    var currentActiveId = null;
+
+    function pickActiveId() {
+      for (var i = 0; i < anchors.length; i++) {
+        var id = anchors[i].getAttribute('data-book-anchor');
+        if (visibleIds.indexOf(id) !== -1) return id;
+      }
+      return null;
+    }
+
+    function expandAncestorsOf(navItem) {
+      var changed = false;
+      var parent = navItem.parentElement && navItem.parentElement.closest
+        ? navItem.parentElement.closest('.site-nav-item.collapsed')
+        : null;
+      while (parent) {
+        setSiteNavItemCollapsed(parent, false);
+        changed = true;
+        parent = parent.parentElement && parent.parentElement.closest
+          ? parent.parentElement.closest('.site-nav-item.collapsed')
+          : null;
+      }
+      return changed;
+    }
+
+    function applyActive(id) {
+      if (id === currentActiveId) return;
+      currentActiveId = id;
+      var prevActive = document.querySelector('.site-nav-link.active');
+      if (prevActive) prevActive.classList.remove('active');
+      if (!id) return;
+      var navLinks = document.querySelectorAll('.site-nav-link');
+      var navLink = null;
+      for (var j = 0; j < navLinks.length; j++) {
+        if (navLinks[j].getAttribute('data-site-target') === id) { navLink = navLinks[j]; break; }
+      }
+      if (!navLink) return;
+      navLink.classList.add('active');
+      var navItem = navLink.closest ? navLink.closest('.site-nav-item') : null;
+      var ancestorsExpanded = navItem ? expandAncestorsOf(navItem) : false;
+      if (ancestorsExpanded && typeof reportSiteNavCollapseState === 'function') reportSiteNavCollapseState();
+    }
+
+    var bookScrollSyncObserver = new IntersectionObserver(function(entries) {
+      for (var i = 0; i < entries.length; i++) {
+        var id = entries[i].target.getAttribute('data-book-anchor');
+        var idx = visibleIds.indexOf(id);
+        if (entries[i].isIntersecting) {
+          if (idx === -1) visibleIds.push(id);
+        } else if (idx !== -1) {
+          visibleIds.splice(idx, 1);
+        }
+      }
+      applyActive(pickActiveId());
+    }, { root: contentRoot, rootMargin: '0px 0px -70% 0px', threshold: 0 });
+
+    for (var k = 0; k < anchors.length; k++) bookScrollSyncObserver.observe(anchors[k]);
+  })();
+`;
+}
+
+/**
+ * Sidebar panel's initial open/collapsed state (nested-fold-and-highlight-
+ * plan.md item 6) -- site mode starts open (unchanged), book mode starts
+ * collapsed. Book mode already shows every topic's content in one page the
+ * moment it opens (unlike site mode, which shows nothing useful until a
+ * topic is picked); leaving its sidebar open by default made book mode
+ * look like a second copy of site mode on first look, when the actual
+ * point of book mode is to read, not to navigate. Matches a PDF reader's
+ * own bookmark-panel default: closed until the reader asks for it.
+ *
+ * Deliberately session-only, the same way the sidebar toggle button
+ * itself already is (see getSiteSidebarToggleScript's own comment: a
+ * plain class flip on body, nothing posted to the extension host, nothing
+ * read back on the next generateHtml) -- reopening this document starts
+ * collapsed again in book mode regardless of whether the reader opened
+ * the panel last time, same as a PDF reader's own panel does not remember
+ * being opened across closing and reopening the file. This deliberately
+ * does NOT reuse item 3's per-document globalState persistence: that
+ * store keys individual fold-node ids that default to "expanded", so
+ * bolting one more per-document boolean onto it for "was the whole panel
+ * open" would be a second, differently-shaped piece of state riding along
+ * on the same key for no behavior a reader asked for.
+ *
+ * A pure function of `mode` alone (no DOM, no vscode API) so it is
+ * testable directly rather than only through generateHtml's own HTML
+ * string -- same reasoning as clampSidebarWidth living here instead of
+ * inline in getSiteSidebarResizerScript.
+ */
+export function getInitialSidebarBodyClass(mode: 'tree' | 'book' | 'site'): string {
+  return mode === 'book' ? `mode-${mode} site-nav-collapsed` : `mode-${mode}`;
+}
+
+/**
  * Docsite mode's sidebar expand/collapse toggle (Oxygen-style triangle in
  * front of a parent entry) -- click delegation only, same one-listener-per-
  * concern pattern as the .site-nav-link and [data-dita-book-xref] listeners
@@ -2239,10 +2422,13 @@ export function getSitePrevNextButtonsScript(opts: { prevLabel: string; prevTitl
 
 /**
  * Docsite mode's sidebar collapse toggle -- a single button that flips
- * `site-nav-collapsed` on document.body. The sidebar itself starts open
- * (see MapViewerProvider.ts's body class construction for site mode); this
- * is how a reader tucks it away when they don't need it and gets it back
- * the same way. Deliberately a plain class toggle on body rather than
+ * `site-nav-collapsed` on document.body. Site mode starts with the class
+ * absent (sidebar open); book mode starts with it already present (sidebar
+ * collapsed) -- see getInitialSidebarBodyClass, which both modes' initial
+ * body tag is built from (nested-fold-and-highlight-plan.md item 6). This
+ * button behaves identically either way: it is how a reader tucks the
+ * sidebar away or gets it back, regardless of which state it started in.
+ * Deliberately a plain class toggle on body rather than
  * anything that touches the sidebar's own markup or posts a message to the
  * extension host: nothing here needs to survive a page switch through any
  * path other than "the class is already sitting on body, which page

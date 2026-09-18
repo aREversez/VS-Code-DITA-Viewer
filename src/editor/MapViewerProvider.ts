@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, siteNavigableEntries, renderSiteNavHtml, renderSiteNavTreeHtml, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
+import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, siteNavigableEntries, renderSiteNavHtml, renderSiteNavTreeHtml, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
 import { getBookSearchIndex, searchBookIndex, getBookSearchScript, invalidateBookSearchIndex } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
@@ -165,6 +165,7 @@ function getMapWebviewScript(mode: 'tree' | 'book' | 'site'): string {
   ${mode === 'site' ? getSiteNavClickHandlerScript({ switchSitePageMsgType: MSG_SWITCH_SITE_PAGE }) : ''}
   ${mode === 'book' ? getBookNavClickHandlerScript() : ''}
   ${getSiteNavCollapseStateHelperScript({ reportCollapseMsgType: MSG_SET_NAV_COLLAPSED })}
+  ${mode === 'book' ? getBookScrollSyncScript() : ''}
   ${getSiteNavToggleScript()}
   ${getSiteSidebarResizerScript()}
 
@@ -221,9 +222,10 @@ function getMapWebviewScript(mode: 'tree' | 'book' | 'site'): string {
 
   // Sidebar collapse toggle -- docsite mode only, same unconditional-build/
   // conditional-append convention as the prev/next buttons right below.
-  // The sidebar itself starts open (see body's own class construction: no
-  // site-nav-collapsed by default); this is how a reader tucks the topic
-  // list away once they don't need it, and gets it back the same way.
+  // Site mode's sidebar starts open; book mode's starts collapsed (see
+  // getInitialSidebarBodyClass, body's own class construction below --
+  // nested-fold-and-highlight-plan.md item 6). This button is how a
+  // reader tucks the topic list away or gets it back, in either mode.
   ${getSiteSidebarToggleScript({ toggleTitle: L.siteToggleSidebar })}
   if (currentMode === 'site' || currentMode === 'book') {
     toolbar.appendChild(siteSidebarToggleBtn);
@@ -1188,7 +1190,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
 <link rel="stylesheet" href="${stylesUri}">
 <title>${escapeHtml(document.fileName)}</title>
 </head>
-<body class="mode-${mode}">
+<body class="${getInitialSidebarBodyClass(mode)}">
 ${result.sidebarHtml ?? ''}
 ${(result.sidebarHtml ? '<div id="__site-nav-resizer" class="site-nav-resizer" role="separator" aria-orientation="vertical" tabindex="0"></div>' : '')}
 <div id="dita-content-root"${result.sidebarHtml ? ' class="site-main"' : ''}>${result.html}</div>

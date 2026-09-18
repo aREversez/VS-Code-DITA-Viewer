@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -1782,6 +1782,215 @@ describe('getBookNavClickHandlerScript (book mode sidebar, nested-fold-and-highl
     const outsideEl = makeFakeElement({});
     assert.doesNotThrow(() => click(outsideEl));
     assert.deepStrictEqual(scrolled, []);
+  });
+});
+
+describe('getBookScrollSyncScript (book mode sidebar, nested-fold-and-highlight-plan.md item 5)', () => {
+  it('emits a script that parses as JavaScript', () => {
+    assert.doesNotThrow(() => new Function(getBookScrollSyncScript()));
+  });
+
+  // Generic-enough fakes to model the actual nested markup
+  // renderSiteNavTreeHtml produces (an <a class="site-nav-link"> inside a
+  // <li class="site-nav-item">, itself possibly nested inside another
+  // <li class="site-nav-item collapsed">'s <ul class="site-nav-children">)
+  // rather than the flatter, closest-only fakes
+  // getBookNavClickHandlerScript's own describe block above uses -- this
+  // suite specifically needs to walk parentElement chains for
+  // expandAncestorsOf.
+  interface FakeNode {
+    parentElement: FakeNode | null;
+    classList: { contains: (c: string) => boolean; add: (c: string) => void; remove: (c: string) => void };
+    getAttribute: (name: string) => string | null;
+    setAttribute: (name: string, value: string) => void;
+    querySelector: (selector: string) => unknown;
+    closest: (selector: string) => unknown;
+  }
+
+  function makeNode(opts: { classes?: string[]; attrs?: Record<string, string> } = {}): FakeNode {
+    const classes = new Set(opts.classes || []);
+    const attrs: Record<string, string> = { ...(opts.attrs || {}) };
+    const node: FakeNode = {
+      parentElement: null,
+      classList: {
+        contains: (c: string) => classes.has(c),
+        add: (c: string) => classes.add(c),
+        remove: (c: string) => classes.delete(c),
+      },
+      getAttribute: (name: string) => (name in attrs ? attrs[name] : null),
+      setAttribute: (name: string, value: string) => {
+        attrs[name] = value;
+      },
+      querySelector: () => null, // no .site-nav-toggle in these fakes -- setSiteNavItemCollapsed tolerates that
+      closest(selector: string): unknown {
+        const required = selector.split('.').filter(Boolean);
+        let el: FakeNode | null = node;
+        while (el) {
+          if (required.every((c) => el!.classList.contains(c))) return el;
+          el = el.parentElement;
+        }
+        return null;
+      },
+    };
+    return node;
+  }
+
+  function makeFakeAnchor(id: string) {
+    return { getAttribute: (name: string) => (name === 'data-book-anchor' ? id : null) };
+  }
+
+  function makeFakeBookScrollDocument(opts: {
+    contentRoot: unknown;
+    anchors: ReturnType<typeof makeFakeAnchor>[];
+    navLinks: ReturnType<typeof makeNode>[];
+  }) {
+    return {
+      getElementById: (id: string) => (id === 'dita-content-root' ? opts.contentRoot : null),
+      querySelectorAll: (sel: string) => {
+        if (sel === '[data-book-anchor]') return opts.anchors;
+        if (sel === '.site-nav-link') return opts.navLinks;
+        return [];
+      },
+      querySelector: (sel: string) =>
+        sel === '.site-nav-link.active' ? opts.navLinks.find((l) => l.classList.contains('active')) ?? null : null,
+    };
+  }
+
+  class FakeIntersectionObserver {
+    static instances: FakeIntersectionObserver[] = [];
+    observed: unknown[] = [];
+    callback: (entries: Array<{ target: unknown; isIntersecting: boolean }>) => void;
+    options: unknown;
+    constructor(callback: (entries: Array<{ target: unknown; isIntersecting: boolean }>) => void, options: unknown) {
+      this.callback = callback;
+      this.options = options;
+      FakeIntersectionObserver.instances.push(this);
+    }
+    observe(el: unknown) {
+      this.observed.push(el);
+    }
+    trigger(entries: Array<{ target: unknown; isIntersecting: boolean }>) {
+      this.callback(entries);
+    }
+  }
+
+  function run(document: unknown, vscode: unknown = { postMessage: () => {} }) {
+    FakeIntersectionObserver.instances.length = 0;
+    const script = getSiteNavCollapseStateHelperScript({ reportCollapseMsgType: 'setNavCollapsed' }) + getBookScrollSyncScript();
+    new Function('document', 'IntersectionObserver', 'vscode', script)(document, FakeIntersectionObserver, vscode);
+    return FakeIntersectionObserver.instances[0];
+  }
+
+  it('does nothing (and never constructs an observer) when there are no data-book-anchor elements', () => {
+    const document = makeFakeBookScrollDocument({ contentRoot: {}, anchors: [], navLinks: [] });
+    assert.doesNotThrow(() => run(document));
+    assert.strictEqual(FakeIntersectionObserver.instances.length, 0);
+  });
+
+  it('does nothing when #dita-content-root is missing', () => {
+    const document = makeFakeBookScrollDocument({ contentRoot: null, anchors: [makeFakeAnchor('/a.dita')], navLinks: [] });
+    assert.doesNotThrow(() => run(document));
+    assert.strictEqual(FakeIntersectionObserver.instances.length, 0);
+  });
+
+  it('observes every data-book-anchor element against #dita-content-root with a top-weighted rootMargin', () => {
+    const contentRoot = {};
+    const anchorA = makeFakeAnchor('/a.dita');
+    const anchorB = makeFakeAnchor('/b.dita');
+    const document = makeFakeBookScrollDocument({ contentRoot, anchors: [anchorA, anchorB], navLinks: [] });
+    const observer = run(document);
+    assert.strictEqual(observer.observed.length, 2);
+    assert.deepStrictEqual(observer.options, { root: contentRoot, rootMargin: '0px 0px -70% 0px', threshold: 0 });
+  });
+
+  it('marks the topmost currently-intersecting anchor active, not whichever the callback happens to report last', () => {
+    const anchorA = makeFakeAnchor('/a.dita');
+    const anchorB = makeFakeAnchor('/b.dita');
+    const anchorC = makeFakeAnchor('/c.dita');
+    const linkA = makeNode({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/a.dita' } });
+    const linkB = makeNode({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/b.dita' } });
+    const linkC = makeNode({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/c.dita' } });
+    const document = makeFakeBookScrollDocument({
+      contentRoot: {},
+      anchors: [anchorA, anchorB, anchorC], // document order
+      navLinks: [linkA, linkB, linkC],
+    });
+    const observer = run(document);
+
+    // B and C both currently visible (e.g. B is a short part just above C,
+    // both inside the top-weighted band at once) -- document order says B
+    // is topmost, so B, not C, should win even though the callback lists
+    // C's entry first.
+    observer.trigger([
+      { target: anchorC, isIntersecting: true },
+      { target: anchorB, isIntersecting: true },
+    ]);
+    assert.strictEqual(linkB.classList.contains('active'), true);
+    assert.strictEqual(linkC.classList.contains('active'), false);
+
+    // B scrolls out, leaving only C -- C becomes active and B loses it.
+    observer.trigger([{ target: anchorB, isIntersecting: false }]);
+    assert.strictEqual(linkB.classList.contains('active'), false);
+    assert.strictEqual(linkC.classList.contains('active'), true);
+  });
+
+  it('expands every collapsed ancestor of the newly-active link and persists that as a collapse-state change', () => {
+    const anchorB = makeFakeAnchor('/b.dita');
+    const outerGroup = makeNode({ classes: ['site-nav-item', 'has-children', 'collapsed'], attrs: { 'data-nav-id': 'grp:0' } });
+    const childrenUl = makeNode({ classes: ['site-nav-children'] });
+    childrenUl.parentElement = outerGroup;
+    const innerItem = makeNode({ classes: ['site-nav-item', 'has-children'] });
+    innerItem.parentElement = childrenUl;
+    const linkB = makeNode({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/b.dita' } });
+    linkB.parentElement = innerItem;
+
+    const document = makeFakeBookScrollDocument({ contentRoot: {}, anchors: [anchorB], navLinks: [linkB] });
+    const posted: Array<{ type: string; ids: string[] }> = [];
+    const observer = run(document, { postMessage: (m: { type: string; ids: string[] }) => posted.push(m) });
+
+    observer.trigger([{ target: anchorB, isIntersecting: true }]);
+
+    assert.strictEqual(linkB.classList.contains('active'), true);
+    assert.strictEqual(outerGroup.classList.contains('collapsed'), false, 'the collapsed ancestor should auto-expand');
+    assert.deepStrictEqual(posted, [{ type: 'setNavCollapsed', ids: [] }], 'the auto-expand should be reported/persisted like a manual toggle');
+  });
+
+  it('does not report a collapse-state change when no ancestor needed expanding', () => {
+    const anchorA = makeFakeAnchor('/a.dita');
+    const linkA = makeNode({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/a.dita' } });
+    const document = makeFakeBookScrollDocument({ contentRoot: {}, anchors: [anchorA], navLinks: [linkA] });
+    const posted: unknown[] = [];
+    const observer = run(document, { postMessage: (m: unknown) => posted.push(m) });
+
+    observer.trigger([{ target: anchorA, isIntersecting: true }]);
+
+    assert.strictEqual(linkA.classList.contains('active'), true);
+    assert.deepStrictEqual(posted, []);
+  });
+
+  it('does nothing when no anchor is currently visible, rather than clearing active for an unrelated reason', () => {
+    const anchorA = makeFakeAnchor('/a.dita');
+    const linkA = makeNode({ classes: ['site-nav-link', 'active'], attrs: { 'data-site-target': '/a.dita' } });
+    const document = makeFakeBookScrollDocument({ contentRoot: {}, anchors: [anchorA], navLinks: [linkA] });
+    const observer = run(document);
+
+    observer.trigger([{ target: anchorA, isIntersecting: false }]);
+
+    assert.strictEqual(linkA.classList.contains('active'), true, 'losing the only visible anchor keeps the last-known active link rather than clearing it to nothing');
+  });
+});
+
+describe('getInitialSidebarBodyClass (nested-fold-and-highlight-plan.md item 6)', () => {
+  it('adds site-nav-collapsed for book mode, so the sidebar starts closed like a PDF reader\'s bookmark panel', () => {
+    assert.strictEqual(getInitialSidebarBodyClass('book'), 'mode-book site-nav-collapsed');
+  });
+
+  it('leaves site mode starting open, unchanged from before this feature', () => {
+    assert.strictEqual(getInitialSidebarBodyClass('site'), 'mode-site');
+  });
+
+  it('leaves tree mode alone -- it has no sidebar to collapse', () => {
+    assert.strictEqual(getInitialSidebarBodyClass('tree'), 'mode-tree');
   });
 });
 
