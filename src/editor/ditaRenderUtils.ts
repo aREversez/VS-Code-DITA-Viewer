@@ -2957,10 +2957,15 @@ export function getSearchOverlayScript(opts: {
       var range = searchRanges[currentMatch];
       searchHighlightCurrent.add(range);
       // Range has no scrollIntoView (that's an Element method), so scroll
-      // position is computed from its own bounding rect instead.
-      var rect = range.getBoundingClientRect();
-      var targetTop = window.scrollY + rect.top - (window.innerHeight / 2) + (rect.height / 2);
-      window.scrollTo({ top: targetTop, behavior: 'smooth' });
+      // via the element the match sits in. NOT window.scrollTo: in site
+      // mode and book mode with a sidebar, body is height:100vh;
+      // overflow:hidden and the real scroller is #dita-content-root (see
+      // media/styles.css), where window.scrollTo is a silent no-op.
+      // Element.scrollIntoView finds whichever ancestor actually scrolls.
+      var scrollTarget = range.startContainer && range.startContainer.parentElement;
+      if (scrollTarget && scrollTarget.scrollIntoView) {
+        scrollTarget.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
     }
     searchCount.textContent = (currentMatch + 1) + '/' + searchRanges.length;
   }

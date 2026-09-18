@@ -1314,6 +1314,7 @@ describe('getSearchOverlayScript', () => {
     nodeType: 3;
     textContent: string;
     parentNode: FakeElement | null;
+    parentElement: FakeElement | null;
   }
   type FakeNode = FakeElement | FakeTextNode;
   interface FakeElement {
@@ -1332,13 +1333,21 @@ describe('getSearchOverlayScript', () => {
     title: string;
     placeholder: string;
     value: string;
+    scrollIntoViewCalls: Array<Record<string, unknown> | undefined>;
+    scrollIntoView: (opts?: Record<string, unknown>) => void;
     appendChild: <T extends FakeNode>(child: T) => T;
     setAttribute: (name: string, value: string) => void;
     addEventListener: (type: string, fn: (e: Record<string, unknown>) => void) => void;
   }
 
   function makeFakeText(text: string): FakeTextNode {
-    return { nodeType: 3, textContent: text, parentNode: null };
+    const node: FakeTextNode = {
+      nodeType: 3,
+      textContent: text,
+      parentNode: null,
+      get parentElement() { return node.parentNode; },
+    };
+    return node;
   }
 
   function makeFakeElement(tag: string): FakeElement {
@@ -1358,6 +1367,8 @@ describe('getSearchOverlayScript', () => {
       title: '',
       placeholder: '',
       value: '',
+      scrollIntoViewCalls: [],
+      scrollIntoView(opts) { el.scrollIntoViewCalls.push(opts); },
       appendChild(child) {
         child.parentNode = el;
         el.children.push(child);
@@ -1393,6 +1404,7 @@ describe('getSearchOverlayScript', () => {
    *  substring, and a stubbed rect (scroll-position math isn't asserted on
    *  here, only that scrollTo gets called). */
   class FakeRange {
+    get startContainer(): FakeTextNode | null { return this.startNode; }
     startNode: FakeTextNode | null = null;
     startOffset = 0;
     endNode: FakeTextNode | null = null;
@@ -1504,7 +1516,7 @@ describe('getSearchOverlayScript', () => {
     const p = body.appendChild(makeFakeElement('p'));
     p.appendChild(makeFakeText('cat cat cat'));
 
-    const { highlights, elements, scrollCalls } = runOverlay(body);
+    const { highlights, elements } = runOverlay(body);
     runSearch(elements, 'cat');
 
     const currentOffset = () => {
@@ -1513,7 +1525,7 @@ describe('getSearchOverlayScript', () => {
     };
     assert.strictEqual(highlights.get('dita-search-current')!.items.size, 1);
     assert.strictEqual(currentOffset(), 0);
-    assert.strictEqual(scrollCalls.length, 1, 'expected the initial match to scroll into view once');
+    assert.strictEqual(p.scrollIntoViewCalls.length, 1, 'expected the initial match to scroll into view once');
 
     const nextBtn = findNextBtn(elements);
     nextBtn.listeners['click'][0]({});
@@ -1522,6 +1534,20 @@ describe('getSearchOverlayScript', () => {
     assert.strictEqual(currentOffset(), 8);
     nextBtn.listeners['click'][0]({});
     assert.strictEqual(currentOffset(), 0, 'expected next to wrap back to the first match');
+  });
+
+  it('scrolls the match via its own element, not window.scrollTo (site/book mode scrolls #dita-content-root, body is overflow:hidden)', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('cat cat'));
+
+    const { elements, scrollCalls } = runOverlay(body);
+    runSearch(elements, 'cat');
+    findNextBtn(elements).listeners['click'][0]({});
+
+    assert.strictEqual(scrollCalls.length, 0, 'window.scrollTo is a no-op when the scroller is #dita-content-root; must not be relied on');
+    assert.strictEqual(p.scrollIntoViewCalls.length, 2, 'expected one scrollIntoView on the match\'s element per navigation');
+    assert.strictEqual(p.scrollIntoViewCalls[0]?.block, 'center');
   });
 
   it('clears both highlight registries when the search bar is closed', () => {
