@@ -1619,9 +1619,11 @@ describe('renderSiteNavTreeHtml (extracted for MapViewerProvider\'s incremental 
     });
 
     it('a group entry whose id is in collapsedIds renders collapsed on arrival: the class, both aria-expanded attributes, and the expand-label all set together', () => {
+      // Active page is elsewhere: a group that CONTAINS the active page is
+      // deliberately never rendered collapsed (see the describe block below).
       const treeHtml = renderSiteNavTreeHtml(
         grouped,
-        grouped[1].absPath as string,
+        '/proj/docs/topics/elsewhere.dita',
         { expand: 'Expand', collapse: 'Collapse' },
         new Set(['grp:0']),
       );
@@ -1650,9 +1652,54 @@ describe('renderSiteNavTreeHtml (extracted for MapViewerProvider\'s incremental 
     });
 
     it('renderSiteNavHtml threads collapsedIds through to renderSiteNavTreeHtml unchanged', () => {
-      const withHelper = renderSiteNavTreeHtml(grouped, grouped[1].absPath as string, { expand: 'Expand', collapse: 'Collapse' }, new Set(['grp:0']));
-      const navHtml = renderSiteNavHtml(grouped, grouped[1].absPath as string, 'Topics', { expand: 'Expand', collapse: 'Collapse' }, new Set(['grp:0']));
+      const withHelper = renderSiteNavTreeHtml(grouped, '', { expand: 'Expand', collapse: 'Collapse' }, new Set(['grp:0']));
+      const navHtml = renderSiteNavHtml(grouped, '', 'Topics', { expand: 'Expand', collapse: 'Collapse' }, new Set(['grp:0']));
       assert.strictEqual(navHtml, `<nav class="site-nav" aria-label="Topics">${withHelper}</nav>`);
+    });
+  });
+
+  // A persisted collapsed set is only ever applied to rows OFF the path to the
+  // page being shown. Site mode re-renders the whole page (sidebar included)
+  // on every edit and on every open, so honouring a persisted collapse on an
+  // ancestor of the active topic would hide the row that says where the
+  // reader is, with no way to tell why.
+  describe('collapsedIds never hides the path to the active page', () => {
+    const nested = [
+      { id: 'grp:0', title: 'Part', depth: 0, isGroup: true },
+      { id: 'grp:0.0', title: 'Chapter', depth: 1, isGroup: true },
+      { id: '/p/a.dita', absPath: '/p/a.dita', title: 'A', depth: 2 },
+      { id: 'grp:1', title: 'Other part', depth: 0, isGroup: true },
+      { id: '/p/b.dita', absPath: '/p/b.dita', title: 'B', depth: 1 },
+    ];
+    const collapsedAll = new Set(['grp:0', 'grp:0.0', 'grp:1']);
+    const itemClass = (html: string, id: string): string => {
+      const m = new RegExp(`<li class="([^"]*)"[^>]*data-nav-id="${id.replace(/[.:]/g, '\\$&')}"`).exec(html);
+      assert.ok(m, `row ${id} not found`);
+      return m![1];
+    };
+
+    it('renders every collapsed ancestor of the active page expanded, however deep', () => {
+      const html = renderSiteNavTreeHtml(nested, '/p/a.dita', undefined, collapsedAll, true);
+      assert.ok(!itemClass(html, 'grp:0').includes('collapsed'), 'the part containing the active page');
+      assert.ok(!itemClass(html, 'grp:0.0').includes('collapsed'), 'the chapter containing the active page');
+    });
+
+    it('still renders collapsed the branches that do not contain the active page', () => {
+      const html = renderSiteNavTreeHtml(nested, '/p/a.dita', undefined, collapsedAll, true);
+      assert.ok(itemClass(html, 'grp:1').includes('collapsed'));
+    });
+
+    it('leaves the persisted collapse alone when revealActive is off (book mode: its currentAbsPath is only the initial highlight)', () => {
+      const html = renderSiteNavTreeHtml(nested, '/p/a.dita', undefined, collapsedAll);
+      assert.ok(itemClass(html, 'grp:0').includes('collapsed'));
+      assert.ok(itemClass(html, 'grp:0.0').includes('collapsed'));
+    });
+
+    it('applies the persisted collapse again once the active page is somewhere else', () => {
+      const html = renderSiteNavTreeHtml(nested, '/p/b.dita', undefined, collapsedAll, true);
+      assert.ok(itemClass(html, 'grp:0').includes('collapsed'));
+      assert.ok(itemClass(html, 'grp:0.0').includes('collapsed'));
+      assert.ok(!itemClass(html, 'grp:1').includes('collapsed'));
     });
   });
 });

@@ -1733,9 +1733,34 @@ export function renderSiteNavTreeHtml(
   currentAbsPath: string,
   toggleLabels: { expand: string; collapse: string } = { expand: 'Expand', collapse: 'Collapse' },
   collapsedIds: ReadonlySet<string> = new Set(),
+  revealActive = false,
 ): string {
   const expandLabel = escapeAttr(toggleLabels.expand);
   const collapseLabel = escapeAttr(toggleLabels.collapse);
+
+  const tree = buildSiteNavTree(manifest);
+
+  // With revealActive (site mode), every ancestor of the active page is
+  // rendered expanded whatever collapsedIds says. Site mode re-renders the
+  // whole page, sidebar included, on every open and every edit; honouring a
+  // persisted collapse on the branch that holds the page being read would
+  // hide the one row that says where the reader is, with nothing to explain
+  // why. Book mode leaves this off: its `currentAbsPath` is only the
+  // initial highlight (the first topic) and book mode's own scroll-sync
+  // decides what to reveal as the reader actually scrolls.
+  const ancestorsOfActive = new Set<SiteNavTreeNode>();
+  if (revealActive) {
+    const mark = (nodes: SiteNavTreeNode[]): boolean => {
+      let found = false;
+      for (const n of nodes) {
+        const inChildren = mark(n.children);
+        if (inChildren) ancestorsOfActive.add(n);
+        if (inChildren || (!n.entry.isGroup && n.entry.absPath !== undefined && n.entry.absPath === currentAbsPath)) found = true;
+      }
+      return found;
+    };
+    mark(tree);
+  }
 
   const renderNode = (node: SiteNavTreeNode): string => {
     const entry = node.entry;
@@ -1769,7 +1794,7 @@ export function renderSiteNavTreeHtml(
     // hand-built test manifest -- buildBookNavManifest always sets one)
     // can never match and is always rendered expanded, same as before
     // this feature existed.
-    const isCollapsed = hasChildren && entry.id !== undefined && collapsedIds.has(entry.id);
+    const isCollapsed = hasChildren && entry.id !== undefined && collapsedIds.has(entry.id) && !ancestorsOfActive.has(node);
     const toggleHtml = hasChildren
       ? `<button type="button" class="site-nav-toggle" style="left:${toggleLeft}px" aria-expanded="${isCollapsed ? 'false' : 'true'}" aria-label="${isCollapsed ? expandLabel : collapseLabel}" data-expand-label="${expandLabel}" data-collapse-label="${collapseLabel}"></button>`
       : '';
@@ -1797,7 +1822,6 @@ export function renderSiteNavTreeHtml(
     return `<li class="site-nav-item${itemClass}" role="treeitem"${itemAriaExpanded}${navIdAttr}>${toggleHtml}${link}${childrenHtml}</li>`;
   };
 
-  const tree = buildSiteNavTree(manifest);
   const items = tree.map(renderNode).join('');
   return `<ul class="site-nav-tree" role="tree">${items}</ul>`;
 }
@@ -1808,8 +1832,9 @@ export function renderSiteNavHtml(
   navLabel: string,
   toggleLabels: { expand: string; collapse: string } = { expand: 'Expand', collapse: 'Collapse' },
   collapsedIds: ReadonlySet<string> = new Set(),
+  revealActive = false,
 ): string {
-  return `<nav class="site-nav" aria-label="${escapeAttr(navLabel)}">${renderSiteNavTreeHtml(manifest, currentAbsPath, toggleLabels, collapsedIds)}</nav>`;
+  return `<nav class="site-nav" aria-label="${escapeAttr(navLabel)}">${renderSiteNavTreeHtml(manifest, currentAbsPath, toggleLabels, collapsedIds, revealActive)}</nav>`;
 }
 
 /**
@@ -1853,6 +1878,14 @@ export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: stri
     var prevActive = document.querySelector('.site-nav-link.active');
     if (prevActive) prevActive.classList.remove('active');
     link.classList.add('active');
+    // Reveal the row: prev/next and xref jumps can land inside a collapsed
+    // branch, leaving the active highlight on an invisible row. DOM-only, not
+    // reported to be persisted -- the reader navigated, they did not choose
+    // to unfold those branches, and the next render keeps the path to the
+    // active page open by itself (renderSiteNavTreeHtml's revealActive).
+    var navItem = link.closest ? link.closest('.site-nav-item') : null;
+    if (navItem && typeof expandSiteNavAncestorsOf === 'function') expandSiteNavAncestorsOf(navItem);
+    if (link.scrollIntoView) link.scrollIntoView({ block: 'nearest' });
     updatePrevNextButtons();
     pendingSiteAnchor = anchor || null;
     vscode.postMessage({ type: '${opts.switchSitePageMsgType}', target: target });
@@ -2115,21 +2148,6 @@ export function getBookScrollSyncScript(): string {
       return null;
     }
 
-    function expandAncestorsOf(navItem) {
-      var changed = false;
-      var parent = navItem.parentElement && navItem.parentElement.closest
-        ? navItem.parentElement.closest('.site-nav-item.collapsed')
-        : null;
-      while (parent) {
-        setSiteNavItemCollapsed(parent, false);
-        changed = true;
-        parent = parent.parentElement && parent.parentElement.closest
-          ? parent.parentElement.closest('.site-nav-item.collapsed')
-          : null;
-      }
-      return changed;
-    }
-
     // A null pick (nothing with a link is in the band right now) keeps the
     // last-known active link rather than clearing it to nothing.
     function applyActive(id) {
@@ -2141,7 +2159,7 @@ export function getBookScrollSyncScript(): string {
       if (prevActive) prevActive.classList.remove('active');
       navLink.classList.add('active');
       var navItem = navLink.closest ? navLink.closest('.site-nav-item') : null;
-      var ancestorsExpanded = navItem ? expandAncestorsOf(navItem) : false;
+      var ancestorsExpanded = navItem ? expandSiteNavAncestorsOf(navItem) : false;
       if (ancestorsExpanded && typeof reportSiteNavCollapseState === 'function') reportSiteNavCollapseState();
     }
 
@@ -2304,6 +2322,25 @@ export function getSiteNavCollapseStateHelperScript(opts: { reportCollapseMsgTyp
 `
     : '';
   return `
+  // Opens every collapsed ancestor of a sidebar row -- the one place that
+  // knows how (site mode's page switch and book mode's scroll sync both
+  // reveal a row this way). Returns whether it opened anything, so a caller
+  // that persists collapse state can decide to report it.
+  function expandSiteNavAncestorsOf(navItem) {
+    var changed = false;
+    var parent = navItem && navItem.parentElement && navItem.parentElement.closest
+      ? navItem.parentElement.closest('.site-nav-item.collapsed')
+      : null;
+    while (parent) {
+      setSiteNavItemCollapsed(parent, false);
+      changed = true;
+      parent = parent.parentElement && parent.parentElement.closest
+        ? parent.parentElement.closest('.site-nav-item.collapsed')
+        : null;
+    }
+    return changed;
+  }
+
   function setSiteNavItemCollapsed(item, collapsed) {
     if (!item) return;
     if (collapsed) item.classList.add('collapsed');

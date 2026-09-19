@@ -2061,6 +2061,90 @@ describe('getSiteNavClickHandlerScript (docsite mode)', () => {
 
     assert.strictEqual(bTopic.classList.contains('active'), true);
   });
+
+  // --- revealing the newly-active row inside collapsed branches ---
+  interface NavNode {
+    parentElement: NavNode | null;
+    classList: { contains: (c: string) => boolean; add: (c: string) => void; remove: (c: string) => void };
+    getAttribute: (n: string) => string | null;
+    setAttribute: (n: string, v: string) => void;
+    querySelector: (s: string) => unknown;
+    closest: (s: string) => unknown;
+    scrollIntoViewCalls: Array<Record<string, unknown> | undefined>;
+    scrollIntoView: (o?: Record<string, unknown>) => void;
+  }
+  function makeNavNode(classes: string[], attrs: Record<string, string> = {}, parent: NavNode | null = null): NavNode {
+    const cls = new Set(classes);
+    const at: Record<string, string> = { ...attrs };
+    const node: NavNode = {
+      parentElement: parent,
+      classList: { contains: (c) => cls.has(c), add: (c) => cls.add(c), remove: (c) => cls.delete(c) },
+      getAttribute: (n) => (n in at ? at[n] : null),
+      setAttribute: (n, v) => { at[n] = v; },
+      querySelector: () => null,
+      closest(sel: string): unknown {
+        const need = sel.split('.').filter(Boolean);
+        for (let el: NavNode | null = node; el; el = el.parentElement) if (need.every((c) => el!.classList.contains(c))) return el;
+        return null;
+      },
+      scrollIntoViewCalls: [],
+      scrollIntoView(o) { node.scrollIntoViewCalls.push(o); },
+    };
+    return node;
+  }
+
+  function buildCollapsedBranch() {
+    // Part(collapsed) > ul > Chapter(collapsed) > ul > leaf > <a>
+    const part = makeNavNode(['site-nav-item', 'has-children', 'collapsed']);
+    const partUl = makeNavNode(['site-nav-children'], {}, part);
+    const chapter = makeNavNode(['site-nav-item', 'has-children', 'collapsed'], {}, partUl);
+    const chapterUl = makeNavNode(['site-nav-children'], {}, chapter);
+    const leaf = makeNavNode(['site-nav-item'], {}, chapterUl);
+    const hidden = makeNavNode(['site-nav-link'], { 'data-site-target': '/book/deep.dita' }, leaf);
+    const visible = makeNavNode(['site-nav-link', 'active'], { 'data-site-target': '/book/top.dita' });
+    return { part, chapter, hidden, visible };
+  }
+
+  function runSiteScript(navLinks: NavNode[], posted: Array<{ type: string }>) {
+    const listeners: Array<(e: unknown) => void> = [];
+    const document = {
+      addEventListener: (evt: string, fn: (e: unknown) => void) => { if (evt === 'click') listeners.push(fn); },
+      querySelectorAll: (sel: string) => (sel === '.site-nav-link' ? navLinks : []),
+      querySelector: (sel: string) => (sel === '.site-nav-link.active' ? navLinks.find((l) => l.classList.contains('active')) ?? null : null),
+      getElementById: () => null,
+    };
+    // Same assembly as MapViewerProvider.ts: one scope, collapse helper alongside the click handler.
+    const script =
+      getSiteNavCollapseStateHelperScript({ reportCollapseMsgType: 'setNavCollapsed' }) +
+      getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
+    new Function('document', 'vscode', 'setTimeout', script)(document, { postMessage: (m: { type: string }) => posted.push(m) }, () => 0);
+    return (target: unknown) => listeners.forEach((fn) => fn({ target, preventDefault: () => {} }));
+  }
+
+  it('expands every collapsed ancestor of the page switched to, so the active row is actually visible (prev/next and xref jumps walk into collapsed branches)', () => {
+    const { part, chapter, hidden, visible } = buildCollapsedBranch();
+    const click = runSiteScript([visible, hidden], []);
+    click(hidden);
+
+    assert.strictEqual(hidden.classList.contains('active'), true);
+    assert.strictEqual(chapter.classList.contains('collapsed'), false, 'the direct parent branch must open');
+    assert.strictEqual(part.classList.contains('collapsed'), false, 'and so must its own collapsed parent');
+    assert.strictEqual(chapter.getAttribute('aria-expanded'), 'true');
+  });
+
+  it('scrolls the sidebar just enough to bring the newly-active row into view', () => {
+    const { hidden, visible } = buildCollapsedBranch();
+    runSiteScript([visible, hidden], [])(hidden);
+    assert.strictEqual(hidden.scrollIntoViewCalls.length, 1);
+    assert.strictEqual(hidden.scrollIntoViewCalls[0]?.block, 'nearest', "'nearest' so an already-visible row does not jump");
+  });
+
+  it('does not persist the expansion: the reader only navigated, they did not choose to unfold those branches', () => {
+    const { hidden, visible } = buildCollapsedBranch();
+    const posted: Array<{ type: string }> = [];
+    runSiteScript([visible, hidden], posted)(hidden);
+    assert.deepStrictEqual(posted.map((m) => m.type), ['switchSitePage'], 'only the page switch is posted, no setNavCollapsed');
+  });
 });
 
 describe('getBookNavClickHandlerScript (book mode sidebar, nested-fold-and-highlight-plan.md item 1)', () => {

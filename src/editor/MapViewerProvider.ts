@@ -1058,7 +1058,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         const sidebarHtml = renderSiteNavHtml(manifest, resolvedSitePage, vscode.l10n.t('Topics'), {
           expand: vscode.l10n.t('Expand'),
           collapse: vscode.l10n.t('Collapse'),
-        }, this.getCollapsedNavIds(document));
+        }, this.getCollapsedNavIds(document), true);
         // manifest/keyMap/bookMembers go back to the caller too
         // (updateWebview) so a page switch (postSitePageUpdate) can reuse
         // them instead of re-parsing the map, re-reading every
