@@ -43,9 +43,42 @@ export interface BookSearchEntry {
 }
 
 /**
- * Recursively flattens a subtree to plain text, joining sibling elements
- * with a space (not concatenating directly) so "<p>Hello</p><p>World</p>"
- * extracts as "Hello World", not "HelloWorld" -- and skips topic/prolog
+ * Base types that flow inside running text (phrase-level elements). Two
+ * adjacent nodes are joined WITHOUT a space only when both are text or one
+ * of these; anything else -- including a base type not listed here -- is
+ * treated as a block and gets a separating space, which is the safe default:
+ * a spurious space only costs a missed cross-element match, while wrongly
+ * gluing two blocks together would fabricate matches ("Hello</p><p>World"
+ * matching "oW"). Keyed on baseType (the parser resolves domain
+ * specializations like hi-d/b or pr-d/codeph to their topic/ base type).
+ */
+const INLINE_BASE_TYPES = new Set([
+  'topic/ph', 'topic/keyword', 'topic/term', 'topic/xref', 'topic/cite', 'topic/q', 'topic/tm',
+  'topic/data', 'topic/sub', 'topic/sup', 'topic/boolean', 'topic/state', 'topic/image',
+  'topic/indexterm', 'topic/abbreviated-form',
+  // highlight domain
+  'topic/b', 'topic/i', 'topic/u', 'topic/tt', 'topic/line-through', 'topic/overline',
+  // software / programming / UI / XML domains
+  'topic/codeph', 'topic/filepath', 'topic/cmdname', 'topic/msgph', 'topic/msgnum', 'topic/varname',
+  'topic/userinput', 'topic/systemoutput', 'topic/uicontrol', 'topic/wintitle', 'topic/menucascade',
+  'topic/option', 'topic/parmname', 'topic/apiname', 'topic/kwd', 'topic/var', 'topic/oper',
+  'topic/delim', 'topic/sep', 'topic/synph', 'topic/xmlnsname', 'topic/xmlpi', 'topic/numcharref',
+  'topic/parameterentity', 'topic/textentity',
+]);
+
+function flowsInline(node: DitaNode | { type: 'text' }): boolean {
+  if (node.type === 'text') return true;
+  return INLINE_BASE_TYPES.has((node as DitaNode).baseType || '');
+}
+
+/**
+ * Recursively flattens a subtree to plain text. Sibling BLOCK elements are
+ * joined with a space (not concatenated directly) so
+ * "<p>Hello</p><p>World</p>" extracts as "Hello World", not "HelloWorld";
+ * text and phrase-level elements (INLINE_BASE_TYPES) are joined directly,
+ * so "点击<b>确定</b>按钮" stays "点击确定按钮" -- a space there would make a
+ * CJK phrase that merely contains a bold word unsearchable, and would put
+ * a stray gap in the result snippet. Skips topic/prolog
  * entirely, so private metadata (author, critdates, internal codenames...)
  * never becomes searchable body text. Also skips topic/indexterm's own
  * text: its term is already tracked precisely via the dedicated
@@ -58,7 +91,14 @@ export interface BookSearchEntry {
 function extractBodyText(node: DitaNode): string {
   if (node.type === 'text') return node.text || '';
   if (node.baseType === 'topic/prolog' || node.baseType === 'topic/indexterm') return '';
-  return (node.children || []).map(extractBodyText).join(' ');
+  let out = '';
+  let prev: DitaNode | undefined;
+  for (const child of node.children || []) {
+    if (prev !== undefined && !(flowsInline(prev) && flowsInline(child))) out += ' ';
+    out += extractBodyText(child);
+    prev = child;
+  }
+  return out;
 }
 
 function collectIndextermsFrom(root: DitaNode): Array<{ path: string[]; pathText: string }> {

@@ -70,6 +70,29 @@ describe('bookSearchIndex', () => {
       assert.ok(!result!.bodyText.includes('HelloWorld'), 'element boundaries need a separator, or adjacent words become one unsearchable token');
     });
 
+    it('does not put a space where an inline element interrupts running text (matters most for CJK, which has no word gaps)', () => {
+      const p = writeTopic('a.dita', '<p>点击<b>确定</b>按钮，设置<codeph>foo</codeph>bar。</p>');
+      const result = extractBookSearchEntry(p);
+      assert.ok(result);
+      assert.ok(result!.bodyText.includes('点击确定按钮'), `expected inline elements to join running text directly, got: ${result!.bodyText}`);
+      assert.ok(result!.bodyText.includes('foobar'), `expected "foobar" (codeph inside a word) to stay one token, got: ${result!.bodyText}`);
+    });
+
+    it('still separates a block element from the inline run next to it', () => {
+      const p = writeTopic('a.dita', '<p>Alpha<b>Beta</b></p><p>Gamma</p>');
+      const result = extractBookSearchEntry(p);
+      assert.ok(result);
+      assert.ok(result!.bodyText.includes('AlphaBeta'), result!.bodyText);
+      assert.ok(!result!.bodyText.includes('BetaGamma'), `block boundary must still separate words, got: ${result!.bodyText}`);
+    });
+
+    it('does not let an indexterm (excluded from bodyText) split a word around it', () => {
+      const p = writeTopic('a.dita', '<p>foo<indexterm>Unrelated</indexterm>bar</p>');
+      const result = extractBookSearchEntry(p);
+      assert.ok(result);
+      assert.ok(result!.bodyText.includes('foobar'), result!.bodyText);
+    });
+
     it('excludes an indexterm\'s own term text from bodyText, since it is already tracked via indexterms', () => {
       const p = writeTopic('a.dita', '<p>Prose here.</p><indexterm>UniqueTermXyz</indexterm>');
       const result = extractBookSearchEntry(p);
@@ -125,6 +148,16 @@ describe('bookSearchIndex', () => {
       const p = join(dir, 'broken.dita');
       writeFileSync(p, '<topic><title>Oops<body>');
       assert.doesNotThrow(() => extractBookSearchEntry(p));
+    });
+  });
+
+  describe('searchBookIndex across inline markup', () => {
+    it('finds a phrase that spans an inline element, and no longer finds one only an artificial space would create', () => {
+      const a = writeTopic('a.dita', '<p>点击<b>确定</b>按钮</p>');
+      const manifest = [entry(a, 'A')];
+      const index = buildBookSearchIndex(manifest);
+      assert.strictEqual(searchBookIndex(index, '点击确定', absPaths(manifest)).hits.length, 1);
+      assert.strictEqual(searchBookIndex(index, '点击 确定', absPaths(manifest)).hits.length, 0);
     });
   });
 
