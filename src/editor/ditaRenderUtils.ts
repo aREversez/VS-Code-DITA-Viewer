@@ -2091,12 +2091,14 @@ export function getBookNavClickHandlerScript(): string {
  * emitted once per script and relied on here rather than duplicated) --
  * one shared implementation for "flip a nav item's collapsed state",
  * whatever triggered the flip. If that expansion actually changed
- * anything. That expansion is DOM-only and is deliberately NOT reported
- * for persistence (reportSiteNavCollapseState): it follows from where the
- * reader scrolled, not from a choice about the tree, and book mode's
- * sidebar is closed by default, so persisting it would silently erase the
- * folds the reader had saved without their ever seeing it happen. Site
- * mode's page-switch reveal behaves the same way.
+ * anything. That expansion is DOM-only: it does not itself trigger a
+ * report for persistence, since it follows from where the reader scrolled,
+ * not from a choice about the tree, and book mode's sidebar is closed by
+ * default, so persisting it would silently erase the folds the reader had
+ * saved without their ever seeing it happen. The rows it opens are marked
+ * (nav-auto-expanded) so that when a LATER manual toggle reports the whole
+ * DOM state they still count as collapsed, i.e. the saved fold survives.
+ * Site mode's page-switch reveal behaves the same way.
  *
  * The observer is rebound (sync() inside the script) whenever
  * #dita-content-root's subtree or .site-nav's children change, because a
@@ -2316,7 +2318,14 @@ export function getSiteNavCollapseStateHelperScript(opts: { reportCollapseMsgTyp
     var ids = [];
     var items = document.querySelectorAll('.site-nav-item.has-children[data-nav-id]');
     for (var i = 0; i < items.length; i++) {
-      if (items[i].classList.contains('collapsed')) ids.push(items[i].getAttribute('data-nav-id'));
+      // 'nav-auto-expanded': opened by revealing the active page, not by the
+      // reader (see expandSiteNavAncestorsOf). It is open on screen but the
+      // reader's saved choice for it is still "collapsed", and since this
+      // reports the WHOLE DOM state, counting it as expanded here would
+      // overwrite that choice the next time they touch any chevron.
+      if (items[i].classList.contains('collapsed') || items[i].classList.contains('nav-auto-expanded')) {
+        ids.push(items[i].getAttribute('data-nav-id'));
+      }
     }
     vscode.postMessage({ type: ${JSON.stringify(opts.reportCollapseMsgType)}, ids: ids });
   }
@@ -2325,14 +2334,16 @@ export function getSiteNavCollapseStateHelperScript(opts: { reportCollapseMsgTyp
   return `
   // Opens every collapsed ancestor of a sidebar row -- the one place that
   // knows how (site mode's page switch and book mode's scroll sync both
-  // reveal a row this way). Returns whether it opened anything.
+  // reveal a row this way). Returns whether it opened anything. What it
+  // opens is marked auto-expanded so the persisted fold state can still say
+  // "collapsed" for it -- see reportSiteNavCollapseState.
   function expandSiteNavAncestorsOf(navItem) {
     var changed = false;
     var parent = navItem && navItem.parentElement && navItem.parentElement.closest
       ? navItem.parentElement.closest('.site-nav-item.collapsed')
       : null;
     while (parent) {
-      setSiteNavItemCollapsed(parent, false);
+      setSiteNavItemCollapsed(parent, false, true);
       changed = true;
       parent = parent.parentElement && parent.parentElement.closest
         ? parent.parentElement.closest('.site-nav-item.collapsed')
@@ -2341,10 +2352,15 @@ export function getSiteNavCollapseStateHelperScript(opts: { reportCollapseMsgTyp
     return changed;
   }
 
-  function setSiteNavItemCollapsed(item, collapsed) {
+  // autoExpanded is only ever true from expandSiteNavAncestorsOf. Every
+  // other caller (a toggle click, expand-all, collapse-all) is the reader
+  // deciding, which replaces the marker: it is cleared here.
+  function setSiteNavItemCollapsed(item, collapsed, autoExpanded) {
     if (!item) return;
     if (collapsed) item.classList.add('collapsed');
     else item.classList.remove('collapsed');
+    if (autoExpanded && !collapsed) item.classList.add('nav-auto-expanded');
+    else item.classList.remove('nav-auto-expanded');
     item.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
     var toggle = item.querySelector(':scope > .site-nav-toggle');
     if (!toggle) return;

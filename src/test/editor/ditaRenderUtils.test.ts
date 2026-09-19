@@ -3587,6 +3587,75 @@ describe('getSiteNavExpandCollapseAllButtonsScript + getSiteNavCollapseStateHelp
       assert.deepStrictEqual(posted[0], { type: 'setNavCollapsed', ids: ['grp:0'] });
     });
 
+    describe('rows auto-expanded to reveal the active page (site page switch, book scroll sync)', () => {
+      // The report is the whole DOM state, so without a marker an auto-
+      // expanded branch would be recorded as EXPANDED the next time the
+      // reader touched any chevron -- silently overwriting the fold they had
+      // saved. An auto-expanded row keeps reporting as collapsed until the
+      // reader explicitly decides otherwise.
+      function setup() {
+        const grp = makeItemWithId('grp:0');
+        grp.classes.add('collapsed');
+        const other = makeItemWithId('grp:1'); // expanded all along, not an ancestor
+        const { document, vscode, posted } = makeReportDocument([grp, other]);
+        // The row whose ancestor is `grp`.
+        const navItem = { parentElement: { closest: (sel: string) => (sel === '.site-nav-item.collapsed' && grp.classes.has('collapsed') ? grp : null) } };
+        const run = (code: string) =>
+          new Function('document', 'vscode', 'navItem', helperWithReport + '\n' + code)(document, vscode, navItem);
+        return { grp, other, posted, run };
+      }
+
+      it('opens the row in the DOM but still reports it as collapsed', () => {
+        const { grp, posted, run } = setup();
+        run('expandSiteNavAncestorsOf(navItem); reportSiteNavCollapseState();');
+        assert.strictEqual(grp.classes.has('collapsed'), false, 'visibly open');
+        assert.deepStrictEqual(posted, [{ type: 'setNavCollapsed', ids: ['grp:0'] }], 'the saved fold is untouched');
+      });
+
+      it('reports it as expanded once the reader expands it themselves', () => {
+        const { posted, grp, run } = setup();
+        run('expandSiteNavAncestorsOf(navItem); setSiteNavItemCollapsed(document.querySelectorAll("x")[0], false); reportSiteNavCollapseState();');
+        assert.deepStrictEqual(posted, [{ type: 'setNavCollapsed', ids: [] }]);
+        assert.strictEqual(grp.classes.has('collapsed'), false);
+      });
+
+      it('reports it as collapsed when the reader collapses it again, and stays that way after a later expand', () => {
+        const { posted, run } = setup();
+        run('expandSiteNavAncestorsOf(navItem); var g = document.querySelectorAll("x")[0]; setSiteNavItemCollapsed(g, true); reportSiteNavCollapseState(); setSiteNavItemCollapsed(g, false); reportSiteNavCollapseState();');
+        assert.deepStrictEqual(posted, [
+          { type: 'setNavCollapsed', ids: ['grp:0'] },
+          { type: 'setNavCollapsed', ids: [] },
+        ]);
+      });
+
+      it('does not make a row that was never collapsed report as collapsed', () => {
+        const { posted, run } = setup();
+        run('expandSiteNavAncestorsOf(navItem); reportSiteNavCollapseState();');
+        assert.ok(!(posted[0] as { ids: string[] }).ids.includes('grp:1'));
+      });
+
+      it('expand-all is an explicit choice and clears the marker', () => {
+        const { grp, other } = setup();
+        const posted: unknown[] = [];
+        const clicks: Record<string, () => void> = {};
+        const document = {
+          querySelectorAll: (sel: string) => (sel === '.site-nav-item.has-children[data-nav-id]' ? [grp, other] : [grp, other]),
+          createElement: () => {
+            const el = { id: '', innerHTML: '', title: '', style: { cssText: '' }, setAttribute: () => {}, addEventListener(_e: string, fn: () => void) { clicks[el.id] = fn; } };
+            return el;
+          },
+        };
+        for (const it of [grp, other]) (it as unknown as { getAttribute(n: string): string | null }).getAttribute = (n: string) => (n === 'data-nav-id' ? it.navId : null);
+        const navItem = { parentElement: { closest: (sel: string) => (sel === '.site-nav-item.collapsed' && grp.classes.has('collapsed') ? grp : null) } };
+        const buttons = getSiteNavExpandCollapseAllButtonsScript({ expandAllTitle: 'E', collapseAllTitle: 'C' });
+        new Function('document', 'btnStyle', 'vscode', 'navItem', helperWithReport + buttons + '\nexpandSiteNavAncestorsOf(navItem);\nreturn null;')(
+          document, '', { postMessage: (m: unknown) => posted.push(m) }, navItem,
+        );
+        clicks['__site-expand-all-btn']();
+        assert.deepStrictEqual(posted, [{ type: 'setNavCollapsed', ids: [] }]);
+      });
+    });
+
     it('collapse-all reports the full set exactly once for the whole batch, not once per item', () => {
       const items = [makeItemWithId('a'), makeItemWithId('b'), makeItemWithId('c')];
       const { document: qDoc } = makeReportDocument(items);
