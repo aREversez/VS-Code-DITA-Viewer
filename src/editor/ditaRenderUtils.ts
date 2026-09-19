@@ -2091,11 +2091,12 @@ export function getBookNavClickHandlerScript(): string {
  * emitted once per script and relied on here rather than duplicated) --
  * one shared implementation for "flip a nav item's collapsed state",
  * whatever triggered the flip. If that expansion actually changed
- * anything, reportSiteNavCollapseState() (also from that same shared
- * script, present whenever persistence is wired up) is called so an
- * auto-expand from scrolling persists exactly like a manual toggle would --
- * a reader who scrolled past a folded section shouldn't have it fold shut
- * again the next time they open this document.
+ * anything. That expansion is DOM-only and is deliberately NOT reported
+ * for persistence (reportSiteNavCollapseState): it follows from where the
+ * reader scrolled, not from a choice about the tree, and book mode's
+ * sidebar is closed by default, so persisting it would silently erase the
+ * folds the reader had saved without their ever seeing it happen. Site
+ * mode's page-switch reveal behaves the same way.
  *
  * The observer is rebound (sync() inside the script) whenever
  * #dita-content-root's subtree or .site-nav's children change, because a
@@ -2159,8 +2160,8 @@ export function getBookScrollSyncScript(): string {
       if (prevActive) prevActive.classList.remove('active');
       navLink.classList.add('active');
       var navItem = navLink.closest ? navLink.closest('.site-nav-item') : null;
-      var ancestorsExpanded = navItem ? expandSiteNavAncestorsOf(navItem) : false;
-      if (ancestorsExpanded && typeof reportSiteNavCollapseState === 'function') reportSiteNavCollapseState();
+      // DOM-only: see this function's doc comment (getBookScrollSyncScript).
+      if (navItem) expandSiteNavAncestorsOf(navItem);
     }
 
     function onIntersect(entries) {
@@ -2324,8 +2325,7 @@ export function getSiteNavCollapseStateHelperScript(opts: { reportCollapseMsgTyp
   return `
   // Opens every collapsed ancestor of a sidebar row -- the one place that
   // knows how (site mode's page switch and book mode's scroll sync both
-  // reveal a row this way). Returns whether it opened anything, so a caller
-  // that persists collapse state can decide to report it.
+  // reveal a row this way). Returns whether it opened anything.
   function expandSiteNavAncestorsOf(navItem) {
     var changed = false;
     var parent = navItem && navItem.parentElement && navItem.parentElement.closest

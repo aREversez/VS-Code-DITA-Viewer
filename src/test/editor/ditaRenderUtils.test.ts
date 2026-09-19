@@ -2512,7 +2512,7 @@ describe('getBookScrollSyncScript (book mode sidebar, nested-fold-and-highlight-
     assert.strictEqual(linkC.classList.contains('active'), true);
   });
 
-  it('expands every collapsed ancestor of the newly-active link and persists that as a collapse-state change', () => {
+  it('expands every collapsed ancestor of the newly-active link, in the DOM only -- scrolling must not rewrite the persisted fold state (book mode\'s sidebar is closed by default, so the reader cannot even see it happen)', () => {
     const anchorB = makeFakeAnchor('/b.dita');
     const outerGroup = makeNode({ classes: ['site-nav-item', 'has-children', 'collapsed'], attrs: { 'data-nav-id': 'grp:0' } });
     const childrenUl = makeNode({ classes: ['site-nav-children'] });
@@ -2530,7 +2530,7 @@ describe('getBookScrollSyncScript (book mode sidebar, nested-fold-and-highlight-
 
     assert.strictEqual(linkB.classList.contains('active'), true);
     assert.strictEqual(outerGroup.classList.contains('collapsed'), false, 'the collapsed ancestor should auto-expand');
-    assert.deepStrictEqual(posted, [{ type: 'setNavCollapsed', ids: [] }], 'the auto-expand should be reported/persisted like a manual toggle');
+    assert.deepStrictEqual(posted, [], 'the auto-expand is a consequence of where the reader scrolled, not a choice about the tree, so it is not reported for persistence');
   });
 
   it('does not report a collapse-state change when no ancestor needed expanding', () => {
