@@ -10,6 +10,8 @@ import {
   invalidateBookSearchIndex,
   searchBookIndex,
   getBookSearchScript,
+  buildBookSearchResultsPayload,
+  MAX_BOOK_SEARCH_RESULTS,
 } from '../../editor/bookSearchIndex';
 import { getSiteNavClickHandlerScript } from '../../editor/ditaRenderUtils';
 import type { DocsiteNavEntry } from '../../editor/ditaRenderUtils';
@@ -481,6 +483,7 @@ describe('bookSearchIndex', () => {
         searchLabel: 'Search this book',
         placeholder: 'Search all topics...',
         noResultsLabel: 'No matches found',
+        truncatedLabel: 'Showing the first {0} of {1} results',
         matchCaseLabel: 'Match case',
         useRegexLabel: 'Use regex',
         invalidRegexLabel: 'Invalid regex',
@@ -512,6 +515,7 @@ describe('bookSearchIndex', () => {
         searchLabel: 'Search this book',
         placeholder: 'Search all topics...',
         noResultsLabel: 'No matches found',
+        truncatedLabel: 'Showing the first {0} of {1} results',
         matchCaseLabel: 'Match case',
         useRegexLabel: 'Use regex',
         invalidRegexLabel: 'Invalid regex',
@@ -651,6 +655,31 @@ describe('bookSearchIndex', () => {
     assert.strictEqual(linksWrap.style.display, 'none');
   });
 
+  it('says so when the host capped the list, instead of silently showing only the first page of a longer result set', () => {
+    const { results, emitMessage } = runBookSearchScript([{ absPath: '/book/a.dita' }]);
+    emitMessage({
+      type: 'bookSearchResults',
+      total: 45,
+      results: [
+        { absPath: '/book/a.dita', title: 'Topic A', kind: 'body', snippet: '...one...' },
+        { absPath: '/book/a.dita', title: 'Topic A', kind: 'body', snippet: '...two...' },
+      ],
+    });
+    assert.strictEqual(results.children.length, 3, 'two results plus one trailing note');
+    assert.strictEqual(results.children[2].textContent, 'Showing the first 2 of 45 results');
+  });
+
+  it('adds no note when every result fit (total equals the number shown, or the host sent no total)', () => {
+    const one = [{ absPath: '/book/a.dita', title: 'Topic A', kind: 'body', snippet: '...one...' }];
+    // A fresh page each time: the fake DOM's innerHTML = '' does not clear children.
+    const withTotal = runBookSearchScript([{ absPath: '/book/a.dita' }]);
+    withTotal.emitMessage({ type: 'bookSearchResults', total: 1, results: one });
+    assert.strictEqual(withTotal.results.children.length, 1);
+    const withoutTotal = runBookSearchScript([{ absPath: '/book/a.dita' }]);
+    withoutTotal.emitMessage({ type: 'bookSearchResults', results: one });
+    assert.strictEqual(withoutTotal.results.children.length, 1);
+  });
+
   it('shows the empty-results label when a search comes back with nothing', () => {
     const { results, emitMessage } = runBookSearchScript();
     emitMessage({ type: 'bookSearchResults', results: [] });
@@ -700,6 +729,7 @@ describe('bookSearchIndex', () => {
         searchLabel: 'Search this book',
         placeholder: 'Search all topics...',
         noResultsLabel: 'No matches found',
+        truncatedLabel: 'Showing the first {0} of {1} results',
         matchCaseLabel: 'Match case',
         useRegexLabel: 'Use regex',
         invalidRegexLabel: 'Invalid regex',
@@ -757,5 +787,27 @@ describe('bookSearchIndex', () => {
     applyPageSearch(pending);
     assert.strictEqual(overlayCalls.openSearchBar, 1);
     assert.deepStrictEqual(overlayCalls.performSearch, ['widget']);
+  });
+
+  describe('buildBookSearchResultsPayload', () => {
+    const hit = (n: number) => ({ absPath: `/book/t${n}.dita`, kind: 'body' as const, snippet: `s${n}` });
+
+    it('caps the list at the limit but reports the full count, so the UI can say the list was cut', () => {
+      const hits = Array.from({ length: 45 }, (_, i) => hit(i));
+      const payload = buildBookSearchResultsPayload(hits, new Map(), 30);
+      assert.strictEqual(payload.results.length, 30);
+      assert.strictEqual(payload.total, 45);
+    });
+
+    it('defaults the limit to MAX_BOOK_SEARCH_RESULTS', () => {
+      const hits = Array.from({ length: MAX_BOOK_SEARCH_RESULTS + 5 }, (_, i) => hit(i));
+      assert.strictEqual(buildBookSearchResultsPayload(hits, new Map()).results.length, MAX_BOOK_SEARCH_RESULTS);
+    });
+
+    it('titles each result from the manifest, falling back to the path', () => {
+      const payload = buildBookSearchResultsPayload([hit(1), hit(2)], new Map([['/book/t1.dita', 'One']]), 30);
+      assert.deepStrictEqual(payload.results.map((r) => r.title), ['One', '/book/t2.dita']);
+      assert.strictEqual(payload.total, 2);
+    });
   });
 });

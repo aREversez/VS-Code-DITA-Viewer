@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
 import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, siteNavigableEntries, renderSiteNavHtml, renderSiteNavTreeHtml, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
-import { getBookSearchIndex, searchBookIndex, getBookSearchScript, invalidateBookSearchIndex } from './bookSearchIndex';
+import { getBookSearchIndex, searchBookIndex, buildBookSearchResultsPayload, getBookSearchScript, invalidateBookSearchIndex } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
 import { foldPendingRender, PendingRender } from './pendingRender';
@@ -149,6 +149,8 @@ function getMapWebviewScript(mode: 'tree' | 'book' | 'site'): string {
     siteSearchTitle: vscode.l10n.t('Search this book'),
     siteSearchPlaceholder: vscode.l10n.t('Search all topics...'),
     siteSearchNoResults: vscode.l10n.t('No matches found'),
+    // {0}/{1} stay as literal placeholders here; the webview fills them in.
+    siteSearchTruncated: vscode.l10n.t('Showing the first {0} of {1} results'),
     siteSearchRefresh: vscode.l10n.t('Refresh search results'),
     siteSearchClear: vscode.l10n.t('Clear search'),
   };
@@ -282,6 +284,7 @@ function getMapWebviewScript(mode: 'tree' | 'book' | 'site'): string {
     searchLabel: L.siteSearchTitle,
     placeholder: L.siteSearchPlaceholder,
     noResultsLabel: L.siteSearchNoResults,
+    truncatedLabel: L.siteSearchTruncated,
     matchCaseLabel: L.searchMatchCase,
     useRegexLabel: L.searchUseRegex,
     invalidRegexLabel: L.searchInvalidRegex,
@@ -603,18 +606,12 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
           return;
         }
         const titleByPath = new Map(navigable.map((m) => [m.absPath, m.title] as const));
-        // Capped rather than sent in full: a broad query against a very
-        // large book could otherwise match most of it, and the panel
-        // (docsite design doc, 6.3: a simple first version) has no
-        // pagination -- a long but bounded list is more useful than either
-        // an unbounded one or truncating silently with no signal at all.
-        const results = outcome.hits.slice(0, 30).map((h) => ({
-          absPath: h.absPath,
-          title: titleByPath.get(h.absPath) ?? h.absPath,
-          kind: h.kind,
-          snippet: h.snippet,
-        }));
-        webviewPanel.webview.postMessage({ type: MSG_BOOK_SEARCH_RESULTS, results });
+        // Capped rather than sent in full (see MAX_BOOK_SEARCH_RESULTS): a
+        // broad query against a very large book could otherwise match most
+        // of it, and the panel has no pagination. The pre-cap total goes
+        // along so the panel can say the list was cut.
+        const payload = buildBookSearchResultsPayload(outcome.hits, titleByPath);
+        webviewPanel.webview.postMessage({ type: MSG_BOOK_SEARCH_RESULTS, ...payload });
       } else if (message.type === MSG_REQUEST_FULL_RENDER) {
         // The webview declined a patch: its DOM does not match the baseline
         // the indices were computed against. Straight to updateWebview rather

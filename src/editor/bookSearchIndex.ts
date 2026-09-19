@@ -229,6 +229,37 @@ export interface BookSearchHit {
   snippet: string;
 }
 
+/** Most results the sidebar panel lists. The panel has no pagination, so a
+ *  broad query against a large book is cut to a long-but-bounded list. */
+export const MAX_BOOK_SEARCH_RESULTS = 30;
+
+export interface BookSearchResultsPayload {
+  results: Array<{ absPath: string; title: string; kind: BookSearchHit['kind']; snippet: string }>;
+  /** How many hits there were before the cap -- lets the panel say the list
+   *  was cut rather than leave the reader believing it is complete. */
+  total: number;
+}
+
+/**
+ * The webview-bound shape of a set of hits: capped at `limit`, titled from
+ * the manifest (falling back to the path), and carrying the pre-cap count.
+ */
+export function buildBookSearchResultsPayload(
+  hits: BookSearchHit[],
+  titleByPath: ReadonlyMap<string, string>,
+  limit: number = MAX_BOOK_SEARCH_RESULTS,
+): BookSearchResultsPayload {
+  return {
+    results: hits.slice(0, limit).map((h) => ({
+      absPath: h.absPath,
+      title: titleByPath.get(h.absPath) ?? h.absPath,
+      kind: h.kind,
+      snippet: h.snippet,
+    })),
+    total: hits.length,
+  };
+}
+
 export interface BookSearchOutcome {
   hits: BookSearchHit[];
   /** Set only when useRegex produced an invalid pattern -- mirrors the
@@ -350,6 +381,8 @@ export function getBookSearchScript(opts: {
   searchLabel: string;
   placeholder: string;
   noResultsLabel: string;
+  /** "Showing the first {0} of {1} results" -- {0}/{1} are filled in client-side. */
+  truncatedLabel: string;
   matchCaseLabel: string;
   useRegexLabel: string;
   invalidRegexLabel: string;
@@ -361,6 +394,7 @@ export function getBookSearchScript(opts: {
   const searchLabel = JSON.stringify(opts.searchLabel);
   const placeholder = JSON.stringify(opts.placeholder);
   const noResultsLabel = JSON.stringify(opts.noResultsLabel);
+  const truncatedLabel = JSON.stringify(opts.truncatedLabel);
   const matchCaseLabel = JSON.stringify(opts.matchCaseLabel);
   const useRegexLabel = JSON.stringify(opts.useRegexLabel);
   const invalidRegexLabel = JSON.stringify(opts.invalidRegexLabel);
@@ -708,6 +742,16 @@ export function getBookSearchScript(opts: {
         });
         bookSearchResults.appendChild(item);
       });
+      // The host caps the list (MAX_BOOK_SEARCH_RESULTS) and reports how many
+      // hits there really were; say so rather than let a cut list read as
+      // complete.
+      var total = typeof e.data.total === 'number' ? e.data.total : results.length;
+      if (total > results.length) {
+        var more = document.createElement('div');
+        more.textContent = ${truncatedLabel}.replace('{0}', String(results.length)).replace('{1}', String(total));
+        more.style.cssText = 'opacity:0.7;padding:6px 2px;font-size:12px;font-style:italic;';
+        bookSearchResults.appendChild(more);
+      }
     });
   }
 `;
