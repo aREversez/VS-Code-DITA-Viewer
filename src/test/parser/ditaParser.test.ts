@@ -212,14 +212,60 @@ describe('ditaParser', () => {
     assert.strictEqual(doc.root.tagName, 'topic');
   });
 
-  it('should remove undeclared entity references to prevent parse errors', () => {
+  // Text of the document's root, concatenated -- what a reader would see.
+  const textOf = (xml: string): string => {
+    const walk = (n: { type: string; text?: string; children?: unknown[] }): string =>
+      n.type === 'text' ? (n.text ?? '') : ((n.children ?? []) as Array<typeof n>).map(walk).join('');
+    return walk(parseDita(preprocessEntities(xml)).root as never);
+  };
+
+  it('should keep undeclared entity references visible as literal text instead of silently deleting them', () => {
+    // Deleting them made e.g. an external-subset &product; vanish without a
+    // trace ("Run  with ..."); showing the literal reference at least
+    // signals that something failed to resolve. Must still parse.
     const xml = `<topic id="t"><p>Text with &undeclared; entity</p></topic>`;
-    const processed = preprocessEntities(xml);
-    assert.ok(!processed.includes('&undeclared;'), 'undeclared entity should be removed');
-    assert.ok(processed.includes('Text with'), 'surrounding text should remain');
-    // Should parse without error
-    const doc = parseDita(processed);
-    assert.strictEqual(doc.root.tagName, 'topic');
+    assert.strictEqual(textOf(xml), 'Text with &undeclared; entity');
+  });
+
+  it('should resolve the ISO/HTML technical entities that were previously deleted (&le; &ge; &ne; &alpha; &infin; &rArr; &thinsp;)', () => {
+    const xml = `<topic id="t"><p>a&le;b&ge;c&ne;d &alpha;&infin; &rArr; x&thinsp;y</p></topic>`;
+    assert.strictEqual(textOf(xml), 'a\u2264b\u2265c\u2260d \u03b1\u221e \u21d2 x\u2009y');
+  });
+
+  it('should escape table entities whose value is markup-significant (&AMP; must not become a bare ampersand)', () => {
+    const xml = `<topic id="t"><p>a &AMP; b</p></topic>`;
+    assert.strictEqual(textOf(xml), 'a & b');
+  });
+
+  it('should resolve entities declared with single quotes', () => {
+    const xml = `<!DOCTYPE topic [ <!ENTITY pn 'Acme'> ]>\n<topic id="t"><title>&pn; Guide</title></topic>`;
+    assert.strictEqual(textOf(xml), 'Acme Guide');
+  });
+
+  it('should not treat parameter-entity declarations (<!ENTITY % name ...>) as general entities', () => {
+    const xml = `<!DOCTYPE topic [ <!ENTITY % pe "x"> <!ENTITY g "G"> ]>\n<topic id="t"><p>&g;</p></topic>`;
+    assert.strictEqual(textOf(xml), 'G');
+  });
+
+  it('should leave CDATA content verbatim (no entity substitution or deletion)', () => {
+    const xml = `<topic id="t"><body><codeblock><![CDATA[a &foo; b &nbsp; c &copy;]]></codeblock></body></topic>`;
+    assert.strictEqual(textOf(xml), 'a &foo; b &nbsp; c &copy;');
+  });
+
+  it('should leave comment content verbatim', () => {
+    const xml = `<topic id="t"><p><!-- &foo; -->x</p></topic>`;
+    assert.ok(preprocessEntities(xml).includes('<!-- &foo; -->'));
+    assert.strictEqual(textOf(xml), 'x');
+  });
+
+  it('should expand an entity whose declared value itself references another declared entity', () => {
+    const xml = `<!DOCTYPE topic [ <!ENTITY outer "[&inner;]"> <!ENTITY inner "in"> ]>\n<topic id="t"><p>&outer;</p></topic>`;
+    assert.strictEqual(textOf(xml), '[in]');
+  });
+
+  it('should not loop forever on self-referential entity declarations', () => {
+    const xml = `<!DOCTYPE topic [ <!ENTITY a "&a;x"> ]>\n<topic id="t"><p>&a;</p></topic>`;
+    assert.doesNotThrow(() => preprocessEntities(xml));
   });
 
   it('should substitute well-known ISO character entities', () => {
