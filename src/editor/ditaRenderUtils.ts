@@ -2999,24 +2999,90 @@ export function getSearchOverlayScript(opts: {
     }
   }
 
+  // Bumped on every navigation so a correction still pending from the
+  // previous match (see recenterMatch) never fights the newer one.
+  var scrollToken = 0;
+
+  // The nearest ancestor that actually scrolls -- #dita-content-root in
+  // site mode and in book mode with a sidebar, where body is overflow:hidden
+  // -- or null when the document itself is the scroller.
+  function findScroller(el) {
+    for (var p = el; p && p !== document.body && p !== document.documentElement; p = p.parentElement) {
+      var oy = window.getComputedStyle(p).overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && p.scrollHeight > p.clientHeight) return p;
+    }
+    return null;
+  }
+
+  // Measure where the match actually is and nudge its scroller until it sits
+  // at the centre of the visible area. One scrollIntoView is not enough in
+  // book mode: entries use content-visibility:auto with a 600px size
+  // ESTIMATE until first rendered, so the jump is aimed at estimated layout,
+  // the entries near the destination then render at their real heights, and
+  // the match lands anywhere from a little off-centre to entirely off-screen.
+  // Reading the range's rect forces layout, so each pass sees the real
+  // geometry. The passes keep running until a deadline rather than stopping
+  // once the match is centred: in a real page the layout can shift again a
+  // few frames AFTER the first settle (observed ~70ms later, moving the
+  // match 170px), so "centred once" is not "stays centred". Any wheel, touch
+  // or pointer press bumps scrollToken and ends the correction, so it never
+  // fights a reader who has started scrolling themselves.
+  var RECENTER_WINDOW_MS = 800;
+  ['wheel', 'touchmove', 'pointerdown'].forEach(function(type) {
+    document.addEventListener(type, function() { scrollToken++; }, { passive: true, capture: true });
+  });
+
+  function recenterMatch(range, token, deadline) {
+    if (token !== scrollToken) return;
+    if (typeof window.requestAnimationFrame !== 'function' || typeof window.getComputedStyle !== 'function') return;
+    var el = range.startContainer && range.startContainer.parentElement;
+    if (!el) return;
+    var rect = range.getBoundingClientRect();
+    // An all-zero rect means "no layout box" (hidden content), not "at the
+    // top of the scroller" -- scrolling toward it would fling the view away.
+    if (!rect.width && !rect.height) return;
+    var scroller = findScroller(el);
+    var boxTop = 0;
+    var boxHeight = window.innerHeight;
+    if (scroller) {
+      var box = scroller.getBoundingClientRect();
+      boxTop = box.top;
+      boxHeight = box.height;
+    }
+    var delta = (rect.top + rect.height / 2) - (boxTop + boxHeight / 2);
+    if (Math.abs(delta) > 4) {
+      if (scroller) scroller.scrollTop += delta;
+      else window.scrollBy(0, delta);
+    }
+    if (Date.now() < deadline) {
+      window.requestAnimationFrame(function() { recenterMatch(range, token, deadline); });
+    }
+  }
+
   function updateCurrentMatch() {
     // Only ever holds one Range (or none) -- clear+add is already O(1),
     // there being no marks left to walk is what makes this simpler than the
     // <mark>-based version this replaced.
     searchHighlightCurrent.clear();
+    scrollToken++;
     if (currentMatch >= 0 && searchRanges[currentMatch]) {
       var range = searchRanges[currentMatch];
       searchHighlightCurrent.add(range);
-      // Range has no scrollIntoView (that's an Element method), so scroll
-      // via the element the match sits in. NOT window.scrollTo: in site
-      // mode and book mode with a sidebar, body is height:100vh;
+      // Range has no scrollIntoView (that's an Element method), so make the
+      // coarse jump via the element the match sits in. NOT window.scrollTo:
+      // in site mode and book mode with a sidebar, body is height:100vh;
       // overflow:hidden and the real scroller is #dita-content-root (see
       // media/styles.css), where window.scrollTo is a silent no-op.
       // Element.scrollIntoView finds whichever ancestor actually scrolls.
+      // 'instant', not 'smooth': a smooth animation is aimed once at the
+      // layout of the moment and is not corrected as content-visibility
+      // entries render during it (see recenterMatch); the refinement below
+      // then puts the match itself, not just its paragraph, at the centre.
       var scrollTarget = range.startContainer && range.startContainer.parentElement;
       if (scrollTarget && scrollTarget.scrollIntoView) {
-        scrollTarget.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        scrollTarget.scrollIntoView({ block: 'center', behavior: 'instant' });
       }
+      recenterMatch(range, scrollToken, Date.now() + RECENTER_WINDOW_MS);
     }
     searchCount.textContent = (currentMatch + 1) + '/' + searchRanges.length;
   }

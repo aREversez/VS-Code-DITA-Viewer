@@ -1326,6 +1326,7 @@ describe('getSearchOverlayScript', () => {
     style: Record<string, string>;
     children: FakeNode[];
     parentNode: FakeElement | null;
+    parentElement: FakeElement | null;
     listeners: Record<string, Array<(e: Record<string, unknown>) => void>>;
     attrs: Record<string, string>;
     textContent: string;
@@ -1360,6 +1361,7 @@ describe('getSearchOverlayScript', () => {
       style: {},
       children: [],
       parentNode: null,
+      get parentElement() { return el.parentNode; },
       listeners: {},
       attrs: {},
       textContent: '',
@@ -1417,7 +1419,10 @@ describe('getSearchOverlayScript', () => {
       }
       return '';
     }
-    getBoundingClientRect() { return { top: 0, left: 0, width: 0, height: 0 }; }
+    /** Tests that care about geometry install a function here; the default
+     *  (all zeros) is what an unlaid-out/hidden range reports. */
+    static rectFn: () => { top: number; left: number; width: number; height: number } = () => ({ top: 0, left: 0, width: 0, height: 0 });
+    getBoundingClientRect() { return FakeRange.rectFn(); }
   }
 
   /** Fake Highlight: a plain Set of ranges is all the real Highlight class
@@ -1436,8 +1441,9 @@ describe('getSearchOverlayScript', () => {
    *  from the outside), every fake element the script created (so the test
    *  can find its search input/buttons the same way a real DOM query would),
    *  and every window.scrollTo call. */
-  function runOverlay(body: FakeElement) {
+  function runOverlay(body: FakeElement, winExtras: Record<string, unknown> = {}) {
     const created: FakeElement[] = [];
+    const docListeners: Record<string, Array<() => void>> = {};
     const head = makeFakeElement('head');
     const doc = {
       body,
@@ -1458,19 +1464,19 @@ describe('getSearchOverlayScript', () => {
           },
         };
       },
-      addEventListener: () => {},
+      addEventListener: (type: string, fn: () => void) => { (docListeners[type] ||= []).push(fn); },
       querySelectorAll: () => [] as FakeElement[],
     };
     const highlights = new Map<string, FakeHighlight>();
     const css = { highlights };
     const scrollCalls: Record<string, unknown>[] = [];
-    const win = { scrollY: 0, innerHeight: 768, scrollTo: (o: Record<string, unknown>) => { scrollCalls.push(o); } };
+    const win = { scrollY: 0, innerHeight: 768, scrollTo: (o: Record<string, unknown>) => { scrollCalls.push(o); }, ...winExtras };
     const script = getSearchOverlayScript(opts);
     // eslint-disable-next-line @typescript-eslint/no-implied-eval
     new Function('document', 'window', 'NodeFilter', 'CSS', 'Highlight', script)(
       doc, win, FAKE_NODE_FILTER, css, FakeHighlight,
     );
-    return { highlights, elements: created, scrollCalls };
+    return { highlights, elements: created, scrollCalls, docListeners };
   }
 
   function findInput(elements: FakeElement[]): FakeElement {
@@ -1548,6 +1554,132 @@ describe('getSearchOverlayScript', () => {
     assert.strictEqual(scrollCalls.length, 0, 'window.scrollTo is a no-op when the scroller is #dita-content-root; must not be relied on');
     assert.strictEqual(p.scrollIntoViewCalls.length, 2, 'expected one scrollIntoView on the match\'s element per navigation');
     assert.strictEqual(p.scrollIntoViewCalls[0]?.block, 'center');
+    assert.strictEqual(
+      p.scrollIntoViewCalls[0]?.behavior,
+      'instant',
+      'a smooth animation is computed against layout that content-visibility:auto entries change while it runs, so it lands short/long of the match',
+    );
+  });
+
+  it('re-centers the match when the first jump lands off-center, because skipped content-visibility entries change height once rendered', () => {
+    // Real cause (book mode, content-visibility:auto entries with a 600px
+    // size estimate): scrollIntoView aims using the estimated layout, the
+    // entries near the viewport then render at their real height, and the
+    // match ends up far from where it was aimed. Measure after the jump and
+    // correct the scroller until the match sits at the viewport's centre.
+    const body = makeFakeElement('body');
+    const root = body.appendChild(makeFakeElement('div'));
+    root.id = 'dita-content-root';
+    const scroller = Object.assign(root, {
+      scrollTop: 0,
+      scrollHeight: 5000,
+      clientHeight: 700,
+      getBoundingClientRect: () => ({ top: 0, left: 0, width: 900, height: 700 }),
+    });
+    const p = root.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('cat'));
+
+    // The match really sits 1000px down the scroller; scrollIntoView (a
+    // no-op in this fake) is the "landed wrong" coarse jump.
+    FakeRange.rectFn = () => ({ left: 0, width: 30, height: 20, top: 1000 - scroller.scrollTop });
+    const frames: Array<() => void> = [];
+    const { elements } = runOverlay(body, {
+      requestAnimationFrame: (cb: () => void) => { frames.push(cb); return frames.length; },
+      getComputedStyle: (el: FakeElement) => ({ overflowY: el === root ? 'auto' : 'visible' }),
+    });
+    try {
+      runSearch(elements, 'cat');
+      for (let i = 0; i < 10 && frames.length; i++) frames.shift()!();
+
+      const centre = FakeRange.rectFn().top + 10;
+      assert.ok(Math.abs(centre - 350) <= 4, `expected the match centred in the 700px scroller, but its centre is at ${centre}`);
+    } finally {
+      FakeRange.rectFn = () => ({ top: 0, left: 0, width: 0, height: 0 });
+    }
+  });
+
+  it('stops correcting once the reader scrolls (wheel) so it never fights them', () => {
+    const body = makeFakeElement('body');
+    const root = body.appendChild(makeFakeElement('div'));
+    root.id = 'dita-content-root';
+    const scroller = Object.assign(root, {
+      scrollTop: 0,
+      scrollHeight: 5000,
+      clientHeight: 700,
+      getBoundingClientRect: () => ({ top: 0, left: 0, width: 900, height: 700 }),
+    });
+    const p = root.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('cat'));
+    FakeRange.rectFn = () => ({ left: 0, width: 30, height: 20, top: 1000 - scroller.scrollTop });
+    const frames: Array<() => void> = [];
+    const { elements, docListeners } = runOverlay(body, {
+      requestAnimationFrame: (cb: () => void) => { frames.push(cb); return frames.length; },
+      getComputedStyle: (el: FakeElement) => ({ overflowY: el === root ? 'auto' : 'visible' }),
+    });
+    try {
+      runSearch(elements, 'cat');
+      const settled = scroller.scrollTop;
+      // Layout shifts again after the first settle, but the reader has grabbed the wheel.
+      FakeRange.rectFn = () => ({ left: 0, width: 30, height: 20, top: 1500 - scroller.scrollTop });
+      docListeners['wheel'].forEach((fn) => fn());
+      for (let i = 0; i < 10 && frames.length; i++) frames.shift()!();
+      assert.strictEqual(scroller.scrollTop, settled, 'a pending correction must not yank the view after the reader scrolled');
+    } finally {
+      FakeRange.rectFn = () => ({ top: 0, left: 0, width: 0, height: 0 });
+    }
+  });
+
+  it('keeps correcting after the first settle, because layout can shift again a few frames later', () => {
+    const body = makeFakeElement('body');
+    const root = body.appendChild(makeFakeElement('div'));
+    root.id = 'dita-content-root';
+    const scroller = Object.assign(root, {
+      scrollTop: 0,
+      scrollHeight: 5000,
+      clientHeight: 700,
+      getBoundingClientRect: () => ({ top: 0, left: 0, width: 900, height: 700 }),
+    });
+    const p = root.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('cat'));
+    let shift = 0;
+    FakeRange.rectFn = () => ({ left: 0, width: 30, height: 20, top: 1000 + shift - scroller.scrollTop });
+    const frames: Array<() => void> = [];
+    const { elements } = runOverlay(body, {
+      requestAnimationFrame: (cb: () => void) => { frames.push(cb); return frames.length; },
+      getComputedStyle: (el: FakeElement) => ({ overflowY: el === root ? 'auto' : 'visible' }),
+    });
+    try {
+      runSearch(elements, 'cat');
+      frames.shift()!(); frames.shift()!(); // settled, then...
+      shift = 170; // ...content-visibility entries finish rendering and push the match down
+      for (let i = 0; i < 10 && frames.length; i++) frames.shift()!();
+      const centre = FakeRange.rectFn().top + 10;
+      assert.ok(Math.abs(centre - 350) <= 4, `expected the late shift to be corrected, centre is at ${centre}`);
+    } finally {
+      FakeRange.rectFn = () => ({ top: 0, left: 0, width: 0, height: 0 });
+    }
+  });
+
+  it('does not scroll toward a match that has no layout box (hidden content reports an all-zero rect)', () => {
+    const body = makeFakeElement('body');
+    const root = body.appendChild(makeFakeElement('div'));
+    root.id = 'dita-content-root';
+    const scroller = Object.assign(root, {
+      scrollTop: 500,
+      scrollHeight: 5000,
+      clientHeight: 700,
+      getBoundingClientRect: () => ({ top: 0, left: 0, width: 900, height: 700 }),
+    });
+    const p = root.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('cat'));
+    const frames: Array<() => void> = [];
+    const { elements } = runOverlay(body, {
+      requestAnimationFrame: (cb: () => void) => { frames.push(cb); return frames.length; },
+      getComputedStyle: (el: FakeElement) => ({ overflowY: el === root ? 'auto' : 'visible' }),
+    });
+    runSearch(elements, 'cat');
+    for (let i = 0; i < 10 && frames.length; i++) frames.shift()!();
+    assert.strictEqual(scroller.scrollTop, 500, 'a zero rect means "not laid out", not "at the top of the scroller"');
   });
 
   it('clears both highlight registries when the search bar is closed', () => {
