@@ -414,9 +414,7 @@ function getMapWebviewScript(mode: 'tree' | 'book' | 'site'): string {
       pfPanel = pfBuildPanel();
       document.body.appendChild(pfPanel);
     }
-    if (typeof sb !== 'undefined' && sb.style.display !== 'none' && searchInput.value) {
-      performSearch(searchInput.value);
-    }
+    if (typeof refreshSearchAfterDomChange === 'function') refreshSearchAfterDomChange();
     // Off (the default) needs no walk: fresh HTML, whether this is a full
     // replace or bookPatch.ts's per-entry patch, only ever carries
     // data-dita-tagname, never a stray title= from this feature.

@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -1336,6 +1336,9 @@ describe('getSearchOverlayScript', () => {
     value: string;
     scrollIntoViewCalls: Array<Record<string, unknown> | undefined>;
     scrollIntoView: (opts?: Record<string, unknown>) => void;
+    checkVisibility?: () => boolean;
+    focus: () => void;
+    select: () => void;
     appendChild: <T extends FakeNode>(child: T) => T;
     setAttribute: (name: string, value: string) => void;
     addEventListener: (type: string, fn: (e: Record<string, unknown>) => void) => void;
@@ -1371,6 +1374,8 @@ describe('getSearchOverlayScript', () => {
       value: '',
       scrollIntoViewCalls: [],
       scrollIntoView(opts) { el.scrollIntoViewCalls.push(opts); },
+      focus() {},
+      select() {},
       appendChild(child) {
         child.parentNode = el;
         el.children.push(child);
@@ -1473,10 +1478,10 @@ describe('getSearchOverlayScript', () => {
     const win = { scrollY: 0, innerHeight: 768, scrollTo: (o: Record<string, unknown>) => { scrollCalls.push(o); }, ...winExtras };
     const script = getSearchOverlayScript(opts);
     // eslint-disable-next-line @typescript-eslint/no-implied-eval
-    new Function('document', 'window', 'NodeFilter', 'CSS', 'Highlight', script)(
+    const api = new Function('document', 'window', 'NodeFilter', 'CSS', 'Highlight', script + '\nreturn { refresh: typeof refreshSearchAfterDomChange === "function" ? refreshSearchAfterDomChange : function() {}, open: openSearchBar };')(
       doc, win, FAKE_NODE_FILTER, css, FakeHighlight,
-    );
-    return { highlights, elements: created, scrollCalls, docListeners };
+    ) as { refresh: () => void; open: () => void };
+    return { highlights, elements: created, scrollCalls, docListeners, ...api };
   }
 
   function findInput(elements: FakeElement[]): FakeElement {
@@ -1658,6 +1663,87 @@ describe('getSearchOverlayScript', () => {
     } finally {
       FakeRange.rectFn = () => ({ top: 0, left: 0, width: 0, height: 0 });
     }
+  });
+
+  it('does not match text inside content that is not rendered (display:none, e.g. profile-filtered-out), which has no box to highlight or scroll to', () => {
+    const body = makeFakeElement('body');
+    const shown = body.appendChild(makeFakeElement('p'));
+    shown.appendChild(makeFakeText('cat here'));
+    const hidden = body.appendChild(makeFakeElement('p'));
+    hidden.checkVisibility = () => false;
+    hidden.appendChild(makeFakeText('cat hidden'));
+
+    const { elements, highlights } = runOverlay(body);
+    runSearch(elements, 'cat');
+
+    assert.strictEqual(highlights.get('dita-search-all')!.items.size, 1, 'only the rendered match counts');
+    assert.strictEqual(elements.find((e) => e.textContent === '1/1') !== undefined, true, 'and the counter agrees');
+  });
+
+  describe('re-running the search after the DOM changed underneath it', () => {
+    function setup(text: string) {
+      const body = makeFakeElement('body');
+      const p = body.appendChild(makeFakeElement('p'));
+      const node = makeFakeText(text);
+      p.appendChild(node);
+      const env = runOverlay(body);
+      const counter = () => env.elements.find((e) => e.tagName === 'SPAN')!.textContent;
+      return { ...env, p, node, counter };
+    }
+
+    it('keeps the match the reader was on and does not scroll -- a live edit must not yank the preview back to the first match', () => {
+      const { elements, p, counter, open, refresh } = setup('cat cat cat');
+      runSearch(elements, 'cat');
+      findNextBtn(elements).listeners['click'][0]({});
+      assert.strictEqual(counter(), '2/3');
+      const scrolls = p.scrollIntoViewCalls.length;
+
+      open();
+      refresh();
+
+      assert.strictEqual(counter(), '2/3', 'still on the second match');
+      assert.strictEqual(p.scrollIntoViewCalls.length, scrolls, 'no scroll: the reader has not asked to go anywhere');
+    });
+
+    it('clamps to the last match when the edit removed matches at or after the current one', () => {
+      const { elements, node, counter, open, refresh } = setup('cat cat cat');
+      runSearch(elements, 'cat');
+      findNextBtn(elements).listeners['click'][0]({});
+      findNextBtn(elements).listeners['click'][0]({});
+      assert.strictEqual(counter(), '3/3');
+
+      node.textContent = 'cat';
+      open();
+      refresh();
+
+      assert.strictEqual(counter(), '1/1');
+    });
+
+    it('does nothing while the search bar is closed', () => {
+      const { elements, counter, refresh } = setup('cat cat');
+      runSearch(elements, 'cat');
+      findCloseBtn(elements).listeners['click'][0]({});
+      refresh();
+      assert.strictEqual(counter(), '');
+    });
+  });
+
+  it('caps the number of matches it tracks, and says the count is a floor', () => {
+    const body = makeFakeElement('body');
+    // findTextMatches already stops at 1000 per text node, so it takes several nodes to reach the overall cap.
+    for (let i = 0; i < 6; i++) body.appendChild(makeFakeElement('p')).appendChild(makeFakeText('a'.repeat(1000)));
+    const { elements, highlights } = runOverlay(body);
+    runSearch(elements, 'a');
+    assert.strictEqual(highlights.get('dita-search-all')!.items.size, 5000);
+    assert.ok(elements.some((e) => e.textContent === '1/5000+'), 'the counter must not claim 5000 is the total');
+  });
+
+  it('re-runs the page search when a profiling-filter checkbox changes what is displayed', () => {
+    const script = getProfilingFilterScript({ buttonLabel: 'Filter', buttonTitle: 'Filter', closeLabel: 'Close', emptyLabel: 'None' });
+    assert.ok(
+      /addEventListener\('change'[\s\S]{0,300}pfApplyFilter\(\);[\s\S]{0,250}refreshSearchAfterDomChange/.test(script),
+      'the checkbox change handler must refresh the page search after pfApplyFilter: hidden/shown content changes the match set',
+    );
   });
 
   it('does not scroll toward a match that has no layout box (hidden content reports an all-zero rect)', () => {

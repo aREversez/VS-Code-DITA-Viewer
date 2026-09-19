@@ -2971,8 +2971,20 @@ export function getSearchOverlayScript(opts: {
     return findTextMatchesCore(text, term, useRegex, caseSensitive);
   }
 
-  function performSearch(term) {
+  // Most matches tracked (one Range each, all held in the highlight
+  // registry). A one-letter query against a large book would otherwise
+  // create hundreds of thousands; past this the counter reads "N/5000+".
+  var MAX_SEARCH_MATCHES = 5000;
+  var searchCapped = false;
+
+  // preservePosition: this run is a refresh after the DOM changed under an
+  // open search (a live edit, a profiling-filter change), not the reader
+  // typing or toggling -- keep them on the match they were on, and don't
+  // scroll, instead of resetting to the first match and jumping there.
+  function performSearch(term, preservePosition) {
+    var keepMatch = preservePosition ? currentMatch : -1;
     clearSearchHighlights();
+    searchCapped = false;
     searchCount.style.color = '';
     if (!term) { searchCount.textContent = ''; return; }
 
@@ -2988,6 +3000,17 @@ export function getSearchOverlayScript(opts: {
       }
     }
 
+    // Text under display:none (e.g. .profile-filtered-out) has no box: a
+    // match there could be counted but never seen, and its rect is all zeros.
+    // Cached per parent -- a paragraph's text nodes all share one answer.
+    var renderedByParent = new Map();
+    function isRendered(el) {
+      if (typeof el.checkVisibility !== 'function') return true;
+      var known = renderedByParent.get(el);
+      if (known === undefined) { known = el.checkVisibility(); renderedByParent.set(el, known); }
+      return known;
+    }
+
     var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
       acceptNode: function(node) {
         if (!node.textContent.trim()) return NodeFilter.FILTER_REJECT;
@@ -2995,6 +3018,7 @@ export function getSearchOverlayScript(opts: {
         if (!parent) return NodeFilter.FILTER_REJECT;
         var tag = parent.tagName;
         if (tag === 'SCRIPT' || tag === 'STYLE') return NodeFilter.FILTER_REJECT;
+        if (!isRendered(parent)) return NodeFilter.FILTER_REJECT;
         var el = parent;
         while (el && el !== document.body) {
           if (el.id === '__toolbar' || el.id === '__search_bar') return NodeFilter.FILTER_REJECT;
@@ -3012,6 +3036,7 @@ export function getSearchOverlayScript(opts: {
     var textNodes = [];
     while (walker.nextNode()) textNodes.push(walker.currentNode);
 
+    collect:
     for (var i = 0; i < textNodes.length; i++) {
       var node = textNodes[i];
       var text = node.textContent;
@@ -3019,6 +3044,7 @@ export function getSearchOverlayScript(opts: {
       if (!matches || matches.length === 0) continue;
 
       for (var j = 0; j < matches.length; j++) {
+        if (searchRanges.length >= MAX_SEARCH_MATCHES) { searchCapped = true; break collect; }
         var range = document.createRange();
         range.setStart(node, matches[j].start);
         range.setEnd(node, matches[j].end);
@@ -3028,8 +3054,13 @@ export function getSearchOverlayScript(opts: {
     }
 
     if (searchRanges.length > 0) {
-      currentMatch = 0;
-      updateCurrentMatch();
+      if (keepMatch >= 0) {
+        currentMatch = Math.min(keepMatch, searchRanges.length - 1);
+        updateCurrentMatch(false);
+      } else {
+        currentMatch = 0;
+        updateCurrentMatch();
+      }
     } else {
       currentMatch = -1;
       searchCount.textContent = '0/0';
@@ -3096,7 +3127,7 @@ export function getSearchOverlayScript(opts: {
     }
   }
 
-  function updateCurrentMatch() {
+  function updateCurrentMatch(scroll) {
     // Only ever holds one Range (or none) -- clear+add is already O(1),
     // there being no marks left to walk is what makes this simpler than the
     // <mark>-based version this replaced.
@@ -3115,13 +3146,15 @@ export function getSearchOverlayScript(opts: {
       // layout of the moment and is not corrected as content-visibility
       // entries render during it (see recenterMatch); the refinement below
       // then puts the match itself, not just its paragraph, at the centre.
-      var scrollTarget = range.startContainer && range.startContainer.parentElement;
-      if (scrollTarget && scrollTarget.scrollIntoView) {
-        scrollTarget.scrollIntoView({ block: 'center', behavior: 'instant' });
+      if (scroll !== false) {
+        var scrollTarget = range.startContainer && range.startContainer.parentElement;
+        if (scrollTarget && scrollTarget.scrollIntoView) {
+          scrollTarget.scrollIntoView({ block: 'center', behavior: 'instant' });
+        }
+        recenterMatch(range, scrollToken, Date.now() + RECENTER_WINDOW_MS);
       }
-      recenterMatch(range, scrollToken, Date.now() + RECENTER_WINDOW_MS);
     }
-    searchCount.textContent = (currentMatch + 1) + '/' + searchRanges.length;
+    searchCount.textContent = (currentMatch + 1) + '/' + searchRanges.length + (searchCapped ? '+' : '');
   }
 
   function gotoNextMatch() {
@@ -3134,6 +3167,14 @@ export function getSearchOverlayScript(opts: {
     if (searchRanges.length === 0) return;
     currentMatch = (currentMatch - 1 + searchRanges.length) % searchRanges.length;
     updateCurrentMatch();
+  }
+
+  // Re-runs the current search after the page's DOM changed underneath it
+  // (a live edit swapped the content, a profiling filter showed/hid some).
+  // The Ranges the old run held point into nodes that are gone or
+  // hidden, so they must be rebuilt -- but the reader keeps their place.
+  function refreshSearchAfterDomChange() {
+    if (sb.style.display !== 'none' && searchInput.value) performSearch(searchInput.value, true);
   }
 
   function openSearchBar() {
@@ -3311,6 +3352,8 @@ export function getProfilingFilterScript(opts: {
           cb.addEventListener('change', function(e) {
             if (e.target.checked) { delete pfExcluded[key]; } else { pfExcluded[key] = true; }
             pfApplyFilter();
+            // Hidden text is not searchable, so the match set just changed.
+            if (typeof refreshSearchAfterDomChange === 'function') refreshSearchAfterDomChange();
           });
         })(rawKey);
         row.appendChild(cb);

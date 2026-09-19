@@ -578,9 +578,7 @@ function getWebviewScript(): string {
           pfPanel = pfBuildPanel();
           document.body.appendChild(pfPanel);
         }
-        if (typeof sb !== 'undefined' && sb.style.display !== 'none' && searchInput.value) { // search was active -- old marks were just wiped out along with the content that contained them
-          performSearch(searchInput.value);
-        }
+        if (typeof refreshSearchAfterDomChange === 'function') refreshSearchAfterDomChange(); // search was active -- the old ranges pointed into content that was just replaced
         if (lastHighlightLine !== null) {
           // Re-target the still-current cursor position against the new
           // DOM. If the earlier scroll had already settled and the spot
