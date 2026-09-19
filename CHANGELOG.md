@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixes
+
+- In-page search (`Ctrl+F`) now finds text that runs across inline markup, such as `Click <b>OK</b> now` or a Chinese phrase with a bold word in the middle, and highlights it as one match. Block boundaries (paragraphs, list items, line breaks) still separate matches.
+
 ## 1.0.9 (2026-09-15)
 
 ### Features

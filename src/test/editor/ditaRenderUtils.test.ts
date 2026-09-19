@@ -1325,6 +1325,7 @@ describe('getSearchOverlayScript', () => {
     classList: { contains: (c: string) => boolean; add: (c: string) => void; remove: (c: string) => void };
     style: Record<string, string>;
     children: FakeNode[];
+    childNodes: FakeNode[];
     parentNode: FakeElement | null;
     parentElement: FakeElement | null;
     listeners: Record<string, Array<(e: Record<string, unknown>) => void>>;
@@ -1363,6 +1364,7 @@ describe('getSearchOverlayScript', () => {
       classList: undefined as unknown as FakeElement['classList'],
       style: {},
       children: [],
+      get childNodes() { return el.children; },
       parentNode: null,
       get parentElement() { return el.parentNode; },
       listeners: {},
@@ -1419,10 +1421,19 @@ describe('getSearchOverlayScript', () => {
     setStart(node: FakeTextNode, offset: number): void { this.startNode = node; this.startOffset = offset; }
     setEnd(node: FakeTextNode, offset: number): void { this.endNode = node; this.endOffset = offset; }
     toString(): string {
-      if (this.startNode && this.startNode === this.endNode) {
-        return this.startNode.textContent.substring(this.startOffset, this.endOffset);
-      }
-      return '';
+      const { startNode, endNode } = this;
+      if (!startNode || !endNode) return '';
+      if (startNode === endNode) return startNode.textContent.substring(this.startOffset, this.endOffset);
+      // Across nodes: the tail of the first, every text node between them in
+      // document order, the head of the last -- what a real Range stringifies to.
+      let root: FakeElement = startNode.parentNode!;
+      while (root.parentNode) root = root.parentNode;
+      const all = collectTextNodes(root);
+      const from = all.indexOf(startNode);
+      const to = all.indexOf(endNode);
+      let out = startNode.textContent.substring(this.startOffset);
+      for (let i = from + 1; i < to; i++) out += all[i].textContent;
+      return out + endNode.textContent.substring(0, this.endOffset);
     }
     /** Tests that care about geometry install a function here; the default
      *  (all zeros) is what an unlaid-out/hidden range reports. */
@@ -1800,6 +1811,184 @@ describe('getSearchOverlayScript', () => {
       1,
       'expected the sidebar\'s own "quick" text to be excluded from search matches',
     );
+  });
+
+  // ── Matches that cross inline element boundaries (F1) ──
+  // Whether two adjacent pieces of text read as one string is decided by the
+  // page's own layout: an element whose computed display is 'inline' (or
+  // 'contents') flows into its neighbours; anything else is a boundary. The
+  // fake getComputedStyle below stands in for that, keyed by tag.
+  const INLINE_TAGS = new Set(['STRONG', 'EM', 'SPAN', 'CODE', 'A']);
+  const layoutExtras = {
+    getComputedStyle: (el: FakeElement) => ({
+      display: INLINE_TAGS.has(el.tagName) ? 'inline' : 'block',
+      overflowY: 'visible',
+    }),
+  };
+  function ranges(highlights: Map<string, FakeHighlight>): FakeRange[] {
+    return Array.from(highlights.get('dita-search-all')!.items);
+  }
+  function counter(elements: FakeElement[]): string {
+    return elements.find((e) => e.tagName === 'SPAN')!.textContent;
+  }
+
+  it('matches a term that spans an inline element boundary as ONE range from the first text node to the last', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    const before = p.appendChild(makeFakeText('Click '));
+    const strong = p.appendChild(makeFakeElement('strong'));
+    strong.appendChild(makeFakeText('OK'));
+    const after = p.appendChild(makeFakeText(' now'));
+
+    const { highlights, elements } = runOverlay(body, layoutExtras);
+    runSearch(elements, 'Click OK now');
+
+    const rs = ranges(highlights);
+    assert.strictEqual(rs.length, 1);
+    assert.strictEqual(rs[0].toString(), 'Click OK now');
+    assert.strictEqual(rs[0].startNode, before);
+    assert.strictEqual(rs[0].startOffset, 0);
+    assert.strictEqual(rs[0].endNode, after);
+    assert.strictEqual(rs[0].endOffset, 4);
+    assert.strictEqual(counter(elements), '1/1');
+  });
+
+  it('works for CJK text with an inline element in the middle (no whitespace to lean on)', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('点击'));
+    p.appendChild(makeFakeElement('strong')).appendChild(makeFakeText('确定'));
+    p.appendChild(makeFakeText('按钮'));
+
+    const { highlights, elements } = runOverlay(body, layoutExtras);
+    runSearch(elements, '击确定按');
+
+    assert.deepStrictEqual(ranges(highlights).map((r) => r.toString()), ['击确定按']);
+  });
+
+  it('maps several matches in one run to the right nodes, including one that straddles a boundary', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('bar and ba'));
+    p.appendChild(makeFakeElement('em')).appendChild(makeFakeText('r'));
+    p.appendChild(makeFakeText(' and bar'));
+
+    const { highlights, elements } = runOverlay(body, layoutExtras);
+    runSearch(elements, 'bar');
+
+    assert.deepStrictEqual(ranges(highlights).map((r) => r.toString()), ['bar', 'bar', 'bar']);
+    assert.strictEqual(counter(elements), '1/3');
+  });
+
+  it('ends a match at the end of its own text node instead of starting an empty range in the next one', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    const first = p.appendChild(makeFakeText('ab'));
+    p.appendChild(makeFakeElement('strong')).appendChild(makeFakeText('cd'));
+
+    const { highlights, elements } = runOverlay(body, layoutExtras);
+    runSearch(elements, 'ab');
+
+    const [r] = ranges(highlights);
+    assert.strictEqual(r.endNode, first);
+    assert.strictEqual(r.endOffset, 2);
+  });
+
+  it('never matches across a block boundary: \"Hello</p><p>World\" does not contain \"oW\"', () => {
+    const body = makeFakeElement('body');
+    body.appendChild(makeFakeElement('p')).appendChild(makeFakeText('Hello'));
+    body.appendChild(makeFakeElement('p')).appendChild(makeFakeText('World'));
+
+    const { highlights, elements } = runOverlay(body, layoutExtras);
+    runSearch(elements, 'oW');
+
+    assert.strictEqual(ranges(highlights).length, 0);
+    assert.strictEqual(counter(elements), '0/0');
+  });
+
+  it('a block child splits its parent\'s text: \"A<p>B</p>C\" does not contain \"AC\" or \"AB\"', () => {
+    const body = makeFakeElement('body');
+    const li = body.appendChild(makeFakeElement('li'));
+    li.appendChild(makeFakeText('A'));
+    li.appendChild(makeFakeElement('p')).appendChild(makeFakeText('B'));
+    li.appendChild(makeFakeText('C'));
+
+    const { highlights, elements } = runOverlay(body, layoutExtras);
+    for (const term of ['AC', 'AB', 'BC']) {
+      runSearch(elements, term);
+      assert.strictEqual(ranges(highlights).length, 0, `\"${term}\" must not match across the block boundary`);
+    }
+    runSearch(elements, 'B');
+    assert.strictEqual(ranges(highlights).length, 1);
+  });
+
+  it('a line break is a boundary even though <br> is display:inline', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('one'));
+    p.appendChild(makeFakeElement('br'));
+    p.appendChild(makeFakeText('two'));
+    const { highlights, elements } = runOverlay(body, {
+      getComputedStyle: () => ({ display: 'inline', overflowY: 'visible' }),
+    });
+    runSearch(elements, 'onetwo');
+    assert.strictEqual(ranges(highlights).length, 0);
+  });
+
+  it('text around a hidden inline element reads as one string, while the hidden text itself stays unsearchable', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('foo'));
+    const hidden = p.appendChild(makeFakeElement('span'));
+    hidden.checkVisibility = () => false;
+    hidden.appendChild(makeFakeText('XYZ'));
+    p.appendChild(makeFakeText('bar'));
+
+    const { highlights, elements } = runOverlay(body, layoutExtras);
+    runSearch(elements, 'XYZ');
+    assert.strictEqual(ranges(highlights).length, 0, 'hidden text stays unsearchable');
+    runSearch(elements, 'foobar');
+    assert.strictEqual(ranges(highlights).length, 1, 'display:none removes it from the flow, so the text around it reads as one string');
+  });
+
+  it('without layout information every element is a boundary, i.e. matching stays per text node', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('Click '));
+    p.appendChild(makeFakeElement('strong')).appendChild(makeFakeText('OK'));
+
+    const { highlights, elements } = runOverlay(body);
+    runSearch(elements, 'Click OK');
+    assert.strictEqual(ranges(highlights).length, 0);
+    runSearch(elements, 'OK');
+    assert.strictEqual(ranges(highlights).length, 1);
+  });
+
+  it('whitespace between inline siblings is part of the string, whitespace-only blocks are not searchable', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeElement('code')).appendChild(makeFakeText('a'));
+    p.appendChild(makeFakeText(' '));
+    p.appendChild(makeFakeElement('code')).appendChild(makeFakeText('b'));
+    body.appendChild(makeFakeElement('div')).appendChild(makeFakeText('   '));
+
+    const { highlights, elements } = runOverlay(body, layoutExtras);
+    runSearch(elements, 'a b');
+    assert.deepStrictEqual(ranges(highlights).map((r) => r.toString()), ['a b']);
+    runSearch(elements, '   ');
+    assert.strictEqual(ranges(highlights).length, 0, 'an indentation-only block was never searchable and still is not');
+  });
+
+  it('still excludes the toolbar and search bar when they sit between inline content', () => {
+    const body = makeFakeElement('body');
+    const bar = body.appendChild(makeFakeElement('div'));
+    bar.id = '__toolbar';
+    bar.appendChild(makeFakeText('quick toolbar'));
+    body.appendChild(makeFakeElement('p')).appendChild(makeFakeText('a quick fox'));
+
+    const { highlights, elements } = runOverlay(body, layoutExtras);
+    runSearch(elements, 'quick');
+    assert.strictEqual(ranges(highlights).length, 1);
   });
 });
 

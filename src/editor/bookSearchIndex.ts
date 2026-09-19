@@ -51,6 +51,12 @@ export interface BookSearchEntry {
  * gluing two blocks together would fabricate matches ("Hello</p><p>World"
  * matching "oW"). Keyed on baseType (the parser resolves domain
  * specializations like hi-d/b or pr-d/codeph to their topic/ base type).
+ *
+ * The current-page overlay (getSearchOverlayScript) makes the same call from
+ * the rendered page instead: text joins across an element only when its
+ * computed display is inline, and anything else is a boundary. The two agree
+ * on the safe default (unknown means boundary), which is what keeps a
+ * full-book hit findable once the page overlay takes over.
  */
 const INLINE_BASE_TYPES = new Set([
   'topic/ph', 'topic/keyword', 'topic/term', 'topic/xref', 'topic/cite', 'topic/q', 'topic/tm',

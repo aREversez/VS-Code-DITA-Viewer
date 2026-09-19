@@ -3018,52 +3018,93 @@ export function getSearchOverlayScript(opts: {
 
     // Text under display:none (e.g. .profile-filtered-out) has no box: a
     // match there could be counted but never seen, and its rect is all zeros.
-    // Cached per parent -- a paragraph's text nodes all share one answer.
-    var renderedByParent = new Map();
-    function isRendered(el) {
-      if (typeof el.checkVisibility !== 'function') return true;
-      var known = renderedByParent.get(el);
-      if (known === undefined) { known = el.checkVisibility(); renderedByParent.set(el, known); }
-      return known;
+    var isRendered = function(el) {
+      return typeof el.checkVisibility !== 'function' || el.checkVisibility();
+    };
+
+    // Whether an element's text flows into its neighbours' as one string.
+    // The page's own layout decides: display:inline (or contents) does, any
+    // block/flex/table/inline-block box does not, and <br> ends a line even
+    // though it is display:inline. With no layout information available
+    // every element is a boundary, i.e. the per-text-node behaviour this
+    // replaced. Deliberately the safe default of the full-book index
+    // (extractBodyText in bookSearchIndex.ts) too: a spurious boundary only
+    // misses a cross-element match, while gluing two blocks would invent
+    // matches (\"Hello</p><p>World\" containing \"oW\").
+    function flowsInline(el) {
+      if (el.tagName === 'BR') return false;
+      if (typeof window.getComputedStyle !== 'function') return false;
+      var d = window.getComputedStyle(el).display;
+      return d === 'inline' || d === 'contents';
     }
 
-    var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
-      acceptNode: function(node) {
-        if (!node.textContent.trim()) return NodeFilter.FILTER_REJECT;
-        var parent = node.parentNode;
-        if (!parent) return NodeFilter.FILTER_REJECT;
-        var tag = parent.tagName;
-        if (tag === 'SCRIPT' || tag === 'STYLE') return NodeFilter.FILTER_REJECT;
-        if (!isRendered(parent)) return NodeFilter.FILTER_REJECT;
-        var el = parent;
-        while (el && el !== document.body) {
-          if (el.id === '__toolbar' || el.id === '__search_bar') return NodeFilter.FILTER_REJECT;
-          // Docsite mode's sidebar (.site-nav) sits beside #dita-content-root
-          // as a sibling under body, not inside it -- without this, Ctrl+F
-          // would also match/highlight topic titles and chips in the
-          // sidebar, which isn't "the page" the reader is searching.
-          if (el.classList && el.classList.contains('site-nav')) return NodeFilter.FILTER_REJECT;
-          el = el.parentNode;
-        }
-        return NodeFilter.FILTER_ACCEPT;
-      }
-    });
+    function isExcluded(el) {
+      var tag = el.tagName;
+      if (tag === 'SCRIPT' || tag === 'STYLE') return true;
+      if (el.id === '__toolbar' || el.id === '__search_bar') return true;
+      // Docsite mode's sidebar (.site-nav) sits beside #dita-content-root
+      // as a sibling under body, not inside it -- without this, Ctrl+F
+      // would also match/highlight topic titles and chips in the
+      // sidebar, which isn't \"the page\" the reader is searching.
+      return !!(el.classList && el.classList.contains('site-nav'));
+    }
 
-    var textNodes = [];
-    while (walker.nextNode()) textNodes.push(walker.currentNode);
+    // Collect \"runs\": maximal stretches of text nodes that read as one
+    // string, each with the start offset of every node inside the run's
+    // text so a match position can be mapped back to (textNode, offset).
+    var runs = [];
+    var run = null;
+    function endRun() {
+      if (run && run.text.trim()) runs.push(run);
+      run = null;
+    }
+    function collectRuns(parent) {
+      var kids = parent.childNodes;
+      for (var k = 0; k < kids.length; k++) {
+        var kid = kids[k];
+        if (kid.nodeType === 3) {
+          if (!run) run = { nodes: [], starts: [], text: '' };
+          run.nodes.push(kid);
+          run.starts.push(run.text.length);
+          run.text += kid.textContent;
+        } else if (kid.nodeType === 1) {
+          var inline = flowsInline(kid);
+          if (isExcluded(kid) || !isRendered(kid)) {
+            // Taken out of the flow entirely: text either side of an
+            // inline one still joins up, a block one splits it.
+            if (!inline) endRun();
+            continue;
+          }
+          if (!inline) endRun();
+          collectRuns(kid);
+          if (!inline) endRun();
+        }
+      }
+    }
+    collectRuns(document.body);
+    endRun();
 
     collect:
-    for (var i = 0; i < textNodes.length; i++) {
-      var node = textNodes[i];
-      var text = node.textContent;
-      var matches = findMatchesInText(text, term);
+    for (var i = 0; i < runs.length; i++) {
+      var r = runs[i];
+      var matches = findMatchesInText(r.text, term);
       if (!matches || matches.length === 0) continue;
 
+      var ni = 0;
       for (var j = 0; j < matches.length; j++) {
         if (searchRanges.length >= MAX_SEARCH_MATCHES) { searchCapped = true; break collect; }
+        var s = matches[j].start;
+        var e = matches[j].end;
+        // Matches ascend, so the start node only ever moves forward. The
+        // end node is the one holding the match's LAST character: a match
+        // ending exactly on a node boundary stays in the earlier node
+        // rather than opening an empty range in the next.
+        while (ni + 1 < r.nodes.length && r.starts[ni + 1] <= s) ni++;
+        var ne = ni;
+        while (ne + 1 < r.nodes.length && r.starts[ne + 1] < e) ne++;
         var range = document.createRange();
-        range.setStart(node, matches[j].start);
-        range.setEnd(node, matches[j].end);
+        range.setStart(r.nodes[ni], s - r.starts[ni]);
+        range.setEnd(r.nodes[ne], e - r.starts[ne]);
         searchRanges.push(range);
         searchHighlightAll.add(range);
       }
