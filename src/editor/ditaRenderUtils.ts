@@ -6,7 +6,7 @@ import { renderDocument } from '../render/renderer';
 import type { MapEntry } from '../render/mapTypeMap';
 import { isDitamapRef } from '../render/mapTypeMap';
 import type { BookPart } from './bookPatch';
-import { sourceStamp } from './sourceText';
+import { sourceStamp, readSourceText } from './sourceText';
 
 // ── Image dimensions (for reserving layout space before the image loads) ──
 //
@@ -235,7 +235,7 @@ export function makeFileCache(docDir: string) {
     if (cache.has(absPath)) return cache.get(absPath);
     if (!existsSync(absPath)) { cache.set(absPath, undefined); return undefined; }
     try {
-      const content = readFileSync(absPath, 'utf-8');
+      const content = readSourceText(absPath, 'utf-8');
       const doc = parseDita(preprocessEntities(content));
       cache.set(absPath, doc.root);
       return doc.root;
@@ -499,6 +499,12 @@ function extractRootTagName(content: string): string | undefined {
  * there was more file left to read -- a huge DOCTYPE internal subset is
  * rare, but should still resolve correctly rather than silently return
  * nothing.
+ *
+ * Reads the DISK, not the unsaved editor text (sourceText.ts), on purpose:
+ * this only picks the sidebar's topic-type chip, and changing a topic's root
+ * element while it is unsaved is rare enough that the chip catching up on
+ * save is not worth a second overlay-aware read path over a partial file
+ * read.
  */
 function sniffRootTagName(absPath: string): string | undefined {
   let fd: number | undefined;
@@ -838,7 +844,7 @@ function rebaseHrefs(node: DitaNode, fromDir: string, toDir: string): void {
 export function expandDitamapRefs(
   node: DitaNode,
   docDir: string,
-  readFile: FileReader = readFileSync as unknown as FileReader,
+  readFile: FileReader = readSourceText,
   visited?: Set<string>,
 ): void {
   if (node.type !== 'element') return;
@@ -968,7 +974,7 @@ export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
     // The topic's own file is a dependency of its own render even though it
     // is read here rather than through the shared file cache.
     collectDependencies?.add(filePath);
-    const rawXml = readFileSync(filePath, 'utf-8');
+    const rawXml = readSourceText(filePath, 'utf-8');
     const result = renderTopicXml({
       xml: rawXml,
       docDir: dirname(filePath),

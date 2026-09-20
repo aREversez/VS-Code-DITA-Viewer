@@ -10,7 +10,7 @@
 // file for the byte-for-byte diff against the code's previous location.
 
 import * as vscode from 'vscode';
-import { readFileSync } from 'fs';
+import { readSourceText } from './sourceText';
 import { dirname } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
@@ -110,11 +110,11 @@ export function buildKeyMap(docUri: vscode.Uri): Map<string, string> {
   const involvedFiles = [...mapFiles];
   const recordingRead: FileReader = (path, encoding) => {
     involvedFiles.push(path);
-    return readFileSync(path, encoding);
+    return readSourceText(path, encoding);
   };
   for (const mf of mapFiles) {
     try {
-      const content = readFileSync(mf, 'utf-8');
+      const content = readSourceText(mf, 'utf-8');
       const doc = parseDitamap(preprocessEntities(content));
       const mapRoot = doc.root;
       // Expand referenced ditamaps so keydefs from included maps are visible

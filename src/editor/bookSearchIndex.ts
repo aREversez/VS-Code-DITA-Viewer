@@ -19,7 +19,8 @@
 // resolution, no HTML generation -- and the resulting index is built once
 // per book and cached, not rebuilt per keystroke.
 
-import { existsSync, readFileSync } from 'fs';
+import { existsSync } from 'fs';
+import { readSourceText } from './sourceText';
 import { DitaNode } from '../parser/domTypes';
 import { parseDita, preprocessEntities } from '../parser/ditaParser';
 import { findTopLevelIndextermsInSubtree, collectIndextermChips } from '../render/baseTypeMap';
@@ -134,7 +135,7 @@ function collectIndextermsFrom(root: DitaNode): Array<{ path: string[]; pathText
 export function extractBookSearchEntry(filePath: string): BookSearchEntry | undefined {
   try {
     if (!existsSync(filePath)) return undefined;
-    const raw = readFileSync(filePath, 'utf-8');
+    const raw = readSourceText(filePath, 'utf-8');
     const doc = parseDita(preprocessEntities(raw));
     const bodyText = extractBodyText(doc.root).replace(/\s+/g, ' ').trim();
     const indexterms = collectIndextermsFrom(doc.root);
