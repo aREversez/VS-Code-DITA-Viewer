@@ -1979,6 +1979,73 @@ describe('getSearchOverlayScript', () => {
     assert.strictEqual(ranges(highlights).length, 0, 'an indentation-only block was never searchable and still is not');
   });
 
+  // ── Whitespace the browser collapses (F1 follow-up) ──
+  // Source indentation ("Click\n    <b>OK</b>") renders as one space, and the
+  // full-book index collapses it too, so a term typed with single spaces has
+  // to find it. Ranges keep pointing at the RAW text.
+  it('finds a term across a newline+indent inside one text node and ranges over the raw characters', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    const t = p.appendChild(makeFakeText('Click\n      OK now'));
+
+    const { highlights, elements } = runOverlay(body, layoutExtras);
+    runSearch(elements, 'Click OK');
+
+    const [r] = ranges(highlights);
+    assert.strictEqual(ranges(highlights).length, 1);
+    assert.strictEqual(r.startNode, t);
+    assert.strictEqual(r.startOffset, 0);
+    assert.strictEqual(r.endOffset, 'Click\n      OK'.length);
+  });
+
+  it('collapses whitespace that spans a node boundary into a single space', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    const before = p.appendChild(makeFakeText('Click\n'));
+    const strong = p.appendChild(makeFakeElement('strong'));
+    const inner = strong.appendChild(makeFakeText('   OK'));
+
+    const { highlights, elements } = runOverlay(body, layoutExtras);
+    runSearch(elements, 'Click OK');
+
+    const [r] = ranges(highlights);
+    assert.strictEqual(ranges(highlights).length, 1);
+    assert.strictEqual(r.startNode, before);
+    assert.strictEqual(r.startOffset, 0);
+    assert.strictEqual(r.endNode, inner);
+    assert.strictEqual(r.endOffset, '   OK'.length);
+  });
+
+  it('a match that starts right after leading whitespace starts at the first visible character', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    const t = p.appendChild(makeFakeText('\n     Hello'));
+
+    const { highlights, elements } = runOverlay(body, layoutExtras);
+    runSearch(elements, 'Hello');
+
+    const [r] = ranges(highlights);
+    assert.strictEqual(r.startNode, t);
+    assert.strictEqual(r.startOffset, 6);
+    assert.strictEqual(r.endOffset, 11);
+  });
+
+  it('does not collapse inside white-space:pre, where every space is real', () => {
+    const body = makeFakeElement('body');
+    body.appendChild(makeFakeElement('pre')).appendChild(makeFakeText('a  b'));
+    const { highlights, elements } = runOverlay(body, {
+      getComputedStyle: (el: FakeElement) => ({
+        display: el.tagName === 'PRE' ? 'block' : 'block',
+        whiteSpace: el.tagName === 'PRE' ? 'pre' : 'normal',
+        overflowY: 'visible',
+      }),
+    });
+    runSearch(elements, 'a  b');
+    assert.strictEqual(ranges(highlights).length, 1);
+    runSearch(elements, 'a b');
+    assert.strictEqual(ranges(highlights).length, 0);
+  });
+
   it('still excludes the toolbar and search bar when they sit between inline content', () => {
     const body = makeFakeElement('body');
     const bar = body.appendChild(makeFakeElement('div'));

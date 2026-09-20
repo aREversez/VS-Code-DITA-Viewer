@@ -3030,12 +3030,22 @@ export function getSearchOverlayScript(opts: {
     // replaced. Deliberately the safe default of the full-book index
     // (extractBodyText in bookSearchIndex.ts) too: a spurious boundary only
     // misses a cross-element match, while gluing two blocks would invent
-    // matches (\"Hello</p><p>World\" containing \"oW\").
+    // matches ("Hello</p><p>World" containing "oW").
     function flowsInline(el) {
       if (el.tagName === 'BR') return false;
       if (typeof window.getComputedStyle !== 'function') return false;
       var d = window.getComputedStyle(el).display;
       return d === 'inline' || d === 'contents';
+    }
+
+    // Whether the browser collapses runs of source whitespace in this
+    // element's text into a single space. Only known when there is layout
+    // information; without it text is taken as it is. white-space is
+    // inherited, so the value on an element is the one its text sees.
+    function collapsesWhitespace(el) {
+      if (typeof window.getComputedStyle !== 'function') return false;
+      var ws = window.getComputedStyle(el).whiteSpace;
+      return ws !== 'pre' && ws !== 'pre-wrap' && ws !== 'pre-line' && ws !== 'break-spaces';
     }
 
     function isExcluded(el) {
@@ -3045,28 +3055,52 @@ export function getSearchOverlayScript(opts: {
       // Docsite mode's sidebar (.site-nav) sits beside #dita-content-root
       // as a sibling under body, not inside it -- without this, Ctrl+F
       // would also match/highlight topic titles and chips in the
-      // sidebar, which isn't \"the page\" the reader is searching.
+      // sidebar, which isn't "the page" the reader is searching.
       return !!(el.classList && el.classList.contains('site-nav'));
     }
 
-    // Collect \"runs\": maximal stretches of text nodes that read as one
-    // string, each with the start offset of every node inside the run's
-    // text so a match position can be mapped back to (textNode, offset).
+    // Collect "runs": maximal stretches of text nodes that read as one
+    // string, as the reader sees it -- source whitespace collapsed to single
+    // spaces, as the full-book index does, so "Click<newline> <b>OK</b>" is
+    // found by "Click OK". segs maps the run's text back onto the raw text
+    // nodes: segment k covers text[segs[k].c .. segs[k+1].c) and corresponds
+    // one-to-one to node.textContent from offset segs[k].o. A collapsed
+    // whitespace run is a one-character segment pointing at the first raw
+    // whitespace character.
     var runs = [];
     var run = null;
     function endRun() {
       if (run && run.text.trim()) runs.push(run);
       run = null;
     }
-    function collectRuns(parent) {
+    var WS_OR_TEXT = /[ \\t\\n\\r\\f]+|[^ \\t\\n\\r\\f]+/g;
+    function addText(node, collapse) {
+      if (!run) run = { segs: [], text: '' };
+      var raw = node.textContent;
+      if (!collapse) {
+        if (raw) run.segs.push({ c: run.text.length, n: node, o: 0 });
+        run.text += raw;
+        return;
+      }
+      WS_OR_TEXT.lastIndex = 0;
+      var m;
+      while ((m = WS_OR_TEXT.exec(raw)) !== null) {
+        var chunk = m[0];
+        if (chunk.charCodeAt(0) <= 32) {
+          // Dropped at the start of a line and after a space already taken.
+          if (run.text === '' || run.text.charAt(run.text.length - 1) === ' ') continue;
+          chunk = ' ';
+        }
+        run.segs.push({ c: run.text.length, n: node, o: m.index });
+        run.text += chunk;
+      }
+    }
+    function collectRuns(parent, collapse) {
       var kids = parent.childNodes;
       for (var k = 0; k < kids.length; k++) {
         var kid = kids[k];
         if (kid.nodeType === 3) {
-          if (!run) run = { nodes: [], starts: [], text: '' };
-          run.nodes.push(kid);
-          run.starts.push(run.text.length);
-          run.text += kid.textContent;
+          addText(kid, collapse);
         } else if (kid.nodeType === 1) {
           var inline = flowsInline(kid);
           if (isExcluded(kid) || !isRendered(kid)) {
@@ -3076,12 +3110,12 @@ export function getSearchOverlayScript(opts: {
             continue;
           }
           if (!inline) endRun();
-          collectRuns(kid);
+          collectRuns(kid, collapsesWhitespace(kid));
           if (!inline) endRun();
         }
       }
     }
-    collectRuns(document.body);
+    collectRuns(document.body, collapsesWhitespace(document.body));
     endRun();
 
     collect:
@@ -3090,21 +3124,23 @@ export function getSearchOverlayScript(opts: {
       var matches = findMatchesInText(r.text, term);
       if (!matches || matches.length === 0) continue;
 
-      var ni = 0;
+      var si = 0;
       for (var j = 0; j < matches.length; j++) {
         if (searchRanges.length >= MAX_SEARCH_MATCHES) { searchCapped = true; break collect; }
-        var s = matches[j].start;
-        var e = matches[j].end;
-        // Matches ascend, so the start node only ever moves forward. The
-        // end node is the one holding the match's LAST character: a match
-        // ending exactly on a node boundary stays in the earlier node
-        // rather than opening an empty range in the next.
-        while (ni + 1 < r.nodes.length && r.starts[ni + 1] <= s) ni++;
-        var ne = ni;
-        while (ne + 1 < r.nodes.length && r.starts[ne + 1] < e) ne++;
+        var st = matches[j].start;
+        var last = matches[j].end - 1;
+        // Matches ascend, so the start segment only ever moves forward. The
+        // end is found from the match's LAST character: a match ending
+        // exactly on a node boundary stays in the earlier node rather than
+        // opening an empty range in the next.
+        while (si + 1 < r.segs.length && r.segs[si + 1].c <= st) si++;
+        var ei = si;
+        while (ei + 1 < r.segs.length && r.segs[ei + 1].c <= last) ei++;
+        var sg = r.segs[si];
+        var eg = r.segs[ei];
         var range = document.createRange();
-        range.setStart(r.nodes[ni], s - r.starts[ni]);
-        range.setEnd(r.nodes[ne], e - r.starts[ne]);
+        range.setStart(sg.n, sg.o + (st - sg.c));
+        range.setEnd(eg.n, eg.o + (last - eg.c) + 1);
         searchRanges.push(range);
         searchHighlightAll.add(range);
       }

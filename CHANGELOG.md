@@ -5,6 +5,7 @@
 ### Fixes
 
 - In-page search (`Ctrl+F`) now finds text that runs across inline markup, such as `Click <b>OK</b> now` or a Chinese phrase with a bold word in the middle, and highlights it as one match. Block boundaries (paragraphs, list items, line breaks) still separate matches.
+- In-page search now treats source indentation and line breaks the way the page displays them, as a single space, so `Click OK` also finds text written across several lines in the DITA source. Text inside `<codeblock>` and other preformatted elements is matched exactly.
 
 ## 1.0.9 (2026-09-15)
 
