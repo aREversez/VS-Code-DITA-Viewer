@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, siteNavigableEntries, renderSiteNavTreeHtml, wrapSiteNavTreeHtml, getSiteNavClickHandlerScript, getSidebarUpdateScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
+import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, siteNavigableEntries, renderSiteNavTreeHtml, wrapSiteNavTreeHtml, getSiteNavClickHandlerScript, getSidebarUpdateScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
 import { getBookSearchIndex, searchBookIndex, buildBookSearchResultsPayload, getBookSearchScript, invalidateBookSearchIndex } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
@@ -146,6 +146,8 @@ function getMapWebviewScript(mode: 'tree' | 'book' | 'site'): string {
     modeOutline: vscode.l10n.t('Outline'),
     modeBook: vscode.l10n.t('Book'),
     modeSite: vscode.l10n.t('Site'),
+    siteBack: vscode.l10n.t('Go back'),
+    siteForward: vscode.l10n.t('Go forward'),
     sitePrevTopic: vscode.l10n.t('Previous topic'),
     siteNextTopic: vscode.l10n.t('Next topic'),
     siteToggleSidebar: vscode.l10n.t('Show/hide topic list'),
@@ -257,6 +259,16 @@ function getMapWebviewScript(mode: 'tree' | 'book' | 'site'): string {
   // what to append) but only appended in site mode; updatePrevNextButtons
   // (getSiteNavClickHandlerScript) already no-ops when it can't find these
   // by id, which is exactly what happens if they were never appended.
+  // Back/forward through the pages the reader has visited (site mode only,
+  // like prev/next, which step through reading order instead -- hence arrows
+  // rather than angle brackets). Wired up by updateHistoryButtons in
+  // getSiteNavClickHandlerScript.
+  ${getSiteHistoryButtonsScript({
+    backLabel: '\u2190',
+    backTitle: L.siteBack,
+    forwardLabel: '\u2192',
+    forwardTitle: L.siteForward,
+  })}
   ${getSitePrevNextButtonsScript({
     prevLabel: '\u2039',
     prevTitle: L.sitePrevTopic,
@@ -264,6 +276,8 @@ function getMapWebviewScript(mode: 'tree' | 'book' | 'site'): string {
     nextTitle: L.siteNextTopic,
   })}
   if (currentMode === 'site') {
+    toolbar.appendChild(siteBackBtn);
+    toolbar.appendChild(siteForwardBtn);
     toolbar.appendChild(sitePrevBtn);
     toolbar.appendChild(siteNextBtn);
   }
@@ -458,6 +472,15 @@ function getMapWebviewScript(mode: 'tree' | 'book' | 'site'): string {
         if (currentMode === 'site' && pendingSiteAnchor) {
           scrollToSiteAnchor(pendingSiteAnchor);
           pendingSiteAnchor = null;
+        }
+        // A page switch's own scroll: the top of a new page, or where the
+        // reader was for a step through the history. Set only by a switch --
+        // every other content update (the in-place refresh after an edit)
+        // leaves it null and the scroll untouched. Before the search-result
+        // jump below, which scrolls to its first match and must win.
+        if (currentMode === 'site' && pendingSiteScroll !== null) {
+          contentRoot.scrollTop = pendingSiteScroll;
+          pendingSiteScroll = null;
         }
         // Full-book search result jump (bookSearchIndex.ts): a result
         // click on a DIFFERENT page stashed the query + case/regex flags

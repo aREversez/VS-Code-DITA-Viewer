@@ -4,6 +4,7 @@
 
 ### Features
 
+- **Docsite view has back and forward.** The two arrow buttons in the toolbar (`←` `→`, next to the previous/next-topic buttons, which still step through reading order) walk back and forward through the topics you visited, and so do the mouse's back/forward buttons and `Alt+←` / `Alt+→`. Going back returns to the scroll position you left the page at. The history survives a theme switch or refresh, and skips topics that have since been removed from the map.
 - **The DITA Map preview remembers how each map was last read.** Reopening a map brings back the view it was left in (Outline, Book or Docsite) and, in Docsite mode, the topic that was open. A remembered view that cannot render the map any more (for example Docsite view of a map that now has no topics) falls back to Outline.
 - **Unsaved changes in other files now show up in the preview.** A conref target, a key-definition map, a mapref'd map or a topic of the book that you have edited in its own editor tab but not saved is rendered from the text on screen, not from the copy on disk; discarding the change puts the disk copy back. A preview refreshes only for files it actually read. In Docsite view, unsaved text in a file the current page uses refreshes the page in place (no reload); the sidebar catches up on save.
 - **Docsite view no longer reloads when you edit the map or a topic it shows.** An edit now updates the sidebar and the page in place, and only the parts that actually changed, so the scroll position, the page search, the sidebar's search box and results and the sidebar's own scroll all stay where they were.
@@ -12,6 +13,7 @@
 
 ### Fixes
 
+- Docsite view: opening another topic now starts at its top instead of at the scroll position of the topic you were reading.
 - After a render error (the red error page), fixing the source now brings the preview back on its own instead of leaving the error showing until you refresh by hand. Affects the topic preview and the map preview in every view.
 - In-page search (`Ctrl+F`) now finds text that runs across inline markup, such as `Click <b>OK</b> now` or a Chinese phrase with a bold word in the middle, and highlights it as one match. Block boundaries (paragraphs, list items, line breaks) still separate matches.
 - In-page search now treats source indentation and line breaks the way the page displays them, as a single space, so `Click OK` also finds text written across several lines in the DITA source. Text inside `<codeblock>` and other preformatted elements is matched exactly.

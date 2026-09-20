@@ -2251,6 +2251,8 @@ describe('getSiteNavClickHandlerScript (docsite mode)', () => {
     const fakeDocument = {
       getElementById: () => null,
       querySelectorAll: () => [],
+      // The deferred init looks for the active link to seed the history from.
+      querySelector: () => null,
       addEventListener: () => {},
     };
     assert.doesNotThrow(() => fn(fakeDocument, { postMessage: () => {} }));

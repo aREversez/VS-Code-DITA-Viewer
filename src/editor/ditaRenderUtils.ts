@@ -1997,6 +1997,85 @@ export function getSiteHistoryModelScript(): string {
  */
 export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: string }): string {
   return `
+  ${getSiteHistoryModelScript()}
+
+  // Back/forward history (getSiteHistoryModelScript above). null until the
+  // deferred init at the bottom of this script, which is when the active link
+  // exists to seed it from.
+  var siteHistory = null;
+
+  // The content pane, not the window, is what scrolls (#dita-content-root.
+  // site-main has its own overflow-y). Absent in the few fake documents that
+  // exercise this script without one.
+  function siteScrollTop() {
+    var scroller = document.getElementById('dita-content-root');
+    return scroller ? scroller.scrollTop : 0;
+  }
+
+  function siteLinkFor(target) {
+    var links = document.querySelectorAll('.site-nav-link');
+    for (var i = 0; i < links.length; i++) {
+      if (links[i].getAttribute('data-site-target') === target) return links[i];
+    }
+    return null;
+  }
+
+  function siteHistoryExists(target) {
+    return !!siteLinkFor(target);
+  }
+
+  // Kept across a full reload (theme switch, manual refresh, a trip through
+  // another mode) in the webview's own state, next to whatever else is there.
+  function persistSiteHistory() {
+    if (!siteHistory || typeof vscode.setState !== 'function') return;
+    var state = (typeof vscode.getState === 'function' && vscode.getState()) || {};
+    state.siteHistory = siteHistory;
+    vscode.setState(state);
+  }
+
+  // A no-op wherever the buttons don't exist, like updatePrevNextButtons.
+  function updateHistoryButtons() {
+    var backBtn = document.getElementById('__site-back-btn');
+    var forwardBtn = document.getElementById('__site-forward-btn');
+    var canBack = !!siteHistory && siteHistoryCan(siteHistory, -1, siteHistoryExists);
+    var canForward = !!siteHistory && siteHistoryCan(siteHistory, 1, siteHistoryExists);
+    if (backBtn) {
+      backBtn.disabled = !canBack;
+      backBtn.onclick = canBack ? function() { siteHistoryGo(-1); } : null;
+    }
+    if (forwardBtn) {
+      forwardBtn.disabled = !canForward;
+      forwardBtn.onclick = canForward ? function() { siteHistoryGo(1); } : null;
+    }
+  }
+
+  // Back (-1) or forward (+1): the model picks the page (skipping ones the
+  // book no longer has) and switchToSitePage does the switching, told not to
+  // record it as new navigation.
+  function siteHistoryGo(dir) {
+    if (!siteHistory) return;
+    var step = siteHistoryStep(siteHistory, dir, siteHistoryExists, siteScrollTop());
+    if (!step) return;
+    switchToSitePage(siteLinkFor(step.entry.target), '', step);
+  }
+
+  // The mouse's own back/forward buttons. Their default (navigating the
+  // webview document itself) must not also run.
+  document.addEventListener('mousedown', function(e) {
+    if (e.button === 3 || e.button === 4) e.preventDefault();
+  });
+  document.addEventListener('mouseup', function(e) {
+    if (e.button === 3) { e.preventDefault(); siteHistoryGo(-1); }
+    else if (e.button === 4) { e.preventDefault(); siteHistoryGo(1); }
+  });
+  // Alt+Left / Alt+Right, the browser convention. Only the bare Alt chord:
+  // anything with Ctrl, Meta or Shift is somebody else's shortcut.
+  document.addEventListener('keydown', function(e) {
+    if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if (e.key === 'ArrowLeft') { e.preventDefault(); siteHistoryGo(-1); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); siteHistoryGo(1); }
+  });
+
   // Shared by the sidebar's own click handler and the prev/next buttons
   // (getSitePrevNextButtonsScript below) -- switching pages always means
   // the same three things: flip which sidebar link is 'active', refresh
@@ -2012,7 +2091,7 @@ export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: stri
   // HTML actually lands -- remembered in pendingSiteAnchor rather than
   // acted on here, since the new content doesn't exist in the DOM yet at
   // click time (it's still an async render on the extension host side).
-  function switchToSitePage(link, anchor) {
+  function switchToSitePage(link, anchor, historyStep) {
     if (!link) return;
     if (link.classList.contains('active')) {
       // Same page already showing -- an xref jump still needs to scroll,
@@ -2035,6 +2114,20 @@ export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: stri
     if (link.scrollIntoView) link.scrollIntoView({ block: 'nearest' });
     updatePrevNextButtons();
     pendingSiteAnchor = anchor || null;
+    if (historyStep) {
+      // Stepping through the history: land where the reader was.
+      siteHistory = historyStep.history;
+      pendingSiteScroll = historyStep.entry.scrollTop;
+    } else {
+      if (siteHistory) siteHistory = siteHistoryPush(siteHistory, target, siteScrollTop());
+      // A new page starts at its top. The content pane keeps its scroll
+      // offset across a content swap, so without this the page opened at
+      // wherever the previous one had been scrolled to. An anchor jump does
+      // its own scrolling.
+      pendingSiteScroll = anchor ? null : 0;
+    }
+    persistSiteHistory();
+    updateHistoryButtons();
     vscode.postMessage({ type: '${opts.switchSitePageMsgType}', target: target });
   }
 
@@ -2044,6 +2137,12 @@ export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: stri
   // later plain sidebar/prev-next switch (no anchor) doesn't accidentally
   // replay a stale scroll target.
   var pendingSiteAnchor = null;
+
+  // The content pane's scrollTop to apply when the new page's HTML lands
+  // (consumed once by the MSG_UPDATE_CONTENT handler, like pendingSiteAnchor).
+  // null: leave the scroll alone -- the state of every content update that is
+  // not a page switch, such as the in-place refresh after an edit.
+  var pendingSiteScroll = null;
 
   function scrollToSiteAnchor(anchor) {
     var el = document.getElementById(anchor);
@@ -2117,7 +2216,17 @@ export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: stri
   // on every subsequent switch). setTimeout(..., 0) runs after the rest of
   // the synchronous page-load script finishes, by which point the buttons
   // exist no matter which order the two scripts happen to be assembled in.
-  setTimeout(function() { updatePrevNextButtons(); }, 0);
+  setTimeout(function() {
+    updatePrevNextButtons();
+    var activeLink = document.querySelector('.site-nav-link.active');
+    var activeTarget = activeLink ? activeLink.getAttribute('data-site-target') : null;
+    if (activeTarget) {
+      var saved = typeof vscode.getState === 'function' ? vscode.getState() : null;
+      siteHistory = siteHistoryRestore(saved && saved.siteHistory, activeTarget);
+      persistSiteHistory();
+    }
+    updateHistoryButtons();
+  }, 0);
 `;
 }
 
@@ -2609,6 +2718,38 @@ export function getSiteNavToggleScript(): string {
     setSiteNavItemCollapsed(item, !item.classList.contains('collapsed'));
     if (typeof reportSiteNavCollapseState === 'function') reportSiteNavCollapseState();
   });
+`;
+}
+
+/**
+ * The toolbar's history buttons, created like getSitePrevNextButtonsScript's
+ * (built here, appended by the caller, which decides where they go). Arrows
+ * rather than the angle brackets the prev/next buttons use: those step through
+ * the book's reading order, these through the pages the reader has visited,
+ * and the two must not look like the same control. Wired up (enabled state and
+ * click) by updateHistoryButtons in getSiteNavClickHandlerScript.
+ */
+export function getSiteHistoryButtonsScript(opts: { backLabel: string; backTitle: string; forwardLabel: string; forwardTitle: string }): string {
+  const backLabel = JSON.stringify(opts.backLabel);
+  const backTitle = JSON.stringify(opts.backTitle);
+  const forwardLabel = JSON.stringify(opts.forwardLabel);
+  const forwardTitle = JSON.stringify(opts.forwardTitle);
+  return `
+  var siteBackBtn = document.createElement('button');
+  siteBackBtn.id = '__site-back-btn';
+  siteBackBtn.textContent = ${backLabel};
+  siteBackBtn.title = ${backTitle};
+  siteBackBtn.setAttribute('aria-label', ${backTitle});
+  siteBackBtn.disabled = true;
+  siteBackBtn.style.cssText = btnStyle + 'font-size:14px;padding:1px 9px;justify-content:center;';
+
+  var siteForwardBtn = document.createElement('button');
+  siteForwardBtn.id = '__site-forward-btn';
+  siteForwardBtn.textContent = ${forwardLabel};
+  siteForwardBtn.title = ${forwardTitle};
+  siteForwardBtn.setAttribute('aria-label', ${forwardTitle});
+  siteForwardBtn.disabled = true;
+  siteForwardBtn.style.cssText = btnStyle + 'font-size:14px;padding:1px 9px;justify-content:center;';
 `;
 }
 

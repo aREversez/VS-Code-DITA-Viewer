@@ -1203,6 +1203,7 @@ body.mode-book.site-nav-collapsed .site-nav-resizer {
 #__site-prev-btn, #__site-next-btn {
   min-width: 2.4em;
 }
+#__site-back-btn:disabled, #__site-forward-btn:disabled,
 #__site-prev-btn:disabled, #__site-next-btn:disabled {
   opacity: 0.4;
   cursor: default;
