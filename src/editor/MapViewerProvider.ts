@@ -11,6 +11,7 @@ import { buildKeyMap, FONT_PREFS_KEY, DEFAULT_FONT_PREFS, WIDTH_SELECTION_KEY, T
 import { formatLocalizedRole } from '../language/bookRoleL10n';
 import { dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
+import { readForDocument, writeForDocument } from './perDocumentState';
 
 // Test-only hook: see the identical comment in DitaViewerProvider.ts.
 const lastRenderedHtmlByUri = new Map<string, string>();
@@ -632,9 +633,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         // this document's own uri -- a ditamap's uri cannot collide with a
         // topic's, so the two providers sharing the map costs nothing.
         if (typeof message.value === 'string') {
-          const map = this.context.globalState.get<Record<string, string>>(WIDTH_SELECTION_KEY, {});
-          map[document.uri.toString()] = message.value;
-          this.context.globalState.update(WIDTH_SELECTION_KEY, map);
+          writeForDocument(this.context.globalState, WIDTH_SELECTION_KEY, document.uri, message.value);
         }
       } else if (message.type === MSG_SET_TAG_TOOLTIPS) {
         this.context.globalState.update(TAG_TOOLTIPS_KEY, message.value === true);
@@ -645,9 +644,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         // next render even though this handler never sees which id changed.
         if (Array.isArray(message.ids)) {
           const ids = message.ids.filter((id: unknown): id is string => typeof id === 'string');
-          const store = this.context.globalState.get<Record<string, string[]>>(COLLAPSED_NAV_KEY, {});
-          store[document.uri.toString()] = ids;
-          this.context.globalState.update(COLLAPSED_NAV_KEY, store);
+          writeForDocument(this.context.globalState, COLLAPSED_NAV_KEY, document.uri, ids);
         }
       }
     });
@@ -1158,7 +1155,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     // and reopening this one.
     const fontPrefs = this.context.globalState.get(FONT_PREFS_KEY, DEFAULT_FONT_PREFS);
     const fontPrefsJson = escapeJson(JSON.stringify(fontPrefs));
-    const widthSelection = this.context.globalState.get<Record<string, string>>(WIDTH_SELECTION_KEY, {})[document.uri.toString()] || '';
+    const widthSelection = readForDocument<string>(this.context.globalState, WIDTH_SELECTION_KEY, document.uri) || '';
     const widthSelectionJson = escapeJson(JSON.stringify(widthSelection));
     const tagTooltips = this.context.globalState.get(TAG_TOOLTIPS_KEY, DEFAULT_TAG_TOOLTIPS);
     const tagTooltipsJson = escapeJson(JSON.stringify(tagTooltips));
@@ -1210,8 +1207,7 @@ ${(result.sidebarHtml ? '<div id="__site-nav-resizer" class="site-nav-resizer" r
   // actual persistence), so there is no cost caching would save, only a
   // staleness risk if some other code path ever updates the same key.
   private getCollapsedNavIds(document: vscode.TextDocument): ReadonlySet<string> {
-    const store = this.context.globalState.get<Record<string, string[]>>(COLLAPSED_NAV_KEY, {});
-    return new Set(store[document.uri.toString()] ?? []);
+    return new Set(readForDocument<string[]>(this.context.globalState, COLLAPSED_NAV_KEY, document.uri) ?? []);
   }
 
   private collectBookParts(

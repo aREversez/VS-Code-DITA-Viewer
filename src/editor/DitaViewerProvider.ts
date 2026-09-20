@@ -10,6 +10,7 @@ import { foldPendingRender, PendingRender } from './pendingRender';
 import { sharedWebviewStrings } from './webviewL10n';
 import { discoverCssFiles } from './cssDiscovery';
 import { findDitamapFiles, buildKeyMap, clearKeyMapCache } from './keyMap';
+import { readForDocument, writeForDocument } from './perDocumentState';
 
 // Test-only hook: @vscode/test-electron integration tests can't read a
 // webview's rendered HTML directly (VS Code doesn't expose the WebviewPanel
@@ -833,15 +834,11 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
         // otherwise silently reset this back to discoverCssFiles()'s own
         // always-recomputed default) picks the same file back up.
         if (typeof message.value === 'string') {
-          const map = this.context.globalState.get<Record<string, string>>(CSS_SELECTION_KEY, {});
-          map[document.uri.toString()] = message.value;
-          this.context.globalState.update(CSS_SELECTION_KEY, map);
+          writeForDocument(this.context.globalState, CSS_SELECTION_KEY, document.uri, message.value);
         }
       } else if (message.type === 'setWidthSelection') {
         if (typeof message.value === 'string') {
-          const map = this.context.globalState.get<Record<string, string>>(WIDTH_SELECTION_KEY, {});
-          map[document.uri.toString()] = message.value;
-          this.context.globalState.update(WIDTH_SELECTION_KEY, map);
+          writeForDocument(this.context.globalState, WIDTH_SELECTION_KEY, document.uri, message.value);
         }
       }
     });
@@ -1154,10 +1151,10 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       // in this document's discovered set -- it may not (e.g. the file
       // was deleted, or this is actually a different document that
       // happens to reuse a stale uri-keyed entry).
-      const persistedCssSelection = this.context.globalState.get<Record<string, string>>(CSS_SELECTION_KEY, {})[document.uri.toString()];
+      const persistedCssSelection = readForDocument<string>(this.context.globalState, CSS_SELECTION_KEY, document.uri);
       const defaultName = persistedCssSelection && files[persistedCssSelection] ? persistedCssSelection : discoveredDefaultName;
       const defaultContent = files[defaultName] || '';
-      const widthSelection = this.context.globalState.get<Record<string, string>>(WIDTH_SELECTION_KEY, {})[document.uri.toString()] || '';
+      const widthSelection = readForDocument<string>(this.context.globalState, WIDTH_SELECTION_KEY, document.uri) || '';
 
       const theme = vscode.window.activeColorTheme;
       const isDark = theme.kind === vscode.ColorThemeKind.Dark || theme.kind === vscode.ColorThemeKind.HighContrast;
