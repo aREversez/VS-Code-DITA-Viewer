@@ -6,6 +6,7 @@ import { renderDocument } from '../render/renderer';
 import type { MapEntry } from '../render/mapTypeMap';
 import { isDitamapRef } from '../render/mapTypeMap';
 import type { BookPart } from './bookPatch';
+import { sourceStamp } from './sourceText';
 
 // ── Image dimensions (for reserving layout space before the image loads) ──
 //
@@ -989,27 +990,17 @@ export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
 // ── Topic render cache (book mode) ──
 
 /**
- * Fingerprint of a set of files' mtimes, used to decide whether a cached
- * result derived from them is still valid. A file that cannot be statted
- * contributes "?" rather than being dropped, so deleting a dependency
- * invalidates exactly as a modification does -- and creating a file that was
- * previously missing turns "?" into a real timestamp, which is the other half
- * of the same requirement.
+ * Fingerprint of a set of files, used to decide whether a cached result
+ * derived from them is still valid: one sourceStamp per file (sourceText.ts
+ * has the rules, including how a missing file and a changed size count),
+ * joined in order.
  *
- * Shared by buildKeyMap's cache (DitaViewerProvider.ts) and renderTopicCached
- * below. It lived privately in the former until the topic cache needed the
- * identical logic; keeping one copy is the point.
+ * Shared by buildKeyMap's cache (keyMap.ts), renderTopicCached below and
+ * the book search index. It lived privately in the first until the topic
+ * cache needed the identical logic; keeping one copy is the point.
  */
 export function stampFiles(files: string[]): string {
-  return files
-    .map((f) => {
-      try {
-        return String(statSync(f).mtimeMs);
-      } catch {
-        return '?';
-      }
-    })
-    .join('|');
+  return files.map(sourceStamp).join('|');
 }
 
 /**

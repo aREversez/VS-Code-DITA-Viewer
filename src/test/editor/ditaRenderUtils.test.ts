@@ -361,11 +361,15 @@ describe('renderTopicCached', () => {
     const a = writeTopic('a.dita', '<p>first</p>');
     assert.ok(render(a).html.includes('first'));
 
-    writeTopic('a.dita', '<p>second</p>'); // new content, same pinned mtime
+    // New content of the SAME LENGTH at the same pinned mtime: the stamp is
+    // mtime:size, so a different length would (correctly) invalidate -- see
+    // sourceText.test.ts. Equal length is what leaves nothing for the stamp
+    // to notice.
+    writeTopic('a.dita', '<p>other</p>');
 
     const again = render(a);
     assert.ok(again.html.includes('first'), 'no dependency changed, so the stored HTML is what should answer');
-    assert.ok(!again.html.includes('second'), 'a re-render would have picked up the new content');
+    assert.ok(!again.html.includes('other'), 'a re-render would have picked up the new content');
   });
 
   it('should re-render a topic once its own file mtime changes', () => {

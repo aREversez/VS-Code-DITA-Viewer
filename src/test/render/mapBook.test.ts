@@ -728,9 +728,10 @@ describe('renderBookEntries', () => {
     const first = renderBook(entries);
     assert.ok(first.includes('alpha') && first.includes('beta'));
 
-    // New bytes on disk, mtime pinned where it was: only a cached answer can
+    // New bytes on disk -- the same number of them, since the stamp is
+    // mtime:size -- with mtime pinned where it was: only a cached answer can
     // reproduce the previous pass exactly.
-    writeTopic('topics/reuse-b.dita', '<p>beta rewritten</p>');
+    writeTopic('topics/reuse-b.dita', '<p>zeta</p>');
     assert.strictEqual(
       renderBook(entries),
       first,
@@ -739,7 +740,7 @@ describe('renderBookEntries', () => {
 
     bumpMtime(b);
     const third = renderBook(entries);
-    assert.ok(third.includes('beta rewritten'), 'the edited topic is re-rendered');
+    assert.ok(third.includes('zeta'), 'the edited topic is re-rendered');
     assert.ok(third.includes('alpha'), 'and the untouched one is still there');
   });
 
