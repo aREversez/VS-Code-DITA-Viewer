@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Features
+
+- **The DITA Map preview remembers how each map was last read.** Reopening a map brings back the view it was left in (Outline, Book or Docsite) and, in Docsite mode, the topic that was open. A remembered view that cannot render the map any more (for example Docsite view of a map that now has no topics) falls back to Outline.
+
 ### Fixes
 
 - In-page search (`Ctrl+F`) now finds text that runs across inline markup, such as `Click <b>OK</b> now` or a Chinese phrase with a bold word in the middle, and highlights it as one match. Block boundaries (paragraphs, list items, line breaks) still separate matches.

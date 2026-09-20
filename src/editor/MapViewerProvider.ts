@@ -12,6 +12,7 @@ import { formatLocalizedRole } from '../language/bookRoleL10n';
 import { dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
 import { readForDocument, writeForDocument } from './perDocumentState';
+import { MAP_VIEW_STATE_KEY, MapMode, parseMapViewState, nextMapViewState } from './mapViewState';
 
 // Test-only hook: see the identical comment in DitaViewerProvider.ts.
 const lastRenderedHtmlByUri = new Map<string, string>();
@@ -520,12 +521,29 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     _token: vscode.CancellationToken,
   ): Promise<void> {
     const documentRoot = vscode.Uri.file(dirname(document.uri.fsPath));
-    // Per-panel mode state (not global)
-    let currentMode: 'tree' | 'book' | 'site' = 'tree';
+    // Per-panel mode state, seeded from what this document was last left in
+    // (mapViewState.ts): a person who reads a map in docsite view gets it
+    // back in docsite view, on the topic they were on.
+    const remembered = parseMapViewState(readForDocument(this.context.globalState, MAP_VIEW_STATE_KEY, document.uri));
+    let currentMode: MapMode = remembered?.mode ?? 'tree';
+    // A remembered mode has not yet been shown to render this map. Docsite
+    // view of a map with no topics renders an error page, and that page has
+    // no toolbar to leave it with -- so if the very first render fails,
+    // updateWebview gives up on the remembered mode instead of trapping the
+    // document in it on every later opening.
+    let rememberedModeUnproven = currentMode !== 'tree';
+    // Set when that fallback happened. The outline tree that replaced the
+    // remembered mode is a stopgap, not a choice: it must not overwrite the
+    // remembered mode (the failure may be a map that was mid-edit, and the
+    // next opening deserves another try). Cleared by the person's own next
+    // mode switch.
+    let keepRememberedView = false;
     // Which topic (absolute path) docsite mode is currently showing --
-    // undefined before the first site-mode render, which falls back to the
-    // nav manifest's first entry (see generateHtml's site-mode branch).
-    let currentSitePage: string | undefined;
+    // seeded from the remembered one, else undefined before the first
+    // site-mode render, which falls back to the nav manifest's first entry
+    // (see generateHtml's site-mode branch). A remembered page the map no
+    // longer has falls back the same way.
+    let currentSitePage: string | undefined = remembered?.sitePage;
     // Populated by every full site-mode render (updateWebview), consumed by
     // postSitePageUpdate so a page-switch click reuses the already-built
     // manifest/keyMap instead of re-parsing the whole map and re-reading
@@ -562,6 +580,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         vscode.commands.executeCommand('vscode.openWith', targetUri, viewType);
       } else if (message.type === 'switchMode') {
         currentMode = message.mode as 'tree' | 'book' | 'site';
+        keepRememberedView = false;
         requestUpdate('full');
       } else if (message.type === MSG_SWITCH_SITE_PAGE) {
         const target = message.target as string;
@@ -713,6 +732,17 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       requestUpdate('full');
     });
 
+    // Stores the mode and site page this panel is showing, once a render of
+    // them succeeded -- never a mode that only produced an error page.
+    // nextMapViewState says whether that changes anything, so the full
+    // site-mode re-render every source edit causes does not write.
+    const rememberView = () => {
+      if (keepRememberedView) return;
+      const previous = parseMapViewState(readForDocument(this.context.globalState, MAP_VIEW_STATE_KEY, document.uri));
+      const next = nextMapViewState(previous, currentMode, currentSitePage);
+      if (next) writeForDocument(this.context.globalState, MAP_VIEW_STATE_KEY, document.uri, next);
+    };
+
     const updateWebview = async () => {
       if (disposed) return;
       if (currentMode === 'book') {
@@ -731,6 +761,13 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         if (disposed) return;
       }
       const rendered = this.generateHtml(document, webviewPanel.webview, currentMode, currentSitePage);
+      if (rendered.failed && rememberedModeUnproven) {
+        rememberedModeUnproven = false;
+        keepRememberedView = true;
+        currentMode = 'tree';
+        return updateWebview();
+      }
+      rememberedModeUnproven = false;
       webviewPanel.webview.html = rendered.html;
       lastRenderedHtmlByUri.set(document.uri.toString(), rendered.html);
       // Reassigning webview.html replaces the DOM outright, so the baseline
@@ -751,6 +788,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       siteManifestCache = rendered.siteManifest
         ? { manifest: rendered.siteManifest, keyMap: rendered.siteKeyMap!, bookMembers: rendered.siteBookMembers! }
         : undefined;
+      if (!rendered.failed) rememberView();
     };
 
     // Docsite mode's page-switch path: unlike postContentUpdate below (a
@@ -795,6 +833,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         return;
       }
       webviewPanel.webview.postMessage({ type: MSG_UPDATE_CONTENT, html: topic.html });
+      rememberView();
     };
 
     // The common case: a regular source edit (topicref profiling, adding/
@@ -1118,7 +1157,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     webview: vscode.Webview,
     mode: 'tree' | 'book' | 'site',
     sitePageHint?: string,
-  ): { html: string; parts?: BookPart[]; sidebarTreeHtml?: string; resolvedSitePage?: string; siteManifest?: DocsiteNavEntry[]; siteKeyMap?: Map<string, string>; siteBookMembers?: ReadonlySet<string> } {
+  ): { html: string; failed?: true; parts?: BookPart[]; sidebarTreeHtml?: string; resolvedSitePage?: string; siteManifest?: DocsiteNavEntry[]; siteKeyMap?: Map<string, string>; siteBookMembers?: ReadonlySet<string> } {
     const stylesUri = webview.asWebviewUri(
       vscode.Uri.file(join(this.context.extensionPath, 'media', 'styles.css')),
     );
@@ -1130,6 +1169,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       // later incremental update could diff against, and the caller's
       // baseline has to drop back to "unknown".
       return {
+        failed: true,
         html: `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><title>Error</title></head>
