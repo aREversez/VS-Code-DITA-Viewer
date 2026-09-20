@@ -16,9 +16,14 @@ export interface SyncableDocument {
   getText(): string;
 }
 
+/** A DITA source text, as opposed to an image, a stylesheet or anything else a preview may depend on. */
+export function isSourceFile(fsPath: string): boolean {
+  return /\.(dita|ditamap|xml)$/i.test(fsPath);
+}
+
 /** DITA sources that exist on disk. Untitled buffers and git/scm views have no file the previews could be reading. */
 export function isOverlayCandidate(scheme: string, fsPath: string): boolean {
-  return scheme === 'file' && /\.(dita|ditamap|xml)$/i.test(fsPath);
+  return scheme === 'file' && isSourceFile(fsPath);
 }
 
 /**
@@ -55,25 +60,32 @@ export function isPathUnder(folder: string, filePath: string): boolean {
 }
 
 /**
- * Whether a change event can affect a panel, given the files its last render
+ * Whether a file event can affect a panel, given the files its last render
  * read (`dependencies`, from trackSourceReads).
  *
- * Only unsaved-edit events are narrowed. A disk event always goes through:
- * the dependency set covers text sources, not the images and stylesheets a
- * disk event may be about, and a created or deleted file may be one a
- * dangling reference was waiting for -- so it cannot be ruled out from the
- * files read before it existed. An unsaved edit can only be about a source
- * text, and one the last render did not read cannot change what that render
- * would produce. (An edit that ADDS a reference is to a file the last render
- * did read: the panel's own document or one of its dependencies, and
- * re-rendering recomputes the set.) With no render yet there is nothing to
- * compare against, so nothing is ruled out.
+ * The folder watcher covers a whole workspace, so without this every save of
+ * every DITA file in it -- another map's topics, an unrelated book in the
+ * same repository -- re-renders every open preview. A change to a source text
+ * the last render did not read cannot change what that render would produce,
+ * so it is dropped. (An edit that ADDS a reference is to a file the last
+ * render did read: the panel's own document or one of its dependencies, and
+ * re-rendering recomputes the set.)
+ *
+ * Deliberately NOT narrowed:
+ *  - create and delete. A new file may be exactly what a dangling reference
+ *    was waiting for, which the files read before it existed cannot say; a
+ *    delete is the mirror case. Both are rare.
+ *  - changes to anything that is not a source text. The dependency set covers
+ *    the sources a render reads, not images and stylesheets.
+ * With no render yet there is nothing to compare against, so nothing is ruled
+ * out.
  */
 export function affectsPanel(
-  event: { fromEditor?: boolean },
+  event: { kind: 'create' | 'change' | 'delete'; fromEditor?: boolean },
   fsPath: string,
   dependencies: ReadonlySet<string> | undefined,
 ): boolean {
-  if (!event.fromEditor) return true;
+  if (event.kind !== 'change') return true;
+  if (!event.fromEditor && !isSourceFile(fsPath)) return true;
   return dependencies === undefined || dependsOn(dependencies, fsPath);
 }

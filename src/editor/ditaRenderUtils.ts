@@ -507,6 +507,10 @@ function extractRootTagName(content: string): string | undefined {
  * read.
  */
 function sniffRootTagName(absPath: string): string | undefined {
+  // Reads the head of the file outside readSourceText, so report it by hand:
+  // a panel drops change events for files its last render did not read, and
+  // this file's root tag is something the render shows.
+  noteSourceDependencies([absPath]);
   let fd: number | undefined;
   try {
     fd = openSync(absPath, 'r');

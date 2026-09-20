@@ -102,19 +102,39 @@ describe('isPathUnder', () => {
 
 describe('affectsPanel', () => {
   const deps: ReadonlySet<string> = new Set(['/w/topics/a.dita']);
+  const disk = (kind: 'create' | 'change' | 'delete') => ({ kind });
+  const editor = { kind: 'change' as const, fromEditor: true };
 
-  it('lets every disk event through, dependency or not (images, css and new files are not tracked)', () => {
-    assert.strictEqual(affectsPanel({}, '/w/other.dita', deps), true);
-    assert.strictEqual(affectsPanel({ fromEditor: undefined }, '/w/pic.png', deps), true);
+  it('lets every create and delete through: a new file may be what a dangling reference was waiting for', () => {
+    for (const kind of ['create', 'delete'] as const) {
+      assert.strictEqual(affectsPanel(disk(kind), '/w/other.dita', deps), true);
+      assert.strictEqual(affectsPanel(disk(kind), '/w/pic.png', deps), true);
+    }
+  });
+
+  it('lets a disk change to a source file through only if the last render read that file', () => {
+    assert.strictEqual(affectsPanel(disk('change'), '/w/topics/a.dita', deps), true);
+    assert.strictEqual(affectsPanel(disk('change'), '/w/topics/../topics/a.dita', deps), true);
+    // Another map's topic in the same workspace, saved: nothing this panel showed changed.
+    assert.strictEqual(affectsPanel(disk('change'), '/w/other/unrelated.dita', deps), false);
+    assert.strictEqual(affectsPanel(disk('change'), '/w/m.ditamap', deps), false);
+    assert.strictEqual(affectsPanel(disk('change'), '/w/x.XML', deps), false);
+  });
+
+  it('lets a disk change to anything that is not a source file through: images and stylesheets are not tracked', () => {
+    for (const p of ['/w/pic.png', '/w/style.css', '/w/logo.svg', '/w/notes.txt']) {
+      assert.strictEqual(affectsPanel(disk('change'), p, deps), true, p);
+    }
   });
 
   it('lets an unsaved-edit event through only for a file the last render read', () => {
-    assert.strictEqual(affectsPanel({ fromEditor: true }, '/w/topics/a.dita', deps), true);
-    assert.strictEqual(affectsPanel({ fromEditor: true }, '/w/topics/../topics/a.dita', deps), true);
-    assert.strictEqual(affectsPanel({ fromEditor: true }, '/w/topics/unrelated.dita', deps), false);
+    assert.strictEqual(affectsPanel(editor, '/w/topics/a.dita', deps), true);
+    assert.strictEqual(affectsPanel(editor, '/w/topics/../topics/a.dita', deps), true);
+    assert.strictEqual(affectsPanel(editor, '/w/topics/unrelated.dita', deps), false);
   });
 
-  it('cannot rule an unsaved-edit event out before the first render', () => {
-    assert.strictEqual(affectsPanel({ fromEditor: true }, '/w/topics/unrelated.dita', undefined), true);
+  it('cannot rule anything out before the first render', () => {
+    assert.strictEqual(affectsPanel(editor, '/w/topics/unrelated.dita', undefined), true);
+    assert.strictEqual(affectsPanel(disk('change'), '/w/topics/unrelated.dita', undefined), true);
   });
 });

@@ -8,6 +8,7 @@ import {
   clearTopicRenderCache,
   expandDitamapRefs,
   makeFileTitleResolver,
+  makeFileTopicTypeResolver,
 } from '../../editor/ditaRenderUtils';
 import {
   getBookSearchIndex,
@@ -75,6 +76,15 @@ describe('unsaved documents in previews', () => {
     const t = writeTopic('t.dita', '<p>x</p>');
     setSourceOverlay(t, `<topic id="t"><title>Typed Title</title><body/></topic>`);
     assert.strictEqual(makeFileTitleResolver(dir)('t.dita'), 'Typed Title');
+  });
+
+  it('counts a file whose root tag was sniffed for the sidebar chip as read, even though only its first bytes were', () => {
+    // The chip is the one input that never goes through readSourceText. A
+    // panel filters change events by the files it read, so without this a
+    // topic whose only role was its chip would be filtered out.
+    const a = writeTopic('a.dita', '<p>x</p>');
+    const { files } = trackSourceReads(() => makeFileTopicTypeResolver(dir)('a.dita'));
+    assert.ok(dependsOn(files, a));
   });
 
   it('inlines a mapref\'d map from its unsaved text', () => {
