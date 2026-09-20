@@ -51,3 +51,15 @@ export function foldSiteRefresh(current: SiteRefresh, requested: 'page' | 'full'
   if (current === 'none' || requested === 'full') return requested;
   return current;
 }
+
+/**
+ * A render failure replaces the page with a bare error document -- no
+ * script, so nothing that could receive the content message a later,
+ * successful render would post. While that page is on screen the only way
+ * back is to replace the document again, whatever the trigger was: a source
+ * edit that fixed the problem is a 'content' request and would otherwise
+ * leave the error showing until the person refreshed by hand.
+ */
+export function escalateAfterFailure(pageIsError: boolean, requested: 'content' | 'full'): 'content' | 'full' {
+  return pageIsError ? 'full' : requested;
+}

@@ -6,7 +6,7 @@ import { randomBytes } from 'crypto';
 import { buildTitleMap, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, detectNoteLabels, detectIndexLabel, readImageDimensions, clearImageDimensionsCache, clearTopicRenderCache, clearBookMembersCache } from './ditaRenderUtils';
 import { clearBookSearchIndexCache } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
-import { foldPendingRender, PendingRender } from './pendingRender';
+import { foldPendingRender, escalateAfterFailure, PendingRender } from './pendingRender';
 import { sharedWebviewStrings } from './webviewL10n';
 import { discoverCssFiles } from './cssDiscovery';
 import { findDitamapFiles, buildKeyMap, clearKeyMapCache } from './keyMap';
@@ -901,6 +901,10 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     // XML mid-edit reads less than a working one would).
     let dependencies: ReadonlySet<string> | undefined;
     const rememberDependencies = (files: ReadonlySet<string>) => { dependencies = files; };
+    // Whether the page on screen is the error document a failed render
+    // produces. It has no script, so a content message posted to it goes
+    // nowhere: recovery has to replace the document (escalateAfterFailure).
+    let pageIsError = false;
     const changeSubscription = vscode.workspace.onDidChangeTextDocument((e) => {
       if (e.document.uri.toString() !== document.uri.toString()) return;
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
@@ -963,7 +967,8 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       // case of a regular source edit, which no longer reloads at all.
       const editor = findSourceEditor();
       const initialScrollLine = editor?.visibleRanges[0]?.start.line;
-      const html = this.generateHtml(document, webviewPanel.webview, initialScrollLine, rememberDependencies);
+      const { html, failed } = this.generateHtml(document, webviewPanel.webview, initialScrollLine, rememberDependencies);
+      pageIsError = failed;
       webviewPanel.webview.html = html;
       lastRenderedHtmlByUri.set(document.uri.toString(), html);
     };
@@ -984,6 +989,10 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     // an error has no "content" to patch in.
     const postContentUpdate = () => {
       if (disposed) return;
+      if (escalateAfterFailure(pageIsError, 'content') === 'full') {
+        updateWebview();
+        return;
+      }
       const result = this.renderTopicContent(document, webviewPanel.webview, rememberDependencies);
       if (result.error !== undefined) {
         updateWebview();
@@ -1147,7 +1156,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     webview: vscode.Webview,
     initialScrollLine?: number,
     onDependencies?: (files: ReadonlySet<string>) => void,
-  ): string {
+  ): { html: string; failed: boolean } {
     const stylesUri = webview.asWebviewUri(
       vscode.Uri.file(join(this.context.extensionPath, 'media', 'styles.css')),
     );
@@ -1155,7 +1164,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     const result = this.renderTopicContent(document, webview, onDependencies);
     if (result.error !== undefined) {
       const message = result.error;
-      return `<!DOCTYPE html>
+      return { failed: true, html: `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><title>Error</title></head>
 <body>
@@ -1164,7 +1173,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
 <pre>${escapeHtml(message)}</pre>
 </div>
 </body>
-</html>`;
+</html>` };
     }
     const content = result.html;
 
@@ -1199,7 +1208,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       // CSP nonce for defense-in-depth against XSS
       const nonce = randomBytes(16).toString('base64');
 
-      return `<!DOCTYPE html>
+      return { failed: false, html: `<!DOCTYPE html>
 <html lang="en"${isDark ? ' class="vscode-dark"' : ''}>
 <head>
 <meta charset="UTF-8">
@@ -1214,10 +1223,10 @@ ${defaultContent ? `<style>\n${defaultContent}\n</style>` : ''}
 <div id="dita-content-root">${content}</div>
 <script nonce="${nonce}">${script}</script>
 </body>
-</html>`;
+</html>` };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      return `<!DOCTYPE html>
+      return { failed: true, html: `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><title>Error</title></head>
 <body>
@@ -1226,7 +1235,7 @@ ${defaultContent ? `<style>\n${defaultContent}\n</style>` : ''}
 <pre>${escapeHtml(message)}</pre>
 </div>
 </body>
-</html>`;
+</html>` };
     }
   }
 }

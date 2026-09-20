@@ -5,7 +5,7 @@ import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRe
 import { getBookSearchIndex, searchBookIndex, buildBookSearchResultsPayload, getBookSearchScript, invalidateBookSearchIndex } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
-import { foldPendingRender, foldSiteRefresh, PendingRender, SiteRefresh } from './pendingRender';
+import { foldPendingRender, foldSiteRefresh, escalateAfterFailure, PendingRender, SiteRefresh } from './pendingRender';
 import { sharedWebviewStrings } from './webviewL10n';
 import { buildKeyMap, FONT_PREFS_KEY, DEFAULT_FONT_PREFS, WIDTH_SELECTION_KEY, TAG_TOOLTIPS_KEY, DEFAULT_TAG_TOOLTIPS, escapeJson } from './DitaViewerProvider';
 import { formatLocalizedRole } from '../language/bookRoleL10n';
@@ -569,6 +569,10 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     // What a site-mode panel owes since the last time it rendered: see
     // foldSiteRefresh. postContentUpdate consumes it.
     let siteRefresh: SiteRefresh = 'none';
+    // Whether the page on screen is the error document a failed render
+    // produces -- bare, with no script, so a content message posted to it
+    // goes nowhere. See escalateAfterFailure.
+    let pageIsError = false;
     // Which topic (absolute path) docsite mode is currently showing --
     // seeded from the remembered one, else undefined before the first
     // site-mode render, which falls back to the nav manifest's first entry
@@ -811,6 +815,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       }
       rememberedModeUnproven = false;
       webviewPanel.webview.html = rendered.html;
+      pageIsError = rendered.failed === true;
       // A full render answers everything owed, and replaces what was read.
       siteRefresh = 'none';
       if (!rendered.failed) {
@@ -900,6 +905,10 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     // failed, to show the error page.
     const postContentUpdate = () => {
       if (disposed) return;
+      if (escalateAfterFailure(pageIsError, 'content') === 'full') {
+        updateWebview();
+        return;
+      }
       const pageOnly = siteRefresh === 'page';
       siteRefresh = 'none';
       if (currentMode === 'site') {

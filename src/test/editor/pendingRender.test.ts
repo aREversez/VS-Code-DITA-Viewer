@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { foldPendingRender, foldSiteRefresh, PendingRender } from '../../editor/pendingRender';
+import { foldPendingRender, foldSiteRefresh, escalateAfterFailure, PendingRender } from '../../editor/pendingRender';
 
 /**
  * The escalate-only rule behind a hidden preview panel's deferred render
@@ -77,5 +77,23 @@ describe('foldSiteRefresh', () => {
 
   it('keeps a pending page-only refresh page-only for another page-only request', () => {
     assert.strictEqual(foldSiteRefresh('page', 'page'), 'page');
+  });
+});
+
+describe('escalateAfterFailure', () => {
+  it('turns a content update into a full render while the page on screen is an error page', () => {
+    // The error page is a bare document with no script: a content message
+    // posted to it has no receiver, so the preview would stay on the error
+    // after the source was fixed. Only replacing the document recovers.
+    assert.strictEqual(escalateAfterFailure(true, 'content'), 'full');
+  });
+
+  it('leaves a full render as it is, failing or not', () => {
+    assert.strictEqual(escalateAfterFailure(true, 'full'), 'full');
+    assert.strictEqual(escalateAfterFailure(false, 'full'), 'full');
+  });
+
+  it('leaves a content update alone while the page on screen is a real one', () => {
+    assert.strictEqual(escalateAfterFailure(false, 'content'), 'content');
   });
 });
