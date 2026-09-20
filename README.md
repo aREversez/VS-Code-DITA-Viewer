@@ -73,10 +73,11 @@ The preview opens in a new column beside your source editor.
 
 #### Outline Mode vs Book Mode vs Docsite Mode
 
-The map preview opens in **Outline (tree) mode** by default, showing the map's hierarchical structure. A single toolbar toggle cycles Outline → Book → Docsite → Outline; its label always names the mode you're currently in. A **reload button** (↻) in the toolbar re-renders the preview from the files on disk.
+The map preview opens in **Outline (tree) mode** by default, showing the map's hierarchical structure. A single toolbar toggle cycles Outline → Book → Docsite → Outline; its label always names the mode you're currently in. Reopening a map brings back the view it was left in and, in Docsite mode, the topic that was open. A **reload button** (↻) in the toolbar re-renders the preview from scratch. Edits show up in the preview as you type, without saving: that includes referenced files (conref targets, key-definition maps, mapref'd maps, the topics of the book) that are open and modified in another tab.
 
 - **Book mode** renders all referenced topics inline as one continuous document.
-- **Docsite mode** renders one topic per page behind a collapsible, resizable sidebar tree — click a sidebar entry (or use the Previous/Next buttons) to switch pages, and use the sidebar's search box to search every topic in the book at once (case-sensitive/regex toggles, jump-to-match with highlight).
+- **Docsite mode** renders one topic per page behind a collapsible, resizable sidebar tree — click a sidebar entry (or use the Previous/Next buttons) to switch pages, and use the sidebar's search box to search every topic in the book at once (case-sensitive/regex toggles, jump-to-match with highlight). The **←/→** toolbar buttons (also the mouse's back/forward buttons and `Alt+←` / `Alt+→`) walk back and forward through the topics you visited, restoring your scroll position. Editing the map or a topic updates the sidebar and page in place, keeping your scroll position and search state.
+- **Sidebar keyboard navigation** (Book and Docsite modes) — the topic tree is a single Tab stop: `↑` `↓` move between rows, `→` expands a branch or steps into it, `←` collapses it or steps out to the parent, `Home` / `End` jump to the first / last row, `Enter` / `Space` open a topic or fold a group.
 
 Duplicate topics (same file referenced multiple times) are shown with a skip message rather than being re-rendered.
 
@@ -350,7 +351,7 @@ src/
 ├── extension.ts              # Extension entry point, command registration, DITA-OT transform flow
 ├── editor/
 │   ├── DitaViewerProvider.ts # CustomTextEditorProvider for .dita files (scroll sync, key map)
-│   ├── MapViewerProvider.ts  # CustomTextEditorProvider for .ditamap files (outline + book mode)
+│   ├── MapViewerProvider.ts  # CustomTextEditorProvider for .ditamap files (outline, book and docsite mode)
 │   ├── ditaRenderUtils.ts    # Shared pure rendering utilities (no vscode dependency)
 │   └── ditaOtUtils.ts        # DITA-OT detection, argument building, log classification
 ├── parser/
