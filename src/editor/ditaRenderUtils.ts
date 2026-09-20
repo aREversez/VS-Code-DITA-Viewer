@@ -1888,6 +1888,103 @@ export function getSidebarUpdateScript(opts: { site: boolean }): string {
 }
 
 /**
+ * The back/forward history of docsite mode, as plain functions over plain
+ * data: `{ entries: [{ target, scrollTop }], index }`, where target is a
+ * page's absolute path (the same string as a sidebar link's data-site-target)
+ * and scrollTop is where the reader was on it when they last left.
+ *
+ * Immutable -- every function returns a new history and never touches its
+ * argument -- because the value is also what gets persisted through
+ * vscode.setState, and because the caller's rule is "compute the new history,
+ * then commit it once the navigation is really happening".
+ *
+ * Defined as a script (rather than TypeScript the webview script would have
+ * to duplicate) so unit tests run the very code the webview runs; it uses no
+ * DOM. What it does NOT know is whether a page still exists -- the map may
+ * have been edited since the entry was made -- so the callers that need to
+ * know pass `exists`, and entries that fail it are skipped over, not deleted:
+ * a page that comes back (an undone edit) is reachable again.
+ */
+export function getSiteHistoryModelScript(): string {
+  return `
+  var SITE_HISTORY_LIMIT = 100;
+
+  function siteHistoryCreate(target) {
+    return { entries: [{ target: target, scrollTop: 0 }], index: 0 };
+  }
+
+  // Keeps the newest SITE_HISTORY_LIMIT entries; the index follows its entry.
+  function siteHistoryClamp(entries, index) {
+    var drop = entries.length - SITE_HISTORY_LIMIT;
+    if (drop <= 0) return { entries: entries, index: index };
+    return { entries: entries.slice(drop), index: Math.max(0, index - drop) };
+  }
+
+  // A new page reached by navigating (as opposed to stepping through the
+  // history): forward entries are discarded, as in a browser, and the page
+  // being left remembers where the reader was on it.
+  function siteHistoryPush(h, target, leavingScrollTop) {
+    if (h.entries[h.index].target === target) return h;
+    var entries = h.entries.slice(0, h.index + 1);
+    entries[h.index] = { target: entries[h.index].target, scrollTop: leavingScrollTop };
+    entries.push({ target: target, scrollTop: 0 });
+    return siteHistoryClamp(entries, entries.length - 1);
+  }
+
+  // The nearest entry in a direction (-1 back, +1 forward) that is worth
+  // going to: its page still exists, and it is not the page already showing.
+  function siteHistoryFind(h, dir, exists) {
+    var here = h.entries[h.index].target;
+    for (var i = h.index + dir; i >= 0 && i < h.entries.length; i += dir) {
+      var t = h.entries[i].target;
+      if (t !== here && exists(t)) return i;
+    }
+    return -1;
+  }
+
+  function siteHistoryCan(h, dir, exists) {
+    return siteHistoryFind(h, dir, exists) >= 0;
+  }
+
+  // Moves through the history. Returns null when there is nowhere to go;
+  // otherwise the new history and the entry to land on (with the scroll
+  // position it was left at). The page being left records its own position,
+  // which is what stepping the other way restores.
+  function siteHistoryStep(h, dir, exists, leavingScrollTop) {
+    var i = siteHistoryFind(h, dir, exists);
+    if (i < 0) return null;
+    var entries = h.entries.slice();
+    entries[h.index] = { target: entries[h.index].target, scrollTop: leavingScrollTop };
+    return { history: { entries: entries, index: i }, entry: entries[i] };
+  }
+
+  // What comes back from webview state after a reload is only trusted as far
+  // as it checks out, and only if its current entry is the page that came up
+  // (a theme switch reloads the same page; anything else means it is stale).
+  function siteHistoryRestore(raw, activeTarget) {
+    if (!raw || typeof raw !== 'object' || !Array.isArray(raw.entries) || raw.entries.length === 0) {
+      return siteHistoryCreate(activeTarget);
+    }
+    var index = raw.index;
+    if (typeof index !== 'number' || index % 1 !== 0 || index < 0 || index >= raw.entries.length) {
+      return siteHistoryCreate(activeTarget);
+    }
+    var entries = [];
+    for (var i = 0; i < raw.entries.length; i++) {
+      var e = raw.entries[i];
+      if (!e || typeof e.target !== 'string' || typeof e.scrollTop !== 'number' || !isFinite(e.scrollTop)) {
+        return siteHistoryCreate(activeTarget);
+      }
+      entries.push({ target: e.target, scrollTop: e.scrollTop });
+    }
+    var clamped = siteHistoryClamp(entries, index);
+    if (clamped.entries[clamped.index].target !== activeTarget) return siteHistoryCreate(activeTarget);
+    return clamped;
+  }
+`;
+}
+
+/**
  * Docsite mode's sidebar click handler -- flips which .site-nav-link
  * carries the `active` class (client-side, no server round-trip for that
  * part; see renderSiteNavHtml's own comment for why) and asks the
