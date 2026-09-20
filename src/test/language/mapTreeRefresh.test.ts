@@ -89,4 +89,15 @@ describe('shouldRefreshMapTree', () => {
     assert.strictEqual(shouldRefreshMapTree(abs, 'change'), false);
     assert.strictEqual(shouldRefreshMapTree(join('n:', 'AI', 'proj', 'test.ditamap'), 'change'), true);
   });
+
+  it('never reloads for an event that comes from unsaved editor text, whatever the file', () => {
+    // A ditamap being typed into is the tree's entire input, but reloading it
+    // on every keystroke would throw away the user's expansion state each
+    // time; the tree already reloads on save.
+    for (const p of ['/w/m.ditamap', '/w/a.dita']) {
+      for (const kind of ['change', 'create', 'delete'] as const) {
+        assert.strictEqual(shouldRefreshMapTree(p, kind, true), false, `${p} ${kind}`);
+      }
+    }
+  });
 });

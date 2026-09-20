@@ -210,7 +210,7 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
       // Not every watched file is this tree's business: a topic's contents
       // change nothing the tree displays, and reloading for it would throw
       // away the user's expansion state. See shouldRefreshMapTree.
-      if (!shouldRefreshMapTree(event.uri.fsPath, event.kind)) return;
+      if (!shouldRefreshMapTree(event.uri.fsPath, event.kind, event.fromEditor === true)) return;
       this.requestRefresh();
     });
   }

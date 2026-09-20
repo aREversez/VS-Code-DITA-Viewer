@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { spawn } from 'child_process';
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs';
 import { basename, dirname, isAbsolute, join, resolve } from 'path';
+import { registerSourceOverlay } from './editor/sourceOverlayFeed';
 import { DitaViewerProvider, findDitamapFiles, getLastRenderedHtmlForTesting, clearAllCaches } from './editor/DitaViewerProvider';
 import { MapViewerProvider, getLastRenderedMapHtmlForTesting, clearMapCache } from './editor/MapViewerProvider';
 import {
@@ -23,6 +24,10 @@ import { registerCompareCommand } from './editor/ditaDiffProvider';
 const TRANSFORM_CMD = 'ditaViewer.transformWithDitaOt';
 
 export function activate(context: vscode.ExtensionContext) {
+  // Unsaved editor text into the sources the previews read (sourceText.ts).
+  // First, so it is in place before anything can render.
+  registerSourceOverlay(context);
+
   // Language features: go-to-definition, completion, outline symbols,
   // broken-reference diagnostics (items shared by .dita and .ditamap)
   registerLanguageFeatures(context);

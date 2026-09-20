@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { dirname } from 'path';
 import { createRefCountedPool } from './refCountedPool';
+import { onDidChangeSourceText } from './sourceOverlayFeed';
+import { isPathUnder } from './sourceOverlaySync';
 
 /**
  * Everything a DITA render can pull in from outside the document being
@@ -24,6 +26,14 @@ export interface DitaFileEvent {
    * contents changing alters nothing the tree displays.
    */
   kind: DitaFileEventKind;
+  /**
+   * True when the source changed in an editor rather than on disk: text typed
+   * but not saved, or that text reverted or discarded (see
+   * sourceOverlayFeed.ts). The file on disk is untouched, so consumers whose
+   * input is the disk (the map tree) have nothing to react to, while the
+   * previews, which render unsaved text, do.
+   */
+  fromEditor?: true;
 }
 
 /**
@@ -46,6 +56,12 @@ const pool = createRefCountedPool<string, DitaFileEvent>((key, broadcast) => {
     watcher.onDidChange((uri) => broadcast({ uri, kind: 'change' })),
     watcher.onDidCreate((uri) => broadcast({ uri, kind: 'create' })),
     watcher.onDidDelete((uri) => broadcast({ uri, kind: 'delete' })),
+    // The disk watcher cannot see unsaved edits. The pool's folder scoping
+    // applies to these too: a panel hears only about documents under the
+    // folder it watches.
+    onDidChangeSourceText((uri) => {
+      if (isPathUnder(base.fsPath, uri.fsPath)) broadcast({ uri, kind: 'change', fromEditor: true });
+    }),
   ];
   return () => {
     for (const s of subscriptions) s.dispose();
