@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { syncDocumentToOverlay, isOverlayCandidate, isPathUnder, SyncableDocument } from '../../editor/sourceOverlaySync';
+import { syncDocumentToOverlay, isOverlayCandidate, isPathUnder, affectsPanel, SyncableDocument } from '../../editor/sourceOverlaySync';
 import { readSourceText, clearAllSourceOverlays, sourceOverlaySize } from '../../editor/sourceText';
 
 describe('syncDocumentToOverlay', () => {
@@ -97,5 +97,24 @@ describe('isPathUnder', () => {
     assert.strictEqual(isPathUnder('/w', '/wx/a.dita'), false);
     assert.strictEqual(isPathUnder('/w/docs', '/w/docs2/a.dita'), false);
     assert.strictEqual(isPathUnder('/w/docs', '/w/a.dita'), false);
+  });
+});
+
+describe('affectsPanel', () => {
+  const deps: ReadonlySet<string> = new Set(['/w/topics/a.dita']);
+
+  it('lets every disk event through, dependency or not (images, css and new files are not tracked)', () => {
+    assert.strictEqual(affectsPanel({}, '/w/other.dita', deps), true);
+    assert.strictEqual(affectsPanel({ fromEditor: undefined }, '/w/pic.png', deps), true);
+  });
+
+  it('lets an unsaved-edit event through only for a file the last render read', () => {
+    assert.strictEqual(affectsPanel({ fromEditor: true }, '/w/topics/a.dita', deps), true);
+    assert.strictEqual(affectsPanel({ fromEditor: true }, '/w/topics/../topics/a.dita', deps), true);
+    assert.strictEqual(affectsPanel({ fromEditor: true }, '/w/topics/unrelated.dita', deps), false);
+  });
+
+  it('cannot rule an unsaved-edit event out before the first render', () => {
+    assert.strictEqual(affectsPanel({ fromEditor: true }, '/w/topics/unrelated.dita', undefined), true);
   });
 });

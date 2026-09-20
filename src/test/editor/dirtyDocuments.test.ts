@@ -14,7 +14,7 @@ import {
   clearBookSearchIndexCache,
   extractBookSearchEntry,
 } from '../../editor/bookSearchIndex';
-import { setSourceOverlay, clearSourceOverlay, clearAllSourceOverlays } from '../../editor/sourceText';
+import { setSourceOverlay, clearSourceOverlay, clearAllSourceOverlays, trackSourceReads, dependsOn } from '../../editor/sourceText';
 import { parseDitamap } from '../../parser/ditaParser';
 
 /**
@@ -111,6 +111,20 @@ describe('unsaved documents in previews', () => {
       assert.ok(render(host).html.includes('ORIGINAL'));
       setSourceOverlay(shared, topicText('shared.dita', '<p id="sn">UNSAVED</p>'));
       assert.ok(render(host).html.includes('UNSAVED'));
+    });
+
+    it('reports the same dependencies for a render it answered from the cache as for the one that built it', () => {
+      // A panel decides which edits concern it from the files its last render
+      // touched. A cache hit reads nothing, so without this the second pass
+      // over a book would tell the panel it depends on nothing.
+      const shared = writeTopic('shared.dita', '<p id="sn">ORIGINAL</p>');
+      const host = writeTopic('host.dita', '<p conref="shared.dita#shared/sn">fallback</p>');
+      const built = trackSourceReads(() => render(host));
+      const hit = trackSourceReads(() => render(host));
+      for (const { files } of [built, hit]) {
+        assert.ok(dependsOn(files, host), 'the topic itself');
+        assert.ok(dependsOn(files, shared), 'the conref target it pulled in');
+      }
     });
 
     it('keeps answering from the cache while the overlay is unchanged', () => {

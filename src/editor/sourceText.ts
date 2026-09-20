@@ -72,8 +72,53 @@ export function sourceOverlaySize(): number {
  * FileReader type asks for.
  */
 export function readSourceText(filePath: string, encoding: 'utf-8' = 'utf-8'): string {
-  const entry = overlay.get(key(filePath));
+  const k = key(filePath);
+  recorder?.add(k);
+  const entry = overlay.get(k);
   return entry ? entry.text : readFileSync(filePath, encoding);
+}
+
+// ── Which sources a render read ──
+//
+// A preview panel has to decide, for an edit made in some other document,
+// whether that edit can change what it shows. The answer is exactly "did my
+// last render read that file", which the readers above can report as they go.
+
+let recorder: Set<string> | undefined;
+
+/**
+ * Runs `fn` and returns its result along with every source file read through
+ * readSourceText while it ran (as normalized keys, for dependsOn). Nests: an
+ * inner call gets its own files, and they are also added to the outer one.
+ * Anything that answers from a cache instead of reading must say what the
+ * cached answer was built from -- see noteSourceDependencies.
+ */
+export function trackSourceReads<T>(fn: () => T): { result: T; files: ReadonlySet<string> } {
+  const outer = recorder;
+  const mine = new Set<string>();
+  recorder = mine;
+  try {
+    return { result: fn(), files: mine };
+  } finally {
+    recorder = outer;
+    if (outer) for (const f of mine) outer.add(f);
+  }
+}
+
+/**
+ * For a cache hit: reading nothing does not mean depending on nothing. The
+ * cache entry knows the files it was built from, and reports them here so an
+ * enclosing trackSourceReads sees the same set on the second pass as on the
+ * first. A no-op outside a tracker.
+ */
+export function noteSourceDependencies(filePaths: Iterable<string>): void {
+  if (!recorder) return;
+  for (const p of filePaths) recorder.add(key(p));
+}
+
+/** Whether a set returned by trackSourceReads contains this file, however its path is spelled. */
+export function dependsOn(files: ReadonlySet<string>, filePath: string): boolean {
+  return files.has(key(filePath));
 }
 
 /**

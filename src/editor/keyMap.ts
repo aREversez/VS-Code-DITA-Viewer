@@ -10,7 +10,7 @@
 // file for the byte-for-byte diff against the code's previous location.
 
 import * as vscode from 'vscode';
-import { readSourceText } from './sourceText';
+import { readSourceText, noteSourceDependencies } from './sourceText';
 import { dirname } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
@@ -103,6 +103,8 @@ export function buildKeyMap(docUri: vscode.Uri): Map<string, string> {
 
   const cached = keyMapCache.get(docDir);
   if (cached && cached.mapFilesKey === mapFilesKey && stampFiles(cached.files) === cached.stamps) {
+    // A hit reads nothing, but every render using this map depends on these files.
+    noteSourceDependencies(cached.files);
     return cached.map;
   }
 

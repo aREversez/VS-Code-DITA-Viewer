@@ -35,3 +35,19 @@ export function foldPendingRender(current: PendingRender, requested: 'content' |
   if (current === 'none' || requested === 'full') return requested;
   return current;
 }
+
+/**
+ * What a site-mode panel owes after edits it has not yet acted on: nothing,
+ * a refresh of the page it is showing ('page' -- an unsaved edit to a file
+ * only that page reads, which cannot change the sidebar), or a full re-render
+ * ('full' -- anything that can). Same escalate-only rule as foldPendingRender
+ * and for the same reason: a 'full' request must never be narrowed by a
+ * 'page' one that arrives after it inside the debounce window, or the
+ * sidebar edit it stands for is silently dropped.
+ */
+export type SiteRefresh = 'none' | 'page' | 'full';
+
+export function foldSiteRefresh(current: SiteRefresh, requested: 'page' | 'full'): SiteRefresh {
+  if (current === 'none' || requested === 'full') return requested;
+  return current;
+}

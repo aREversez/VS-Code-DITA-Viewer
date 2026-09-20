@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { foldPendingRender, PendingRender } from '../../editor/pendingRender';
+import { foldPendingRender, foldSiteRefresh, PendingRender } from '../../editor/pendingRender';
 
 /**
  * The escalate-only rule behind a hidden preview panel's deferred render
@@ -54,5 +54,28 @@ describe('foldPendingRender', () => {
     state = foldPendingRender(state, 'full'); // theme switch while still hidden
     state = foldPendingRender(state, 'content'); // another edit before it's shown again
     assert.strictEqual(state, 'full', 'the theme switch must still be honoured on reveal');
+  });
+});
+
+describe('foldSiteRefresh', () => {
+  it('takes the request outright when nothing was pending', () => {
+    assert.strictEqual(foldSiteRefresh('none', 'page'), 'page');
+    assert.strictEqual(foldSiteRefresh('none', 'full'), 'full');
+  });
+
+  it('escalates a pending page-only refresh to a full one', () => {
+    // A source edit that can change the sidebar (or a disk event) landing on
+    // top of an unsaved-edit refresh that only touches the page must not be
+    // narrowed back to the page: the sidebar would stay stale.
+    assert.strictEqual(foldSiteRefresh('page', 'full'), 'full');
+  });
+
+  it('never narrows a pending full refresh to page-only', () => {
+    assert.strictEqual(foldSiteRefresh('full', 'page'), 'full');
+    assert.strictEqual(foldSiteRefresh('full', 'full'), 'full');
+  });
+
+  it('keeps a pending page-only refresh page-only for another page-only request', () => {
+    assert.strictEqual(foldSiteRefresh('page', 'page'), 'page');
   });
 });

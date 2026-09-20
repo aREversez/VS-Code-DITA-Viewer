@@ -11,6 +11,8 @@ import { sharedWebviewStrings } from './webviewL10n';
 import { discoverCssFiles } from './cssDiscovery';
 import { findDitamapFiles, buildKeyMap, clearKeyMapCache } from './keyMap';
 import { readForDocument, writeForDocument } from './perDocumentState';
+import { trackSourceReads } from './sourceText';
+import { affectsPanel } from './sourceOverlaySync';
 
 // Test-only hook: @vscode/test-electron integration tests can't read a
 // webview's rendered HTML directly (VS Code doesn't expose the WebviewPanel
@@ -893,6 +895,12 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     // lives in pendingRender.ts -- see foldPendingRender -- so the rule is
     // pinned by a unit test rather than only by this comment.
     let pendingUpdate: PendingRender = 'none';
+    // The source files the last successful render read (its own, conref
+    // targets, key maps, ...). Decides which unsaved edits elsewhere are worth
+    // a refresh -- see affectsPanel. Kept across a failed render (malformed
+    // XML mid-edit reads less than a working one would).
+    let dependencies: ReadonlySet<string> | undefined;
+    const rememberDependencies = (files: ReadonlySet<string>) => { dependencies = files; };
     const changeSubscription = vscode.workspace.onDidChangeTextDocument((e) => {
       if (e.document.uri.toString() !== document.uri.toString()) return;
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
@@ -925,6 +933,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     const referencedFilesWatcher = acquireDitaFileWatcher(ditaWatchBase(document.uri), (event) => {
       if (disposed) return;
       if (event.uri.toString() === document.uri.toString()) return; // already handled above
+      if (!affectsPanel(event, event.uri.fsPath, dependencies)) return;
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
       renderDebounceTimer = setTimeout(() => {
         requestUpdate('content');
@@ -954,7 +963,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       // case of a regular source edit, which no longer reloads at all.
       const editor = findSourceEditor();
       const initialScrollLine = editor?.visibleRanges[0]?.start.line;
-      const html = this.generateHtml(document, webviewPanel.webview, initialScrollLine);
+      const html = this.generateHtml(document, webviewPanel.webview, initialScrollLine, rememberDependencies);
       webviewPanel.webview.html = html;
       lastRenderedHtmlByUri.set(document.uri.toString(), html);
     };
@@ -975,7 +984,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     // an error has no "content" to patch in.
     const postContentUpdate = () => {
       if (disposed) return;
-      const result = this.renderTopicContent(document, webviewPanel.webview);
+      const result = this.renderTopicContent(document, webviewPanel.webview, rememberDependencies);
       if (result.error !== undefined) {
         updateWebview();
         return;
@@ -1040,7 +1049,22 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
    * longer needs webview.html reassigned wholesale (a full page reload)
    * just to get fresh content onto the page -- see postContentUpdate.
    */
+  /**
+   * Renders the topic's content div, reporting (on success) which source
+   * files the render read -- see the `dependencies` note in
+   * resolveCustomTextEditor.
+   */
   private renderTopicContent(
+    document: vscode.TextDocument,
+    webview: vscode.Webview,
+    onDependencies?: (files: ReadonlySet<string>) => void,
+  ): { html: string; error?: undefined } | { html?: undefined; error: string } {
+    const { result, files } = trackSourceReads(() => this.renderTopicContentUntracked(document, webview));
+    if (result.error === undefined) onDependencies?.(files);
+    return result;
+  }
+
+  private renderTopicContentUntracked(
     document: vscode.TextDocument,
     webview: vscode.Webview,
   ): { html: string; error?: undefined } | { html?: undefined; error: string } {
@@ -1122,12 +1146,13 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     document: vscode.TextDocument,
     webview: vscode.Webview,
     initialScrollLine?: number,
+    onDependencies?: (files: ReadonlySet<string>) => void,
   ): string {
     const stylesUri = webview.asWebviewUri(
       vscode.Uri.file(join(this.context.extensionPath, 'media', 'styles.css')),
     );
 
-    const result = this.renderTopicContent(document, webview);
+    const result = this.renderTopicContent(document, webview, onDependencies);
     if (result.error !== undefined) {
       const message = result.error;
       return `<!DOCTYPE html>

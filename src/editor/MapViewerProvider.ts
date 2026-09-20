@@ -5,13 +5,15 @@ import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRe
 import { getBookSearchIndex, searchBookIndex, buildBookSearchResultsPayload, getBookSearchScript, invalidateBookSearchIndex } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
-import { foldPendingRender, PendingRender } from './pendingRender';
+import { foldPendingRender, foldSiteRefresh, PendingRender, SiteRefresh } from './pendingRender';
 import { sharedWebviewStrings } from './webviewL10n';
 import { buildKeyMap, FONT_PREFS_KEY, DEFAULT_FONT_PREFS, WIDTH_SELECTION_KEY, TAG_TOOLTIPS_KEY, DEFAULT_TAG_TOOLTIPS, escapeJson } from './DitaViewerProvider';
 import { formatLocalizedRole } from '../language/bookRoleL10n';
 import { dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
 import { readForDocument, writeForDocument } from './perDocumentState';
+import { trackSourceReads, dependsOn } from './sourceText';
+import { affectsPanel } from './sourceOverlaySync';
 import { MAP_VIEW_STATE_KEY, MapMode, parseMapViewState, nextMapViewState } from './mapViewState';
 
 // Test-only hook: see the identical comment in DitaViewerProvider.ts.
@@ -512,6 +514,25 @@ function getMapWebviewScript(mode: 'tree' | 'book' | 'site'): string {
 `;
 }
 
+/** What renderMapContent produces: the content for a mode, or the error that replaces it. */
+type RenderedMapContent =
+  | {
+      html: string;
+      parts?: BookPart[];
+      sidebarHtml?: string;
+      sidebarTreeHtml?: string;
+      resolvedSitePage?: string;
+      siteManifest?: DocsiteNavEntry[];
+      siteKeyMap?: Map<string, string>;
+      siteBookMembers?: ReadonlySet<string>;
+      /** Every source file the render read. */
+      files?: ReadonlySet<string>;
+      /** Site mode only: the files the topic page alone read. */
+      pageFiles?: ReadonlySet<string>;
+      error?: undefined;
+    }
+  | { html?: undefined; error: string };
+
 export class MapViewerProvider implements vscode.CustomTextEditorProvider {
   constructor(private readonly context: vscode.ExtensionContext) {}
 
@@ -538,6 +559,16 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     // next opening deserves another try). Cleared by the person's own next
     // mode switch.
     let keepRememberedView = false;
+    // The source files the last successful render read: everything (map,
+    // key maps, topics, conref targets, sidebar titles) and, in site mode,
+    // just what the page on screen read. They decide which unsaved edits
+    // elsewhere concern this panel -- see affectsPanel -- and, in site mode,
+    // whether one needs only the page refreshed. Kept across a failed render.
+    let dependencies: ReadonlySet<string> | undefined;
+    let pageDependencies: ReadonlySet<string> | undefined;
+    // What a site-mode panel owes since the last time it rendered: see
+    // foldSiteRefresh. postContentUpdate consumes it.
+    let siteRefresh: SiteRefresh = 'none';
     // Which topic (absolute path) docsite mode is currently showing --
     // seeded from the remembered one, else undefined before the first
     // site-mode render, which falls back to the nav manifest's first entry
@@ -703,6 +734,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     let lastBookSidebarTreeHtml: string | undefined;
     const changeSubscription = vscode.workspace.onDidChangeTextDocument((e) => {
       if (e.document.uri.toString() !== document.uri.toString()) return;
+      siteRefresh = foldSiteRefresh(siteRefresh, 'full');
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
       renderDebounceTimer = setTimeout(() => requestUpdate('content'), 300);
     });
@@ -720,6 +752,16 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     const referencedFilesWatcher = acquireDitaFileWatcher(ditaWatchBase(document.uri), (event) => {
       if (disposed) return;
       if (event.uri.toString() === document.uri.toString()) return; // already handled above
+      if (!affectsPanel(event, event.uri.fsPath, dependencies)) return;
+      if (event.fromEditor && currentMode === 'site') {
+        // Text typed into another document but not saved. The page on screen
+        // shows it if it read that file; the sidebar (titles, structure) is
+        // left as it is until the save, so this never reloads the webview.
+        if (!pageDependencies || !dependsOn(pageDependencies, event.uri.fsPath)) return;
+        siteRefresh = foldSiteRefresh(siteRefresh, 'page');
+      } else {
+        siteRefresh = foldSiteRefresh(siteRefresh, 'full');
+      }
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
       renderDebounceTimer = setTimeout(() => requestUpdate('content'), 300);
     });
@@ -769,6 +811,12 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       }
       rememberedModeUnproven = false;
       webviewPanel.webview.html = rendered.html;
+      // A full render answers everything owed, and replaces what was read.
+      siteRefresh = 'none';
+      if (!rendered.failed) {
+        dependencies = rendered.files;
+        pageDependencies = rendered.pageFiles;
+      }
       lastRenderedHtmlByUri.set(document.uri.toString(), rendered.html);
       // Reassigning webview.html replaces the DOM outright, so the baseline
       // becomes whatever this render produced -- including nothing at all in
@@ -827,12 +875,18 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         ? currentSitePage
         : navigable[0].absPath;
       currentSitePage = resolvedSitePage;
-      const topic = this.renderSiteTopicContent(resolvedSitePage, webviewPanel.webview, site.keyMap, site.bookMembers);
+      const tracked = trackSourceReads(() => this.renderSiteTopicContent(resolvedSitePage, webviewPanel.webview, site.keyMap, site.bookMembers));
+      const topic = tracked.result;
       if (topic.error !== undefined) {
         updateWebview();
         return;
       }
       webviewPanel.webview.postMessage({ type: MSG_UPDATE_CONTENT, html: topic.html });
+      // The page now on screen is what pageDependencies describes; the
+      // whole-panel set only grows, so a page visited earlier stays in it
+      // until the next full render (an extra refresh, never a missed one).
+      pageDependencies = tracked.files;
+      dependencies = new Set([...(dependencies ?? []), ...tracked.files]);
       rememberView();
     };
 
@@ -846,7 +900,16 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     // failed, to show the error page.
     const postContentUpdate = () => {
       if (disposed) return;
+      const pageOnly = siteRefresh === 'page';
+      siteRefresh = 'none';
       if (currentMode === 'site') {
+        // Only unsaved text in a file the page reads changed (see the
+        // watcher listener above): refresh the page the way a page switch
+        // does, without touching the sidebar or reloading the webview.
+        if (pageOnly) {
+          postSitePageUpdate();
+          return;
+        }
         // A source edit can rename a topicref's navtitle, add/remove/reorder
         // entries, or change which topic a keyref-driven title resolves to
         // -- all sidebar changes, not just content-pane ones. The sidebar
@@ -864,6 +927,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         updateWebview();
         return;
       }
+      dependencies = result.files;
       const parts = result.parts;
       // Tree mode produces no parts and keeps sending its whole (small)
       // content div, exactly as before.
@@ -1051,12 +1115,28 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     return { html: result.html };
   }
 
+  /**
+   * Renders the map in a mode, reporting on success which source files the
+   * render read (`files`) and, in site mode, which of those belong to the
+   * topic page alone (`pageFiles`) -- see `dependencies` in
+   * resolveCustomTextEditor.
+   */
   private renderMapContent(
     document: vscode.TextDocument,
     webview: vscode.Webview,
     mode: 'tree' | 'book' | 'site',
     sitePageHint?: string,
-  ): { html: string; parts?: BookPart[]; sidebarHtml?: string; sidebarTreeHtml?: string; resolvedSitePage?: string; siteManifest?: DocsiteNavEntry[]; siteKeyMap?: Map<string, string>; siteBookMembers?: ReadonlySet<string>; error?: undefined } | { html?: undefined; error: string } {
+  ): RenderedMapContent {
+    const { result, files } = trackSourceReads(() => this.renderMapContentUntracked(document, webview, mode, sitePageHint));
+    return result.error === undefined ? { ...result, files } : result;
+  }
+
+  private renderMapContentUntracked(
+    document: vscode.TextDocument,
+    webview: vscode.Webview,
+    mode: 'tree' | 'book' | 'site',
+    sitePageHint?: string,
+  ): RenderedMapContent {
     const docDir = dirname(document.uri.fsPath);
     try {
       const rawXml = document.getText();
@@ -1084,7 +1164,8 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         const resolvedSitePage = sitePageHint && navigable.some((m) => m.absPath === sitePageHint)
           ? sitePageHint
           : navigable[0].absPath;
-        const topic = this.renderSiteTopicContent(resolvedSitePage, webview, keyMap, bookMembers);
+        const pageTracked = trackSourceReads(() => this.renderSiteTopicContent(resolvedSitePage, webview, keyMap, bookMembers));
+        const topic = pageTracked.result;
         if (topic.error !== undefined) return { error: topic.error };
         const sidebarHtml = renderSiteNavHtml(manifest, resolvedSitePage, vscode.l10n.t('Topics'), {
           expand: vscode.l10n.t('Expand'),
@@ -1096,7 +1177,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         // un-navtitled topic's <title> off disk, and rebuilding the book
         // membership set on every single click -- see that function's own
         // comment.
-        return { html: topic.html, sidebarHtml, resolvedSitePage, siteManifest: manifest, siteKeyMap: keyMap, siteBookMembers: bookMembers };
+        return { html: topic.html, sidebarHtml, resolvedSitePage, siteManifest: manifest, siteKeyMap: keyMap, siteBookMembers: bookMembers, pageFiles: pageTracked.files };
       }
 
       let content: string;
@@ -1157,7 +1238,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     webview: vscode.Webview,
     mode: 'tree' | 'book' | 'site',
     sitePageHint?: string,
-  ): { html: string; failed?: true; parts?: BookPart[]; sidebarTreeHtml?: string; resolvedSitePage?: string; siteManifest?: DocsiteNavEntry[]; siteKeyMap?: Map<string, string>; siteBookMembers?: ReadonlySet<string> } {
+  ): { html: string; failed?: true; parts?: BookPart[]; sidebarTreeHtml?: string; resolvedSitePage?: string; siteManifest?: DocsiteNavEntry[]; siteKeyMap?: Map<string, string>; siteBookMembers?: ReadonlySet<string>; files?: ReadonlySet<string>; pageFiles?: ReadonlySet<string> } {
     const stylesUri = webview.asWebviewUri(
       vscode.Uri.file(join(this.context.extensionPath, 'media', 'styles.css')),
     );
@@ -1236,6 +1317,8 @@ ${(result.sidebarHtml ? '<div id="__site-nav-resizer" class="site-nav-resizer" r
       siteManifest: result.siteManifest,
       siteKeyMap: result.siteKeyMap,
       siteBookMembers: result.siteBookMembers,
+      files: result.files,
+      pageFiles: result.pageFiles,
     };
   }
 

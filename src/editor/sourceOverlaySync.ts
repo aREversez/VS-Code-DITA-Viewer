@@ -5,7 +5,7 @@
  * this from the real editor events.
  */
 import { normalize, sep } from 'path';
-import { setSourceOverlay, clearSourceOverlay, sourceStamp } from './sourceText';
+import { setSourceOverlay, clearSourceOverlay, sourceStamp, dependsOn } from './sourceText';
 
 export interface SyncableDocument {
   fsPath: string;
@@ -52,4 +52,28 @@ export function isPathUnder(folder: string, filePath: string): boolean {
   const base = comparable(folder);
   const file = comparable(filePath);
   return file === base || file.startsWith(base + sep);
+}
+
+/**
+ * Whether a change event can affect a panel, given the files its last render
+ * read (`dependencies`, from trackSourceReads).
+ *
+ * Only unsaved-edit events are narrowed. A disk event always goes through:
+ * the dependency set covers text sources, not the images and stylesheets a
+ * disk event may be about, and a created or deleted file may be one a
+ * dangling reference was waiting for -- so it cannot be ruled out from the
+ * files read before it existed. An unsaved edit can only be about a source
+ * text, and one the last render did not read cannot change what that render
+ * would produce. (An edit that ADDS a reference is to a file the last render
+ * did read: the panel's own document or one of its dependencies, and
+ * re-rendering recomputes the set.) With no render yet there is nothing to
+ * compare against, so nothing is ruled out.
+ */
+export function affectsPanel(
+  event: { fromEditor?: boolean },
+  fsPath: string,
+  dependencies: ReadonlySet<string> | undefined,
+): boolean {
+  if (!event.fromEditor) return true;
+  return dependencies === undefined || dependsOn(dependencies, fsPath);
 }

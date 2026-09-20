@@ -9,6 +9,9 @@ import {
   clearSourceOverlay,
   clearAllSourceOverlays,
   sourceOverlaySize,
+  trackSourceReads,
+  noteSourceDependencies,
+  dependsOn,
 } from '../../editor/sourceText';
 import { stampFiles } from '../../editor/ditaRenderUtils';
 
@@ -128,5 +131,74 @@ describe('source overlay (unsaved editor text)', () => {
     clearAllSourceOverlays();
     assert.strictEqual(readSourceText(a), 'a');
     assert.strictEqual(sourceOverlaySize(), 0);
+  });
+});
+
+describe('tracking which sources a render read', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'dita-track-'));
+    clearAllSourceOverlays();
+  });
+  afterEach(() => {
+    clearAllSourceOverlays();
+    rmSync(dir, { recursive: true, force: true });
+  });
+  const mk = (name: string): string => {
+    const f = join(dir, name);
+    writeFileSync(f, name);
+    return f;
+  };
+
+  it('collects every file read inside the callback, overlaid or not, and returns the callback\'s result', () => {
+    const a = mk('a.dita');
+    const b = mk('b.dita');
+    setSourceOverlay(b, 'unsaved');
+    const { result, files } = trackSourceReads(() => readSourceText(a) + '+' + readSourceText(b));
+    assert.strictEqual(result, 'a.dita+unsaved');
+    assert.ok(dependsOn(files, a) && dependsOn(files, b));
+    assert.strictEqual(files.size, 2);
+  });
+
+  it('matches a file however its path is spelled', () => {
+    const a = mk('a.dita');
+    const { files } = trackSourceReads(() => readSourceText(a));
+    assert.ok(dependsOn(files, join(dir, 'x', '..', 'a.dita')));
+    assert.ok(!dependsOn(files, join(dir, 'b.dita')));
+  });
+
+  it('records nothing outside a tracker', () => {
+    const a = mk('a.dita');
+    readSourceText(a);
+    const { files } = trackSourceReads(() => undefined);
+    assert.strictEqual(files.size, 0);
+  });
+
+  it('lets a cache hit report the files its entry stands for', () => {
+    const a = mk('a.dita');
+    const b = mk('b.dita');
+    const { files } = trackSourceReads(() => noteSourceDependencies([a, b]));
+    assert.ok(dependsOn(files, a) && dependsOn(files, b));
+  });
+
+  it('nests: an inner tracker gets its own files, the outer one gets them too, and the outer keeps tracking afterwards', () => {
+    const a = mk('a.dita');
+    const b = mk('b.dita');
+    const c = mk('c.dita');
+    const outer = trackSourceReads(() => {
+      readSourceText(a);
+      const inner = trackSourceReads(() => readSourceText(b));
+      assert.strictEqual(inner.files.size, 1);
+      assert.ok(dependsOn(inner.files, b) && !dependsOn(inner.files, a));
+      readSourceText(c);
+    });
+    assert.strictEqual(outer.files.size, 3);
+  });
+
+  it('stops tracking when the callback throws, so later reads are not attributed to it', () => {
+    const a = mk('a.dita');
+    assert.throws(() => trackSourceReads(() => { throw new Error('boom'); }), /boom/);
+    const { files } = trackSourceReads(() => readSourceText(a));
+    assert.strictEqual(files.size, 1);
   });
 });

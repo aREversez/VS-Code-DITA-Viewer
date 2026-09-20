@@ -6,7 +6,7 @@ import { renderDocument } from '../render/renderer';
 import type { MapEntry } from '../render/mapTypeMap';
 import { isDitamapRef } from '../render/mapTypeMap';
 import type { BookPart } from './bookPatch';
-import { sourceStamp, readSourceText } from './sourceText';
+import { sourceStamp, readSourceText, noteSourceDependencies } from './sourceText';
 
 // ── Image dimensions (for reserving layout space before the image loads) ──
 //
@@ -1256,6 +1256,8 @@ export function renderTopicCached(input: TopicRenderInput): TopicRenderResult {
     // imageDimensionsCache above.
     topicRenderCache.delete(key);
     topicRenderCache.set(key, cached);
+    // A hit reads nothing, but the answer still stands for these files.
+    noteSourceDependencies(cached.files);
     return { html: cached.html, title: cached.title };
   }
 

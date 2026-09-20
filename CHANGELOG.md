@@ -5,6 +5,8 @@
 ### Features
 
 - **The DITA Map preview remembers how each map was last read.** Reopening a map brings back the view it was left in (Outline, Book or Docsite) and, in Docsite mode, the topic that was open. A remembered view that cannot render the map any more (for example Docsite view of a map that now has no topics) falls back to Outline.
+- **Unsaved changes in other files now show up in the preview.** A conref target, a key-definition map, a mapref'd map or a topic of the book that you have edited in its own editor tab but not saved is rendered from the text on screen, not from the copy on disk; discarding the change puts the disk copy back. A preview refreshes only for files it actually read. In Docsite view, unsaved text in a file the current page uses refreshes the page in place (no reload); the sidebar catches up on save.
+- Cached renders and the key map are now invalidated by a file's size as well as its modification time, so an edit that leaves the timestamp unchanged (a restored mtime, a coarse file system) is no longer missed.
 
 ### Fixes
 
