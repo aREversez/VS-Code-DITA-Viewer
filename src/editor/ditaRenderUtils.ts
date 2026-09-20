@@ -1837,6 +1837,44 @@ export function renderSiteNavHtml(
 }
 
 /**
+ * The webview half of MSG_UPDATE_SIDEBAR: defines applySidebarUpdate(html),
+ * which puts a freshly rendered sidebar tree (renderSiteNavTreeHtml) in place.
+ *
+ * Always a full innerHTML replace of the tree, never a diff -- the sidebar is
+ * cheap to rebuild -- and never a replace of the .site-nav ELEMENT itself
+ * (nav.outerHTML = ...): getSiteSidebarResizerScript captured that node once
+ * at script-init time and never re-queries it, so replacing it would leave
+ * the resizer silently pointing at a detached element.
+ *
+ * Book mode's .site-nav holds nothing but the tree, so its inner content is
+ * the thing to replace. Site mode's does not: getBookSearchScript inserts the
+ * search box into it and moves the original links into .site-nav-links, so
+ * replacing the nav's whole inner content there would delete the search box
+ * and any results with it. Only the link list is replaced. Either way the
+ * prev/next buttons derive their targets from the .site-nav-link elements
+ * (updatePrevNextButtons), which are new nodes now.
+ *
+ * `site` gates the site-only half at generation time rather than with a
+ * runtime typeof check: updatePrevNextButtons is declared by a script that is
+ * only emitted in site mode, and the declaration and its use should appear or
+ * disappear together. Extracted so it can be unit-tested; the message
+ * listener that calls it lives in MapViewerProvider.ts.
+ */
+export function getSidebarUpdateScript(opts: { site: boolean }): string {
+  return `
+  function applySidebarUpdate(html) {
+    var nav = document.querySelector('.site-nav');
+    if (!nav) return;
+    ${opts.site
+      ? `var links = nav.querySelector('.site-nav-links');
+    (links || nav).innerHTML = html;
+    updatePrevNextButtons();`
+      : `nav.innerHTML = html;`}
+  }
+`;
+}
+
+/**
  * Docsite mode's sidebar click handler -- flips which .site-nav-link
  * carries the `active` class (client-side, no server round-trip for that
  * part; see renderSiteNavHtml's own comment for why) and asks the

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, siteNavigableEntries, renderSiteNavHtml, renderSiteNavTreeHtml, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
+import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, siteNavigableEntries, renderSiteNavHtml, renderSiteNavTreeHtml, getSiteNavClickHandlerScript, getSidebarUpdateScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
 import { getBookSearchIndex, searchBookIndex, buildBookSearchResultsPayload, getBookSearchScript, invalidateBookSearchIndex } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
@@ -425,6 +425,8 @@ function getMapWebviewScript(mode: 'tree' | 'book' | 'site'): string {
     if (tagTooltipsOn) applyTagTooltips();
   }
 
+  ${getSidebarUpdateScript({ site: mode === 'site' })}
+
   window.addEventListener('message', function(e) {
     if (e.data.type === '${MSG_UPDATE_CONTENT}') {
       var contentRoot = document.getElementById('dita-content-root');
@@ -493,21 +495,10 @@ function getMapWebviewScript(mode: 'tree' | 'book' | 'site'): string {
       }
       afterContentSwap();
     } else if (e.data.type === '${MSG_UPDATE_SIDEBAR}') {
-      // Book mode's own sidebar refresh (nested-fold-and-highlight-plan.md
-      // item 1) -- always a full innerHTML replace of the tree, never a
-      // diff: the sidebar itself is cheap to rebuild (it's just the
-      // manifest's own titles/structure, not a whole book's worth of
-      // rendered topic content), so there is no equivalent need for
-      // bookPatch.ts's per-entry patching here. Deliberately replaces only
-      // .site-nav's INNER content, not the .site-nav element itself
-      // (nav.outerHTML = ...) -- getSiteSidebarResizerScript captured that
-      // exact node once at script-init time and never re-queries it, so an
-      // outerHTML replace would leave the resizer silently pointing at a
-      // detached element afterward. See renderSiteNavTreeHtml's own
-      // comment (ditaRenderUtils.ts) for the same reasoning on the host
-      // side.
-      var nav = document.querySelector('.site-nav');
-      if (nav) nav.innerHTML = e.data.html;
+      // Sent by book mode's content updates and, since site mode stopped
+      // reloading the page on an edit, by site mode's too -- see
+      // getSidebarUpdateScript for what each replaces and why.
+      applySidebarUpdate(e.data.html);
     }
   });
 })();
