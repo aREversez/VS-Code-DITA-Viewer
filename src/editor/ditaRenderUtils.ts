@@ -1833,7 +1833,16 @@ export function renderSiteNavHtml(
   collapsedIds: ReadonlySet<string> = new Set(),
   revealActive = false,
 ): string {
-  return `<nav class="site-nav" aria-label="${escapeAttr(navLabel)}">${renderSiteNavTreeHtml(manifest, currentAbsPath, toggleLabels, collapsedIds, revealActive)}</nav>`;
+  return wrapSiteNavTreeHtml(renderSiteNavTreeHtml(manifest, currentAbsPath, toggleLabels, collapsedIds, revealActive), navLabel);
+}
+
+/**
+ * The <nav> a rendered sidebar tree goes in. Split out of renderSiteNavHtml
+ * so a caller that also needs the bare tree (MSG_UPDATE_SIDEBAR sends the
+ * tree alone) can render it once and wrap it, instead of rendering it twice.
+ */
+export function wrapSiteNavTreeHtml(treeHtml: string, navLabel: string): string {
+  return `<nav class="site-nav" aria-label="${escapeAttr(navLabel)}">${treeHtml}</nav>`;
 }
 
 /**

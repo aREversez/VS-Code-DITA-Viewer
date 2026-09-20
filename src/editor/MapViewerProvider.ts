@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, siteNavigableEntries, renderSiteNavHtml, renderSiteNavTreeHtml, getSiteNavClickHandlerScript, getSidebarUpdateScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
+import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, siteNavigableEntries, renderSiteNavTreeHtml, wrapSiteNavTreeHtml, getSiteNavClickHandlerScript, getSidebarUpdateScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
 import { getBookSearchIndex, searchBookIndex, buildBookSearchResultsPayload, getBookSearchScript, invalidateBookSearchIndex } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
@@ -14,6 +14,7 @@ import { randomBytes } from 'crypto';
 import { readForDocument, writeForDocument } from './perDocumentState';
 import { trackSourceReads, dependsOn } from './sourceText';
 import { affectsPanel } from './sourceOverlaySync';
+import { diffSiteRender, SiteRender } from './siteRender';
 import { MAP_VIEW_STATE_KEY, MapMode, parseMapViewState, nextMapViewState } from './mapViewState';
 
 // Test-only hook: see the identical comment in DitaViewerProvider.ts.
@@ -564,6 +565,11 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     // produces -- bare, with no script, so a content message posted to it
     // goes nowhere. See escalateAfterFailure.
     let pageIsError = false;
+    // What site mode last put in the webview, for diffing the next in-place
+    // refresh against -- see siteRender.ts. undefined outside site mode, on
+    // an error page, and before the first render: nothing to diff against, so
+    // the next refresh sends both halves.
+    let lastSiteRender: SiteRender | undefined;
     // Which topic (absolute path) docsite mode is currently showing --
     // seeded from the remembered one, else undefined before the first
     // site-mode render, which falls back to the nav manifest's first entry
@@ -807,6 +813,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       rememberedModeUnproven = false;
       webviewPanel.webview.html = rendered.html;
       pageIsError = rendered.failed === true;
+      lastSiteRender = rendered.siteRender;
       // A full render answers everything owed, and replaces what was read.
       siteRefresh = 'none';
       if (!rendered.failed) {
@@ -878,11 +885,50 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         return;
       }
       webviewPanel.webview.postMessage({ type: MSG_UPDATE_CONTENT, html: topic.html });
+      // The webview flipped the active sidebar row on its own for a page
+      // switch, so the last sidebar the host rendered no longer describes
+      // its DOM: unknown, and resent by the next in-place refresh.
+      lastSiteRender = { sidebarTreeHtml: undefined, pageHtml: topic.html };
       // The page now on screen is what pageDependencies describes; the
       // whole-panel set only grows, so a page visited earlier stays in it
       // until the next full render (an extra refresh, never a missed one).
       pageDependencies = tracked.files;
       dependencies = new Set([...(dependencies ?? []), ...tracked.files]);
+      rememberView();
+    };
+
+    // Site mode's answer to a source edit that may touch the sidebar: render
+    // the map again, as a full reload would, but send the webview only the
+    // halves that came out different (diffSiteRender) instead of replacing the
+    // document. The page keeps its scroll position, the search box its query
+    // and results, the sidebar its scroll -- everything a reload threw away.
+    // A render that fails (or leaves nothing to show) still goes through
+    // updateWebview, which produces the error page.
+    const refreshSiteInPlace = () => {
+      if (disposed) return;
+      const rendered = this.renderMapContent(document, webviewPanel.webview, 'site', currentSitePage);
+      if (
+        rendered.error !== undefined ||
+        rendered.sidebarTreeHtml === undefined ||
+        rendered.resolvedSitePage === undefined ||
+        rendered.siteManifest === undefined ||
+        rendered.siteKeyMap === undefined ||
+        rendered.siteBookMembers === undefined
+      ) {
+        updateWebview();
+        return;
+      }
+      currentSitePage = rendered.resolvedSitePage;
+      siteManifestCache = { manifest: rendered.siteManifest, keyMap: rendered.siteKeyMap, bookMembers: rendered.siteBookMembers };
+      dependencies = rendered.files;
+      pageDependencies = rendered.pageFiles;
+      const next = { sidebarTreeHtml: rendered.sidebarTreeHtml, pageHtml: rendered.html };
+      const changes = diffSiteRender(lastSiteRender, next);
+      lastSiteRender = next;
+      // Sidebar first: the content message's follow-up work (the page-search
+      // refresh, a pending anchor) may look at sidebar rows.
+      if (changes.sidebar !== undefined) webviewPanel.webview.postMessage({ type: MSG_UPDATE_SIDEBAR, html: changes.sidebar });
+      if (changes.page !== undefined) webviewPanel.webview.postMessage({ type: MSG_UPDATE_CONTENT, html: changes.page });
       rememberView();
     };
 
@@ -912,14 +958,11 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         }
         // A source edit can rename a topicref's navtitle, add/remove/reorder
         // entries, or change which topic a keyref-driven title resolves to
-        // -- all sidebar changes, not just content-pane ones. The sidebar
-        // lives outside #dita-content-root (postSitePageUpdate's own
-        // content-only message only ever touches that div), so a content-
-        // only update here would leave it showing stale topics/titles.
-        // Correctness over avoiding a reload for this one case; postponing
-        // the same optimization postSitePageUpdate already does for actual
-        // page switches is a smaller, separate follow-up.
-        updateWebview();
+        // -- sidebar changes as well as content ones, and the sidebar lives
+        // outside #dita-content-root, which is all a content message
+        // touches. So both are re-rendered and the ones that differ are
+        // sent, without replacing the document.
+        refreshSiteInPlace();
         return;
       }
       const result = this.renderMapContent(document, webviewPanel.webview, currentMode);
@@ -1167,17 +1210,20 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         const pageTracked = trackSourceReads(() => this.renderSiteTopicContent(resolvedSitePage, webview, keyMap, bookMembers));
         const topic = pageTracked.result;
         if (topic.error !== undefined) return { error: topic.error };
-        const sidebarHtml = renderSiteNavHtml(manifest, resolvedSitePage, vscode.l10n.t('Topics'), {
+        // The bare tree is returned as well as the wrapped nav: it is what an
+        // in-place refresh sends as MSG_UPDATE_SIDEBAR (see refreshSiteInPlace).
+        const sidebarTreeHtml = renderSiteNavTreeHtml(manifest, resolvedSitePage, {
           expand: vscode.l10n.t('Expand'),
           collapse: vscode.l10n.t('Collapse'),
         }, this.getCollapsedNavIds(document), true);
+        const sidebarHtml = wrapSiteNavTreeHtml(sidebarTreeHtml, vscode.l10n.t('Topics'));
         // manifest/keyMap/bookMembers go back to the caller too
         // (updateWebview) so a page switch (postSitePageUpdate) can reuse
         // them instead of re-parsing the map, re-reading every
         // un-navtitled topic's <title> off disk, and rebuilding the book
         // membership set on every single click -- see that function's own
         // comment.
-        return { html: topic.html, sidebarHtml, resolvedSitePage, siteManifest: manifest, siteKeyMap: keyMap, siteBookMembers: bookMembers, pageFiles: pageTracked.files };
+        return { html: topic.html, sidebarHtml, sidebarTreeHtml, resolvedSitePage, siteManifest: manifest, siteKeyMap: keyMap, siteBookMembers: bookMembers, pageFiles: pageTracked.files };
       }
 
       let content: string;
@@ -1238,7 +1284,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     webview: vscode.Webview,
     mode: 'tree' | 'book' | 'site',
     sitePageHint?: string,
-  ): { html: string; failed?: true; parts?: BookPart[]; sidebarTreeHtml?: string; resolvedSitePage?: string; siteManifest?: DocsiteNavEntry[]; siteKeyMap?: Map<string, string>; siteBookMembers?: ReadonlySet<string>; files?: ReadonlySet<string>; pageFiles?: ReadonlySet<string> } {
+  ): { html: string; failed?: true; parts?: BookPart[]; sidebarTreeHtml?: string; resolvedSitePage?: string; siteManifest?: DocsiteNavEntry[]; siteKeyMap?: Map<string, string>; siteBookMembers?: ReadonlySet<string>; files?: ReadonlySet<string>; pageFiles?: ReadonlySet<string>; siteRender?: { sidebarTreeHtml: string; pageHtml: string } } {
     const stylesUri = webview.asWebviewUri(
       vscode.Uri.file(join(this.context.extensionPath, 'media', 'styles.css')),
     );
@@ -1319,6 +1365,11 @@ ${(result.sidebarHtml ? '<div id="__site-nav-resizer" class="site-nav-resizer" r
       siteBookMembers: result.siteBookMembers,
       files: result.files,
       pageFiles: result.pageFiles,
+      // What site mode now has in the webview, the baseline the next
+      // in-place refresh is diffed against (siteRender.ts).
+      siteRender: mode === 'site' && result.sidebarTreeHtml !== undefined
+        ? { sidebarTreeHtml: result.sidebarTreeHtml, pageHtml: result.html }
+        : undefined,
     };
   }
 
@@ -1397,7 +1448,7 @@ ${(result.sidebarHtml ? '<div id="__site-nav-resizer" class="site-nav-resizer" r
     // would quietly blow away item 3's persisted state on every keystroke.
     const collapsedIds = this.getCollapsedNavIds(document);
     const sidebarTreeHtml = navigable.length > 0 ? renderSiteNavTreeHtml(manifest, navigable[0].absPath, toggleLabels, collapsedIds) : '';
-    const sidebarHtml = navigable.length > 0 ? renderSiteNavHtml(manifest, navigable[0].absPath, vscode.l10n.t('Topics'), toggleLabels, collapsedIds) : '';
+    const sidebarHtml = navigable.length > 0 ? wrapSiteNavTreeHtml(sidebarTreeHtml, vscode.l10n.t('Topics')) : '';
 
     return { parts, sidebarHtml, sidebarTreeHtml };
   }
