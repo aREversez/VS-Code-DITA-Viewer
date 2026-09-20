@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, siteNavigableEntries, renderSiteNavTreeHtml, wrapSiteNavTreeHtml, getSiteNavClickHandlerScript, getSidebarUpdateScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
+import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, siteNavigableEntries, renderSiteNavTreeHtml, wrapSiteNavTreeHtml, getSiteNavClickHandlerScript, getSidebarUpdateScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavKeyboardScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
 import { getBookSearchIndex, searchBookIndex, buildBookSearchResultsPayload, getBookSearchScript, invalidateBookSearchIndex } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
@@ -176,6 +176,7 @@ function getMapWebviewScript(mode: 'tree' | 'book' | 'site'): string {
   ${getSiteNavCollapseStateHelperScript({ reportCollapseMsgType: MSG_SET_NAV_COLLAPSED })}
   ${mode === 'book' ? getBookScrollSyncScript() : ''}
   ${getSiteNavToggleScript()}
+  ${getSiteNavKeyboardScript()}
   ${getSiteSidebarResizerScript()}
 
   // Click on navigable tree node → post message to extension

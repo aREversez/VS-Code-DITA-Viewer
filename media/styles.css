@@ -1139,6 +1139,14 @@ body.mode-book.site-nav-collapsed .site-nav-resizer {
   min-width: 0;
 }
 .site-nav-link:hover { background: var(--vscode-list-hoverBackground); }
+/* Keyboard focus in the sidebar tree (arrow-key navigation). The row's own
+   box is what gets the ring: the toggle is out of the Tab order and the
+   li wraps a whole subtree, so neither is a good place to draw it. */
+.site-nav-link:focus-visible,
+.site-nav-group-label:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
 .site-nav-link.active {
   background: var(--vscode-list-activeSelectionBackground);
   color: var(--vscode-list-activeSelectionForeground);

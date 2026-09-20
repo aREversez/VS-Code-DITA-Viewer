@@ -76,4 +76,59 @@ describe('sidebar update script', () => {
     assert.doesNotThrow(() => load(false, null)('<ul/>'));
     assert.doesNotThrow(() => load(true, null, () => { throw new Error('no nav, no prev/next'); })('<ul/>'));
   });
+
+  describe('keyboard focus', () => {
+    // A sidebar row's stand-in: focusing it is recorded, so a test can see
+    // where focus was put back.
+    function makeRow(id: string, focused: string[]): { row: unknown; focusEl: unknown } {
+      const focusEl = { classList: { contains: (c: string) => c === 'site-nav-link' }, focus: () => { focused.push(id); } };
+      const row = { getAttribute: (n: string) => (n === 'data-nav-id' ? id : null), children: [focusEl] };
+      return { row, focusEl };
+    }
+
+    function navWith(rowsAfter: Array<{ row: unknown }>, activeRow: { row: unknown; focusEl: unknown } | null) {
+      const nav = makeNav();
+      const active = activeRow ? { closest: (sel: string) => (sel === '.site-nav-item' ? activeRow.row : null) } : null;
+      const navFull = Object.assign(nav, {
+        contains: (el: unknown) => el === active,
+        querySelectorAll: (sel: string) => (sel === '.site-nav-item' ? rowsAfter.map((r) => r.row) : []),
+      });
+      return { nav: navFull, active };
+    }
+
+    function run(site: boolean, navObj: FakeEl, activeElement: unknown, html: string) {
+      const script = getSidebarUpdateScript({ site });
+      // eslint-disable-next-line @typescript-eslint/no-implied-eval
+      const factory = new Function('document', 'updatePrevNextButtons', `${script}\nreturn applySidebarUpdate;`) as (
+        d: unknown, u: unknown,
+      ) => (html: string) => void;
+      factory({ querySelector: (s: string) => (s === '.site-nav' ? navObj : null), activeElement }, () => undefined)(html);
+    }
+
+    it('puts focus back on the same row of the new tree when it was inside the sidebar (book and site mode alike)', () => {
+      for (const site of [false, true]) {
+        const focused: string[] = [];
+        const before = makeRow('/b', focused);
+        const after = [makeRow('/a', focused), makeRow('/b', focused)];
+        const { nav, active } = navWith(after, before);
+        run(site, nav, active, '<ul>new</ul>');
+        assert.deepStrictEqual(focused, ['/b'], `site=${site}`);
+      }
+    });
+
+    it('does not take focus when it was not in the sidebar', () => {
+      const focused: string[] = [];
+      const { nav } = navWith([makeRow('/b', focused)], null);
+      run(false, nav, { closest: () => null }, '<ul>new</ul>');
+      assert.deepStrictEqual(focused, []);
+    });
+
+    it('lets focus go when the row it was on is not in the new tree', () => {
+      const focused: string[] = [];
+      const before = makeRow('/gone', focused);
+      const { nav, active } = navWith([makeRow('/a', focused)], before);
+      assert.doesNotThrow(() => run(false, nav, active, '<ul>new</ul>'));
+      assert.deepStrictEqual(focused, []);
+    });
+  });
 });

@@ -1765,9 +1765,27 @@ export function renderSiteNavTreeHtml(
     mark(tree);
   }
 
+  // Roving tabindex (the ARIA tree pattern): the whole tree is ONE Tab stop,
+  // and arrow keys move within it (getSiteNavKeyboardScript). Without it every
+  // topic link and every fold toggle is its own stop, and a large map takes
+  // hundreds of Tab presses to get past the sidebar. The stop starts on the
+  // active page -- where the reader is -- or the first row when there is none
+  // (book mode's initial highlight, a page the map no longer has). The client
+  // script moves it as focus moves.
+  const findActive = (nodes: SiteNavTreeNode[]): SiteNavTreeNode | undefined => {
+    for (const n of nodes) {
+      if (!n.entry.isGroup && n.entry.absPath !== undefined && n.entry.absPath === currentAbsPath) return n;
+      const inChildren = findActive(n.children);
+      if (inChildren) return inChildren;
+    }
+    return undefined;
+  };
+  const rovingNode = findActive(tree) ?? tree[0];
+
   const renderNode = (node: SiteNavTreeNode): string => {
     const entry = node.entry;
     const hasChildren = node.children.length > 0;
+    const rowTabindex = node === rovingNode ? '0' : '-1';
     // The link's own padding-left carries the full indent, toggle slot
     // included, exactly as before this feature -- the toggle itself is a
     // sibling, absolutely positioned into that reserved slot (see
@@ -1799,7 +1817,7 @@ export function renderSiteNavTreeHtml(
     // this feature existed.
     const isCollapsed = hasChildren && entry.id !== undefined && collapsedIds.has(entry.id) && !ancestorsOfActive.has(node);
     const toggleHtml = hasChildren
-      ? `<button type="button" class="site-nav-toggle" style="left:${toggleLeft}px" aria-expanded="${isCollapsed ? 'false' : 'true'}" aria-label="${isCollapsed ? expandLabel : collapseLabel}" data-expand-label="${expandLabel}" data-collapse-label="${collapseLabel}"></button>`
+      ? `<button type="button" class="site-nav-toggle" style="left:${toggleLeft}px" aria-expanded="${isCollapsed ? 'false' : 'true'}" aria-label="${isCollapsed ? expandLabel : collapseLabel}" tabindex="-1" data-expand-label="${expandLabel}" data-collapse-label="${collapseLabel}"></button>`
       : '';
     const childrenHtml = hasChildren
       ? `<ul class="site-nav-children" role="group">${node.children.map(renderNode).join('')}</ul>`
@@ -1817,11 +1835,12 @@ export function renderSiteNavTreeHtml(
     // (map/topichead in mapTypeMap.ts) and book mode renders one as a
     // plain section heading (renderBookParts's own `struct:` branch).
     if (entry.isGroup) {
-      const label = `<span class="site-nav-group-label" style="padding-left:${indent}px" title="${escapeAttr(entry.title)}">${roleChip}<span class="site-nav-link-text">${escapeHtml(entry.title)}</span></span>`;
+      const label = `<span class="site-nav-group-label" tabindex="${rowTabindex}" style="padding-left:${indent}px" title="${escapeAttr(entry.title)}">${roleChip}<span class="site-nav-link-text">${escapeHtml(entry.title)}</span></span>`;
       return `<li class="site-nav-item site-nav-item--group${itemClass}" role="treeitem"${itemAriaExpanded}${navIdAttr}>${toggleHtml}${label}${childrenHtml}</li>`;
     }
     const activeClass = entry.absPath === currentAbsPath ? ' active' : '';
-    const link = `<a href="#" class="site-nav-link${activeClass}" data-site-target="${escapeAttr(entry.absPath as string)}" style="padding-left:${indent}px" title="${escapeAttr(entry.title)}">${roleChip}${typeChip}<span class="site-nav-link-text">${escapeHtml(entry.title)}</span></a>`;
+    const currentAttr = activeClass ? ' aria-current="page"' : '';
+    const link = `<a href="#" class="site-nav-link${activeClass}"${currentAttr} tabindex="${rowTabindex}" data-site-target="${escapeAttr(entry.absPath as string)}" style="padding-left:${indent}px" title="${escapeAttr(entry.title)}">${roleChip}${typeChip}<span class="site-nav-link-text">${escapeHtml(entry.title)}</span></a>`;
     return `<li class="site-nav-item${itemClass}" role="treeitem"${itemAriaExpanded}${navIdAttr}>${toggleHtml}${link}${childrenHtml}</li>`;
   };
 
@@ -1847,6 +1866,192 @@ export function renderSiteNavHtml(
  */
 export function wrapSiteNavTreeHtml(treeHtml: string, navLabel: string): string {
   return `<nav class="site-nav" aria-label="${escapeAttr(navLabel)}">${treeHtml}</nav>`;
+}
+
+/**
+ * Arrow-key navigation for the sidebar tree, book and docsite mode alike (the
+ * ARIA tree pattern; the markup is renderSiteNavTreeHtml's, whose roving
+ * tabindex makes the whole tree one Tab stop).
+ *
+ *   Down / Up      next / previous VISIBLE row (rows inside a collapsed branch
+ *                  are not rows)
+ *   Right          collapsed parent: expand; expanded parent: first child
+ *   Left           expanded parent: collapse; anything else: the parent row
+ *   Home / End     first / last visible row
+ *   Enter / Space  a topic link: open it; a group: fold or unfold it
+ *
+ * The decision is siteNavKeyAction, a pure function over a simplified model of
+ * the visible rows, so the unit tests run the same code the page does. The
+ * rest is glue that builds that model from the DOM and carries the action out
+ * -- and carries it out with the CONTROLS THE MOUSE USES: a fold is a click on
+ * the row's toggle button, opening a topic is a click on its link. That keeps
+ * one implementation of "fold a branch and remember it" (getSiteNavToggleScript,
+ * which also reports the state to the extension) and of "open a page" (each
+ * mode's own click handling), instead of a keyboard copy that could drift.
+ *
+ * Enter on a link, and Enter/Space on the toggle button, are left to the
+ * browser: they already click, and handling them here as well would run the
+ * action twice.
+ *
+ * Also keeps two things about the tree in step with what the other scripts do
+ * to it: the Tab stop follows focus (and moves off a row whose branch was just
+ * collapsed by mouse, so the tree can never end up with its only Tab stop
+ * hidden), and aria-current follows the `active` class, however many places
+ * change that.
+ */
+export function getSiteNavKeyboardScript(): string {
+  return `
+  // rows: the visible rows, top to bottom, as { hasChildren, expanded, parent }
+  // where parent is the index of the parent row in the same array (-1 at the
+  // top level). Returns { type, index } -- focus that row, expand it, collapse
+  // it, or activate it -- or null when the key means nothing there.
+  function siteNavKeyAction(rows, index, key) {
+    var row = rows[index];
+    if (!row) return null;
+    switch (key) {
+      case 'ArrowDown':
+        return index + 1 < rows.length ? { type: 'focus', index: index + 1 } : null;
+      case 'ArrowUp':
+        return index > 0 ? { type: 'focus', index: index - 1 } : null;
+      case 'Home':
+        return index !== 0 ? { type: 'focus', index: 0 } : null;
+      case 'End':
+        return index !== rows.length - 1 ? { type: 'focus', index: rows.length - 1 } : null;
+      case 'ArrowRight':
+        if (!row.hasChildren) return null;
+        if (!row.expanded) return { type: 'expand', index: index };
+        return index + 1 < rows.length && rows[index + 1].parent === index ? { type: 'focus', index: index + 1 } : null;
+      case 'ArrowLeft':
+        if (row.hasChildren && row.expanded) return { type: 'collapse', index: index };
+        return row.parent >= 0 ? { type: 'focus', index: row.parent } : null;
+      case 'Enter':
+      case ' ':
+        return { type: 'activate', index: index };
+    }
+    return null;
+  }
+
+  // The element of a row that takes focus: its link, or a group's label -- not
+  // the <li>, which wraps the whole subtree, and not the toggle, which is for
+  // the mouse.
+  function siteNavFocusEl(li) {
+    for (var i = 0; i < li.children.length; i++) {
+      var c = li.children[i];
+      if (c.classList.contains('site-nav-link') || c.classList.contains('site-nav-group-label')) return c;
+    }
+    return null;
+  }
+
+  function siteNavToggleBtn(li) {
+    for (var i = 0; i < li.children.length; i++) {
+      if (li.children[i].classList.contains('site-nav-toggle')) return li.children[i];
+    }
+    return null;
+  }
+
+  function siteNavHasCollapsedAncestor(li) {
+    for (var p = li.parentElement; p; p = p.parentElement) {
+      if (p.classList && p.classList.contains('site-nav-item') && p.classList.contains('collapsed')) return true;
+    }
+    return false;
+  }
+
+  // The visible rows as parallel arrays: the <li>s, and the model
+  // siteNavKeyAction takes.
+  function siteNavVisibleRows() {
+    var all = document.querySelectorAll('.site-nav-tree .site-nav-item');
+    var lis = [];
+    var model = [];
+    for (var i = 0; i < all.length; i++) {
+      var li = all[i];
+      if (siteNavHasCollapsedAncestor(li)) continue;
+      var parentLi = li.parentElement ? li.parentElement.closest('.site-nav-item') : null;
+      var hasChildren = li.classList.contains('has-children');
+      lis.push(li);
+      model.push({
+        hasChildren: hasChildren,
+        expanded: hasChildren && !li.classList.contains('collapsed'),
+        parent: parentLi ? lis.indexOf(parentLi) : -1,
+      });
+    }
+    return { lis: lis, model: model };
+  }
+
+  document.addEventListener('keydown', function(e) {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var t = e.target;
+    if (!t || !t.closest) return;
+    var li = t.closest('.site-nav-tree .site-nav-item');
+    if (!li) return;
+    var rows = siteNavVisibleRows();
+    var index = rows.lis.indexOf(li);
+    if (index < 0) return;
+    var action = siteNavKeyAction(rows.model, index, e.key);
+    if (!action) return;
+    var el = siteNavFocusEl(rows.lis[action.index]);
+    if (action.type === 'activate') {
+      // Native: Enter on a link and Enter/Space on the toggle button click on their own.
+      if (t.tagName === 'BUTTON' || (e.key === 'Enter' && t.tagName === 'A')) return;
+      e.preventDefault();
+      var toggle = siteNavToggleBtn(li);
+      if (el && el.classList.contains('site-nav-link')) el.click();
+      else if (toggle) toggle.click();
+      return;
+    }
+    e.preventDefault();
+    if (action.type === 'focus') {
+      if (el) el.focus();
+    } else {
+      var btn = siteNavToggleBtn(rows.lis[action.index]);
+      if (btn) btn.click();
+    }
+  });
+
+  // One Tab stop for the whole tree, and it follows focus.
+  document.addEventListener('focusin', function(e) {
+    var t = e.target;
+    if (!t || !t.closest || !t.closest('.site-nav-tree')) return;
+    if (!(t.classList.contains('site-nav-link') || t.classList.contains('site-nav-group-label'))) return;
+    var stops = document.querySelectorAll('.site-nav-tree [tabindex="0"]');
+    for (var i = 0; i < stops.length; i++) stops[i].setAttribute('tabindex', '-1');
+    t.setAttribute('tabindex', '0');
+  });
+
+  // A fold click can hide the row that holds the only Tab stop; move the stop
+  // to the nearest row that is still visible. Runs after the toggle handler
+  // (registered earlier), and after expand/collapse-all, which are clicks too.
+  document.addEventListener('click', function() {
+    var stop = document.querySelector('.site-nav-tree [tabindex="0"]');
+    if (!stop) return;
+    var li = stop.closest('.site-nav-item');
+    if (!li || !siteNavHasCollapsedAncestor(li)) return;
+    var visible = li;
+    for (var p = li.parentElement; p; p = p.parentElement) {
+      if (p.classList && p.classList.contains('site-nav-item') && !siteNavHasCollapsedAncestor(p)) { visible = p; break; }
+    }
+    var el = siteNavFocusEl(visible);
+    if (!el) return;
+    stop.setAttribute('tabindex', '-1');
+    el.setAttribute('tabindex', '0');
+  });
+
+  // aria-current follows the 'active' class. Three places flip that class
+  // (a docsite page switch, a book-mode sidebar click, book-mode scroll sync);
+  // watching the class keeps the attribute right without a fourth copy of the
+  // rule in each. The server sets it on first render (renderSiteNavTreeHtml).
+  (function() {
+    var nav = document.querySelector('.site-nav');
+    if (!nav || typeof MutationObserver !== 'function') return;
+    new MutationObserver(function(records) {
+      for (var i = 0; i < records.length; i++) {
+        var el = records[i].target;
+        if (!el.classList || !el.classList.contains('site-nav-link')) continue;
+        if (el.classList.contains('active')) el.setAttribute('aria-current', 'page');
+        else el.removeAttribute('aria-current');
+      }
+    }).observe(nav, { attributes: true, subtree: true, attributeFilter: ['class'] });
+  })();
+`;
 }
 
 /**
@@ -1878,11 +2083,32 @@ export function getSidebarUpdateScript(opts: { site: boolean }): string {
   function applySidebarUpdate(html) {
     var nav = document.querySelector('.site-nav');
     if (!nav) return;
+    // Replacing the tree destroys the row that has keyboard focus, and with it
+    // the reader's place in the sidebar. Note which row it was (by the same
+    // stable id that keys the persisted fold state) and put focus on that row
+    // of the new tree; focus that was not in the sidebar is left where it is.
+    var focusedId = null;
+    var current = document.activeElement;
+    if (current && nav.contains(current)) {
+      var focusedRow = current.closest('.site-nav-item');
+      if (focusedRow) focusedId = focusedRow.getAttribute('data-nav-id');
+    }
     ${opts.site
       ? `var links = nav.querySelector('.site-nav-links');
     (links || nav).innerHTML = html;
     updatePrevNextButtons();`
       : `nav.innerHTML = html;`}
+    if (focusedId !== null) {
+      var rows = nav.querySelectorAll('.site-nav-item');
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i].getAttribute('data-nav-id') !== focusedId) continue;
+        for (var k = 0; k < rows[i].children.length; k++) {
+          var c = rows[i].children[k];
+          if (c.classList.contains('site-nav-link') || c.classList.contains('site-nav-group-label')) { c.focus(); break; }
+        }
+        break;
+      }
+    }
   }
 `;
 }
