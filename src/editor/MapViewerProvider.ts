@@ -600,14 +600,14 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     // (see generateHtml's site-mode branch). A remembered page the map no
     // longer has falls back the same way.
     let currentSitePage: string | undefined = remembered?.sitePage;
-    // Populated by every full site-mode render (updateWebview), consumed by
-    // postSitePageUpdate so a page-switch click reuses the already-built
-    // manifest/keyMap instead of re-parsing the whole map and re-reading
-    // every un-navtitled topic's <title> off disk again on every click --
-    // see postSitePageUpdate's own comment. Self-heals: postContentUpdate's
-    // site-mode branch always falls back to a full updateWebview() on a
-    // source edit (never a content-only message in site mode), which
-    // repopulates this: there is no separate invalidation path to keep in
+    // Populated by every site-mode render of the whole map (updateWebview,
+    // and refreshSiteInPlace -- what a source edit in site mode goes through),
+    // consumed by postSitePageUpdate so a page-switch click reuses the
+    // already-built manifest/keyMap instead of re-parsing the whole map and
+    // re-reading every un-navtitled topic's <title> off disk again on every
+    // click -- see postSitePageUpdate's own comment. Self-heals: any source
+    // edit re-renders the whole map through one of those two and so
+    // repopulates this; there is no separate invalidation path to keep in
     // sync by hand.
     let siteManifestCache: { manifest: DocsiteNavEntry[]; keyMap: Map<string, string>; bookMembers: ReadonlySet<string> } | undefined;
 
@@ -668,8 +668,10 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         }
         const searchDocDir = dirname(document.uri.fsPath);
         // The manual refresh button (getBookSearchScript's bsRefreshBtn):
-        // getBookSearchIndex's own mtime-based staleness check already
-        // catches an edited topic on its own, so this only matters for
+        // getBookSearchIndex's own stamp-based staleness check (sourceStamp:
+        // mtime and size on disk, the unsaved text for an open dirty
+        // document) already catches an edited topic on its own, so this only
+        // matters for
         // the reassurance case of forcing a rebuild anyway.
         if (message.refresh === true) invalidateBookSearchIndex(searchDocDir);
         const searchIndex = getBookSearchIndex(searchDocDir, site.manifest);
@@ -874,8 +876,8 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     // its own click handler already flipped the active class client-side
     // before this message was even sent (see getMapWebviewScript).
     //
-    // Reuses siteManifestCache (populated by the last full updateWebview()
-    // render) rather than re-parsing the map and rebuilding the manifest --
+    // Reuses siteManifestCache (populated by the last render of the whole
+    // map -- updateWebview or refreshSiteInPlace) rather than re-parsing the map and rebuilding the manifest --
     // which, for any topic the map itself never gave a navtitle, means
     // re-reading that topic's <title> off disk -- on every single click.
     // buildSiteManifest(document) is still here as a defensive fallback for
@@ -963,7 +965,10 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     // page reload means no images re-requesting/re-decoding, no scroll
     // position lost, and nothing for an in-flight scroll correction to
     // race against. Falls back to a full reload only if rendering itself
-    // failed, to show the error page.
+    // failed (to show the error page), or if the page on screen already IS
+    // the error page (escalateAfterFailure): it has no script to receive the
+    // message. Site mode does its own thing for a source edit, see
+    // refreshSiteInPlace.
     const postContentUpdate = () => {
       if (disposed) return;
       if (escalateAfterFailure(pageIsError, 'content') === 'full') {

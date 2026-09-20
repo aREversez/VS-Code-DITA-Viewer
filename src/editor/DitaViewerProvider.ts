@@ -986,7 +986,9 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     // else"), since there is no longer a reload for anything to race
     // against. Falls back to a full reload only if rendering itself
     // failed (malformed XML mid-edit, etc.), to show the error page --
-    // an error has no "content" to patch in.
+    // an error has no "content" to patch in -- or if the page on screen
+    // already is that error page, which has no script to receive a patch
+    // (escalateAfterFailure).
     const postContentUpdate = () => {
       if (disposed) return;
       if (escalateAfterFailure(pageIsError, 'content') === 'full') {

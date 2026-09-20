@@ -71,8 +71,10 @@ function getKeyValueFromRef(node: DitaNode): string | undefined {
 // buildKeyMap sits on hot paths (preview re-render, completion, diagnostics,
 // map tree) and used to re-read and re-parse every ancestor ditamap each
 // call. Cache per document directory; invalidated when the set of ancestor
-// maps changes or any involved file's mtime changes (including maps pulled
-// in via expandDitamapRefs, tracked through the recording reader).
+// maps changes or any involved file's stamp changes (sourceStamp in
+// sourceText.ts: mtime and size on disk, the unsaved text for an open dirty
+// document; including maps pulled in via expandDitamapRefs, tracked through
+// the recording reader).
 interface KeyMapCacheEntry {
   mapFilesKey: string;
   stamps: string;
@@ -84,8 +86,8 @@ const keyMapCache = new Map<string, KeyMapCacheEntry>();
 // folders cannot grow the cache without limit (evicts oldest-inserted first).
 const KEY_MAP_CACHE_MAX = 50;
 // stampFiles is imported from ditaRenderUtils.ts rather than defined here:
-// book-mode topic caching needs the identical mtime fingerprint, and two
-// copies of an invalidation rule drift apart silently.
+// book-mode topic caching needs the identical fingerprint, and two copies
+// of an invalidation rule drift apart silently.
 
 /** Part of clearAllCaches() in DitaViewerProvider.ts -- kept here alongside
  *  the cache it clears rather than exporting the Map itself. */

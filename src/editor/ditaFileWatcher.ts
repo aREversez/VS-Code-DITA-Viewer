@@ -19,11 +19,13 @@ export type DitaFileEventKind = 'change' | 'create' | 'delete';
 export interface DitaFileEvent {
   uri: vscode.Uri;
   /**
-   * Which watcher event fired. Both preview providers treat the three alike,
-   * since any of them can invalidate a render. Consumers that care about the
-   * difference need it though -- see shouldRefreshMapTree, where a .dita being
-   * created or deleted changes whether a tree entry can be opened, while its
-   * contents changing alters nothing the tree displays.
+   * Which watcher event fired. It matters to both kinds of consumer: the
+   * previews drop a 'change' to a source file their last render never read
+   * (affectsPanel) but always act on a create or delete, which may be what a
+   * dangling reference was waiting for; and the map tree cares whether a .dita
+   * was created or deleted (whether a tree entry can be opened) rather than
+   * changed (which alters nothing the tree displays) -- see
+   * shouldRefreshMapTree.
    */
   kind: DitaFileEventKind;
   /**

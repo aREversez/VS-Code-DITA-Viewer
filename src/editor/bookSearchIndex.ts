@@ -1,6 +1,7 @@
 // Full-book search (docsite design doc, 4.4). Deliberately separate from
 // the current-page search overlay (getSearchOverlayScript in
-// ditaRenderUtils.ts), which is a pure DOM/<mark> mechanism that already
+// ditaRenderUtils.ts), which is a pure DOM mechanism (text ranges painted
+// with the CSS Custom Highlight API) that already
 // works per-page for free in site mode -- searching the WHOLE book needs
 // its own text index, since a book can have far more content than what is
 // on screen at once. That said, the two are wired together rather than
@@ -180,9 +181,9 @@ export function clearBookSearchIndexCache(): void {
 /**
  * Drops just one book's cached index, forcing the next getBookSearchIndex
  * call for that docDir to rebuild from disk regardless of whether its own
- * mtime-based staleness check would have caught anything -- backs the
+ * stamp-based staleness check would have caught anything -- backs the
  * search box's manual refresh button (getBookSearchScript's bsRefreshBtn):
- * mtime stamps already invalidate automatically on an edit, so this exists
+ * stamps (sourceText.ts) already invalidate automatically on an edit, so this exists
  * for the reassurance case (the reader isn't sure the index reflects
  * disk, or a file changed some other way stampFiles can't observe) rather
  * than being required for correctness the way clearBookSearchIndexCache's
@@ -200,8 +201,8 @@ export function invalidateBookSearchIndex(docDir: string): void {
  * one docDir, matching buildKeyMap/getStableBookMembers' own granularity)
  * and invalidated the same dual way buildKeyMap is: the manifest's own
  * file list (order and membership -- a changed topicref list needs a new
- * index even if every individual file's mtime happens to be unchanged)
- * AND each file's own mtime stamp (a topic can be edited without the
+ * index even if every individual file's stamp happens to be unchanged)
+ * AND each file's own stamp (a topic can be edited without the
  * topicref list changing at all).
  */
 export function getBookSearchIndex(docDir: string, manifest: DocsiteNavEntry[]): Map<string, BookSearchEntry> {

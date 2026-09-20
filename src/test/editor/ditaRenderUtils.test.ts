@@ -1303,17 +1303,17 @@ describe('getSearchOverlayScript', () => {
     // test below ('does not create highlight ranges inside the .site-nav
     // sidebar') which exercises the same rule end to end.
     const script = getSearchOverlayScript(opts);
-    assert.ok(script.includes("classList.contains('site-nav')"), 'search TreeWalker filter should exclude the sidebar');
+    assert.ok(script.includes("classList.contains('site-nav')"), 'the search text collection should exclude the sidebar');
   });
 
   // ── CSS Custom Highlight API behavior ──
-  // jsdom has no Range/TreeWalker/CSS.highlights support, and the e2e harness
-  // only captures rendered HTML strings -- it cannot reach into a webview to
-  // run script and read state back (see extension.ts's own _test export
-  // comment). So, same spirit as getImageLightboxScript's fake DOM further
-  // down this file, this hand-rolls just enough of document/Range/
-  // TreeWalker/CSS to actually execute performSearch and assert on what it
-  // did, rather than only pinning source text.
+  // The e2e harness only captures rendered HTML strings -- it cannot reach
+  // into a webview to run script and read state back (see extension.ts's own
+  // _test export comment), and jsdom is not a dependency of this project. So,
+  // same spirit as getImageLightboxScript's fake DOM further down this file,
+  // this hand-rolls just enough of document/Range/CSS.highlights to actually
+  // execute performSearch and assert on what it did, rather than only
+  // pinning source text.
   interface FakeTextNode {
     nodeType: 3;
     textContent: string;
@@ -1454,7 +1454,6 @@ describe('getSearchOverlayScript', () => {
     clear(): void { this.items.clear(); }
   }
 
-  const FAKE_NODE_FILTER = { SHOW_TEXT: 4, FILTER_ACCEPT: 1, FILTER_REJECT: 2 };
 
   /** Runs the overlay script against a fake body tree and returns the
    *  CSS.highlights registry (a real Map -- HighlightRegistry is Map-shaped
@@ -1470,20 +1469,6 @@ describe('getSearchOverlayScript', () => {
       head,
       createElement: (tag: string) => { const el = makeFakeElement(tag); created.push(el); return el; },
       createRange: () => new FakeRange(),
-      createTreeWalker(root: FakeElement, _whatToShow: number, filter: { acceptNode: (n: FakeTextNode) => number }) {
-        const all = collectTextNodes(root);
-        let idx = -1;
-        return {
-          get currentNode() { return all[idx]; },
-          nextNode() {
-            while (idx + 1 < all.length) {
-              idx++;
-              if (filter.acceptNode(all[idx]) === FAKE_NODE_FILTER.FILTER_ACCEPT) return all[idx];
-            }
-            return null;
-          },
-        };
-      },
       addEventListener: (type: string, fn: () => void) => { (docListeners[type] ||= []).push(fn); },
       querySelectorAll: () => [] as FakeElement[],
     };
@@ -1493,8 +1478,8 @@ describe('getSearchOverlayScript', () => {
     const win = { scrollY: 0, innerHeight: 768, scrollTo: (o: Record<string, unknown>) => { scrollCalls.push(o); }, ...winExtras };
     const script = getSearchOverlayScript(opts);
     // eslint-disable-next-line @typescript-eslint/no-implied-eval
-    const api = new Function('document', 'window', 'NodeFilter', 'CSS', 'Highlight', script + '\nreturn { refresh: typeof refreshSearchAfterDomChange === "function" ? refreshSearchAfterDomChange : function() {}, open: openSearchBar };')(
-      doc, win, FAKE_NODE_FILTER, css, FakeHighlight,
+    const api = new Function('document', 'window', 'CSS', 'Highlight', script + '\nreturn { refresh: typeof refreshSearchAfterDomChange === "function" ? refreshSearchAfterDomChange : function() {}, open: openSearchBar };')(
+      doc, win, css, FakeHighlight,
     ) as { refresh: () => void; open: () => void };
     return { highlights, elements: created, scrollCalls, docListeners, ...api };
   }

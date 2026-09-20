@@ -699,7 +699,7 @@ describe('bookSearchIndex', () => {
   // These stub out getSearchOverlayScript's own surface (performSearch,
   // openSearchBar, caseSensitive, useRegex, searchInput, caseBtn, regexBtn,
   // updateToggleVisual) rather than including the real script: that
-  // overlay does its own document.createTreeWalker-based DOM text search,
+  // overlay does its own DOM text search,
   // already covered by its own tests elsewhere, and simulating a full text
   // tree here would test that mechanism a second time instead of what is
   // actually new -- whether a result click correctly hands off to it (or,

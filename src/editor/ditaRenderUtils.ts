@@ -1274,7 +1274,7 @@ export function renderTopicCached(input: TopicRenderInput): TopicRenderResult {
     // transient case this path sees, and pinning it would keep serving the
     // error page after the file was fixed -- the dependency stamps would
     // still match, because the file that failed to parse is the very file
-    // whose mtime gets compared.
+    // whose stamp gets compared.
     dropTopicEntry(key);
     return result;
   }
@@ -1354,9 +1354,10 @@ export interface DocsiteNavEntry {
    *  buildBookNavManifest itself always populates it. */
   id?: string;
   /** Resolved absolute path -- the same identity renderBookParts's own
-   *  `visited` set and de-duplication use, and what a future "is this xref
-   *  target part of the current book" check (docsite design doc, 3.2/4.5)
-   *  will key off of. Undefined exactly when isGroup is true (see below) --
+   *  `visited` set and de-duplication use, and what the "is this xref
+   *  target part of the current book" check (docsite design doc, 3.2/4.5;
+   *  see the book members set in MapViewerProvider) keys off of. Undefined
+   *  exactly when isGroup is true (see below) --
    *  a group entry has no topic file of its own to resolve one from. */
   absPath?: string;
   title: string;
@@ -3236,7 +3237,7 @@ export function renderBookParts(input: BookRenderInput): BookPart[] {
   // Parallel to `entries`: entries[i]'s stable sidebar-manifest id, or
   // undefined when buildBookNavManifest itself would drop this entry (a
   // duplicate reference, an external/.ditamap href, a childless hrefless
-  // entry) -- see computeManifestEntryPositions' own comment. A future
+  // entry) -- see computeManifestEntryPositions' own comment. The
   // book-mode sidebar (nested-fold-and-highlight-plan.md item 1) scrolls
   // to `[data-book-anchor="id"]`, so every part whose entry buildBookNavManifest
   // keeps gets that same id stamped onto its own root element here, computed
