@@ -1416,7 +1416,8 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       ? buildTemplateStyle(template, (p) => readFileSync(p, 'utf-8'), (p) => webview.asWebviewUri(vscode.Uri.file(p)).toString())
       : '';
     const templateBody = templateBodyAttrs(template);
-    const mapTitle = mapTitleFromXml(document.getText(), basename(document.fileName));
+    const titleKeys = buildKeyMap(document.uri);
+    const mapTitle = mapTitleFromXml(document.getText(), basename(document.fileName), (k) => titleKeys.get(k));
     const mapTitleJson = escapeJson(JSON.stringify(mapTitle));
     const chrome = renderChrome(
       template,

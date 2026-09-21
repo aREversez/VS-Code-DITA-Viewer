@@ -61,6 +61,29 @@ describe('fillPlaceholders / cssUrlSafe / mapTitleFromXml', () => {
   });
 });
 
+describe('mapTitleFromXml with keyref titles', () => {
+  const keys = new Map([['prod', 'Acme Cloud']]);
+  const resolve = (k: string) => keys.get(k);
+
+  it('resolves a keyref inside <title> (the template header and the top-left title read this)', () => {
+    assert.strictEqual(mapTitleFromXml('<map><title><ph keyref="prod"/></title></map>', 'a.ditamap', resolve), 'Acme Cloud');
+    assert.strictEqual(mapTitleFromXml('<map><title>Guide for <ph keyref="prod"/></title></map>', 'a.ditamap', resolve), 'Guide for Acme Cloud');
+  });
+  it('resolves a keyref on the title element itself', () => {
+    assert.strictEqual(mapTitleFromXml('<map><title keyref="prod"/></map>', 'a.ditamap', resolve), 'Acme Cloud');
+  });
+  it('resolves a keyref in a bookmap main title', () => {
+    assert.strictEqual(mapTitleFromXml('<bookmap><booktitle><mainbooktitle keyref="prod"/></booktitle></bookmap>', 'a.ditamap', resolve), 'Acme Cloud');
+  });
+  it('falls back to the file name when the key does not resolve or no resolver is given', () => {
+    assert.strictEqual(mapTitleFromXml('<map><title keyref="nope"/></map>', '/x/guide.ditamap', resolve), 'guide');
+    assert.strictEqual(mapTitleFromXml('<map><title keyref="prod"/></map>', '/x/guide.ditamap'), 'guide');
+  });
+  it('element content wins over the keyref, like the outline heading', () => {
+    assert.strictEqual(mapTitleFromXml('<map><title keyref="prod">Own</title></map>', 'a.ditamap', resolve), 'Own');
+  });
+});
+
 describe('wrapShell', () => {
   const parts = { sidebarHtml: '<nav/>', resizerHtml: '<div r/>', contentRootHtml: '<main/>' };
   it('a page with a sidebar is a column: header, frame (sidebar, resizer, content), footer', () => {

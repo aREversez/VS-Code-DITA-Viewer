@@ -5,6 +5,8 @@
  * content pane. Pure -- the webview-URI mapping is injected -- so it is unit
  * tested, including that nothing a template says can become markup.
  */
+import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
+import { getMapTitleText } from '../render/mapTypeMap';
 import type { SiteTemplate, TemplateFooter, TemplateHeader, TemplateLink } from './siteTemplates';
 
 export function escapeText(s: string): string {
@@ -47,8 +49,25 @@ export function renderTemplateFooter(f: TemplateFooter, ctx: { title: string; ye
   return `<footer class="tpl-footer"><div class="tpl-footer-brand">${logo}${text}</div>${renderLinks(f.links)}</footer>`;
 }
 
-/** The map's own title: a bookmap's main book title, else the first <title>, else the file name. */
-export function mapTitleFromXml(xml: string, fileName: string): string {
+/**
+ * The map's own title: a bookmap's main book title, else the first <title>,
+ * else the file name. Read from the parsed map, with the same rule the
+ * outline heading uses (getMapTitleText), so a title carried by a keyref --
+ * <title keyref="k"/> or <ph keyref="k"/> inside it -- shows the key's value
+ * instead of nothing. Without a resolver, or when the key does not resolve,
+ * there is no text and the file name stands in, as it always did.
+ */
+export function mapTitleFromXml(xml: string, fileName: string, resolveKey?: (key: string) => string | undefined): string {
+  try {
+    const parsed = getMapTitleText(parseDitamap(preprocessEntities(xml)).root, resolveKey);
+    if (parsed) return parsed.replace(/\s+/g, ' ');
+  } catch {
+    // Unparseable while being typed: the tolerant scan below still finds a plain title.
+  }
+  return mapTitleFromText(xml, fileName);
+}
+
+function mapTitleFromText(xml: string, fileName: string): string {
   const inner = (tag: string): string | undefined => {
     const m = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)</${tag}>`, 'i').exec(xml);
     if (!m) return undefined;
