@@ -34,7 +34,14 @@ function escapeForStyleElement(css: string): string {
   return css.replace(/<\/(style)/gi, '<\\/$1');
 }
 
-export function buildTemplateStyle(t: SiteTemplate, readFile: (p: string) => string, toUri: (absPath: string) => string): string {
+/**
+ * The template's own css, joined and made safe to drop into a <style>
+ * element, WITHOUT the surrounding tag. The map webview keeps a persistent
+ * `<style id="dita-template-style">` in its head so an in-place mode switch
+ * can swap only this text (see MapViewerProvider's applyModeStage); the full
+ * document build wraps it with buildTemplateStyle below.
+ */
+export function buildTemplateStyleText(t: SiteTemplate, readFile: (p: string) => string, toUri: (absPath: string) => string): string {
   const parts: string[] = [];
   for (const file of t.css) {
     let text: string;
@@ -45,12 +52,21 @@ export function buildTemplateStyle(t: SiteTemplate, readFile: (p: string) => str
     }
     parts.push(rewriteCssUrls(text, file, t.dir, toUri));
   }
-  return `<style id="dita-template-style">\n${escapeForStyleElement(parts.join('\n'))}\n</style>`;
+  return escapeForStyleElement(parts.join('\n'));
+}
+
+export function buildTemplateStyle(t: SiteTemplate, readFile: (p: string) => string, toUri: (absPath: string) => string): string {
+  return `<style id="dita-template-style">\n${buildTemplateStyleText(t, readFile, toUri)}\n</style>`;
+}
+
+/** The sanitised value of the body's `data-template` hook for a template id. */
+export function templateDataAttr(id: string): string {
+  return id.replace(/[^A-Za-z0-9_-]/g, '_');
 }
 
 /** Attributes for <body>: a hook for template css (`body[data-template="id"]`) and a dark marker. */
 export function templateBodyAttrs(t: SiteTemplate | undefined): { className: string; attrs: string } {
   if (!t) return { className: '', attrs: '' };
-  const safeId = t.id.replace(/[^A-Za-z0-9_-]/g, '_');
+  const safeId = templateDataAttr(t.id);
   return { className: t.defaultDark ? ' template-dark' : '', attrs: ` data-template="${safeId}"` };
 }

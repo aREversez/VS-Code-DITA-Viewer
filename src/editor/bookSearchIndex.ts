@@ -436,15 +436,44 @@ export function getBookSearchScript(opts: {
     performSearch(opts.term);
   }
 
-  var siteNav = document.querySelector('.site-nav');
-  if (siteNav) {
+  // The search box's elements and the case/regex/hover flags live at THIS
+  // scope, not inside bindBookSearch below, for two reasons: the persistent
+  // document/window listeners at the bottom read them after a rebuild, and
+  // this suite's own tests reference them by name once the script has run.
+  // bindBookSearch re-queries .site-nav and reassigns them each time an
+  // in-place mode switch (applyModeStage) rebuilds the shell with a fresh
+  // sidebar -- the old box and its per-element listeners go away with the
+  // old nodes, so only the box rebuild re-runs; the two global listeners are
+  // registered once and always read whatever the latest bind produced.
+  var siteNav = null;
+  var bsLinksWrap = null;
+  var bookSearchInput = null;
+  var bookSearchResults = null;
+  var bsCaseBtn = null;
+  var bsRegexBtn = null;
+  var bsRefreshBtn = null;
+  var bsClearBtn = null;
+  var bsCaseSensitive = false;
+  var bsUseRegex = false;
+  var bsMouseOverNav = false;
+
+  function bindBookSearch() {
+    // Full-book search is a docsite-only feature (its click-through needs a
+    // real page fetch book mode has no equivalent of), so the box is built
+    // only in site mode. In the always-on superset script this script is now
+    // present in every mode, hence the runtime gate; the typeof keeps the
+    // isolated unit tests -- which run it with no currentMode in scope --
+    // building the box unconditionally.
+    if (typeof currentMode !== 'undefined' && currentMode !== 'site') return;
+    siteNav = document.querySelector('.site-nav');
+    if (!siteNav) return;
     // renderSiteNavHtml (ditaRenderUtils.ts) renders the topic links
     // directly as .site-nav's children -- wrapping them here, at script
     // run time, rather than changing that function, is what lets this
     // hide/show "the topic list" as one unit while a search is active,
     // without that pure/tested HTML-generation function needing to know
     // search exists at all.
-    var bsLinksWrap = document.createElement('div');
+    bsLinksWrap = document.createElement('div');
     bsLinksWrap.className = 'site-nav-links';
     var bsExistingLinks = Array.prototype.slice.call(siteNav.children);
     bsExistingLinks.forEach(function(el) { bsLinksWrap.appendChild(el); });
@@ -510,7 +539,7 @@ export function getBookSearchScript(opts: {
     var bsInputWrap = document.createElement('div');
     bsInputWrap.style.cssText = 'position:relative;flex:1;min-width:0;display:flex;align-items:center;';
 
-    var bookSearchInput = document.createElement('input');
+    bookSearchInput = document.createElement('input');
     bookSearchInput.type = 'text';
     bookSearchInput.placeholder = ${placeholder};
     bookSearchInput.setAttribute('aria-label', ${placeholder});
@@ -520,7 +549,7 @@ export function getBookSearchScript(opts: {
     // driven by the input listener below): nothing to clear against an
     // empty box, and an always-visible x inside an empty input reads as
     // a stray mark rather than a control.
-    var bsClearBtn = document.createElement('button');
+    bsClearBtn = document.createElement('button');
     bsClearBtn.innerHTML = '&times;';
     bsClearBtn.title = ${clearLabel};
     bsClearBtn.setAttribute('aria-label', ${clearLabel});
@@ -563,21 +592,21 @@ export function getBookSearchScript(opts: {
       btn.style.color = active ? bsActiveFg : 'var(--vscode-dropdown-foreground,#eee)';
     }
 
-    var bsCaseBtn = document.createElement('button');
+    bsCaseBtn = document.createElement('button');
     bsCaseBtn.textContent = 'Aa';
     bsCaseBtn.title = ${matchCaseLabel};
     bsCaseBtn.setAttribute('aria-label', ${matchCaseLabel});
     bsCaseBtn.style.cssText = bsToggleStyle;
     bsUpdateToggle(bsCaseBtn, false);
 
-    var bsRegexBtn = document.createElement('button');
+    bsRegexBtn = document.createElement('button');
     bsRegexBtn.textContent = '.*';
     bsRegexBtn.title = ${useRegexLabel};
     bsRegexBtn.setAttribute('aria-label', ${useRegexLabel});
     bsRegexBtn.style.cssText = bsToggleStyle + 'font-family:monospace;';
     bsUpdateToggle(bsRegexBtn, false);
 
-    var bsRefreshBtn = document.createElement('button');
+    bsRefreshBtn = document.createElement('button');
     bsRefreshBtn.innerHTML = '&#x21bb;';
     bsRefreshBtn.title = ${refreshLabel};
     bsRefreshBtn.setAttribute('aria-label', ${refreshLabel});
@@ -591,15 +620,15 @@ export function getBookSearchScript(opts: {
     bsInputRow.appendChild(bsToggleGroup);
     bsBox.appendChild(bsInputRow);
 
-    var bookSearchResults = document.createElement('div');
+    bookSearchResults = document.createElement('div');
     bookSearchResults.style.cssText = 'display:none;max-height:50vh;overflow:auto;';
     bsBox.appendChild(bookSearchResults);
 
     siteNav.insertBefore(bsLinksWrap, siteNav.firstChild);
     siteNav.insertBefore(bsBox, bsLinksWrap);
 
-    var bsCaseSensitive = false;
-    var bsUseRegex = false;
+    bsCaseSensitive = false;
+    bsUseRegex = false;
 
     // Single source of truth for the clear button's visibility, so the
     // empty-query path (bsShowLinks, reached both from bsRunQuery and
@@ -668,99 +697,116 @@ export function getBookSearchScript(opts: {
       bookSearchInput.focus();
     });
 
-    // Ctrl+F normally opens the page-level search overlay
-    // (getSearchOverlayScript, registered separately) no matter where the
-    // reader is -- reasonable for the topic content itself, but a reader
-    // hovering the sidebar (or already focused inside this book-search
-    // box) almost certainly means "find it in the book", not "find it on
-    // this one page". bsMouseOverNav tracks hover instead of relying on
-    // focus alone, since most of .site-nav (the links themselves) is
-    // never a focus target. Registered with the capture flag so it runs
-    // ahead of the overlay's own bubble-phase document listener
-    // regardless of which of the two assembled scripts happens to run
-    // first (see MapViewerProvider.ts's getBookSearchScript call site);
-    // stopping the event here keeps the overlay from also opening
-    // underneath.
-    var bsMouseOverNav = false;
+    // Hover tracking for the persistent Ctrl+F handler below: most of
+    // .site-nav (the links themselves) is never a focus target, so the
+    // overlay is steered to book search on hover rather than focus alone.
+    bsMouseOverNav = false;
     siteNav.addEventListener('mouseenter', function() { bsMouseOverNav = true; });
     siteNav.addEventListener('mouseleave', function() { bsMouseOverNav = false; });
+  }
 
-    document.addEventListener('keydown', function(e) {
-      if (!(e.ctrlKey || e.metaKey) || (e.key !== 'f' && e.key !== 'F')) return;
-      if (!bsMouseOverNav && document.activeElement !== bookSearchInput) return;
-      e.preventDefault();
-      e.stopPropagation();
-      bookSearchInput.focus();
-      bookSearchInput.select();
-    }, true);
+  // Registered once, outside bindBookSearch -- re-adding them on every rebuild
+  // would stack duplicates (double posts, double Ctrl+F handling), and the old
+  // box's nodes are gone anyway so their per-element listeners die with them.
+  // They read whatever elements the latest bind assigned to the outer vars.
+  // Ctrl+F normally opens the page-level search overlay
+  // (getSearchOverlayScript, registered separately) no matter where the
+  // reader is -- reasonable for the topic content itself, but a reader
+  // hovering the sidebar (or already focused inside this book-search
+  // box) almost certainly means "find it in the book", not "find it on
+  // this one page". bsMouseOverNav tracks hover instead of relying on
+  // focus alone, since most of .site-nav (the links themselves) is
+  // never a focus target. Registered with the capture flag so it runs
+  // ahead of the overlay's own bubble-phase document listener
+  // regardless of which of the two assembled scripts happens to run
+  // first (see MapViewerProvider.ts's getBookSearchScript call site);
+  // stopping the event here keeps the overlay from also opening
+  // underneath.
+  document.addEventListener('keydown', function(e) {
+    if (!(e.ctrlKey || e.metaKey) || (e.key !== 'f' && e.key !== 'F')) return;
+    if (!bsMouseOverNav && document.activeElement !== bookSearchInput) return;
+    e.preventDefault();
+    e.stopPropagation();
+    bookSearchInput.focus();
+    bookSearchInput.select();
+  }, true);
 
-    window.addEventListener('message', function(e) {
-      if (e.data.type !== '${opts.responseMsgType}') return;
-      bookSearchResults.innerHTML = '';
-      bookSearchResults.style.display = 'block';
-      bsLinksWrap.style.display = 'none';
+  window.addEventListener('message', function(e) {
+    if (e.data.type !== '${opts.responseMsgType}') return;
+    if (!bookSearchResults || !bsLinksWrap) return;
+    bookSearchResults.innerHTML = '';
+    bookSearchResults.style.display = 'block';
+    bsLinksWrap.style.display = 'none';
 
-      if (e.data.error === 'invalid-regex') {
-        var err = document.createElement('div');
-        err.textContent = ${invalidRegexLabel};
-        err.style.cssText = 'color:var(--vscode-errorForeground,#f48771);padding:4px 2px;font-size:12px;';
-        bookSearchResults.appendChild(err);
-        return;
-      }
+    if (e.data.error === 'invalid-regex') {
+      var err = document.createElement('div');
+      err.textContent = ${invalidRegexLabel};
+      err.style.cssText = 'color:var(--vscode-errorForeground,#f48771);padding:4px 2px;font-size:12px;';
+      bookSearchResults.appendChild(err);
+      return;
+    }
 
-      var results = e.data.results || [];
-      if (results.length === 0) {
-        var empty = document.createElement('div');
-        empty.textContent = ${noResultsLabel};
-        empty.style.cssText = 'opacity:0.7;padding:4px 2px;font-size:12px;';
-        bookSearchResults.appendChild(empty);
-        return;
-      }
-      results.forEach(function(r) {
-        var item = document.createElement('div');
-        item.style.cssText = 'padding:4px 2px;cursor:pointer;border-bottom:1px solid var(--vscode-panel-border);font-size:12px;';
-        var titleEl = document.createElement('div');
-        // U+1F4D1 (bookmark tabs) matches the indexterm chip's own marker
-        // (renderIndextermChip in baseTypeMap.ts) -- same visual language
-        // for \"this came from an index entry\" wherever it shows up.
-        titleEl.textContent = (r.kind === 'indexterm' ? '\\u{1F4D1} ' : '') + r.title;
-        titleEl.style.cssText = 'font-weight:600;';
-        var snippetEl = document.createElement('div');
-        snippetEl.textContent = r.snippet;
-        snippetEl.style.cssText = 'opacity:0.75;';
-        item.appendChild(titleEl);
-        item.appendChild(snippetEl);
-        item.addEventListener('click', function() {
-          var opts = { term: bookSearchInput.value, caseSensitive: bsCaseSensitive, useRegex: bsUseRegex };
-          var navLinks = bsLinksWrap.querySelectorAll('.site-nav-link');
-          var navLink = null;
-          for (var i = 0; i < navLinks.length; i++) {
-            if (navLinks[i].getAttribute('data-site-target') === r.absPath) { navLink = navLinks[i]; break; }
-          }
-          if (!navLink) return;
-          if (navLink.classList.contains('active')) {
-            // Already on this page -- switchToSitePage would no-op and no
-            // MSG_UPDATE_CONTENT will ever arrive to trigger the deferred
-            // path below, so apply the highlight right now instead.
-            bsApplyPageSearch(opts);
-          } else {
-            pendingSiteSearchHighlight = opts;
-            switchToSitePage(navLink);
-          }
-        });
-        bookSearchResults.appendChild(item);
+    var results = e.data.results || [];
+    if (results.length === 0) {
+      var empty = document.createElement('div');
+      empty.textContent = ${noResultsLabel};
+      empty.style.cssText = 'opacity:0.7;padding:4px 2px;font-size:12px;';
+      bookSearchResults.appendChild(empty);
+      return;
+    }
+    results.forEach(function(r) {
+      var item = document.createElement('div');
+      item.style.cssText = 'padding:4px 2px;cursor:pointer;border-bottom:1px solid var(--vscode-panel-border);font-size:12px;';
+      var titleEl = document.createElement('div');
+      // U+1F4D1 (bookmark tabs) matches the indexterm chip's own marker
+      // (renderIndextermChip in baseTypeMap.ts) -- same visual language
+      // for \"this came from an index entry\" wherever it shows up.
+      titleEl.textContent = (r.kind === 'indexterm' ? '\\u{1F4D1} ' : '') + r.title;
+      titleEl.style.cssText = 'font-weight:600;';
+      var snippetEl = document.createElement('div');
+      snippetEl.textContent = r.snippet;
+      snippetEl.style.cssText = 'opacity:0.75;';
+      item.appendChild(titleEl);
+      item.appendChild(snippetEl);
+      item.addEventListener('click', function() {
+        var opts = { term: bookSearchInput.value, caseSensitive: bsCaseSensitive, useRegex: bsUseRegex };
+        var navLinks = bsLinksWrap.querySelectorAll('.site-nav-link');
+        var navLink = null;
+        for (var i = 0; i < navLinks.length; i++) {
+          if (navLinks[i].getAttribute('data-site-target') === r.absPath) { navLink = navLinks[i]; break; }
+        }
+        if (!navLink) return;
+        if (navLink.classList.contains('active')) {
+          // Already on this page -- switchToSitePage would no-op and no
+          // MSG_UPDATE_CONTENT will ever arrive to trigger the deferred
+          // path below, so apply the highlight right now instead.
+          bsApplyPageSearch(opts);
+        } else {
+          pendingSiteSearchHighlight = opts;
+          switchToSitePage(navLink);
+        }
       });
-      // The host caps the list (MAX_BOOK_SEARCH_RESULTS) and reports how many
-      // hits there really were; say so rather than let a cut list read as
-      // complete.
-      var total = typeof e.data.total === 'number' ? e.data.total : results.length;
-      if (total > results.length) {
-        var more = document.createElement('div');
-        more.textContent = ${truncatedLabel}.replace('{0}', String(results.length)).replace('{1}', String(total));
-        more.style.cssText = 'opacity:0.7;padding:6px 2px;font-size:12px;font-style:italic;';
-        bookSearchResults.appendChild(more);
-      }
+      bookSearchResults.appendChild(item);
     });
+    // The host caps the list (MAX_BOOK_SEARCH_RESULTS) and reports how many
+    // hits there really were; say so rather than let a cut list read as
+    // complete.
+    var total = typeof e.data.total === 'number' ? e.data.total : results.length;
+    if (total > results.length) {
+      var more = document.createElement('div');
+      more.textContent = ${truncatedLabel}.replace('{0}', String(results.length)).replace('{1}', String(total));
+      more.style.cssText = 'opacity:0.7;padding:6px 2px;font-size:12px;font-style:italic;';
+      bookSearchResults.appendChild(more);
+    }
+  });
+
+  bindBookSearch();
+  // Rebuild the box after an in-place mode switch restores a fresh .site-nav.
+  // Window-guarded so the isolated unit tests (which dispatch no stage event,
+  // and whose fake window ignores non-'message' listeners) keep exercising the
+  // immediate bind alone.
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('ditamap:stage', bindBookSearch);
   }
 `;
 }

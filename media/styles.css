@@ -1325,21 +1325,74 @@ body.mode-book.site-shell.site-shell:has(.site-nav) {
 @container topbar (max-width: 760px) {
   .topbar-title { display: none; }
 }
-/* The same bar on a page that is one long scrolling document (outline view):
-   fixed to the window's top edge, full width, with the body padded down by its
-   height. --topbar-h is kept current by getToolbarPlacementScript as the
-   buttons wrap; the fallback is one row. The scroll-padding keeps an anchor
-   jump from landing under the bar. */
-#__topbar.topbar--fixed {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 9999;
+/* The same bar on a page that is one long scrolling document (outline view,
+   and a book with an empty map). The bar is NOT a fixed overlay here: the
+   body becomes a one-viewport-tall flex column, the bar is its full-width
+   first ROW, and the content scrolls in its own area beneath that row. So
+   the vertical scrollbar belongs to the content, starts below the bar and
+   sits at the window's right edge -- it never runs beside the bar and never
+   nudges the right-aligned buttons left the way a fixed, full-viewport bar
+   did. The bar reserves only its own height (flex: 0 0 auto); the content
+   region takes the rest (min-height: 0 lets it shrink so its own overflow
+   takes over instead of the page growing). Readable width lives on the
+   content's own child, so the scrollbar stays at the true window edge while
+   the text stays centered. No scroll-padding: the bar no longer overlaps
+   the content, so an anchor jump lands cleanly below it. */
+body:has(> #__topbar.topbar--top) {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  box-sizing: border-box;
+  height: 100vh;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
 }
-body:has(> #__topbar.topbar--fixed) {
-  padding-top: calc(2rem + var(--topbar-h, 26px));
+body:has(> #__topbar.topbar--top) > #__topbar { flex: 0 0 auto; }
+body:has(> #__topbar.topbar--top) > #dita-content-root {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0;
 }
-html:has(#__topbar.topbar--fixed) {
-  scroll-padding-top: var(--topbar-h, 26px);
+body:has(> #__topbar.topbar--top) > #dita-content-root > * {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+/* Mode-specific toolbar buttons, keyed on the body's mode-* class.
+
+   The map webview is a superset script (getMapWebviewScript): EVERY mode's
+   toolbar buttons are built and appended on load and an in-place mode switch
+   (applyModeStage) only swaps the body class, never the toolbar. Hiding the
+   buttons a mode has no use for here -- rather than building them per-mode --
+   is what lets the always-present right-hand cluster, and the mode button in
+   it, hold one fixed spot across a switch, so the toolbar never shifts or
+   briefly disappears.
+
+   outline (tree): no sidebar, no template, no page navigation -- hide them all.
+   book: has a sidebar and a template, but is one long document, so the
+     back/forward/prev/next/open-source page controls (which walk docsite pages)
+     have nothing to act on. docsite (site) shows everything. */
+body.mode-tree #__site-sidebar-toggle-btn,
+body.mode-tree #__site-expand-all-btn,
+body.mode-tree #__site-collapse-all-btn,
+body.mode-tree #__template-select,
+body.mode-tree #__site-back-btn,
+body.mode-tree #__site-forward-btn,
+body.mode-tree #__site-prev-btn,
+body.mode-tree #__site-next-btn,
+body.mode-tree #__site-open-source-btn {
+  display: none !important;
+}
+body.mode-book #__site-back-btn,
+body.mode-book #__site-forward-btn,
+body.mode-book #__site-prev-btn,
+body.mode-book #__site-next-btn,
+body.mode-book #__site-open-source-btn {
+  display: none !important;
 }

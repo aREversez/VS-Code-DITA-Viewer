@@ -2073,11 +2073,16 @@ export function getSiteNavKeyboardScript(): string {
  * prev/next buttons derive their targets from the .site-nav-link elements
  * (updatePrevNextButtons), which are new nodes now.
  *
- * `site` gates the site-only half at generation time rather than with a
- * runtime typeof check: updatePrevNextButtons is declared by a script that is
- * only emitted in site mode, and the declaration and its use should appear or
- * disappear together. Extracted so it can be unit-tested; the message
- * listener that calls it lives in MapViewerProvider.ts.
+ * `site` selects which half of the nav is replaced. MapViewerProvider always
+ * passes true now that getMapWebviewScript is a superset script (it no longer
+ * knows the mode at generation time): site:true replaces only .site-nav-links
+ * where a search box exists, and falls back to the whole nav otherwise -- so
+ * it is correct for book mode too, where there is no search box. The prev/
+ * next re-derivation (updatePrevNextButtons) is declared by the always-
+ * injected getSiteNavClickHandlerScript, so calling it from here is safe in
+ * every mode. The `site: false` shape is kept
+ * for the isolated book-style unit test. Extracted so it can be unit-tested;
+ * the message listener that calls it lives in MapViewerProvider.ts.
  */
 export function getSidebarUpdateScript(opts: { site: boolean }): string {
   return `
@@ -2288,10 +2293,17 @@ export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: stri
 
   // The mouse's own back/forward buttons. Their default (navigating the
   // webview document itself) must not also run.
+  //
+  // Guarded to site mode: in the always-on superset script these listeners
+  // coexist with book mode, where the mouse back/forward should stay native.
+  // The typeof keeps the isolated unit tests (no currentMode in scope) running
+  // the handler unconditionally.
   document.addEventListener('mousedown', function(e) {
+    if (typeof currentMode !== 'undefined' && currentMode !== 'site') return;
     if (e.button === 3 || e.button === 4) e.preventDefault();
   });
   document.addEventListener('mouseup', function(e) {
+    if (typeof currentMode !== 'undefined' && currentMode !== 'site') return;
     if (e.button === 3) { e.preventDefault(); siteHistoryGo(-1); }
     else if (e.button === 4) { e.preventDefault(); siteHistoryGo(1); }
   });
@@ -2309,6 +2321,7 @@ export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: stri
   // for the cases where the key is not "handled" by preventDefault but still
   // means something else: moving a caret, changing a dropdown's selection.
   window.addEventListener('keydown', function(e) {
+    if (typeof currentMode !== 'undefined' && currentMode !== 'site') return;
     if (e.defaultPrevented) return;
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
@@ -2432,6 +2445,7 @@ export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: stri
   }
 
   document.addEventListener('click', function(e) {
+    if (typeof currentMode !== 'undefined' && currentMode !== 'site') return;
     var siteLink = e.target.closest ? e.target.closest('.site-nav-link') : null;
     if (!siteLink) return;
     e.preventDefault();
@@ -2445,6 +2459,7 @@ export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: stri
   // (shouldn't happen, but the manifest and the render pass could in
   // principle disagree), this silently does nothing rather than throwing.
   document.addEventListener('click', function(e) {
+    if (typeof currentMode !== 'undefined' && currentMode !== 'site') return;
     var xrefLink = e.target.closest ? e.target.closest('[data-dita-book-xref]') : null;
     if (!xrefLink) return;
     e.preventDefault();
@@ -2471,7 +2486,15 @@ export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: stri
   // on every subsequent switch). setTimeout(..., 0) runs after the rest of
   // the synchronous page-load script finishes, by which point the buttons
   // exist no matter which order the two scripts happen to be assembled in.
-  setTimeout(function() {
+  //
+  // Named and re-runnable rather than a one-shot timer body: an in-place mode
+  // switch into site mode leaves the sidebar links as fresh nodes with no
+  // siteHistory seeded and prev/next unrefreshed, so this has to run again on
+  // the ditamap:stage event, guarded to site mode. The window/typeof guards
+  // keep the isolated unit tests -- which dispatch no stage event and carry no
+  // currentMode -- exercising only the immediate timer call.
+  function initSiteNavDeferred() {
+    if (typeof currentMode !== 'undefined' && currentMode !== 'site') return;
     updatePrevNextButtons();
     var activeLink = document.querySelector('.site-nav-link.active');
     var activeTarget = activeLink ? activeLink.getAttribute('data-site-target') : null;
@@ -2481,7 +2504,11 @@ export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: stri
       persistSiteHistory();
     }
     updateHistoryButtons();
-  }, 0);
+  }
+  setTimeout(initSiteNavDeferred, 0);
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('ditamap:stage', initSiteNavDeferred);
+  }
 `;
 }
 
@@ -2508,10 +2535,13 @@ export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: stri
  * tests already flag as a recurring gotcha (see resolveBookTopicPath's own
  * tests). Plain string comparison sidesteps that entirely.
  *
- * Only ever emitted for book mode (see getMapWebviewScript, which
- * generates a fresh script per mode rather than branching this one at
- * runtime) -- MapViewerProvider.ts's currentMode variable exists for the
- * mode-toggle button only, not to gate this.
+ * Always injected now (superset script, so an in-place mode switch needs no
+ * reload -- see getMapWebviewScript): the click handler carries a
+ * `currentMode !== 'book'` runtime guard so it only acts while book mode is
+ * showing, the same guard MapViewerProvider.ts's mode-toggle `currentMode`
+ * variable drives. A test that runs this script in isolation has no
+ * `currentMode` in scope, so `typeof currentMode` is 'undefined' and the
+ * guard lets the handler run.
  */
 export function getBookNavClickHandlerScript(): string {
   return `
@@ -2524,6 +2554,12 @@ export function getBookNavClickHandlerScript(): string {
   }
 
   document.addEventListener('click', function(e) {
+    // In the always-on superset webview script (MapViewerProvider.ts), this
+    // and getSiteNavClickHandlerScript's own .site-nav-link listener coexist;
+    // each defers to the other outside its mode. The typeof guard keeps the
+    // isolated unit tests -- which run this script alone, with no currentMode
+    // in scope -- exercising the handler unconditionally.
+    if (typeof currentMode !== 'undefined' && currentMode !== 'book') return;
     var link = e.target.closest ? e.target.closest('.site-nav-link') : null;
     if (!link) return;
     e.preventDefault();
@@ -2548,11 +2584,13 @@ export function getBookNavClickHandlerScript(): string {
  * pointed at whatever part is actually on screen, the same way a PDF
  * reader's bookmark panel tracks the current page.
  *
- * Only ever emitted for book mode, same one-script-per-mode convention as
- * getBookNavClickHandlerScript (see getMapWebviewScript) -- site mode has
- * no equivalent because each topic there is its own page load, so the
- * server-rendered `.active` class on load already IS the answer; nothing
- * to track as the reader scrolls one topic's own content.
+ * Always injected now (superset script, so an in-place mode switch needs no
+ * reload -- see getMapWebviewScript), where it self-binds to #dita-content-root
+ * and re-binds on the ditamap:stage event. It is inert outside book mode on its
+ * own: it tracks [data-book-anchor] parts, which only exist in a book's content,
+ * so site mode has no equivalent to worry about -- each topic there is its own
+ * page load, and the server-rendered `.active` class on load already IS the
+ * answer; nothing to track as the reader scrolls one topic's own content.
  *
  * Picking the active anchor: `entries[i].isIntersecting` from
  * IntersectionObserver only tells you which anchors are inside the
@@ -2633,8 +2671,11 @@ export function getBookNavClickHandlerScript(): string {
 export function getBookScrollSyncScript(): string {
   return `
   (function() {
-    var contentRoot = document.getElementById('dita-content-root');
-    if (!contentRoot || typeof IntersectionObserver === 'undefined') return;
+    // Mutable so bind() can re-acquire the content root after an in-place mode
+    // switch replaces it: #dita-content-root and .site-nav are fresh nodes
+    // then, so observers bound to the old ones would watch detached DOM.
+    var contentRoot = null;
+    var swapObserver = null;
 
     var anchors = [];
     var visibleIds = [];
@@ -2714,16 +2755,34 @@ export function getBookScrollSyncScript(): string {
       if (prevActiveId) applyActive(prevActiveId);
     }
 
-    sync();
+    // Binds (or re-binds) to whatever shell is in the DOM right now. An
+    // in-place mode switch swaps #dita-content-root/.site-nav for fresh nodes,
+    // so the old swap observer is disconnected and a new pair bound to the new
+    // nodes. Re-running on first load is just the initial bind.
+    function bind() {
+      contentRoot = document.getElementById('dita-content-root');
+      if (swapObserver) { swapObserver.disconnect(); swapObserver = null; }
+      if (!contentRoot || typeof IntersectionObserver === 'undefined') return;
 
-    // Self-contained swap detection rather than a call from each message
-    // handler in MapViewerProvider.ts: one place owns this script's own
-    // lifecycle, and a future third swap path can't forget to call it.
-    if (typeof MutationObserver !== 'undefined') {
-      var swapObserver = new MutationObserver(function() { sync(); });
-      swapObserver.observe(contentRoot, { childList: true, subtree: true });
-      var siteNav = document.querySelector('.site-nav');
-      if (siteNav) swapObserver.observe(siteNav, { childList: true });
+      sync();
+
+      // Self-contained swap detection rather than a call from each message
+      // handler in MapViewerProvider.ts: one place owns this script's own
+      // lifecycle, and a future third swap path can't forget to call it.
+      if (typeof MutationObserver !== 'undefined') {
+        swapObserver = new MutationObserver(function() { sync(); });
+        swapObserver.observe(contentRoot, { childList: true, subtree: true });
+        var siteNav = document.querySelector('.site-nav');
+        if (siteNav) swapObserver.observe(siteNav, { childList: true });
+      }
+    }
+
+    bind();
+    // Re-bind after an in-place mode switch (applyModeStage) rebuilds the
+    // shell. Window-guarded so the isolated unit tests, which pass only a
+    // fake document and no window, keep exercising the immediate bind alone.
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('ditamap:stage', bind);
     }
   })();
 `;
@@ -3245,10 +3304,12 @@ export function getSiteOpenSourceScript(opts: { openSourceMsgType: string; menuL
  * and the buttons wrap.
  *
  * Every other page (outline view; a book with an empty map) is one long
- * scrolling document, so there the bar is fixed to the top of the window
- * (`topbar--fixed`) and the body is padded down by the bar's height, kept in
- * --topbar-h as the buttons wrap and unwrap. No title on that bar: outline
- * view's own heading already shows it.
+ * scrolling document, so there the bar is a full-width first ROW (`topbar--top`)
+ * of a one-viewport-tall flex-column body, and the content region scrolls in its
+ * own area beneath it. That keeps the vertical scrollbar on the content, below
+ * the bar's row and at the window's right edge, instead of running beside a
+ * fixed bar and pushing its right-aligned buttons left. No title on that bar:
+ * outline view's own heading already shows it.
  *
  * Define-then-call: the caller inserts this where it used to append the
  * toolbar to the body.
@@ -3269,15 +3330,8 @@ export function getToolbarPlacementScript(): string {
     }
     tb.classList.add('in-topbar');
     bar.appendChild(tb);
-    if (!shell) bar.classList.add('topbar--fixed');
+    if (!shell) bar.classList.add('topbar--top');
     document.body.insertBefore(bar, document.body.firstChild);
-    if (!shell) {
-      var syncTopbarHeight = function() {
-        document.documentElement.style.setProperty('--topbar-h', bar.offsetHeight + 'px');
-      };
-      syncTopbarHeight();
-      if (typeof ResizeObserver === 'function') new ResizeObserver(syncTopbarHeight).observe(bar);
-    }
   }
   placeToolbar(toolbar);
 `;
@@ -3357,7 +3411,14 @@ export function clampSidebarWidth(width: number, min = 160, max = 560): number {
  */
 export function getSiteSidebarResizerScript(): string {
   return `
-  (function() {
+  // Bound as a named function rather than a one-shot IIFE so it can be re-run
+  // after an in-place mode switch rebuilds the shell (MapViewerProvider.ts's
+  // applyModeStage): the handle and the sidebar are fresh nodes then, so the
+  // mousedown/keydown wiring has to be re-attached. Re-running is safe because
+  // the old handle is gone with the old shell -- no duplicate listeners on a
+  // live element. The re-listen is window-guarded so the isolated unit tests,
+  // which pass only a fake document, keep exercising the immediate bind alone.
+  function bindSiteSidebarResizer() {
     var resizer = document.getElementById('__site-nav-resizer');
     var nav = document.querySelector('.site-nav');
     if (!resizer || !nav) return;
@@ -3392,7 +3453,11 @@ export function getSiteSidebarResizerScript(): string {
         e.preventDefault();
       }
     });
-  })();
+  }
+  bindSiteSidebarResizer();
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('ditamap:stage', bindSiteSidebarResizer);
+  }
 `;
 }
 

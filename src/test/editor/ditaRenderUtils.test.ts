@@ -4104,14 +4104,14 @@ describe('getToolbarPlacementScript (the toolbar becomes the docsite/book top ba
     return { toolbar, bodyChildren, cssVars };
   }
 
-  it('outline view (no shell) also gets the bar as its FIRST body child, fixed to the window, with the body padded by its height', () => {
+  it('outline view (no shell) also gets the bar as its FIRST body child, a full-width top row the content scrolls beneath', () => {
     const r = run({ shell: false, header: false, title: 'T' });
     const bar = r.bodyChildren[0];
     assert.strictEqual(bar.id, '__topbar');
-    assert.ok(bar.classes.includes('topbar--fixed'));
+    assert.ok(bar.classes.includes('topbar--top'));
     assert.ok(bar.children.includes(r.toolbar));
     assert.strictEqual(r.bodyChildren[1].tag, 'existing');
-    assert.strictEqual(r.cssVars['--topbar-h'], '26px');
+    assert.deepStrictEqual(r.cssVars, {}, 'no fixed-bar height var: the bar is a row, not an overlay');
   });
 
   it('outline view shows no title in the bar: its own heading already does', () => {
@@ -4121,7 +4121,7 @@ describe('getToolbarPlacementScript (the toolbar becomes the docsite/book top ba
 
   it('a shell page has no fixed class and needs no body padding var', () => {
     const r = run({ shell: true, header: false, title: 'T' });
-    assert.ok(!r.bodyChildren[0].classes.includes('topbar--fixed'));
+    assert.ok(!r.bodyChildren[0].classes.includes('topbar--top'));
     assert.deepStrictEqual(r.cssVars, {});
   });
 

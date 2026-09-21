@@ -3,7 +3,7 @@ import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
 import { openSourceBesidePreview } from './sourceEditorOpener';
 import { discoverTemplates, templateDisplayName, SiteTemplate, TemplateRoot } from './siteTemplates';
-import { buildTemplateStyle, templateBodyAttrs } from './templateStyle';
+import { buildTemplateStyleText, templateBodyAttrs, templateDataAttr } from './templateStyle';
 import { mapTitleFromXml, renderChrome, wrapShell } from './templateChrome';
 import { TEMPLATE_SELECTION_KEY, parseTemplateSelection, withTemplate, pickTemplate } from './templateSelection';
 import { resolveDirectoryPath } from './cssDiscovery';
@@ -114,6 +114,15 @@ const COLLAPSED_NAV_KEY = 'ditaViewer.collapsedNavNodes';
 // results instead of failing loudly).
 const MSG_BOOK_SEARCH = 'bookSearch';
 const MSG_BOOK_SEARCH_RESULTS = 'bookSearchResults';
+// In-place mode switch (toolbar-persistence work): the webview's mode button
+// sends a 'switchMode' REQUEST (webview -> host, left a literal -- its failure
+// is loud, the switch just does nothing), and the host answers with this one
+// host -> webview message carrying everything needed to rebuild the view
+// WITHOUT reassigning webview.html. Interpolated on both sides like
+// MSG_UPDATE_CONTENT, because a typo here is silent: the client would ignore
+// the reply and leave the stale mode on screen while the host believes it
+// already switched.
+const MSG_SWITCH_MODE = 'applyModeStage';
 
 // Localized topic-type labeler for the docsite sidebar's per-entry chip:
 // every known DITA topic root gets a localized short label
@@ -144,7 +153,6 @@ function localizeTopicTypeLabel(tagName: string): string | undefined {
 }
 
 function getMapWebviewScript(
-  mode: 'tree' | 'book' | 'site',
   templateOptions: ReadonlyArray<{ value: string; label: string }>,
   selectedTemplate: string,
 ): string {
@@ -184,17 +192,27 @@ function getMapWebviewScript(
   return `
 (function() {
   var vscode = acquireVsCodeApi();
-  // The whole HTML document is regenerated on every mode switch, so derive
-  // the current mode from the body class instead of a hardcoded default —
-  // otherwise the script's state resets to 'tree' while the extension is in
-  // 'book' mode and the toggle can never switch back.
+  // Seed the current mode from the server-rendered body class. A mode switch
+  // no longer regenerates the document (it is applied in place by the
+  // MSG_SWITCH_MODE handler below), so this derivation only ever runs on the
+  // initial load -- but it must still read the mode the document was opened
+  // in, otherwise a document opened straight into book/site (a remembered
+  // view) would seed 'tree' and the toggle would be one click out of sync.
   var currentMode = document.body.classList.contains('mode-book') ? 'book'
     : document.body.classList.contains('mode-site') ? 'site' : 'tree';
 
-  ${mode === 'site' ? getSiteNavClickHandlerScript({ switchSitePageMsgType: MSG_SWITCH_SITE_PAGE }) : ''}
-  ${mode === 'book' ? getBookNavClickHandlerScript() : ''}
+  // Superset script: every mode's handlers are always present so an in-place
+  // switch needs no reload. The site/book click and keyboard handlers each
+  // carry a "typeof currentMode" runtime guard so only the active mode's one
+  // acts on a shared selector (e.g. .site-nav-link); the mode-specific toolbar
+  // buttons are always built and appended and merely hidden by CSS keyed on
+  // the body's mode-* class (see media/styles.css), which keeps the always-
+  // present right-hand cluster of the bar -- and the mode button itself -- in
+  // one fixed spot across modes.
+  ${getSiteNavClickHandlerScript({ switchSitePageMsgType: MSG_SWITCH_SITE_PAGE })}
+  ${getBookNavClickHandlerScript()}
   ${getSiteNavCollapseStateHelperScript({ reportCollapseMsgType: MSG_SET_NAV_COLLAPSED })}
-  ${mode === 'book' ? getBookScrollSyncScript() : ''}
+  ${getBookScrollSyncScript()}
   ${getSiteNavToggleScript()}
   ${getSiteNavKeyboardScript()}
   ${getSiteSidebarResizerScript()}
@@ -250,40 +268,35 @@ function getMapWebviewScript(
   toolbar.appendChild(fontBtn);
   toolbar.appendChild(wSel);
 
-  // Sidebar collapse toggle -- docsite mode only, same unconditional-build/
-  // conditional-append convention as the prev/next buttons right below.
-  // Site mode's sidebar starts open; book mode's starts collapsed (see
+  // Sidebar collapse toggle -- docsite and book view. Built and appended in
+  // every mode now (superset script); CSS keyed on the body's mode-* class
+  // hides it in outline (see media/styles.css), so switching modes only flips
+  // visibility and never moves the always-present right-hand cluster. Site
+  // mode's sidebar starts open; book mode's starts collapsed (see
   // getInitialSidebarBodyClass, body's own class construction below --
   // nested-fold-and-highlight-plan.md item 6). This button is how a
   // reader tucks the topic list away or gets it back, in either mode.
   ${getSiteSidebarToggleScript({ toggleTitle: L.siteToggleSidebar })}
-  if (currentMode === 'site' || currentMode === 'book') {
-    toolbar.appendChild(siteSidebarToggleBtn);
-  }
+  toolbar.appendChild(siteSidebarToggleBtn);
 
   // Expand-all / collapse-all, right after the sidebar toggle they
-  // operate on. Same build-always/append-conditionally convention; both
+  // operate on. Same append-always/CSS-hides-outside-its-mode convention; both
   // sidebar modes get them, since book and site render the identical
   // sidebar markup (renderSiteNavTreeHtml).
   ${getSiteNavExpandCollapseAllButtonsScript({
     expandAllTitle: L.siteExpandAll,
     collapseAllTitle: L.siteCollapseAll,
   })}
-  if (currentMode === 'site' || currentMode === 'book') {
-    toolbar.appendChild(siteExpandAllBtn);
-    toolbar.appendChild(siteCollapseAllBtn);
-  }
+  toolbar.appendChild(siteExpandAllBtn);
+  toolbar.appendChild(siteCollapseAllBtn);
 
-  // Prev/next topic buttons -- docsite mode only. Built unconditionally
-  // (same pattern the shared font/width buttons above already use: both
-  // providers always create the full shared button set, then each decides
-  // what to append) but only appended in site mode; updatePrevNextButtons
-  // (getSiteNavClickHandlerScript) already no-ops when it can't find these
-  // by id, which is exactly what happens if they were never appended.
-  // Back/forward through the pages the reader has visited (site mode only,
-  // like prev/next, which step through reading order instead -- hence arrows
-  // rather than angle brackets). Wired up by updateHistoryButtons in
-  // getSiteNavClickHandlerScript.
+  // Prev/next topic buttons -- docsite mode only. Built and appended in every
+  // mode (superset), hidden by CSS outside site mode. updatePrevNextButtons
+  // (getSiteNavClickHandlerScript) finds them by id even while hidden, which
+  // is harmless (updating a display:none button). Back/forward through the
+  // pages the reader has visited (site mode only, like prev/next, which step
+  // through reading order instead -- hence arrows rather than angle brackets).
+  // Wired up by updateHistoryButtons in getSiteNavClickHandlerScript.
   ${getSiteHistoryButtonsScript({
     backLabel: HISTORY_BACK_ICON_SVG,
     backTitle: L.siteBack,
@@ -304,13 +317,11 @@ function getMapWebviewScript(
     buttonLabel: L.siteOpenSource,
     buttonTitle: L.siteOpenSourceTitle,
   })}
-  if (currentMode === 'site') {
-    toolbar.appendChild(siteBackBtn);
-    toolbar.appendChild(siteForwardBtn);
-    toolbar.appendChild(sitePrevBtn);
-    toolbar.appendChild(siteNextBtn);
-    toolbar.appendChild(siteOpenSourceBtn);
-  }
+  toolbar.appendChild(siteBackBtn);
+  toolbar.appendChild(siteForwardBtn);
+  toolbar.appendChild(sitePrevBtn);
+  toolbar.appendChild(siteNextBtn);
+  toolbar.appendChild(siteOpenSourceBtn);
 
   // Full-book search -- docsite mode only (docsite design doc, 4.4,
   // revised to live in the sidebar rather than a toolbar button after
@@ -325,11 +336,12 @@ function getMapWebviewScript(
   // .site-nav directly, so there is no toolbar wiring needed here at all --
   // but book mode now has its own .site-nav too (nested-fold-and-highlight-
   // plan.md item 1), and getBookSearchScript's own click-through
-  // (switchToSitePage, a genuine page fetch) has no book-mode equivalent,
-  // so this stays explicitly gated to 'site' rather than relying on the
-  // element-presence no-op the way it used to when only site mode ever had
-  // a .site-nav to find.
-  ${mode === 'site' ? getBookSearchScript({
+  // (switchToSitePage, a genuine page fetch) has no book-mode equivalent, so
+  // it stays docsite-only. In the superset script it is emitted in every mode
+  // and gates itself at run time (its bindBookSearch early-returns unless
+  // currentMode is 'site'), so a switch into site builds the box and a switch
+  // out leaves it unbuilt -- no reload needed either way.
+  ${getBookSearchScript({
     searchLabel: L.siteSearchTitle,
     placeholder: L.siteSearchPlaceholder,
     noResultsLabel: L.siteSearchNoResults,
@@ -341,14 +353,15 @@ function getMapWebviewScript(
     clearLabel: L.siteSearchClear,
     requestMsgType: MSG_BOOK_SEARCH,
     responseMsgType: MSG_BOOK_SEARCH_RESULTS,
-  }) : ''}
+  })}
 
 
-  // Template picker -- docsite and book view (outline view has no template).
-  // Placed BEFORE the mode button on purpose: the bar is right-aligned, so
-  // the mode button (and Tags/Flags/Filter/refresh after it) keep their
-  // distance from the right edge whether or not this picker exists --
-  // switching modes must not move the mode button out from under the cursor.
+  // Template picker -- docsite and book view (outline view has no template,
+  // where CSS hides this). Placed BEFORE the mode button on purpose: the bar
+  // is right-aligned, so the mode button (and Tags/Flags/Filter/refresh after
+  // it) keep their distance from the right edge whether or not this picker is
+  // visible -- switching modes must not move the mode button out from under
+  // the cursor.
   ${getTemplateSelectScript({
     msgType: MSG_SET_TEMPLATE,
     title: L.templateTitle,
@@ -356,9 +369,7 @@ function getMapWebviewScript(
     options: templateOptions,
     selected: selectedTemplate,
   })}
-  if (currentMode === 'site' || currentMode === 'book') {
-    toolbar.appendChild(templateSel);
-  }
+  toolbar.appendChild(templateSel);
 
   // Mode toggle button. Cycles tree -> site -> book -> tree; the label
   // always names the CURRENT mode (see getModeToggleScript's own comment
@@ -487,7 +498,75 @@ function getMapWebviewScript(
     if (tagTooltipsOn) applyTagTooltips();
   }
 
-  ${getSidebarUpdateScript({ site: mode === 'site' })}
+  // site:true is now unconditional: updatePrevNextButtons is declared by the
+  // always-injected getSiteNavClickHandlerScript (superset script), and the
+  // site:true body is book-safe too (it falls back to the whole nav when there
+  // is no .site-nav-links, and returns early in tree mode where there is no
+  // .site-nav at all).
+  ${getSidebarUpdateScript({ site: true })}
+
+  // Applies a mode the host just rendered, IN PLACE: swap the body class, the
+  // template css + dropdown, and the content that follows the persistent
+  // #__topbar -- without reassigning webview.html, so the toolbar (and the
+  // mode button inside it) never leaves the page. The element-binding scripts
+  // (resizer, scroll-sync, book search, deferred site-nav init) re-run over the
+  // new DOM via the ditamap:stage event dispatched at the end.
+  function applyModeStage(stage) {
+    currentMode = stage.mode;
+    if (typeof updateModeLabel === 'function') updateModeLabel();
+
+    // Body: this mode's classes and template hook, but keep the client-owned
+    // hide-profiling toggle (a Flags-button state that a switch must not reset).
+    var cls = stage.bodyClass || '';
+    if (document.body.classList.contains('hide-profiling')) cls += (cls ? ' ' : '') + 'hide-profiling';
+    document.body.className = cls;
+    if (stage.templateDataAttr) document.body.setAttribute('data-template', stage.templateDataAttr);
+    else document.body.removeAttribute('data-template');
+
+    // Template css into the persistent head <style>, and the dropdown choice.
+    var tplStyle = document.getElementById('dita-template-style');
+    if (tplStyle) tplStyle.textContent = stage.templateCss || '';
+    if (typeof templateSel !== 'undefined' && templateSel) templateSel.value = stage.selectedTemplate || '';
+
+    // Replace everything the #__topbar does NOT own: drop the current body
+    // children after it (keeping the bar itself and the already-run <script>
+    // tags, whose side effects must stay), then insert the new stage markup
+    // right after the bar -- the same order a full document had them in.
+    var bar = document.getElementById('__topbar');
+    if (bar) {
+      var n = bar.nextSibling;
+      while (n) {
+        var next = n.nextSibling;
+        if (!(n.nodeType === 1 && n.tagName === 'SCRIPT')) n.remove();
+        n = next;
+      }
+      bar.insertAdjacentHTML('afterend', stage.shellHtml || '');
+
+      // The bar's own placement tracks the stage: docsite/book shells keep it
+      // as the shell's first flex row; outline (and an empty book) pin it as a
+      // full-width top row (topbar--top) with the content scrolling beneath.
+      // The title shows only inside a shell that has no template header of its
+      // own already carrying one -- checked after the swap, against the NEW DOM.
+      bar.classList.toggle('topbar--top', !stage.isShell);
+      var titleEl = bar.querySelector('.topbar-title');
+      var wantTitle = stage.isShell && !document.querySelector('.tpl-header');
+      var title = typeof window.__mapTitle === 'string' ? window.__mapTitle : '';
+      if (wantTitle && title) {
+        if (!titleEl) {
+          titleEl = document.createElement('span');
+          titleEl.className = 'topbar-title';
+          bar.insertBefore(titleEl, bar.firstChild);
+        }
+        titleEl.textContent = title;
+        titleEl.title = title;
+      } else if (titleEl) {
+        titleEl.remove();
+      }
+    }
+
+    afterContentSwap();
+    window.dispatchEvent(new Event('ditamap:stage'));
+  }
 
   window.addEventListener('message', function(e) {
     if (e.data.type === '${MSG_UPDATE_CONTENT}') {
@@ -495,27 +574,20 @@ function getMapWebviewScript(
       if (contentRoot) {
         contentRoot.innerHTML = e.data.html;
         afterContentSwap();
-        ${mode === 'site' ? `
         // Site mode's book-internal xref jump (docsite design doc,
         // 3.2/4.5): switchToSitePage stashed the target anchor before the
         // page-switch postMessage, since the element it names doesn't
         // exist until this new HTML lands. A plain sidebar/prev-next
         // switch never sets this, so it's a no-op there.
         //
-        // Emitted in site mode only, because the identifiers these two
-        // blocks read (pendingSiteAnchor/scrollToSiteAnchor from
-        // getSiteNavClickHandlerScript, pendingSiteSearchHighlight/
-        // bsApplyPageSearch from getBookSearchScript) are DECLARED by
-        // those same site-mode-only scripts -- gate them out of the
-        // script and these references have nothing to resolve against.
-        // The currentMode === 'site' runtime guards below do happen to
-        // short-circuit before evaluating them, but that is the wrong
-        // thing to depend on: the guard and the declaration live in
-        // different files, and neither tsc nor eslint sees inside this
-        // injected string, so a later edit that reorders or splits a
-        // guard would produce a ReferenceError only a running webview
-        // would ever show. Gating at generation time makes the
-        // declaration and the use appear or disappear together.
+        // Always emitted now: the identifiers these blocks read
+        // (pendingSiteAnchor/scrollToSiteAnchor from
+        // getSiteNavClickHandlerScript, pendingSiteScroll, and
+        // pendingSiteSearchHighlight/bsApplyPageSearch from
+        // getBookSearchScript) are DECLARED by those same scripts, which the
+        // superset design injects in every mode so an in-place switch needs
+        // no reload. The currentMode === 'site' runtime guards below keep
+        // them inert outside site mode.
         if (currentMode === 'site' && pendingSiteAnchor) {
           scrollToSiteAnchor(pendingSiteAnchor);
           pendingSiteAnchor = null;
@@ -537,7 +609,7 @@ function getMapWebviewScript(
         if (currentMode === 'site' && pendingSiteSearchHighlight) {
           bsApplyPageSearch(pendingSiteSearchHighlight);
           pendingSiteSearchHighlight = null;
-        }` : ''}
+        }
       }
     } else if (e.data.type === '${MSG_PATCH_CONTENT}') {
       // Book mode's incremental update: replace only the entries whose HTML
@@ -570,10 +642,38 @@ function getMapWebviewScript(
       // reloading the page on an edit, by site mode's too -- see
       // getSidebarUpdateScript for what each replaces and why.
       applySidebarUpdate(e.data.html);
+    } else if (e.data.type === '${MSG_SWITCH_MODE}') {
+      // A mode the host rendered and is handing to this still-alive document:
+      // applied in place by applyModeStage (see above) rather than a reload,
+      // which is what keeps the toolbar from flashing out and back on a switch.
+      applyModeStage(e.data.stage);
     }
   });
 })();
 `;
+}
+
+/**
+ * The parts of a rendered mode that an in-place switch swaps into the live
+ * webview, instead of reassigning webview.html -- which is how the toolbar
+ * stays on the page across a mode change (toolbar-persistence work). Sent to
+ * the webview's applyModeStage (see getMapWebviewScript's MSG_SWITCH_MODE
+ * handler) alongside the host's own state commit.
+ */
+interface MapRenderStage {
+  mode: 'tree' | 'book' | 'site';
+  /** Full <body> class list (mode-*, template, shell); no hide-profiling. */
+  bodyClass: string;
+  /** The template's css text (no <style> wrapper); '' when there is none. */
+  templateCss: string;
+  /** The body's data-template hook value; '' when there is no template. */
+  templateDataAttr: string;
+  /** The template dropdown's selected id; '' for the default look. */
+  selectedTemplate: string;
+  /** The <body> content that follows the persistent #__topbar element. */
+  shellHtml: string;
+  /** Whether this stage is a docsite/book shell (drives topbar--top). */
+  isShell: boolean;
 }
 
 /** What renderMapContent produces: the content for a mode, or the error that replaces it. */
@@ -685,9 +785,25 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         const viewType = filePart.toLowerCase().endsWith('.ditamap') ? 'ditaViewer.mapPreview' : 'ditaViewer.preview';
         vscode.commands.executeCommand('vscode.openWith', targetUri, viewType);
       } else if (message.type === 'switchMode') {
-        currentMode = message.mode as 'tree' | 'book' | 'site';
+        const newMode = message.mode as 'tree' | 'book' | 'site';
+        if (newMode !== 'tree' && newMode !== 'book' && newMode !== 'site') return;
         keepRememberedView = false;
-        requestUpdate('full');
+        // Render the target mode and apply it IN PLACE: the webview keeps its
+        // document (so the toolbar never leaves the page) and swaps the stage
+        // payload into it. Only fall back to a full reload when there is no
+        // stage to apply -- a render that failed (its error page has no
+        // toolbar to switch back with, matching the old behaviour) or a page
+        // that is already that error page (no script to receive the message).
+        const rendered = this.generateHtml(document, webviewPanel.webview, newMode, currentSitePage);
+        if (rendered.failed || !rendered.stage || pageIsError) {
+          currentMode = newMode;
+          requestUpdate('full');
+          return;
+        }
+        currentMode = newMode;
+        rememberedModeUnproven = false;
+        commitRenderedState(rendered);
+        webviewPanel.webview.postMessage({ type: MSG_SWITCH_MODE, stage: rendered.stage });
       } else if (message.type === MSG_SET_TEMPLATE) {
         // Only 'site'/'book' views have a template, and only a template that
         // exists (or '' for none) can be chosen -- the id is untrusted input.
@@ -905,6 +1021,18 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       }
       rememberedModeUnproven = false;
       webviewPanel.webview.html = rendered.html;
+      commitRenderedState(rendered);
+    };
+
+    // Records everything a completed render (full-reload OR in-place switch)
+    // implies for the panel's diffing/dependency state, so the next source
+    // edit refreshes the right thing against the right baseline. updateWebview
+    // runs it after assigning webview.html; the switchMode handler runs it
+    // before posting MSG_SWITCH_MODE. Shared because both put the SAME
+    // rendered document (rendered.html) in front of the reader -- an in-place
+    // switch leaves the toolbar up but the content/baselines it commits are
+    // identical to what a reload of that mode would have.
+    const commitRenderedState = (rendered: ReturnType<MapViewerProvider['generateHtml']>) => {
       pageIsError = rendered.failed === true;
       lastSiteRender = rendered.siteRender;
       // A full render answers everything owed, and replaces what was read.
@@ -1380,7 +1508,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     webview: vscode.Webview,
     mode: 'tree' | 'book' | 'site',
     sitePageHint?: string,
-  ): { html: string; failed?: true; parts?: BookPart[]; sidebarTreeHtml?: string; resolvedSitePage?: string; siteManifest?: DocsiteNavEntry[]; siteKeyMap?: Map<string, string>; siteBookMembers?: ReadonlySet<string>; files?: ReadonlySet<string>; pageFiles?: ReadonlySet<string>; siteRender?: { sidebarTreeHtml: string; pageHtml: string } } {
+  ): { html: string; failed?: true; parts?: BookPart[]; sidebarTreeHtml?: string; resolvedSitePage?: string; siteManifest?: DocsiteNavEntry[]; siteKeyMap?: Map<string, string>; siteBookMembers?: ReadonlySet<string>; files?: ReadonlySet<string>; pageFiles?: ReadonlySet<string>; siteRender?: { sidebarTreeHtml: string; pageHtml: string }; stage?: MapRenderStage } {
     const stylesUri = webview.asWebviewUri(
       vscode.Uri.file(join(this.context.extensionPath, 'media', 'styles.css')),
     );
@@ -1413,13 +1541,18 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       templates,
     );
     const script = getMapWebviewScript(
-      mode,
       templates.map((t) => ({ value: t.id, label: templateDisplayName(t, vscode.env.language) })),
       template?.id ?? '',
     );
-    const templateStyle = template
-      ? buildTemplateStyle(template, (p) => readFileSync(p, 'utf-8'), (p) => webview.asWebviewUri(vscode.Uri.file(p)).toString())
+    // The template's raw css (no <style> wrapper) is computed here so an
+    // in-place mode switch can drop it into the persistent head element (the
+    // stage's templateCss field). The head always carries a
+    // `<style id="dita-template-style">`, empty when there is no template, so
+    // that swap has a stable target across every mode/template combination.
+    const templateCss = template
+      ? buildTemplateStyleText(template, (p) => readFileSync(p, 'utf-8'), (p) => webview.asWebviewUri(vscode.Uri.file(p)).toString())
       : '';
+    const templateStyle = `<style id="dita-template-style">\n${templateCss}\n</style>`;
     const templateBody = templateBodyAttrs(template);
     const titleKeys = buildKeyMap(document.uri);
     const mapTitle = mapTitleFromXml(document.getText(), basename(document.fileName), (k) => titleKeys.get(k));
@@ -1464,6 +1597,12 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     // one were there. media/styles.css's own flex shell rule is scoped the
     // matching way (body.mode-book:has(.site-nav)).
 
+    // The full <body> class list this render produces (mode-*, template dark
+    // marker, shell). hide-profiling is deliberately NOT part of it -- it is a
+    // client-side toggle the webview owns and preserves across an in-place
+    // switch, so it never appears in a host-computed body class.
+    const bodyClass = `${getInitialSidebarBodyClass(mode)}${templateBody.className}${shell.bodyClass}`;
+
     return {
       html: `<!DOCTYPE html>
 <html lang="en"${isDark ? ' class="vscode-dark"' : ''}>
@@ -1475,7 +1614,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
 ${templateStyle}
 <title>${escapeHtml(document.fileName)}</title>
 </head>
-<body class="${getInitialSidebarBodyClass(mode)}${templateBody.className}${shell.bodyClass}"${templateBody.attrs}>
+<body class="${bodyClass}"${templateBody.attrs}>
 ${shell.html}
 <script nonce="${nonce}">window.__fontPrefs=${fontPrefsJson};window.__widthSelection=${widthSelectionJson};window.__tagTooltips=${tagTooltipsJson};window.__mapTitle=${mapTitleJson};</script>
 <script nonce="${nonce}">${script}</script>
@@ -1494,6 +1633,19 @@ ${shell.html}
       siteRender: mode === 'site' && result.sidebarTreeHtml !== undefined
         ? { sidebarTreeHtml: result.sidebarTreeHtml, pageHtml: result.html }
         : undefined,
+      // Everything a switch INTO this mode needs to apply in place, without
+      // reassigning webview.html (so the toolbar stays on the page). Absent on
+      // the error page (there is no stage to apply); the switchMode handler
+      // falls back to a full reload for a failed render.
+      stage: {
+        mode,
+        bodyClass,
+        templateCss,
+        templateDataAttr: template ? templateDataAttr(template.id) : '',
+        selectedTemplate: template?.id ?? '',
+        shellHtml: shell.html,
+        isShell: shell.bodyClass.includes('site-shell'),
+      },
     };
   }
 
