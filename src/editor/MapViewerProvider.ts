@@ -2,7 +2,12 @@ import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
 import { openSourceBesidePreview } from './sourceEditorOpener';
-import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, siteNavigableEntries, renderSiteNavTreeHtml, wrapSiteNavTreeHtml, getSiteNavClickHandlerScript, getSidebarUpdateScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavKeyboardScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteOpenSourceScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
+import { discoverTemplates, templateDisplayName, SiteTemplate, TemplateRoot } from './siteTemplates';
+import { buildTemplateStyle, templateBodyAttrs } from './templateStyle';
+import { TEMPLATE_SELECTION_KEY, parseTemplateSelection, withTemplate, pickTemplate } from './templateSelection';
+import { resolveDirectoryPath } from './cssDiscovery';
+import { readFileSync } from 'fs';
+import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, siteNavigableEntries, renderSiteNavTreeHtml, wrapSiteNavTreeHtml, getSiteNavClickHandlerScript, getSidebarUpdateScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavKeyboardScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteOpenSourceScript, getTemplateSelectScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
 import { getBookSearchIndex, searchBookIndex, buildBookSearchResultsPayload, getBookSearchScript, invalidateBookSearchIndex } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
@@ -67,6 +72,8 @@ const MSG_SWITCH_SITE_PAGE = 'switchSitePage';
 // Docsite mode: open a topic's source file in the text editor, in a tab
 // group other than the preview's. webview -> host only.
 const MSG_OPEN_TOPIC_SOURCE = 'openTopicSource';
+// Docsite/book view: the reader picked a template ('' = none). webview -> host.
+const MSG_SET_TEMPLATE = 'setTemplate';
 // Book mode's own sidebar refresh (nested-fold-and-highlight-plan.md item
 // 1) -- host -> webview only, sent alongside (not instead of)
 // MSG_PATCH_CONTENT/MSG_UPDATE_CONTENT on every source edit in book mode.
@@ -136,7 +143,11 @@ function localizeTopicTypeLabel(tagName: string): string | undefined {
   return tagName.charAt(0).toUpperCase() + tagName.slice(1);
 }
 
-function getMapWebviewScript(mode: 'tree' | 'book' | 'site'): string {
+function getMapWebviewScript(
+  mode: 'tree' | 'book' | 'site',
+  templateOptions: ReadonlyArray<{ value: string; label: string }>,
+  selectedTemplate: string,
+): string {
   const L = {
     // Everything the single-topic preview's toolbar says too: the toolbar
     // label, the font and page-width controls, the Flags toggle, and the
@@ -155,6 +166,8 @@ function getMapWebviewScript(mode: 'tree' | 'book' | 'site'): string {
     siteOpenSource: vscode.l10n.t('Source'),
     siteOpenSourceTitle: vscode.l10n.t('Open this topic\'s source in the editor'),
     siteOpenSourceMenu: vscode.l10n.t('Open source'),
+    templateTitle: vscode.l10n.t('Template'),
+    templateNone: vscode.l10n.t('Default look'),
     sitePrevTopic: vscode.l10n.t('Previous topic'),
     siteNextTopic: vscode.l10n.t('Next topic'),
     siteToggleSidebar: vscode.l10n.t('Show/hide topic list'),
@@ -338,7 +351,7 @@ function getMapWebviewScript(mode: 'tree' | 'book' | 'site'): string {
   // that was missing.
   toolbar.appendChild(tagTooltipsBtn);
 
-  // Mode toggle button. Cycles tree -> book -> site -> tree; the label
+  // Mode toggle button. Cycles tree -> site -> book -> tree; the label
   // always names the CURRENT mode (see getModeToggleScript's own comment
   // for why).
   ${getModeToggleScript({
@@ -349,6 +362,18 @@ function getMapWebviewScript(mode: 'tree' | 'book' | 'site'): string {
     switchModeMsgType: 'switchMode',
   })}
   toolbar.appendChild(modeBtn);
+
+  // Template picker -- docsite and book view (outline view has no template).
+  ${getTemplateSelectScript({
+    msgType: MSG_SET_TEMPLATE,
+    title: L.templateTitle,
+    noneLabel: L.templateNone,
+    options: templateOptions,
+    selected: selectedTemplate,
+  })}
+  if (currentMode === 'site' || currentMode === 'book') {
+    toolbar.appendChild(templateSel);
+  }
 
   // Profiling / conditional-attribute highlight toggle, same as the topic
   // viewer's Flags button -- purely a CSS class flip (body.hide-profiling),
@@ -633,6 +658,10 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         vscode.Uri.file(this.context.extensionPath),
         documentRoot,
         ...(vscode.workspace.workspaceFolders || []).map((f) => f.uri),
+        // User template folders (dita-viewer.templatesDirectory), so a
+        // template's fonts and images can load. Fixed for the panel's
+        // lifetime, like the rest of these roots.
+        ...this.templateRoots(document).filter((r) => !r.builtin).map((r) => vscode.Uri.file(r.dir)),
       ],
     };
 
@@ -653,6 +682,16 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       } else if (message.type === 'switchMode') {
         currentMode = message.mode as 'tree' | 'book' | 'site';
         keepRememberedView = false;
+        requestUpdate('full');
+      } else if (message.type === MSG_SET_TEMPLATE) {
+        // Only 'site'/'book' views have a template, and only a template that
+        // exists (or '' for none) can be chosen -- the id is untrusted input.
+        const id = typeof message.id === 'string' ? message.id : '';
+        const view = currentMode === 'book' ? 'book' : currentMode === 'site' ? 'site' : undefined;
+        if (!view) return;
+        if (id !== '' && !this.loadTemplates(document).some((t) => t.id === id)) return;
+        const prev = parseTemplateSelection(readForDocument(this.context.globalState, TEMPLATE_SELECTION_KEY, document.uri));
+        writeForDocument(this.context.globalState, TEMPLATE_SELECTION_KEY, document.uri, withTemplate(prev, view, id));
         requestUpdate('full');
       } else if (message.type === MSG_OPEN_TOPIC_SOURCE) {
         // Only a topic of this map's own manifest may be opened -- the
@@ -1362,7 +1401,21 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       };
     }
 
-    const script = getMapWebviewScript(mode);
+    const templates = this.loadTemplates(document);
+    const template = pickTemplate(
+      parseTemplateSelection(readForDocument(this.context.globalState, TEMPLATE_SELECTION_KEY, document.uri)),
+      mode,
+      templates,
+    );
+    const script = getMapWebviewScript(
+      mode,
+      templates.map((t) => ({ value: t.id, label: templateDisplayName(t, vscode.env.language) })),
+      template?.id ?? '',
+    );
+    const templateStyle = template
+      ? buildTemplateStyle(template, (p) => readFileSync(p, 'utf-8'), (p) => webview.asWebviewUri(vscode.Uri.file(p)).toString())
+      : '';
+    const templateBody = templateBodyAttrs(template);
     const nonce = randomBytes(16).toString('base64');
     const theme = vscode.window.activeColorTheme;
     const isDark = theme.kind === vscode.ColorThemeKind.Dark || theme.kind === vscode.ColorThemeKind.HighContrast;
@@ -1397,11 +1450,12 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; base-uri 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; font-src ${webview.cspSource}; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; base-uri 'none';">
 <link rel="stylesheet" href="${stylesUri}">
+${templateStyle}
 <title>${escapeHtml(document.fileName)}</title>
 </head>
-<body class="${getInitialSidebarBodyClass(mode)}">
+<body class="${getInitialSidebarBodyClass(mode)}${templateBody.className}"${templateBody.attrs}>
 ${result.sidebarHtml ?? ''}
 ${(result.sidebarHtml ? '<div id="__site-nav-resizer" class="site-nav-resizer" role="separator" aria-orientation="vertical" tabindex="0"></div>' : '')}
 <div id="dita-content-root"${result.sidebarHtml ? ' class="site-main"' : ''}>${result.html}</div>
@@ -1423,6 +1477,25 @@ ${(result.sidebarHtml ? '<div id="__site-nav-resizer" class="site-nav-resizer" r
         ? { sidebarTreeHtml: result.sidebarTreeHtml, pageHtml: result.html }
         : undefined,
     };
+  }
+
+  // Where templates live: the built-in ones shipped in media/templates, then
+  // the folders of dita-viewer.templatesDirectory (later roots override
+  // earlier ones with the same id, so a user template can replace a built-in).
+  private templateRoots(document: vscode.TextDocument): TemplateRoot[] {
+    const roots: TemplateRoot[] = [{ dir: join(this.context.extensionPath, 'media', 'templates'), builtin: true }];
+    const configured = vscode.workspace.getConfiguration('dita-viewer').get<string[]>('templatesDirectory') ?? [];
+    for (const dir of configured) {
+      const resolved = resolveDirectoryPath(dir, dirname(document.uri.fsPath));
+      if (resolved) roots.push({ dir: resolved, builtin: false });
+    }
+    return roots;
+  }
+
+  private loadTemplates(document: vscode.TextDocument): SiteTemplate[] {
+    const { templates, diagnostics } = discoverTemplates(this.templateRoots(document));
+    for (const d of diagnostics) console.warn(`[DITA Viewer] template ${d.dir}: ${d.message}`);
+    return templates;
   }
 
   // nested-fold-and-highlight-plan.md item 3: persisted sidebar collapse

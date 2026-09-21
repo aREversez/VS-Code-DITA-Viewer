@@ -142,6 +142,8 @@
   "Source": "源码",
   "Open this topic's source in the editor": "在编辑器中打开此主题的源码",
   "Open source": "打开源码",
+  "Template": "模板",
+  "Default look": "默认外观",
   "Could not open {0}: {1}": "无法打开 {0}：{1}",
   "Previous topic": "上一主题",
   "Next topic": "下一主题",

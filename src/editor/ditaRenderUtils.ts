@@ -3200,6 +3200,43 @@ export function getSiteOpenSourceScript(opts: { openSourceMsgType: string; menuL
 }
 
 /**
+ * Template dropdown for docsite/book view. Declares `templateSel` for the
+ * caller to place. The first option ("no template", value '') is always
+ * present; picking one posts its id and the host re-renders the page with
+ * that template's style (a full render, like a theme switch).
+ */
+export function getTemplateSelectScript(opts: {
+  msgType: string;
+  title: string;
+  noneLabel: string;
+  options: ReadonlyArray<{ value: string; label: string }>;
+  selected: string;
+}): string {
+  const msgType = JSON.stringify(opts.msgType);
+  const title = JSON.stringify(opts.title);
+  const options = JSON.stringify([{ value: '', label: opts.noneLabel }, ...opts.options]);
+  const selected = JSON.stringify(opts.selected);
+  return `
+  var templateSel = document.createElement('select');
+  templateSel.id = '__template-select';
+  templateSel.title = ${title};
+  templateSel.setAttribute('aria-label', ${title});
+  templateSel.style.cssText = 'max-width:110px;' + ddStyle;
+  var templateOptions = ${options};
+  for (var ti = 0; ti < templateOptions.length; ti++) {
+    var tOpt = document.createElement('option');
+    tOpt.value = templateOptions[ti].value;
+    tOpt.textContent = templateOptions[ti].label;
+    if (templateOptions[ti].value === ${selected}) tOpt.selected = true;
+    templateSel.appendChild(tOpt);
+  }
+  templateSel.addEventListener('change', function() {
+    vscode.postMessage({ type: ${msgType}, id: templateSel.value });
+  });
+`;
+}
+
+/**
  * Clamps a docsite-mode sidebar width (px) a drag gesture produced to a
  * sane range. Pure and exported so the clamping math itself is unit
  * tested; the drag wiring around it (getSiteSidebarResizerScript below)

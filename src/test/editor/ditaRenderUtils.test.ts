@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getSiteOpenSourceScript, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getSiteOpenSourceScript, getTemplateSelectScript, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -3981,5 +3981,44 @@ describe('getSiteOpenSourceScript (docsite: open a topic source)', () => {
     prevented = false;
     listeners['contextmenu']({ target: { closest: () => null }, preventDefault: () => { prevented = true; }, clientX: 1, clientY: 1 });
     assert.strictEqual(prevented, false);
+  });
+});
+
+describe('getTemplateSelectScript (docsite/book template dropdown)', () => {
+  function run(selected: string) {
+    const posted: Array<{ type: string; id: string }> = [];
+    const created: Array<{ tag: string; value?: string; textContent?: string; selected?: boolean; children: unknown[]; listeners: Record<string, () => void> }> = [];
+    const make = (tag: string) => {
+      const el = {
+        tag, value: '', textContent: '', selected: false, id: '', title: '', style: {} as Record<string, unknown>,
+        children: [] as unknown[], listeners: {} as Record<string, () => void>,
+        setAttribute: () => {},
+        appendChild(c: unknown) { el.children.push(c); },
+        addEventListener(evt: string, fn: () => void) { el.listeners[evt] = fn; },
+      };
+      created.push(el);
+      return el;
+    };
+    const script = getTemplateSelectScript({ msgType: 'setTemplate', title: 'Template', noneLabel: 'Default look', options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }], selected });
+    const fn = new Function('ddStyle', 'document', 'vscode', script + '; return templateSel;');
+    const sel = fn('', { createElement: make }, { postMessage: (m: { type: string; id: string }) => posted.push(m) });
+    return { sel, posted };
+  }
+
+  it('lists "no template" first, then the templates, and marks the current one', () => {
+    const { sel } = run('b');
+    const opts = sel.children as Array<{ value: string; textContent: string; selected: boolean }>;
+    assert.deepStrictEqual(opts.map((o) => o.value), ['', 'a', 'b']);
+    assert.strictEqual(opts[0].textContent, 'Default look');
+    assert.deepStrictEqual(opts.map((o) => o.selected), [false, false, true]);
+  });
+
+  it('posts the chosen id on change, and "" for the default look', () => {
+    const { sel, posted } = run('');
+    sel.value = 'a';
+    sel.listeners['change']();
+    sel.value = '';
+    sel.listeners['change']();
+    assert.deepStrictEqual(posted, [{ type: 'setTemplate', id: 'a' }, { type: 'setTemplate', id: '' }]);
   });
 });
