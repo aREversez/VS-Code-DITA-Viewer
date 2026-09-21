@@ -76,19 +76,18 @@ export interface ShellParts {
 }
 
 /**
- * The body's children. Without chrome it is exactly what the page always
- * had -- sidebar, resizer, content, as siblings -- so a page with no
- * template (or a template without header and footer) is untouched. With
- * chrome, the three are wrapped in .site-frame between the header and the
- * footer; only a page that HAS a sidebar gets chrome (a book with an empty
- * sidebar is not laid out as a docsite).
+ * The body's children for a docsite/book page. A page WITH a sidebar is laid
+ * out as a column: [top bar, added by the toolbar script] / header (template)
+ * / .site-frame (sidebar, resizer, content as a row) / footer (template),
+ * marked with the site-shell body class. A page without a sidebar (a book with
+ * an empty map) keeps the three parts as plain siblings, exactly as before.
+ * Header and footer are optional; only a template supplies them.
  */
 export function wrapShell(p: ShellParts): { bodyClass: string; html: string } {
-  const hasChrome = p.sidebarHtml !== '' && (p.headerHtml !== undefined || p.footerHtml !== undefined);
   const core = `${p.sidebarHtml}\n${p.resizerHtml}\n${p.contentRootHtml}`;
-  if (!hasChrome) return { bodyClass: '', html: core };
+  if (p.sidebarHtml === '') return { bodyClass: '', html: core };
   return {
-    bodyClass: ' tpl-shell',
+    bodyClass: ' site-shell',
     html: `${p.headerHtml ?? ''}\n<div class="site-frame">\n${core}\n</div>\n${p.footerHtml ?? ''}`,
   };
 }

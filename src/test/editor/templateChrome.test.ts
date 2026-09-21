@@ -63,22 +63,23 @@ describe('fillPlaceholders / cssUrlSafe / mapTitleFromXml', () => {
 
 describe('wrapShell', () => {
   const parts = { sidebarHtml: '<nav/>', resizerHtml: '<div r/>', contentRootHtml: '<main/>' };
-  it('without chrome, the body children are exactly the three siblings, in order', () => {
-    const r = wrapShell(parts);
-    assert.strictEqual(r.bodyClass, '');
-    assert.ok(!r.html.includes('site-frame'));
-    assert.ok(r.html.indexOf('<nav/>') < r.html.indexOf('<div r/>') && r.html.indexOf('<div r/>') < r.html.indexOf('<main/>'));
-  });
-  it('with chrome, header, frame and footer are laid out in that order', () => {
+  it('a page with a sidebar is a column: header, frame (sidebar, resizer, content), footer', () => {
     const r = wrapShell({ ...parts, headerHtml: '<header/>', footerHtml: '<footer/>' });
-    assert.strictEqual(r.bodyClass, ' tpl-shell');
+    assert.strictEqual(r.bodyClass, ' site-shell');
     const at = (s: string) => r.html.indexOf(s);
-    assert.ok(at('<header/>') < at('site-frame') && at('site-frame') < at('<nav/>') && at('<main/>') < at('<footer/>'));
+    assert.ok(at('<header/>') < at('site-frame') && at('site-frame') < at('<nav/>'));
+    assert.ok(at('<nav/>') < at('<div r/>') && at('<div r/>') < at('<main/>') && at('<main/>') < at('<footer/>'));
   });
-  it('a page without a sidebar gets no chrome', () => {
+  it('header and footer are optional: without a template the frame stands alone', () => {
+    const r = wrapShell(parts);
+    assert.strictEqual(r.bodyClass, ' site-shell');
+    assert.ok(r.html.includes('site-frame') && r.html.includes('<nav/>') && r.html.includes('<main/>'));
+    assert.ok(!r.html.includes('<header') && !r.html.includes('<footer'));
+  });
+  it('a page without a sidebar stays three plain siblings and gets no shell class or chrome', () => {
     const r = wrapShell({ ...parts, sidebarHtml: '', headerHtml: '<header/>' });
     assert.strictEqual(r.bodyClass, '');
-    assert.ok(!r.html.includes('<header/>'));
+    assert.ok(!r.html.includes('<header/>') && !r.html.includes('site-frame'));
   });
 });
 

@@ -3234,21 +3234,34 @@ export function getSiteOpenSourceScript(opts: { openSourceMsgType: string; menuL
 }
 
 /**
- * Puts the finished toolbar on the page. Normally it floats over the top-right
- * corner (position:fixed, set by the scaffold). When a template supplies a
- * header, the toolbar is docked INTO the header instead -- as its last child,
- * styled by `.tpl-toolbar` in styles.css -- so it can never cover the brand or
- * the header's links, wraps under them in a narrow window, and is centered in
- * the header's own row. Define-then-call: the caller just inserts this where
- * it used to append the toolbar to the body.
+ * Puts the finished toolbar on the page. In a docsite/book page (body has
+ * `site-shell`, see wrapShell) it becomes a top bar: the first row of the
+ * page, above any template header, so it never covers the header or the
+ * content -- the content pane scrolls beneath it, not under it. The bar's
+ * left side carries the map's title (window.__mapTitle) when there is room
+ * and no template header already shows a title; on a narrow bar the title
+ * hides (container query in styles.css) and the buttons wrap. Every other
+ * page keeps the floating toolbar over the top-right corner.
+ * Define-then-call: the caller inserts this where it used to append the
+ * toolbar to the body.
  */
 export function getToolbarPlacementScript(): string {
   return `
   function placeToolbar(tb) {
-    var header = document.querySelector('.tpl-header');
-    if (!header) { document.body.appendChild(tb); return; }
-    tb.classList.add('tpl-toolbar');
-    header.appendChild(tb);
+    if (!document.body.classList.contains('site-shell')) { document.body.appendChild(tb); return; }
+    var bar = document.createElement('div');
+    bar.id = '__topbar';
+    var title = typeof window.__mapTitle === 'string' ? window.__mapTitle : '';
+    if (title && !document.querySelector('.tpl-header')) {
+      var t = document.createElement('span');
+      t.className = 'topbar-title';
+      t.textContent = title;
+      t.title = title;
+      bar.appendChild(t);
+    }
+    tb.classList.add('in-topbar');
+    bar.appendChild(tb);
+    document.body.insertBefore(bar, document.body.firstChild);
   }
   placeToolbar(toolbar);
 `;

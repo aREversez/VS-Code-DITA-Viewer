@@ -4077,32 +4077,48 @@ describe('site toolbar navigation buttons: compact and centered', () => {
   });
 });
 
-describe('getToolbarPlacementScript (toolbar docks into a template header)', () => {
-  function run(header: object | null) {
-    const bodyAppended: unknown[] = [];
-    const headerAppended: unknown[] = [];
-    const classes: string[] = [];
-    const toolbar = { classList: { add: (c: string) => classes.push(c) } };
-    const doc = {
-      querySelector: (sel: string) => (sel === '.tpl-header' && header ? { appendChild: (n: unknown) => headerAppended.push(n) } : null),
-      body: { appendChild: (n: unknown) => bodyAppended.push(n) },
+describe('getToolbarPlacementScript (the toolbar becomes the docsite/book top bar)', () => {
+  interface El { tag: string; id?: string; className?: string; textContent?: string; title?: string; children: El[]; classes: string[]; classList: { add: (c: string) => void }; appendChild: (c: El) => void }
+  function el(tag: string): El {
+    const e: El = { tag, children: [], classes: [], classList: { add: (c: string) => { e.classes.push(c); } }, appendChild: (c) => { e.children.push(c); } };
+    return e;
+  }
+  function run(opts: { shell: boolean; header: boolean; title?: unknown }) {
+    const toolbar = el('div');
+    const bodyChildren: El[] = [el('existing')];
+    const body = {
+      classList: { contains: (c: string) => c === 'site-shell' && opts.shell },
+      appendChild: (c: El) => { bodyChildren.push(c); },
+      insertBefore: (c: El, ref: El) => { bodyChildren.splice(bodyChildren.indexOf(ref), 0, c); },
+      get firstChild() { return bodyChildren[0]; },
     };
-    new Function('toolbar', 'document', getToolbarPlacementScript())(toolbar, doc);
-    return { toolbar, bodyAppended, headerAppended, classes };
+    const doc = { body, createElement: el, querySelector: (sel: string) => (sel === '.tpl-header' && opts.header ? {} : null) };
+    new Function('toolbar', 'document', 'window', getToolbarPlacementScript())(toolbar, doc, { __mapTitle: opts.title });
+    return { toolbar, bodyChildren };
   }
 
-  it('without a template header the toolbar goes on the body, floating as before', () => {
-    const r = run(null);
-    assert.deepStrictEqual(r.bodyAppended, [r.toolbar]);
-    assert.deepStrictEqual(r.headerAppended, []);
-    assert.deepStrictEqual(r.classes, []);
+  it('on a page that is not a docsite/book shell the toolbar floats on the body as before', () => {
+    const r = run({ shell: false, header: false, title: 'T' });
+    assert.strictEqual(r.bodyChildren[r.bodyChildren.length - 1], r.toolbar);
+    assert.deepStrictEqual(r.toolbar.classes, []);
   });
 
-  it('with a template header the toolbar is docked into it and marked for the docked styling', () => {
-    const r = run({});
-    assert.deepStrictEqual(r.headerAppended, [r.toolbar]);
-    assert.deepStrictEqual(r.bodyAppended, []);
-    assert.deepStrictEqual(r.classes, ['tpl-toolbar']);
+  it('in a shell page a top bar becomes the FIRST body child and holds the toolbar', () => {
+    const r = run({ shell: true, header: false, title: 'My Book' });
+    const bar = r.bodyChildren[0];
+    assert.strictEqual(bar.id, '__topbar');
+    assert.strictEqual(r.bodyChildren[1].tag, 'existing');
+    assert.ok(bar.children.includes(r.toolbar));
+    assert.deepStrictEqual(r.toolbar.classes, ['in-topbar']);
+  });
+
+  it('the map title leads the bar, unless a template header already shows one or there is no title', () => {
+    const withTitle = run({ shell: true, header: false, title: 'My Book' }).bodyChildren[0];
+    assert.strictEqual(withTitle.children[0].className, 'topbar-title');
+    assert.strictEqual(withTitle.children[0].textContent, 'My Book');
+    assert.strictEqual(run({ shell: true, header: true, title: 'My Book' }).bodyChildren[0].children.length, 1);
+    assert.strictEqual(run({ shell: true, header: false, title: '' }).bodyChildren[0].children.length, 1);
+    assert.strictEqual(run({ shell: true, header: false, title: undefined }).bodyChildren[0].children.length, 1);
   });
 });
 

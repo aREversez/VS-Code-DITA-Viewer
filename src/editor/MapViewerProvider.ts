@@ -1416,9 +1416,11 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       ? buildTemplateStyle(template, (p) => readFileSync(p, 'utf-8'), (p) => webview.asWebviewUri(vscode.Uri.file(p)).toString())
       : '';
     const templateBody = templateBodyAttrs(template);
+    const mapTitle = mapTitleFromXml(document.getText(), basename(document.fileName));
+    const mapTitleJson = escapeJson(JSON.stringify(mapTitle));
     const chrome = renderChrome(
       template,
-      { title: mapTitleFromXml(document.getText(), basename(document.fileName)), year: new Date().getFullYear() },
+      { title: mapTitle, year: new Date().getFullYear() },
       (p) => webview.asWebviewUri(vscode.Uri.file(p)).toString(),
     );
     const shell = wrapShell({
@@ -1469,7 +1471,7 @@ ${templateStyle}
 </head>
 <body class="${getInitialSidebarBodyClass(mode)}${templateBody.className}${shell.bodyClass}"${templateBody.attrs}>
 ${shell.html}
-<script nonce="${nonce}">window.__fontPrefs=${fontPrefsJson};window.__widthSelection=${widthSelectionJson};window.__tagTooltips=${tagTooltipsJson};</script>
+<script nonce="${nonce}">window.__fontPrefs=${fontPrefsJson};window.__widthSelection=${widthSelectionJson};window.__tagTooltips=${tagTooltipsJson};window.__mapTitle=${mapTitleJson};</script>
 <script nonce="${nonce}">${script}</script>
 </body>
 </html>`,

@@ -1249,30 +1249,31 @@ body.dita-loading {
   to { transform: rotate(360deg); }
 }
 
-/* Template chrome (media/templates/*): a header above and a footer below the
-   sidebar/content frame. Only present when a template asks for one -- without
-   it the body's children are the sidebar, resizer and content, exactly as
-   the rules above lay them out. The body turns from a flex row into a column
-   of three rows, and .site-frame takes over as the flex row; the selector
-   list mirrors the shell rule it overrides (its :has() form is more
-   specific, hence the doubled class). */
-body.mode-site.tpl-shell.tpl-shell,
-body.mode-book.tpl-shell.tpl-shell:has(.site-nav) {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  grid-template-columns: minmax(0, 1fr);
+/* Docsite/book page shell (wrapShell): a column of [top bar] / [template
+   header] / .site-frame / [template footer]. .site-frame takes over as the
+   flex row that the body itself used to be, and is the only part that
+   stretches; the body stays exactly one viewport tall so the sidebar and the
+   content pane scroll on their own. The selector list mirrors the shell rule
+   it overrides (its :has() form is more specific, hence the doubled class). */
+body.mode-site.site-shell.site-shell,
+body.mode-book.site-shell.site-shell:has(.site-nav) {
+  flex-direction: column;
+  align-items: stretch;
 }
-.tpl-shell > .site-frame {
+.site-shell > .site-frame {
+  flex: 1 1 0;
   display: flex;
   align-items: stretch;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
+.site-shell > #__topbar,
+.site-shell > .tpl-header,
+.site-shell > .tpl-footer { flex: 0 0 auto; }
 /* Structure hooks a template's css styles; the base look is deliberately
-   bare (its own css supplies colours, size and spacing). The fixed toolbar
-   floats over the header's right-hand end, so the header keeps that corner
-   free by default. */
+   bare (its own css supplies colours, size and spacing). The toolbar is not
+   part of the header: it is the page's top bar, above it. */
 .tpl-header, .tpl-footer {
   display: flex;
   align-items: center;
@@ -1280,7 +1281,7 @@ body.mode-book.tpl-shell.tpl-shell:has(.site-nav) {
   box-sizing: border-box;
   padding: 0.6rem 1rem;
 }
-.tpl-header { padding-right: var(--tpl-toolbar-reserve, 0); background-size: cover; background-position: center; }
+.tpl-header { flex-wrap: wrap; background-size: cover; background-position: center; }
 .tpl-footer { justify-content: space-between; flex-wrap: wrap; }
 .tpl-brand, .tpl-footer-brand { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
 .tpl-brand-text { display: flex; flex-direction: column; min-width: 0; }
@@ -1289,19 +1290,46 @@ body.mode-book.tpl-shell.tpl-shell:has(.site-nav) {
 .tpl-links { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; }
 .tpl-link { text-decoration: none; }
 
-/* The toolbar docked into a template's header (getToolbarPlacementScript):
-   it stops floating, keeps the header's row, and wraps under the brand and
-   links when the window is narrow. !important because the scaffold styles it
-   with an inline cssText (fixed, top/right, opacity, blur). */
-.tpl-header { flex-wrap: wrap; }
-.tpl-header > .tpl-toolbar {
+/* Top bar (getToolbarPlacementScript): the toolbar as the first row of a
+   docsite/book page. !important on the toolbar because the scaffold styles it
+   with an inline cssText for the floating case (fixed, top/right, opacity,
+   blur, its own background and border). The left side is the map's title
+   while the bar is wide enough; the buttons keep the right side, and wrap
+   only once they no longer fit on the row. */
+#__topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  box-sizing: border-box;
+  padding: 3px 8px;
+  background: var(--vscode-editor-background);
+  border-bottom: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.3));
+  container: topbar / inline-size;
+}
+#__topbar > .in-topbar {
   position: static !important;
   z-index: auto !important;
   opacity: 1 !important;
   backdrop-filter: none !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  flex: 0 1 auto;
   flex-wrap: wrap;
   justify-content: flex-end;
   max-width: 100%;
   margin-left: auto;
 }
-.tpl-header > .tpl-links + .tpl-toolbar { margin-left: 0; }
+.topbar-title {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+}
+@container topbar (max-width: 760px) {
+  .topbar-title { display: none; }
+}
