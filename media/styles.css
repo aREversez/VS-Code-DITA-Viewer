@@ -1248,3 +1248,43 @@ body.dita-loading {
 @keyframes dita-loading-spin {
   to { transform: rotate(360deg); }
 }
+
+/* Template chrome (media/templates/*): a header above and a footer below the
+   sidebar/content frame. Only present when a template asks for one -- without
+   it the body's children are the sidebar, resizer and content, exactly as
+   the rules above lay them out. The body turns from a flex row into a column
+   of three rows, and .site-frame takes over as the flex row; the selector
+   list mirrors the shell rule it overrides (its :has() form is more
+   specific, hence the doubled class). */
+body.mode-site.tpl-shell.tpl-shell,
+body.mode-book.tpl-shell.tpl-shell:has(.site-nav) {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
+}
+.tpl-shell > .site-frame {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+/* Structure hooks a template's css styles; the base look is deliberately
+   bare (its own css supplies colours, size and spacing). The fixed toolbar
+   floats over the header's right-hand end, so the header keeps that corner
+   free by default. */
+.tpl-header, .tpl-footer {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  box-sizing: border-box;
+  padding: 0.6rem 1rem;
+}
+.tpl-header { padding-right: var(--tpl-toolbar-reserve, 0); background-size: cover; background-position: center; }
+.tpl-footer { justify-content: space-between; flex-wrap: wrap; }
+.tpl-brand, .tpl-footer-brand { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+.tpl-brand-text { display: flex; flex-direction: column; min-width: 0; }
+.tpl-logo { height: 32px; width: auto; max-width: 160px; zoom: 1; border-radius: 0; cursor: default; }
+.tpl-logo--footer { height: 20px; }
+.tpl-links { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; }
+.tpl-link { text-decoration: none; }

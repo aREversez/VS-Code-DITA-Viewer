@@ -4,6 +4,7 @@ import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
 import { openSourceBesidePreview } from './sourceEditorOpener';
 import { discoverTemplates, templateDisplayName, SiteTemplate, TemplateRoot } from './siteTemplates';
 import { buildTemplateStyle, templateBodyAttrs } from './templateStyle';
+import { mapTitleFromXml, renderChrome, wrapShell } from './templateChrome';
 import { TEMPLATE_SELECTION_KEY, parseTemplateSelection, withTemplate, pickTemplate } from './templateSelection';
 import { resolveDirectoryPath } from './cssDiscovery';
 import { readFileSync } from 'fs';
@@ -15,7 +16,7 @@ import { foldPendingRender, foldSiteRefresh, escalateAfterFailure, PendingRender
 import { sharedWebviewStrings } from './webviewL10n';
 import { buildKeyMap, FONT_PREFS_KEY, DEFAULT_FONT_PREFS, WIDTH_SELECTION_KEY, TAG_TOOLTIPS_KEY, DEFAULT_TAG_TOOLTIPS, escapeJson } from './DitaViewerProvider';
 import { formatLocalizedRole } from '../language/bookRoleL10n';
-import { dirname, join, resolve } from 'path';
+import { basename, dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
 import { readForDocument, writeForDocument } from './perDocumentState';
 import { trackSourceReads, dependsOn } from './sourceText';
@@ -1416,6 +1417,18 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       ? buildTemplateStyle(template, (p) => readFileSync(p, 'utf-8'), (p) => webview.asWebviewUri(vscode.Uri.file(p)).toString())
       : '';
     const templateBody = templateBodyAttrs(template);
+    const chrome = renderChrome(
+      template,
+      { title: mapTitleFromXml(document.getText(), basename(document.fileName)), year: new Date().getFullYear() },
+      (p) => webview.asWebviewUri(vscode.Uri.file(p)).toString(),
+    );
+    const shell = wrapShell({
+      sidebarHtml: result.sidebarHtml ?? '',
+      resizerHtml: result.sidebarHtml ? '<div id="__site-nav-resizer" class="site-nav-resizer" role="separator" aria-orientation="vertical" tabindex="0"></div>' : '',
+      contentRootHtml: `<div id="dita-content-root"${result.sidebarHtml ? ' class="site-main"' : ''}>${result.html}</div>`,
+      headerHtml: chrome.headerHtml,
+      footerHtml: chrome.footerHtml,
+    });
     const nonce = randomBytes(16).toString('base64');
     const theme = vscode.window.activeColorTheme;
     const isDark = theme.kind === vscode.ColorThemeKind.Dark || theme.kind === vscode.ColorThemeKind.HighContrast;
@@ -1455,10 +1468,8 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
 ${templateStyle}
 <title>${escapeHtml(document.fileName)}</title>
 </head>
-<body class="${getInitialSidebarBodyClass(mode)}${templateBody.className}"${templateBody.attrs}>
-${result.sidebarHtml ?? ''}
-${(result.sidebarHtml ? '<div id="__site-nav-resizer" class="site-nav-resizer" role="separator" aria-orientation="vertical" tabindex="0"></div>' : '')}
-<div id="dita-content-root"${result.sidebarHtml ? ' class="site-main"' : ''}>${result.html}</div>
+<body class="${getInitialSidebarBodyClass(mode)}${templateBody.className}${shell.bodyClass}"${templateBody.attrs}>
+${shell.html}
 <script nonce="${nonce}">window.__fontPrefs=${fontPrefsJson};window.__widthSelection=${widthSelectionJson};window.__tagTooltips=${tagTooltipsJson};</script>
 <script nonce="${nonce}">${script}</script>
 </body>
