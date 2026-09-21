@@ -3234,25 +3234,33 @@ export function getSiteOpenSourceScript(opts: { openSourceMsgType: string; menuL
 }
 
 /**
- * Puts the finished toolbar on the page. In a docsite/book page (body has
- * `site-shell`, see wrapShell) it becomes a top bar: the first row of the
- * page, above any template header, so it never covers the header or the
- * content -- the content pane scrolls beneath it, not under it. The bar's
- * left side carries the map's title (window.__mapTitle) when there is room
- * and no template header already shows a title; on a narrow bar the title
- * hides (container query in styles.css) and the buttons wrap. Every other
- * page keeps the floating toolbar over the top-right corner.
+ * Puts the finished toolbar on the page as the top bar: the first row, so it
+ * never covers what is under it.
+ *
+ * In a docsite/book page (body has `site-shell`, see wrapShell) the bar is the
+ * first row of the page's column, above any template header, and the content
+ * pane scrolls beneath it. Its left side carries the map's title
+ * (window.__mapTitle) when there is room and no template header already shows
+ * a title; on a narrow bar the title hides (container query in styles.css)
+ * and the buttons wrap.
+ *
+ * Every other page (outline view; a book with an empty map) is one long
+ * scrolling document, so there the bar is fixed to the top of the window
+ * (`topbar--fixed`) and the body is padded down by the bar's height, kept in
+ * --topbar-h as the buttons wrap and unwrap. No title on that bar: outline
+ * view's own heading already shows it.
+ *
  * Define-then-call: the caller inserts this where it used to append the
  * toolbar to the body.
  */
 export function getToolbarPlacementScript(): string {
   return `
   function placeToolbar(tb) {
-    if (!document.body.classList.contains('site-shell')) { document.body.appendChild(tb); return; }
+    var shell = document.body.classList.contains('site-shell');
     var bar = document.createElement('div');
     bar.id = '__topbar';
     var title = typeof window.__mapTitle === 'string' ? window.__mapTitle : '';
-    if (title && !document.querySelector('.tpl-header')) {
+    if (shell && title && !document.querySelector('.tpl-header')) {
       var t = document.createElement('span');
       t.className = 'topbar-title';
       t.textContent = title;
@@ -3261,7 +3269,15 @@ export function getToolbarPlacementScript(): string {
     }
     tb.classList.add('in-topbar');
     bar.appendChild(tb);
+    if (!shell) bar.classList.add('topbar--fixed');
     document.body.insertBefore(bar, document.body.firstChild);
+    if (!shell) {
+      var syncTopbarHeight = function() {
+        document.documentElement.style.setProperty('--topbar-h', bar.offsetHeight + 'px');
+      };
+      syncTopbarHeight();
+      if (typeof ResizeObserver === 'function') new ResizeObserver(syncTopbarHeight).observe(bar);
+    }
   }
   placeToolbar(toolbar);
 `;

@@ -343,13 +343,22 @@ function getMapWebviewScript(
     responseMsgType: MSG_BOOK_SEARCH_RESULTS,
   }) : ''}
 
-  // Tag-name tooltip toggle -- same feature and same persisted preference
-  // as the topic viewer's own (see TAG_TOOLTIPS_KEY in
-  // DitaViewerProvider.ts). Book mode renders each topic through the same
-  // renderTopicCached()/renderer.ts pipeline, so the same data-dita-tagname
-  // attributes are already present here; this toggle is the only piece
-  // that was missing.
-  toolbar.appendChild(tagTooltipsBtn);
+
+  // Template picker -- docsite and book view (outline view has no template).
+  // Placed BEFORE the mode button on purpose: the bar is right-aligned, so
+  // the mode button (and Tags/Flags/Filter/refresh after it) keep their
+  // distance from the right edge whether or not this picker exists --
+  // switching modes must not move the mode button out from under the cursor.
+  ${getTemplateSelectScript({
+    msgType: MSG_SET_TEMPLATE,
+    title: L.templateTitle,
+    noneLabel: L.templateNone,
+    options: templateOptions,
+    selected: selectedTemplate,
+  })}
+  if (currentMode === 'site' || currentMode === 'book') {
+    toolbar.appendChild(templateSel);
+  }
 
   // Mode toggle button. Cycles tree -> site -> book -> tree; the label
   // always names the CURRENT mode (see getModeToggleScript's own comment
@@ -363,17 +372,13 @@ function getMapWebviewScript(
   })}
   toolbar.appendChild(modeBtn);
 
-  // Template picker -- docsite and book view (outline view has no template).
-  ${getTemplateSelectScript({
-    msgType: MSG_SET_TEMPLATE,
-    title: L.templateTitle,
-    noneLabel: L.templateNone,
-    options: templateOptions,
-    selected: selectedTemplate,
-  })}
-  if (currentMode === 'site' || currentMode === 'book') {
-    toolbar.appendChild(templateSel);
-  }
+  // Tag-name tooltip toggle -- same feature and same persisted preference
+  // as the topic viewer's own (see TAG_TOOLTIPS_KEY in
+  // DitaViewerProvider.ts). Book mode renders each topic through the same
+  // renderTopicCached()/renderer.ts pipeline, so the same data-dita-tagname
+  // attributes are already present here; this toggle is the only piece
+  // that was missing.
+  toolbar.appendChild(tagTooltipsBtn);
 
   // Profiling / conditional-attribute highlight toggle, same as the topic
   // viewer's Flags button -- purely a CSS class flip (body.hide-profiling),

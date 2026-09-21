@@ -4078,7 +4078,7 @@ describe('site toolbar navigation buttons: compact and centered', () => {
 });
 
 describe('getToolbarPlacementScript (the toolbar becomes the docsite/book top bar)', () => {
-  interface El { tag: string; id?: string; className?: string; textContent?: string; title?: string; children: El[]; classes: string[]; classList: { add: (c: string) => void }; appendChild: (c: El) => void }
+  interface El { tag: string; id?: string; className?: string; textContent?: string; title?: string; children: El[]; classes: string[]; classList: { add: (c: string) => void }; appendChild: (c: El) => void; offsetHeight?: number }
   function el(tag: string): El {
     const e: El = { tag, children: [], classes: [], classList: { add: (c: string) => { e.classes.push(c); } }, appendChild: (c) => { e.children.push(c); } };
     return e;
@@ -4086,21 +4086,43 @@ describe('getToolbarPlacementScript (the toolbar becomes the docsite/book top ba
   function run(opts: { shell: boolean; header: boolean; title?: unknown }) {
     const toolbar = el('div');
     const bodyChildren: El[] = [el('existing')];
+    const cssVars: Record<string, string> = {};
     const body = {
       classList: { contains: (c: string) => c === 'site-shell' && opts.shell },
       appendChild: (c: El) => { bodyChildren.push(c); },
       insertBefore: (c: El, ref: El) => { bodyChildren.splice(bodyChildren.indexOf(ref), 0, c); },
       get firstChild() { return bodyChildren[0]; },
     };
-    const doc = { body, createElement: el, querySelector: (sel: string) => (sel === '.tpl-header' && opts.header ? {} : null) };
+    const createElement = (tag: string): El => { const e = el(tag); e.offsetHeight = 26; return e; };
+    const doc = {
+      body,
+      createElement,
+      querySelector: (sel: string) => (sel === '.tpl-header' && opts.header ? {} : null),
+      documentElement: { style: { setProperty: (k: string, v: string) => { cssVars[k] = v; } } },
+    };
     new Function('toolbar', 'document', 'window', getToolbarPlacementScript())(toolbar, doc, { __mapTitle: opts.title });
-    return { toolbar, bodyChildren };
+    return { toolbar, bodyChildren, cssVars };
   }
 
-  it('on a page that is not a docsite/book shell the toolbar floats on the body as before', () => {
+  it('outline view (no shell) also gets the bar as its FIRST body child, fixed to the window, with the body padded by its height', () => {
     const r = run({ shell: false, header: false, title: 'T' });
-    assert.strictEqual(r.bodyChildren[r.bodyChildren.length - 1], r.toolbar);
-    assert.deepStrictEqual(r.toolbar.classes, []);
+    const bar = r.bodyChildren[0];
+    assert.strictEqual(bar.id, '__topbar');
+    assert.ok(bar.classes.includes('topbar--fixed'));
+    assert.ok(bar.children.includes(r.toolbar));
+    assert.strictEqual(r.bodyChildren[1].tag, 'existing');
+    assert.strictEqual(r.cssVars['--topbar-h'], '26px');
+  });
+
+  it('outline view shows no title in the bar: its own heading already does', () => {
+    const bar = run({ shell: false, header: false, title: 'My Book' }).bodyChildren[0];
+    assert.strictEqual(bar.children.length, 1);
+  });
+
+  it('a shell page has no fixed class and needs no body padding var', () => {
+    const r = run({ shell: true, header: false, title: 'T' });
+    assert.ok(!r.bodyChildren[0].classes.includes('topbar--fixed'));
+    assert.deepStrictEqual(r.cssVars, {});
   });
 
   it('in a shell page a top bar becomes the FIRST body child and holds the toolbar', () => {

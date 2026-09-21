@@ -1325,3 +1325,21 @@ body.mode-book.site-shell.site-shell:has(.site-nav) {
 @container topbar (max-width: 760px) {
   .topbar-title { display: none; }
 }
+/* The same bar on a page that is one long scrolling document (outline view):
+   fixed to the window's top edge, full width, with the body padded down by its
+   height. --topbar-h is kept current by getToolbarPlacementScript as the
+   buttons wrap; the fallback is one row. The scroll-padding keeps an anchor
+   jump from landing under the bar. */
+#__topbar.topbar--fixed {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+}
+body:has(> #__topbar.topbar--fixed) {
+  padding-top: calc(2rem + var(--topbar-h, 26px));
+}
+html:has(#__topbar.topbar--fixed) {
+  scroll-padding-top: var(--topbar-h, 26px);
+}
