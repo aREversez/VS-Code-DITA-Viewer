@@ -811,3 +811,21 @@ describe('bookSearchIndex', () => {
     });
   });
 });
+
+describe('getBookSearchScript: the search box sits centered in its own block', () => {
+  const script = getBookSearchScript({
+    searchLabel: 'Search this book', placeholder: 'Search', noResultsLabel: 'None', truncatedLabel: '{0}/{1}',
+    matchCaseLabel: 'Case', useRegexLabel: 'Regex', invalidRegexLabel: 'Bad', refreshLabel: 'Refresh', clearLabel: 'Clear',
+    requestMsgType: 'bookSearch', responseMsgType: 'bookSearchResults',
+  });
+
+  it('gives the sticky box equal padding above and below, so the input is not pushed toward the bottom', () => {
+    const m = /position:sticky;top:0;[^']*?padding:([^;']+);/.exec(script);
+    assert.ok(m, 'sticky box style not found');
+    const parts = m[1].trim().split(/\s+/);
+    // Two-value shorthand (vertical horizontal) or four values with equal top and bottom.
+    const top = parts[0];
+    const bottom = parts.length === 2 ? parts[0] : parts.length === 4 ? parts[2] : parts.length === 3 ? parts[2] : parts[0];
+    assert.strictEqual(top, bottom, `padding "${m[1]}" is uneven`);
+  });
+});

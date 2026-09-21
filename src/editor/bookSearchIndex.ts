@@ -478,7 +478,7 @@ export function getBookSearchScript(opts: {
     // stays; only the broken top half was removed, with .site-nav's own
     // top padding moved off of it entirely rather than left for a
     // negative margin to (unreliably) cancel.
-    bsBox.style.cssText = 'position:sticky;top:0;z-index:1;margin:0 -0.5rem 0.5rem;padding:0.75rem 0.5rem 6px;background:var(--vscode-sideBar-background,var(--vscode-editor-background));border-bottom:1px solid var(--vscode-panel-border);display:flex;flex-direction:column;gap:4px;';
+    bsBox.style.cssText = 'position:sticky;top:0;z-index:1;margin:0 -0.5rem 0.5rem;padding:8px 0.5rem;background:var(--vscode-sideBar-background,var(--vscode-editor-background));border-bottom:1px solid var(--vscode-panel-border);display:flex;flex-direction:column;gap:4px;';
 
     // Icon-only action buttons (refresh, clear) -- reusing this project's
     // own already-established glyphs for these exact actions (the main
