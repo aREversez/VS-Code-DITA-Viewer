@@ -211,6 +211,12 @@ Create a full documentation-style theme by overriding most elements. See the exa
 | `custom-doc-corporate.css` | Corporate intranet with branding |
 | `custom-rose-pine.css` | Dark Rosé Pine theme |
 | `custom-rose-dawn.css` | Light Rosé Pine Dawn theme |
+| `custom-oxygen-red.css` | Oxygen Red — brick red accents, warm gray sidebar |
+| `custom-oxygen-aquamarine.css` | Oxygen Aquamarine — teal on pale mint |
+| `custom-oxygen-green.css` | Oxygen Green — leafy green, cream page |
+| `custom-oxygen-orange.css` | Oxygen Orange — amber accents, filled short description |
+| `custom-oxygen-cobalt.css` | Oxygen Cobalt — deep navy (dark by design) |
+| `custom-oxygen-ashes.css` | Oxygen Ashes — charcoal monochrome (dark by design) |
 
 Open a DITA preview, then use the **Theme dropdown** to cycle through these and see how they look.
 
