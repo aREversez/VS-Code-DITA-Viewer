@@ -1195,22 +1195,14 @@ body.mode-book.site-nav-collapsed .site-nav-resizer {
   color: var(--vscode-list-activeSelectionForeground);
   opacity: 1;
 }
-/* Prev/next toolbar buttons (site mode) -- explicit opacity/cursor rather
-   than relying on the browser's native disabled look, since btnStyle
+/* Back/forward/prev/next toolbar buttons (site mode) -- explicit opacity/cursor
+   rather than relying on the browser's native disabled look, since btnStyle
    (getToolbarScaffoldScript) sets background/border/color explicitly and
    would otherwise mostly hide it. Disabled at the first/last topic.
-   min-width only, deliberately no min-height: an earlier version bumped
-   font-size to 20px with a matching 1.9em min-height to make these two
-   easier to hit than the rest of the icon-sized toolbar, but that made
-   them visibly taller than every other button in the same toolbar row.
-   Same font-size as the rest of the toolbar now (btnStyle's default,
-   via 'font-size:14px' close to but not exactly it -- see
-   getSitePrevNextButtonsScript's own inline style), just wider, so the
-   two read as a slightly bigger target without breaking the toolbar's
-   otherwise-uniform row height. */
-#__site-prev-btn, #__site-next-btn {
-  min-width: 2.4em;
-}
+   Deliberately NO width here: all four share SITE_NAV_BTN_STYLE's inline
+   width (ditaRenderUtils.ts). A min-width on prev/next used to sit in this
+   rule and, being a min-, beat that inline width -- so the two came out
+   wider than back/forward whatever the inline width was set to. */
 #__site-back-btn:disabled, #__site-forward-btn:disabled,
 #__site-prev-btn:disabled, #__site-next-btn:disabled {
   opacity: 0.4;
