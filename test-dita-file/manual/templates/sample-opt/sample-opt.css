@@ -1,0 +1,7 @@
+/* Manual-test template that is described by a publishing-template .opt file.
+   Scoped by its folder name (the data-template value is the folder's id). */
+body[data-template="sample-opt"] { background: #fbfaf5; color: #2b3a2b; --max-width: 900px; }
+body[data-template="sample-opt"] .site-nav { background: #eef3e8; border-right: 2px solid #9db88a; }
+body[data-template="sample-opt"] .site-nav-link.active { background: #cfe0c3; color: #1f4d1f; font-weight: 600; }
+body[data-template="sample-opt"] #dita-content-root { background: #fbfaf5; color: #2b3a2b; }
+body[data-template="sample-opt"] #dita-content-root h1 { color: #1f4d1f; }

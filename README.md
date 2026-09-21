@@ -214,6 +214,20 @@ Create a full documentation-style theme by overriding most elements. See the exa
 
 Open a DITA preview, then use the **Theme dropdown** to cycle through these and see how they look.
 
+#### Templates for Docsite and Book view
+
+The **Template** dropdown in the toolbar (Docsite and Book view) restyles the sidebar and the page of a map; it is remembered per map, separately for each view. **Classic Docs** is built in. To add your own, list one or more folders in `dita-viewer.templatesDirectory`; every sub-folder is a template:
+
+```
+my-templates/
+  green/
+    template.json     { "name": "Green", "css": ["green.css"] }   (or a publishing-template .opt file)
+    green.css
+    resources/        fonts and images the css refers to with relative url(...)
+```
+
+A template's css and everything it refers to must stay inside its own folder. Scope your rules with `body[data-template="<folder name>"]` (a `template-dark` class is added to `body` for templates marked dark). The page structure to target is the extension's own — `.site-nav`, `.site-nav-link`, `#dita-content-root` — see `media/templates/classic-docs/classic-docs.css` for a complete example. Sample templates for manual testing are in `test-dita-file/manual/templates/`.
+
 #### Dark mode overrides
 
 Your CSS can also provide `.vscode-dark` overrides that activate when VS Code's color theme is dark:

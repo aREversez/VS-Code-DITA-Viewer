@@ -1,0 +1,5 @@
+{
+  "name": { "en": "Classic Docs", "zh-cn": "经典文档" },
+  "description": "A light documentation look: tinted sidebar, comfortable reading column.",
+  "css": ["classic-docs.css"]
+}

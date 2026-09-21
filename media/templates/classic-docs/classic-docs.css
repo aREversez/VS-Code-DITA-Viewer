@@ -1,0 +1,83 @@
+/* Classic Docs -- built-in site/book template.
+   Everything is scoped to body[data-template="classic-docs"] and driven by the
+   custom properties below, so a copy of this file only needs new values to
+   become a different colour scheme. Fixed light palette: it does not follow
+   the VS Code theme. */
+body[data-template="classic-docs"] {
+  --tpl-bg: #ffffff;
+  --tpl-text: #24292f;
+  --tpl-muted: #57606a;
+  --tpl-accent: #0b62d6;
+  --tpl-accent-soft: #e6f0ff;
+  --tpl-nav-bg: #f6f8fa;
+  --tpl-border: #d0d7de;
+  --tpl-code-bg: #f3f5f7;
+  --max-width: 860px;
+  background: var(--tpl-bg);
+  color: var(--tpl-text);
+}
+body[data-template="classic-docs"] .site-nav {
+  background: var(--tpl-nav-bg);
+  border-right: 1px solid var(--tpl-border);
+}
+body[data-template="classic-docs"] .site-nav-link {
+  color: var(--tpl-text);
+  border-radius: 6px;
+}
+body[data-template="classic-docs"] .site-nav-link:hover {
+  background: var(--tpl-accent-soft);
+}
+body[data-template="classic-docs"] .site-nav-link.active {
+  background: var(--tpl-accent-soft);
+  color: var(--tpl-accent);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--tpl-accent);
+}
+body[data-template="classic-docs"] .site-nav-group-label {
+  color: var(--tpl-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 11px;
+}
+body[data-template="classic-docs"] .site-nav-toggle {
+  color: var(--tpl-muted);
+}
+body[data-template="classic-docs"] #dita-content-root {
+  background: var(--tpl-bg);
+  color: var(--tpl-text);
+  line-height: 1.7;
+}
+body[data-template="classic-docs"] #dita-content-root h1 {
+  font-size: 2rem;
+  padding-bottom: 0.4em;
+  border-bottom: 2px solid var(--tpl-accent);
+}
+body[data-template="classic-docs"] #dita-content-root h2 {
+  margin-top: 2em;
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--tpl-border);
+}
+body[data-template="classic-docs"] #dita-content-root a {
+  color: var(--tpl-accent);
+}
+body[data-template="classic-docs"] #dita-content-root pre,
+body[data-template="classic-docs"] #dita-content-root code {
+  background: var(--tpl-code-bg);
+  color: var(--tpl-text);
+}
+body[data-template="classic-docs"] #dita-content-root pre {
+  border: 1px solid var(--tpl-border);
+  border-radius: 6px;
+  padding: 0.8em 1em;
+}
+body[data-template="classic-docs"] #dita-content-root table {
+  border-collapse: collapse;
+}
+body[data-template="classic-docs"] #dita-content-root th,
+body[data-template="classic-docs"] #dita-content-root td {
+  border: 1px solid var(--tpl-border);
+  padding: 0.4em 0.7em;
+}
+body[data-template="classic-docs"] #dita-content-root th {
+  background: var(--tpl-nav-bg);
+}

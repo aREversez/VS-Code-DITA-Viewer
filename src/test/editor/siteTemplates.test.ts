@@ -169,3 +169,22 @@ describe('templateDisplayName', () => {
     assert.strictEqual(templateDisplayName({ id: 'x', names: {} } as never, 'fr'), 'x');
   });
 });
+
+describe('the templates shipped in the repository', () => {
+  const root = process.cwd();
+
+  it('built-in templates all load without diagnostics, each with usable css', () => {
+    const { templates, diagnostics } = discoverTemplates([{ dir: join(root, 'media', 'templates'), builtin: true }]);
+    assert.deepStrictEqual(diagnostics, []);
+    assert.ok(templates.some((t) => t.id === 'classic-docs'));
+    for (const t of templates) assert.ok(t.css.length > 0 && templateDisplayName(t, 'en') !== t.id, t.id);
+  });
+
+  it('the manual-test samples load, including the one described by an .opt', () => {
+    const { templates, diagnostics } = discoverTemplates([{ dir: join(root, 'test-dita-file', 'manual', 'templates'), builtin: false }]);
+    assert.deepStrictEqual(diagnostics, []);
+    const opt = templates.find((t) => t.id === 'sample-opt');
+    assert.ok(opt);
+    assert.strictEqual(opt?.names[''], 'Sample (.opt)');
+  });
+});
