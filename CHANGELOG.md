@@ -18,6 +18,8 @@
 
 ### Fixes
 
+- **With a template header, the toolbar no longer covers it.** The toolbar now sits inside the header (right end, wrapping under the brand in a narrow window) instead of floating over it. The previous/next-topic buttons use centered SVG chevrons, and the Template dropdown centers its value like the page-width one.
+- **Built-in templates: no gap above the sidebar search box, readable type chips on the active row, tighter Reader spacing.** Aurora's sidebar no longer shows scrolled text above the sticky search box; the topic-type chip on the active row is an outline in the row's own colour in light and dark; Reader's headings, paragraphs and lists sit closer together and its header keeps the brand centered under the toolbar.
 - Docsite view: opening another topic now starts at its top instead of at the scroll position of the topic you were reading.
 - After a render error (the red error page), fixing the source now brings the preview back on its own instead of leaving the error showing until you refresh by hand. Affects the topic preview and the map preview in every view.
 - In-page search (`Ctrl+F`) now finds text that runs across inline markup, such as `Click <b>OK</b> now` or a Chinese phrase with a bold word in the middle, and highlights it as one match. Block boundaries (paragraphs, list items, line breaks) still separate matches.
