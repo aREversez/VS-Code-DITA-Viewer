@@ -2216,6 +2216,10 @@ describe('toolbar scaffold/font-prefs/font-width-tag-tooltips scripts (a3\' extr
 });
 
 describe('getSiteNavClickHandlerScript (docsite mode)', () => {
+  // The script registers its arrow-key page turning on the window (which a key
+  // reaches after every document-level handler); nothing here needs it to fire.
+  const fakeWindow = { addEventListener: () => {} };
+
   it('emits a script that parses as JavaScript', () => {
     assert.doesNotThrow(() => new Function(getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' })));
   });
@@ -2232,7 +2236,7 @@ describe('getSiteNavClickHandlerScript (docsite mode)', () => {
     // without erroring on document.getElementById returning null for
     // buttons that were never appended there.
     const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
-    const fn = new Function('document', 'vscode', script + '; return typeof updatePrevNextButtons;');
+    const fn = new Function('document', 'window', 'vscode', script + '; return typeof updatePrevNextButtons;');
     const fakeDocument = {
       getElementById: () => null,
       querySelectorAll: () => [],
@@ -2240,7 +2244,7 @@ describe('getSiteNavClickHandlerScript (docsite mode)', () => {
       querySelector: () => null,
       addEventListener: () => {},
     };
-    assert.doesNotThrow(() => fn(fakeDocument, { postMessage: () => {} }));
+    assert.doesNotThrow(() => fn(fakeDocument, fakeWindow, { postMessage: () => {} }));
   });
 
   it('does not try to wire up prev/next buttons until they actually exist in the DOM (deferred to next tick)', () => {
@@ -2273,7 +2277,7 @@ describe('getSiteNavClickHandlerScript (docsite mode)', () => {
     const { document } = makeFakeSiteDocument([aTopic, bTopic], elementsById);
 
     const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
-    new Function('document', 'vscode', 'setTimeout', script)(document, { postMessage: () => {} }, fakeSetTimeout);
+    new Function('document', 'window', 'vscode', 'setTimeout', script)(document, fakeWindow, { postMessage: () => {} }, fakeSetTimeout);
 
     assert.strictEqual(timers.length, 1, 'expected the initial updatePrevNextButtons() call to be deferred exactly once');
 
@@ -2341,7 +2345,7 @@ describe('getSiteNavClickHandlerScript (docsite mode)', () => {
     const aTopic = makeFakeElement({ classes: ['site-nav-link', 'active'], attrs: { 'data-site-target': '/book/a.dita' } });
     const { document, click } = makeFakeSiteDocument([aTopic, bTopic], {});
     const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
-    new Function('document', 'vscode', script)(document, { postMessage: (m: { type: string; target: string }) => posted.push(m) });
+    new Function('document', 'window', 'vscode', script)(document, fakeWindow, { postMessage: (m: { type: string; target: string }) => posted.push(m) });
 
     const xrefLink = makeFakeElement({ attrs: { 'data-dita-book-xref': '/book/b.dita#sec1' } });
     click(xrefLink);
@@ -2359,7 +2363,7 @@ describe('getSiteNavClickHandlerScript (docsite mode)', () => {
       'sec2': { scrollIntoView: () => scrolled.push('sec2') },
     });
     const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
-    new Function('document', 'vscode', script)(document, { postMessage: (m: unknown) => posted.push(m) });
+    new Function('document', 'window', 'vscode', script)(document, fakeWindow, { postMessage: (m: unknown) => posted.push(m) });
 
     const xrefLink = makeFakeElement({ attrs: { 'data-dita-book-xref': '/book/a.dita#sec2' } });
     click(xrefLink);
@@ -2372,7 +2376,7 @@ describe('getSiteNavClickHandlerScript (docsite mode)', () => {
     const posted: unknown[] = [];
     const { document, click } = makeFakeSiteDocument([], {});
     const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
-    new Function('document', 'vscode', script)(document, { postMessage: (m: unknown) => posted.push(m) });
+    new Function('document', 'window', 'vscode', script)(document, fakeWindow, { postMessage: (m: unknown) => posted.push(m) });
 
     const xrefLink = makeFakeElement({ attrs: { 'data-dita-book-xref': '/book/nowhere.dita' } });
     assert.doesNotThrow(() => click(xrefLink));
@@ -2387,7 +2391,7 @@ describe('getSiteNavClickHandlerScript (docsite mode)', () => {
       '': { scrollIntoView: () => scrolled.push('') },
     });
     const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
-    new Function('document', 'vscode', script)(document, { postMessage: () => {} });
+    new Function('document', 'window', 'vscode', script)(document, fakeWindow, { postMessage: () => {} });
 
     const xrefLink = makeFakeElement({ attrs: { 'data-dita-book-xref': '/book/b.dita' } });
     click(xrefLink);
@@ -2450,7 +2454,7 @@ describe('getSiteNavClickHandlerScript (docsite mode)', () => {
     const script =
       getSiteNavCollapseStateHelperScript({ reportCollapseMsgType: 'setNavCollapsed' }) +
       getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
-    new Function('document', 'vscode', 'setTimeout', script)(document, { postMessage: (m: { type: string }) => posted.push(m) }, () => 0);
+    new Function('document', 'window', 'vscode', 'setTimeout', script)(document, fakeWindow, { postMessage: (m: { type: string }) => posted.push(m) }, () => 0);
     return (target: unknown) => listeners.forEach((fn) => fn({ target, preventDefault: () => {} }));
   }
 

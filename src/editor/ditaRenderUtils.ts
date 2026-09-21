@@ -2295,12 +2295,30 @@ export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: stri
     if (e.button === 3) { e.preventDefault(); siteHistoryGo(-1); }
     else if (e.button === 4) { e.preventDefault(); siteHistoryGo(1); }
   });
-  // Alt+Left / Alt+Right, the browser convention. Only the bare Alt chord:
-  // anything with Ctrl, Meta or Shift is somebody else's shortcut.
-  document.addEventListener('keydown', function(e) {
-    if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-    if (e.key === 'ArrowLeft') { e.preventDefault(); siteHistoryGo(-1); }
-    else if (e.key === 'ArrowRight') { e.preventDefault(); siteHistoryGo(1); }
+  // Left / Right arrow: the previous / next topic, in reading order (the
+  // toolbar's prev/next buttons). Alt+arrow is deliberately NOT handled --
+  // VS Code binds it (navigate back/forward through editor locations), and a
+  // page that takes it only some of the time is worse than one that never
+  // does; the history has its buttons and the mouse's back/forward buttons.
+  //
+  // Registered on the window, which a keydown reaches after the document, so
+  // by the time this runs everything with a claim on the arrow keys has had
+  // its turn and marked the event handled: the image lightbox (steps through
+  // images), the sidebar tree (a document listener, and the tree is excluded
+  // below anyway), the sidebar resizer (nudges its width). The exclusions are
+  // for the cases where the key is not "handled" by preventDefault but still
+  // means something else: moving a caret, changing a dropdown's selection.
+  window.addEventListener('keydown', function(e) {
+    if (e.defaultPrevented) return;
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var t = e.target;
+    if (t && t.closest && t.closest('input, textarea, select, [contenteditable], [role="separator"], .site-nav-tree')) return;
+    var adjacent = siteAdjacentLinks();
+    var link = e.key === 'ArrowLeft' ? adjacent.prev : adjacent.next;
+    if (!link) return;
+    e.preventDefault();
+    switchToSitePage(link);
   });
 
   // Shared by the sidebar's own click handler and the prev/next buttons
@@ -2380,19 +2398,29 @@ export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: stri
   // rather than tracked separately -- buildBookNavManifest's own contract
   // is that its entries (and so the sidebar links built from them) are
   // already in document/reading order, so the sidebar IS the ordering,
-  // not just a display of it. A no-op wherever the buttons don't exist
-  // (only site mode creates them; see getSitePrevNextButtonsScript).
-  function updatePrevNextButtons() {
-    var prevBtn = document.getElementById('__site-prev-btn');
-    var nextBtn = document.getElementById('__site-next-btn');
-    if (!prevBtn && !nextBtn) return;
+  // not just a display of it. One function, because the toolbar buttons and
+  // the Left/Right arrow keys must agree on what "next" is.
+  function siteAdjacentLinks() {
     var links = Array.prototype.slice.call(document.querySelectorAll('.site-nav-link'));
     var activeIdx = -1;
     for (var i = 0; i < links.length; i++) {
       if (links[i].classList.contains('active')) { activeIdx = i; break; }
     }
-    var prevLink = activeIdx > 0 ? links[activeIdx - 1] : null;
-    var nextLink = activeIdx >= 0 && activeIdx < links.length - 1 ? links[activeIdx + 1] : null;
+    return {
+      prev: activeIdx > 0 ? links[activeIdx - 1] : null,
+      next: activeIdx >= 0 && activeIdx < links.length - 1 ? links[activeIdx + 1] : null
+    };
+  }
+
+  // A no-op wherever the buttons don't exist (only site mode creates them;
+  // see getSitePrevNextButtonsScript).
+  function updatePrevNextButtons() {
+    var prevBtn = document.getElementById('__site-prev-btn');
+    var nextBtn = document.getElementById('__site-next-btn');
+    if (!prevBtn && !nextBtn) return;
+    var adjacent = siteAdjacentLinks();
+    var prevLink = adjacent.prev;
+    var nextLink = adjacent.next;
     if (prevBtn) {
       prevBtn.disabled = !prevLink;
       prevBtn.onclick = prevLink ? function() { switchToSitePage(prevLink); } : null;
