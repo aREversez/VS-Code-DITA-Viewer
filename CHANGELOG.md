@@ -4,6 +4,7 @@
 
 ### Features
 
+- **Docsite view can open a topic's source.** Right-click a topic in the sidebar and choose **Open source**, or use the **Source** button in the toolbar for the topic being shown. The source opens in a different editor group than the preview (the most recently active one, or a new group beside it when there is only one), so you can edit without switching tabs back and forth.
 - **The map preview's mode button cycles Outline → Docsite → Book.** Docsite view now comes before Book view.
 - **Docsite view turns pages with the `←` / `→` keys**: previous / next topic in reading order, like the toolbar's `‹` `›` buttons. The keys are left alone while you are typing (search boxes, dropdowns), inside the sidebar tree (where they expand and collapse), and in the image viewer. `Alt+←` / `Alt+→` are not touched and keep working as VS Code's own back/forward.
 - **The sidebar topic tree can be used from the keyboard** (Book and Docsite views). The whole tree is one Tab stop instead of one per topic; inside it `↑` `↓` move between the visible rows, `→` expands a branch or steps into it, `←` collapses it or steps out to the parent, `Home` / `End` jump to the first / last row, and `Enter` or `Space` opens a topic or folds a group. Keyboard focus stays on the same row when the sidebar is refreshed after an edit, and the current topic is marked for screen readers.

@@ -3,6 +3,7 @@ import { spawn } from 'child_process';
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs';
 import { basename, dirname, isAbsolute, join, resolve } from 'path';
 import { registerSourceOverlay } from './editor/sourceOverlayFeed';
+import { registerSourceEditorTracker } from './editor/sourceEditorOpener';
 import { DitaViewerProvider, findDitamapFiles, getLastRenderedHtmlForTesting, clearAllCaches } from './editor/DitaViewerProvider';
 import { MapViewerProvider, getLastRenderedMapHtmlForTesting, clearMapCache } from './editor/MapViewerProvider';
 import {
@@ -27,6 +28,9 @@ export function activate(context: vscode.ExtensionContext) {
   // Unsaved editor text into the sources the previews read (sourceText.ts).
   // First, so it is in place before anything can render.
   registerSourceOverlay(context);
+
+  // Remembers which tab group was active last, for "open source" in docsite mode.
+  registerSourceEditorTracker(context);
 
   // Language features: go-to-definition, completion, outline symbols,
   // broken-reference diagnostics (items shared by .dita and .ditamap)

@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
-import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, siteNavigableEntries, renderSiteNavTreeHtml, wrapSiteNavTreeHtml, getSiteNavClickHandlerScript, getSidebarUpdateScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavKeyboardScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
+import { openSourceBesidePreview } from './sourceEditorOpener';
+import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, siteNavigableEntries, renderSiteNavTreeHtml, wrapSiteNavTreeHtml, getSiteNavClickHandlerScript, getSidebarUpdateScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavKeyboardScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteOpenSourceScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
 import { getBookSearchIndex, searchBookIndex, buildBookSearchResultsPayload, getBookSearchScript, invalidateBookSearchIndex } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
@@ -63,6 +64,9 @@ const MSG_SET_TAG_TOOLTIPS = 'setTagTooltips';
 // against (nothing else reads this literal), so it stays a plain constant
 // rather than getting the MSG_UPDATE_CONTENT treatment above.
 const MSG_SWITCH_SITE_PAGE = 'switchSitePage';
+// Docsite mode: open a topic's source file in the text editor, in a tab
+// group other than the preview's. webview -> host only.
+const MSG_OPEN_TOPIC_SOURCE = 'openTopicSource';
 // Book mode's own sidebar refresh (nested-fold-and-highlight-plan.md item
 // 1) -- host -> webview only, sent alongside (not instead of)
 // MSG_PATCH_CONTENT/MSG_UPDATE_CONTENT on every source edit in book mode.
@@ -148,6 +152,9 @@ function getMapWebviewScript(mode: 'tree' | 'book' | 'site'): string {
     modeSite: vscode.l10n.t('Site'),
     siteBack: vscode.l10n.t('Go back'),
     siteForward: vscode.l10n.t('Go forward'),
+    siteOpenSource: vscode.l10n.t('Source'),
+    siteOpenSourceTitle: vscode.l10n.t('Open this topic\'s source in the editor'),
+    siteOpenSourceMenu: vscode.l10n.t('Open source'),
     sitePrevTopic: vscode.l10n.t('Previous topic'),
     siteNextTopic: vscode.l10n.t('Next topic'),
     siteToggleSidebar: vscode.l10n.t('Show/hide topic list'),
@@ -276,11 +283,20 @@ function getMapWebviewScript(mode: 'tree' | 'book' | 'site'): string {
     nextLabel: '\u203a',
     nextTitle: L.siteNextTopic,
   })}
+  // Open the shown topic's source (and, via right-click on a sidebar row,
+  // any topic's) -- docsite mode only, like the buttons around it.
+  ${getSiteOpenSourceScript({
+    openSourceMsgType: MSG_OPEN_TOPIC_SOURCE,
+    menuLabel: L.siteOpenSourceMenu,
+    buttonLabel: L.siteOpenSource,
+    buttonTitle: L.siteOpenSourceTitle,
+  })}
   if (currentMode === 'site') {
     toolbar.appendChild(siteBackBtn);
     toolbar.appendChild(siteForwardBtn);
     toolbar.appendChild(sitePrevBtn);
     toolbar.appendChild(siteNextBtn);
+    toolbar.appendChild(siteOpenSourceBtn);
   }
 
   // Full-book search -- docsite mode only (docsite design doc, 4.4,
@@ -638,6 +654,13 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         currentMode = message.mode as 'tree' | 'book' | 'site';
         keepRememberedView = false;
         requestUpdate('full');
+      } else if (message.type === MSG_OPEN_TOPIC_SOURCE) {
+        // Only a topic of this map's own manifest may be opened -- the
+        // webview is untrusted input for a path.
+        const target = message.target;
+        if (typeof target !== 'string' || !siteManifestCache) return;
+        if (!siteNavigableEntries(siteManifestCache.manifest).some((entry) => entry.absPath === target)) return;
+        void openSourceBesidePreview(vscode.Uri.file(target), webviewPanel.viewColumn);
       } else if (message.type === MSG_SWITCH_SITE_PAGE) {
         const target = message.target as string;
         if (!target || target === currentSitePage) return;

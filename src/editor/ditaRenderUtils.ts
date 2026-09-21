@@ -3127,6 +3127,79 @@ export function getModeToggleScript(opts: {
 }
 
 /**
+ * "Open the source of this topic" for docsite mode: a toolbar button (acts on
+ * the page being shown) and a right-click menu on any sidebar topic row (acts
+ * on that row, without switching page). Both only post the topic's absolute
+ * path -- the extension host validates it against the map's own manifest and
+ * decides which tab group the source opens in.
+ *
+ * Declares `siteOpenSourceBtn` for the caller to place, same build-always/
+ * append-conditionally convention as the other toolbar scripts. The menu
+ * reuses the image menu's CSS classes so both look alike; it needs `vscode`
+ * in scope. Group rows (topichead) carry no data-site-target, so they never
+ * match the menu's selector.
+ */
+export function getSiteOpenSourceScript(opts: { openSourceMsgType: string; menuLabel: string; buttonLabel: string; buttonTitle: string }): string {
+  const msgType = JSON.stringify(opts.openSourceMsgType);
+  const menuLabel = JSON.stringify(opts.menuLabel);
+  const buttonLabel = JSON.stringify(opts.buttonLabel);
+  const buttonTitle = JSON.stringify(opts.buttonTitle);
+  return `
+  function requestOpenTopicSource(target) {
+    if (target) vscode.postMessage({ type: ${msgType}, target: target });
+  }
+
+  var siteOpenSourceBtn = document.createElement('button');
+  siteOpenSourceBtn.id = '__site-open-source-btn';
+  siteOpenSourceBtn.textContent = ${buttonLabel};
+  siteOpenSourceBtn.title = ${buttonTitle};
+  siteOpenSourceBtn.setAttribute('aria-label', ${buttonTitle});
+  siteOpenSourceBtn.style.cssText = btnStyle + 'font-size:11px;';
+  siteOpenSourceBtn.addEventListener('click', function() {
+    var active = document.querySelector('.site-nav-link.active[data-site-target]');
+    if (active) requestOpenTopicSource(active.getAttribute('data-site-target'));
+  });
+
+  var srcCtxMenu = null;
+  function closeSrcCtxMenu() {
+    if (!srcCtxMenu) return;
+    srcCtxMenu.remove();
+    srcCtxMenu = null;
+  }
+  document.addEventListener('contextmenu', function(e) {
+    var link = e.target && e.target.closest ? e.target.closest('.site-nav-link[data-site-target]') : null;
+    if (!link) { closeSrcCtxMenu(); return; }
+    e.preventDefault();
+    closeSrcCtxMenu();
+    var target = link.getAttribute('data-site-target');
+    var menu = document.createElement('div');
+    menu.className = 'dita-img-ctxmenu';
+    var item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'dita-img-ctxmenu-item';
+    item.textContent = ${menuLabel};
+    item.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      closeSrcCtxMenu();
+      requestOpenTopicSource(target);
+    });
+    menu.appendChild(item);
+    document.body.appendChild(menu);
+    // Clamped to the viewport once its real size is known, like the image menu.
+    menu.style.left = Math.min(e.clientX, window.innerWidth - menu.offsetWidth - 4) + 'px';
+    menu.style.top = Math.min(e.clientY, window.innerHeight - menu.offsetHeight - 4) + 'px';
+    srcCtxMenu = menu;
+  });
+  document.addEventListener('click', function(e) {
+    if (srcCtxMenu && !srcCtxMenu.contains(e.target)) closeSrcCtxMenu();
+  });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeSrcCtxMenu();
+  });
+`;
+}
+
+/**
  * Clamps a docsite-mode sidebar width (px) a drag gesture produced to a
  * sane range. Pure and exported so the clamping math itself is unit
  * tested; the drag wiring around it (getSiteSidebarResizerScript below)

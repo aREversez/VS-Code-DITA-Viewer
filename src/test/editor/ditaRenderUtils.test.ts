@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getSiteOpenSourceScript, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -3931,5 +3931,55 @@ describe('getSiteNavExpandCollapseAllButtonsScript + getSiteNavCollapseStateHelp
       const ids = (posted[0] as { ids: string[] }).ids.slice().sort();
       assert.deepStrictEqual(ids, ['a', 'b', 'c']);
     });
+  });
+});
+
+describe('getSiteOpenSourceScript (docsite: open a topic source)', () => {
+  const opts = { openSourceMsgType: 'openTopicSource', menuLabel: 'Open source', buttonLabel: 'Source', buttonTitle: 'Open this topic\'s source' };
+
+  function setup(activeTarget: string | null) {
+    const posted: Array<{ type: string; target: string }> = [];
+    const listeners: Record<string, (e: unknown) => void> = {};
+    const btnListeners: Record<string, () => void> = {};
+    const fakeBtn = {
+      style: {}, id: '', textContent: '', title: '',
+      setAttribute: () => {},
+      addEventListener: (evt: string, fn: () => void) => { btnListeners[evt] = fn; },
+    };
+    const fakeDocument = {
+      createElement: () => ({ ...fakeBtn, appendChild: () => {}, remove: () => {}, contains: () => false, style: {}, offsetWidth: 0, offsetHeight: 0, addEventListener: () => {}, setAttribute: () => {} }),
+      querySelector: (sel: string) =>
+        sel === '.site-nav-link.active[data-site-target]' && activeTarget !== null
+          ? { getAttribute: () => activeTarget }
+          : null,
+      addEventListener: (evt: string, fn: (e: unknown) => void) => { listeners[evt] = fn; },
+      body: { appendChild: () => {} },
+    };
+    const script = getSiteOpenSourceScript(opts);
+    const fn = new Function('btnStyle', 'document', 'vscode', 'window', script + '; return siteOpenSourceBtn;');
+    fn('', { ...fakeDocument, createElement: (tag: string) => (tag === 'button' && !btnListeners['click'] ? fakeBtn : fakeDocument.createElement()) }, { postMessage: (m: { type: string; target: string }) => posted.push(m) }, { innerWidth: 800, innerHeight: 600 });
+    return { posted, listeners, btnListeners };
+  }
+
+  it('the toolbar button posts the ACTIVE page\'s target', () => {
+    const { btnListeners, posted } = setup('/book/a.dita');
+    btnListeners['click']();
+    assert.deepStrictEqual(posted, [{ type: 'openTopicSource', target: '/book/a.dita' }]);
+  });
+
+  it('the toolbar button posts nothing when no page is active', () => {
+    const { btnListeners, posted } = setup(null);
+    btnListeners['click']();
+    assert.deepStrictEqual(posted, []);
+  });
+
+  it('right-click on a topic row is intercepted, on anything else is left to the browser', () => {
+    const { listeners } = setup('/book/a.dita');
+    let prevented = false;
+    listeners['contextmenu']({ target: { closest: () => ({ getAttribute: () => '/book/b.dita' }) }, preventDefault: () => { prevented = true; }, clientX: 1, clientY: 1 });
+    assert.strictEqual(prevented, true);
+    prevented = false;
+    listeners['contextmenu']({ target: { closest: () => null }, preventDefault: () => { prevented = true; }, clientX: 1, clientY: 1 });
+    assert.strictEqual(prevented, false);
   });
 });
