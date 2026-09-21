@@ -313,6 +313,14 @@
           "default": [],
           "description": "%config.cssDirectory.description%"
         },
+        "dita-viewer.templatesDirectory": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "%config.templatesDirectory.description%"
+        },
         "dita-viewer.ditaOtPath": {
           "type": "string",
           "default": "",
