@@ -4,6 +4,7 @@
 
 ### Features
 
+- **The map preview's mode button cycles Outline → Docsite → Book.** Docsite view now comes before Book view.
 - **Docsite view turns pages with the `←` / `→` keys**: previous / next topic in reading order, like the toolbar's `‹` `›` buttons. The keys are left alone while you are typing (search boxes, dropdowns), inside the sidebar tree (where they expand and collapse), and in the image viewer. `Alt+←` / `Alt+→` are not touched and keep working as VS Code's own back/forward.
 - **The sidebar topic tree can be used from the keyboard** (Book and Docsite views). The whole tree is one Tab stop instead of one per topic; inside it `↑` `↓` move between the visible rows, `→` expands a branch or steps into it, `←` collapses it or steps out to the parent, `Home` / `End` jump to the first / last row, and `Enter` or `Space` opens a topic or folds a group. Keyboard focus stays on the same row when the sidebar is refreshed after an edit, and the current topic is marked for screen readers.
 - **Docsite view has back and forward.** The two arrow buttons in the toolbar (`←` `→`, next to the previous/next-topic buttons, which still step through reading order) walk back and forward through the topics you visited, and so do the mouse's back/forward buttons. Going back returns to the scroll position you left the page at. The history survives a theme switch or refresh, and skips topics that have since been removed from the map.

@@ -3108,7 +3108,7 @@ export function getModeToggleScript(opts: {
   modeBtn.setAttribute('aria-label', ${switchModeTitle});
   modeBtn.style.cssText = btnStyle + 'font-size:11px;';
   function nextMapMode(m) {
-    return m === 'tree' ? 'book' : m === 'book' ? 'site' : 'tree';
+    return m === 'tree' ? 'site' : m === 'site' ? 'book' : 'tree';
   }
   function modeLabel(m) {
     return m === 'book' ? ${modeBook} : m === 'site' ? ${modeSite} : ${modeOutline};

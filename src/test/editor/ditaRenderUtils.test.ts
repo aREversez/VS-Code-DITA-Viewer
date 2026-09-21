@@ -3103,7 +3103,7 @@ describe('getModeToggleScript (docsite mode)', () => {
     assert.strictEqual(run('tree').btn.textContent, 'Outline');
   });
 
-  it('still cycles tree -> book -> site -> tree on click, and posts the new mode', () => {
+  it('cycles outline (tree) -> site -> book -> outline (tree) on click, and posts the new mode', () => {
     const posted: Array<{ type: string; mode: string }> = [];
     const script = getModeToggleScript(opts);
     const listeners: Record<string, () => void> = {};
@@ -3117,12 +3117,12 @@ describe('getModeToggleScript (docsite mode)', () => {
     const btn = fn('tree', '', fakeDocument, { postMessage: (m: { type: string; mode: string }) => posted.push(m) });
     assert.strictEqual(btn.textContent, 'Outline');
     listeners['click']();
-    assert.strictEqual(btn.textContent, 'Book', 'first click from tree should switch to book and relabel to the new current mode');
+    assert.strictEqual(btn.textContent, 'Site', 'first click from tree should switch to site and relabel to the new current mode');
     listeners['click']();
-    assert.strictEqual(btn.textContent, 'Site');
+    assert.strictEqual(btn.textContent, 'Book');
     listeners['click']();
     assert.strictEqual(btn.textContent, 'Outline');
-    assert.deepStrictEqual(posted.map(m => m.mode), ['book', 'site', 'tree']);
+    assert.deepStrictEqual(posted.map(m => m.mode), ['site', 'book', 'tree']);
     assert.ok(posted.every(m => m.type === 'switchMode'));
   });
 
