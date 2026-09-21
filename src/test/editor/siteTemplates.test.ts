@@ -188,3 +188,30 @@ describe('the templates shipped in the repository', () => {
     assert.strictEqual(opt?.names[''], 'Sample (.opt)');
   });
 });
+
+describe('discoverTemplates: header and footer files', () => {
+  it('resolves the logo and banner inside the folder and drops missing or escaping ones', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'tplchrome-'));
+    try {
+      mkdirSync(join(tmp, 't', 'resources'), { recursive: true });
+      writeFileSync(join(tmp, 't', 'a.css'), 'a{}');
+      writeFileSync(join(tmp, 't', 'resources', 'logo.svg'), '<svg/>');
+      writeFileSync(join(tmp, 'outside.svg'), '<svg/>');
+      writeFileSync(join(tmp, 't', 'template.json'), JSON.stringify({
+        name: 'T', css: ['a.css'],
+        header: { logo: 'resources/logo.svg', banner: '../outside.svg', title: 'Hi' },
+        footer: { logo: 'resources/missing.svg', text: 'x' },
+      }));
+      const { templates, diagnostics } = discoverTemplates([{ dir: tmp, builtin: false }]);
+      assert.strictEqual(templates.length, 1);
+      assert.ok(templates[0].header?.logo?.endsWith('logo.svg'));
+      assert.strictEqual(templates[0].header?.banner, undefined);
+      assert.strictEqual(templates[0].footer?.logo, undefined);
+      assert.strictEqual(templates[0].footer?.text, 'x');
+      assert.ok(diagnostics.some((d) => d.message.includes('header banner')));
+      assert.ok(diagnostics.some((d) => d.message.includes('footer logo')));
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+});

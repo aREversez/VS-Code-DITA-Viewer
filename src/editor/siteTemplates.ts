@@ -24,11 +24,39 @@ export interface SiteTemplate {
   /** Absolute paths, in injection order. At least one. */
   css: string[];
   thumbnail?: string;
-  header?: string;
-  footer?: string;
+  /** The page header (brand bar / banner), when the template has one. */
+  header?: TemplateHeader;
+  /** The page footer, when the template has one. */
+  footer?: TemplateFooter;
   /** Absolute path of the template folder. */
   dir: string;
   builtin: boolean;
+}
+
+/** A link in the header or footer. `href` is always http(s) or mailto. */
+export interface TemplateLink {
+  label: string;
+  href: string;
+}
+
+/**
+ * The header is data, not markup: the extension renders it (and escapes it),
+ * so a template cannot inject elements or scripts through it. `logo` and
+ * `banner` are files inside the template folder (relative here, absolute once
+ * the template is loaded). Text may use {title} and {year}.
+ */
+export interface TemplateHeader<P = string> {
+  logo?: P;
+  banner?: P;
+  title?: string;
+  tagline?: string;
+  links: TemplateLink[];
+}
+
+export interface TemplateFooter<P = string> {
+  logo?: P;
+  text?: string;
+  links: TemplateLink[];
 }
 
 export interface TemplateDiagnostic {
@@ -44,11 +72,12 @@ export interface TemplateDescriptor {
   defaultDark: boolean;
   css: string[];
   thumbnail?: string;
-  header?: string;
-  footer?: string;
+  header?: TemplateHeader;
+  footer?: TemplateFooter;
 }
 
-export type ParseResult = { ok: true; descriptor: TemplateDescriptor } | { ok: false; error: string };
+/** `warnings` name parts of a descriptor that were dropped (a bad link, an oversized text). */
+export type ParseResult = { ok: true; descriptor: TemplateDescriptor; warnings: string[] } | { ok: false; error: string };
 
 /** `rel` resolved against `dir`, or undefined when it is absolute or escapes `dir`. */
 export function resolveInside(dir: string, rel: string): string | undefined {
@@ -61,6 +90,80 @@ export function resolveInside(dir: string, rel: string): string | undefined {
 
 function asString(v: unknown): string | undefined {
   return typeof v === 'string' && v.trim() !== '' ? v.trim() : undefined;
+}
+
+export const MAX_LINKS = 8;
+const MAX_TITLE = 120;
+const MAX_TEXT = 300;
+const MAX_LABEL = 60;
+
+/** Only web and mail links: no javascript:, data:, file: or relative targets. */
+export function isSafeLinkHref(href: string): boolean {
+  return /^(?:https?:\/\/[^\s"'<>`]+|mailto:[^\s"'<>`]+)$/i.test(href);
+}
+
+function boundedString(v: unknown, max: number, what: string, warnings: string[]): string | undefined {
+  const s = asString(v);
+  if (s === undefined) return undefined;
+  if (s.length > max) {
+    warnings.push(`${what} is longer than ${max} characters; ignored`);
+    return undefined;
+  }
+  return s;
+}
+
+function parseLinks(v: unknown, what: string, warnings: string[]): TemplateLink[] {
+  if (v === undefined) return [];
+  if (!Array.isArray(v)) {
+    warnings.push(`${what}.links must be a list; ignored`);
+    return [];
+  }
+  const links: TemplateLink[] = [];
+  for (const item of v) {
+    const o = typeof item === 'object' && item !== null ? (item as Record<string, unknown>) : {};
+    const label = boundedString(o.label, MAX_LABEL, `${what} link label`, warnings);
+    const href = asString(o.href);
+    if (!label || !href || !isSafeLinkHref(href)) {
+      warnings.push(`${what} link ${JSON.stringify(o.label ?? '')} needs a label and an http(s)/mailto href; dropped`);
+      continue;
+    }
+    if (links.length >= MAX_LINKS) {
+      warnings.push(`${what} has more than ${MAX_LINKS} links; the rest are dropped`);
+      break;
+    }
+    links.push({ label, href });
+  }
+  return links;
+}
+
+function parseHeader(v: unknown, warnings: string[]): TemplateHeader | undefined {
+  if (v === undefined) return undefined;
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) {
+    warnings.push('header must be an object; ignored');
+    return undefined;
+  }
+  const o = v as Record<string, unknown>;
+  return {
+    logo: asString(o.logo),
+    banner: asString(o.banner),
+    title: boundedString(o.title, MAX_TITLE, 'header title', warnings),
+    tagline: boundedString(o.tagline, MAX_TEXT, 'header tagline', warnings),
+    links: parseLinks(o.links, 'header', warnings),
+  };
+}
+
+function parseFooter(v: unknown, warnings: string[]): TemplateFooter | undefined {
+  if (v === undefined) return undefined;
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) {
+    warnings.push('footer must be an object; ignored');
+    return undefined;
+  }
+  const o = v as Record<string, unknown>;
+  return {
+    logo: asString(o.logo),
+    text: boundedString(o.text, MAX_TEXT, 'footer text', warnings),
+    links: parseLinks(o.links, 'footer', warnings),
+  };
 }
 
 export function parseTemplateJson(text: string): ParseResult {
@@ -85,8 +188,10 @@ export function parseTemplateJson(text: string): ParseResult {
   const css = Array.isArray(o.css) ? o.css.filter((c): c is string => typeof c === 'string' && c.trim() !== '') : [];
   if (css.length === 0) return { ok: false, error: 'template.json needs a non-empty "css" list' };
 
+  const warnings: string[] = [];
   return {
     ok: true,
+    warnings,
     descriptor: {
       names,
       description: asString(o.description),
@@ -94,8 +199,8 @@ export function parseTemplateJson(text: string): ParseResult {
       defaultDark: o.defaultDark === true,
       css,
       thumbnail: asString(o.thumbnail),
-      header: asString(o.header),
-      footer: asString(o.footer),
+      header: parseHeader(o.header, warnings),
+      footer: parseFooter(o.footer, warnings),
     },
   };
 }
@@ -142,7 +247,7 @@ export function parseTemplateOpt(text: string): ParseResult {
 
   const css = attr('css', 'file');
   if (css.length === 0) return { ok: false, error: '.opt lists no <css file="..."/>' };
-  return { ok: true, descriptor: { names, layout, defaultDark, css, thumbnail: attr('preview-image', 'file')[0] } };
+  return { ok: true, warnings: [], descriptor: { names, layout, defaultDark, css, thumbnail: attr('preview-image', 'file')[0] } };
 }
 
 export interface TemplateRoot {
@@ -185,6 +290,7 @@ function loadTemplateDir(dir: string, id: string, builtin: boolean, diagnostics:
     return undefined;
   }
   const d = parsed.descriptor;
+  for (const w of parsed.warnings) diagnostics.push({ dir, message: `${descriptorName}: ${w}` });
 
   const resolveFile = (rel: string, what: string): string | undefined => {
     const abs = resolveInside(dir, rel);
@@ -212,8 +318,10 @@ function loadTemplateDir(dir: string, id: string, builtin: boolean, diagnostics:
     defaultDark: d.defaultDark,
     css,
     thumbnail: d.thumbnail ? resolveFile(d.thumbnail, 'thumbnail') : undefined,
-    header: d.header ? resolveFile(d.header, 'header') : undefined,
-    footer: d.footer ? resolveFile(d.footer, 'footer') : undefined,
+    header: d.header
+      ? { ...d.header, logo: d.header.logo ? resolveFile(d.header.logo, 'header logo') : undefined, banner: d.header.banner ? resolveFile(d.header.banner, 'header banner') : undefined }
+      : undefined,
+    footer: d.footer ? { ...d.footer, logo: d.footer.logo ? resolveFile(d.footer.logo, 'footer logo') : undefined } : undefined,
     dir,
     builtin,
   };
