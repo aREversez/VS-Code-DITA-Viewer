@@ -1288,3 +1288,20 @@ body.mode-book.tpl-shell.tpl-shell:has(.site-nav) {
 .tpl-logo--footer { height: 20px; }
 .tpl-links { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; }
 .tpl-link { text-decoration: none; }
+
+/* The toolbar docked into a template's header (getToolbarPlacementScript):
+   it stops floating, keeps the header's row, and wraps under the brand and
+   links when the window is narrow. !important because the scaffold styles it
+   with an inline cssText (fixed, top/right, opacity, blur). */
+.tpl-header { flex-wrap: wrap; }
+.tpl-header > .tpl-toolbar {
+  position: static !important;
+  z-index: auto !important;
+  opacity: 1 !important;
+  backdrop-filter: none !important;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 100%;
+  margin-left: auto;
+}
+.tpl-header > .tpl-links + .tpl-toolbar { margin-left: 0; }

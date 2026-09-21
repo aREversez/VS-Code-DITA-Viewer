@@ -2996,6 +2996,16 @@ export const HISTORY_FORWARD_ICON_SVG =
   '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
   '<path d="M3.5 8H12M8.5 4.5L12 8l-3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
+/** Chevrons for the previous/next-topic buttons, drawn like the history arrows
+ *  so the icon sits at the button's exact center (a font's ‹ › glyphs sit
+ *  low on the line and their position varies by font). */
+export const PREV_TOPIC_ICON_SVG =
+  '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+  '<path d="M10 3.5L5.5 8 10 12.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+export const NEXT_TOPIC_ICON_SVG =
+  '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+  '<path d="M6 3.5L10.5 8 6 12.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
 /**
  * The toolbar's history buttons, created like getSitePrevNextButtonsScript's
  * (built here, appended by the caller, which decides where they go). Arrows
@@ -3048,14 +3058,15 @@ export function getSitePrevNextButtonsScript(opts: { prevLabel: string; prevTitl
   return `
   var sitePrevBtn = document.createElement('button');
   sitePrevBtn.id = '__site-prev-btn';
-  sitePrevBtn.textContent = ${prevLabel};
+  // innerHTML: the label is the caller's constant icon markup (see PREV_TOPIC_ICON_SVG), never translated or user text.
+  sitePrevBtn.innerHTML = ${prevLabel};
   sitePrevBtn.title = ${prevTitle};
   sitePrevBtn.setAttribute('aria-label', ${prevTitle});
   sitePrevBtn.style.cssText = btnStyle + '${SITE_NAV_BTN_STYLE}';
 
   var siteNextBtn = document.createElement('button');
   siteNextBtn.id = '__site-next-btn';
-  siteNextBtn.textContent = ${nextLabel};
+  siteNextBtn.innerHTML = ${nextLabel};
   siteNextBtn.title = ${nextTitle};
   siteNextBtn.setAttribute('aria-label', ${nextTitle});
   siteNextBtn.style.cssText = btnStyle + '${SITE_NAV_BTN_STYLE}';
@@ -3223,6 +3234,27 @@ export function getSiteOpenSourceScript(opts: { openSourceMsgType: string; menuL
 }
 
 /**
+ * Puts the finished toolbar on the page. Normally it floats over the top-right
+ * corner (position:fixed, set by the scaffold). When a template supplies a
+ * header, the toolbar is docked INTO the header instead -- as its last child,
+ * styled by `.tpl-toolbar` in styles.css -- so it can never cover the brand or
+ * the header's links, wraps under them in a narrow window, and is centered in
+ * the header's own row. Define-then-call: the caller just inserts this where
+ * it used to append the toolbar to the body.
+ */
+export function getToolbarPlacementScript(): string {
+  return `
+  function placeToolbar(tb) {
+    var header = document.querySelector('.tpl-header');
+    if (!header) { document.body.appendChild(tb); return; }
+    tb.classList.add('tpl-toolbar');
+    header.appendChild(tb);
+  }
+  placeToolbar(toolbar);
+`;
+}
+
+/**
  * Template dropdown for docsite/book view. Declares `templateSel` for the
  * caller to place. The first option ("no template", value '') is always
  * present; picking one posts its id and the host re-renders the page with
@@ -3244,7 +3276,8 @@ export function getTemplateSelectScript(opts: {
   templateSel.id = '__template-select';
   templateSel.title = ${title};
   templateSel.setAttribute('aria-label', ${title});
-  templateSel.style.cssText = 'max-width:110px;' + ddStyle;
+  // text-align-last is what centers a <select>'s displayed value.
+  templateSel.style.cssText = 'max-width:110px;text-align:center;text-align-last:center;' + ddStyle;
   var templateOptions = ${options};
   for (var ti = 0; ti < templateOptions.length; ti++) {
     var tOpt = document.createElement('option');

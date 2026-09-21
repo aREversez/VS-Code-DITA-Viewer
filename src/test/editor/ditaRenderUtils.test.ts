@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteSidebarToggleScript, getSiteOpenSourceScript, getTemplateSelectScript, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteSidebarToggleScript, getSiteOpenSourceScript, getTemplateSelectScript, getToolbarPlacementScript, PREV_TOPIC_ICON_SVG, NEXT_TOPIC_ICON_SVG, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -4074,5 +4074,49 @@ describe('site toolbar navigation buttons: compact and centered', () => {
     const m = /wSel\.style\.cssText = '([^']*)'/.exec(script);
     assert.ok(m, 'wSel cssText assignment not found');
     assert.ok(m[1].includes('text-align:center') && m[1].includes('text-align-last:center'), m[1]);
+  });
+});
+
+describe('getToolbarPlacementScript (toolbar docks into a template header)', () => {
+  function run(header: object | null) {
+    const bodyAppended: unknown[] = [];
+    const headerAppended: unknown[] = [];
+    const classes: string[] = [];
+    const toolbar = { classList: { add: (c: string) => classes.push(c) } };
+    const doc = {
+      querySelector: (sel: string) => (sel === '.tpl-header' && header ? { appendChild: (n: unknown) => headerAppended.push(n) } : null),
+      body: { appendChild: (n: unknown) => bodyAppended.push(n) },
+    };
+    new Function('toolbar', 'document', getToolbarPlacementScript())(toolbar, doc);
+    return { toolbar, bodyAppended, headerAppended, classes };
+  }
+
+  it('without a template header the toolbar goes on the body, floating as before', () => {
+    const r = run(null);
+    assert.deepStrictEqual(r.bodyAppended, [r.toolbar]);
+    assert.deepStrictEqual(r.headerAppended, []);
+    assert.deepStrictEqual(r.classes, []);
+  });
+
+  it('with a template header the toolbar is docked into it and marked for the docked styling', () => {
+    const r = run({});
+    assert.deepStrictEqual(r.headerAppended, [r.toolbar]);
+    assert.deepStrictEqual(r.bodyAppended, []);
+    assert.deepStrictEqual(r.classes, ['tpl-toolbar']);
+  });
+});
+
+describe('toolbar icons and alignment', () => {
+  it('previous/next topic buttons draw centered SVG chevrons, not font glyphs', () => {
+    const script = getSitePrevNextButtonsScript({ prevLabel: PREV_TOPIC_ICON_SVG, prevTitle: 'P', nextLabel: NEXT_TOPIC_ICON_SVG, nextTitle: 'N' });
+    assert.ok(script.includes('sitePrevBtn.innerHTML'));
+    assert.ok(script.includes('siteNextBtn.innerHTML'));
+    assert.ok(PREV_TOPIC_ICON_SVG.startsWith('<svg') && NEXT_TOPIC_ICON_SVG.startsWith('<svg'));
+    assert.notStrictEqual(PREV_TOPIC_ICON_SVG, NEXT_TOPIC_ICON_SVG);
+  });
+
+  it('the template dropdown centers its displayed value like the width dropdown', () => {
+    const script = getTemplateSelectScript({ msgType: 'setTemplate', title: 'T', noneLabel: 'None', options: [], selected: '' });
+    assert.ok(script.includes('text-align:center;text-align-last:center;'));
   });
 });
