@@ -1,0 +1,17 @@
+{
+  "name": {
+    "en": "Reader",
+    "zh-cn": "阅读"
+  },
+  "description": "Book-like reading: serif type, narrow justified column, quiet header and footer. Light (paper) and dark (sepia).",
+  "css": [
+    "reader.css"
+  ],
+  "header": {
+    "logo": "resources/logo.svg",
+    "title": "{title}"
+  },
+  "footer": {
+    "text": "{title} · {year}"
+  }
+}

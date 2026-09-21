@@ -1,0 +1,19 @@
+{
+  "name": {
+    "en": "Aurora",
+    "zh-cn": "极光"
+  },
+  "description": "Banner header with a gradient backdrop, pill-style navigation, rounded cards. Light and dark.",
+  "css": [
+    "aurora.css"
+  ],
+  "header": {
+    "logo": "resources/logo.svg",
+    "banner": "resources/banner.svg",
+    "title": "{title}",
+    "tagline": "Product documentation"
+  },
+  "footer": {
+    "text": "© {year} {title}"
+  }
+}

@@ -1,5 +1,19 @@
 {
-  "name": { "en": "Classic Docs", "zh-cn": "经典文档" },
-  "description": "A light documentation look: tinted sidebar, comfortable reading column.",
-  "css": ["classic-docs.css"]
+  "name": {
+    "en": "Classic Docs",
+    "zh-cn": "经典文档"
+  },
+  "description": "Documentation-site look: brand header, tinted sidebar, footer. Light and dark.",
+  "css": [
+    "classic-docs.css"
+  ],
+  "header": {
+    "logo": "resources/logo.svg",
+    "title": "{title}",
+    "tagline": "Documentation"
+  },
+  "footer": {
+    "logo": "resources/logo.svg",
+    "text": "© {year} {title}"
+  }
 }

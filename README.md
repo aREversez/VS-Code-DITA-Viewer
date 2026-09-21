@@ -216,17 +216,42 @@ Open a DITA preview, then use the **Theme dropdown** to cycle through these and 
 
 #### Templates for Docsite and Book view
 
-The **Template** dropdown in the toolbar (Docsite and Book view) restyles the sidebar and the page of a map; it is remembered per map, separately for each view. **Classic Docs** is built in. To add your own, list one or more folders in `dita-viewer.templatesDirectory`; every sub-folder is a template:
+The **Template** dropdown in the toolbar (Docsite and Book view) restyles the sidebar and the page of a map and can add a header and a footer around it. The choice is remembered per map, separately for each view. Three templates are built in: **Classic Docs**, **Aurora** (banner header) and **Reader** (serif, book-like); each has a light and a dark palette and follows VS Code's colour theme.
+
+To add your own, list one or more folders in `dita-viewer.templatesDirectory`; every sub-folder is a template:
 
 ```
 my-templates/
   green/
-    template.json     { "name": "Green", "css": ["green.css"] }   (or a publishing-template .opt file)
+    template.json
     green.css
-    resources/        fonts and images the css refers to with relative url(...)
+    resources/        logo, banner, fonts and images the css refers to
 ```
 
-A template's css and everything it refers to must stay inside its own folder. Scope your rules with `body[data-template="<folder name>"]` (a `template-dark` class is added to `body` for templates marked dark). The page structure to target is the extension's own — `.site-nav`, `.site-nav-link`, `#dita-content-root` — see `media/templates/classic-docs/classic-docs.css` for a complete example. Sample templates for manual testing are in `test-dita-file/manual/templates/`.
+`template.json`:
+
+```json
+{
+  "name": { "en": "Green", "zh-cn": "绿色" },
+  "css": ["green.css"],
+  "header": {
+    "logo": "resources/logo.svg",
+    "banner": "resources/banner.svg",
+    "title": "{title}",
+    "tagline": "Product documentation",
+    "links": [{ "label": "Support", "href": "https://example.com/support" }]
+  },
+  "footer": { "text": "© {year} {title}", "links": [{ "label": "Privacy", "href": "https://example.com/privacy" }] }
+}
+```
+
+- `header` and `footer` are optional and are **data, not HTML**: the extension renders them, so a template cannot add elements or scripts. Text may use `{title}` (the map's title) and `{year}`; links must be `http(s)` or `mailto` (at most 8 each). The header's `banner` becomes its background image.
+- A folder with a `<publishing-template>` `.opt` file instead of `template.json` also works for the name, the colour tag, the preview image and the css list; its `webhelp.*` parameters are ignored, and it has no header or footer.
+- Everything a template names must stay inside its own folder.
+- Scope your css with `body[data-template="<folder name>"]`. Use `html.vscode-dark body[data-template="…"]` for the dark palette, or mark a dark-only template by using `body[data-template="…"].template-dark` (the class is added when `template.json` sets `"defaultDark": true`). The page structure to target is the extension's own — `.site-nav`, `.site-nav-link`, `#dita-content-root`, `.tpl-header`, `.tpl-footer` — and re-pointing the `--vscode-*` and `--color-*` custom properties on `body` recolours the toolbar, sidebar, notes and code blocks in one go. `media/templates/classic-docs/classic-docs.css` is a complete example. Do not override `content-visibility` rules: Book view relies on them for large maps.
+- Changing `dita-viewer.templatesDirectory` needs the preview reopened before a template's fonts and images load.
+
+Sample templates for manual testing are in `test-dita-file/manual/templates/`.
 
 #### Dark mode overrides
 

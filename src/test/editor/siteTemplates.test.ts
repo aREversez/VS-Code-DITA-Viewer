@@ -186,6 +186,9 @@ describe('the templates shipped in the repository', () => {
     const opt = templates.find((t) => t.id === 'sample-opt');
     assert.ok(opt);
     assert.strictEqual(opt?.names[''], 'Sample (.opt)');
+    const json = templates.find((t) => t.id === 'sample-json');
+    assert.strictEqual(json?.header?.links.length, 2);
+    assert.strictEqual(json?.footer?.links.length, 1);
   });
 });
 

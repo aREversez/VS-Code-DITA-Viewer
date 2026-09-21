@@ -1,0 +1,19 @@
+/* Manual-test template: user-authored, so it sets only what it needs. It
+   recolours through the preview's own variables instead of restyling every
+   element, and adds a header/footer look. Scoped by the folder name. */
+body[data-template="sample-json"] {
+  --vscode-editor-background: #fffdf7;
+  --vscode-editor-foreground: #2a2a2a;
+  --vscode-foreground: #2a2a2a;
+  --vscode-textLink-foreground: #a33a00;
+  --vscode-list-hoverBackground: #fbe9d9;
+  --vscode-list-activeSelectionBackground: #f6d9bf;
+  --vscode-list-activeSelectionForeground: #6e2400;
+  --color-link: #a33a00;
+  background: #fffdf7;
+  color: #2a2a2a;
+}
+body[data-template="sample-json"] .site-nav { background: #fbf3ea; }
+body[data-template="sample-json"] .tpl-header { background: #a33a00; color: #fff; }
+body[data-template="sample-json"] .tpl-header .tpl-link { color: #fff; }
+body[data-template="sample-json"] .tpl-footer { background: #fbf3ea; color: #5a4a3a; }

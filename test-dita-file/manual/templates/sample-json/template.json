@@ -1,0 +1,17 @@
+{
+  "name": { "en": "Sample (template.json)", "zh-cn": "示例（template.json）" },
+  "description": "Text-only header and footer with links, for manual testing of user templates.",
+  "css": ["sample-json.css"],
+  "header": {
+    "title": "{title}",
+    "tagline": "Manual test template",
+    "links": [
+      { "label": "DITA TC", "href": "https://www.oasis-open.org/committees/tc_home.php?wg_abbrev=dita" },
+      { "label": "Contact", "href": "mailto:docs@example.com" }
+    ]
+  },
+  "footer": {
+    "text": "© {year} {title}",
+    "links": [{ "label": "Top of DITA TC", "href": "https://www.oasis-open.org/committees/tc_home.php?wg_abbrev=dita" }]
+  }
+}

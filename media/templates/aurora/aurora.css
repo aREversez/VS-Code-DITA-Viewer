@@ -1,0 +1,180 @@
+/* aurora -- built-in site/book template.
+   Colours live in two blocks of custom properties (light, and dark for when
+   VS Code shows a dark theme); everything below only reads them. The block
+   also re-points the --vscode-* variables the preview's own rules use, so the
+   sidebar, toolbar, notes and code blocks all follow this palette. Copy the
+   folder and change the values to make a new colour scheme. */
+body[data-template="aurora"] {
+  --body-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --tpl-bg: #fbfcfe;
+  --tpl-fg: #1d2433;
+  --tpl-muted: #5b6579;
+  --tpl-accent: #0a7377;
+  --tpl-accent-fg: #ffffff;
+  --tpl-soft: #e6f5f5;
+  --tpl-nav-bg: #f1f5f9;
+  --tpl-border: #dbe3ec;
+  --tpl-code-bg: #eef2f7;
+  --tpl-header-bg: #1b1f4b;
+  --tpl-header-fg: #ffffff;
+  --tpl-footer-bg: #1b1f4b;
+  --tpl-footer-fg: #c9cffa;
+  --vscode-editor-background: #fbfcfe;
+  --vscode-editor-foreground: #1d2433;
+  --vscode-foreground: #1d2433;
+  --vscode-descriptionForeground: #5b6579;
+  --vscode-textLink-foreground: #0a6b6f;
+  --vscode-textCodeBlock-background: #eef2f7;
+  --vscode-textPreformat-background: #eef2f7;
+  --vscode-list-hoverBackground: #e6f5f5;
+  --vscode-list-activeSelectionBackground: #e6f5f5;
+  --vscode-list-activeSelectionForeground: #0a7377;
+  --vscode-focusBorder: #0a7377;
+  --vscode-widget-border: #dbe3ec;
+  --vscode-panel-border: #dbe3ec;
+  --vscode-icon-foreground: #5b6579;
+  --vscode-sideBar-background: #f1f5f9;
+  --vscode-dropdown-background: #f1f5f9;
+  --vscode-dropdown-foreground: #1d2433;
+  --vscode-dropdown-border: #dbe3ec;
+  --vscode-input-background: #fbfcfe;
+  --vscode-input-foreground: #1d2433;
+  --vscode-input-border: #dbe3ec;
+  --vscode-button-background: #0a7377;
+  --vscode-button-foreground: #ffffff;
+  --color-border: #dbe3ec;
+  --table-border: #c9d4e0;
+  --color-link: #0a6b6f;
+  --color-code-bg: #eef2f7;
+  --color-note-bg: #e9f5f9;
+  --color-note-border: #2b9bb8;
+  --color-warning-bg: #fff6e0;
+  --color-warning-border: #e5a52e;
+  --color-danger-bg: #fdecec;
+  --color-danger-border: #d24545;
+  --color-important-bg: #f0ecfd;
+  --color-important-border: #7a5bd0;
+  --color-tip-bg: #e6f6ee;
+  --color-tip-border: #26a06a;
+  background: var(--tpl-bg);
+  color: var(--tpl-fg);
+}
+html.vscode-dark body[data-template="aurora"],
+body[data-template="aurora"].template-dark {
+  --tpl-bg: #10131f;
+  --tpl-fg: #dfe5f2;
+  --tpl-muted: #8f9ab3;
+  --tpl-accent: #3cc4c6;
+  --tpl-accent-fg: #08222a;
+  --tpl-soft: #16303a;
+  --tpl-nav-bg: #151a2b;
+  --tpl-border: #262e47;
+  --tpl-code-bg: #1a2036;
+  --tpl-header-bg: #0b0e26;
+  --tpl-header-fg: #ffffff;
+  --tpl-footer-bg: #0b0e26;
+  --tpl-footer-fg: #9aa3d8;
+  --vscode-editor-background: #10131f;
+  --vscode-editor-foreground: #dfe5f2;
+  --vscode-foreground: #dfe5f2;
+  --vscode-descriptionForeground: #8f9ab3;
+  --vscode-textLink-foreground: #5fd4d6;
+  --vscode-textCodeBlock-background: #1a2036;
+  --vscode-textPreformat-background: #1a2036;
+  --vscode-list-hoverBackground: #16303a;
+  --vscode-list-activeSelectionBackground: #16303a;
+  --vscode-list-activeSelectionForeground: #3cc4c6;
+  --vscode-focusBorder: #3cc4c6;
+  --vscode-widget-border: #262e47;
+  --vscode-panel-border: #262e47;
+  --vscode-icon-foreground: #8f9ab3;
+  --vscode-sideBar-background: #151a2b;
+  --vscode-dropdown-background: #151a2b;
+  --vscode-dropdown-foreground: #dfe5f2;
+  --vscode-dropdown-border: #262e47;
+  --vscode-input-background: #10131f;
+  --vscode-input-foreground: #dfe5f2;
+  --vscode-input-border: #262e47;
+  --vscode-button-background: #3cc4c6;
+  --vscode-button-foreground: #08222a;
+  --color-border: #262e47;
+  --table-border: #36405e;
+  --color-link: #5fd4d6;
+  --color-code-bg: #1a2036;
+  --color-note-bg: #122c38;
+  --color-note-border: #2b9bb8;
+  --color-warning-bg: #352b17;
+  --color-warning-border: #d9a02f;
+  --color-danger-bg: #381a1f;
+  --color-danger-border: #d95b5b;
+  --color-important-bg: #251f43;
+  --color-important-border: #8d70e6;
+  --color-tip-bg: #12352a;
+  --color-tip-border: #34b57c;
+  background: var(--tpl-bg);
+  color: var(--tpl-fg);
+}
+
+/* ── Chrome: header and footer ── */
+body[data-template="aurora"] .tpl-header {
+  background: var(--tpl-header-bg);
+  color: var(--tpl-header-fg);
+  min-height: 64px;
+  align-items: flex-end;
+  padding-top: 0.75rem;
+  padding-bottom: 0.6rem;
+}
+body[data-template="aurora"] .tpl-brand { align-self: center; }
+body[data-template="aurora"] .tpl-title { font-weight: 700; font-size: 1.15rem; line-height: 1.2; }
+body[data-template="aurora"] .tpl-tagline { font-size: 0.8rem; opacity: 0.75; line-height: 1.3; }
+body[data-template="aurora"] .tpl-links { margin-left: auto; padding-bottom: 0.1rem; }
+body[data-template="aurora"] .tpl-header .tpl-link { color: var(--tpl-header-fg); opacity: 0.85; font-size: 0.9rem; }
+body[data-template="aurora"] .tpl-header .tpl-link:hover { opacity: 1; text-decoration: underline; }
+body[data-template="aurora"] .tpl-footer {
+  background: var(--tpl-footer-bg);
+  color: var(--tpl-footer-fg);
+  font-size: 0.8rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+body[data-template="aurora"] .tpl-footer .tpl-link { color: var(--tpl-footer-fg); }
+body[data-template="aurora"] .tpl-footer .tpl-link:hover { text-decoration: underline; }
+
+/* ── Sidebar ── */
+body[data-template="aurora"] .site-nav { background: var(--tpl-nav-bg); }
+body[data-template="aurora"] .site-nav-link { color: var(--tpl-fg); }
+body[data-template="aurora"] .site-nav-link:hover { background: var(--tpl-soft); }
+body[data-template="aurora"] .site-nav-group-label { color: var(--tpl-muted); }
+body[data-template="aurora"] .site-nav-toggle { color: var(--tpl-muted); }
+body[data-template="aurora"] .site-nav-resizer::before { background: var(--tpl-border); }
+
+/* ── Page ── */
+body[data-template="aurora"] #dita-content-root { background: var(--tpl-bg); color: var(--tpl-fg); }
+body[data-template="aurora"] #dita-content-root a { color: var(--color-link); }
+body[data-template="aurora"] #dita-content-root .shortdesc { background: var(--tpl-soft); color: var(--tpl-fg); }
+body[data-template="aurora"] #dita-content-root pre.codeblock, body[data-template="aurora"] #dita-content-root pre.preformatted { background: var(--tpl-code-bg); border-color: var(--tpl-border); }
+body[data-template="aurora"] #dita-content-root th { background: var(--tpl-nav-bg); }
+body[data-template="aurora"] ::selection { background: var(--tpl-soft); }
+
+body[data-template="aurora"] .tpl-header { min-height: 92px; padding: 1rem 1.5rem 0.9rem; background-color: var(--tpl-header-bg); }
+body[data-template="aurora"] .tpl-header--banner { background-size: cover; background-position: center right; }
+body[data-template="aurora"] .tpl-logo { height: 44px; max-width: 200px; }
+body[data-template="aurora"] .tpl-title { font-size: 1.45rem; letter-spacing: 0.01em; }
+body[data-template="aurora"] .tpl-tagline { font-size: 0.85rem; }
+body[data-template="aurora"] .tpl-header .tpl-link { padding: 0.2rem 0.7rem; border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 999px; font-size: 0.82rem; }
+body[data-template="aurora"] .tpl-header .tpl-link:hover { background: rgba(255, 255, 255, 0.14); text-decoration: none; }
+body[data-template="aurora"] .site-nav { padding-top: 0.25rem; }
+body[data-template="aurora"] .site-nav-link { border-radius: 999px; padding: 5px 12px; }
+body[data-template="aurora"] .site-nav-link.active { background: var(--tpl-accent); color: var(--tpl-accent-fg); font-weight: 600; }
+body[data-template="aurora"] .site-nav-link.active .site-nav-chip { color: var(--tpl-accent-fg); border-color: var(--tpl-accent-fg); }
+body[data-template="aurora"] .site-nav-group-label { font-weight: 700; font-size: 12px; letter-spacing: 0.03em; }
+body[data-template="aurora"] .tpl-footer { padding: 0.7rem 1.5rem; }
+body[data-template="aurora"] #dita-content-root { line-height: 1.75; font-size: 1.02em; }
+body[data-template="aurora"] #dita-content-root h1 { font-size: 2.1rem; margin-bottom: 0.6em; }
+body[data-template="aurora"] #dita-content-root h1::after { content: ''; display: block; width: 64px; height: 4px; margin-top: 0.35em; border-radius: 2px; background: linear-gradient(90deg, var(--tpl-accent), #7a5bd0); }
+body[data-template="aurora"] #dita-content-root h2 { margin-top: 2em; color: var(--tpl-accent); }
+body[data-template="aurora"] #dita-content-root .shortdesc { border-radius: 10px; font-size: 1.08em; }
+body[data-template="aurora"] #dita-content-root .note { border-radius: 10px; border: 1px solid var(--tpl-border); border-left-width: 5px; box-shadow: 0 1px 3px rgba(20, 30, 60, 0.08); }
+body[data-template="aurora"] #dita-content-root pre.codeblock, body[data-template="aurora"] #dita-content-root pre.preformatted { border-radius: 10px; border: 1px solid var(--tpl-border); }
+body[data-template="aurora"] #dita-content-root table { border-radius: 10px; overflow: hidden; }
+body[data-template="aurora"] #dita-content-root code { border-radius: 5px; }
