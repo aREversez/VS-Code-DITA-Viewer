@@ -116,16 +116,15 @@ const MSG_BOOK_SEARCH = 'bookSearch';
 const MSG_BOOK_SEARCH_RESULTS = 'bookSearchResults';
 
 // Localized topic-type labeler for the docsite sidebar's per-entry chip:
-// every known DITA topic specialization gets a localized short label
-// ("Concept"/"概念", "Task"/"任务", …), and the generic `<topic>` root
-// returns undefined so a plain map full of `<topic>` files doesn't get a
-// row of identical "Topic" chips with no information. Passed to
-// makeFileTopicTypeResolver, which calls it with the topic file's root
-// tag name (sniffed off the front of the file, not fully parsed -- see
-// that function's own comment). Mirrors formatLocalizedRole's own
-// contract (see bookRoleL10n.ts): the render layer stays pure, VS Code
-// callers inject translated display text.
+// every known DITA topic root gets a localized short label
+// ("Concept"/"概念", "Task"/"任务", ..., and the generic `<topic>` itself,
+// "Topic"/"主题"). Passed to makeFileTopicTypeResolver, which calls it with
+// the topic file's root tag name (sniffed off the front of the file, not
+// fully parsed -- see that function's own comment). Mirrors
+// formatLocalizedRole's own contract (see bookRoleL10n.ts): the render
+// layer stays pure, VS Code callers inject translated display text.
 const TOPIC_TYPE_LABELS: Record<string, () => string> = {
+  topic: () => vscode.l10n.t('Topic'),
   concept: () => vscode.l10n.t('Concept'),
   task: () => vscode.l10n.t('Task'),
   reference: () => vscode.l10n.t('Reference'),
@@ -134,7 +133,7 @@ const TOPIC_TYPE_LABELS: Record<string, () => string> = {
   glossgroup: () => vscode.l10n.t('Glossary Group'),
 };
 function localizeTopicTypeLabel(tagName: string): string | undefined {
-  if (!tagName || tagName === 'topic') return undefined;
+  if (!tagName) return undefined;
   const factory = TOPIC_TYPE_LABELS[tagName];
   if (factory) return factory();
   // Unknown specializations (custom domains, future DITA modules) fall

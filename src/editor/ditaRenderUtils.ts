@@ -434,15 +434,16 @@ export function makeFileTitleResolver(
 
 /**
  * Default topic-type labeler used when no localized labeler is injected.
- * Returns undefined for the generic `<topic>` root (every entry would
- * otherwise carry an identical "Topic" chip, which adds visual noise
- * without any information), and a simple capitalized tag name for any
- * specialization (`concept` -> "Concept", `task` -> "Task", ...). Callers
- * that want localized labels (MapViewerProvider in VS Code) inject their
- * own labeler; pure-function tests use this default to stay vscode-free.
+ * Returns a simple capitalized tag name for every root, the generic
+ * `<topic>` included (`concept` -> "Concept", `task` -> "Task", `topic` ->
+ * "Topic", ...): in a map that mixes specializations with plain topics, the
+ * plain ones being the only rows with no chip read as "type unknown" rather
+ * than "generic topic". Callers that want localized labels
+ * (MapViewerProvider in VS Code) inject their own labeler; pure-function
+ * tests use this default to stay vscode-free.
  */
 function defaultTopicTypeLabel(tagName: string): string | undefined {
-  if (!tagName || tagName === 'topic') return undefined;
+  if (!tagName) return undefined;
   return tagName.charAt(0).toUpperCase() + tagName.slice(1);
 }
 
@@ -1369,10 +1370,9 @@ export interface DocsiteNavEntry {
   /** Displayable type label for the referenced topic's own root element
    *  ("Concept", "Task", "Reference", ...), when a resolveTopicType was
    *  passed to buildBookNavManifest and the topic file's root tag is one
-   *  the labeler recognized. The generic `<topic>` root yields undefined
-   *  (see makeFileTopicTypeResolver's default labeler) so a plain map
-   *  full of `<topic>` files doesn't get a row of identical "Topic"
-   *  chips with no information -- only specializations get a chip. */
+   *  the labeler recognized. The generic `<topic>` root gets a chip too
+   *  ("Topic"), so every entry with a topic file is labeled the same way
+   *  and a plain topic isn't the odd row out among specializations. */
   topicType?: string;
   /** True for an entry with no topic of its own to navigate to -- a
    *  <topichead> (pure heading, no href by definition) or an href-less

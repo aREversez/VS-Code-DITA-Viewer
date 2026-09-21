@@ -828,9 +828,9 @@ describe('makeFileTopicTypeResolver (sniffRootTagName)', () => {
     assert.strictEqual(resolver('full-preamble.dita'), 'Concept');
   });
 
-  it('should return undefined for the generic <topic> root, since the default labeler drops it to avoid a row of identical chips with no information', () => {
+  it('should label the generic <topic> root "Topic" like every other type, so a plain topic in a mixed map is not the one row with no chip', () => {
     const resolver = makeFileTopicTypeResolver(dir);
-    assert.strictEqual(resolver('generic.dita'), undefined);
+    assert.strictEqual(resolver('generic.dita'), 'Topic');
   });
 
   it('should let a custom labeler override the default (e.g. localize, or hide tags the default would show)', () => {
