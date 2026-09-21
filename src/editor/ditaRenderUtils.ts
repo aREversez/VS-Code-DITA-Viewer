@@ -2977,6 +2977,26 @@ export function getSiteNavToggleScript(): string {
 }
 
 /**
+ * Shared inline style of the four site-mode navigation buttons (back,
+ * forward, previous topic, next topic). A fixed width rather than
+ * glyph-width-plus-padding sizing: the arrow/angle glyphs vary in width from
+ * font to font, and the buttons used to come out as the longest things on the
+ * toolbar. Fixed width + flex centering keeps all four the same compact size
+ * with the icon in the middle.
+ */
+const SITE_NAV_BTN_STYLE = 'width:22px;padding:0;font-size:14px;justify-content:center;text-align:center;';
+
+/** Short-shafted arrows for the history buttons -- a font's own arrow glyph
+ *  has a long shaft, which is what made these buttons wide. currentColor so
+ *  they follow the button's (and its disabled) color. */
+export const HISTORY_BACK_ICON_SVG =
+  '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+  '<path d="M12.5 8H4M7.5 4.5L4 8l3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+export const HISTORY_FORWARD_ICON_SVG =
+  '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+  '<path d="M3.5 8H12M8.5 4.5L12 8l-3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+/**
  * The toolbar's history buttons, created like getSitePrevNextButtonsScript's
  * (built here, appended by the caller, which decides where they go). Arrows
  * rather than the angle brackets the prev/next buttons use: those step through
@@ -2992,19 +3012,22 @@ export function getSiteHistoryButtonsScript(opts: { backLabel: string; backTitle
   return `
   var siteBackBtn = document.createElement('button');
   siteBackBtn.id = '__site-back-btn';
-  siteBackBtn.textContent = ${backLabel};
+  // innerHTML, not textContent: the label is the caller's own constant
+  // icon markup (a short SVG arrow), never translated or user text -- the
+  // translated part is the title below.
+  siteBackBtn.innerHTML = ${backLabel};
   siteBackBtn.title = ${backTitle};
   siteBackBtn.setAttribute('aria-label', ${backTitle});
   siteBackBtn.disabled = true;
-  siteBackBtn.style.cssText = btnStyle + 'font-size:14px;padding:1px 9px;justify-content:center;';
+  siteBackBtn.style.cssText = btnStyle + '${SITE_NAV_BTN_STYLE}';
 
   var siteForwardBtn = document.createElement('button');
   siteForwardBtn.id = '__site-forward-btn';
-  siteForwardBtn.textContent = ${forwardLabel};
+  siteForwardBtn.innerHTML = ${forwardLabel};
   siteForwardBtn.title = ${forwardTitle};
   siteForwardBtn.setAttribute('aria-label', ${forwardTitle});
   siteForwardBtn.disabled = true;
-  siteForwardBtn.style.cssText = btnStyle + 'font-size:14px;padding:1px 9px;justify-content:center;';
+  siteForwardBtn.style.cssText = btnStyle + '${SITE_NAV_BTN_STYLE}';
 `;
 }
 
@@ -3028,14 +3051,14 @@ export function getSitePrevNextButtonsScript(opts: { prevLabel: string; prevTitl
   sitePrevBtn.textContent = ${prevLabel};
   sitePrevBtn.title = ${prevTitle};
   sitePrevBtn.setAttribute('aria-label', ${prevTitle});
-  sitePrevBtn.style.cssText = btnStyle + 'font-size:14px;padding:1px 9px;justify-content:center;';
+  sitePrevBtn.style.cssText = btnStyle + '${SITE_NAV_BTN_STYLE}';
 
   var siteNextBtn = document.createElement('button');
   siteNextBtn.id = '__site-next-btn';
   siteNextBtn.textContent = ${nextLabel};
   siteNextBtn.title = ${nextTitle};
   siteNextBtn.setAttribute('aria-label', ${nextTitle});
-  siteNextBtn.style.cssText = btnStyle + 'font-size:14px;padding:1px 9px;justify-content:center;';
+  siteNextBtn.style.cssText = btnStyle + '${SITE_NAV_BTN_STYLE}';
 `;
 }
 
@@ -4608,7 +4631,9 @@ ${fontResetBlock}
   var wSel = document.createElement('select');
   wSel.title = ${pageWidth};
   wSel.setAttribute('aria-label', ${pageWidth});
-  wSel.style.cssText = 'max-width:72px;' + ddStyle;
+  // text-align-last is what centers a <select>'s displayed value (text-align
+  // alone leaves "Auto" flush left).
+  wSel.style.cssText = 'max-width:72px;text-align:center;text-align-last:center;' + ddStyle;
   var restoredWidth = window.__widthSelection || '';
   for (var i = 0; i < widths.length; i++) {
     var opt = document.createElement('option');

@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getSiteOpenSourceScript, getTemplateSelectScript, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteSidebarToggleScript, getSiteOpenSourceScript, getTemplateSelectScript, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -4020,5 +4020,59 @@ describe('getTemplateSelectScript (docsite/book template dropdown)', () => {
     sel.value = '';
     sel.listeners['change']();
     assert.deepStrictEqual(posted, [{ type: 'setTemplate', id: 'a' }, { type: 'setTemplate', id: '' }]);
+  });
+});
+
+
+describe('site toolbar navigation buttons: compact and centered', () => {
+  const histOpts = { backLabel: 'B', backTitle: 'Back', forwardLabel: 'F', forwardTitle: 'Forward' };
+  const pnOpts = { prevLabel: '\u2039', prevTitle: 'Previous topic', nextLabel: '\u203a', nextTitle: 'Next topic' };
+
+  // Every button's inline style, keyed by variable name, as the script would assign it.
+  function styleOf(script: string, varName: string): string {
+    const m = new RegExp(varName + "\\.style\\.cssText = btnStyle \\+ '([^']*)'").exec(script);
+    assert.ok(m, 'no cssText assignment found for ' + varName);
+    return m[1];
+  }
+
+  it('gives back, forward, previous and next the same short fixed width instead of glyph-plus-padding sizing', () => {
+    const hist = getSiteHistoryButtonsScript(histOpts);
+    const pn = getSitePrevNextButtonsScript(pnOpts);
+    const widths = [
+      styleOf(hist, 'siteBackBtn'),
+      styleOf(hist, 'siteForwardBtn'),
+      styleOf(pn, 'sitePrevBtn'),
+      styleOf(pn, 'siteNextBtn'),
+    ].map((css) => /(?:^|;)width:(\d+)px/.exec(css)?.[1]);
+    assert.ok(widths.every((w) => w !== undefined), 'each button needs an explicit width: ' + widths.join(','));
+    assert.strictEqual(new Set(widths).size, 1, 'all four share one width');
+    assert.ok(Number(widths[0]) <= 24, 'and it is compact');
+  });
+
+  it('centers the content of all four buttons', () => {
+    const hist = getSiteHistoryButtonsScript(histOpts);
+    const pn = getSitePrevNextButtonsScript(pnOpts);
+    for (const css of [styleOf(hist, 'siteBackBtn'), styleOf(hist, 'siteForwardBtn'), styleOf(pn, 'sitePrevBtn'), styleOf(pn, 'siteNextBtn')]) {
+      assert.ok(css.includes('justify-content:center'), css);
+    }
+  });
+
+  it('renders the history label as markup so the arrows can be short SVG icons rather than long font glyphs', () => {
+    const hist = getSiteHistoryButtonsScript({ ...histOpts, backLabel: '<svg></svg>' });
+    assert.ok(hist.includes("siteBackBtn.innerHTML = "), 'back label goes through innerHTML');
+    assert.ok(hist.includes("siteForwardBtn.innerHTML = "), 'forward label goes through innerHTML');
+  });
+
+  it('centers the page-width dropdown text (the "Auto" option sat left-aligned)', () => {
+    const script = getToolbarFontWidthTagTooltipsButtonsScript({
+      decreaseFontSize: 'a', increaseFontSize: 'b', fontSans: 'c', fontSerif: 'd',
+      fontCurrentSans: 'e', fontCurrentSerif: 'f', fontSizeButtonExtraStyle: '', includeFontReset: false,
+      widthAuto: 'Auto', widthFull: 'Full', widthWide: 'Wide', widthDesktop: 'Desktop', widthNarrow: 'Narrow',
+      pageWidth: 'Page width', setWidthSelectionMsgType: 'setWidthSelection',
+      tagTooltipsLabel: 'Tags', tagTooltipsOnTitle: 'on', tagTooltipsOffTitle: 'off', setTagTooltipsMsgType: 'setTagTooltips',
+    });
+    const m = /wSel\.style\.cssText = '([^']*)'/.exec(script);
+    assert.ok(m, 'wSel cssText assignment not found');
+    assert.ok(m[1].includes('text-align:center') && m[1].includes('text-align-last:center'), m[1]);
   });
 });

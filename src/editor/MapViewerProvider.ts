@@ -8,7 +8,7 @@ import { mapTitleFromXml, renderChrome, wrapShell } from './templateChrome';
 import { TEMPLATE_SELECTION_KEY, parseTemplateSelection, withTemplate, pickTemplate } from './templateSelection';
 import { resolveDirectoryPath } from './cssDiscovery';
 import { readFileSync } from 'fs';
-import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, siteNavigableEntries, renderSiteNavTreeHtml, wrapSiteNavTreeHtml, getSiteNavClickHandlerScript, getSidebarUpdateScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavKeyboardScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteOpenSourceScript, getTemplateSelectScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry } from './ditaRenderUtils';
+import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, siteNavigableEntries, renderSiteNavTreeHtml, wrapSiteNavTreeHtml, getSiteNavClickHandlerScript, getSidebarUpdateScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavKeyboardScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteOpenSourceScript, getTemplateSelectScript, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, HISTORY_BACK_ICON_SVG, HISTORY_FORWARD_ICON_SVG, DocsiteNavEntry } from './ditaRenderUtils';
 import { getBookSearchIndex, searchBookIndex, buildBookSearchResultsPayload, getBookSearchScript, invalidateBookSearchIndex } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
@@ -285,9 +285,9 @@ function getMapWebviewScript(
   // rather than angle brackets). Wired up by updateHistoryButtons in
   // getSiteNavClickHandlerScript.
   ${getSiteHistoryButtonsScript({
-    backLabel: '\u2190',
+    backLabel: HISTORY_BACK_ICON_SVG,
     backTitle: L.siteBack,
-    forwardLabel: '\u2192',
+    forwardLabel: HISTORY_FORWARD_ICON_SVG,
     forwardTitle: L.siteForward,
   })}
   ${getSitePrevNextButtonsScript({
