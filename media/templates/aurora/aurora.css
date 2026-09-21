@@ -159,6 +159,7 @@ body[data-template="aurora"] .site-nav-resizer::before { background: var(--tpl-b
 /* ── Page ── */
 body[data-template="aurora"] #dita-content-root { background: var(--tpl-bg); color: var(--tpl-fg); }
 body[data-template="aurora"] #dita-content-root a { color: var(--color-link); }
+body[data-template="aurora"] #dita-content-root h1, body[data-template="aurora"] #dita-content-root h2, body[data-template="aurora"] #dita-content-root h3, body[data-template="aurora"] #dita-content-root h4, body[data-template="aurora"] #dita-content-root h5, body[data-template="aurora"] #dita-content-root h6 { line-height: 1.25; }
 body[data-template="aurora"] #dita-content-root .shortdesc { background: var(--tpl-soft); color: var(--tpl-fg); }
 body[data-template="aurora"] #dita-content-root pre.codeblock, body[data-template="aurora"] #dita-content-root pre.preformatted { background: var(--tpl-code-bg); border-color: var(--tpl-border); }
 body[data-template="aurora"] #dita-content-root th { background: var(--tpl-nav-bg); }

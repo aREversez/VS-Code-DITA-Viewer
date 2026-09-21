@@ -159,17 +159,17 @@ body[data-template="reader"] .site-nav-resizer::before { background: var(--tpl-b
 /* ── Page ── */
 body[data-template="reader"] #dita-content-root { background: var(--tpl-bg); color: var(--tpl-fg); }
 body[data-template="reader"] #dita-content-root a { color: var(--color-link); }
+body[data-template="reader"] #dita-content-root h1, body[data-template="reader"] #dita-content-root h2, body[data-template="reader"] #dita-content-root h3, body[data-template="reader"] #dita-content-root h4, body[data-template="reader"] #dita-content-root h5, body[data-template="reader"] #dita-content-root h6 { line-height: 1.25; }
 body[data-template="reader"] #dita-content-root .shortdesc { background: var(--tpl-soft); color: var(--tpl-fg); }
 body[data-template="reader"] #dita-content-root pre.codeblock, body[data-template="reader"] #dita-content-root pre.preformatted { background: var(--tpl-code-bg); border-color: var(--tpl-border); }
 body[data-template="reader"] #dita-content-root th { background: var(--tpl-nav-bg); }
 body[data-template="reader"] ::selection { background: var(--tpl-soft); }
 
 body[data-template="reader"] { --max-width: 720px; }
-/* Brand centred on its own row; the toolbar (docked into the header) takes the row above it, right-aligned. */
-body[data-template="reader"] .tpl-header { min-height: 0; padding-top: 0.4rem; padding-bottom: 0.7rem; border-bottom: 1px solid var(--tpl-border); }
-body[data-template="reader"] .tpl-brand { order: 1; flex: 1 1 100%; justify-content: center; }
-body[data-template="reader"] .tpl-header > .tpl-toolbar { order: 0; }
-body[data-template="reader"] .tpl-links { order: 2; flex: 1 1 100%; justify-content: center; margin-left: 0; }
+/* Brand centred on its own row; links (if any) on the row below it. */
+body[data-template="reader"] .tpl-header { min-height: 0; padding-top: 0.8rem; padding-bottom: 0.8rem; border-bottom: 1px solid var(--tpl-border); }
+body[data-template="reader"] .tpl-brand { flex: 1 1 100%; justify-content: center; }
+body[data-template="reader"] .tpl-links { flex: 1 1 100%; justify-content: center; margin-left: 0; }
 body[data-template="reader"] .tpl-title { font-weight: 600; font-size: 1.05rem; letter-spacing: 0.06em; text-transform: uppercase; }
 body[data-template="reader"] .tpl-tagline { font-style: italic; }
 body[data-template="reader"] .tpl-header .tpl-brand-text { align-items: flex-start; }

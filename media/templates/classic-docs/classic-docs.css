@@ -159,6 +159,7 @@ body[data-template="classic-docs"] .site-nav-resizer::before { background: var(-
 /* ── Page ── */
 body[data-template="classic-docs"] #dita-content-root { background: var(--tpl-bg); color: var(--tpl-fg); }
 body[data-template="classic-docs"] #dita-content-root a { color: var(--color-link); }
+body[data-template="classic-docs"] #dita-content-root h1, body[data-template="classic-docs"] #dita-content-root h2, body[data-template="classic-docs"] #dita-content-root h3, body[data-template="classic-docs"] #dita-content-root h4, body[data-template="classic-docs"] #dita-content-root h5, body[data-template="classic-docs"] #dita-content-root h6 { line-height: 1.25; }
 body[data-template="classic-docs"] #dita-content-root .shortdesc { background: var(--tpl-soft); color: var(--tpl-fg); }
 body[data-template="classic-docs"] #dita-content-root pre.codeblock, body[data-template="classic-docs"] #dita-content-root pre.preformatted { background: var(--tpl-code-bg); border-color: var(--tpl-border); }
 body[data-template="classic-docs"] #dita-content-root th { background: var(--tpl-nav-bg); }
