@@ -514,6 +514,27 @@ function getMapWebviewScript(
   function applyModeStage(stage) {
     currentMode = stage.mode;
     if (typeof updateModeLabel === 'function') updateModeLabel();
+    // Re-enable the mode button now that the stage it was waiting on has
+    // actually landed (see the disabled/debounce comment in
+    // getModeToggleScript). The old, dimmed #dita-content-root this click
+    // disabled the button for is about to be discarded below along with the
+    // rest of the pre-switch content, so there is nothing to un-dim here --
+    // the freshly inserted one starts undimmed.
+    if (typeof modeBtn !== 'undefined' && modeBtn) modeBtn.disabled = false;
+
+    // Search state does not survive a mode switch: the highlighted terms and
+    // matches belong to the content that is about to be torn down. Close it
+    // BEFORE that content is removed below, for two reasons -- (1) it clears
+    // the CSS Custom Highlight registrations and resets the input/count, so
+    // afterContentSwap()'s refreshSearchAfterDomChange (called at the end of
+    // this function, same as it is for a live-edit refresh) does not see an
+    // "open" search bar and silently re-run performSearch against the new
+    // mode's content, which is what used to make old matches reappear
+    // highlighted on the page the reader just switched to; and (2) sb
+    // (#__search_bar) is a normal DOM node appended after #__topbar, so
+    // without this it would otherwise still be showing open when the removal
+    // loop below detaches it from the document a few lines down.
+    if (typeof closeSearchBar === 'function') closeSearchBar();
 
     // Body: this mode's classes and template hook, but keep the client-owned
     // hide-profiling toggle (a Flags-button state that a switch must not reset).
@@ -529,15 +550,20 @@ function getMapWebviewScript(
     if (typeof templateSel !== 'undefined' && templateSel) templateSel.value = stage.selectedTemplate || '';
 
     // Replace everything the #__topbar does NOT own: drop the current body
-    // children after it (keeping the bar itself and the already-run <script>
-    // tags, whose side effects must stay), then insert the new stage markup
-    // right after the bar -- the same order a full document had them in.
+    // children after it (keeping the bar itself, the already-run <script>
+    // tags whose side effects must stay, and #__search_bar -- the search
+    // overlay is shell chrome like the bar itself, not mode content: it is
+    // built once by the superset script and reused across switches, same as
+    // #__topbar, rather than being torn down and left permanently
+    // unreachable by the still-live sb variable its own click handlers
+    // close over), then insert the new stage markup right after the bar --
+    // the same order a full document had them in.
     var bar = document.getElementById('__topbar');
     if (bar) {
       var n = bar.nextSibling;
       while (n) {
         var next = n.nextSibling;
-        if (!(n.nodeType === 1 && n.tagName === 'SCRIPT')) n.remove();
+        if (!(n.nodeType === 1 && (n.tagName === 'SCRIPT' || n.id === '__search_bar'))) n.remove();
         n = next;
       }
       bar.insertAdjacentHTML('afterend', stage.shellHtml || '');

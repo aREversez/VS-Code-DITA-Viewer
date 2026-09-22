@@ -81,6 +81,20 @@ body {
   overflow-anchor: none;
 }
 
+/* In-place mode switch (toolbar-persistence work): added to the OLD content
+   root by the mode button's click handler the instant it fires, since its
+   own label flips immediately while the new stage is still being rendered
+   asynchronously on the host side (getModeToggleScript). Gives that gap a
+   visible "switching" state instead of the button and the page silently
+   disagreeing for a moment. Needs no matching removal -- applyModeStage
+   (MapViewerProvider.ts) discards this exact node once the new stage lands
+   and inserts a fresh, undimmed one in its place. */
+#dita-content-root.mode-switching {
+  opacity: 0.5;
+  transition: opacity 0.1s ease-out;
+  pointer-events: none;
+}
+
 /* Topic article */
 .topic > h1:first-child { margin-top: 0; }
 

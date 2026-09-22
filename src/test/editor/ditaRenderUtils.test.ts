@@ -3109,16 +3109,26 @@ describe('getModeToggleScript (docsite mode)', () => {
     const listeners: Record<string, () => void> = {};
     const fakeBtn = {
       style: {},
+      disabled: false,
       setAttribute: () => {},
       addEventListener: (evt: string, fn: () => void) => { listeners[evt] = fn; },
     };
-    const fakeDocument = { createElement: () => fakeBtn };
-    const fn = new Function('currentMode', 'btnStyle', 'document', 'vscode', script + '; return modeBtn;');
-    const btn = fn('tree', '', fakeDocument, { postMessage: (m: { type: string; mode: string }) => posted.push(m) });
+    // getElementById/setTimeout are only exercised by the disabled/dimming
+    // behaviour (its own tests below); this test's own concern is the mode
+    // sequence and postMessage payloads, so they are stubbed out here just to
+    // keep the click handler from throwing (no real #dita-content-root in
+    // this fake document) and to avoid leaving a real 8s timer running past
+    // the test (each click schedules one -- see getModeToggleScript's own
+    // comment on why 8s is a safety net, not the normal path).
+    const fakeDocument = { createElement: () => fakeBtn, getElementById: () => null };
+    const fn = new Function('currentMode', 'btnStyle', 'document', 'vscode', 'setTimeout', script + '; return modeBtn;');
+    const btn = fn('tree', '', fakeDocument, { postMessage: (m: { type: string; mode: string }) => posted.push(m) }, () => {});
     assert.strictEqual(btn.textContent, 'Outline');
     listeners['click']();
+    btn.disabled = false; // each real click is followed by applyModeStage re-enabling it; simulate that here so the next click isn't ignored
     assert.strictEqual(btn.textContent, 'Site', 'first click from tree should switch to site and relabel to the new current mode');
     listeners['click']();
+    btn.disabled = false;
     assert.strictEqual(btn.textContent, 'Book');
     listeners['click']();
     assert.strictEqual(btn.textContent, 'Outline');
@@ -3129,6 +3139,56 @@ describe('getModeToggleScript (docsite mode)', () => {
   it('does not append the button to a toolbar itself', () => {
     const script = getModeToggleScript(opts);
     assert.ok(!script.includes('toolbar.appendChild'));
+  });
+
+  // Toolbar-persistence follow-up: the label flips the instant a click
+  // fires (optimistic, tested above), well before the host's asynchronously
+  // rendered stage can land (applyModeStage in MapViewerProvider.ts). Left
+  // alone that reads as the button and the page disagreeing for a beat, and
+  // a second click in that window could race the first switchMode reply.
+  // modeBtn.disabled is both the visible "switching" affordance (paired with
+  // the #dita-content-root.mode-switching class in media/styles.css) and the
+  // debounce -- these two tests are its unit-level guarantee that the reply
+  // MapViewerProvider.ts posts back is what clears it (applyModeStage does
+  // `modeBtn.disabled = false`), not this script itself.
+  it('disables itself and dims the content root on click, and ignores a second click while disabled', () => {
+    const posted: Array<{ type: string; mode: string }> = [];
+    const script = getModeToggleScript(opts);
+    const listeners: Record<string, () => void> = {};
+    const fakeBtn = {
+      style: {},
+      disabled: false,
+      setAttribute: () => {},
+      addEventListener: (evt: string, fn: () => void) => { listeners[evt] = fn; },
+    };
+    const contentRootClasses = new Set<string>();
+    const fakeContentRoot = { classList: { add: (c: string) => contentRootClasses.add(c) } };
+    const fakeDocument = {
+      createElement: () => fakeBtn,
+      getElementById: (id: string) => (id === 'dita-content-root' ? fakeContentRoot : null),
+    };
+    const fn = new Function('currentMode', 'btnStyle', 'document', 'vscode', 'setTimeout',
+      script + '; return modeBtn;');
+    const btn = fn('tree', '', fakeDocument, { postMessage: (m: { type: string; mode: string }) => posted.push(m) }, () => {});
+    listeners['click']();
+    assert.strictEqual(btn.disabled, true, 'button should disable itself for the duration of the switch');
+    assert.ok(contentRootClasses.has('mode-switching'), 'content root should get the dimming class');
+    assert.strictEqual(posted.length, 1);
+    listeners['click'](); // a second click while still disabled
+    assert.strictEqual(posted.length, 1, 'a click while disabled must not post a second switchMode request');
+  });
+
+  it('is a no-op when there is no #dita-content-root to dim (outline/tree mode has none)', () => {
+    const script = getModeToggleScript(opts);
+    const listeners: Record<string, () => void> = {};
+    const fakeBtn = { style: {}, disabled: false, setAttribute: () => {}, addEventListener: (evt: string, fn: () => void) => { listeners[evt] = fn; } };
+    const fakeDocument = { createElement: () => fakeBtn, getElementById: () => null };
+    const fn = new Function('currentMode', 'btnStyle', 'document', 'vscode', 'setTimeout', script + '; return modeBtn;');
+    assert.doesNotThrow(() => {
+      const btn = fn('tree', '', fakeDocument, { postMessage: () => {} }, () => {});
+      listeners['click']();
+      assert.strictEqual(btn.disabled, true);
+    });
   });
 });
 

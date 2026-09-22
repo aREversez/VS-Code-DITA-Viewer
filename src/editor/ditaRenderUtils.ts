@@ -3211,10 +3211,33 @@ export function getModeToggleScript(opts: {
   }
   updateModeLabel();
   modeBtn.addEventListener('click', function() {
+    // The label flips the instant this fires (optimistic -- it is what
+    // makes the click feel like it landed), but the actual page only
+    // catches up once the host's asynchronously-rendered stage comes back
+    // over postMessage (applyModeStage, MapViewerProvider.ts). Left alone,
+    // that gap reads as the button and the page disagreeing with each
+    // other. modeBtn.disabled both gives a visible "switching" affordance
+    // for that gap (paired with the dimming below) and doubles as a debounce:
+    // a second click mid-flight is ignored rather than kicking off a second
+    // switchMode request that could race the first one's reply. Cleared by
+    // applyModeStage once the new stage actually lands (or, on the rare
+    // render-failure fallback to a full reload, moot -- the reload replaces
+    // this whole document, button included).
+    if (modeBtn.disabled) return;
     var newMode = nextMapMode(currentMode);
     currentMode = newMode;
     updateModeLabel();
+    modeBtn.disabled = true;
+    var cr = document.getElementById('dita-content-root');
+    if (cr) cr.classList.add('mode-switching');
     vscode.postMessage({ type: '${opts.switchModeMsgType}', mode: newMode });
+    // Safety net, not the normal path: applyModeStage (or a render-failure's
+    // full reload, which replaces this whole document anyway) is what
+    // ordinarily clears the disabled state. This just guards against the
+    // button being stuck forever if the host throws before ever replying --
+    // an unexpected host-side error rather than anything this feature's own
+    // logic can produce, so a generous delay is fine.
+    setTimeout(function() { modeBtn.disabled = false; }, 8000);
   });
 `;
 }

@@ -1,6 +1,7 @@
 import * as assert from 'assert';
+import { join } from 'path';
 import { cssUrlSafe, fillPlaceholders, mapTitleFromXml, renderChrome, renderTemplateFooter, renderTemplateHeader, wrapShell } from '../../editor/templateChrome';
-import { isSafeLinkHref, parseTemplateJson } from '../../editor/siteTemplates';
+import { discoverTemplates, isSafeLinkHref, parseTemplateJson } from '../../editor/siteTemplates';
 
 const ctx = { title: 'My <Book>', year: 2026 };
 const toUri = (p: string) => `vscode-webview://x${p}`;
@@ -132,5 +133,62 @@ describe('template.json header/footer parsing', () => {
     assert.ok(!isSafeLinkHref('https://a.b/"onmouseover=x'));
     assert.ok(!isSafeLinkHref('https://a.b/ c'));
     assert.ok(!isSafeLinkHref('//a.b'));
+  });
+});
+
+/**
+ * MapRenderStage.shellHtml (MapViewerProvider.ts's generateHtml) is exactly
+ * wrapShell(...).html, and it is inserted into the live document with
+ * insertAdjacentHTML (applyModeStage, the in-place mode-switch work) rather
+ * than assigned through innerHTML on a fresh page load -- insertAdjacentHTML
+ * silently drops any <script> tag in the string instead of running or even
+ * erroring on it. wrapShell itself is plain concatenation, so a stray
+ * <script> could only get into its output through one of the pieces it
+ * assembles -- the parts most likely to vary (and so most likely to grow one
+ * by accident later) are a template's own header/footer, which is exactly
+ * what renderChrome/renderTemplateHeader/renderTemplateFooter build. This
+ * tripwire renders every built-in template's chrome for real, through the
+ * actual assembly function that produces shellHtml, and fails loudly if a
+ * <script> tag ever ends up in it -- catching in a test run what a webview's
+ * CSP would otherwise only fail at silently, with no error anywhere.
+ */
+describe('wrapShell output never contains a <script> tag (in-place mode-switch tripwire)', () => {
+  const root = join(process.cwd(), 'media', 'templates');
+  const { templates, diagnostics } = discoverTemplates([{ dir: root, builtin: true }]);
+
+  it('loads the built-in templates cleanly (precondition for the checks below)', () => {
+    assert.deepStrictEqual(diagnostics, []);
+    assert.ok(templates.length > 0);
+  });
+
+  it('every built-in template\'s rendered header/footer is free of <script>', () => {
+    for (const t of templates) {
+      const { headerHtml, footerHtml } = renderChrome(t, ctx, toUri);
+      assert.ok(!/<script[\s>]/i.test(headerHtml ?? ''), `${t.id} header contains <script>`);
+      assert.ok(!/<script[\s>]/i.test(footerHtml ?? ''), `${t.id} footer contains <script>`);
+    }
+  });
+
+  it('wrapShell\'s assembled html is free of <script>, with or without a sidebar, for every built-in template', () => {
+    const sidebarHtml = '<nav class="site-nav">...</nav>';
+    const resizerHtml = '<div class="site-nav-resizer"></div>';
+    const contentRootHtml = '<div id="dita-content-root" class="site-main">...</div>';
+    for (const t of templates) {
+      const { headerHtml, footerHtml } = renderChrome(t, ctx, toUri);
+      const withSidebar = wrapShell({ sidebarHtml, resizerHtml, contentRootHtml, headerHtml, footerHtml });
+      const withoutSidebar = wrapShell({ sidebarHtml: '', resizerHtml: '', contentRootHtml, headerHtml, footerHtml });
+      assert.ok(!/<script[\s>]/i.test(withSidebar.html), `${t.id} shell (with sidebar) contains <script>`);
+      assert.ok(!/<script[\s>]/i.test(withoutSidebar.html), `${t.id} shell (without sidebar) contains <script>`);
+    }
+  });
+
+  it('a hostile title/tagline/text containing a literal <script> tag is escaped, not passed through', () => {
+    const hostileCtx = { title: '<script>alert(1)</script>', year: 2026 };
+    const header = renderTemplateHeader({ title: '{title}', tagline: undefined, links: [] }, hostileCtx, toUri);
+    const footer = renderTemplateFooter({ text: '{title}', links: [] }, hostileCtx, toUri);
+    assert.ok(!/<script[\s>]/i.test(header));
+    assert.ok(!/<script[\s>]/i.test(footer));
+    const shell = wrapShell({ sidebarHtml: '', resizerHtml: '', contentRootHtml: '<div></div>', headerHtml: header, footerHtml: footer });
+    assert.ok(!/<script[\s>]/i.test(shell.html));
   });
 });
