@@ -13,6 +13,7 @@ import {
   buildNavManifest,
   classifyLogLine,
   createLineBuffer,
+  normalizeIndexHtmlLinks,
   CssArg,
   SiteChromeFeatures,
 } from './editor/ditaOtUtils';
@@ -396,7 +397,21 @@ export function activate(context: vscode.ExtensionContext) {
               // Success
               outputChannel.appendLine(vscode.l10n.t('\n[DITA-OT] Transformation complete. Output directory: {0}', outputDir));
 
-              // 9. Inject site chrome (features enabled via QuickPick during flow)
+              // 9a. Repair the map landing page's links. DITA-OT writes index.html
+              // to the site root but makes its href/src relative to the map's own
+              // sub-folder, so a map under maps/ yields ../topics/… links that
+              // climb out of the site and never resolve. Runs before chrome
+              // injection so it also normalises nothing the chrome step adds (the
+              // chrome links it injects are already root-relative).
+              if (transtype === 'html5' || transtype === 'xhtml') {
+                try {
+                  fixRootIndexLinks(outputDir, outputChannel);
+                } catch (e) {
+                  outputChannel.appendLine(vscode.l10n.t('\n[DITA-OT] Failed to fix index.html links: {0}', String(e)));
+                }
+              }
+
+              // 9b. Inject site chrome (features enabled via QuickPick during flow)
               if (transtype === 'html5' || transtype === 'xhtml') {
                 try {
                   if (siteChromeFeatures) {
@@ -502,6 +517,22 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 // ── Site chrome injection ──
+
+/**
+ * Rewrite the map landing page's over-escaped links in place. See
+ * normalizeIndexHtmlLinks for why DITA-OT produces them and what the fix does.
+ * A no-op (no write) when there is no index.html or nothing matched, so it is
+ * safe to run on every html5/xhtml transform.
+ */
+function fixRootIndexLinks(outputDir: string, outputChannel: vscode.OutputChannel): void {
+  const indexPath = join(outputDir, 'index.html');
+  if (!existsSync(indexPath)) return;
+  const html = readFileSync(indexPath, 'utf-8');
+  const fixed = normalizeIndexHtmlLinks(html);
+  if (fixed === html) return;
+  writeFileSync(indexPath, fixed, 'utf-8');
+  outputChannel.appendLine(vscode.l10n.t('\n[DITA-OT] Fixed root index.html topic links (removed stray ../ prefixes).'));
+}
 
 function injectSiteChrome(
   extPath: string,

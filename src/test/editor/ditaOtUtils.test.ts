@@ -9,6 +9,7 @@ import {
   buildNavManifest,
   classifyLogLine,
   createLineBuffer,
+  normalizeIndexHtmlLinks,
 } from '../../editor/ditaOtUtils';
 
 describe('resolveDitaOtExecutable', () => {
@@ -488,5 +489,59 @@ describe('buildDitaOtSpawnSpec', () => {
       'win32',
     );
     assert.ok(spec.args[3].includes('"--filter=some""value"'), `expected doubled quote, got: ${spec.args[3]}`);
+  });
+});
+
+describe('normalizeIndexHtmlLinks', () => {
+  it('strips the stray ../ prefix DITA-OT leaves on root index.html topic links', () => {
+    const html = '<li><a href="../topics/about_manual.html">About</a></li>';
+    assert.strictEqual(
+      normalizeIndexHtmlLinks(html),
+      '<li><a href="topics/about_manual.html">About</a></li>',
+    );
+  });
+
+  it('strips multiple leading ../ segments (map nested several folders deep)', () => {
+    const html = '<a href="../../topics/foo.html">x</a>';
+    assert.strictEqual(normalizeIndexHtmlLinks(html), '<a href="topics/foo.html">x</a>');
+  });
+
+  it('fixes stylesheet and script references too', () => {
+    const html = '<link href="../commonltr.css"><script src="../chrome.js"></script>';
+    assert.strictEqual(
+      normalizeIndexHtmlLinks(html),
+      '<link href="commonltr.css"><script src="chrome.js"></script>',
+    );
+  });
+
+  it('leaves already-correct root-relative links untouched (idempotent)', () => {
+    const html = '<a href="topics/foo.html">x</a>';
+    assert.strictEqual(normalizeIndexHtmlLinks(html), html);
+    // Running twice changes nothing further.
+    assert.strictEqual(normalizeIndexHtmlLinks(normalizeIndexHtmlLinks(html)), html);
+  });
+
+  it('does not touch external URLs, mailto, protocol-relative or bare anchors', () => {
+    const html =
+      '<a href="https://example.com/a">e</a>' +
+      '<a href="mailto:x@y.z">m</a>' +
+      '<a href="//cdn.example.com/x.js">p</a>' +
+      '<a href="#sec">a</a>';
+    assert.strictEqual(normalizeIndexHtmlLinks(html), html);
+  });
+
+  it('only strips LEADING ../ and leaves mid-path traversal intact', () => {
+    const html = '<a href="topics/../images/x.svg">i</a>';
+    assert.strictEqual(normalizeIndexHtmlLinks(html), '<a href="topics/../images/x.svg">i</a>');
+  });
+
+  it('is case-insensitive on the attribute name', () => {
+    const html = '<A HREF="../topics/x.html">t</A>';
+    assert.strictEqual(normalizeIndexHtmlLinks(html), '<A HREF="topics/x.html">t</A>');
+  });
+
+  it('collapses ../maps/../topics/ down to a resolvable topics/ path', () => {
+    const html = '<a href="../maps/../topics/x.html">t</a>';
+    assert.strictEqual(normalizeIndexHtmlLinks(html), '<a href="maps/../topics/x.html">t</a>');
   });
 });

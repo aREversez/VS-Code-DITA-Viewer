@@ -29,6 +29,30 @@ export function buildNavManifest(mapPath: string): NavManifestEntry[] {
     }));
 }
 
+/**
+ * Fix the topic links on the DITA-OT map landing page (index.html).
+ *
+ * DITA-OT emits the map's own page as `<outputDir>/index.html` (the site root)
+ * but computes its `href`/`src` values relative to the map's *source*
+ * directory. When the map lives in a sub-folder — e.g. `manual/maps/main.ditamap`
+ * referencing topics as `../topics/foo.dita` — every generated reference climbs
+ * out of the site root (`href="../topics/foo.html"`), so clicking a TOC entry on
+ * index.html navigates to a path *above* the exported site and lands nowhere.
+ * The topic pages themselves are unaffected: their links stay inside `topics/`
+ * and resolve correctly.
+ *
+ * Because index.html is at the site root, nothing above the root is part of the
+ * site — so stripping the leading `../` segments turns each over-escaped
+ * reference back into a root-relative one (`../topics/foo.html` →
+ * `topics/foo.html`, `../commonltr.css` → `commonltr.css`). Absolute URLs,
+ * `mailto:`/`tel:`, protocol-relative `//…` and bare `#anchor` references never
+ * start with `../`, so they are left untouched; nor is a correct root-relative
+ * link, making the transform idempotent.
+ */
+export function normalizeIndexHtmlLinks(html: string): string {
+  return html.replace(/(\b(?:href|src)="?)(?:\.\.\/)+/gi, '$1');
+}
+
 export interface DitaOtLocation {
   executablePath: string;
   source: 'setting' | 'env' | 'path';

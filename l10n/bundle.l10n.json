@@ -102,6 +102,8 @@
   "\n[DITA-OT] Site enhancements injected.": "\n[DITA-OT] Site enhancements injected.",
   "\n[DITA-OT] Transformation cancelled by user.": "\n[DITA-OT] Transformation cancelled by user.",
   "\n[DITA-OT] Transformation complete. Output directory: {0}": "\n[DITA-OT] Transformation complete. Output directory: {0}",
+  "\n[DITA-OT] Failed to fix index.html links: {0}": "\n[DITA-OT] Failed to fix index.html links: {0}",
+  "\n[DITA-OT] Fixed root index.html topic links (removed stray ../ prefixes).": "\n[DITA-OT] Fixed root index.html topic links (removed stray ../ prefixes).",
   "Zoom out this image (preview only)": "Zoom out this image (preview only)",
   "Zoom in this image (preview only)": "Zoom in this image (preview only)",
   "View full-screen (use ←/→ to switch images)": "View full-screen (use ←/→ to switch images)",

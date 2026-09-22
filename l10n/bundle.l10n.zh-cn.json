@@ -102,6 +102,8 @@
   "\n[DITA-OT] Site enhancements injected.": "\n[DITA-OT] 站点增强已注入。",
   "\n[DITA-OT] Transformation cancelled by user.": "\n[DITA-OT] 转换已被用户取消。",
   "\n[DITA-OT] Transformation complete. Output directory: {0}": "\n[DITA-OT] 转换完成。输出目录：{0}",
+  "\n[DITA-OT] Failed to fix index.html links: {0}": "\n[DITA-OT] 修复 index.html 链接失败：{0}",
+  "\n[DITA-OT] Fixed root index.html topic links (removed stray ../ prefixes).": "\n[DITA-OT] 已修复根目录 index.html 的主题链接（移除了多余的 ../ 前缀）。",
   "Zoom out this image (preview only)": "缩小此图片（仅预览，不影响源文件）",
   "Zoom in this image (preview only)": "放大此图片（仅预览，不影响源文件）",
   "View full-screen (use ←/→ to switch images)": "全屏查看（使用 ←/→ 切换图片）",
