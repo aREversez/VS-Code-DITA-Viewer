@@ -6,11 +6,31 @@
  * webview's CSP would block it anyway, and it is how a stylesheet would reach
  * outside the folder).
  */
-import { dirname, relative, resolve } from 'path';
-import { resolveInside, SiteTemplate } from './siteTemplates';
+import { dirname, isAbsolute, join, normalize, sep } from 'path';
+import { SiteTemplate } from './siteTemplates';
 
 const URL_RE = /url\(\s*(['"]?)([^'")]*)\1\s*\)/gi;
 const EXTERNAL_RE = /^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i;
+
+/**
+ * `join(cssDir, relPath)`, but only if it stays inside `templateDir` once
+ * both are normalized; undefined (blank it out) if it would escape, or was
+ * already an absolute reference.
+ *
+ * Deliberately join()+normalize() rather than resolve()+relative(): resolve()
+ * anchors a drive-less path (on Windows, one built without a leading `C:` --
+ * exactly what a root given as e.g. `/tpl/red` produces) to the process's
+ * cwd, so templateDir and the css-relative target can silently end up
+ * resolved against different drives and compare as unrelated even though
+ * they are the same folder.
+ */
+function resolveInsideTemplate(templateDir: string, cssDir: string, relPath: string): string | undefined {
+  if (!relPath || isAbsolute(relPath)) return undefined;
+  const base = normalize(templateDir).replace(/[\\/]+$/, '');
+  const abs = normalize(join(cssDir, relPath));
+  if (abs !== base && !abs.startsWith(base + sep)) return undefined;
+  return abs;
+}
 
 export function rewriteCssUrls(css: string, cssFile: string, templateDir: string, toUri: (absPath: string) => string): string {
   const cssDir = dirname(cssFile);
@@ -24,7 +44,7 @@ export function rewriteCssUrls(css: string, cssFile: string, templateDir: string
       const m = /^([^?#]*)([?#].*)?$/.exec(u);
       const path = m ? m[1] : u;
       const suffix = m && m[2] ? m[2] : '';
-      const inside = resolveInside(templateDir, relative(templateDir, resolve(cssDir, path)));
+      const inside = resolveInsideTemplate(templateDir, cssDir, path);
       return inside ? `url("${toUri(inside)}${suffix}")` : 'url("")';
     });
 }
