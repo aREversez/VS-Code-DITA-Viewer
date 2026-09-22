@@ -9,7 +9,14 @@ describe('buildStandaloneHtml', () => {
     const html = buildStandaloneHtml({ title: 'Test', bodyHtml: '<p>Hello</p>', css: 'body{color:red}' });
     assert.ok(html.startsWith('<!DOCTYPE html>'));
     assert.ok(html.includes('<title>Test</title>'));
-    assert.ok(html.includes('<style>\nbody{color:red}\n</style>'));
+    // The user CSS lands first, then the export's own imagemap override
+    // (natural-size image maps, horizontally scrollable figure) appended
+    // after it so it wins the cascade.
+    assert.ok(html.includes('<style>\nbody{color:red}\n'));
+    assert.ok(
+      html.includes('.dita-export figure.imagemap { overflow-x: auto; }') &&
+        html.includes('.dita-export figure.imagemap img { max-width: none; }'),
+    );
     assert.ok(html.includes('<main class="dita-export">'));
     assert.ok(html.includes('<p>Hello</p>'));
   });

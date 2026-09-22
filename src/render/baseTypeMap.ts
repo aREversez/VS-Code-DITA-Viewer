@@ -318,6 +318,110 @@ function safeAttr(name: string, value: string | undefined | null): string {
   return ` ${name}="${escapeAttr(value)}"`;
 }
 
+// ── Utilities domain: image maps ─────────────────────────────────────────
+// <imagemap> pairs one <image> with <area> hotspots, each declaring a
+// region (<shape> + <coords>) and a destination (<xref>). The HTML
+// translation is the native image-map construct the DITA element was
+// designed around: the <img> carries usemap="#id", and a sibling
+// <map name="id"> holds one <area shape coords href alt> per hotspot.
+// Building that structure is what makes the region data clickable AND
+// what keeps it off the page — the previous topic/fig + topic/figgroup
+// mapping rendered the areas as visible "rect 0,0,10,10 Section 1"
+// text lines with no click behavior at all.
+
+// The <map> id needs to be unique per imagemap instance (two imagemaps
+// in one rendered page would otherwise fight over the same map, and the
+// browser only honors the first). A monotonic module-level counter keeps
+// it deterministic and collision-free across a whole book render; it only
+// needs uniqueness within one rendered document, which is also all it
+// guarantees (re-renders restart the count, and separate documents never
+// share a DOM).
+let imagemapSequence = 0;
+
+// Region geometry + destination for one <area>. Only shape/coords/xref
+// are meaningful here (sort-as is authoring metadata for link-text
+// generation and is deliberately not rendered); anything else the DTD
+// allows is equally invisible in a hotspot.
+function renderImageMapArea(area: DitaNode, ctx: RenderContext): string {
+  const children = (area.children || []).filter(
+    (c): c is DitaNode => c.type === 'element',
+  );
+  const shapeNode = children.find((c) => c.baseType === 'topic/shape');
+  const coordsNode = children.find((c) => c.baseType === 'topic/coords');
+  const xrefNode = children.find((c) => c.baseType === 'topic/xref');
+
+  // HTML shape keywords are case-insensitive; normalize to the canonical
+  // lowercase form so authoring style ("RECT", "Poly") doesn't leak into
+  // the markup. Whitespace between numbers is tolerated by browsers'
+  // coords parsing, so it's collapsed, not rejected.
+  const shape = shapeNode ? extractPlainText(shapeNode).trim().toLowerCase() : '';
+  const coords = coordsNode ? extractPlainText(coordsNode).trim().replace(/\s+/g, ' ') : '';
+
+  const rawHref = xrefNode ? getAttr(xrefNode, 'href') || '' : '';
+
+  // Three-way target resolution, mirroring topic/xref below so a hotspot
+  // behaves like the same link would outside an imagemap:
+  // same-page fragment -> real anchor; target inside the current
+  // book/docsite -> data-dita-book-xref (the site/book click handlers
+  // use closest(), which works on <area> like on any element);
+  // everything else -> the raw href kept on the area. Unlike topic/xref,
+  // which renders non-book targets as non-clickable hint spans, a
+  // hotspot can't opt out of being a link (an <area> without a usable
+  // href is a dead region, and clickable regions are the element's whole
+  // purpose), so the raw href stays and the webviews' image-map click
+  // guard (getImageMapSupportScript in ditaRenderUtils.ts) routes the
+  // click to the host, which resolves it like the map tree's openTopic
+  // handler does -- a bare relative href must never navigate the webview
+  // itself, that navigation is the white page.
+  let hrefAttr: string | undefined;
+  let bookXref: string | undefined;
+  if (rawHref) {
+    if (rawHref.startsWith('#')) {
+      hrefAttr = rawHref.includes('/') ? '#' + rawHref.split('/').pop()! : rawHref;
+    } else {
+      const bookTarget = ctx.isInCurrentBook?.(rawHref);
+      if (bookTarget) {
+        const hashIdx = rawHref.indexOf('#');
+        const idPart = hashIdx >= 0 ? rawHref.slice(hashIdx + 1) : '';
+        const anchorId = idPart ? (idPart.includes('/') ? idPart.split('/').pop()! : idPart) : '';
+        bookXref = bookTarget + (anchorId ? '#' + anchorId : '');
+        // Same href="#" placeholder topic/xref uses for book-internal
+        // links: without an href the area isn't a link at all (no pointer
+        // cursor, no click), and the site/book click handlers key off
+        // data-dita-book-xref anyway.
+        hrefAttr = '#';
+      } else {
+        hrefAttr = rawHref;
+      }
+    }
+  }
+
+  // Alternative text per the spec example: the <xref>'s own content is
+  // the link's alternative text ("Section 1 alternative text"). An empty
+  // xref (e.g. the spec's "pull title" comment case) falls back the same
+  // way topic/xref falls back for its visible text: keyref resolution,
+  // then the referenced document/element's title, then the raw href —
+  // an <area> must never end up with NO text hint at all.
+  let alt = xrefNode ? extractPlainText(xrefNode).trim() : '';
+  if (!alt && xrefNode) {
+    const keyref = getAttr(xrefNode, 'keyref');
+    if (keyref) alt = ctx.resolveKey?.(keyref) || '';
+  }
+  if (!alt && rawHref) {
+    const titleId = rawHref.startsWith('#')
+      ? (rawHref.includes('/') ? rawHref.split('/').pop()! : rawHref.slice(1))
+      : rawHref;
+    alt = ctx.resolveTitle?.(titleId) || '';
+  }
+  if (!alt) alt = rawHref;
+
+  // title= doubles the alt text as a hover tooltip — the one affordance
+  // a hotspot has, since it renders no visible link text of its own.
+  // injectAttributes (renderer.ts) sees this title= and skips its
+  // generic tag-name tooltip for the element, as intended.
+  return `<area${safeAttr('shape', shape || undefined)}${safeAttr('coords', coords || undefined)}${safeAttr('href', hrefAttr)}${safeAttr('alt', alt || undefined)}${safeAttr('title', alt || undefined)}${bookXref ? ` data-dita-book-xref="${escapeAttr(bookXref)}"` : ''}>`;
+}
+
 export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   'topic/foreign': (node) => {
     // No renderChildren() here — that would fall through to the generic
@@ -695,6 +799,57 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     return `<figure${safeAttr('id', id)}>${figContent}${figCaption}</figure>`;
   },
 
+  // ── Utilities domain: image maps ── renderers below; the shared helpers
+  // (imagemapSequence + renderImageMapArea) live just above this object.
+
+  'topic/imagemap': (node, ctx, renderChildren) => {
+    const id = getAttr(node, 'id');
+    const children = (node.children || []).filter((c): c is DitaNode => c.type === 'element');
+    const titleNode = children.find((c) => c.baseType === 'topic/title');
+    const imageNode = children.find((c) => c.baseType === 'topic/image');
+    const areaNodes = children.filter((c) => c.baseType === 'topic/area');
+
+    imagemapSequence += 1;
+    const mapId = `dita-imagemap-${imagemapSequence}`;
+
+    // The hotspot image reuses the full topic/image renderer — webview URI
+    // resolution, natural-dimension reservation, @width/@height/@scale,
+    // <alt> handling — then gains the usemap binding. The renderer's
+    // data-dita-default-scale marker is stripped for imagemap images: that
+    // marker triggers the webview's cosmetic "start smaller" shrink, and a
+    // shrunken image would leave every <area> hit region misaligned with
+    // the pixels underneath (browsers don't rescale map coordinates for
+    // CSS-resized images). Keeping the image at its natural/author size is
+    // what keeps the coordinates honest; the zoom toolbar remains
+    // available for deliberate inspection.
+    let imgHtml = '';
+    if (imageNode) {
+      imgHtml = BASE_TYPE_RENDERERS['topic/image'](imageNode, ctx, renderChildren);
+      imgHtml = imgHtml.replace(/^<img/, `<img usemap="#${escapeAttr(mapId)}"`);
+      imgHtml = imgHtml.replace(/ data-dita-default-scale="1"/g, '');
+    }
+
+    const mapHtml = `<map${safeAttr('name', mapId)}${safeAttr('id', mapId)}>${areaNodes.map((a) => renderImageMapArea(a, ctx)).join('')}</map>`;
+
+    const figCaption = titleNode
+      ? `<figcaption>${renderChildren(titleNode, { ...ctx, headingLevel: ctx.headingLevel + 1 })}</figcaption>`
+      : '';
+    return `<figure${safeAttr('id', id)} class="imagemap">${imgHtml}${mapHtml}${figCaption}</figure>`;
+  },
+
+  // Standalone <area> (not inside an <imagemap>) has no image to attach
+  // its region to — any output would be an invisible no-op element or a
+  // stray link, so render nothing, same convention as the index-see family
+  // of parent-consumed elements. Valid markup never reaches here: the
+  // imagemap renderer above walks its own area children directly.
+  'topic/area': () => '',
+  // shape/coords text is region data consumed by renderImageMapArea above;
+  // visited standalone they can only be malformed markup, and echoing
+  // "rect" / "0,0,10,10" into the page is exactly the bug this renderer
+  // pair exists to fix.
+  'topic/shape': () => '',
+  'topic/coords': () => '',
+
   'topic/codeblock': (node, ctx, renderChildren) => {
     const outputClass = getAttr(node, 'outputclass') || '';
     const lang = outputClass.replace(/^language-/, '');
@@ -944,9 +1099,11 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     `<div class="section-div">${renderChildren(_node, ctx)}</div>`,
   'topic/bodydiv': (_node, ctx, renderChildren) =>
     `<div class="body-div">${renderChildren(_node, ctx)}</div>`,
-  // Generic grouping container (image-map <area> group, programming domain
+  // Generic grouping container (programming domain
   // groupchoice/groupcomp/groupseq alternatives). Same block treatment as
   // bodydiv/sectiondiv — no distinct visual semantics of its own.
+  // (Image-map <area> groups no longer land here — see topic/imagemap
+  // above, which builds the real <map>/<area> structure.)
   'topic/figgroup': (_node, ctx, renderChildren) =>
     `<div class="figgroup">${renderChildren(_node, ctx)}</div>`,
   'topic/desc': (_node, ctx, renderChildren) =>

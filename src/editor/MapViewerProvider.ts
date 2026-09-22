@@ -8,7 +8,7 @@ import { mapTitleFromXml, renderChrome, wrapShell } from './templateChrome';
 import { TEMPLATE_SELECTION_KEY, parseTemplateSelection, withTemplate, pickTemplate } from './templateSelection';
 import { resolveDirectoryPath } from './cssDiscovery';
 import { readFileSync } from 'fs';
-import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, buildBookNavManifest, siteNavigableEntries, renderSiteNavTreeHtml, wrapSiteNavTreeHtml, getSiteNavClickHandlerScript, getSidebarUpdateScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavKeyboardScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteOpenSourceScript, getTemplateSelectScript, getToolbarPlacementScript, PREV_TOPIC_ICON_SVG, NEXT_TOPIC_ICON_SVG, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, HISTORY_BACK_ICON_SVG, HISTORY_FORWARD_ICON_SVG, DocsiteNavEntry } from './ditaRenderUtils';
+import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getImageMapSupportScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, openHrefTarget, buildBookNavManifest, siteNavigableEntries, renderSiteNavTreeHtml, wrapSiteNavTreeHtml, getSiteNavClickHandlerScript, getSidebarUpdateScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavKeyboardScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteOpenSourceScript, getTemplateSelectScript, getToolbarPlacementScript, PREV_TOPIC_ICON_SVG, NEXT_TOPIC_ICON_SVG, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, HISTORY_BACK_ICON_SVG, HISTORY_FORWARD_ICON_SVG, DocsiteNavEntry } from './ditaRenderUtils';
 import { getBookSearchIndex, searchBookIndex, buildBookSearchResultsPayload, getBookSearchScript, invalidateBookSearchIndex } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
@@ -470,6 +470,16 @@ function getMapWebviewScript(
     copyToastFailed: L.imgCopyToastFailed,
   })}
 
+  // Image-map hotspots: same two fixes as the topic preview (see
+  // getImageMapSupportScript in ditaRenderUtils.ts) -- keeps <area> hit
+  // regions aligned with the rendered image across max-width clamping and
+  // content swaps, and routes non-fragment hotspot clicks to the host via
+  // openImagemapLink instead of letting the webview navigate itself to a
+  // vscode-webview:// 404. Book-internal hotspots are untouched: their
+  // data-dita-book-xref attribute is handled by the site/book click
+  // handlers that already run on the same event.
+  ${getImageMapSupportScript({ openMsgType: 'openImagemapLink' })}
+
   // Every source edit (a topicref's profiling attributes, reordering
   // entries, ...) sends just the freshly rendered content as a message
   // instead of the extension reassigning webview.html wholesale -- see
@@ -825,6 +835,14 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         // still open in the map preview.
         const viewType = filePart.toLowerCase().endsWith('.ditamap') ? 'ditaViewer.mapPreview' : 'ditaViewer.preview';
         vscode.commands.executeCommand('vscode.openWith', targetUri, viewType);
+      } else if (message.type === 'openImagemapLink') {
+        // Image-map hotspot click (getImageMapSupportScript): resolve the
+        // raw href against the map's folder -- the same base openTopic
+        // above uses -- and open it in the right place. Book-internal
+        // targets never arrive here (the webview guard leaves those to
+        // the site/book click handlers).
+        const href = typeof message.href === 'string' ? message.href : '';
+        if (href) openHrefTarget(vscode, href, dirname(document.uri.fsPath));
       } else if (message.type === 'switchMode') {
         const newMode = message.mode as 'tree' | 'book' | 'site';
         if (newMode !== 'tree' && newMode !== 'book' && newMode !== 'site') return;

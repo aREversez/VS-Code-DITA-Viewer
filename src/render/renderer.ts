@@ -67,6 +67,7 @@ const CONTAINER_BASETYPES = new Set([
   'topic/section',
   'topic/example',
   'topic/fig',
+  'topic/imagemap',
   'topic/related-links',
 ]);
 

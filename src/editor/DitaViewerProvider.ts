@@ -3,7 +3,7 @@ import { parseDita, preprocessEntities } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
 import { dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
-import { buildTitleMap, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, detectNoteLabels, detectIndexLabel, readImageDimensions, clearImageDimensionsCache, clearTopicRenderCache, clearBookMembersCache } from './ditaRenderUtils';
+import { buildTitleMap, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getImageMapSupportScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, openHrefTarget, detectNoteLabels, detectIndexLabel, readImageDimensions, clearImageDimensionsCache, clearTopicRenderCache, clearBookMembersCache } from './ditaRenderUtils';
 import { clearBookSearchIndexCache } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { foldPendingRender, escalateAfterFailure, PendingRender } from './pendingRender';
@@ -256,6 +256,15 @@ function getWebviewScript(): string {
     copyToastFailed: L.imgCopyToastFailed,
   })}
 
+  // Image-map hotspots: keeps <area> hit regions aligned with the rendered
+  // image size (Chromium hit-tests coords against the natural pixel space,
+  // so any max-width clamping or zoom-toolbar resize would otherwise point
+  // every hotspot at the wrong region) and routes non-fragment hotspot
+  // clicks to the extension host instead of letting the webview navigate
+  // itself to a vscode-webview:// 404 (the white page). Shared with the
+  // map viewer; see getImageMapSupportScript in ditaRenderUtils.ts.
+  ${getImageMapSupportScript({ openMsgType: 'openImagemapLink' })}
+
   // Per-image zoom controls: a small hover toolbar pinned to each image's
   // own top-right corner (−, +, maximize), replacing the old page-wide
   // toolbar zoom control — each image now scales independently instead of
@@ -495,12 +504,24 @@ function getWebviewScript(): string {
   }
 
   window.addEventListener('click', function(e) {
-    var a = e.target.closest ? e.target.closest('a.xref') : null;
+    // 'area[href]' covers image-map hotspots (topic/imagemap in
+    // baseTypeMap.ts): a click on a mapped region targets the <area>
+    // element itself, so the same in-page anchor smooth-scroll that
+    // a.xref gets applies to clicking a hotspot that points at an
+    // element in this same topic (the spec's href="#inline" case).
+    // Non-fragment hrefs are left to the browser: book-internal
+    // cross-topic areas carry data-dita-book-xref and are handled by
+    // the site/book click scripts, external http(s) links go through
+    // the webview's own link handling.
+    var a = e.target.closest ? e.target.closest('a.xref, area[href]') : null;
     if (!a) return;
     var href = a.getAttribute('href');
     if (!href || href.charAt(0) !== '#') return;
     e.preventDefault();
     var id = href.slice(1);
+    // href="#" alone (book-xref placeholder) has no id to scroll to;
+    // the data-dita-book-xref listener owns that click.
+    if (!id) return;
     var el = document.getElementById(id);
     if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   });
@@ -822,6 +843,14 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
           const character = Math.min(col, lineLength);
           editor.selection = new vscode.Selection(new vscode.Position(line, character), new vscode.Position(line, character));
         }
+      } else if (message.type === 'openImagemapLink') {
+        // Image-map hotspot click (getImageMapSupportScript): the webview
+        // guard preventDefaults the navigation and hands over the raw
+        // href; resolve it against THIS topic's folder and open it in the
+        // right place (preview editor for DITA sources, system handler
+        // for html/pdf/external URLs).
+        const href = typeof message.href === 'string' ? message.href : '';
+        if (href) openHrefTarget(vscode, href, dirname(document.uri.fsPath));
       } else if (message.type === 'setFontPrefs') {
         // Persist across webview reopens/reloads — same size/family applies
         // to every DITA file the user previews, not per-document.

@@ -18,6 +18,14 @@ export function buildStandaloneHtml(opts: { title: string; bodyHtml: string; css
 <title>${safeTitle}</title>
 <style>
 ${css}
+/* Image maps render at their natural size in exports: browsers hit-test
+<area> coordinates against the image's natural pixel space regardless of
+CSS resizing (the same engine behavior the preview's rescale script works
+around), so max-width clamping would point every hotspot at the wrong
+region. Natural size keeps the coordinates honest in every browser; the
+figure scrolls horizontally instead of shrinking. */
+.dita-export figure.imagemap { overflow-x: auto; }
+.dita-export figure.imagemap img { max-width: none; }
 </style>
 </head>
 <body>
