@@ -93,6 +93,30 @@ body {
   opacity: 0.5;
   transition: opacity 0.1s ease-out;
   pointer-events: none;
+  /* Positioning context for .dita-mode-switch-overlay below -- scoped to
+     this class rather than added unconditionally so it never affects
+     #dita-content-root's normal (non-switching) layout. */
+  position: relative;
+}
+
+/* getModeToggleScript's delayed "still switching" overlay: only appended if
+   a switch takes longer than its 400ms grace period (see that script's own
+   comment for why), as a child of the OLD #dita-content-root, so it is
+   scoped to the content area alone -- the toolbar above it stays fully
+   visible and interactive throughout, which is the entire point of the
+   in-place-switch work this belongs to. .dita-loading-spinner is the same
+   spinner the full-reload path's book-mode placeholder uses
+   (MapViewerProvider.ts's generateLoadingHtml); here it is a small overlay
+   instead of a full-page one. */
+.dita-mode-switch-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--vscode-descriptionForeground, #999);
 }
 
 /* Topic article */

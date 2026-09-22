@@ -169,6 +169,7 @@ function getMapWebviewScript(
     modeOutline: vscode.l10n.t('Outline'),
     modeBook: vscode.l10n.t('Book'),
     modeSite: vscode.l10n.t('Site'),
+    modeSwitching: vscode.l10n.t('Switching view…'),
     siteBack: vscode.l10n.t('Go back'),
     siteForward: vscode.l10n.t('Go forward'),
     siteOpenSource: vscode.l10n.t('Source'),
@@ -380,6 +381,7 @@ function getMapWebviewScript(
     modeBook: L.modeBook,
     modeSite: L.modeSite,
     switchModeMsgType: 'switchMode',
+    switchingLabel: L.modeSwitching,
   })}
   toolbar.appendChild(modeBtn);
 
@@ -521,6 +523,19 @@ function getMapWebviewScript(
     // rest of the pre-switch content, so there is nothing to un-dim here --
     // the freshly inserted one starts undimmed.
     if (typeof modeBtn !== 'undefined' && modeBtn) modeBtn.disabled = false;
+    // Cancel the delayed "switching..." overlay (getModeToggleScript) if it
+    // has not fired yet -- the switch just landed inside the 400ms grace
+    // period, so there is nothing slow to explain. If it HAS already fired,
+    // there is nothing to undo here either: it was appended as a child of
+    // the very #dita-content-root node the removal loop below discards, so
+    // it goes with it. Guarded with typeof the same defensive way modeBtn
+    // is just above -- both are declared by getModeToggleScript, elsewhere
+    // in this same concatenated script, and this file has no static check
+    // tying the two pieces together.
+    if (typeof pendingSwitchOverlayTimer !== 'undefined' && pendingSwitchOverlayTimer) {
+      clearTimeout(pendingSwitchOverlayTimer);
+      pendingSwitchOverlayTimer = null;
+    }
 
     // Search state does not survive a mode switch: the highlighted terms and
     // matches belong to the content that is about to be torn down. Close it

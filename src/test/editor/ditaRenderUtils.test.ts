@@ -3083,6 +3083,7 @@ describe('getModeToggleScript (docsite mode)', () => {
     modeBook: 'Book',
     modeSite: 'Site',
     switchModeMsgType: 'switchMode',
+    switchingLabel: 'Switching view…',
   };
 
   it('emits a script that parses as JavaScript', () => {
@@ -3189,6 +3190,51 @@ describe('getModeToggleScript (docsite mode)', () => {
       listeners['click']();
       assert.strictEqual(btn.disabled, true);
     });
+  });
+
+  // A book with a lot of topics can make generateHtml (host side, collectBookParts)
+  // take real time -- the dimming above already reads as "something is
+  // happening" for the common fast case, but on its own that stops being
+  // reassuring the longer it goes on. This is the delayed overlay's contract:
+  // absent past its own grace period, present (with a spinner and label)
+  // once a switch runs long -- see getModeToggleScript's own comment for why
+  // it is delayed rather than shown immediately on every switch.
+  it('does not show the "still switching" overlay immediately, but does after its delay elapses, as a child of #dita-content-root', () => {
+    const script = getModeToggleScript(opts);
+    const listeners: Record<string, () => void> = {};
+    const fakeBtn = { style: {}, disabled: false, setAttribute: () => {}, addEventListener: (evt: string, fn: () => void) => { listeners[evt] = fn; } };
+
+    function makeEl(): any {
+      const el: any = { style: {}, children: [] as any[], classList: { add: (c: string) => { el.className = ((el.className ?? '') + ' ' + c).trim(); } } };
+      el.setAttribute = (k: string, v: string) => { el[`attr_${k}`] = v; };
+      el.appendChild = (child: unknown) => { el.children.push(child); };
+      return el;
+    }
+    const contentRoot = makeEl();
+
+    const timers: Array<{ fn: () => void; delay: number }> = [];
+    const fakeSetTimeout = (fn: () => void, delay: number) => { timers.push({ fn, delay }); return timers.length; };
+
+    const fakeDocument = {
+      createElement: (tag: string) => (tag === 'button' ? fakeBtn : makeEl()),
+      getElementById: (id: string) => (id === 'dita-content-root' ? contentRoot : null),
+    };
+    const fn = new Function('currentMode', 'btnStyle', 'document', 'vscode', 'setTimeout', script + '; return modeBtn;');
+    fn('tree', '', fakeDocument, { postMessage: () => {} }, fakeSetTimeout);
+
+    listeners['click']();
+    assert.strictEqual(contentRoot.children.length, 0, 'overlay must not appear synchronously on click');
+
+    const overlayTimer = timers.find(t => t.delay === 400);
+    assert.ok(overlayTimer, 'a 400ms timer for the overlay should have been scheduled');
+    overlayTimer!.fn(); // simulate the grace period elapsing
+
+    assert.strictEqual(contentRoot.children.length, 1);
+    const overlay = contentRoot.children[0];
+    assert.strictEqual(overlay.className, 'dita-mode-switch-overlay');
+    assert.strictEqual(overlay.children.length, 2, 'spinner + label');
+    assert.strictEqual(overlay.children[0].className, 'dita-loading-spinner');
+    assert.strictEqual(overlay.children[1].textContent, opts.switchingLabel);
   });
 });
 

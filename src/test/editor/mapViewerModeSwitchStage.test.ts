@@ -63,4 +63,17 @@ describe('MapViewerProvider applyModeStage (in-place mode-switch source tripwire
     const body = applyModeStageBody();
     assert.ok(/modeBtn\.disabled\s*=\s*false/.test(body), 'applyModeStage should clear modeBtn.disabled once its stage is applied -- otherwise the button getModeToggleScript disables on click stays disabled forever on a successful switch');
   });
+
+  // Companion to the button-disable check above: getModeToggleScript also
+  // schedules a delayed "still switching" overlay (see its own comment) for
+  // book views slow enough that the dimming alone stops reading as
+  // reassurance. If a switch lands inside that delay, applyModeStage must
+  // cancel the pending timer -- otherwise the overlay can still fire AFTER
+  // the new stage's own (fresh, undimmed) #dita-content-root is already on
+  // screen, popping a stale "switching" overlay onto content that finished
+  // switching a moment earlier.
+  it('cancels the pending "still switching" overlay timer before it can fire against the new stage', () => {
+    const body = applyModeStageBody();
+    assert.ok(/clearTimeout\(\s*pendingSwitchOverlayTimer\s*\)/.test(body), 'applyModeStage should clearTimeout(pendingSwitchOverlayTimer) so a late-firing overlay cannot land on the already-switched-to content');
+  });
 });

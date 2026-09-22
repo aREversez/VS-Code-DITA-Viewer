@@ -3190,11 +3190,13 @@ export function getModeToggleScript(opts: {
   modeBook: string;
   modeSite: string;
   switchModeMsgType: string; // raw, e.g. 'switchMode'
+  switchingLabel: string;
 }): string {
   const switchModeTitle = JSON.stringify(opts.switchModeTitle);
   const modeOutline = JSON.stringify(opts.modeOutline);
   const modeBook = JSON.stringify(opts.modeBook);
   const modeSite = JSON.stringify(opts.modeSite);
+  const switchingLabel = JSON.stringify(opts.switchingLabel);
   return `
   var modeBtn = document.createElement('button');
   modeBtn.title = ${switchModeTitle};
@@ -3210,6 +3212,36 @@ export function getModeToggleScript(opts: {
     modeBtn.textContent = modeLabel(currentMode);
   }
   updateModeLabel();
+  // Shared with applyModeStage (MapViewerProvider.ts, same script scope):
+  // whichever of the two runs second is what actually stops the OTHER from
+  // firing late -- see the comment where applyModeStage clears this.
+  var pendingSwitchOverlayTimer = null;
+  // A large book's generateHtml (collectBookParts/wrapBookParts) runs
+  // synchronously on the extension host and can take real time -- see
+  // scripts/bench-book-render.js. The dimming below already shows a switch
+  // is happening for a typical fast switch (outline/site, or a small book),
+  // but past a beat, "dimmed and unresponsive" reads the same as "the
+  // extension hung". This mirrors the full-reload path's own book-mode
+  // placeholder (generateLoadingHtml/"Rendering book...") for that same
+  // slow case, just as an overlay instead of a full document swap: delayed
+  // so a fast switch never flashes it, appended as a CHILD of the OLD
+  // #dita-content-root so applyModeStage's removal of that whole node is
+  // what clears it away -- no separate teardown needed on the success path.
+  function showPendingSwitchOverlay() {
+    var cr = document.getElementById('dita-content-root');
+    if (!cr) return;
+    var overlay = document.createElement('div');
+    overlay.className = 'dita-mode-switch-overlay';
+    var spinner = document.createElement('div');
+    spinner.className = 'dita-loading-spinner';
+    spinner.setAttribute('role', 'status');
+    spinner.setAttribute('aria-label', ${switchingLabel});
+    var label = document.createElement('div');
+    label.textContent = ${switchingLabel};
+    overlay.appendChild(spinner);
+    overlay.appendChild(label);
+    cr.appendChild(overlay);
+  }
   modeBtn.addEventListener('click', function() {
     // The label flips the instant this fires (optimistic -- it is what
     // makes the click feel like it landed), but the actual page only
@@ -3230,6 +3262,7 @@ export function getModeToggleScript(opts: {
     modeBtn.disabled = true;
     var cr = document.getElementById('dita-content-root');
     if (cr) cr.classList.add('mode-switching');
+    pendingSwitchOverlayTimer = setTimeout(showPendingSwitchOverlay, 400);
     vscode.postMessage({ type: '${opts.switchModeMsgType}', mode: newMode });
     // Safety net, not the normal path: applyModeStage (or a render-failure's
     // full reload, which replaces this whole document anyway) is what
