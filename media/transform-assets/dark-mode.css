@@ -1,5 +1,12 @@
 /* ── Dark mode palette ── */
 html.dark {
+  /* Paint the document canvas dark too (not just <body>) and tell the UA this
+     page is dark, so the viewport background and native scrollbars/overscroll
+     are dark the instant the page shows — before and independent of <body>
+     rendering. Set together with the class by the <head> bootstrap, so a
+     dark-mode reader never sees a white flash while navigating topics. */
+  color-scheme: dark;
+  background: var(--color-bg);
   --color-bg: #1e1e1e;
   --color-text: #d4d4d4;
   --color-border: #444;

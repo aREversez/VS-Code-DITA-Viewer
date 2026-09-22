@@ -577,7 +577,18 @@ function injectSiteChrome(
 
       if (hasDark) {
         const darkLink = '<link rel="stylesheet" type="text/css" href="' + prefix + 'dita-viewer-dark.css">';
-        html = html.replace('</head>', darkLink + '</head>');
+        // Apply the reader's stored theme (or the OS preference) to <html> the
+        // moment the head parses, before any body content paints. DITA-OT's own
+        // commonltr.css is light-only, so the body would otherwise flash white on
+        // every topic navigation until the chrome.js deferred to </body> ran
+        // initDarkMode(). This static export ships without a CSP meta, so the
+        // inline script is allowed; it reads the same 'dv-theme' localStorage key
+        // as initDarkMode(), which now only reflects the class applied here.
+        const themeBootstrap =
+          "<script>(function(){try{var s=localStorage.getItem('dv-theme');"
+          + "var d=s!==null?s==='dark':!!(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);"
+          + "if(d)document.documentElement.classList.add('dark');}catch(e){}})();</script>";
+        html = html.replace('</head>', darkLink + themeBootstrap + '</head>');
       }
 
       html = html.replace('</body>', '<script src="' + prefix + 'dita-viewer-chrome.js"></script></body>');

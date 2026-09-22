@@ -187,10 +187,13 @@ function initBackToTop() {
 }
 
 function initDarkMode() {
-  var stored = localStorage.getItem('dv-theme');
-  var dark = stored !== null ? stored === 'dark'
-    : window.matchMedia('(prefers-color-scheme: dark)').matches;
-  if (dark) document.documentElement.classList.add('dark');
+  // The html.dark class is already on <html> by the time this runs: the
+  // extension injects a tiny inline bootstrap script in <head> (before any
+  // body paint) that reads the same preference and applies it, so a dark-mode
+  // reader never sees DITA-OT's light default flash while navigating between
+  // topics. Reading the class here keeps the button in sync with what's on
+  // screen rather than recomputing (which could disagree with the bootstrap).
+  var dark = document.documentElement.classList.contains('dark');
   var btn = document.createElement('button'); btn.className = 'dv-dark-toggle';
   btn.textContent = dark ? '\u2600' : '\uD83C\uDF19';
   btn.title = dark ? T.switchToLight : T.switchToDark;
