@@ -4,7 +4,7 @@
  * TextDocument used) so they can be unit-tested. sourceOverlayFeed.ts calls
  * this from the real editor events.
  */
-import { normalize, sep } from 'path';
+import { normalize } from 'path';
 import { setSourceOverlay, clearSourceOverlay, sourceStamp, dependsOn } from './sourceText';
 
 export interface SyncableDocument {
@@ -47,8 +47,11 @@ export function syncDocumentToOverlay(doc: SyncableDocument): boolean {
   return sourceStamp(doc.fsPath) !== before;
 }
 
+// '/' throughout, same as sourceText.ts's key() -- normalize() alone leaves
+// '/' vs '\' unresolved (and rewrites '/' to '\' on win32), so folder/filePath
+// spelled with the other separator would otherwise compare unequal.
 function comparable(p: string): string {
-  const n = normalize(p).replace(/[\\/]+$/, '');
+  const n = normalize(p).replace(/\\/g, '/').replace(/\/+$/, '');
   return process.platform === 'win32' ? n.toLowerCase() : n;
 }
 
@@ -56,7 +59,7 @@ function comparable(p: string): string {
 export function isPathUnder(folder: string, filePath: string): boolean {
   const base = comparable(folder);
   const file = comparable(filePath);
-  return file === base || file.startsWith(base + sep);
+  return file === base || file.startsWith(base + '/');
 }
 
 /**

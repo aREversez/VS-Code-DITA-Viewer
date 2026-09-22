@@ -31,9 +31,15 @@ const overlay = new Map<string, OverlayEntry>();
  */
 let revision = 0;
 
-/** Same file however the path is spelled: `..` segments, and case on Windows. */
+/**
+ * Same file however the path is spelled: `..` segments, case on Windows, and
+ * `/` vs `\` -- normalize() only resolves the former two and, on win32,
+ * rewrites `/` to `\`, so a caller (or a test) that builds a path with `/`
+ * throughout gets a different key than the disk path unless both are folded
+ * to one separator here.
+ */
 function key(filePath: string): string {
-  const n = normalize(filePath);
+  const n = normalize(filePath).replace(/\\/g, '/');
   return process.platform === 'win32' ? n.toLowerCase() : n;
 }
 
