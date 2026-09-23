@@ -10,6 +10,7 @@ function makeTemplate(overrides: Partial<SiteTemplate> = {}): SiteTemplate {
     id: 'sample',
     names: { '': 'Sample' },
     defaultDark: false,
+    outline: false,
     css: ['/t/sample.css'],
     dir: '/t',
     builtin: true,

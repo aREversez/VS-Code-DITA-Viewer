@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, getSearchOverlayScript, getProfilingFilterScript, getRefreshButtonScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteSidebarToggleScript, getSiteOpenSourceScript, getSiteHomeButtonScript, getTemplateSelectScript, getToolbarPlacementScript, PREV_TOPIC_ICON_SVG, NEXT_TOPIC_ICON_SVG, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, getSearchOverlayScript, getProfilingFilterScript, getRefreshButtonScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getOutlineSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteSidebarToggleScript, getSiteOpenSourceScript, getSiteHomeButtonScript, getTemplateSelectScript, getToolbarPlacementScript, PREV_TOPIC_ICON_SVG, NEXT_TOPIC_ICON_SVG, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -2984,6 +2984,246 @@ describe('getBookScrollSyncScript (book mode sidebar, nested-fold-and-highlight-
     observer.trigger([{ target: anchorA, isIntersecting: false }]);
 
     assert.strictEqual(linkA.classList.contains('active'), true, 'losing the only visible anchor keeps the last-known active link rather than clearing it to nothing');
+  });
+});
+
+/**
+ * getOutlineSyncScript (site-book-templates-plan.md item 4: the "on this
+ * page" outline column). Deliberately mirrors getBookScrollSyncScript's own
+ * IntersectionObserver/topmost-visible-wins/MutationObserver-rebind shape
+ * above rather than inventing a second pattern -- the only real differences
+ * are what is being tracked (h1-h3 headings inside #dita-content-root, not
+ * [data-book-anchor] parts) and that this script also BUILDS the sidebar
+ * list itself (headings carry no id from the renderer -- topic/title never
+ * emits one, see baseTypeMap.ts -- so ids are generated here, once per
+ * heading, the first time it is seen).
+ */
+describe('getOutlineSyncScript (site-book-templates-plan.md item 4, on-this-page outline)', () => {
+  it('emits a script that parses as JavaScript', () => {
+    assert.doesNotThrow(() => new Function(getOutlineSyncScript()));
+  });
+
+  interface FakeHeading { tagName: string; id: string; textContent: string }
+  function makeFakeHeading(tag: string, text: string): FakeHeading {
+    return { tagName: tag, id: '', textContent: text };
+  }
+
+  interface FakeLink {
+    classList: { add: (c: string) => void; remove: (c: string) => void; contains: (c: string) => boolean };
+    attrs: Record<string, string>;
+    href: string;
+    textContent: string;
+    setAttribute: (n: string, v: string) => void;
+    getAttribute: (n: string) => string | null;
+  }
+  function makeFakeLink(): FakeLink {
+    const classes = new Set<string>();
+    const attrs: Record<string, string> = {};
+    return {
+      classList: { add: (c) => classes.add(c), remove: (c) => classes.delete(c), contains: (c) => classes.has(c) },
+      attrs,
+      href: '',
+      textContent: '',
+      setAttribute: (n, v) => { attrs[n] = v; },
+      getAttribute: (n) => (n in attrs ? attrs[n] : null),
+    };
+  }
+
+  function makeFakeOutlineInner() {
+    const children: FakeLink[] = [];
+    return {
+      children,
+      appendChild: (el: FakeLink) => { children.push(el); },
+      set innerHTML(v: string) { if (v === '') children.length = 0; },
+      querySelector: (sel: string): FakeLink | null => {
+        if (sel === '.tpl-outline-link.active') return children.find((c) => c.classList.contains('active')) ?? null;
+        const m = /\[data-outline-target="([^"]+)"\]/.exec(sel);
+        if (m) return children.find((c) => c.getAttribute('data-outline-target') === m[1]) ?? null;
+        return null;
+      },
+    };
+  }
+
+  function makeFakeOutlineEl(inner: ReturnType<typeof makeFakeOutlineInner>) {
+    const classes = new Set<string>();
+    let clickHandler: ((e: unknown) => void) | null = null;
+    return {
+      classList: { add: (c: string) => classes.add(c), remove: (c: string) => classes.delete(c), contains: (c: string) => classes.has(c) },
+      querySelector: (sel: string) => (sel === '.tpl-outline-inner' ? inner : null),
+      addEventListener: (type: string, handler: (e: unknown) => void) => { if (type === 'click') clickHandler = handler; },
+      click(target: FakeLink, extra: Record<string, unknown> = {}) {
+        if (clickHandler) clickHandler({ target: { ...target, closest: () => target }, preventDefault: () => {}, ...extra });
+      },
+    };
+  }
+
+  function makeFakeOutlineDocument(opts: { headings: FakeHeading[]; outlineEl: ReturnType<typeof makeFakeOutlineEl> | null }) {
+    const contentRoot = { querySelectorAll: (sel: string) => (sel === 'h1,h2,h3' ? opts.headings : []) };
+    return {
+      getElementById: (id: string) => (id === 'dita-content-root' ? contentRoot : id === '__site-outline' ? opts.outlineEl : null),
+      createElement: () => makeFakeLink(),
+    };
+  }
+
+  class FakeIntersectionObserver {
+    static instances: FakeIntersectionObserver[] = [];
+    observed: unknown[] = [];
+    callback: (entries: Array<{ target: unknown; isIntersecting: boolean }>) => void;
+    options: unknown;
+    disconnected = false;
+    constructor(callback: (entries: Array<{ target: unknown; isIntersecting: boolean }>) => void, options: unknown) {
+      this.callback = callback;
+      this.options = options;
+      FakeIntersectionObserver.instances.push(this);
+    }
+    observe(el: unknown) { this.observed.push(el); }
+    disconnect() { this.disconnected = true; }
+    trigger(entries: Array<{ target: unknown; isIntersecting: boolean }>) { this.callback(entries); }
+  }
+
+  class FakeMutationObserver {
+    static instances: FakeMutationObserver[] = [];
+    callback: () => void;
+    constructor(callback: () => void) { this.callback = callback; FakeMutationObserver.instances.push(this); }
+    observe() {}
+    trigger() { this.callback(); }
+  }
+
+  function run(document: unknown, withMutationObserver = false) {
+    FakeIntersectionObserver.instances.length = 0;
+    FakeMutationObserver.instances.length = 0;
+    const script = getOutlineSyncScript();
+    new Function('document', 'IntersectionObserver', 'MutationObserver', script)(
+      document, FakeIntersectionObserver, withMutationObserver ? FakeMutationObserver : undefined,
+    );
+  }
+
+  it('does nothing when #__site-outline is missing (template did not opt in, or book mode where it is never rendered)', () => {
+    const document = makeFakeOutlineDocument({ headings: [makeFakeHeading('H1', 'A'), makeFakeHeading('H2', 'B')], outlineEl: null });
+    assert.doesNotThrow(() => run(document));
+    assert.strictEqual(FakeIntersectionObserver.instances.length, 0);
+  });
+
+  it('builds one link per h1-h3 heading, in document order, with a generated id and the heading level recorded', () => {
+    const inner = makeFakeOutlineInner();
+    const outlineEl = makeFakeOutlineEl(inner);
+    const h1 = makeFakeHeading('H1', 'Overview');
+    const h2 = makeFakeHeading('H2', 'Details');
+    const h3 = makeFakeHeading('H3', 'Fine print');
+    const document = makeFakeOutlineDocument({ headings: [h1, h2, h3], outlineEl });
+    run(document);
+
+    assert.strictEqual(inner.children.length, 3);
+    assert.deepStrictEqual(inner.children.map((c) => c.textContent), ['Overview', 'Details', 'Fine print']);
+    assert.deepStrictEqual(inner.children.map((c) => c.getAttribute('data-outline-level')), ['1', '2', '3']);
+    // Every heading got a real, distinct id -- none was left blank.
+    assert.ok(h1.id && h2.id && h3.id);
+    assert.notStrictEqual(h1.id, h2.id);
+    assert.strictEqual(inner.children[0].getAttribute('data-outline-target'), h1.id);
+  });
+
+  it('a heading that already has an id (however it got one) keeps it rather than being overwritten', () => {
+    const inner = makeFakeOutlineInner();
+    const outlineEl = makeFakeOutlineEl(inner);
+    const h1 = makeFakeHeading('H1', 'A'); h1.id = 'kept';
+    const h2 = makeFakeHeading('H2', 'B');
+    run(makeFakeOutlineDocument({ headings: [h1, h2], outlineEl }));
+    assert.strictEqual(h1.id, 'kept');
+  });
+
+  it('hides the column (and builds no observer) when fewer than two headings -- a lone title is not worth a mini table of contents', () => {
+    const inner = makeFakeOutlineInner();
+    const outlineEl = makeFakeOutlineEl(inner);
+    run(makeFakeOutlineDocument({ headings: [makeFakeHeading('H1', 'Only one')], outlineEl }));
+    assert.strictEqual(outlineEl.classList.contains('tpl-outline--empty'), true);
+    assert.strictEqual(inner.children.length, 0);
+    assert.strictEqual(FakeIntersectionObserver.instances.length, 0);
+  });
+
+  it('un-hides the column once there are two or more headings again', () => {
+    const inner = makeFakeOutlineInner();
+    const outlineEl = makeFakeOutlineEl(inner);
+    const opts = { headings: [makeFakeHeading('H1', 'Only one')], outlineEl };
+    const document = makeFakeOutlineDocument(opts);
+    run(document, true);
+    assert.strictEqual(outlineEl.classList.contains('tpl-outline--empty'), true);
+    opts.headings = [makeFakeHeading('H1', 'A'), makeFakeHeading('H2', 'B')];
+    FakeMutationObserver.instances[0].trigger();
+    assert.strictEqual(outlineEl.classList.contains('tpl-outline--empty'), false);
+    assert.strictEqual(inner.children.length, 2);
+  });
+
+  it('observes every heading against #dita-content-root with the same top-weighted rootMargin getBookScrollSyncScript uses', () => {
+    const inner = makeFakeOutlineInner();
+    const outlineEl = makeFakeOutlineEl(inner);
+    const h1 = makeFakeHeading('H1', 'A');
+    const h2 = makeFakeHeading('H2', 'B');
+    const document = makeFakeOutlineDocument({ headings: [h1, h2], outlineEl });
+    run(document);
+    const observer = FakeIntersectionObserver.instances[0];
+    assert.strictEqual(observer.observed.length, 2);
+    assert.strictEqual((observer.options as { rootMargin: string }).rootMargin, '0px 0px -70% 0px');
+  });
+
+  it('highlights the topmost currently-intersecting heading\'s link, not whichever the callback reports last', () => {
+    const inner = makeFakeOutlineInner();
+    const outlineEl = makeFakeOutlineEl(inner);
+    const h1 = makeFakeHeading('H1', 'A');
+    const h2 = makeFakeHeading('H2', 'B');
+    const h3 = makeFakeHeading('H3', 'C');
+    const document = makeFakeOutlineDocument({ headings: [h1, h2, h3], outlineEl });
+    run(document);
+    const observer = FakeIntersectionObserver.instances[0];
+
+    observer.trigger([
+      { target: h3, isIntersecting: true },
+      { target: h2, isIntersecting: true },
+    ]);
+    assert.strictEqual(inner.querySelector('.tpl-outline-link.active'), inner.children[1], 'h2, not h3, is topmost even though the callback listed h3 first');
+
+    observer.trigger([{ target: h2, isIntersecting: false }]);
+    assert.strictEqual(inner.querySelector('.tpl-outline-link.active'), inner.children[2]);
+  });
+
+  it('clicking a link scrolls its heading into view and does not follow the href', () => {
+    const inner = makeFakeOutlineInner();
+    const outlineEl = makeFakeOutlineEl(inner);
+    const h1 = makeFakeHeading('H1', 'A');
+    const h2 = makeFakeHeading('H2', 'B');
+    let scrolledTo: unknown = null;
+    let prevented = false;
+    const scrollTarget = { ...h2, scrollIntoView: (opts: unknown) => { scrolledTo = opts; } };
+    const contentRoot = { querySelectorAll: () => [h1, h2] };
+    const document = {
+      getElementById: (id: string) => (id === 'dita-content-root' ? contentRoot : id === '__site-outline' ? outlineEl : id === h2.id ? scrollTarget : null),
+      createElement: () => makeFakeLink(),
+    };
+    run(document);
+    const link = inner.children[1];
+    outlineEl.click(link, { preventDefault: () => { prevented = true; } });
+    assert.ok(prevented, 'the default hash-jump must not run alongside the smooth scroll');
+    assert.deepStrictEqual(scrolledTo, { behavior: 'smooth', block: 'start' });
+  });
+
+  it('rebinds to the new headings when a live edit or topic switch swaps #dita-content-root\'s children', () => {
+    const inner = makeFakeOutlineInner();
+    const outlineEl = makeFakeOutlineEl(inner);
+    const oldH1 = makeFakeHeading('H1', 'Old A');
+    const oldH2 = makeFakeHeading('H2', 'Old B');
+    const opts = { headings: [oldH1, oldH2], outlineEl };
+    const document = makeFakeOutlineDocument(opts);
+    run(document, true);
+    assert.strictEqual(FakeMutationObserver.instances.length, 1);
+    const oldObserver = FakeIntersectionObserver.instances[0];
+
+    const newH1 = makeFakeHeading('H1', 'New A');
+    const newH2 = makeFakeHeading('H2', 'New B');
+    opts.headings = [newH1, newH2];
+    FakeMutationObserver.instances[0].trigger();
+
+    assert.strictEqual(oldObserver.disconnected, true);
+    assert.strictEqual(FakeIntersectionObserver.instances.length, 2);
+    assert.deepStrictEqual(inner.children.map((c) => c.textContent), ['New A', 'New B']);
   });
 });
 

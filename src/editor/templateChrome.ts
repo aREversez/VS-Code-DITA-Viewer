@@ -90,6 +90,8 @@ export interface ShellParts {
   sidebarHtml: string;
   resizerHtml: string;
   contentRootHtml: string;
+  /** The on-this-page outline column (site-book-templates-plan.md item 4), when the template opted in. Sits inside .site-frame, after the content pane. */
+  outlineHtml?: string;
   headerHtml?: string;
   footerHtml?: string;
 }
@@ -97,13 +99,14 @@ export interface ShellParts {
 /**
  * The body's children for a docsite/book page. A page WITH a sidebar is laid
  * out as a column: [top bar, added by the toolbar script] / header (template)
- * / .site-frame (sidebar, resizer, content as a row) / footer (template),
- * marked with the site-shell body class. A page without a sidebar (a book with
- * an empty map) keeps the three parts as plain siblings, exactly as before.
- * Header and footer are optional; only a template supplies them.
+ * / .site-frame (sidebar, resizer, content, optional outline, as a row) / footer
+ * (template), marked with the site-shell body class. A page without a sidebar
+ * (a book with an empty map) keeps the three parts as plain siblings, exactly
+ * as before -- outlineHtml is ignored in that case, the same way header/footer
+ * are: a shell-less page has nowhere to put a fourth column either.
  */
 export function wrapShell(p: ShellParts): { bodyClass: string; html: string } {
-  const core = `${p.sidebarHtml}\n${p.resizerHtml}\n${p.contentRootHtml}`;
+  const core = `${p.sidebarHtml}\n${p.resizerHtml}\n${p.contentRootHtml}${p.outlineHtml ? `\n${p.outlineHtml}` : ''}`;
   if (p.sidebarHtml === '') return { bodyClass: '', html: core };
   return {
     bodyClass: ' site-shell',

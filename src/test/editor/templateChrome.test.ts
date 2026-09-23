@@ -42,7 +42,7 @@ describe('renderTemplateHeader / renderTemplateFooter', () => {
 
   it('renderChrome gives nothing without a template, and only the parts a template has', () => {
     assert.deepStrictEqual(renderChrome(undefined, ctx, toUri), {});
-    const c = renderChrome({ id: 'x', names: {}, defaultDark: false, css: [], dir: '/t', builtin: false, footer: { links: [] } }, ctx, toUri);
+    const c = renderChrome({ id: 'x', names: {}, defaultDark: false, outline: false, css: [], dir: '/t', builtin: false, footer: { links: [] } }, ctx, toUri);
     assert.strictEqual(c.headerHtml, undefined);
     assert.ok(c.footerHtml?.startsWith('<footer'));
   });
@@ -104,6 +104,17 @@ describe('wrapShell', () => {
     const r = wrapShell({ ...parts, sidebarHtml: '', headerHtml: '<header/>' });
     assert.strictEqual(r.bodyClass, '');
     assert.ok(!r.html.includes('<header/>') && !r.html.includes('site-frame'));
+  });
+
+  it('an outline column, when the caller supplies one, sits inside .site-frame after the content pane (site-book-templates-plan.md item 4)', () => {
+    const r = wrapShell({ ...parts, outlineHtml: '<aside id="outline"/>' });
+    const at = (s: string) => r.html.indexOf(s);
+    assert.ok(at('<main/>') < at('<aside id="outline"/>'));
+  });
+
+  it('no outlineHtml means no outline column at all, not an empty one', () => {
+    const r = wrapShell(parts);
+    assert.ok(!r.html.includes('aside') && !r.html.includes('tpl-outline'));
   });
 });
 

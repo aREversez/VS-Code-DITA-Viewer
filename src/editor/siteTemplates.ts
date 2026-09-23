@@ -21,6 +21,8 @@ export interface SiteTemplate {
   /** Raw layout keyword (validated against the built-in layouts later). */
   layout?: string;
   defaultDark: boolean;
+  /** Whether this template supplies the on-this-page outline column (site mode only -- see templateChrome.ts wrapShell). */
+  outline: boolean;
   /** Absolute paths, in injection order. At least one. */
   css: string[];
   thumbnail?: string;
@@ -70,6 +72,7 @@ export interface TemplateDescriptor {
   description?: string;
   layout?: string;
   defaultDark: boolean;
+  outline: boolean;
   css: string[];
   thumbnail?: string;
   header?: TemplateHeader;
@@ -197,6 +200,7 @@ export function parseTemplateJson(text: string): ParseResult {
       description: asString(o.description),
       layout: asString(o.layout),
       defaultDark: o.defaultDark === true,
+      outline: o.outline === true,
       css,
       thumbnail: asString(o.thumbnail),
       header: parseHeader(o.header, warnings),
@@ -247,7 +251,7 @@ export function parseTemplateOpt(text: string): ParseResult {
 
   const css = attr('css', 'file');
   if (css.length === 0) return { ok: false, error: '.opt lists no <css file="..."/>' };
-  return { ok: true, warnings: [], descriptor: { names, layout, defaultDark, css, thumbnail: attr('preview-image', 'file')[0] } };
+  return { ok: true, warnings: [], descriptor: { names, layout, defaultDark, outline: false, css, thumbnail: attr('preview-image', 'file')[0] } };
 }
 
 export interface TemplateRoot {
@@ -316,6 +320,7 @@ function loadTemplateDir(dir: string, id: string, builtin: boolean, diagnostics:
     description: d.description,
     layout: d.layout,
     defaultDark: d.defaultDark,
+    outline: d.outline,
     css,
     thumbnail: d.thumbnail ? resolveFile(d.thumbnail, 'thumbnail') : undefined,
     header: d.header

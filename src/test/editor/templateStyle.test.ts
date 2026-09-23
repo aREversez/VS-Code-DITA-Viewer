@@ -6,7 +6,7 @@ import type { SiteTemplate } from '../../editor/siteTemplates';
 
 const dir = join('/tpl', 'red');
 const toUri = (p: string) => `vscode-webview://x${p.replace(/\\/g, '/')}`;
-const tpl = (over: Partial<SiteTemplate> = {}): SiteTemplate => ({ id: 'red', names: {}, defaultDark: false, css: [join(dir, 'a.css')], dir, builtin: false, ...over });
+const tpl = (over: Partial<SiteTemplate> = {}): SiteTemplate => ({ id: 'red', names: {}, defaultDark: false, outline: false, css: [join(dir, 'a.css')], dir, builtin: false, ...over });
 
 describe('rewriteCssUrls', () => {
   it('rewrites url() relative to the css file, keeping query/hash', () => {

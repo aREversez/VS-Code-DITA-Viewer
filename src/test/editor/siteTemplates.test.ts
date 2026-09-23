@@ -37,6 +37,8 @@ describe('parseTemplateOpt', () => {
     assert.strictEqual(r.descriptor.defaultDark, true);
     assert.deepStrictEqual(r.descriptor.css, ['main.css', 'notes.css']);
     assert.strictEqual(r.descriptor.thumbnail, 'thumb.png');
+    // .opt has no equivalent of the on-this-page outline column -- always off.
+    assert.strictEqual(r.descriptor.outline, false);
   });
 
   it('a light template is not dark', () => {
@@ -60,6 +62,14 @@ describe('parseTemplateJson', () => {
     assert.strictEqual(parseTemplateJson('{"name":"A","css":[]}').ok, false);
     assert.strictEqual(parseTemplateJson('not json').ok, false);
     assert.strictEqual(parseTemplateJson('[]').ok, false);
+  });
+
+  it('outline defaults to false and is only true when the field is the literal boolean true (site-book-templates-plan.md item 4)', () => {
+    assert.strictEqual(parseTemplateJson('{"name":"A","css":["a.css"]}').ok && (parseTemplateJson('{"name":"A","css":["a.css"]}') as { descriptor: { outline: boolean } }).descriptor.outline, false);
+    const r = parseTemplateJson('{"name":"A","css":["a.css"],"outline":true}');
+    assert.ok(r.ok && r.descriptor.outline === true);
+    const s = parseTemplateJson('{"name":"A","css":["a.css"],"outline":"true"}');
+    assert.ok(s.ok && s.descriptor.outline === false);
   });
 });
 

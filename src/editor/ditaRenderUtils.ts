@@ -2983,6 +2983,181 @@ export function getBookScrollSyncScript(): string {
 }
 
 /**
+ * getOutlineSyncScript -- the "on this page" outline column
+ * (site-book-templates-plan.md item 4). Site mode only: a template opts in
+ * with `"outline": true` in template.json (siteTemplates.ts), and
+ * MapViewerProvider.ts then renders an empty `<aside id="__site-outline">`
+ * container as the fourth child of .site-frame, after the content pane
+ * (templateChrome.ts wrapShell) -- never in book mode, and never for a
+ * template that did not ask for it. This script does the rest entirely
+ * client-side: it builds the link list itself and keeps it in sync.
+ *
+ * Deliberately mirrors getBookScrollSyncScript immediately above rather
+ * than inventing a second pattern for "highlight whichever thing is
+ * topmost on screen right now": same IntersectionObserver with the same
+ * top-weighted rootMargin, same visibleIds/topmost-wins tie-break, same
+ * MutationObserver-driven rebind on content swap, same re-bind on
+ * 'ditamap:stage'. The two real differences: what is tracked (h1-h3
+ * headings inside #dita-content-root, not [data-book-anchor] parts) and
+ * that this script also BUILDS the sidebar list itself, not just the
+ * highlight -- topic/title never emits an id (see baseTypeMap.ts), so
+ * headings have nothing stable to scroll to or highlight until this script
+ * gives them one. That id is assigned once per heading, the first time it
+ * is seen, and left alone after that; a heading that already carries an id
+ * for some other reason keeps it.
+ *
+ * Limited to h1-h3 by design (three levels is enough for a quick-jump
+ * list; deeper sections would make the column longer than the content
+ * it is next to). A page with fewer than two such headings -- the site
+ * home tile page, whose only h1 is decorative chrome, or a short topic
+ * that is just its own title with no sections -- hides the column
+ * entirely (tpl-outline--empty) rather than showing a one-line list that
+ * cannot help navigate anything; sync() re-checks this on every rebuild,
+ * so paging from a short topic to a long one un-hides it again.
+ *
+ * No-ops entirely (before ever constructing an IntersectionObserver) when
+ * `#__site-outline` is missing -- the template did not opt in, or this is
+ * book mode, where the container is never rendered in the first place --
+ * or when `#dita-content-root` or IntersectionObserver itself is missing,
+ * matching every other script in this file that tolerates the DOM it
+ * expects simply not being there.
+ */
+export function getOutlineSyncScript(): string {
+  return `
+  (function() {
+    var contentRoot = null;
+    var outlineEl = null;
+    var outlineInner = null;
+    var swapObserver = null;
+
+    var headings = [];
+    var visibleIds = [];
+    var currentActiveId = null;
+    var scrollObserver = null;
+    var idCounter = 0;
+
+    function headingLevel(h) {
+      return h.tagName.charAt(1);
+    }
+
+    // Assigns an id only the first time a given heading is seen; a heading
+    // that already has one (from this script's own earlier pass, or from
+    // anywhere else) is left untouched. Monotonic across every rebuild in
+    // this page's lifetime, so ids from a since-replaced heading are never
+    // reused -- irrelevant once that heading is detached, but guarantees no
+    // collision with whatever the new content happens to contain.
+    function ensureId(h) {
+      if (!h.id) h.id = 'outline-h-' + (idCounter++);
+      return h.id;
+    }
+
+    function findOutlineLink(id) {
+      return outlineInner ? outlineInner.querySelector('[data-outline-target="' + id + '"]') : null;
+    }
+
+    function pickActiveId() {
+      for (var i = 0; i < headings.length; i++) {
+        var id = headings[i].id;
+        if (visibleIds.indexOf(id) !== -1) return id;
+      }
+      return null;
+    }
+
+    function applyActive(id) {
+      if (!id || id === currentActiveId) return;
+      var link = findOutlineLink(id);
+      if (!link) return;
+      currentActiveId = id;
+      var prevActive = outlineInner.querySelector('.tpl-outline-link.active');
+      if (prevActive) prevActive.classList.remove('active');
+      link.classList.add('active');
+    }
+
+    function onIntersect(entries) {
+      for (var i = 0; i < entries.length; i++) {
+        var id = entries[i].target.id;
+        var idx = visibleIds.indexOf(id);
+        if (entries[i].isIntersecting) {
+          if (idx === -1) visibleIds.push(id);
+        } else if (idx !== -1) {
+          visibleIds.splice(idx, 1);
+        }
+      }
+      applyActive(pickActiveId());
+    }
+
+    function onOutlineClick(e) {
+      var link = e.target && e.target.closest ? e.target.closest('.tpl-outline-link') : null;
+      if (!link) return;
+      e.preventDefault();
+      var target = document.getElementById(link.getAttribute('data-outline-target'));
+      if (target && target.scrollIntoView) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // (Re)builds the link list from whatever h1-h3 headings exist right
+    // now, and rebinds the observer to them. Runs once at init and again
+    // on every content swap below, the same reasons getBookScrollSyncScript's
+    // own sync() gives: a live edit or topic switch replaces the heading
+    // elements outright, so an observer bound once at init would keep
+    // watching detached nodes.
+    function sync() {
+      if (scrollObserver) { scrollObserver.disconnect(); scrollObserver = null; }
+      headings = Array.prototype.slice.call(contentRoot.querySelectorAll('h1,h2,h3'));
+      visibleIds = [];
+      currentActiveId = null;
+      outlineInner.innerHTML = '';
+
+      if (headings.length < 2) {
+        outlineEl.classList.add('tpl-outline--empty');
+        return;
+      }
+      outlineEl.classList.remove('tpl-outline--empty');
+
+      for (var i = 0; i < headings.length; i++) {
+        var h = headings[i];
+        var id = ensureId(h);
+        var a = document.createElement('a');
+        a.className = 'tpl-outline-link';
+        a.href = '#' + id;
+        a.setAttribute('data-outline-target', id);
+        a.setAttribute('data-outline-level', headingLevel(h));
+        a.textContent = h.textContent || '';
+        outlineInner.appendChild(a);
+      }
+
+      if (typeof IntersectionObserver === 'undefined') return;
+      scrollObserver = new IntersectionObserver(onIntersect, { root: contentRoot, rootMargin: '0px 0px -70% 0px', threshold: 0 });
+      for (var k = 0; k < headings.length; k++) scrollObserver.observe(headings[k]);
+    }
+
+    // Binds (or re-binds) to whatever shell is in the DOM right now -- see
+    // getBookScrollSyncScript's own bind() comment; the reasoning is
+    // identical, just for #__site-outline instead of .site-nav.
+    function bind() {
+      contentRoot = document.getElementById('dita-content-root');
+      outlineEl = document.getElementById('__site-outline');
+      outlineInner = outlineEl ? outlineEl.querySelector('.tpl-outline-inner') : null;
+      if (swapObserver) { swapObserver.disconnect(); swapObserver = null; }
+      if (!contentRoot || !outlineEl || !outlineInner || typeof IntersectionObserver === 'undefined') return;
+
+      outlineEl.addEventListener('click', onOutlineClick);
+      sync();
+
+      if (typeof MutationObserver !== 'undefined') {
+        swapObserver = new MutationObserver(function() { sync(); });
+        swapObserver.observe(contentRoot, { childList: true, subtree: true });
+      }
+    }
+
+    bind();
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('ditamap:stage', bind);
+    }
+  })();
+`;
+}
+
+/**
  * Sidebar panel's initial open/collapsed state (nested-fold-and-highlight-
  * plan.md item 6) -- site mode starts open (unchanged), book mode starts
  * collapsed. Book mode already shows every topic's content in one page the
