@@ -3197,7 +3197,7 @@ export function getSiteNavExpandCollapseAllButtonsScript(opts: { expandAllTitle:
   siteExpandAllBtn.innerHTML = '${EXPAND_ALL_ICON_SVG}';
   siteExpandAllBtn.title = ${expandAllTitle};
   siteExpandAllBtn.setAttribute('aria-label', ${expandAllTitle});
-  siteExpandAllBtn.style.cssText = btnStyle + 'padding:1px 6px;justify-content:center;';
+  siteExpandAllBtn.style.cssText = btnStyle + 'justify-content:center;';
   siteExpandAllBtn.addEventListener('click', function() { setAllSiteNavCollapsed(false); });
 
   var siteCollapseAllBtn = document.createElement('button');
@@ -3205,7 +3205,7 @@ export function getSiteNavExpandCollapseAllButtonsScript(opts: { expandAllTitle:
   siteCollapseAllBtn.innerHTML = '${COLLAPSE_ALL_ICON_SVG}';
   siteCollapseAllBtn.title = ${collapseAllTitle};
   siteCollapseAllBtn.setAttribute('aria-label', ${collapseAllTitle});
-  siteCollapseAllBtn.style.cssText = btnStyle + 'padding:1px 6px;justify-content:center;';
+  siteCollapseAllBtn.style.cssText = btnStyle + 'justify-content:center;';
   siteCollapseAllBtn.addEventListener('click', function() { setAllSiteNavCollapsed(true); });
 `;
 }
@@ -3237,7 +3237,7 @@ export function getSiteNavToggleScript(): string {
  * toolbar. Fixed width + flex centering keeps all four the same compact size
  * with the icon in the middle.
  */
-const SITE_NAV_BTN_STYLE = 'width:22px;padding:0;font-size:14px;justify-content:center;text-align:center;';
+const SITE_NAV_BTN_STYLE = 'width:20px;padding:0;justify-content:center;text-align:center;';
 
 /** Short-shafted arrows for the history buttons -- a font's own arrow glyph
  *  has a long shaft, which is what made these buttons wide. currentColor so
@@ -3396,7 +3396,7 @@ export function getSiteSidebarToggleScript(opts: { toggleTitle: string }): strin
   siteSidebarToggleBtn.textContent = '\\u2630';
   siteSidebarToggleBtn.title = ${toggleTitle};
   siteSidebarToggleBtn.setAttribute('aria-label', ${toggleTitle});
-  siteSidebarToggleBtn.style.cssText = btnStyle + 'font-size:14px;';
+  siteSidebarToggleBtn.style.cssText = btnStyle;
   siteSidebarToggleBtn.addEventListener('click', function() {
     document.body.classList.toggle('site-nav-collapsed');
   });
@@ -3437,7 +3437,7 @@ export function getModeToggleScript(opts: {
   var modeBtn = document.createElement('button');
   modeBtn.title = ${switchModeTitle};
   modeBtn.setAttribute('aria-label', ${switchModeTitle});
-  modeBtn.style.cssText = btnStyle + 'font-size:11px;';
+  modeBtn.style.cssText = btnStyle;
   function nextMapMode(m) {
     return m === 'tree' ? 'site' : m === 'site' ? 'book' : 'tree';
   }
@@ -3539,7 +3539,7 @@ export function getSiteOpenSourceScript(opts: { openSourceMsgType: string; menuL
   siteOpenSourceBtn.textContent = ${buttonLabel};
   siteOpenSourceBtn.title = ${buttonTitle};
   siteOpenSourceBtn.setAttribute('aria-label', ${buttonTitle});
-  siteOpenSourceBtn.style.cssText = btnStyle + 'font-size:11px;';
+  siteOpenSourceBtn.style.cssText = btnStyle;
   siteOpenSourceBtn.addEventListener('click', function() {
     var active = document.querySelector('.site-nav-link.active[data-site-target]');
     if (active) requestOpenTopicSource(active.getAttribute('data-site-target'));
@@ -3652,7 +3652,7 @@ export function getTemplateSelectScript(opts: {
   templateSel.title = ${title};
   templateSel.setAttribute('aria-label', ${title});
   // text-align-last is what centers a <select>'s displayed value.
-  templateSel.style.cssText = 'max-width:110px;text-align:center;text-align-last:center;' + ddStyle;
+  templateSel.style.cssText = 'max-width:96px;text-align:center;text-align-last:center;' + ddStyle;
   var templateOptions = ${options};
   for (var ti = 0; ti < templateOptions.length; ti++) {
     var tOpt = document.createElement('option');
@@ -4577,7 +4577,7 @@ export function getProfilingFilterScript(opts: {
   pfFilterBtn.textContent = ${btnLabel};
   pfFilterBtn.title = ${btnTitle};
   pfFilterBtn.setAttribute('aria-label', ${btnTitle});
-  pfFilterBtn.style.cssText = btnStyle + 'font-size:11px;';
+  pfFilterBtn.style.cssText = btnStyle;
   pfFilterBtn.addEventListener('click', pfTogglePanel);
   pfUpdateButtonState();
   toolbar.appendChild(pfFilterBtn);
@@ -5026,6 +5026,40 @@ export function getImageMapSupportScript(opts: { openMsgType: string }): string 
 `;
 }
 
+/**
+ * The preview toolbar's refresh button, shared by both previews. This used
+ * to be two byte-for-byte copies (one inline in each provider); it lives
+ * here now so the shared-11px tripwire test in ditaRenderUtils.test.ts can
+ * see it -- that test cannot import the providers (they need the `vscode`
+ * module; mapToolbarOrder.test.ts has the same constraint and reads source
+ * text instead). Built here, appended by the caller right after, same
+ * build-always/caller-appends convention as getSitePrevNextButtonsScript.
+ * `btnStyle` comes from getToolbarScaffoldScript below already being in
+ * scope -- same closure requirement as every other button script here -- and
+ * stays plain: the scaffold's shared 11px IS the compact toolbar, so the ↻
+ * renders at the same size as every control around it.
+ *
+ * `title` is a raw string, quoted here internally -- same convention as
+ * getToolbarScaffoldScript below, and required by it: sharedWebviewStrings()
+ * hands reloadContent out as a value both providers pass into this function
+ * call rather than interpolating directly, so it belongs in that function's
+ * raw-string group, not the pre-JSON.stringify'd group (see the comment on
+ * sharedWebviewStrings() itself for why the two groups aren't
+ * interchangeable).
+ */
+export function getRefreshButtonScript(opts: { title: string }): string {
+  const title = JSON.stringify(opts.title);
+  return `
+  // Refresh button
+  var refreshBtn = document.createElement('button');
+  refreshBtn.innerHTML = '&#x21bb;';
+  refreshBtn.title = ${title};
+  refreshBtn.setAttribute('aria-label', ${title});
+  refreshBtn.style.cssText = btnStyle;
+  refreshBtn.addEventListener('click', function() { vscode.postMessage({ type: 'refresh' }); });
+`;
+}
+
 // ── Shared toolbar scaffolding (style constants + the toolbar container
 // itself) ──
 //
@@ -5048,9 +5082,15 @@ export function getToolbarScaffoldScript(opts: { previewToolbar: string }): stri
   const previewToolbar = JSON.stringify(opts.previewToolbar);
   return `
   // Toolbar
-  var tbStyle = 'position:fixed;top:4px;right:8px;z-index:9999;display:flex;align-items:center;gap:4px;padding:3px 6px;border-radius:5px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;background:var(--vscode-editor-background,rgba(30,30,30,0.88));border:1px solid var(--vscode-widget-border,rgba(255,255,255,0.12));backdrop-filter:blur(4px);opacity:0.75;transition:opacity 0.15s;';
+  // Compact and uniform: every button and dropdown inherits the scaffold's
+  // single 11px font-size (the base btnStyle/ddStyle value) instead of each
+  // carrying its own override, and the bar's own gap/padding are a notch
+  // tighter -- the map preview's toolbar holds over a dozen controls, so
+  // per-button sizes (11/12/13/14px as it once was) made the row read as
+  // several different toolbars stitched together.
+  var tbStyle = 'position:fixed;top:4px;right:8px;z-index:9999;display:flex;align-items:center;gap:3px;padding:2px 5px;border-radius:5px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:11px;background:var(--vscode-editor-background,rgba(30,30,30,0.88));border:1px solid var(--vscode-widget-border,rgba(255,255,255,0.12));backdrop-filter:blur(4px);opacity:0.75;transition:opacity 0.15s;';
   var ddStyle = 'box-sizing:border-box;height:18px;appearance:none;-webkit-appearance:none;padding:1px 4px;border-radius:3px;border:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));background:var(--vscode-dropdown-background,#333);color:var(--vscode-dropdown-foreground,#eee);font-size:11px;outline:none;cursor:pointer;';
-  var btnStyle = 'box-sizing:border-box;height:18px;padding:1px 5px;border-radius:3px;border:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));background:var(--vscode-dropdown-background,#333);color:var(--vscode-dropdown-foreground,#eee);cursor:pointer;font-size:13px;line-height:1;outline:none;display:flex;align-items:center;';
+  var btnStyle = 'box-sizing:border-box;height:18px;padding:1px 4px;border-radius:3px;border:1px solid var(--vscode-dropdown-border,var(--vscode-widget-border,#555));background:var(--vscode-dropdown-background,#333);color:var(--vscode-dropdown-foreground,#eee);cursor:pointer;font-size:11px;line-height:1;outline:none;display:flex;align-items:center;';
 
   var toolbar = document.createElement('div');
   toolbar.id = '__toolbar';
@@ -5161,7 +5201,7 @@ export function getToolbarFontWidthTagTooltipsButtonsScript(opts: {
   fontResetBtn.innerHTML = '&#8635;';
   fontResetBtn.title = ${JSON.stringify(opts.resetFont)};
   fontResetBtn.setAttribute('aria-label', ${JSON.stringify(opts.resetFont)});
-  fontResetBtn.style.cssText = btnStyle + 'font-size:12px;';
+  fontResetBtn.style.cssText = btnStyle;
   fontResetBtn.addEventListener('click', function() {
     fontSize = 100;
     isSerif = false;
@@ -5201,7 +5241,7 @@ export function getToolbarFontWidthTagTooltipsButtonsScript(opts: {
   fontBtn.textContent = isSerif ? ${fontSerif} : ${fontSans};
   fontBtn.title = isSerif ? ${fontCurrentSerif} : ${fontCurrentSans};
   fontBtn.setAttribute('aria-label', isSerif ? ${fontCurrentSerif} : ${fontCurrentSans});
-  fontBtn.style.cssText = btnStyle + 'font-size:11px;';
+  fontBtn.style.cssText = btnStyle;
   fontBtn.addEventListener('click', function() {
     isSerif = !isSerif;
     fontBtn.textContent = isSerif ? ${fontSerif} : ${fontSans};
@@ -5267,7 +5307,7 @@ ${fontResetBlock}
   var tagTooltipsOn = window.__tagTooltips === true;
   var tagTooltipsBtn = document.createElement('button');
   tagTooltipsBtn.textContent = ${tagTooltipsLabel};
-  tagTooltipsBtn.style.cssText = btnStyle + 'font-size:11px;';
+  tagTooltipsBtn.style.cssText = btnStyle;
   function applyTagTooltips() {
     var contentRoot = document.getElementById('dita-content-root');
     var els = contentRoot ? contentRoot.querySelectorAll('[data-dita-tagname]') : [];

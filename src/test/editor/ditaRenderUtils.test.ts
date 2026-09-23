@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, getSearchOverlayScript, getProfilingFilterScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteSidebarToggleScript, getSiteOpenSourceScript, getTemplateSelectScript, getToolbarPlacementScript, PREV_TOPIC_ICON_SVG, NEXT_TOPIC_ICON_SVG, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, getSearchOverlayScript, getProfilingFilterScript, getRefreshButtonScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteSidebarToggleScript, getSiteOpenSourceScript, getSiteHomeButtonScript, getTemplateSelectScript, getToolbarPlacementScript, PREV_TOPIC_ICON_SVG, NEXT_TOPIC_ICON_SVG, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -2062,12 +2062,11 @@ describe('toolbar scaffold/font-prefs/font-width-tag-tooltips scripts (a3\' extr
   it('gives every toolbar button and dropdown the same fixed, border-box height', () => {
     // Root cause of the reported unevenness: btnStyle used line-height:1
     // with no explicit height, so a button's rendered height tracked
-    // whatever font-size it happened to carry -- and toolbar buttons carry
-    // several different ones (11/12/13/14px, see fontBtn/fontResetBtn/
-    // fsDown/siteSidebarToggleBtn etc. below in this same file). Pinning
-    // the box height directly, via box-sizing:border-box, makes every
-    // button's box the same regardless of its own font-size or padding
-    // overrides layered on afterward in the same cssText string.
+    // whatever font-size it happened to carry -- historically several
+    // different ones (11/12/13/14px), before the compact pass unified every
+    // control on the scaffold's single 11px. Pinning the box height directly,
+    // via box-sizing:border-box, keeps every button's box the same even if a
+    // button ever does grow its own font-size again.
     const script = getToolbarScaffoldScript({ previewToolbar: 'Preview toolbar' });
     const btnStyleMatch = /var btnStyle = '([^']*)'/.exec(script);
     const ddStyleMatch = /var ddStyle = '([^']*)'/.exec(script);
@@ -2152,6 +2151,57 @@ describe('toolbar scaffold/font-prefs/font-width-tag-tooltips scripts (a3\' extr
     const bold = getToolbarFontWidthTagTooltipsButtonsScript({ ...buttonsOpts, fontSizeButtonExtraStyle: 'font-weight:bold;' });
     assert.ok(bold.includes("fsDown.style.cssText = btnStyle + 'font-weight:bold;';"));
     assert.ok(bold.includes("fsUp.style.cssText = btnStyle + 'font-weight:bold;';"));
+  });
+
+  it('puts one shared 11px font-size on every toolbar control -- no per-button overrides', () => {
+    // The compact toolbar: tbStyle/btnStyle/ddStyle all carry 11px and every
+    // button script assigns plain btnStyle (or btnStyle plus layout-only
+    // extras like justify-content), so the row reads as one toolbar rather
+    // than several sizes stitched together (A−/A+ used to be 13px, the
+    // ☰ sidebar toggle 14px, fontReset 12px, everything else 11px).
+    // A reintroduced `btnStyle + 'font-size:...'` override anywhere below is
+    // exactly the drift this tripwire exists to catch. getRefreshButtonScript
+    // is in this list because it was extracted out of the providers
+    // precisely to be here: the providers need the `vscode` module, so this
+    // file cannot import them and would otherwise never see their buttons
+    // drift. getSiteHomeButtonScript belongs here for the same reason it is
+    // written like the other nav buttons: it shares SITE_NAV_BTN_STYLE, so a
+    // font-size smuggled into that constant or the home button would ship
+    // past this file otherwise.
+    const scaffold = getToolbarScaffoldScript({ previewToolbar: 'Preview toolbar' });
+    for (const decl of ['tbStyle', 'btnStyle', 'ddStyle']) {
+      const style = new RegExp("var " + decl + " = '([^']*)'").exec(scaffold)![1];
+      assert.ok(/(?:^|;)font-size:11px/.test(style), decl + ' should carry the shared 11px font-size: ' + style);
+    }
+    const scripts = [
+      getToolbarFontWidthTagTooltipsButtonsScript({ ...buttonsOpts, includeFontReset: true, resetFont: 'Reset font' }),
+      getSiteSidebarToggleScript({ toggleTitle: 'T' }),
+      getModeToggleScript({ switchModeTitle: 'T', modeOutline: 'O', modeBook: 'B', modeSite: 'S', switchModeMsgType: 'switchMode', switchingLabel: 'Switching…' }),
+      getSiteOpenSourceScript({ openSourceMsgType: 'm', menuLabel: 'M', buttonLabel: 'B', buttonTitle: 'T' }),
+      getProfilingFilterScript({ buttonLabel: 'F', buttonTitle: 'T', closeLabel: 'C', emptyLabel: 'E' }),
+      getSiteNavExpandCollapseAllButtonsScript({ expandAllTitle: 'E', collapseAllTitle: 'C' }),
+      getSiteHistoryButtonsScript({ backLabel: 'B', backTitle: 'B', forwardLabel: 'F', forwardTitle: 'F' }),
+      getSitePrevNextButtonsScript({ prevLabel: 'P', prevTitle: 'P', nextLabel: 'N', nextTitle: 'N' }),
+      getSiteHomeButtonScript({ title: 'H', switchSitePageMsgType: 'switchSitePage' }),
+      getRefreshButtonScript({ title: 'R' }),
+    ];
+    for (const script of scripts) {
+      assert.ok(!/btnStyle \+ 'font-size:/.test(script), 'no toolbar button should override the shared font-size');
+    }
+  });
+
+  it('builds the shared refresh button as plain btnStyle posting a refresh message', () => {
+    // One script for both previews (each provider appendChilds it last on
+    // its bar), so a regression here lands on two toolbars at once. Plain
+    // btnStyle: the shared 11px is the whole compact-toolbar point. The
+    // tripwire above only sees what this file can import -- this assertion
+    // pins the emitted text itself.
+    const script = getRefreshButtonScript({ title: 'Reload DITA content' });
+    assert.ok(script.includes('refreshBtn.title = "Reload DITA content";'));
+    assert.ok(script.includes('refreshBtn.setAttribute(\'aria-label\', "Reload DITA content");'));
+    assert.ok(script.includes('refreshBtn.style.cssText = btnStyle;'), 'plain btnStyle, no font-size/padding override');
+    assert.ok(script.includes("vscode.postMessage({ type: 'refresh' })"));
+    assert.doesNotThrow(() => new Function('document', 'btnStyle', 'vscode', script));
   });
 
   it('applies the page-width selection as the --max-width custom property (not just body.style.maxWidth), so it also reaches #dita-content-root.site-main in docsite mode -- body.style.maxWidth alone only ever affected the outer flex row body becomes in site mode, which site mode\'s own CSS already resets to none, making every width selection a no-op there', () => {
@@ -3755,9 +3805,13 @@ describe('getSiteNavExpandCollapseAllButtonsScript + getSiteNavCollapseStateHelp
     assert.doesNotThrow(() => new Function('document', 'btnStyle', helper + buttons));
   });
 
-  it('keeps the expand/collapse buttons a little tighter than the shared toolbar while leaving the toolbar itself shorter overall', () => {
-    assert.ok(buttons.includes("siteExpandAllBtn.style.cssText = btnStyle + 'padding:1px 6px;justify-content:center;';"), 'expand-all button should stay compact without fighting the shared control height');
-    assert.ok(buttons.includes("siteCollapseAllBtn.style.cssText = btnStyle + 'padding:1px 6px;justify-content:center;';"), 'collapse-all button should stay compact without fighting the shared control height');
+  it('keeps the expand/collapse buttons tight against the shared toolbar padding while centering their icons', () => {
+    // The base btnStyle's own padding (1px 4px since the compact pass) is
+    // already the tightest on the bar; what these two add is only the
+    // centering, so a 14px icon in an 18px box sits mid-button without any
+    // per-button padding that could fight the shared control height.
+    assert.ok(buttons.includes("siteExpandAllBtn.style.cssText = btnStyle + 'justify-content:center;';"), 'expand-all button should stay compact without fighting the shared control height');
+    assert.ok(buttons.includes("siteCollapseAllBtn.style.cssText = btnStyle + 'justify-content:center;';"), 'collapse-all button should stay compact without fighting the shared control height');
     assert.ok(buttons.includes('width="14" height="14"'), 'icons stay readable while being slightly tighter than the prior 16px versions');
   });
 

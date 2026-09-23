@@ -8,7 +8,7 @@ import { mapTitleFromXml, renderChrome, wrapShell } from './templateChrome';
 import { TEMPLATE_SELECTION_KEY, parseTemplateSelection, withTemplate, pickTemplate } from './templateSelection';
 import { resolveDirectoryPath } from './cssDiscovery';
 import { readFileSync } from 'fs';
-import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getImageMapSupportScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, openHrefTarget, buildBookNavManifest, siteNavigableEntries, renderSiteNavTreeHtml, wrapSiteNavTreeHtml, getSiteNavClickHandlerScript, getSidebarUpdateScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavKeyboardScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteOpenSourceScript, getTemplateSelectScript, getToolbarPlacementScript, PREV_TOPIC_ICON_SVG, NEXT_TOPIC_ICON_SVG, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, HISTORY_BACK_ICON_SVG, HISTORY_FORWARD_ICON_SVG, DocsiteNavEntry, SITE_HOME_TARGET, buildSiteHomeTiles, renderSiteHomeHtml, getSiteHomeButtonScript } from './ditaRenderUtils';
+import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getImageMapSupportScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getRefreshButtonScript, decodeHrefPart, openHrefTarget, buildBookNavManifest, siteNavigableEntries, renderSiteNavTreeHtml, wrapSiteNavTreeHtml, getSiteNavClickHandlerScript, getSidebarUpdateScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavKeyboardScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteOpenSourceScript, getTemplateSelectScript, getToolbarPlacementScript, PREV_TOPIC_ICON_SVG, NEXT_TOPIC_ICON_SVG, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, HISTORY_BACK_ICON_SVG, HISTORY_FORWARD_ICON_SVG, DocsiteNavEntry, SITE_HOME_TARGET, buildSiteHomeTiles, renderSiteHomeHtml, getSiteHomeButtonScript } from './ditaRenderUtils';
 import { getBookSearchIndex, searchBookIndex, buildBookSearchResultsPayload, getBookSearchScript, invalidateBookSearchIndex } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
@@ -410,7 +410,7 @@ function getMapWebviewScript(
   var profilingOn = true;
   var profilingBtn = document.createElement('button');
   profilingBtn.textContent = ${L.profilingLabel};
-  profilingBtn.style.cssText = btnStyle + 'font-size:11px;';
+  profilingBtn.style.cssText = btnStyle;
   function applyProfilingToggle() {
     document.body.classList.toggle('hide-profiling', !profilingOn);
     profilingBtn.style.background = profilingOn ? 'var(--color-profiling-label-bg)' : '';
@@ -438,13 +438,7 @@ function getMapWebviewScript(
     emptyLabel: L.filterEmpty,
   })}
 
-  // Refresh button
-  var refreshBtn = document.createElement('button');
-  refreshBtn.innerHTML = '&#x21bb;';
-  refreshBtn.title = ${L.reloadContent};
-  refreshBtn.setAttribute('aria-label', ${L.reloadContent});
-  refreshBtn.style.cssText = btnStyle;
-  refreshBtn.addEventListener('click', function() { vscode.postMessage({ type: 'refresh' }); });
+  ${getRefreshButtonScript({ title: L.reloadContent })}
   toolbar.appendChild(refreshBtn);
 
   ${getToolbarPlacementScript()}

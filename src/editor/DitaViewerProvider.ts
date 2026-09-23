@@ -3,7 +3,7 @@ import { parseDita, preprocessEntities } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
 import { dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
-import { buildTitleMap, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getImageMapSupportScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, openHrefTarget, detectNoteLabels, detectIndexLabel, readImageDimensions, clearImageDimensionsCache, clearTopicRenderCache, clearBookMembersCache } from './ditaRenderUtils';
+import { buildTitleMap, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getImageMapSupportScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getRefreshButtonScript, decodeHrefPart, openHrefTarget, detectNoteLabels, detectIndexLabel, readImageDimensions, clearImageDimensionsCache, clearTopicRenderCache, clearBookMembersCache } from './ditaRenderUtils';
 import { clearBookSearchIndexCache } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { foldPendingRender, escalateAfterFailure, PendingRender } from './pendingRender';
@@ -685,7 +685,7 @@ function getWebviewScript(): string {
   var profilingOn = true;
   var profilingBtn = document.createElement('button');
   profilingBtn.textContent = ${L.profilingLabel};
-  profilingBtn.style.cssText = btnStyle + 'font-size:11px;';
+  profilingBtn.style.cssText = btnStyle;
   function applyProfilingToggle() {
     document.body.classList.toggle('hide-profiling', !profilingOn);
     profilingBtn.style.background = profilingOn ? 'var(--color-profiling-label-bg)' : '';
@@ -724,13 +724,7 @@ function getWebviewScript(): string {
 
   toolbar.appendChild(wSel);
 
-  // Refresh button
-  var refreshBtn = document.createElement('button');
-  refreshBtn.innerHTML = '&#x21bb;';
-  refreshBtn.title = ${L.reloadContent};
-  refreshBtn.setAttribute('aria-label', ${L.reloadContent});
-  refreshBtn.style.cssText = btnStyle;
-  refreshBtn.addEventListener('click', function() { vscode.postMessage({ type: 'refresh' }); });
+  ${getRefreshButtonScript({ title: L.reloadContent })}
   toolbar.appendChild(refreshBtn);
 
   document.body.appendChild(toolbar);

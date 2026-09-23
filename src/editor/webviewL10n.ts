@@ -19,7 +19,8 @@ import * as vscode from 'vscode';
 //     template, where quotes and escaping have to arrive as a JS literal;
 //   - bare vscode.l10n.t(...) for values handed to a helper function that
 //     quotes them itself: getSearchOverlayScript(), getProfilingFilterScript(),
-//     getToolbarScaffoldScript() and getToolbarFontWidthTagTooltipsButtonsScript().
+//     getToolbarScaffoldScript(), getToolbarFontWidthTagTooltipsButtonsScript()
+//     and getRefreshButtonScript().
 // Moving an entry between the groups double-quotes one and leaves the other
 // unquoted, and both failures show up as mangled text in the toolbar rather
 // than as an error.
@@ -36,9 +37,9 @@ import * as vscode from 'vscode';
 export function sharedWebviewStrings() {
   return {
     // ── toolbar, passed to getToolbarScaffoldScript/
-    // getToolbarFontWidthTagTooltipsButtonsScript as values, quoted by
-    // those functions themselves (same convention as the overlay options
-    // below) ──
+    // getToolbarFontWidthTagTooltipsButtonsScript/getRefreshButtonScript as
+    // values, quoted by those functions themselves (same convention as the
+    // overlay options below) ──
     previewToolbar: vscode.l10n.t('Preview toolbar'),
     decreaseFontSize: vscode.l10n.t('Decrease font size'),
     increaseFontSize: vscode.l10n.t('Increase font size'),
@@ -55,12 +56,12 @@ export function sharedWebviewStrings() {
     widthWide: vscode.l10n.t('Wide'),
     widthDesktop: vscode.l10n.t('Desktop'),
     widthNarrow: vscode.l10n.t('Narrow'),
+    reloadContent: vscode.l10n.t('Reload DITA content'),
     // ── toolbar, still interpolated straight into each provider's own
-    // inline script (profiling toggle, refresh button) ──
+    // inline script (profiling toggle) ──
     profilingLabel: JSON.stringify(vscode.l10n.t('Flags')),
     profilingOnTitle: JSON.stringify(vscode.l10n.t('Profiling attributes (props/otherprops/audience/...) are highlighted. Click to hide the highlighting.')),
     profilingOffTitle: JSON.stringify(vscode.l10n.t('Profiling attribute highlighting is hidden. Click to show which content is flagged and with what.')),
-    reloadContent: JSON.stringify(vscode.l10n.t('Reload DITA content')),
     // ── search overlay, passed to getSearchOverlayScript as values ──
     searchPlaceholder: vscode.l10n.t('Search'),
     searchNext: vscode.l10n.t('Next match'),

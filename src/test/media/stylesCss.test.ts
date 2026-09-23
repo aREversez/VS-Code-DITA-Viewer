@@ -175,7 +175,7 @@ describe('styles.css site-mode toolbar buttons', () => {
   const css = stylesCss.replace(/\/\*[\s\S]*?\*\//g, '');
 
   it('gives previous/next-topic no width of their own: the shared inline width must apply to all four nav buttons', () => {
-    // SITE_NAV_BTN_STYLE (ditaRenderUtils.ts) sets width:22px inline on back,
+    // SITE_NAV_BTN_STYLE (ditaRenderUtils.ts) sets width:20px inline on back,
     // forward, previous and next alike. A stylesheet min-width on the last two
     // wins over that width and made them visibly wider than the first two.
     const rules = [...css.matchAll(/([^{}]*#__site-(?:prev|next)-btn[^{}]*)\{([^}]*)\}/g)];

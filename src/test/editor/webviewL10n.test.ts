@@ -61,13 +61,15 @@ describe('webview toolbar string table', () => {
     // both moved to the raw group when getToolbarScaffoldScript/
     // getToolbarFontWidthTagTooltipsButtonsScript started taking them as
     // function arguments instead of the providers interpolating them
-    // directly -- reloadContent and profilingOnTitle still are, and still
-    // represent the pre-quoted group correctly.
-    for (const key of ['reloadContent', 'profilingOnTitle']) {
+    // directly; reloadContent followed when getRefreshButtonScript took it
+    // over from the providers' inline refresh-button code. profilingOnTitle
+    // still interpolates straight into each provider's profiling toggle, so
+    // it remains the pre-quoted group's canary.
+    for (const key of ['profilingOnTitle']) {
       assert.ok(sharedEntries.has(key), `shared table lost ${key}`);
       assert.match(sharedEntries.get(key)!, /^JSON\.stringify\(/);
     }
-    for (const key of ['searchPlaceholder', 'filterTitle']) {
+    for (const key of ['searchPlaceholder', 'filterTitle', 'reloadContent']) {
       assert.ok(sharedEntries.has(key), `shared table lost ${key}`);
       assert.match(sharedEntries.get(key)!, /^vscode\.l10n\.t\(/);
     }

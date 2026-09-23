@@ -71,8 +71,14 @@ describe('site/book template visual check (real Chromium)', function () {
   });
 
   after(async () => {
-    await browser.close();
-    rmSync(tmpDir, { recursive: true, force: true });
+    // before can die before either variable is assigned -- Chromium not
+    // downloaded yet is the everyday case (chromium.launch throws before
+    // `browser =` lands, leaving tmpDir unassigned too). Cleaning up
+    // unconditionally here buried that real failure under a TypeError from
+    // this hook (and would trip over the undefined tmpDir next), so guard
+    // both and let the launch error stand alone.
+    if (browser) await browser.close();
+    if (tmpDir) rmSync(tmpDir, { recursive: true, force: true });
   });
 
   it('kill test: a template that overrides content-visibility is caught', async () => {
