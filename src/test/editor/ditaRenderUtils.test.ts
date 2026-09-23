@@ -2116,6 +2116,7 @@ describe('toolbar scaffold/font-prefs/font-width-tag-tooltips scripts (a3\' extr
     widthWide: 'Wide',
     widthDesktop: 'Desktop',
     widthNarrow: 'Narrow',
+    widthTooNarrow: 'Window too narrow at "{0}" width.',
     pageWidth: 'Page width',
     setWidthSelectionMsgType: 'setWidthSelection',
     tagTooltipsLabel: 'Tags',
@@ -2252,8 +2253,67 @@ describe('toolbar scaffold/font-prefs/font-width-tag-tooltips scripts (a3\' extr
     (fakeDocument as unknown as { body: { style: typeof bodyStyle } }).body = { style: bodyStyle };
     applyWidth('1400px');
     assert.deepStrictEqual(setProps, [['--max-width', '1400px']], 'expected the CSS custom property to be set, not just body.style.maxWidth');
+    // Kill-test for the toolbar-jump bug: book/site mode's CSS resets body
+    // itself to max-width:none/margin:0 so the top bar and shell frame span
+    // the full window; an inline body.style.maxWidth/margin write here would
+    // override that class-based reset (inline always wins) and visibly
+    // shrink/re-center body -- and the top bar riding on it -- on every
+    // width change. Only the custom property may move; body's own inline
+    // style must stay exactly as it started.
+    assert.strictEqual(bodyStyle.maxWidth, '', 'body.style.maxWidth must be left untouched -- book/site mode CSS depends on it staying unset');
+    assert.strictEqual(bodyStyle.margin, '', 'body.style.margin must be left untouched -- book/site mode CSS depends on it staying unset');
     applyWidth('');
     assert.deepStrictEqual(removedProps, ['--max-width'], 'expected the property to be cleared (falling back to :root\'s default), not set to an empty/invalid value');
+    assert.strictEqual(bodyStyle.maxWidth, '', 'body.style.maxWidth must stay untouched after clearing the selection too');
+    assert.strictEqual(bodyStyle.margin, '', 'body.style.margin must stay untouched after clearing the selection too');
+  });
+
+  it('warns via toast when the selected width is not narrower than the current window -- otherwise every option renders identically to Auto/Full and looks like nothing happened', () => {
+    const script = getToolbarFontWidthTagTooltipsButtonsScript(buttonsOpts);
+    const toasts: string[] = [];
+    let changeHandler: (() => void) | undefined;
+    const fakeSelect = {
+      style: {},
+      value: '',
+      options: [] as Array<{ textContent: string }>,
+      selectedIndex: 0,
+      setAttribute: () => {},
+      appendChild: (opt: { textContent: string }) => { fakeSelect.options.push(opt); },
+      addEventListener: (_evt: string, handler: () => void) => { changeHandler = handler; },
+    };
+    const fakeOption = { value: '', textContent: '', selected: false };
+    const fakeDocument = {
+      createElement: (tag: string) => {
+        if (tag === 'select') return fakeSelect;
+        if (tag === 'option') return { ...fakeOption };
+        return { style: {}, setAttribute: () => {}, addEventListener: () => {} };
+      },
+      getElementById: () => null,
+      documentElement: { clientWidth: 600 },
+      body: { style: { setProperty: () => {}, removeProperty: () => {} } },
+    };
+    const fontPrefsStub = 'var fontSize = 100; var isSerif = false; var SERIF_STACK = "serif";';
+    const imageToastStub = 'function showCenteredToast(text) { window.__toasts.push(text); }';
+    const vscodeStub = { postMessage: () => {} };
+    new Function(
+      'document', 'btnStyle', 'ddStyle', 'window', 'vscode',
+      fontPrefsStub + imageToastStub + script,
+    )(fakeDocument, '', '', { __fontPrefs: undefined, __widthSelection: undefined, __tagTooltips: undefined, __toasts: toasts }, vscodeStub);
+    // Simulate selecting "1400px" (Wide) while the window is 600px wide --
+    // narrower than every fixed option, so the change can't be seen.
+    const wideOption = fakeSelect.options.find((o) => o.textContent === 'Wide')!;
+    fakeSelect.value = '1400px';
+    fakeSelect.selectedIndex = fakeSelect.options.indexOf(wideOption);
+    changeHandler!();
+    assert.strictEqual(toasts.length, 1, 'expected exactly one toast for a selection with no visible effect');
+    assert.ok(toasts[0].includes('Wide'), 'toast should name the option the user picked');
+    // Selecting "Auto" (no numeric px) never warns -- there's no fixed
+    // width to compare the window against.
+    toasts.length = 0;
+    fakeSelect.value = '';
+    fakeSelect.selectedIndex = fakeSelect.options.findIndex((o) => o.textContent === 'Auto');
+    changeHandler!();
+    assert.strictEqual(toasts.length, 0, 'Auto has no fixed width to be "too narrow" for');
   });
 
   it('does not append any of its buttons to a toolbar itself -- ordering stays with the caller', () => {
@@ -4228,6 +4288,7 @@ describe('site toolbar navigation buttons: compact and centered', () => {
       decreaseFontSize: 'a', increaseFontSize: 'b', fontSans: 'c', fontSerif: 'd',
       fontCurrentSans: 'e', fontCurrentSerif: 'f', fontSizeButtonExtraStyle: '', includeFontReset: false,
       widthAuto: 'Auto', widthFull: 'Full', widthWide: 'Wide', widthDesktop: 'Desktop', widthNarrow: 'Narrow',
+      widthTooNarrow: 'Window too narrow at "{0}" width.',
       pageWidth: 'Page width', setWidthSelectionMsgType: 'setWidthSelection',
       tagTooltipsLabel: 'Tags', tagTooltipsOnTitle: 'on', tagTooltipsOffTitle: 'off', setTagTooltipsMsgType: 'setTagTooltips',
     });

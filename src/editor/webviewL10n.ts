@@ -56,6 +56,7 @@ export function sharedWebviewStrings() {
     widthWide: vscode.l10n.t('Wide'),
     widthDesktop: vscode.l10n.t('Desktop'),
     widthNarrow: vscode.l10n.t('Narrow'),
+    widthTooNarrow: vscode.l10n.t('Window too narrow to see a visible difference at "{0}" width. Try widening the window.'),
     reloadContent: vscode.l10n.t('Reload DITA content'),
     // ── toolbar, still interpolated straight into each provider's own
     // inline script (profiling toggle) ──

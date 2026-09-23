@@ -258,6 +258,7 @@ function getMapWebviewScript(
     widthWide: L.widthWide,
     widthDesktop: L.widthDesktop,
     widthNarrow: L.widthNarrow,
+    widthTooNarrow: L.widthTooNarrow,
     pageWidth: L.pageWidth,
     setWidthSelectionMsgType: MSG_SET_WIDTH_SELECTION,
     tagTooltipsLabel: L.tagTooltipsLabel,

@@ -5173,6 +5173,10 @@ export function getToolbarFontWidthTagTooltipsButtonsScript(opts: {
   widthDesktop: string;
   widthNarrow: string;
   pageWidth: string;
+  /** Toast shown when the chosen width can't visibly differ from Auto/Full
+   *  at the current window size. Contains a literal `{0}` placeholder for
+   *  the selected option's label, substituted in the webview at runtime. */
+  widthTooNarrow: string;
   setWidthSelectionMsgType: string; // raw, e.g. 'setWidthSelection'
   tagTooltipsLabel: string;
   tagTooltipsOnTitle: string;
@@ -5191,6 +5195,7 @@ export function getToolbarFontWidthTagTooltipsButtonsScript(opts: {
   const widthDesktop = JSON.stringify(opts.widthDesktop);
   const widthNarrow = JSON.stringify(opts.widthNarrow);
   const pageWidth = JSON.stringify(opts.pageWidth);
+  const widthTooNarrow = JSON.stringify(opts.widthTooNarrow);
   const tagTooltipsLabel = JSON.stringify(opts.tagTooltipsLabel);
   const tagTooltipsOnTitle = JSON.stringify(opts.tagTooltipsOnTitle);
   const tagTooltipsOffTitle = JSON.stringify(opts.tagTooltipsOffTitle);
@@ -5274,23 +5279,23 @@ ${fontResetBlock}
     wSel.appendChild(opt);
   }
   function applyWidth(value) {
-    document.body.style.maxWidth = value;
-    document.body.style.margin = value ? '0 auto' : '';
-    // #dita-content-root.site-main (docsite mode) has its own
-    // max-width:var(--max-width); margin:0 auto -- a separate box from
-    // body, which in site mode is just the outer flex row holding the
-    // sidebar and the content pane side by side (see body.mode-site in
-    // styles.css). Setting body.style.maxWidth above only ever affected
-    // body itself, which is exactly the box site mode's own CSS already
-    // resets to max-width:none -- so every width selection was a no-op
-    // there: "Full" looked identical to "Auto" because neither one was
-    // reaching the box that actually determines the reading column's
-    // width. Setting the --max-width custom property instead reaches
-    // both: body's own rule already reads max-width:var(--max-width) (the
-    // property this used to set directly is now just a more specific
-    // duplicate of what the variable already produces in tree/book mode),
-    // and .site-main's rule, which the class-based override in site mode
-    // never touched, now tracks the same selection.
+    // Only ever touch the --max-width custom property, never body's own
+    // inline style directly. Every layout already routes that property to
+    // the box that actually determines the reading column's width: body's
+    // own rule reads max-width:var(--max-width) in plain topic view and
+    // tree/book mode; #dita-content-root's children read it in the
+    // top-bar layout (outline view, book without nav); .site-main reads it
+    // in docsite/site-shell mode. Those same layouts also reset body's
+    // *own* box on purpose -- max-width:none, margin:0, a fixed viewport
+    // height -- so the top bar and the shell frame span the full window
+    // instead of shrinking with the reading column. Setting
+    // document.body.style.maxWidth/margin directly (as this used to)
+    // overrode that reset, since an inline style always wins over the
+    // class-based rule: every width change shrank and re-centered body
+    // itself, visibly shifting the top bar and site shell sideways along
+    // with the content on every selection. Routing through the custom
+    // property alone reaches the right box in each layout without ever
+    // touching the one box that must stay full width.
     if (value) {
       document.body.style.setProperty('--max-width', value);
     } else {
@@ -5301,6 +5306,17 @@ ${fontResetBlock}
   wSel.addEventListener('change', function() {
     applyWidth(wSel.value);
     vscode.postMessage({ type: '${opts.setWidthSelectionMsgType}', value: wSel.value });
+    // The selection only has a visible effect when the chosen column width
+    // is actually narrower than what's already on screen -- past that
+    // point every option renders identically to Auto/Full, which reads as
+    // "nothing happened" rather than as a no-op by design. Flag it instead
+    // of leaving the user to guess why toggling Wide vs Desktop vs Narrow
+    // looks the same at a cramped window size.
+    var px = parseInt(wSel.value, 10);
+    if (px && document.documentElement.clientWidth <= px) {
+      var selectedLabel = wSel.options[wSel.selectedIndex].textContent;
+      showCenteredToast(${widthTooNarrow}.replace('{0}', selectedLabel));
+    }
   });
 
   // Tag-name tooltip toggle

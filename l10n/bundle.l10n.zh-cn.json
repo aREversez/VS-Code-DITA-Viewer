@@ -97,6 +97,7 @@
   "View Install Instructions": "查看安装说明",
   "View Output Log": "查看输出日志",
   "Wide": "宽",
+  "Window too narrow to see a visible difference at \"{0}\" width. Try widening the window.": "当前窗口过窄，切换到「{0}」宽度模式效果不明显，建议拉宽窗口后查看效果。",
   "\n[DITA-OT] Command: {0} {1}": "\n[DITA-OT] 命令：{0} {1}",
   "\n[DITA-OT] Failed to inject site enhancements: {0}": "\n[DITA-OT] 站点增强注入失败：{0}",
   "\n[DITA-OT] Failed to start process: {0}": "\n[DITA-OT] 进程启动失败：{0}",

@@ -660,6 +660,7 @@ function getWebviewScript(): string {
     widthWide: L.widthWide,
     widthDesktop: L.widthDesktop,
     widthNarrow: L.widthNarrow,
+    widthTooNarrow: L.widthTooNarrow,
     pageWidth: L.pageWidth,
     setWidthSelectionMsgType: 'setWidthSelection',
     tagTooltipsLabel: L.tagTooltipsLabel,
