@@ -49,9 +49,9 @@ describe('built-in templates', () => {
   const root = join(process.cwd(), 'media', 'templates');
   const { templates, diagnostics } = discoverTemplates([{ dir: root, builtin: true }]);
 
-  it('ships five templates that load cleanly, each with a header, a footer and a logo that exists', () => {
+  it('ships six templates that load cleanly, each with a header, a footer and a logo that exists', () => {
     assert.deepStrictEqual(diagnostics, []);
-    assert.deepStrictEqual(templates.map((t) => t.id).sort(), ['aurora', 'classic-docs', 'reader', 'slate', 'terminal']);
+    assert.deepStrictEqual(templates.map((t) => t.id).sort(), ['aurora', 'classic-docs', 'reader', 'slate', 'terminal', 'topbar']);
     for (const t of templates) {
       assert.ok(t.header, `${t.id} header`);
       assert.ok(t.footer, `${t.id} footer`);
@@ -61,7 +61,7 @@ describe('built-in templates', () => {
     assert.ok(existsSync(templates.find((t) => t.id === 'aurora')!.header!.banner!));
   });
 
-  for (const id of ['classic-docs', 'aurora', 'reader', 'slate', 'terminal']) {
+  for (const id of ['classic-docs', 'aurora', 'reader', 'slate', 'terminal', 'topbar']) {
     describe(id, () => {
       const css = readFileSync(join(root, id, `${id}.css`), 'utf-8');
       const light = declarations(css, `body[data-template="${id}"] {`);
