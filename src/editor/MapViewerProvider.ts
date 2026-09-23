@@ -8,7 +8,7 @@ import { mapTitleFromXml, renderChrome, wrapShell } from './templateChrome';
 import { TEMPLATE_SELECTION_KEY, parseTemplateSelection, withTemplate, pickTemplate } from './templateSelection';
 import { resolveDirectoryPath } from './cssDiscovery';
 import { readFileSync } from 'fs';
-import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getImageMapSupportScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, openHrefTarget, buildBookNavManifest, siteNavigableEntries, renderSiteNavTreeHtml, wrapSiteNavTreeHtml, getSiteNavClickHandlerScript, getSidebarUpdateScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavKeyboardScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteOpenSourceScript, getTemplateSelectScript, getToolbarPlacementScript, PREV_TOPIC_ICON_SVG, NEXT_TOPIC_ICON_SVG, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, HISTORY_BACK_ICON_SVG, HISTORY_FORWARD_ICON_SVG, DocsiteNavEntry } from './ditaRenderUtils';
+import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getImageMapSupportScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, openHrefTarget, buildBookNavManifest, siteNavigableEntries, renderSiteNavTreeHtml, wrapSiteNavTreeHtml, getSiteNavClickHandlerScript, getSidebarUpdateScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavKeyboardScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteOpenSourceScript, getTemplateSelectScript, getToolbarPlacementScript, PREV_TOPIC_ICON_SVG, NEXT_TOPIC_ICON_SVG, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, HISTORY_BACK_ICON_SVG, HISTORY_FORWARD_ICON_SVG, DocsiteNavEntry, SITE_HOME_TARGET, buildSiteHomeTiles, renderSiteHomeHtml, getSiteHomeButtonScript } from './ditaRenderUtils';
 import { getBookSearchIndex, searchBookIndex, buildBookSearchResultsPayload, getBookSearchScript, invalidateBookSearchIndex } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
@@ -170,6 +170,7 @@ function getMapWebviewScript(
     modeBook: vscode.l10n.t('Book'),
     modeSite: vscode.l10n.t('Site'),
     modeSwitching: vscode.l10n.t('Switching view…'),
+    siteHome: vscode.l10n.t('Go to book home'),
     siteBack: vscode.l10n.t('Go back'),
     siteForward: vscode.l10n.t('Go forward'),
     siteOpenSource: vscode.l10n.t('Source'),
@@ -298,6 +299,13 @@ function getMapWebviewScript(
   // pages the reader has visited (site mode only, like prev/next, which step
   // through reading order instead -- hence arrows rather than angle brackets).
   // Wired up by updateHistoryButtons in getSiteNavClickHandlerScript.
+  // Home -- docsite mode only, like the buttons around it, and leftmost of
+  // the cluster: back/forward/prev/next all walk relative to wherever the
+  // reader currently is, this is the one fixed place among them.
+  ${getSiteHomeButtonScript({
+    title: L.siteHome,
+    switchSitePageMsgType: MSG_SWITCH_SITE_PAGE,
+  })}
   ${getSiteHistoryButtonsScript({
     backLabel: HISTORY_BACK_ICON_SVG,
     backTitle: L.siteBack,
@@ -318,6 +326,7 @@ function getMapWebviewScript(
     buttonLabel: L.siteOpenSource,
     buttonTitle: L.siteOpenSourceTitle,
   })}
+  toolbar.appendChild(siteHomeBtn);
   toolbar.appendChild(siteBackBtn);
   toolbar.appendChild(siteForwardBtn);
   toolbar.appendChild(sitePrevBtn);
@@ -625,6 +634,14 @@ function getMapWebviewScript(
       if (contentRoot) {
         contentRoot.innerHTML = e.data.html;
         afterContentSwap();
+        // Refreshes the Home button's disabled state (updatePrevNextButtons
+        // also handles it, see getSiteNavClickHandlerScript) against the DOM
+        // that just landed -- the home toolbar button's own click handler
+        // posts straight to the extension host without switchToSitePage's
+        // usual optimistic pre-update, so nothing else does this for a trip
+        // to or from the home page. Harmless where it is redundant (a plain
+        // topic-to-topic switch already updated this before the postMessage).
+        if (currentMode === 'site' && typeof updatePrevNextButtons === 'function') updatePrevNextButtons();
         // Site mode's book-internal xref jump (docsite design doc,
         // 3.2/4.5): switchToSitePage stashed the target anchor before the
         // page-switch postMessage, since the element it names doesn't
@@ -1154,10 +1171,26 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         updateWebview(); // every entry is a group header / resource-only -- nothing to actually show
         return;
       }
-      const resolvedSitePage = currentSitePage && navigable.some((m) => m.absPath === currentSitePage)
-        ? currentSitePage
-        : navigable[0].absPath;
+      // currentSitePage === SITE_HOME_TARGET (the home toolbar button was
+      // clicked) resolves straight to home -- it deliberately does NOT go
+      // through the navigable.some check below, which would never match the
+      // sentinel and would silently fall back to the first topic instead of
+      // actually going home.
+      const resolvedSitePage = currentSitePage === SITE_HOME_TARGET
+        ? SITE_HOME_TARGET
+        : currentSitePage && navigable.some((m) => m.absPath === currentSitePage)
+          ? currentSitePage
+          : navigable[0].absPath;
       currentSitePage = resolvedSitePage;
+      if (resolvedSitePage === SITE_HOME_TARGET) {
+        const homeHtml = this.renderSiteHomeContent(document, site.manifest);
+        webviewPanel.webview.postMessage({ type: MSG_UPDATE_CONTENT, html: homeHtml });
+        lastSiteRender = { sidebarTreeHtml: undefined, pageHtml: homeHtml };
+        // No topic file was read for the home page itself.
+        pageDependencies = new Set();
+        rememberView();
+        return;
+      }
       const tracked = trackSourceReads(() => this.renderSiteTopicContent(resolvedSitePage, webviewPanel.webview, site.keyMap, site.bookMembers));
       const topic = tracked.result;
       if (topic.error !== undefined) {
@@ -1442,6 +1475,23 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
   }
 
   /**
+   * Docsite mode's home page (renderMapContentUntracked's and
+   * postSitePageUpdate's shared SITE_HOME_TARGET branch): the map/book's own
+   * title (mapTitleFromXml -- the same source generateHtml's `<h1>`-less
+   * chrome header uses) plus one tile per buildSiteHomeTiles entry. Reads no
+   * topic file itself (unlike renderSiteTopicContent above), so it needs no
+   * trackSourceReads wrapping of its own -- callers hand it pageFiles: new
+   * Set() rather than a tracked result.
+   */
+  private renderSiteHomeContent(document: vscode.TextDocument, manifest: DocsiteNavEntry[]): string {
+    const titleKeys = buildKeyMap(document.uri);
+    const mapTitle = mapTitleFromXml(document.getText(), basename(document.fileName), (k) => titleKeys.get(k));
+    const topicCountLabel = (count: number): string =>
+      count === 1 ? vscode.l10n.t('1 topic') : vscode.l10n.t('{0} topics', count);
+    return renderSiteHomeHtml(buildSiteHomeTiles(manifest), { heading: mapTitle, topicCountLabel });
+  }
+
+  /**
    * Renders the map in a mode, reporting on success which source files the
    * render read (`files`) and, in site mode, which of those belong to the
    * topic page alone (`pageFiles`) -- see `dependencies` in
@@ -1483,23 +1533,41 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         if (navigable.length === 0) {
           return { error: vscode.l10n.t('This map has no topics to show in site view.') };
         }
-        // sitePageHint is whatever the caller last knew as "current" -- stale
-        // (the map was edited and that topic's entry is gone) or never set
-        // (first render) both fall back to the first entry, same as opening
-        // a book always starts at its first topic.
-        const resolvedSitePage = sitePageHint && navigable.some((m) => m.absPath === sitePageHint)
-          ? sitePageHint
-          : navigable[0].absPath;
-        const pageTracked = trackSourceReads(() => this.renderSiteTopicContent(resolvedSitePage, webview, keyMap, bookMembers));
-        const topic = pageTracked.result;
-        if (topic.error !== undefined) return { error: topic.error };
+        // sitePageHint is whatever the caller last knew as "current". Never
+        // set (first render of this document in site mode -- mapViewState.ts
+        // has no remembered sitePage yet) or explicitly SITE_HOME_TARGET
+        // (the reader's last stop was the home page, or they just clicked the
+        // home toolbar button) both resolve to the home page. Anything else
+        // that no longer names a topic (the map was edited and that entry is
+        // gone) falls back to the first entry, same as opening a book always
+        // starts at its first topic -- home is only ever the *first* stop,
+        // never a fallback for a since-vanished one.
+        const resolvedSitePage =
+          sitePageHint === undefined || sitePageHint === SITE_HOME_TARGET
+            ? SITE_HOME_TARGET
+            : navigable.some((m) => m.absPath === sitePageHint)
+              ? sitePageHint
+              : navigable[0].absPath;
         // The bare tree is returned as well as the wrapped nav: it is what an
         // in-place refresh sends as MSG_UPDATE_SIDEBAR (see refreshSiteInPlace).
+        // resolvedSitePage never equals a real entry's absPath while it is
+        // SITE_HOME_TARGET, so the home page renders with no sidebar row
+        // marked active -- correct, the home page is not one of them.
         const sidebarTreeHtml = renderSiteNavTreeHtml(manifest, resolvedSitePage, {
           expand: vscode.l10n.t('Expand'),
           collapse: vscode.l10n.t('Collapse'),
         }, this.getCollapsedNavIds(document), true);
         const sidebarHtml = wrapSiteNavTreeHtml(sidebarTreeHtml, vscode.l10n.t('Topics'));
+        if (resolvedSitePage === SITE_HOME_TARGET) {
+          const homeHtml = this.renderSiteHomeContent(document, manifest);
+          // manifest/keyMap/bookMembers go back to the caller too (see the
+          // non-home return below for why); pageFiles is empty rather than
+          // tracked -- the home page reads no topic file of its own.
+          return { html: homeHtml, sidebarHtml, sidebarTreeHtml, resolvedSitePage, siteManifest: manifest, siteKeyMap: keyMap, siteBookMembers: bookMembers, pageFiles: new Set() };
+        }
+        const pageTracked = trackSourceReads(() => this.renderSiteTopicContent(resolvedSitePage, webview, keyMap, bookMembers));
+        const topic = pageTracked.result;
+        if (topic.error !== undefined) return { error: topic.error };
         // manifest/keyMap/bookMembers go back to the caller too
         // (updateWebview) so a page switch (postSitePageUpdate) can reuse
         // them instead of re-parsing the map, re-reading every

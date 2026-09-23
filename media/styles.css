@@ -1233,6 +1233,69 @@ body.mode-book.site-nav-collapsed .site-nav-resizer {
   color: var(--vscode-list-activeSelectionForeground);
   opacity: 1;
 }
+/* Docsite home page (renderSiteHomeHtml) -- an Oxygen-WebHelp-style tile
+   gallery in place of always landing on the first topic. Sits directly in
+   #dita-content-root, so it gets that element's own max-width/centering;
+   only its own padding is set here. */
+.site-home {
+  padding: 2rem 0 1rem;
+}
+.site-home-title {
+  margin: 0 0 1.25rem;
+}
+.site-home-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+}
+/* A tile is a plain link, not .site-nav-link (see renderSiteHomeHtml's own
+   comment on why) -- styled to match the sidebar's look-and-feel (the same
+   chip classes, the same hover/focus treatment) without being wired into
+   the sidebar's own click/history/roving-tabindex machinery. */
+.site-home-tile {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 1rem;
+  border: 1px solid var(--color-border, var(--vscode-widget-border, #555));
+  border-radius: 6px;
+  color: var(--vscode-editor-foreground);
+  text-decoration: none;
+  background: var(--vscode-editor-background);
+}
+.site-home-tile:hover {
+  background: var(--vscode-list-hoverBackground);
+  border-color: var(--color-link, #4a76c9);
+}
+.site-home-tile:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+.site-home-tile-icon {
+  flex-shrink: 0;
+  color: var(--color-link, #4a76c9);
+  opacity: 0.8;
+  line-height: 0;
+}
+.site-home-tile-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3em;
+  min-width: 0;
+}
+.site-home-tile-chips:empty {
+  display: none;
+}
+.site-home-tile-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.site-home-tile-meta {
+  font-size: 0.85em;
+  color: var(--vscode-descriptionForeground, #999);
+}
 /* Back/forward/prev/next toolbar buttons (site mode) -- explicit opacity/cursor
    rather than relying on the browser's native disabled look, since btnStyle
    (getToolbarScaffoldScript) sets background/border/color explicitly and
@@ -1241,6 +1304,7 @@ body.mode-book.site-nav-collapsed .site-nav-resizer {
    width (ditaRenderUtils.ts). A min-width on prev/next used to sit in this
    rule and, being a min-, beat that inline width -- so the two came out
    wider than back/forward whatever the inline width was set to. */
+#__site-home-btn:disabled,
 #__site-back-btn:disabled, #__site-forward-btn:disabled,
 #__site-prev-btn:disabled, #__site-next-btn:disabled {
   opacity: 0.4;
@@ -1420,6 +1484,7 @@ body.mode-tree #__site-sidebar-toggle-btn,
 body.mode-tree #__site-expand-all-btn,
 body.mode-tree #__site-collapse-all-btn,
 body.mode-tree #__template-select,
+body.mode-tree #__site-home-btn,
 body.mode-tree #__site-back-btn,
 body.mode-tree #__site-forward-btn,
 body.mode-tree #__site-prev-btn,
@@ -1427,6 +1492,7 @@ body.mode-tree #__site-next-btn,
 body.mode-tree #__site-open-source-btn {
   display: none !important;
 }
+body.mode-book #__site-home-btn,
 body.mode-book #__site-back-btn,
 body.mode-book #__site-forward-btn,
 body.mode-book #__site-prev-btn,

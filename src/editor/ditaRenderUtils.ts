@@ -1664,6 +1664,138 @@ export function siteNavigableEntries(manifest: DocsiteNavEntry[]): (DocsiteNavEn
   return manifest.filter((entry): entry is DocsiteNavEntry & { absPath: string } => entry.absPath !== undefined);
 }
 
+/**
+ * Sentinel `target` value meaning "the docsite home page", used the same way
+ * a topic's absPath is used everywhere a site page is identified -- as the
+ * `sitePage` stored in mapViewState.ts, as `currentSitePage` in
+ * MapViewerProvider.ts, and as the `target` on the MSG_SWITCH_SITE_PAGE
+ * postMessage the home toolbar button sends (getSiteHomeButtonScript below).
+ * Deliberately not the empty string: MapViewerProvider's switchSitePage
+ * handler rejects a falsy target outright, and this needs to pass that
+ * check. Deliberately not a real filesystem path shape either, so it can
+ * never collide with an actual entry.absPath -- every `=== SITE_HOME_TARGET`
+ * comparison in this file and MapViewerProvider.ts relies on that.
+ */
+export const SITE_HOME_TARGET = '@@dita-viewer-site-home@@';
+
+/** One home-page tile: a top-level manifest entry (or, for a childless-href
+ *  group like a `<topichead>`, its first navigable descendant) plus enough
+ *  to label the tile and say how much is behind it. */
+export interface SiteHomeTile {
+  title: string;
+  /** Where clicking the tile navigates -- always a real topic path, never
+   *  SITE_HOME_TARGET and never a group's own absPath (groups don't have one). */
+  target: string;
+  role?: string;
+  topicType?: string;
+  /** Count of navigable topics in this entry's own subtree (itself, if it has
+   *  a topic of its own, plus every descendant) -- always at least 1, since a
+   *  branch with none is dropped rather than given an unclickable tile. */
+  topicCount: number;
+}
+
+/**
+ * The home page's tiles, one per top-level manifest entry that leads
+ * somewhere -- Oxygen-WebHelp-style entry points into the book, rather than
+ * always dropping the reader on the first topic in reading order (see
+ * renderSiteHomeHtml and the SITE_HOME_TARGET resolution in
+ * MapViewerProvider.ts's renderMapContentUntracked/postSitePageUpdate).
+ *
+ * A leaf top-level entry (a real topic) is its own tile, targeting itself. A
+ * group top-level entry (isGroup -- a `<topichead>` or an href-less
+ * topicref, see DocsiteNavEntry's own comment) has no topic file to open, so
+ * its tile targets the first navigable entry in its own subtree instead --
+ * the same topic clicking into it in the sidebar and taking the first child
+ * would land on. A top-level branch with no navigable entry anywhere under
+ * it (every descendant is itself a childless group) gets no tile at all:
+ * there is nowhere for it to lead.
+ *
+ * depth-based subtree slicing relies on the same "flat, already-in-reading-
+ * order list keyed only by depth" manifest shape siteAdjacentLinks and
+ * buildSiteNavTree already rely on (DocsiteNavEntry's own comment) -- an
+ * entry's subtree is every following entry up to (not including) the next
+ * one at its own depth or shallower.
+ */
+export function buildSiteHomeTiles(manifest: DocsiteNavEntry[]): SiteHomeTile[] {
+  const tiles: SiteHomeTile[] = [];
+  for (let i = 0; i < manifest.length; i++) {
+    const entry = manifest[i];
+    if (entry.depth !== 0) continue;
+    let end = i + 1;
+    while (end < manifest.length && manifest[end].depth > 0) end++;
+    const subtreeNavigable = siteNavigableEntries(manifest.slice(i, end));
+    if (subtreeNavigable.length === 0) continue;
+    const target = !entry.isGroup && entry.absPath !== undefined ? entry.absPath : subtreeNavigable[0].absPath;
+    tiles.push({
+      title: entry.title,
+      target,
+      role: entry.role,
+      topicType: entry.isGroup ? undefined : entry.topicType,
+      topicCount: subtreeNavigable.length,
+    });
+  }
+  return tiles;
+}
+
+/** Generic document glyph shown on every home tile -- deliberately one icon
+ *  for every tile rather than one per topicType: buildSiteHomeTiles' tiles
+ *  are frequently group entries (chapters) with no topicType of their own,
+ *  so a per-type icon would be present on some tiles and silently missing on
+ *  others. currentColor, same convention as the other inline icon constants
+ *  in this file. */
+const SITE_HOME_TILE_ICON_SVG =
+  '<svg width="20" height="20" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+  '<path d="M4 1.5h5.5L12.5 4.5V14.5H4V1.5Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>' +
+  '<path d="M9.5 1.5V4.5H12.5" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>' +
+  '<path d="M5.75 8H10.75M5.75 10.25H10.75M5.75 12.5H9" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>';
+
+/**
+ * The docsite home page: a heading (the book's own title) and a tile grid,
+ * one tile per buildSiteHomeTiles entry -- Oxygen WebHelp's own tile/tree
+ * gallery home page (ug-editor/topics/whr-pt-feature-gallery.html) is the
+ * model, not a `<topic>` file, so it does not go through renderTopicCached
+ * at all.
+ *
+ * A tile is a plain `<a data-site-target>`, NOT `.site-nav-link` -- reusing
+ * that class would pull every tile into siteAdjacentLinks' prev/next
+ * computation (it queries every `.site-nav-link` in the whole document) and
+ * into siteHistoryExists' existence check, corrupting both. Its click is
+ * handled by a small dedicated delegation in getSiteNavClickHandlerScript
+ * that looks up the matching sidebar link and drives the ordinary
+ * switchToSitePage/history machinery through that -- the tile itself is
+ * just a labeled pointer at a target.
+ *
+ * No tiles (every top-level entry is a childless group, so
+ * buildSiteHomeTiles returned nothing) still renders the heading alone
+ * rather than an empty grid -- shouldn't happen in practice (a map with no
+ * navigable entries anywhere never reaches site mode at all, see
+ * renderMapContentUntracked's own empty-manifest check), but an empty grid
+ * with no tiles and no explanation would look broken rather than empty.
+ */
+export function renderSiteHomeHtml(
+  tiles: SiteHomeTile[],
+  opts: { heading: string; topicCountLabel: (count: number) => string },
+): string {
+  const heading = `<h1 class="site-home-title">${escapeHtml(opts.heading)}</h1>`;
+  if (tiles.length === 0) return `<div class="site-home">${heading}</div>`;
+  const cards = tiles
+    .map((tile) => {
+      const roleChip = tile.role ? `<span class="site-nav-chip site-nav-chip--role">${escapeHtml(tile.role)}</span>` : '';
+      const typeChip = tile.topicType ? `<span class="site-nav-chip site-nav-chip--type">${escapeHtml(tile.topicType)}</span>` : '';
+      return (
+        `<a href="#" class="site-home-tile" data-site-target="${escapeAttr(tile.target)}" title="${escapeAttr(tile.title)}">` +
+        `<span class="site-home-tile-icon">${SITE_HOME_TILE_ICON_SVG}</span>` +
+        `<span class="site-home-tile-body">` +
+        `<span class="site-home-tile-chips">${roleChip}${typeChip}</span>` +
+        `<span class="site-home-tile-title">${escapeHtml(tile.title)}</span>` +
+        `<span class="site-home-tile-meta">${escapeHtml(opts.topicCountLabel(tile.topicCount))}</span>` +
+        `</span></a>`
+      );
+    })
+    .join('');
+  return `<div class="site-home">${heading}<div class="site-home-grid" role="list">${cards}</div></div>`;
+}
+
 /** One manifest entry plus the direct children nested under it, built by
  *  buildSiteNavTree below. The manifest itself never carries parent/child
  *  links (see DocsiteNavEntry's own comment -- it's a flat, already-in-
@@ -2471,18 +2603,24 @@ export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: stri
   function updatePrevNextButtons() {
     var prevBtn = document.getElementById('__site-prev-btn');
     var nextBtn = document.getElementById('__site-next-btn');
-    if (!prevBtn && !nextBtn) return;
-    var adjacent = siteAdjacentLinks();
-    var prevLink = adjacent.prev;
-    var nextLink = adjacent.next;
-    if (prevBtn) {
-      prevBtn.disabled = !prevLink;
-      prevBtn.onclick = prevLink ? function() { switchToSitePage(prevLink); } : null;
+    if (prevBtn || nextBtn) {
+      var adjacent = siteAdjacentLinks();
+      var prevLink = adjacent.prev;
+      var nextLink = adjacent.next;
+      if (prevBtn) {
+        prevBtn.disabled = !prevLink;
+        prevBtn.onclick = prevLink ? function() { switchToSitePage(prevLink); } : null;
+      }
+      if (nextBtn) {
+        nextBtn.disabled = !nextLink;
+        nextBtn.onclick = nextLink ? function() { switchToSitePage(nextLink); } : null;
+      }
     }
-    if (nextBtn) {
-      nextBtn.disabled = !nextLink;
-      nextBtn.onclick = nextLink ? function() { switchToSitePage(nextLink); } : null;
-    }
+    // Same events as prev/next above (every page switch, plus init/mode-
+    // switch) refresh whether the reader is already on the home page --
+    // '.site-home' only ever marks up the page renderSiteHomeHtml produced.
+    var homeBtn = document.getElementById('__site-home-btn');
+    if (homeBtn) homeBtn.disabled = !!document.querySelector('#dita-content-root .site-home');
   }
 
   document.addEventListener('click', function(e) {
@@ -2515,6 +2653,21 @@ export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: stri
       if (navLinks[j].getAttribute('data-site-target') === targetPath) { navLink = navLinks[j]; break; }
     }
     if (navLink) switchToSitePage(navLink, anchor);
+  });
+
+  // Home page tile (renderSiteHomeHtml): NOT a '.site-nav-link' (see that
+  // function's own comment on why), so it does not reach switchToSitePage
+  // via the generic site-nav-link handler above -- this finds the matching
+  // sidebar link by the tile's own data-site-target and drives the switch
+  // through that, the same lookup-by-target the xref handler above uses.
+  document.addEventListener('click', function(e) {
+    if (typeof currentMode !== 'undefined' && currentMode !== 'site') return;
+    var tile = e.target.closest ? e.target.closest('.site-home-tile[data-site-target]') : null;
+    if (!tile) return;
+    e.preventDefault();
+    var tileTarget = tile.getAttribute('data-site-target');
+    var tileLink = tileTarget ? siteLinkFor(tileTarget) : null;
+    if (tileLink) switchToSitePage(tileLink);
   });
 
   // Deferred rather than called inline: this script is injected into the
@@ -3105,6 +3258,48 @@ export const PREV_TOPIC_ICON_SVG =
 export const NEXT_TOPIC_ICON_SVG =
   '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
   '<path d="M6 3.5L10.5 8 6 12.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+/** House glyph for the home toolbar button, drawn like the other toolbar
+ *  icons (short, centered, currentColor) rather than a font glyph. */
+export const SITE_HOME_ICON_SVG =
+  '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+  '<path d="M2 7.5L8 2.5L14 7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '<path d="M3.5 6.5V13.5H12.5V6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+/**
+ * Docsite mode's Home button -- built and appended the same
+ * build-always/caller-places-it convention as getSitePrevNextButtonsScript,
+ * placed leftmost of the navigation cluster (before back/forward) in
+ * MapViewerProvider.ts. Unlike back/forward/prev/next, it does not act on a
+ * `.site-nav-link` element (there isn't one for the home page -- it is not a
+ * manifest entry), so it posts MSG_SWITCH_SITE_PAGE directly with
+ * SITE_HOME_TARGET rather than going through switchToSitePage. It also
+ * leaves siteHistory alone: that history is "the topics the reader has
+ * visited" (siteHistoryExists tests a target against the sidebar's own
+ * links, which the home page is deliberately not one of), not a generic
+ * page stack, so a trip home is not recorded on it -- back/forward continues
+ * to step through real topics as if the trip home never happened.
+ * Its disabled state (already on the home page) is refreshed by
+ * updatePrevNextButtons alongside the prev/next buttons, since both fire
+ * from the exact same events (every page switch, plus init/mode-switch).
+ */
+export function getSiteHomeButtonScript(opts: { title: string; switchSitePageMsgType: string }): string {
+  const title = JSON.stringify(opts.title);
+  const msgType = JSON.stringify(opts.switchSitePageMsgType);
+  const homeTarget = JSON.stringify(SITE_HOME_TARGET);
+  return `
+  var siteHomeBtn = document.createElement('button');
+  siteHomeBtn.id = '__site-home-btn';
+  // innerHTML: the label is this file's own constant icon markup (SITE_HOME_ICON_SVG), never translated or user text.
+  siteHomeBtn.innerHTML = ${JSON.stringify(SITE_HOME_ICON_SVG)};
+  siteHomeBtn.title = ${title};
+  siteHomeBtn.setAttribute('aria-label', ${title});
+  siteHomeBtn.style.cssText = btnStyle + '${SITE_NAV_BTN_STYLE}';
+  siteHomeBtn.addEventListener('click', function() {
+    vscode.postMessage({ type: ${msgType}, target: ${homeTarget} });
+  });
+`;
+}
 
 /**
  * The toolbar's history buttons, created like getSitePrevNextButtonsScript's
