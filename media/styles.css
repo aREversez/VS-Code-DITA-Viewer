@@ -28,6 +28,7 @@
   --color-profiling-label-text: #2a3a12;
   --color-indexterm-chip-bg: #e6f0fa;
   --color-indexterm-chip-text: #2c5282;
+  --color-menucascade-arrow: #767676;
 }
 
 .vscode-dark {
@@ -47,6 +48,7 @@
   --color-profiling-label-text: #eef7dc;
   --color-indexterm-chip-bg: #1f2f42;
   --color-indexterm-chip-text: #9dc4ea;
+  --color-menucascade-arrow: #aaaaaa;
 }
 
 body {
@@ -634,7 +636,7 @@ pre code { background: none; padding: 0; border-radius: 0; }
 
 /* User Interface domain */
 .uicontrol { font-weight: 500; color: var(--vscode-textLink-foreground); }
-.menucascade .uicontrol + .uicontrol::before { content: ' › '; color: var(--color-border); font-weight: normal; }
+.menucascade .uicontrol + .uicontrol::before { content: ' › '; color: var(--color-menucascade-arrow); font-weight: normal; }
 .wintitle { font-style: italic; font-weight: 600; }
 .filepath { font-family: var(--code-font); font-size: 0.9em; padding: 0.1em 0.3em; background: var(--color-code-bg); border-radius: 3px; color: var(--vscode-editor-foreground); }
 .userinput { font-family: var(--code-font); font-size: 0.9em; padding: 0.1em 0.3em; background: var(--color-code-bg); border-radius: 3px; border: 1px dashed var(--color-border); color: var(--vscode-editor-foreground); }
