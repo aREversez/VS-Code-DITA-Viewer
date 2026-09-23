@@ -58,6 +58,10 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
   private titleResolver: ((href: string) => string | undefined) | undefined;
   /** Numbered book-division labels ("Chapter 1", …) keyed by node, in document order */
   private roleLabels = new WeakMap<DitaNode, string>();
+  /** Parent pointers over the visible tree structure -- see getParent. */
+  private parentOf = new WeakMap<DitaNode, DitaNode>();
+  /** Set by attachTreeView once registerMapTreeView creates it -- see expandAll. */
+  private treeView: vscode.TreeView<MapTreeNode> | undefined;
   /** Pending coalesced reload -- see requestRefresh. */
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
   /** This tree's share of the folder watcher, and the folder it is on. */
@@ -185,6 +189,7 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
     this.resolveKey = undefined;
     this.titleResolver = undefined;
     this.roleLabels = new WeakMap();
+    this.parentOf = new WeakMap();
     if (this.mapPath && existsSync(this.mapPath)) {
       try {
         const content = readFileSync(this.mapPath, 'utf-8');
@@ -208,12 +213,58 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
           }
         };
         labelWalk(doc.root, -1);
+        // Parent pointers over the same *visible* structure getChildren
+        // exposes (visibleChildren, not raw node.children -- a
+        // topicgroup's children point through it to its own parent, since
+        // the topicgroup itself never appears as a tree row). Needed for
+        // TreeView.reveal, which requires getParent to walk anything below
+        // the top level -- see expandAll.
+        const parentWalk = (node: DitaNode): void => {
+          for (const child of visibleChildren(node)) {
+            this.parentOf.set(child, node);
+            parentWalk(child);
+          }
+        };
+        parentWalk(doc.root);
       } catch {
         this.mapRoot = undefined;
       }
     }
     this.syncWatcher();
     this._onDidChangeTreeData.fire();
+  }
+
+  getParent(element: MapTreeNode): MapTreeNode | null {
+    const parentNode = this.parentOf.get(element.node);
+    // parentNode === mapRoot means element is a top-level item: mapRoot
+    // itself is never wrapped as a MapTreeNode (getChildren(undefined)
+    // returns its visible children directly), so there's no tree row to
+    // point back to.
+    if (!parentNode || parentNode === this.mapRoot || !this.mapPath) return null;
+    return { node: parentNode, mapDir: element.mapDir };
+  }
+
+  /** Set once by registerMapTreeView, after the TreeView itself exists. */
+  attachTreeView(view: vscode.TreeView<MapTreeNode>): void {
+    this.treeView = view;
+  }
+
+  /**
+   * Re-expands every branch, undoing any manual collapsing. reveal() only
+   * ever expands the one element it's given (one level), so the whole map
+   * is walked breadth-first, calling reveal on every branch node in turn.
+   */
+  async expandAll(): Promise<void> {
+    if (!this.treeView) return;
+    const walk = async (nodes: MapTreeNode[]): Promise<void> => {
+      for (const n of nodes) {
+        const children = this.getChildren(n);
+        if (children.length === 0) continue;
+        await this.treeView!.reveal(n, { expand: true, select: false, focus: false });
+        await walk(children);
+      }
+    };
+    await walk(this.getChildren(undefined));
   }
 
   getChildren(element?: MapTreeNode): MapTreeNode[] {
@@ -251,7 +302,16 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
 
     const role = this.roleLabels.get(node);
     const keys = node.attributes?.keys;
-    item.description = role || (baseType === 'map/keydef' ? keys : href) || undefined;
+    // Previously mirrored the href/keys value into the row's description
+    // text too, next to the title -- redundant once the title itself
+    // already resolves to something meaningful (the real topic title, or
+    // the href/keys fallback text getDisplayNameInfo already falls back
+    // to), and it ate horizontal space on every single row. The raw
+    // reference is still one hover away via the tooltip below; only the
+    // book-division role label (Chapter 1, Appendix A, ...) earns a
+    // permanent spot next to the title, since it's information the title
+    // itself never carries.
+    item.description = role || undefined;
     item.tooltip = href || keys || label;
 
     if (baseType === 'map/keydef') {
@@ -338,12 +398,22 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
 export function registerMapTreeView(context: vscode.ExtensionContext): void {
   const provider = new DitaMapTreeProvider();
   vscode.commands.executeCommand('setContext', 'ditaViewer.mapExplorer.pinned', false);
+  // createTreeView (rather than the plain registerTreeDataProvider used
+  // before) for two reasons: showCollapseAll gets us a native "Collapse
+  // All" button for free, with no command of our own to register, and the
+  // returned TreeView is what expandAll needs to call reveal() on.
+  const treeView = vscode.window.createTreeView('ditaViewer.mapExplorer', {
+    treeDataProvider: provider,
+    showCollapseAll: true,
+  });
+  provider.attachTreeView(treeView);
   context.subscriptions.push(
-    vscode.window.registerTreeDataProvider('ditaViewer.mapExplorer', provider),
+    treeView,
     vscode.commands.registerCommand('ditaViewer.mapExplorer.refresh', () => provider.refresh()),
     vscode.commands.registerCommand('ditaViewer.mapExplorer.selectMap', () => provider.selectMap()),
     vscode.commands.registerCommand('ditaViewer.mapExplorer.pin', () => provider.pin()),
     vscode.commands.registerCommand('ditaViewer.mapExplorer.unpin', () => provider.unpin()),
+    vscode.commands.registerCommand('ditaViewer.mapExplorer.expandAll', () => provider.expandAll()),
     vscode.window.onDidChangeActiveTextEditor((editor) =>
       provider.setActiveDocument(editor?.document.uri),
     ),

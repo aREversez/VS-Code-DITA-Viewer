@@ -9,6 +9,7 @@
   "command.compareWithGit.title": "DITA：与 Git 版本比较…",
   "command.mapExplorerRefresh.title": "刷新 DITA Map",
   "command.mapExplorerSelectMap.title": "选择 DITA Map…",
+  "command.mapExplorerExpandAll.title": "全部展开",
   "command.mapExplorerPin.title": "固定当前 Map",
   "command.mapExplorerUnpin.title": "取消固定（跟随当前编辑器）",
   "view.mapExplorer.name": "DITA Map",
