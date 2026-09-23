@@ -540,8 +540,18 @@ describe('normalizeIndexHtmlLinks', () => {
     assert.strictEqual(normalizeIndexHtmlLinks(html), '<A HREF="topics/x.html">t</A>');
   });
 
-  it('collapses ../maps/../topics/ down to a resolvable topics/ path', () => {
+  it('only strips one leading ../ segment when a non-../ path component follows, leaving the rest resolvable by the browser', () => {
     const html = '<a href="../maps/../topics/x.html">t</a>';
     assert.strictEqual(normalizeIndexHtmlLinks(html), '<a href="maps/../topics/x.html">t</a>');
+  });
+
+  it('does not touch data-href/data-src (KILL: pre-fix regex\'s \\b matches after the hyphen)', () => {
+    const html = '<a data-href="../topics/x.html" data-src="../images/y.png">t</a>';
+    assert.strictEqual(normalizeIndexHtmlLinks(html), html);
+  });
+
+  it('strips the prefix on single-quoted attributes too (KILL: pre-fix regex only handled "? )', () => {
+    const html = "<a href='../topics/x.html'>t</a>";
+    assert.strictEqual(normalizeIndexHtmlLinks(html), "<a href='topics/x.html'>t</a>");
   });
 });

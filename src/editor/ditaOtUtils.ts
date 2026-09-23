@@ -48,9 +48,17 @@ export function buildNavManifest(mapPath: string): NavManifestEntry[] {
  * `mailto:`/`tel:`, protocol-relative `//…` and bare `#anchor` references never
  * start with `../`, so they are left untouched; nor is a correct root-relative
  * link, making the transform idempotent.
+ *
+ * This is a plain text substitution, not an HTML/attribute parse: it assumes
+ * index.html is a TOC/landing page with no code samples containing literal
+ * `href="../…`/`src="../…` text (DITA-OT's own generated TOC markup never
+ * does). The match requires `href`/`src` not be preceded by a word character
+ * or `-`, so it does not touch compound attribute names such as `data-href`
+ * or `data-src`; both `"` and `'` quoting are handled (DITA-OT itself always
+ * emits `"`, but this keeps the function correct for hand-edited HTML too).
  */
 export function normalizeIndexHtmlLinks(html: string): string {
-  return html.replace(/(\b(?:href|src)="?)(?:\.\.\/)+/gi, '$1');
+  return html.replace(/(?<![\w-])((?:href|src)=(?:"|')?)(?:\.\.\/)+/gi, '$1');
 }
 
 export interface DitaOtLocation {
