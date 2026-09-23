@@ -61,6 +61,31 @@ export function normalizeIndexHtmlLinks(html: string): string {
   return html.replace(/(?<![\w-])((?:href|src)=(?:"|')?)(?:\.\.\/)+/gi, '$1');
 }
 
+/**
+ * Body of the inline `<head>` bootstrap script that applies the reader's dark
+ * mode preference to `<html>` before body content paints, for the DITA-OT
+ * HTML5/XHTML export's site chrome. Raw JS only (no `<script>` tags) — the
+ * caller wraps it, same convention as the other `getXScript()` helpers in
+ * ditaRenderUtils.ts.
+ *
+ * Without this, the page paints DITA-OT's light default first and only
+ * flips dark once `dita-viewer-chrome.js` (which self-installs at the end of
+ * `<body>`) runs `initDarkMode()` — a white flash on every topic navigation.
+ * `initDarkMode()` now only *reads* the `dark` class this script applies, so
+ * the theme-resolution logic (stored `dv-theme`, else the OS
+ * `prefers-color-scheme`) lives in exactly one place.
+ *
+ * Kept as an exported, independently testable function — rather than an
+ * inline string literal in extension.ts — because template-string webview JS
+ * like this is invisible to `tsc`/`eslint`/`npm test` unless it is executed
+ * against a fake DOM in a unit test.
+ */
+export function buildThemeBootstrapScript(): string {
+  return "(function(){try{var s=localStorage.getItem('dv-theme');"
+    + "var d=s!==null?s==='dark':!!(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);"
+    + "if(d)document.documentElement.classList.add('dark');}catch(e){}})();";
+}
+
 export interface DitaOtLocation {
   executablePath: string;
   source: 'setting' | 'env' | 'path';

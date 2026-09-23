@@ -11,6 +11,7 @@ import {
   buildDitaOtArgs,
   buildDitaOtSpawnSpec,
   buildNavManifest,
+  buildThemeBootstrapScript,
   classifyLogLine,
   createLineBuffer,
   normalizeIndexHtmlLinks,
@@ -584,10 +585,7 @@ function injectSiteChrome(
         // initDarkMode(). This static export ships without a CSP meta, so the
         // inline script is allowed; it reads the same 'dv-theme' localStorage key
         // as initDarkMode(), which now only reflects the class applied here.
-        const themeBootstrap =
-          "<script>(function(){try{var s=localStorage.getItem('dv-theme');"
-          + "var d=s!==null?s==='dark':!!(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);"
-          + "if(d)document.documentElement.classList.add('dark');}catch(e){}})();</script>";
+        const themeBootstrap = '<script>' + buildThemeBootstrapScript() + '</script>';
         html = html.replace('</head>', darkLink + themeBootstrap + '</head>');
       }
 

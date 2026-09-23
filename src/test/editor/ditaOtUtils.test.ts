@@ -7,6 +7,7 @@ import {
   buildDitaOtArgs,
   buildDitaOtSpawnSpec,
   buildNavManifest,
+  buildThemeBootstrapScript,
   classifyLogLine,
   createLineBuffer,
   normalizeIndexHtmlLinks,
@@ -553,5 +554,57 @@ describe('normalizeIndexHtmlLinks', () => {
   it('strips the prefix on single-quoted attributes too (KILL: pre-fix regex only handled "? )', () => {
     const html = "<a href='../topics/x.html'>t</a>";
     assert.strictEqual(normalizeIndexHtmlLinks(html), "<a href='topics/x.html'>t</a>");
+  });
+});
+
+describe('buildThemeBootstrapScript', () => {
+  // Simulate the <head> bootstrap in a fake DOM (jsdom is not a dependency
+  // of this project) the same way getSearchOverlayScript et al. are tested
+  // in ditaRenderUtils.test.ts, since tsc/eslint/npm test never execute
+  // template-string webview JS otherwise.
+  function run(opts: { stored: string | null; throwsOnGet?: boolean; matches?: boolean; hasMatchMedia?: boolean }) {
+    const added: string[] = [];
+    const fakeDocument = { documentElement: { classList: { add: (c: string) => added.push(c) } } };
+    const fakeLocalStorage = {
+      getItem: () => {
+        if (opts.throwsOnGet) {
+          throw new Error('SecurityError: storage disabled');
+        }
+        return opts.stored;
+      },
+    };
+    const fakeWindow = opts.hasMatchMedia === false
+      ? {}
+      : { matchMedia: () => ({ matches: !!opts.matches }) };
+    const fn = new Function('document', 'window', 'localStorage', buildThemeBootstrapScript());
+    fn(fakeDocument, fakeWindow, fakeLocalStorage);
+    return added;
+  }
+
+  it('returns raw JS, not wrapped in <script></script> (caller assembles the tag)', () => {
+    assert.doesNotThrow(() => new Function(buildThemeBootstrapScript()));
+    assert.ok(!buildThemeBootstrapScript().includes('<script'));
+  });
+
+  it('adds the dark class when the stored preference is "dark", regardless of OS preference', () => {
+    assert.deepStrictEqual(run({ stored: 'dark', matches: false }), ['dark']);
+  });
+
+  it('does not add the dark class when the stored preference is "light", even if the OS prefers dark', () => {
+    assert.deepStrictEqual(run({ stored: 'light', matches: true }), []);
+  });
+
+  it('falls back to the OS preference when nothing is stored', () => {
+    assert.deepStrictEqual(run({ stored: null, matches: true }), ['dark']);
+    assert.deepStrictEqual(run({ stored: null, matches: false }), []);
+  });
+
+  it('treats a missing matchMedia (no window.matchMedia) as light when nothing is stored', () => {
+    assert.deepStrictEqual(run({ stored: null, hasMatchMedia: false }), []);
+  });
+
+  it('fails silently (adds nothing, does not throw) when localStorage access throws, e.g. private browsing', () => {
+    assert.doesNotThrow(() => run({ stored: null, throwsOnGet: true, matches: true }));
+    assert.deepStrictEqual(run({ stored: null, throwsOnGet: true, matches: true }), []);
   });
 });
