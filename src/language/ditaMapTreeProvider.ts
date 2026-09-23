@@ -4,13 +4,13 @@
 
 import * as vscode from 'vscode';
 import { existsSync, readFileSync } from 'fs';
-import { dirname, resolve } from 'path';
+import { basename, dirname, resolve } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
-import { expandDitamapRefs, decodeHrefPart } from '../editor/ditaRenderUtils';
+import { expandDitamapRefs, decodeHrefPart, makeFileTitleResolver } from '../editor/ditaRenderUtils';
 import { acquireDitaFileWatcher, ditaWatchBase } from '../editor/ditaFileWatcher';
 import { buildKeyMap, findDitamapFiles } from '../editor/DitaViewerProvider';
-import { createBookRoleLabeler, getDisplayName } from '../render/mapTypeMap';
+import { createBookRoleLabeler, getDisplayNameInfo } from '../render/mapTypeMap';
 import { formatLocalizedRole } from './bookRoleL10n';
 import { shouldRefreshMapTree } from './mapTreeRefresh';
 
@@ -51,6 +51,11 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
   private mapPath: string | undefined;
   private mapRoot: DitaNode | undefined;
   private resolveKey: ((key: string) => string | undefined) | undefined;
+  /** Reads a referenced topic's own <title> off disk -- only ever consulted
+   *  for entries the map itself never named (see getTreeItem). Rebuilt each
+   *  reload so a rename/edit of a topic file is picked up, not stale-cached
+   *  across the tree's whole lifetime. */
+  private titleResolver: ((href: string) => string | undefined) | undefined;
   /** Numbered book-division labels ("Chapter 1", …) keyed by node, in document order */
   private roleLabels = new WeakMap<DitaNode, string>();
   /** Pending coalesced reload -- see requestRefresh. */
@@ -58,28 +63,103 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
   /** This tree's share of the folder watcher, and the folder it is on. */
   private watcherSubscription: vscode.Disposable | undefined;
   private watchedBase: string | undefined;
+  /**
+   * When true, setActiveDocument is a no-op: the user picked a map by hand
+   * (selectMap) or asked to keep the current one (pin), so opening other
+   * topics -- however deeply cross-referenced the map's own structure is --
+   * must not second-guess that choice. Cleared by unpin, which immediately
+   * resyncs to whatever's active.
+   */
+  private pinned = false;
 
-  /** Re-evaluates which map to show based on the active editor's document. */
+  get isPinned(): boolean {
+    return this.pinned;
+  }
+
+  /**
+   * Re-evaluates which map to show based on the active editor's document.
+   * Auto-following only ever crosses a *workspace-folder* boundary -- the
+   * common layout where each product/book lives isolated in its own folder,
+   * each with its own map. Opening another topic inside the map's own
+   * folder never switches the tree: DITA's nested map/topic references make
+   * "the" owning map ambiguous within one folder (a topic can be reachable
+   * from several maps), so picking one automatically on every keystroke
+   * would fight both nested references and a manual choice made moments
+   * ago. A topic opened from outside every workspace folder is left alone
+   * too -- there's no "project" to have switched into.
+   */
   setActiveDocument(uri: vscode.Uri | undefined): void {
     if (!uri) return; // Keep the last map when focus moves to non-file views
+    if (this.pinned) return; // Manual choice in force: editor activity never overrides it
     const fsPath = uri.fsPath;
-    let nextMap: string | undefined;
-    if (fsPath.toLowerCase().endsWith('.ditamap')) {
-      nextMap = fsPath;
-    } else if (fsPath.toLowerCase().endsWith('.dita')) {
-      nextMap = findDitamapFiles(uri)[0];
-    } else {
-      return; // Unrelated file type: keep showing the current map
-    }
+    const lower = fsPath.toLowerCase();
+    if (!lower.endsWith('.ditamap') && !lower.endsWith('.dita')) return; // Unrelated file type: keep showing the current map
+
+    const folder = vscode.workspace.getWorkspaceFolder(uri);
+    if (!folder) return; // External topic outside any workspace folder: keep the current map
+
+    const currentFolder = this.mapPath
+      ? vscode.workspace.getWorkspaceFolder(vscode.Uri.file(this.mapPath))
+      : undefined;
+    if (currentFolder && folder.uri.fsPath === currentFolder.uri.fsPath) return; // Same project folder: not a project switch
+
+    const nextMap = lower.endsWith('.ditamap') ? fsPath : findDitamapFiles(uri)[0];
+    if (!nextMap) return;
+
     // Keep the sidebar view visible even when the user moves on to other files
     vscode.commands.executeCommand('setContext', 'ditaViewer.hasMap', true);
-    if (nextMap && resolve(nextMap) !== (this.mapPath ? resolve(this.mapPath) : undefined)) {
-      this.mapPath = nextMap;
-      this.reload();
-    } else if (!this.mapRoot && nextMap) {
+    if (resolve(nextMap) !== (this.mapPath ? resolve(this.mapPath) : undefined)) {
       this.mapPath = nextMap;
       this.reload();
     }
+  }
+
+  /** Pins the map currently shown, so further editor activity can't change it. */
+  pin(): void {
+    if (!this.mapPath) return;
+    this.pinned = true;
+    vscode.commands.executeCommand('setContext', 'ditaViewer.mapExplorer.pinned', true);
+  }
+
+  /** Releases the pin and immediately resyncs to whatever editor is active. */
+  unpin(): void {
+    this.pinned = false;
+    vscode.commands.executeCommand('setContext', 'ditaViewer.mapExplorer.pinned', false);
+    this.setActiveDocument(vscode.window.activeTextEditor?.document.uri);
+  }
+
+  /**
+   * Lets the user hand-pick which map the sidebar shows, independent of
+   * whatever's active in the editor -- the escape hatch for a map made of
+   * layered/nested references, where no single "owning" map for a given
+   * topic is obviously correct. Scoped to the map's own workspace folder
+   * when one is already showing (or the active editor's, on first use);
+   * falls back to the whole workspace if neither is available. Picking a
+   * map pins it, same as pin(), so the choice sticks through further topic
+   * navigation.
+   */
+  async selectMap(): Promise<void> {
+    const scopeUri = this.mapPath
+      ? vscode.Uri.file(this.mapPath)
+      : vscode.window.activeTextEditor?.document.uri;
+    const folder = scopeUri ? vscode.workspace.getWorkspaceFolder(scopeUri) : undefined;
+    const pattern = folder ? new vscode.RelativePattern(folder, '**/*.ditamap') : '**/*.ditamap';
+    const found = await vscode.workspace.findFiles(pattern, '**/node_modules/**', 200);
+    if (found.length === 0) {
+      vscode.window.showInformationMessage(vscode.l10n.t('No .ditamap files found in this workspace folder.'));
+      return;
+    }
+    const items = found
+      .map((u) => ({ label: basename(u.fsPath), description: vscode.workspace.asRelativePath(u), uri: u }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    const picked = await vscode.window.showQuickPick(items, {
+      placeHolder: vscode.l10n.t('Select a DITA map to show'),
+    });
+    if (!picked) return;
+    this.mapPath = picked.uri.fsPath;
+    this.pin();
+    vscode.commands.executeCommand('setContext', 'ditaViewer.hasMap', true);
+    this.reload();
   }
 
   refresh(): void {
@@ -103,6 +183,7 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
   private reload(): void {
     this.mapRoot = undefined;
     this.resolveKey = undefined;
+    this.titleResolver = undefined;
     this.roleLabels = new WeakMap();
     if (this.mapPath && existsSync(this.mapPath)) {
       try {
@@ -112,6 +193,7 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
         this.mapRoot = doc.root;
         const keyMap = buildKeyMap(vscode.Uri.file(this.mapPath));
         this.resolveKey = (k: string) => keyMap.get(k);
+        this.titleResolver = makeFileTitleResolver(dirname(this.mapPath));
         // Assign numbered division labels per nesting depth
         const roleLabel = createBookRoleLabeler(formatLocalizedRole);
         const labelWalk = (node: DitaNode, depth: number): void => {
@@ -146,10 +228,21 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
   getTreeItem(element: MapTreeNode): vscode.TreeItem {
     const { node, mapDir } = element;
     const baseType = node.baseType;
-    const label =
-      baseType === 'map/bookmap-structural'
-        ? node.tagName || '(container)'
-        : getDisplayName(node, this.resolveKey);
+    const href = node.attributes?.href;
+    let label: string;
+    if (baseType === 'map/bookmap-structural') {
+      label = node.tagName || '(container)';
+    } else {
+      const nameInfo = getDisplayNameInfo(node, this.resolveKey);
+      // A name the map itself never gave (Priority 4/5 in
+      // getDisplayNameInfo -- the href's bare filename, or the raw `keys`
+      // value) isn't really a title, just the only thing left to call the
+      // row: read the referenced topic's own <title> off disk instead, so
+      // the tree shows what the topic is actually about rather than its
+      // filename. Falls back to the map's own text when the topic can't be
+      // read (a broken href, a non-DITA target, a key-only ref).
+      label = nameInfo.explicit ? nameInfo.text : this.titleResolver?.(href || '') || nameInfo.text;
+    }
     const hasChildren = visibleChildren(node).length > 0;
     const item = new vscode.TreeItem(
       label,
@@ -157,7 +250,6 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
     );
 
     const role = this.roleLabels.get(node);
-    const href = node.attributes?.href;
     const keys = node.attributes?.keys;
     item.description = role || (baseType === 'map/keydef' ? keys : href) || undefined;
     item.tooltip = href || keys || label;
@@ -245,9 +337,13 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
 
 export function registerMapTreeView(context: vscode.ExtensionContext): void {
   const provider = new DitaMapTreeProvider();
+  vscode.commands.executeCommand('setContext', 'ditaViewer.mapExplorer.pinned', false);
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider('ditaViewer.mapExplorer', provider),
     vscode.commands.registerCommand('ditaViewer.mapExplorer.refresh', () => provider.refresh()),
+    vscode.commands.registerCommand('ditaViewer.mapExplorer.selectMap', () => provider.selectMap()),
+    vscode.commands.registerCommand('ditaViewer.mapExplorer.pin', () => provider.pin()),
+    vscode.commands.registerCommand('ditaViewer.mapExplorer.unpin', () => provider.unpin()),
     vscode.window.onDidChangeActiveTextEditor((editor) =>
       provider.setActiveDocument(editor?.document.uri),
     ),
