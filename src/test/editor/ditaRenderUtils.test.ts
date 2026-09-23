@@ -2270,7 +2270,7 @@ describe('toolbar scaffold/font-prefs/font-width-tag-tooltips scripts (a3\' extr
 
   it('warns via toast when the selected width is not narrower than the current window -- otherwise every option renders identically to Auto/Full and looks like nothing happened', () => {
     const script = getToolbarFontWidthTagTooltipsButtonsScript(buttonsOpts);
-    const toasts: string[] = [];
+    const toasts: Array<{ text: string; opts: { top?: boolean; duration?: number } | undefined }> = [];
     let changeHandler: (() => void) | undefined;
     const fakeSelect = {
       style: {},
@@ -2293,7 +2293,7 @@ describe('toolbar scaffold/font-prefs/font-width-tag-tooltips scripts (a3\' extr
       body: { style: { setProperty: () => {}, removeProperty: () => {} } },
     };
     const fontPrefsStub = 'var fontSize = 100; var isSerif = false; var SERIF_STACK = "serif";';
-    const imageToastStub = 'function showCenteredToast(text) { window.__toasts.push(text); }';
+    const imageToastStub = 'function showCenteredToast(text, opts) { window.__toasts.push({ text: text, opts: opts }); }';
     const vscodeStub = { postMessage: () => {} };
     new Function(
       'document', 'btnStyle', 'ddStyle', 'window', 'vscode',
@@ -2306,7 +2306,13 @@ describe('toolbar scaffold/font-prefs/font-width-tag-tooltips scripts (a3\' extr
     fakeSelect.selectedIndex = fakeSelect.options.indexOf(wideOption);
     changeHandler!();
     assert.strictEqual(toasts.length, 1, 'expected exactly one toast for a selection with no visible effect');
-    assert.ok(toasts[0].includes('Wide'), 'toast should name the option the user picked');
+    assert.ok(toasts[0].text.includes('Wide'), 'toast should name the option the user picked');
+    // Shown near the width dropdown (top: true) rather than the
+    // image-copy toast's default bottom placement, and long enough on
+    // screen to actually read a full sentence, not the 1200ms tuned for a
+    // short "Copied" pill.
+    assert.strictEqual(toasts[0].opts?.top, true, 'should be placed near the top, where the width dropdown itself is');
+    assert.ok((toasts[0].opts?.duration ?? 0) >= 3500, 'should stay up long enough to actually read the message, not the short default toast duration');
     // Selecting "Auto" (no numeric px) never warns -- there's no fixed
     // width to compare the window against.
     toasts.length = 0;

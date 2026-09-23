@@ -4780,14 +4780,14 @@ export function getImageLightboxScript(opts: {
   // whether or not the lightbox overlay is open. Auto-removes itself; never
   // accumulates if fired repeatedly, since each call removes any toast
   // still showing before adding its own.
-  function showCenteredToast(text) {
+  function showCenteredToast(text, opts) {
     var existing = document.querySelector('.dita-img-toast');
     if (existing) existing.remove();
     var toast = document.createElement('div');
-    toast.className = 'dita-img-toast';
+    toast.className = 'dita-img-toast' + (opts && opts.top ? ' dita-img-toast--top' : '');
     toast.textContent = text;
     document.body.appendChild(toast);
-    setTimeout(function() { toast.remove(); }, 1200);
+    setTimeout(function() { toast.remove(); }, (opts && opts.duration) || 1200);
   }
 
   // Custom right-click "Copy Image" menu for both the inline preview images
@@ -5315,7 +5315,15 @@ ${fontResetBlock}
     var px = parseInt(wSel.value, 10);
     if (px && document.documentElement.clientWidth <= px) {
       var selectedLabel = wSel.options[wSel.selectedIndex].textContent;
-      showCenteredToast(${widthTooNarrow}.replace('{0}', selectedLabel));
+      var narrowMsg = ${widthTooNarrow}.replace('{0}', selectedLabel);
+      // Shown near the width dropdown itself (top of the page, not the
+      // image-copy toast's default bottom placement) since that's where
+      // the user's focus already is after clicking it -- a bottom toast
+      // is easy to miss entirely, or costs a big eye/scroll jump down to
+      // notice at all. Duration scales with message length: this sentence
+      // is long enough that the default 1200ms (tuned for a short "Copied"
+      // pill) disappears before it can be read.
+      showCenteredToast(narrowMsg, { top: true, duration: Math.min(8000, Math.max(3500, narrowMsg.length * 60)) });
     }
   });
 
