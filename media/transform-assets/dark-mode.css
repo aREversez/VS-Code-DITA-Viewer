@@ -28,6 +28,22 @@ html.dark {
   --dv-active-bg: #1c2a3d;
   --dv-active-fg: #5aa6ff;
 
+  /* Note-severity tokens (site-chrome.css) -- overriding these covers every
+     .note_xxx variant, note_warning and note_caution included, without a
+     separate override per class. */
+  --dv-note-tip-bg: #16281c;
+  --dv-note-tip-border: #234d31;
+  --dv-note-tip-accent: #3fbf6a;
+  --dv-note-important-bg: #221a33;
+  --dv-note-important-border: #3a2a5c;
+  --dv-note-important-accent: #9b7aeb;
+  --dv-note-warning-bg: #2e2313;
+  --dv-note-warning-border: #4d3c1a;
+  --dv-note-warning-accent: #e0a83a;
+  --dv-note-danger-bg: #2e1717;
+  --dv-note-danger-border: #4d2424;
+  --dv-note-danger-accent: #e2645f;
+
   /* Content-level tokens (DITA-OT's own output, e.g. .codeblock/.note/table). */
   --color-bg: #1e1e1e;
   --color-text: #d4d4d4;
@@ -36,10 +52,6 @@ html.dark {
   --color-code-bg: #1a1a1a;
   --color-code-border: #444;
   --color-note-bg: #1a2633;
-  --color-warning-bg: #33281a;
-  --color-danger-bg: #331a1a;
-  --color-important-bg: #261a33;
-  --color-tip-bg: #1a3326;
   --color-surface: #2a2a2a;
   --color-muted: #999;
 }
@@ -75,10 +87,6 @@ html.dark .filepath {
 
 /* ── Notes / admonitions ── */
 html.dark .note { background: var(--color-note-bg); border-color: #2a4a6a; }
-html.dark .note_important { background: var(--color-important-bg); border-color: #443366; }
-html.dark .note_tip { background: var(--color-tip-bg); border-color: #336644; }
-html.dark .note_warning { background: var(--color-warning-bg); border-color: #665533; }
-html.dark .note_danger { background: var(--color-danger-bg); border-color: #663333; }
 html.dark .note__title { color: #ccc; }
 
 /* ── Tables ── */

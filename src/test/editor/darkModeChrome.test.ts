@@ -60,4 +60,16 @@ describe('dark-mode.css chrome tokens', () => {
       assert.ok(css.includes(sel), `expected content-level rule for ${sel}`);
     }
   });
+
+  it('overrides every note-severity token (including note_caution, aliased to note_warning) with WCAG AA contrast (4.5:1)', () => {
+    const dark = declarations(darkCss(), 'html.dark {');
+    for (const sev of ['tip', 'important', 'warning', 'danger']) {
+      const bg = dark[`--dv-note-${sev}-bg`];
+      assert.ok(bg, `--dv-note-${sev}-bg overridden under html.dark`);
+      assert.ok(contrast(dark['--dv-fg'], bg) >= 4.5, `text on --dv-note-${sev}-bg is ${contrast(dark['--dv-fg'], bg).toFixed(2)}:1`);
+    }
+    // note_caution has no override of its own -- it must share note_warning's
+    // tokens (real sample output uses both note_warning and note_caution).
+    assert.ok(chromeCss().includes('.note_warning, .note_caution'), 'note_caution should be aliased to note_warning\'s tokens in site-chrome.css');
+  });
 });

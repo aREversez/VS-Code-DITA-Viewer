@@ -25,6 +25,22 @@
   --dv-accent-soft: #e8f1fd;
   --dv-active-bg: #e8f1fd;
   --dv-active-fg: #0b62d6;
+
+  /* Note-severity tokens, so dark-mode.css only needs to override these
+     once instead of re-styling every .note_xxx rule individually -- same
+     pattern as the chrome tokens above. */
+  --dv-note-tip-bg: #eaf7ee;
+  --dv-note-tip-border: #cdebd6;
+  --dv-note-tip-accent: #2f9e52;
+  --dv-note-important-bg: #f1ecfb;
+  --dv-note-important-border: #ded2f5;
+  --dv-note-important-accent: #7c4fd1;
+  --dv-note-warning-bg: #fdf3e2;
+  --dv-note-warning-border: #f6e0b3;
+  --dv-note-warning-accent: #c98a12;
+  --dv-note-danger-bg: #fbeaea;
+  --dv-note-danger-border: #f3caca;
+  --dv-note-danger-accent: #c23b3b;
 }
 
 /* ── Content baseline ──
@@ -36,6 +52,141 @@
 img, svg, video {
   max-width: 100%;
   height: auto;
+}
+
+/* Page canvas: commonltr.css sets no body rule at all, so without this the
+   page is pure browser default (serif/sans default, black-on-white, no
+   reading width) regardless of theme. Verified against a real DITA-OT html5
+   sample (Adeline's own "星枢 N1" manual) rather than assumed. */
+body {
+  font-family: var(--dv-font);
+  color: var(--dv-fg);
+  background: var(--dv-bg);
+  line-height: 1.65;
+}
+main[role="main"] {
+  box-sizing: border-box;
+  padding: 3rem 3rem 4rem;
+}
+main[role="main"] > article {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+/* Headings -- commonltr.css only sets font-size/weight/margin; layer colour
+   and a reading-friendly rhythm on top without fighting those base rules. */
+.title.topictitle1 {
+  font-size: 2rem;
+  letter-spacing: -0.01em;
+  color: var(--dv-fg);
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--dv-border);
+}
+.title.sectiontitle {
+  color: var(--dv-fg);
+}
+
+/* Body text */
+.shortdesc {
+  font-size: 1.08rem;
+  color: var(--dv-muted);
+}
+.ul, .ol {
+  padding-left: 1.4rem;
+}
+.ul .li, .ol .li {
+  margin: 0.35rem 0;
+}
+
+/* Figures -- real markup: <figure class="fig fignone"><figcaption><span
+   class="fig--title-label">图 1. </span>...</figcaption><img class="image">. */
+.fig {
+  margin: 1.5rem 0;
+  text-align: center;
+}
+.fig img.image {
+  border: 1px solid var(--dv-border);
+  border-radius: var(--dv-radius-sm);
+}
+.fig--title-label {
+  font-weight: 600;
+}
+figcaption {
+  font-size: 0.85rem;
+  color: var(--dv-muted);
+  margin-top: 0.5rem;
+}
+
+/* Notes -- commonltr.css only bolds the title, no box at all in light mode.
+   Real severities seen in sample output: note_tip, note_important,
+   note_warning, note_caution (aliased to the same amber as warning). */
+.note {
+  position: relative;
+  margin: 1.25rem 0;
+  padding: 0.85rem 1rem;
+  border-radius: var(--dv-radius-sm);
+  border: 1px solid var(--dv-border);
+  border-left-width: 4px;
+  background: var(--dv-bg-soft);
+}
+.note .note__title {
+  color: var(--dv-fg);
+  margin-right: 0.35rem;
+}
+.note_tip { background: var(--dv-note-tip-bg); border-color: var(--dv-note-tip-border); border-left-color: var(--dv-note-tip-accent); }
+.note_important { background: var(--dv-note-important-bg); border-color: var(--dv-note-important-border); border-left-color: var(--dv-note-important-accent); }
+.note_warning, .note_caution { background: var(--dv-note-warning-bg); border-color: var(--dv-note-warning-border); border-left-color: var(--dv-note-warning-accent); }
+.note_danger { background: var(--dv-note-danger-bg); border-color: var(--dv-note-danger-border); border-left-color: var(--dv-note-danger-accent); }
+
+/* Tables -- real markup: table.table > caption(.table--title-label + .title)
+   + thead.thead > tr.row > th.entry, tbody.tbody > tr.row > td.entry. */
+.table {
+  width: 100%;
+  margin: 1.25rem 0;
+  font-size: 0.92rem;
+}
+.table caption {
+  text-align: left;
+  margin-bottom: 0.5rem;
+  color: var(--dv-fg);
+}
+.table--title-label {
+  color: var(--dv-muted);
+  font-weight: 400;
+}
+.thead .entry {
+  background: var(--dv-bg-soft);
+  font-weight: 600;
+  text-align: left;
+}
+.entry {
+  border: 1px solid var(--dv-border);
+  padding: 0.5rem 0.75rem;
+}
+.tbody .row:nth-child(even) .entry {
+  background: var(--dv-bg-soft);
+}
+
+/* Code blocks -- real markup: pre.pre.codeblock > code. Only dark-mode.css
+   gave these a background before; light mode had none at all. */
+pre.codeblock, pre.pre {
+  background: var(--dv-bg-soft);
+  border: 1px solid var(--dv-border);
+  border-radius: var(--dv-radius-sm);
+  padding: 0.85rem 1rem;
+  overflow-x: auto;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+/* Cross-references -- commonltr.css sets no colour for .xref at all. */
+.xref {
+  color: var(--dv-accent);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--dv-accent);
+}
+.xref:hover {
+  border-bottom-style: solid;
 }
 
 /* ── Nav toolbar (right side) ── */
@@ -91,6 +242,20 @@ img, svg, video {
 .dv-sidebar ul ul { padding-left: 1rem; }
 .dv-sidebar li { margin: 2px 0; }
 .dv-sidebar .title { display: none; }
+/* Per-topic sidebar's chapter group label -- real markup wraps it in a bare
+   <span> as the <li>'s first child, sibling to the nested <ul> (no dedicated
+   class to hang a style on), so target that shape directly. */
+.dv-sidebar li > span:first-child {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--dv-muted);
+  margin: 1.1rem 0 0.35rem;
+  padding: 0 10px;
+}
+.dv-sidebar li:first-child > span:first-child { margin-top: 0; }
 .dv-sidebar a {
   text-decoration: none;
   color: var(--dv-fg);
@@ -145,13 +310,36 @@ img, svg, video {
   padding: 0;
 }
 .dv-index nav ul.map { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
-.dv-index nav .map .map { padding-left: 1.25rem; margin-top: 8px; }
+/* Index page's chapter/topichead label is a bare text node, not a link --
+   real markup: <li class="topicref topichead">第 1 章 ...<ul>(topics)</ul></li>
+   with no wrapper around the text and no class on the nested <ul>, so style
+   the <li> itself (its text inherits) and target the nested list directly
+   rather than the old (never-matching) ".map .map" guess. */
+.dv-index nav ul.map li.topichead {
+  list-style: none;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--dv-fg);
+  margin: 2rem 0 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--dv-border);
+}
+.dv-index nav ul.map li.topichead:first-child { margin-top: 0; }
+.dv-index nav ul.map li.topichead > ul {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .dv-index nav .topicref { margin: 0; }
 .dv-index nav a {
   display: flex;
   align-items: center;
   padding: 12px 18px;
   text-decoration: none;
+  font-weight: 400;
   color: var(--dv-fg);
   background: var(--dv-bg);
   border: 1px solid var(--dv-border);

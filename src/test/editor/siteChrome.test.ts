@@ -105,4 +105,13 @@ describe('site-chrome.css content-page baseline', () => {
     assert.ok(/max-width:\s*100%/.test(body), 'expected max-width: 100%');
     assert.ok(/height:\s*auto/.test(body), 'expected height: auto');
   });
+
+  it('gives every note-severity token light-mode WCAG AA contrast (4.5:1) for body text on the tinted background', () => {
+    const tokens = declarations(chromeCss(), ':root {');
+    for (const sev of ['tip', 'important', 'warning', 'danger']) {
+      const bg = tokens[`--dv-note-${sev}-bg`];
+      assert.ok(bg, `--dv-note-${sev}-bg declared`);
+      assert.ok(contrast(tokens['--dv-fg'], bg) >= 4.5, `text on --dv-note-${sev}-bg is ${contrast(tokens['--dv-fg'], bg).toFixed(2)}:1`);
+    }
+  });
 });
