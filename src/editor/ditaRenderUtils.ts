@@ -4,7 +4,7 @@ import { DitaNode } from '../parser/domTypes';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
 import type { MapEntry } from '../render/mapTypeMap';
-import { isDitamapRef } from '../render/mapTypeMap';
+import { extractText, getMapTitleText, isDitamapRef } from '../render/mapTypeMap';
 import type { BookPart } from './bookPatch';
 import { sourceStamp, readSourceText, noteSourceDependencies } from './sourceText';
 
@@ -236,7 +236,13 @@ export function makeFileCache(docDir: string) {
     if (!existsSync(absPath)) { cache.set(absPath, undefined); return undefined; }
     try {
       const content = readSourceText(absPath, 'utf-8');
-      const doc = parseDita(preprocessEntities(content));
+      // A .ditamap parses with the map tag table: without it, a map's own
+      // <title>/<booktitle> would carry the topic parser's baseTypes and
+      // map-title consumers (the Explorer tree's submap rows, via
+      // makeFileTitleResolver) would see nothing they recognize.
+      const doc = /\.ditamap$/i.test(absPath)
+        ? parseDitamap(preprocessEntities(content))
+        : parseDita(preprocessEntities(content));
       cache.set(absPath, doc.root);
       return doc.root;
     } catch {
@@ -254,14 +260,18 @@ export function makeFileCache(docDir: string) {
     return undefined;
   }
 
-  function findTitleOfElement(root: DitaNode, elementId: string): string | undefined {
+  function findTitleOfElement(
+    root: DitaNode,
+    elementId: string,
+    resolveKey?: (key: string) => string | undefined,
+  ): string | undefined {
     const el = findElementById(root, elementId);
     if (!el) return undefined;
     const titleChild = (el.children || []).find(
       (c) => c.type === 'element' && c.baseType === 'topic/title',
     );
     if (!titleChild) return undefined;
-    return collectText(titleChild);
+    return extractText(titleChild, resolveKey);
   }
 
   /**
@@ -400,6 +410,7 @@ export function makeConrefRangeResolver(
 export function makeFileTitleResolver(
   docDir: string,
   sharedCache?: ReturnType<typeof makeFileCache>,
+  resolveKey?: (key: string) => string | undefined,
 ): (href: string) => string | undefined {
   const cache = sharedCache ?? makeFileCache(docDir);
 
@@ -412,15 +423,22 @@ export function makeFileTitleResolver(
     if (hashIdx < 0) {
       // No fragment: only hrefs that look like DITA files get file-level
       // resolution — bare ids (unmatched local anchors that callers pass
-      // through) must not be probed as filenames.
-      if (!/\.(dita|xml)$/i.test(href)) return undefined;
-      // Resolve the root topic's title from the file
+      // through) must not be probed as filenames. .ditamap resolves the
+      // same way (its own <title>/<mainbooktitle> rather than a topic
+      // <title>): the Explorer tree names submap rows by the referenced
+      // map's own title, including a duplicate mapref whose children were
+      // never spliced in.
+      if (!/\.(dita|xml|ditamap)$/i.test(href)) return undefined;
       const root = cache.loadFile(href);
       if (!root) return undefined;
+      if (/\.ditamap$/i.test(href)) return getMapTitleText(root, resolveKey);
       const titleChild = (root.children || []).find(
         (c) => c.type === 'element' && c.baseType === 'topic/title',
       );
-      return titleChild ? collectText(titleChild) : undefined;
+      // extractText rather than collectText: a title whose product name or
+      // version number is a keyref (the software-manual pattern) must show
+      // the key's value, not drop it.
+      return titleChild ? extractText(titleChild, resolveKey) : undefined;
     }
     const filePath = href.substring(0, hashIdx);
     const idPart = href.substring(hashIdx + 1);
@@ -428,7 +446,7 @@ export function makeFileTitleResolver(
 
     const root = cache.loadFile(filePath);
     if (!root) return undefined;
-    return cache.findTitleOfElement(root, topicId);
+    return cache.findTitleOfElement(root, topicId, resolveKey);
   };
 }
 

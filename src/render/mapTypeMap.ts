@@ -144,13 +144,19 @@ export function createBookRoleLabeler(
 /**
  * Plain-text map title. For bookmaps, <booktitle> groups <mainbooktitle>
  * with optional <booktitlealt>/<subtitle> — prefer the main title instead
- * of concatenating all inner text.
+ * of concatenating all inner text. A bookmap may also carry a plain
+ * <title> (the short form) alongside <booktitle>; the main book title is
+ * the one a tree row or a site header should answer to.
  */
 export function getMapTitleText(root: DitaNode, resolveKey?: ResolveKey): string | undefined {
-  const titleEl = (root.children || []).find(
+  const titleEls = (root.children || []).filter(
     (c) => c.type === 'element' && c.baseType === 'map/map-title',
   );
-  if (!titleEl) return undefined;
+  if (titleEls.length === 0) return undefined;
+  const titleEl =
+    titleEls.find((c) => c.tagName === 'booktitle') ||
+    titleEls.find((c) => c.tagName === 'mainbooktitle') ||
+    titleEls[0];
   const inner = (titleEl.children || []).filter(
     (c) => c.type === 'element' && c.baseType === 'map/map-title',
   );
@@ -159,7 +165,15 @@ export function getMapTitleText(root: DitaNode, resolveKey?: ResolveKey): string
   return text || undefined;
 }
 
-function extractText(node: DitaNode, resolveKey?: ResolveKey): string {
+/**
+ * Text content of an element, substituting a keyref whose element carries
+ * no content of its own (an empty <ph keyref="version"/>): the pattern a
+ * manual's own title uses for product names and version numbers, so every
+ * title-extraction path (map titles, navtitles, topic titles read off
+ * disk) goes through here to render it. Element content wins over the
+ * keyref when both exist, per DITA keyref fallback semantics.
+ */
+export function extractText(node: DitaNode, resolveKey?: ResolveKey): string {
   if (node.type === 'text') return node.text || '';
   const own = (node.children || []).map((c) => extractText(c, resolveKey)).join('');
   // Empty element carrying a keyref (e.g. <ph keyref="product"/>): substitute

@@ -24,6 +24,7 @@ describe('extension activation', () => {
     assert.ok(commands.includes('ditaViewer.mapExplorer.refresh'));
     assert.ok(commands.includes('ditaViewer.mapExplorer.selectMap'));
     assert.ok(commands.includes('ditaViewer.mapExplorer.expandAll'));
+    assert.ok(commands.includes('ditaViewer.mapExplorer.collapseAll'));
     assert.ok(commands.includes('ditaViewer.mapExplorer.pin'));
     assert.ok(commands.includes('ditaViewer.mapExplorer.unpin'));
   });

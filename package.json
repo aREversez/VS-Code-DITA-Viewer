@@ -136,6 +136,11 @@
         "icon": "$(expand-all)"
       },
       {
+        "command": "ditaViewer.mapExplorer.collapseAll",
+        "title": "%command.mapExplorerCollapseAll.title%",
+        "icon": "$(collapse-all)"
+      },
+      {
         "command": "ditaViewer.mapExplorer.pin",
         "title": "%command.mapExplorerPin.title%",
         "icon": "$(pin)"
@@ -230,19 +235,36 @@
           "group": "navigation@2"
         },
         {
+          "command": "ditaViewer.mapExplorer.collapseAll",
+          "when": "view == ditaViewer.mapExplorer",
+          "group": "navigation@3"
+        },
+        {
           "command": "ditaViewer.mapExplorer.pin",
           "when": "view == ditaViewer.mapExplorer && !ditaViewer.mapExplorer.pinned",
-          "group": "navigation@3"
+          "group": "navigation@4"
         },
         {
           "command": "ditaViewer.mapExplorer.unpin",
           "when": "view == ditaViewer.mapExplorer && ditaViewer.mapExplorer.pinned",
-          "group": "navigation@3"
+          "group": "navigation@4"
         },
         {
           "command": "ditaViewer.mapExplorer.refresh",
           "when": "view == ditaViewer.mapExplorer",
-          "group": "navigation@4"
+          "group": "navigation@5"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "ditaViewer.mapExplorer.expandAll",
+          "when": "view == ditaViewer.mapExplorer",
+          "group": "expandcollapse@1"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.collapseAll",
+          "when": "view == ditaViewer.mapExplorer",
+          "group": "expandcollapse@2"
         }
       ],
       "editor/title": [
@@ -338,6 +360,10 @@
         },
         {
           "command": "ditaViewer.mapExplorer.expandAll",
+          "when": "false"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.collapseAll",
           "when": "false"
         },
         {

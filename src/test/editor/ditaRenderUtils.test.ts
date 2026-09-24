@@ -754,6 +754,21 @@ describe('makeFileTitleResolver', () => {
     writeFileSync(join(dir, 'topic.dita'), `<topic id="t1"><title>Real Topic Title</title></topic>`);
     // File deliberately named like a bare id — must NOT be picked up
     writeFileSync(join(dir, 'someid'), `<topic id="someid"><title>Ghost Title</title></topic>`);
+    // A title carrying keyrefs — the software-manual pattern (product name,
+    // version number as reusable variables) the Explorer map tree resolves
+    // so submap/topic rows show the key's value, not a dropped word.
+    writeFileSync(
+      join(dir, 'keyed.dita'),
+      `<topic id="k1"><title><ph keyref="product"/> 安装指南 <keyword keyref="version"/></title></topic>`,
+    );
+    writeFileSync(
+      join(dir, 'manual.ditamap'),
+      `<map><title><keyword keyref="product"/> 用户手册</title><topicref href="topic.dita"/></map>`,
+    );
+    writeFileSync(
+      join(dir, 'book.ditamap'),
+      `<bookmap><booktitle><mainbooktitle><keyword keyref="product"/> 安装手册</mainbooktitle><subtitle>副标题</subtitle></booktitle></bookmap>`,
+    );
   });
 
   after(() => {
@@ -779,6 +794,32 @@ describe('makeFileTitleResolver', () => {
   it('should not treat a bare id as a filename even when a matching file exists', () => {
     const resolver = makeFileTitleResolver(dir);
     assert.strictEqual(resolver('someid'), undefined);
+  });
+
+  it('should resolve keyrefs inside a topic title when a key resolver is given', () => {
+    const resolver = makeFileTitleResolver(dir, undefined, (key) =>
+      key === 'product' ? '星枢 N1' : key === 'version' ? '2.1.0' : undefined,
+    );
+    assert.strictEqual(resolver('keyed.dita'), '星枢 N1 安装指南 2.1.0');
+  });
+
+  it('should leave a keyref unresolved (word dropped) when no key resolver is given, as before', () => {
+    const resolver = makeFileTitleResolver(dir);
+    assert.strictEqual(resolver('keyed.dita'), ' 安装指南 ');
+  });
+
+  it('should resolve a local .ditamap href to the map\'s own <title>, keyrefs resolved', () => {
+    const resolver = makeFileTitleResolver(dir, undefined, (key) =>
+      key === 'product' ? '星枢 N1' : undefined,
+    );
+    assert.strictEqual(resolver('manual.ditamap'), '星枢 N1 用户手册');
+  });
+
+  it('should resolve a local .ditamap href to a bookmap\'s mainbooktitle, not the subtitle', () => {
+    const resolver = makeFileTitleResolver(dir, undefined, (key) =>
+      key === 'product' ? '星枢 N1' : undefined,
+    );
+    assert.strictEqual(resolver('book.ditamap'), '星枢 N1 安装手册');
   });
 });
 

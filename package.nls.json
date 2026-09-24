@@ -10,6 +10,7 @@
   "command.mapExplorerRefresh.title": "Refresh DITA Map",
   "command.mapExplorerSelectMap.title": "Select DITA Map…",
   "command.mapExplorerExpandAll.title": "Expand All",
+  "command.mapExplorerCollapseAll.title": "Collapse All",
   "command.mapExplorerPin.title": "Pin Current Map",
   "command.mapExplorerUnpin.title": "Unpin (Follow Active Editor)",
   "view.mapExplorer.name": "DITA Map",
