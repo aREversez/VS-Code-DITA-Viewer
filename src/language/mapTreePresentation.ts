@@ -97,6 +97,11 @@ export interface MapTreeIconInput {
 }
 
 export function mapTreeIconId(input: MapTreeIconInput): string {
+  // map/map-filled were registered in VS Code 1.69.0 (July 2022); every
+  // other icon id below predates that. Safe against this extension's
+  // current engines.vscode (^1.85.0) with room to spare -- re-verify
+  // against whichever codicons.ts shipped with the target version before
+  // ever lowering that floor below 1.69, or these silently render blank.
   if (input.isRoot) return 'map-filled';
   // A mapref is a map even when its href is not local (external scope) --
   // the tag itself says what kind of thing the row points at.
