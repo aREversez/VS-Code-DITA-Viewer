@@ -554,7 +554,15 @@ img[data-load-error] { cursor: default; }
      reads noticeably slower for a quick transient message). */
   font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-  max-width: min(90vw, 420px);
+  max-width: 92vw;
+  /* Kept to one line: a short toast that wraps to two is more disruptive
+     to read at a glance than one that's simply not padded to a fixed box
+     width. The message itself is kept short enough to fit in the common
+     case; text-overflow is only a safety net for an unusually long locale
+     string or width-option label. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   text-align: center;
 }
 /* For feedback tied to a top-of-page control (the width dropdown): a

@@ -97,7 +97,7 @@
   "View Install Instructions": "View Install Instructions",
   "View Output Log": "View Output Log",
   "Wide": "Wide",
-  "Window too narrow to see a visible difference at \"{0}\" width. Try widening the window.": "Window too narrow to see a visible difference at \"{0}\" width. Try widening the window.",
+  "Too narrow for \"{0}\" width -- try widening the window.": "Too narrow for \"{0}\" width -- try widening the window.",
   "\n[DITA-OT] Command: {0} {1}": "\n[DITA-OT] Command: {0} {1}",
   "\n[DITA-OT] Failed to inject site enhancements: {0}": "\n[DITA-OT] Failed to inject site enhancements: {0}",
   "\n[DITA-OT] Failed to start process: {0}": "\n[DITA-OT] Failed to start process: {0}",
