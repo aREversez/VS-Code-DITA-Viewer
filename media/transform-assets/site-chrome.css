@@ -27,6 +27,17 @@
   --dv-active-fg: #0b62d6;
 }
 
+/* ── Content baseline ──
+   DITA-OT's own commonltr.css doesn't constrain media to the viewport, so an
+   image wider than its natural display column overflows the page instead of
+   scaling down. Targets the bare tags rather than a DITA-OT class name, so it
+   holds regardless of DITA-OT version. Deliberately conservative otherwise --
+   this file still doesn't restyle commonltr.css's own typography/colour. */
+img, svg, video {
+  max-width: 100%;
+  height: auto;
+}
+
 /* ── Nav toolbar (right side) ── */
 .dv-toolbar {
   position: fixed;

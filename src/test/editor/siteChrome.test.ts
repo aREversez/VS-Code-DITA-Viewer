@@ -93,3 +93,16 @@ describe('site-chrome.css design tokens', () => {
     }
   });
 });
+
+describe('site-chrome.css content-page baseline', () => {
+  it('scales images/svg/video down to fit the viewport instead of letting them overflow it', () => {
+    const css = chromeCss();
+    // Targets the bare tag, not a DITA-OT class name, so it applies
+    // regardless of which DITA-OT version generated the page.
+    const m = css.match(/img,\s*svg,\s*video\s*\{([^}]*)\}/);
+    assert.ok(m, 'expected an img, svg, video rule');
+    const body = m![1];
+    assert.ok(/max-width:\s*100%/.test(body), 'expected max-width: 100%');
+    assert.ok(/height:\s*auto/.test(body), 'expected height: auto');
+  });
+});
