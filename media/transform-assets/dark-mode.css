@@ -1,12 +1,34 @@
-/* ── Dark mode palette ── */
+/* ── Dark palette ──
+   Two layers: the --dv- tokens (re-themes every dv- chrome component defined
+   in site-chrome.css automatically -- nothing below needs to re-style an
+   individual component), and the content-level overrides for DITA-OT's own
+   output (headings, links, code, notes, tables, ...), which stays necessary
+   because DITA-OT's bundled commonltr.css is light-only and we do not touch
+   that file (see site-book-templates-plan.md's "own DOM, own templates"
+   boundary applied here as "own chrome, DITA-OT's own base css untouched"). */
 html.dark {
   /* Paint the document canvas dark too (not just <body>) and tell the UA this
      page is dark, so the viewport background and native scrollbars/overscroll
-     are dark the instant the page shows — before and independent of <body>
+     are dark the instant the page shows -- before and independent of <body>
      rendering. Set together with the class by the <head> bootstrap, so a
      dark-mode reader never sees a white flash while navigating topics. */
   color-scheme: dark;
   background: var(--color-bg);
+
+  /* dv- chrome tokens (site-chrome.css) -- overriding these alone re-themes
+     every floating component without touching site-chrome.css itself. */
+  --dv-bg: #191e24;
+  --dv-bg-soft: #14181d;
+  --dv-fg: #d8dee4;
+  --dv-muted: #8b96a1;
+  --dv-border: #2b333c;
+  --dv-accent: #5aa6ff;
+  --dv-accent-fg: #0b1422;
+  --dv-accent-soft: #1c2a3d;
+  --dv-active-bg: #1c2a3d;
+  --dv-active-fg: #5aa6ff;
+
+  /* Content-level tokens (DITA-OT's own output, e.g. .codeblock/.note/table). */
   --color-bg: #1e1e1e;
   --color-text: #d4d4d4;
   --color-border: #444;
@@ -18,7 +40,6 @@ html.dark {
   --color-danger-bg: #331a1a;
   --color-important-bg: #261a33;
   --color-tip-bg: #1a3326;
-  --color-sidebar-bg: #252525;
   --color-surface: #2a2a2a;
   --color-muted: #999;
 }
@@ -32,41 +53,8 @@ html.dark a { color: var(--color-link); }
 
 html.dark h1, html.dark h2, html.dark h3, html.dark h4 { color: #e8e8e8; }
 
-/* ── Floating UI elements ── */
-html.dark .dv-toolbar,
-html.dark .dv-page-toc,
-html.dark .dv-back-to-top,
-html.dark .dv-dark-toggle {
-  background: var(--color-surface);
-  border-color: var(--color-border);
-}
-html.dark .dv-toolbar button { background: #333; border-color: #555; color: #ddd; }
-html.dark .dv-toolbar button:hover { background: #444; }
-
-html.dark .dv-sidebar {
-  background: var(--color-sidebar-bg);
-  border-color: var(--color-border);
-}
-html.dark .dv-sidebar a { color: #bbb; }
-html.dark .dv-sidebar a:hover { background: #333; }
-html.dark .dv-sidebar a.active { background: #1a3a6a; color: #6ab0f3; }
-html.dark .dv-sidebar ul ul { padding-left: 1rem; }
-
-html.dark .dv-page-toc a { color: #aaa; }
-html.dark .dv-page-toc a:hover { color: var(--color-link); background: #333; }
-html.dark .dv-page-toc-title { border-bottom-color: var(--color-border); }
-
 /* ── Index page ── */
 html.dark .dv-index { background: var(--color-bg); }
-html.dark .dv-index nav a {
-  background: #2a2a2a;
-  color: #d4d4d4;
-  border-color: var(--color-border);
-}
-html.dark .dv-index nav a:hover {
-  background: #333;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-}
 
 /* ── Code blocks ── */
 html.dark pre.codeblock,
@@ -75,12 +63,6 @@ html.dark pre.pre {
   border-color: var(--color-code-border);
 }
 html.dark code, html.dark .codeph, html.dark .tt { color: #d4d4d4; }
-html.dark .dv-code-lang {
-  background: #333;
-  color: #aaa;
-  border-color: var(--color-border);
-}
-html.dark .dv-code-lang:hover { background: #444; color: #ddd; }
 
 /* ── Inline code, keyboard, filepath ── */
 html.dark kbd,
