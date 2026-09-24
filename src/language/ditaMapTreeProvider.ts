@@ -19,10 +19,16 @@ interface MapTreeNode {
   mapDir: string;
 }
 
+// Navigation targets only -- map/keydef is deliberately left out. A keydef
+// scopes a reusable key (often a text variable: a product name, a version
+// number) and is frequently not navigable at all (no href), or points at a
+// topic that's already reachable through its own topicref elsewhere in the
+// map; either way it's not a place to navigate *to*, and a bookmap can carry
+// dozens of them, which would swamp the actual topic outline this tree is
+// for.
 const SHOWN_BASE_TYPES = new Set([
   'map/topicref',
   'map/topichead',
-  'map/keydef',
   'map/mapref',
   'map/bookmap-structural',
 ]);
@@ -314,9 +320,7 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
     item.description = role || undefined;
     item.tooltip = href || keys || label;
 
-    if (baseType === 'map/keydef') {
-      item.iconPath = new vscode.ThemeIcon('key');
-    } else if (baseType === 'map/bookmap-structural' || baseType === 'map/topichead') {
+    if (baseType === 'map/bookmap-structural' || baseType === 'map/topichead') {
       item.iconPath = new vscode.ThemeIcon('folder');
     } else if (role) {
       item.iconPath = new vscode.ThemeIcon('book');
