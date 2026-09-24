@@ -33,11 +33,23 @@ const SHOWN_BASE_TYPES = new Set([
   'map/bookmap-structural',
 ]);
 
+// Tag names excluded even though their baseType is otherwise shown --
+// map/bookmap-structural covers frontmatter alongside backmatter, toc,
+// figurelist, and the other auto-generated book lists, so this can't be a
+// baseType-level exclusion the way map/keydef above is. frontmatter's own
+// children are typically <booklists> (toc/figurelist/tablelist/...) -- the
+// same auto-generated, non-authored listings that make map/keydef noisy --
+// plus any real preface/notices/dedication topicrefs it carries, which go
+// with it: the request was to drop frontmatter and everything under it, not
+// to sort its children by whether each one happens to be navigable.
+const EXCLUDED_TAGS = new Set(['frontmatter']);
+
 /** Collects the child nodes to show, flattening pass-through topicgroups. */
 function visibleChildren(node: DitaNode): DitaNode[] {
   const result: DitaNode[] = [];
   for (const child of node.children || []) {
     if (child.type !== 'element') continue;
+    if (child.tagName && EXCLUDED_TAGS.has(child.tagName)) continue;
     const bt = child.baseType;
     if (bt && SHOWN_BASE_TYPES.has(bt)) {
       result.push(child);
