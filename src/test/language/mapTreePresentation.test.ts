@@ -151,15 +151,19 @@ describe('mapTreeLabel', () => {
 
 describe('mapTreeLabel against a real expandDitamapRefs pass', () => {
   it('labels a mapref by the submap title expandDitamapRefs inlined from disk', () => {
-    const files: Record<string, string> = {
-      '/w/sub/develop.ditamap':
-        '<map><title><keyword keyref="product-name"/> 开发者手册</title><topicref href="api.dita"/></map>',
-    };
+    const submapXml =
+      '<map><title><keyword keyref="product-name"/> 开发者手册</title><topicref href="api.dita"/></map>';
     const root = parse('<map><title>主手册</title><mapref href="sub/develop.ditamap"/></map>');
+    // Matched on a path suffix rather than an absolute-path key (same style
+    // as the expandDitamapRefs tests in ditaRenderUtils.test.ts):
+    // expandDitamapRefs resolves the href against docDir with path.resolve,
+    // which on Windows turns '/w' into '<cwd drive>:\w' -- a POSIX-shaped
+    // key would miss, the reader's throw would be swallowed as a missing
+    // file, and nothing would be spliced in for reasons that have nothing
+    // to do with the label under test.
     expandDitamapRefs(root, '/w', (path) => {
-      const content = files[path];
-      if (content === undefined) throw new Error(`unexpected read: ${path}`);
-      return content;
+      if (path.replace(/\\/g, '/').endsWith('/w/sub/develop.ditamap')) return submapXml;
+      throw new Error(`unexpected read: ${path}`);
     });
     const mapref = root.children.find((c) => c.tagName === 'mapref')!;
     assert.ok(mapref.children.length > 0, 'the submap\'s children were spliced in');
