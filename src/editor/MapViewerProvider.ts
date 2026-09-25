@@ -191,7 +191,11 @@ function getMapWebviewScript(
     // equivalent exists.
     navMenuOpenMap: vscode.l10n.t('Open Map in Editor'),
     navMenuOpenWithOxygen: vscode.l10n.t('Open with Oxygen XML Editor'),
-    navMenuRevealInExplorer: vscode.l10n.t('Reveal in Explorer'),
+    // "Reveal in Explorer" for the native tree is VS Code's own Explorer
+    // view (revealInExplorer); this one opens the OS file manager
+    // (revealFileInOS) -- VS Code's standard label for that command, kept
+    // deliberately different so the two entries don't read as the same action.
+    navMenuRevealInExplorer: vscode.l10n.t('Reveal in File Explorer'),
     navMenuFindUnreferenced: vscode.l10n.t('Find Unreferenced Resources…'),
     navMenuExportHtml: vscode.l10n.t('Export as HTML…'),
     navMenuCopyTitle: vscode.l10n.t('Copy Title'),
