@@ -23,5 +23,15 @@
   "config.ditaOtInjectNavToolbar.description": "（已废弃）转换完成后注入站点增强功能（导航、侧边栏等）。新版本使用转换流程中的 QuickPick 选择具体功能，此设置仅作为旧版兼容保留。",
   "icon.ditaPreview.description": "DITA Viewer：预览图标",
   "icon.ditaMapPreview.description": "DITA Viewer：Map 预览图标",
-  "icon.ditaTransform.description": "DITA Viewer：转换图标"
+  "icon.ditaTransform.description": "DITA Viewer：转换图标",
+  "command.openWithOxygen.title": "DITA：用 Oxygen XML Editor 打开",
+  "command.findReferencingMaps.title": "DITA：查找引用此文件的 Map…",
+  "command.revealInMapExplorer.title": "DITA：在导航树中定位",
+  "command.mapExplorerOpenWithOxygen.title": "用 Oxygen XML Editor 打开",
+  "command.mapExplorerRevealInExplorer.title": "在资源管理器中定位",
+  "command.mapExplorerExportHtml.title": "导出为 HTML…",
+  "command.mapExplorerCopyHref.title": "复制 Href",
+  "command.mapExplorerCopyTitle.title": "复制标题",
+  "command.mapExplorerFindUnreferenced.title": "查找未被引用的资源…",
+  "config.oxygenPath.description": "Oxygen XML Editor 可执行文件的路径（也可以是其安装目录，或 macOS 上的 .app 包路径）。留空则自动检测 macOS 默认安装位置，或 PATH 中的 oxygen 可执行文件。"
 }

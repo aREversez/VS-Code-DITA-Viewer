@@ -167,5 +167,13 @@
   "No matches found": "No matches found",
   "Showing the first {0} of {1} results": "Showing the first {0} of {1} results",
   "Refresh search results": "Refresh search results",
-  "Clear search": "Clear search"
+  "Clear search": "Clear search",
+  "No map in this workspace references {0}.": "No map in this workspace references {0}.",
+  "{0} map(s) reference this file — select one to open": "{0} map(s) reference this file — select one to open",
+  "The configured Oxygen XML Editor path is invalid: {0}": "The configured Oxygen XML Editor path is invalid: {0}",
+  "Oxygen XML Editor was not found. Please configure its path in settings.": "Oxygen XML Editor was not found. Please configure its path in settings.",
+  "Failed to launch Oxygen XML Editor: {0}": "Failed to launch Oxygen XML Editor: {0}",
+  "This file is not part of the DITA map currently shown in the navigator.": "This file is not part of the DITA map currently shown in the navigator.",
+  "No unreferenced .dita topics found under {0}.": "No unreferenced .dita topics found under {0}.",
+  "{0} unreferenced .dita topic(s) found — select one to open": "{0} unreferenced .dita topic(s) found — select one to open"
 }

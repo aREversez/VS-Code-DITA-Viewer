@@ -23,5 +23,15 @@
   "config.ditaOtInjectNavToolbar.description": "(Deprecated) Inject site-enhancement features (navigation, sidebar, etc.) after transform. Newer versions use a QuickPick during the transform flow to choose specific features instead; this setting is kept only for backward compatibility.",
   "icon.ditaPreview.description": "DITA Viewer: preview icon",
   "icon.ditaMapPreview.description": "DITA Viewer: map preview icon",
-  "icon.ditaTransform.description": "DITA Viewer: transform icon"
+  "icon.ditaTransform.description": "DITA Viewer: transform icon",
+  "command.openWithOxygen.title": "DITA: Open with Oxygen XML Editor",
+  "command.findReferencingMaps.title": "DITA: Find Maps Referencing This File…",
+  "command.revealInMapExplorer.title": "DITA: Reveal in Map Navigator",
+  "command.mapExplorerOpenWithOxygen.title": "Open with Oxygen XML Editor",
+  "command.mapExplorerRevealInExplorer.title": "Reveal in Explorer",
+  "command.mapExplorerExportHtml.title": "Export as HTML…",
+  "command.mapExplorerCopyHref.title": "Copy Href",
+  "command.mapExplorerCopyTitle.title": "Copy Title",
+  "command.mapExplorerFindUnreferenced.title": "Find Unreferenced Resources…",
+  "config.oxygenPath.description": "Path to the Oxygen XML Editor executable (or its installation directory, or its .app bundle on macOS). Leave empty to auto-detect the default macOS install location or an \"oxygen\" executable on PATH."
 }

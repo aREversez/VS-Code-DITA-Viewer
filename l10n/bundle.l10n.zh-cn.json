@@ -167,5 +167,13 @@
   "No matches found": "未找到匹配项",
   "Showing the first {0} of {1} results": "仅显示前 {0} 条，共 {1} 条结果",
   "Refresh search results": "刷新搜索结果",
-  "Clear search": "清除搜索"
+  "Clear search": "清除搜索",
+  "No map in this workspace references {0}.": "此工作区中没有 Map 引用 {0}。",
+  "{0} map(s) reference this file — select one to open": "有 {0} 个 Map 引用了此文件 — 选择一个以打开",
+  "The configured Oxygen XML Editor path is invalid: {0}": "配置的 Oxygen XML Editor 路径无效：{0}",
+  "Oxygen XML Editor was not found. Please configure its path in settings.": "未找到 Oxygen XML Editor，请在设置中配置其路径。",
+  "Failed to launch Oxygen XML Editor: {0}": "启动 Oxygen XML Editor 失败：{0}",
+  "This file is not part of the DITA map currently shown in the navigator.": "此文件不属于导航栏中当前显示的 DITA Map。",
+  "No unreferenced .dita topics found under {0}.": "在 {0} 下未找到未被引用的 .dita 主题。",
+  "{0} unreferenced .dita topic(s) found — select one to open": "找到 {0} 个未被引用的 .dita 主题 — 选择一个以打开"
 }

@@ -8,17 +8,25 @@
 // which are listed again now that nothing auto-expands them -- and
 // expand-all/collapse-all act on the selected node's subtree, with the
 // resulting expansion state persisted per map.
+//
+// Each row's context menu (also Oxygen-DITA-Maps-Manager-flavored) offers
+// Open with Oxygen, Reveal in Explorer, Export as HTML, and Copy
+// Title/Href for rows with the right shape (see getTreeItem's
+// contextValue), plus Find Unreferenced Resources on the root row. All of
+// it hangs off resolveNodeFsPath, the one place a row's file gets
+// resolved.
 
 import * as vscode from 'vscode';
 import { existsSync, readFileSync } from 'fs';
-import { basename, dirname, resolve } from 'path';
+import { basename, dirname, relative, resolve } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { expandDitamapRefs, decodeHrefPart, makeFileTitleResolver, makeFileTopicTypeResolver } from '../editor/ditaRenderUtils';
 import { acquireDitaFileWatcher, ditaWatchBase } from '../editor/ditaFileWatcher';
 import { buildKeyMap, findDitamapFiles } from '../editor/DitaViewerProvider';
-import { createBookRoleLabeler } from '../render/mapTypeMap';
+import { createBookRoleLabeler, collectMapEntries } from '../render/mapTypeMap';
 import { isDitamapRef } from '../render/mapTypeMap';
+import { resolveLocalHrefPath, computeUnreferencedFiles } from '../editor/mapReferenceTools';
 import { formatLocalizedRole } from './bookRoleL10n';
 import { shouldRefreshMapTree } from './mapTreeRefresh';
 import { mapTreeLabel, mapTreeIconId } from './mapTreePresentation';
@@ -486,7 +494,7 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
   }
 
   getTreeItem(element: MapTreeNode): vscode.TreeItem {
-    const { node, mapDir } = element;
+    const { node } = element;
     const isRoot = node === this.mapRoot;
     // A row the view still holds from before a reload re-parses the map:
     // it carries no structural id. Rare (the refresh replaces rows from
@@ -496,12 +504,7 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
     const nodeId = this.nodeIds.get(node) ?? (isRoot ? ROOT_NODE_ID : `stale-${this.staleIdSeq++}`);
     const baseType = node.baseType;
     const href = node.attributes?.href;
-    const label = mapTreeLabel(node, {
-      isRoot,
-      resolveKey: this.resolveKey,
-      readTitle: this.titleResolver ?? (() => undefined),
-      rootFallback: this.mapPath ? basename(this.mapPath).replace(/\.ditamap$/i, '') : '',
-    });
+    const label = this.labelFor(element);
 
     const hasChildren = visibleChildren(node).length > 0;
     const mark = hasChildren ? expansionFor(this.currentDeviations(), nodeId) : undefined;
@@ -543,27 +546,188 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
       mapTreeIconId({ isRoot, isMapRef, baseType, topicType, hasRole: !!role }),
     );
 
+    // Drives which context-menu items a row offers (package.json's
+    // view/item/context "viewItem =~ /…/" clauses): "fileRef" rows have a
+    // real file on disk behind them -- Oxygen, reveal-in-Explorer and
+    // export all need one -- while "hasHref" is broader and also covers a
+    // href/keys reference that *didn't* resolve, since copying the raw
+    // text is most useful exactly when a link is broken.
+    const fsPath = this.resolveNodeFsPath(element);
+    item.contextValue = [
+      isRoot ? 'root' : 'child',
+      fsPath ? 'fileRef' : 'noFile',
+      !isRoot && (href || keys) ? 'hasHref' : 'noHref',
+    ].join(' ');
+
     // Click opens the referenced local file
-    if (isRoot) {
-      if (this.mapPath && existsSync(this.mapPath)) {
-        item.command = {
-          command: 'vscode.open',
-          title: vscode.l10n.t('Open File'),
-          arguments: [vscode.Uri.file(this.mapPath)],
-        };
-      }
-    } else if (href && !/^[a-z][a-z0-9+.-]*:/i.test(href) && node.attributes?.scope !== 'external') {
-      const filePart = decodeHrefPart(href.split('#')[0]);
-      const abs = resolve(mapDir, filePart);
-      if (existsSync(abs)) {
-        item.command = {
-          command: 'vscode.open',
-          title: vscode.l10n.t('Open File'),
-          arguments: [vscode.Uri.file(abs)],
-        };
-      }
+    if (fsPath) {
+      item.command = {
+        command: 'vscode.open',
+        title: vscode.l10n.t('Open File'),
+        arguments: [vscode.Uri.file(fsPath)],
+      };
     }
     return item;
+  }
+
+  /**
+   * The absolute on-disk path a row represents: the map file itself for the
+   * root row, else the href it resolves to -- or undefined for a row with
+   * no href, an external/out-of-scope href, or a href that resolves to a
+   * file no longer on disk. Shared by the click-to-open command above and
+   * every "act on this row's file" context-menu command below (Oxygen,
+   * reveal in Explorer, export, and revealPath's reverse lookup).
+   */
+  private resolveNodeFsPath(element: MapTreeNode): string | undefined {
+    const { node, mapDir } = element;
+    if (node === this.mapRoot) {
+      return this.mapPath && existsSync(this.mapPath) ? this.mapPath : undefined;
+    }
+    const href = node.attributes?.href;
+    if (!href || /^[a-z][a-z0-9+.-]*:/i.test(href) || node.attributes?.scope === 'external') return undefined;
+    const filePart = decodeHrefPart(href.split('#')[0]);
+    const abs = resolve(mapDir, filePart);
+    return existsSync(abs) ? abs : undefined;
+  }
+
+  /** The row's rendered title -- same computation getTreeItem's label uses,
+   *  factored out so "Copy Title" copies exactly what the row shows. */
+  private labelFor(element: MapTreeNode): string {
+    const isRoot = element.node === this.mapRoot;
+    return mapTreeLabel(element.node, {
+      isRoot,
+      resolveKey: this.resolveKey,
+      readTitle: this.titleResolver ?? (() => undefined),
+      rootFallback: this.mapPath ? basename(this.mapPath).replace(/\.ditamap$/i, '') : '',
+    });
+  }
+
+  /** Row backing this.mapRoot's own href/keys attributes are meaningless
+   *  (the root shows the *map*, not one of its own topicrefs), so "Copy
+   *  Href" and its "hasHref" contextValue both stay off the root row. */
+  private hrefOrKeysFor(element: MapTreeNode): string | undefined {
+    if (element.node === this.mapRoot) return undefined;
+    return element.node.attributes?.href || element.node.attributes?.keys;
+  }
+
+  /** "Open with Oxygen" from a row's context menu: resolve the row to a
+   *  file and delegate to the shared command (same one the Explorer and
+   *  editor context menus use), so detection/error-handling lives in one
+   *  place (oxygenLauncher.ts). */
+  async openWithOxygen(element?: MapTreeNode): Promise<void> {
+    const fsPath = element && this.resolveNodeFsPath(element);
+    if (!fsPath) return;
+    await vscode.commands.executeCommand('ditaViewer.openWithOxygen', vscode.Uri.file(fsPath));
+  }
+
+  /** "Reveal in Explorer": the mapExplorer-to-file-Explorer direction of
+   *  the pair completed by revealPath below (file-Explorer-to-mapExplorer). */
+  async revealInExplorer(element?: MapTreeNode): Promise<void> {
+    const fsPath = element && this.resolveNodeFsPath(element);
+    if (!fsPath) return;
+    await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(fsPath));
+  }
+
+  /** "Export as HTML" for one row: delegates to the same command the
+   *  Explorer/editor context menus use, with the row's own file as the
+   *  export root -- the whole map for the root row, or just that
+   *  topic/submap for anything else (see resolveNodeFsPath). */
+  async exportHtml(element?: MapTreeNode): Promise<void> {
+    const fsPath = element && this.resolveNodeFsPath(element);
+    if (!fsPath) return;
+    await vscode.commands.executeCommand('ditaViewer.exportHtml', vscode.Uri.file(fsPath));
+  }
+
+  async copyHref(element?: MapTreeNode): Promise<void> {
+    const value = element && this.hrefOrKeysFor(element);
+    if (!value) return;
+    await vscode.env.clipboard.writeText(value);
+  }
+
+  async copyTitle(element?: MapTreeNode): Promise<void> {
+    if (!element) return;
+    await vscode.env.clipboard.writeText(this.labelFor(element));
+  }
+
+  /**
+   * "Find Unreferenced Resources": every .dita file under the current
+   * map's own folder that no href in this map (at any depth, including
+   * spliced-in submaps -- this.mapRoot already has expandDitamapRefs
+   * applied, see reload()) resolves to. Scoped to the map's folder rather
+   * than the whole workspace, matching Oxygen's DITA Maps Manager, where
+   * this is a per-project action, not a workspace-wide one.
+   */
+  async findUnreferencedResources(): Promise<void> {
+    if (!this.mapPath || !this.mapRoot) return;
+    const mapDir = dirname(this.mapPath);
+
+    const entries = collectMapEntries(this.mapRoot, this.resolveKey, formatLocalizedRole);
+    const referenced: string[] = [];
+    for (const entry of entries) {
+      const abs = resolveLocalHrefPath(mapDir, entry.href);
+      if (abs) referenced.push(abs);
+    }
+
+    const found = await vscode.workspace.findFiles(
+      new vscode.RelativePattern(mapDir, '**/*.dita'),
+      '**/node_modules/**',
+      2000,
+    );
+    const unreferenced = computeUnreferencedFiles(found.map((u) => u.fsPath), referenced, process.platform)
+      .map((p) => ({ label: basename(p), description: relative(mapDir, p), fsPath: p }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+
+    if (unreferenced.length === 0) {
+      vscode.window.showInformationMessage(
+        vscode.l10n.t('No unreferenced .dita topics found under {0}.', basename(mapDir)),
+      );
+      return;
+    }
+    const picked = await vscode.window.showQuickPick(unreferenced, {
+      placeHolder: vscode.l10n.t('{0} unreferenced .dita topic(s) found — select one to open', String(unreferenced.length)),
+    });
+    if (picked) await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(picked.fsPath));
+  }
+
+  /**
+   * The file-Explorer-to-mapExplorer direction: reveals and selects the row
+   * whose file is fsPath, if the currently shown map has one. Returns
+   * false (rather than switching maps or searching the rest of the
+   * workspace) when it doesn't -- the caller's job, not this one, to decide
+   * what "not part of the current map" should tell the user.
+   */
+  async revealPath(fsPath: string): Promise<boolean> {
+    if (!this.mapRoot || !this.mapPath || !this.treeView) return false;
+    const targetAbs = resolve(fsPath);
+    const mapDir = dirname(this.mapPath);
+
+    const target =
+      resolve(this.mapPath) === targetAbs
+        ? { node: this.mapRoot, mapDir }
+        : this.findNodeForPath(this.mapRoot, mapDir, targetAbs);
+    if (!target) return false;
+
+    try {
+      await this.treeView.reveal(target, { select: true, focus: true, expand: true });
+    } catch {
+      return false; // A concurrent reload raced the reveal; nothing to surface to the user.
+    }
+    return true;
+  }
+
+  /** Depth-first search over the *visible* tree (visibleChildren, matching
+   *  everything else keyed by nodeIds/parentOf) for the first row whose
+   *  resolveNodeFsPath equals targetAbs. First occurrence in document order
+   *  wins when a conref'd topic is reachable through more than one row. */
+  private findNodeForPath(node: DitaNode, mapDir: string, targetAbs: string): MapTreeNode | undefined {
+    for (const child of visibleChildren(node)) {
+      const element = { node: child, mapDir };
+      const abs = this.resolveNodeFsPath(element);
+      if (abs && resolve(abs) === targetAbs) return element;
+      const nested = this.findNodeForPath(child, mapDir, targetAbs);
+      if (nested) return nested;
+    }
+    return undefined;
   }
 
   /**
@@ -627,7 +791,14 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
   }
 }
 
-export function registerMapTreeView(context: vscode.ExtensionContext): void {
+/** What registerMapTreeView hands back to extension.ts -- just enough to
+ *  wire the Explorer-side "Reveal in Map Navigator" command
+ *  (ditaViewer.revealInMapExplorer) without exposing the provider itself. */
+export interface MapTreeViewHandle {
+  revealPath(fsPath: string): Promise<boolean>;
+}
+
+export function registerMapTreeView(context: vscode.ExtensionContext): MapTreeViewHandle {
   const provider = new DitaMapTreeProvider();
   vscode.commands.executeCommand('setContext', 'ditaViewer.mapExplorer.pinned', false);
   // createTreeView (rather than the plain registerTreeDataProvider) because
@@ -659,6 +830,27 @@ export function registerMapTreeView(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('ditaViewer.mapExplorer.collapseAll', (node?: MapTreeNode) =>
       provider.collapseAll(node),
     ),
+    // Row context-menu commands. Each takes the row's element (passed by
+    // VS Code from view/item/context) and delegates to the provider method
+    // of the same name.
+    vscode.commands.registerCommand('ditaViewer.mapExplorer.openWithOxygen', (node?: MapTreeNode) =>
+      provider.openWithOxygen(node),
+    ),
+    vscode.commands.registerCommand('ditaViewer.mapExplorer.revealInExplorer', (node?: MapTreeNode) =>
+      provider.revealInExplorer(node),
+    ),
+    vscode.commands.registerCommand('ditaViewer.mapExplorer.exportHtml', (node?: MapTreeNode) =>
+      provider.exportHtml(node),
+    ),
+    vscode.commands.registerCommand('ditaViewer.mapExplorer.copyHref', (node?: MapTreeNode) =>
+      provider.copyHref(node),
+    ),
+    vscode.commands.registerCommand('ditaViewer.mapExplorer.copyTitle', (node?: MapTreeNode) =>
+      provider.copyTitle(node),
+    ),
+    vscode.commands.registerCommand('ditaViewer.mapExplorer.findUnreferenced', () =>
+      provider.findUnreferencedResources(),
+    ),
     // Chevron clicks (and the row replacements a data change performs)
     // report their element; recording the resulting state is what makes it
     // survive the next reload and the next session.
@@ -678,4 +870,5 @@ export function registerMapTreeView(context: vscode.ExtensionContext): void {
     new vscode.Disposable(() => provider.dispose()),
   );
   provider.setActiveDocument(vscode.window.activeTextEditor?.document.uri);
+  return { revealPath: (fsPath: string) => provider.revealPath(fsPath) };
 }

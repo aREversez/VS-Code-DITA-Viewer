@@ -21,8 +21,10 @@ import {
 import { registerLanguageFeatures } from './language/ditaLanguageFeatures';
 import { registerMapTreeView } from './language/ditaMapTreeProvider';
 import { ditaFileWatcherCounts } from './editor/ditaFileWatcher';
-import { registerExportHtmlCommand } from './editor/exportHtml';
+import { registerExportHtmlCommand, getActiveDitaUri } from './editor/exportHtml';
 import { registerCompareCommand } from './editor/ditaDiffProvider';
+import { resolveOxygenLaunch, buildOxygenSpawnArgs } from './editor/oxygenLauncher';
+import { registerFindReferencingMapsCommand } from './editor/findDitaReferences';
 
 const TRANSFORM_CMD = 'ditaViewer.transformWithDitaOt';
 
@@ -39,13 +41,80 @@ export function activate(context: vscode.ExtensionContext) {
   registerLanguageFeatures(context);
 
   // Explorer sidebar tree view of the active DITA map
-  registerMapTreeView(context);
+  const mapTree = registerMapTreeView(context);
 
   // "Export as HTML" command (self-contained file, no DITA-OT needed)
   registerExportHtmlCommand(context);
 
   // "Compare with Git Version" — rendered diff view for .dita files
   registerCompareCommand(context);
+
+  // "Open with Oxygen" — hands the file to Oxygen XML Editor
+  context.subscriptions.push(
+    vscode.commands.registerCommand('ditaViewer.openWithOxygen', async (uri?: vscode.Uri) => {
+      const target = uri ?? getActiveDitaUri();
+      if (!target) {
+        vscode.window.showErrorMessage(vscode.l10n.t('Please open a .dita or .ditamap file first.'));
+        return;
+      }
+
+      const configPath: string | undefined = vscode.workspace.getConfiguration('dita-viewer').get('oxygenPath');
+      const configuredPath = configPath && configPath.trim() ? configPath.trim() : undefined;
+
+      const result = resolveOxygenLaunch({
+        configuredPath,
+        platform: process.platform,
+        pathEnv: process.env.PATH,
+        fileExists: (p) => existsSync(p),
+      });
+
+      if (!result.found) {
+        const openSettingsLabel = vscode.l10n.t('Open Settings');
+        const message =
+          result.reason === 'setting-invalid'
+            ? vscode.l10n.t('The configured Oxygen XML Editor path is invalid: {0}', configuredPath ?? '')
+            : vscode.l10n.t('Oxygen XML Editor was not found. Please configure its path in settings.');
+        const action = await vscode.window.showErrorMessage(message, openSettingsLabel);
+        if (action === openSettingsLabel) {
+          vscode.commands.executeCommand('workbench.action.openSettings', 'dita-viewer.oxygenPath');
+        }
+        return;
+      }
+
+      const spawnArgs = buildOxygenSpawnArgs(result.spec, target.fsPath);
+      try {
+        const child = spawn(spawnArgs.command, spawnArgs.args, { detached: true, stdio: 'ignore' });
+        child.on('error', (err) => {
+          vscode.window.showErrorMessage(vscode.l10n.t('Failed to launch Oxygen XML Editor: {0}', err.message));
+        });
+        child.unref();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        vscode.window.showErrorMessage(vscode.l10n.t('Failed to launch Oxygen XML Editor: {0}', message));
+      }
+    }),
+  );
+
+  // "Find Maps Referencing This File…" — reverse lookup of a topicref/mapref
+  registerFindReferencingMapsCommand(context);
+
+  // "Reveal in Map Navigator" — the file-Explorer-to-mapExplorer direction
+  // of the pair completed by the tree's own "Reveal in Explorer" row command.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('ditaViewer.revealInMapExplorer', async (uri?: vscode.Uri) => {
+      const target = uri ?? getActiveDitaUri();
+      if (!target) {
+        vscode.window.showErrorMessage(vscode.l10n.t('Please open a .dita or .ditamap file first.'));
+        return;
+      }
+      const revealed = await mapTree.revealPath(target.fsPath);
+      if (!revealed) {
+        vscode.window.showInformationMessage(
+          vscode.l10n.t('This file is not part of the DITA map currently shown in the navigator.'),
+        );
+      }
+    }),
+  );
 
   // DITA topic preview (.dita)
   context.subscriptions.push(
