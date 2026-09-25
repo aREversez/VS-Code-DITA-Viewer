@@ -34,7 +34,7 @@ export function buildNavManifest(mapPath: string): NavManifestEntry[] {
  *
  * DITA-OT emits the map's own page as `<outputDir>/index.html` (the site root)
  * but computes its `href`/`src` values relative to the map's *source*
- * directory. When the map lives in a sub-folder — e.g. `manual/maps/main.ditamap`
+ * directory. When the map lives in a sub-folder — e.g. `manual/maps/book.ditamap`
  * referencing topics as `../topics/foo.dita` — every generated reference climbs
  * out of the site root (`href="../topics/foo.html"`), so clicking a TOC entry on
  * index.html navigates to a path *above* the exported site and lands nowhere.

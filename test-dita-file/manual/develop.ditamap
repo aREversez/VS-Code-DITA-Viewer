@@ -12,7 +12,7 @@
   </topicmeta>
   <!--
     开发版本 ditamap。
-    构建: dita -i maps/develop.ditamap -f html5 -t out/develop (ditaval: ditavals/develop.ditaval))
+    构建: dita -i develop.ditamap -f html5 -t out/develop (ditaval: ditavals/develop.ditaval)
     条件处理: 保留 developer 内容与 rev="planned" 预览特性；剔除品牌 B 内容。
   -->
   <!-- ===== 品牌相关 keydef：换品牌仅替换本块 ===== -->

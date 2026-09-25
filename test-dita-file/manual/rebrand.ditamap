@@ -12,7 +12,7 @@
   </topicmeta>
   <!--
     换品牌版本 ditamap（品牌 A → 品牌 B）。
-    构建: dita -i maps/rebrand.ditamap -f html5 -t out/rebrand (ditaval: ditavals/rebrand.ditaval))
+    构建: dita -i rebrand.ditamap -f html5 -t out/rebrand (ditaval: ditavals/rebrand.ditaval)
     说明: 全部品牌内容（产品名、公司名、版本号、客服信息、logo、共享短语）均来自
           keydef/conkeyref，源 topic 不做任何修改；品牌 A 专属正文段落由
           rebrand.ditaval 通过 product="brandA" 过滤剔除，品牌 B 专属段落保留。
