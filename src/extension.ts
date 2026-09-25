@@ -646,17 +646,23 @@ function injectSiteChrome(
       const cssLink = '<link rel="stylesheet" type="text/css" href="' + prefix + 'dita-viewer-chrome.css">';
       html = html.replace('</head>', cssLink + '</head>');
 
+      // Apply the reader's stored dark/light preference (or OS default) and
+      // chrome accent theme to <html> the moment the head parses, before any
+      // body content paints. DITA-OT's own commonltr.css is light-only, so
+      // the body would otherwise flash white/wrong-accent on every topic
+      // navigation until chrome.js deferred to </body> ran. This runs
+      // regardless of the darkMode feature toggle -- the accent theme (see
+      // the toolbar's theme <select>, gated on navToolbar) is independent of
+      // dark/light and needs the same before-paint treatment either way.
+      // This static export ships without a CSP meta, so the inline script is
+      // allowed; it reads the same 'dv-theme'/'dv-chrome-theme' localStorage
+      // keys that initDarkMode()/the theme <select> write to.
+      const themeBootstrap = '<script>' + buildThemeBootstrapScript() + '</script>';
+      html = html.replace('</head>', themeBootstrap + '</head>');
+
       if (hasDark) {
         const darkLink = '<link rel="stylesheet" type="text/css" href="' + prefix + 'dita-viewer-dark.css">';
-        // Apply the reader's stored theme (or the OS preference) to <html> the
-        // moment the head parses, before any body content paints. DITA-OT's own
-        // commonltr.css is light-only, so the body would otherwise flash white on
-        // every topic navigation until the chrome.js deferred to </body> ran
-        // initDarkMode(). This static export ships without a CSP meta, so the
-        // inline script is allowed; it reads the same 'dv-theme' localStorage key
-        // as initDarkMode(), which now only reflects the class applied here.
-        const themeBootstrap = '<script>' + buildThemeBootstrapScript() + '</script>';
-        html = html.replace('</head>', darkLink + themeBootstrap + '</head>');
+        html = html.replace('</head>', darkLink + '</head>');
       }
 
       if (features.navToolbar) {

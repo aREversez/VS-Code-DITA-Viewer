@@ -72,4 +72,17 @@ describe('dark-mode.css chrome tokens', () => {
     // tokens (real sample output uses both note_warning and note_caution).
     assert.ok(chromeCss().includes('.note_warning, .note_caution'), 'note_caution should be aliased to note_warning\'s tokens in site-chrome.css');
   });
+
+  it('overrides each accent theme\'s tokens again for dark mode (html[data-dv-theme="..."].dark), with WCAG AA contrast', () => {
+    for (const theme of ['aurora', 'reader']) {
+      const dark = declarations(darkCss(), `html[data-dv-theme="${theme}"].dark {`);
+      for (const name of ['--dv-accent', '--dv-accent-fg', '--dv-accent-soft', '--dv-active-bg', '--dv-active-fg']) {
+        assert.ok(dark[name], `expected ${name} overridden for theme ${theme} in dark mode`);
+      }
+      const baseDark = declarations(darkCss(), 'html.dark {');
+      assert.notStrictEqual(dark['--dv-accent'], baseDark['--dv-accent'], `theme ${theme}'s dark accent should differ from the base dark accent`);
+      assert.ok(contrast(dark['--dv-accent-fg'], dark['--dv-accent']) >= 4.5, `theme ${theme} dark: accent-fg on accent is below AA`);
+      assert.ok(contrast(dark['--dv-active-fg'], dark['--dv-active-bg']) >= 4.5, `theme ${theme} dark: active-fg on active-bg is below AA`);
+    }
+  });
 });

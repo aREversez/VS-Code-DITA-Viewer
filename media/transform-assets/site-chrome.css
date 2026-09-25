@@ -43,6 +43,40 @@
   --dv-note-danger-accent: #c23b3b;
 }
 
+/* ── Runtime accent themes ──
+   Selected via the toolbar's theme <select> (initNavToolbar in
+   site-chrome.js), persisted to localStorage's 'dv-chrome-theme' and
+   applied via data-dv-theme on <html> (buildThemeBootstrapScript sets it
+   before paint). Each theme only overrides the accent-family tokens --
+   background/foreground/border/radius/shadow and the note-severity palette
+   stay the same "classic" values across all themes, so switching themes
+   re-colours the UI's accent without changing its underlying structure. */
+html[data-dv-theme="aurora"] {
+  --dv-accent: #7c4fd1;
+  --dv-accent-fg: #ffffff;
+  --dv-accent-soft: #f1ecfb;
+  --dv-active-bg: #f1ecfb;
+  --dv-active-fg: #7c4fd1;
+}
+html[data-dv-theme="reader"] {
+  --dv-accent: #96500f;
+  --dv-accent-fg: #ffffff;
+  --dv-accent-soft: #f7e2c8;
+  --dv-active-bg: #f7e2c8;
+  --dv-active-fg: #96500f;
+}
+/* Reader is also a reading-comfort theme, not just a colour swap: a wider
+   line-height and a narrower column, mirroring the Reader preview
+   template's personality (large type, narrow measure) as closely as a
+   theme that only touches our own dv- layer (not DITA-OT's own typography
+   rules) reasonably can. */
+html[data-dv-theme="reader"] body {
+  line-height: 1.85;
+}
+html[data-dv-theme="reader"] main[role="main"] > article {
+  max-width: 640px;
+}
+
 /* ── Content baseline ──
    DITA-OT's own commonltr.css doesn't constrain media to the viewport, so an
    image wider than its natural display column overflows the page instead of
@@ -219,6 +253,17 @@ pre.codeblock, pre.pre {
   transition: background 0.15s ease, color 0.15s ease;
 }
 .dv-toolbar button:hover { background: var(--dv-accent-soft); color: var(--dv-accent); }
+.dv-toolbar select {
+  cursor: pointer;
+  border: 1px solid var(--dv-border);
+  border-radius: var(--dv-radius-sm);
+  padding: 6px 4px;
+  background: var(--dv-bg);
+  color: var(--dv-muted);
+  font-size: 12px;
+  font-family: inherit;
+}
+.dv-toolbar select:hover { color: var(--dv-accent); }
 
 /* ── Section collapse ── */
 .section.dv-collapsed > :is(h1,h2,h3,h4,h5,h6) { margin-bottom: 0; }

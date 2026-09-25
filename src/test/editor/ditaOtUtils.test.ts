@@ -563,14 +563,21 @@ describe('buildThemeBootstrapScript', () => {
   // of this project) the same way getSearchOverlayScript et al. are tested
   // in ditaRenderUtils.test.ts, since tsc/eslint/npm test never execute
   // template-string webview JS otherwise.
-  function run(opts: { stored: string | null; throwsOnGet?: boolean; matches?: boolean; hasMatchMedia?: boolean }) {
+  function run(opts: { stored: string | null; throwsOnGet?: boolean; matches?: boolean; hasMatchMedia?: boolean; storedTheme?: string | null }) {
     const added: string[] = [];
-    const fakeDocument = { documentElement: { classList: { add: (c: string) => added.push(c) } } };
+    const attrs: Record<string, string> = {};
+    const fakeDocument = {
+      documentElement: {
+        classList: { add: (c: string) => added.push(c) },
+        setAttribute: (k: string, v: string) => { attrs[k] = v; },
+      },
+    };
     const fakeLocalStorage = {
-      getItem: () => {
+      getItem: (key: string) => {
         if (opts.throwsOnGet) {
           throw new Error('SecurityError: storage disabled');
         }
+        if (key === 'dv-chrome-theme') return opts.storedTheme ?? null;
         return opts.stored;
       },
     };
@@ -579,7 +586,7 @@ describe('buildThemeBootstrapScript', () => {
       : { matchMedia: () => ({ matches: !!opts.matches }) };
     const fn = new Function('document', 'window', 'localStorage', buildThemeBootstrapScript());
     fn(fakeDocument, fakeWindow, fakeLocalStorage);
-    return added;
+    return { added, attrs };
   }
 
   it('returns raw JS, not wrapped in <script></script> (caller assembles the tag)', () => {
@@ -588,25 +595,39 @@ describe('buildThemeBootstrapScript', () => {
   });
 
   it('adds the dark class when the stored preference is "dark", regardless of OS preference', () => {
-    assert.deepStrictEqual(run({ stored: 'dark', matches: false }), ['dark']);
+    assert.deepStrictEqual(run({ stored: 'dark', matches: false }).added, ['dark']);
   });
 
   it('does not add the dark class when the stored preference is "light", even if the OS prefers dark', () => {
-    assert.deepStrictEqual(run({ stored: 'light', matches: true }), []);
+    assert.deepStrictEqual(run({ stored: 'light', matches: true }).added, []);
   });
 
   it('falls back to the OS preference when nothing is stored', () => {
-    assert.deepStrictEqual(run({ stored: null, matches: true }), ['dark']);
-    assert.deepStrictEqual(run({ stored: null, matches: false }), []);
+    assert.deepStrictEqual(run({ stored: null, matches: true }).added, ['dark']);
+    assert.deepStrictEqual(run({ stored: null, matches: false }).added, []);
   });
 
   it('treats a missing matchMedia (no window.matchMedia) as light when nothing is stored', () => {
-    assert.deepStrictEqual(run({ stored: null, hasMatchMedia: false }), []);
+    assert.deepStrictEqual(run({ stored: null, hasMatchMedia: false }).added, []);
   });
 
   it('fails silently (adds nothing, does not throw) when localStorage access throws, e.g. private browsing', () => {
     assert.doesNotThrow(() => run({ stored: null, throwsOnGet: true, matches: true }));
-    assert.deepStrictEqual(run({ stored: null, throwsOnGet: true, matches: true }), []);
+    assert.deepStrictEqual(run({ stored: null, throwsOnGet: true, matches: true }).added, []);
+  });
+
+  it('applies a stored chrome theme (data-dv-theme) before paint, independent of dark/light', () => {
+    assert.deepStrictEqual(run({ stored: 'light', storedTheme: 'aurora' }).attrs, { 'data-dv-theme': 'aurora' });
+  });
+
+  it('sets no data-dv-theme attribute at all when nothing is stored (classic default needs no attribute)', () => {
+    assert.deepStrictEqual(run({ stored: 'light', storedTheme: null }).attrs, {});
+  });
+
+  it('fails silently on both the dark class and the theme attribute when localStorage throws, not just the first read', () => {
+    const result = run({ stored: 'dark', throwsOnGet: true, matches: false });
+    assert.deepStrictEqual(result.added, []);
+    assert.deepStrictEqual(result.attrs, {});
   });
 });
 

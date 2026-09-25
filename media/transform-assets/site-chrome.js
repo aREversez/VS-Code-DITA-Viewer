@@ -22,6 +22,10 @@ var LABELS = {
     backToTop: 'Back to top',
     switchToLight: 'Switch to light mode',
     switchToDark: 'Switch to dark mode',
+    theme: 'Colour theme',
+    themeClassic: 'Classic',
+    themeAurora: 'Aurora',
+    themeReader: 'Reader',
   },
   zh: {
     collapseAllSections: '\u6298\u53E0\u5168\u90E8\u7AE0\u8282',
@@ -35,6 +39,10 @@ var LABELS = {
     backToTop: '\u56DE\u5230\u9876\u90E8',
     switchToLight: '\u5207\u6362\u5230\u4EAE\u8272\u6A21\u5F0F',
     switchToDark: '\u5207\u6362\u5230\u6697\u8272\u6A21\u5F0F',
+    theme: '\u914D\u8272\u4E3B\u9898',
+    themeClassic: '\u7ECF\u5178',
+    themeAurora: '\u6781\u5149',
+    themeReader: '\u9605\u8BFB',
   },
 };
 var T = LABELS[LANG];
@@ -250,6 +258,26 @@ function initNavToolbar() {
     nb.onclick = function () { location.href = MANIFEST[idx + 1].file; };
     bar.appendChild(nb);
   }
+  var THEMES = [['classic', T.themeClassic], ['aurora', T.themeAurora], ['reader', T.themeReader]];
+  var sel = document.createElement('select'); sel.title = T.theme;
+  THEMES.forEach(function (t) {
+    var opt = document.createElement('option'); opt.value = t[0]; opt.textContent = t[1];
+    sel.appendChild(opt);
+  });
+  // buildThemeBootstrapScript() already applied any stored theme to <html>
+  // before this script ran (avoids a flash of the wrong accent colour); read
+  // it back here just to initialise the control's displayed value.
+  sel.value = document.documentElement.getAttribute('data-dv-theme') || 'classic';
+  sel.onchange = function () {
+    if (sel.value === 'classic') {
+      document.documentElement.removeAttribute('data-dv-theme');
+      localStorage.setItem('dv-chrome-theme', '');
+    } else {
+      document.documentElement.setAttribute('data-dv-theme', sel.value);
+      localStorage.setItem('dv-chrome-theme', sel.value);
+    }
+  };
+  bar.appendChild(sel);
   document.body.appendChild(bar);
 }
 

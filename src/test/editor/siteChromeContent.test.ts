@@ -67,7 +67,10 @@ const chromeCss = () => readFileSync(join(assetsDir, 'site-chrome.css'), 'utf-8'
 describe('site-chrome.css content baseline (checked against real DITA-OT output)', () => {
   it('gives the page a font/background/colour baseline instead of leaving commonltr.css to fall back to browser defaults', () => {
     const css = chromeCss();
-    const start = css.indexOf('body {');
+    // Match "body {" only at the start of a selector (not as a substring of
+    // e.g. "html[data-dv-theme=\"reader\"] body {"), so this finds the real
+    // page-canvas baseline rule rather than a theme override.
+    const start = css.search(/(^|\n)body \{/);
     assert.ok(start >= 0, 'expected a body {} rule');
     const body = css.slice(css.indexOf('{', start) + 1, css.indexOf('}', start));
     assert.ok(/font-family:\s*var\(--dv-font\)/.test(body));

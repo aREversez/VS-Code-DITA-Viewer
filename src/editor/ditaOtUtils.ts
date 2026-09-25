@@ -83,7 +83,13 @@ export function normalizeIndexHtmlLinks(html: string): string {
 export function buildThemeBootstrapScript(): string {
   return "(function(){try{var s=localStorage.getItem('dv-theme');"
     + "var d=s!==null?s==='dark':!!(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);"
-    + "if(d)document.documentElement.classList.add('dark');}catch(e){}})();";
+    + "if(d)document.documentElement.classList.add('dark');"
+    // Chrome accent theme (data-dv-theme) is independent of dark/light -- read
+    // and applied in the same try block so a thrown localStorage read (e.g.
+    // private browsing) doesn't leave the dark-class logic half-run either.
+    + "var t=localStorage.getItem('dv-chrome-theme');"
+    + "if(t)document.documentElement.setAttribute('data-dv-theme',t);"
+    + "}catch(e){}})();";
 }
 
 /**

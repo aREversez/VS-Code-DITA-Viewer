@@ -106,3 +106,24 @@ html.dark .linklist { border-color: var(--color-border); }
 html.dark .related-links a,
 html.dark .linklist a { color: var(--color-link); }
 html.dark hr { border-color: var(--color-border); }
+
+/* ── Runtime accent themes, dark variant ──
+   Mirrors site-chrome.css's html[data-dv-theme="..."] blocks -- same accent
+   family, re-picked for readability on the dark --dv-bg. Reader's line-
+   height/column-width rules are theme-structural, not colour, so they don't
+   need a dark counterpart here; the light-mode rule already applies under
+   html.dark too since nothing in dark-mode.css overrides it. */
+html[data-dv-theme="aurora"].dark {
+  --dv-accent: #b79aef;
+  --dv-accent-fg: #160f26;
+  --dv-accent-soft: #221a33;
+  --dv-active-bg: #221a33;
+  --dv-active-fg: #b79aef;
+}
+html[data-dv-theme="reader"].dark {
+  --dv-accent: #e0a83a;
+  --dv-accent-fg: #2e2313;
+  --dv-accent-soft: #2e2313;
+  --dv-active-bg: #2e2313;
+  --dv-active-fg: #e0a83a;
+}

@@ -40,14 +40,19 @@ describe('site-chrome.css design tokens', () => {
 
   it('every dv- component references the shared tokens rather than a literal hex/rgba colour', () => {
     const css = chromeCss();
-    // Strip the :root token-declaration block itself, then look at everything
-    // else for a literal colour value outside of a var(...) call.
-    const rootStart = css.indexOf(':root {');
-    const rootEnd = css.indexOf('}', rootStart);
-    const rest = css.slice(0, rootStart) + css.slice(rootEnd + 1);
+    // Strip :root and the per-theme token-declaration blocks (html[data-dv-theme="..."]
+    // are pure custom-property overrides, exactly like :root, not component styling),
+    // then look at everything else for a literal colour outside a var(...) call.
+    let rest = css;
+    for (const blockStart of [':root {', 'html[data-dv-theme="aurora"] {', 'html[data-dv-theme="reader"] {']) {
+      const start = rest.indexOf(blockStart);
+      assert.ok(start >= 0, `expected to find ${blockStart}`);
+      const end = rest.indexOf('}', start);
+      rest = rest.slice(0, start) + rest.slice(end + 1);
+    }
     const literalColor = /(?<!var\([^)]{0,80})(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\))/;
     const m = rest.match(literalColor);
-    assert.strictEqual(m, null, `found a literal colour outside :root: ${m && m[0]}`);
+    assert.strictEqual(m, null, `found a literal colour outside a token-declaration block: ${m && m[0]}`);
   });
 
   it('the floating panels (toolbar, back-to-top, dark toggle, on-page toc) use the shared radius/shadow tokens', () => {
@@ -113,5 +118,42 @@ describe('site-chrome.css content-page baseline', () => {
       assert.ok(bg, `--dv-note-${sev}-bg declared`);
       assert.ok(contrast(tokens['--dv-fg'], bg) >= 4.5, `text on --dv-note-${sev}-bg is ${contrast(tokens['--dv-fg'], bg).toFixed(2)}:1`);
     }
+  });
+});
+
+describe('site-chrome.css runtime accent themes (aurora/reader, selected via the toolbar\'s theme <select>)', () => {
+  it('overrides only the accent-family tokens per theme, under html[data-dv-theme="..."], leaving the base :root (classic) untouched', () => {
+    const css = chromeCss();
+    for (const theme of ['aurora', 'reader']) {
+      const tokens = declarations(css, `html[data-dv-theme="${theme}"] {`);
+      for (const name of ['--dv-accent', '--dv-accent-fg', '--dv-accent-soft', '--dv-active-bg', '--dv-active-fg']) {
+        assert.ok(tokens[name], `expected ${name} overridden for theme ${theme}`);
+      }
+    }
+  });
+
+  it('gives every theme\'s accent tokens light-mode WCAG AA contrast (4.5:1)', () => {
+    for (const theme of ['aurora', 'reader']) {
+      const tokens = declarations(chromeCss(), `html[data-dv-theme="${theme}"] {`);
+      const pairs: Array<[string, string]> = [
+        ['--dv-accent-fg', '--dv-accent'],
+        ['--dv-active-fg', '--dv-active-bg'],
+      ];
+      for (const [a, b] of pairs) {
+        assert.ok(contrast(tokens[a], tokens[b]) >= 4.5, `theme ${theme}: ${a} on ${b} is ${contrast(tokens[a], tokens[b]).toFixed(2)}:1`);
+      }
+      const bgTokens = declarations(chromeCss(), ':root {');
+      assert.ok(contrast(tokens['--dv-accent'], bgTokens['--dv-bg']) >= 4.5, `theme ${theme}: --dv-accent on the base --dv-bg is below AA`);
+    }
+  });
+
+  it('gives the reader theme a wider line-height and a narrower reading column, matching what was promised (not just a colour swap)', () => {
+    const css = chromeCss();
+    const bodyStart = css.search(/html\[data-dv-theme="reader"\]\s+body\s*\{/);
+    assert.ok(bodyStart >= 0, 'expected a reader-theme body rule');
+    const bodyBlock = css.slice(css.indexOf('{', bodyStart) + 1, css.indexOf('}', bodyStart));
+    assert.ok(/line-height:\s*1\.[7-9]/.test(bodyBlock), 'expected a relaxed line-height for the reader theme');
+    const articleStart = css.search(/html\[data-dv-theme="reader"\]\s+main\[role="main"\]\s*>\s*article\s*\{/);
+    assert.ok(articleStart >= 0, 'expected a reader-theme article max-width rule');
   });
 });
