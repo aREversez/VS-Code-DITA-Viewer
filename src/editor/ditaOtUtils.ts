@@ -86,6 +86,41 @@ export function buildThemeBootstrapScript(): string {
     + "if(d)document.documentElement.classList.add('dark');}catch(e){}})();";
 }
 
+/**
+ * Body of the inline `<head>` bootstrap that re-applies the reader's stored
+ * collapse-all-sections preference before body content paints, for the
+ * DITA-OT HTML5/XHTML export's site chrome — the section-collapse twin of
+ * buildThemeBootstrapScript(), same no-flash rationale. Without it, every
+ * topic navigation paints fully expanded and only collapses once
+ * `dita-viewer-chrome.js` runs at the end of `<body>`.
+ *
+ * Two deliberate omissions:
+ * - Only TOP-LEVEL `section.section` elements get the class. site-chrome.css
+ *   hides a collapsed section's non-heading children wholesale, so a nested
+ *   section inside a collapsed ancestor is already hidden; marking those too
+ *   would leave stragglers flagged while the preference-clear reader's
+ *   per-anchor reveal (which only un-collapses ancestors) could not reach
+ *   them. chrome.js re-syncs nothing on load, so what this script stamps is
+ *   what the page runs with.
+ * - Skipped entirely when the URL carries a hash: a link naming one section
+ *   outranks a stored collapse-everything preference, and collapsing here
+ *   would race chrome.js's load-time ancestor-expansion for the native
+ *   fragment jump. Better a brief expanded paint than a broken deep link.
+ *
+ * Reads the same 'dv-section-collapse' key as site-chrome.js's
+ * getSectionPref/setSectionPref; raw JS only (no `<script>` tags) — the
+ * caller wraps it.
+ */
+export function buildCollapseBootstrapScript(): string {
+  return "(function(){try{if(location.hash.length>1)return;"
+    + "if(localStorage.getItem('dv-section-collapse')!=='1')return;"
+    + "var all=document.getElementsByTagName('section');"
+    + "for(var i=0;i<all.length;i++){var e=all[i];"
+    + "if(!/(^|\\s)section(\\s|$)/.test(e.className))continue;"
+    + "if(e.parentNode&&e.parentNode.nodeType===1&&/(^|\\s)section(\\s|$)/.test(e.parentNode.className))continue;"
+    + "e.className+=' dv-collapsed';}}catch(e){}})();";
+}
+
 export interface DitaOtLocation {
   executablePath: string;
   source: 'setting' | 'env' | 'path';

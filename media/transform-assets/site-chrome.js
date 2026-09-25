@@ -11,7 +11,8 @@ var FEATURES = /* __DV_FEATURES__ */;
 var LANG = ((document.documentElement.lang || navigator.language || 'en') + '').toLowerCase().indexOf('zh') === 0 ? 'zh' : 'en';
 var LABELS = {
   en: {
-    toggleSections: 'Collapse/expand sections',
+    collapseAllSections: 'Collapse all sections',
+    expandAllSections: 'Expand all sections',
     home: 'Back to home',
     prevPage: 'Previous page',
     nextPage: 'Next page',
@@ -23,7 +24,8 @@ var LABELS = {
     switchToDark: 'Switch to dark mode',
   },
   zh: {
-    toggleSections: '\u6298\u53E0/\u5C55\u5F00\u7AE0\u8282',
+    collapseAllSections: '\u6298\u53E0\u5168\u90E8\u7AE0\u8282',
+    expandAllSections: '\u5C55\u5F00\u5168\u90E8\u7AE0\u8282',
     home: '\u56DE\u5230\u4E3B\u9875',
     prevPage: '\u4E0A\u4E00\u9875',
     nextPage: '\u4E0B\u4E00\u9875',
@@ -52,20 +54,186 @@ function rootPrefix() {
   return idx >= 0 ? href.substring(0, idx + 1) : '';
 }
 
+// ── Section collapse: shared state, persistence, anchor reveal ──
+
+// One selector, one owner: every collapse read/write in this file goes
+// through these two, so the toolbar button, the stored preference, the
+// <head> bootstrap's class and the anchor-reveal path can't drift onto
+// different definitions of "a collapsible section".
+function getCollapsibleSections() {
+  return document.querySelectorAll('section.section');
+}
+
+// Stored site-wide under one key, mirroring 'dv-theme': every page of the
+// export shares the same collapse preference. Only the button writes it --
+// an anchor auto-expanding one section is the reader navigating, not the
+// reader choosing a new default, and persisting that would silently undo
+// their collapse-everything choice one page at a time.
+function getSectionPref() {
+  try { return localStorage.getItem('dv-section-collapse'); } catch (e) { return null; }
+}
+function setSectionPref(collapsed) {
+  try { localStorage.setItem('dv-section-collapse', collapsed ? '1' : '0'); } catch (e) {}
+}
+
+// Collapsing marks TOP-LEVEL sections only; expanding clears every section
+// (including any straggler a nested marking could have left behind, and
+// matching the <head> bootstrap's own top-level stamping). site-chrome.css
+// hides a collapsed section's non-heading children wholesale, so a nested
+// section inside a collapsed parent needs no class of its own: the CSS
+// cascade hides it, expandCollapsedAncestors' ancestor walk un-hides it, and
+// neither pass has to know it exists. Marking nested sections too would strand
+// one invisible next to an un-hidden parent, unreachable by any control.
+function applyAllSectionsCollapse(collapsed) {
+  if (collapsed) {
+    getCollapsibleSections().forEach(function (s) {
+      var p = s.parentElement;
+      if (p && p.closest && p.closest('section.section')) return;
+      s.classList.add('dv-collapsed');
+    });
+  } else {
+    getCollapsibleSections().forEach(function (s) {
+      s.classList.remove('dv-collapsed');
+    });
+  }
+}
+
+// The toolbar button's live two-state view. `anyCollapsed` is the state the
+// glyph/title/aria-pressed claim, so it is always recomputed from the DOM
+// rather than tracked on its own -- an anchor-revealed section breaks the
+// all-or-nothing picture, and the button should show what it will actually
+// do (collapse the still-visible ones).
+var anyCollapsed = false;
+// The toolbar button, module-scoped next to the state it renders: assigned
+// by initNavToolbar, but syncSectionToggleState tolerates it being absent
+// (a void expression, not a reference) so the load-time reveal path below
+// can run before the toolbar exists.
+var sectionToggle = null;
+function syncSectionToggleState() {
+  anyCollapsed = !!document.querySelector('section.section.dv-collapsed');
+  if (!sectionToggle) return;
+  sectionToggle.textContent = anyCollapsed ? '\u229F' : '\u229E';
+  sectionToggle.title = anyCollapsed ? T.expandAllSections : T.collapseAllSections;
+  sectionToggle.setAttribute('aria-pressed', anyCollapsed ? 'true' : 'false');
+}
+
+function hasHashTarget() {
+  return location.hash.length > 1;
+}
+
+function findHashTarget() {
+  var id;
+  try { id = decodeURIComponent(location.hash.slice(1)); } catch (e) { id = location.hash.slice(1); }
+  if (!id) return null;
+  var el = document.getElementById(id);
+  // Map-level links into a section come in as "topicid/sectionid" (and
+  // DITA-OT's own idiom wraps those as id="__topicid/sectionid") -- try the
+  // trailing part before giving up.
+  if (!el && id.indexOf('/') >= 0) el = document.getElementById(id.substring(id.lastIndexOf('/') + 1));
+  if (!el && id.indexOf('/') >= 0) el = document.getElementById('__' + id);
+  return el;
+}
+
+function revealElement(el) {
+  if (!el) return;
+  try { el.scrollIntoView(); } catch (e) {}
+}
+
+// Walk up from an anchor target and un-collapse every collapsed ancestor
+// section (nested sections included -- an outer <section> hide blanks its
+// inner ones via the CSS child rule regardless of their own class),
+// returning how many it actually opened. DOM-only: no preference write, on
+// purpose (see setSectionPref's comment).
+function expandCollapsedAncestors(el) {
+  var changed = 0;
+  var n = el && el.closest ? el.closest('section.section') : null;
+  while (n) {
+    if (n.classList.contains('dv-collapsed')) {
+      n.classList.remove('dv-collapsed');
+      changed++;
+    }
+    var parent = n.parentElement ? n.parentElement.closest('section.section') : null;
+    n = parent && n !== parent ? parent : null;
+  }
+  return changed;
+}
+
+function initSectionCollapsePreference() {
+  if (getSectionPref() === '1') applyAllSectionsCollapse(true);
+  // A stored collapse-everything preference must never win against a link
+  // that names a specific section -- the reader asked for that section,
+  // exactly the preview's nav-auto-expanded-for-the-active-row rule.
+  if (hasHashTarget()) {
+    var changed = expandCollapsedAncestors(findHashTarget());
+    if (changed) syncSectionToggleState();
+  }
+}
+
+// Same-document #id links -- the sidebar (links into THIS page's sections)
+// and DITA-OT's own cross-references -- land on a display:none element when
+// the target's section is collapsed, and the browser silently scrolls to top
+// instead. A capture-phase listener sees the click before any page-local
+// handler (the on-page TOC's own onclick) and restores a jumpable target.
+function initAnchorReveal() {
+  document.addEventListener('click', function (e) {
+    var a = e.target && e.target.closest ? e.target.closest('a') : null;
+    if (!a) return;
+    var href = a.getAttribute('href') || '';
+    if (href.charAt(0) !== '#' || href.length < 2) return;
+    var target = document.getElementById(href.slice(1));
+    if (!target) return;
+    // Visible already: stay out of the way entirely and let the browser's
+    // native jump (and hash update) happen.
+    if (target.offsetParent) return;
+    e.preventDefault();
+    if (expandCollapsedAncestors(target)) syncSectionToggleState();
+    revealElement(target);
+  }, true);
+  // A hash change within the loaded page (native jump, or a link whose
+  // target only became reachable after an expand) -- expand so the browser's
+  // layout includes the target, then re-jump by resetting the hash.
+  window.addEventListener('hashchange', function () {
+    var target = findHashTarget();
+    if (!target) return;
+    if (expandCollapsedAncestors(target)) {
+      syncSectionToggleState();
+      revealElement(target);
+    } else if (!target.offsetParent) {
+      // Still hidden, and nothing to expand: the target itself sits inside
+      // content hidden by something outside our collapse machinery (or the
+      // browser's jump predated the expand) -- nudge it into view.
+      revealElement(target);
+    }
+  });
+}
+
 function initNavToolbar() {
   var idx = -1;
   for (var i = 0; i < MANIFEST.length; i++) {
     if (MANIFEST[i].file === cur()) { idx = i; break; }
   }
   var bar = document.createElement('div'); bar.className = 'dv-toolbar';
-  var tb = document.createElement('button'); tb.textContent = '\u00A7';
-  tb.title = T.toggleSections;
-  tb.onclick = function () {
-    document.querySelectorAll('section.section').forEach(function (s) {
-      s.classList.toggle('dv-collapsed');
-    });
+  // All-sections toggle, two-state like the extension preview's collapse
+  // bookkeeping: the glyph, title and aria-pressed all describe the *current
+  // state* (\u229F = sections are collapsed, pressing expands), so the
+  // button never claims "collapse" while everything already is. The state
+  // itself lives at module scope (syncSectionToggleState) so the anchor-
+  // reveal paths can keep the button honest when they open a section behind
+  // the reader's back -- literally, since initSectionCollapsePreference has
+  // already run by the time this button first renders its state.
+  sectionToggle = document.createElement('button');
+  sectionToggle.onclick = function () {
+    // One direction for the whole page (classList.toggle's second-argument
+    // form), not a per-section flip -- a lockstep toggle would invert the
+    // reader's partly-collapsed mix into a different partly-collapsed mix
+    // instead of collapsing/expanding everything.
+    var target = !anyCollapsed;
+    applyAllSectionsCollapse(target);
+    setSectionPref(target);
+    syncSectionToggleState();
   };
-  bar.appendChild(tb);
+  syncSectionToggleState();
+  bar.appendChild(sectionToggle);
   if (!isIndex()) {
     var homeBtn = document.createElement('button'); homeBtn.textContent = '\u2302';
     homeBtn.title = T.home;
@@ -216,7 +384,14 @@ function initDarkMode() {
   document.body.appendChild(btn);
 }
 
-if (FEATURES.navToolbar) initNavToolbar();
+if (FEATURES.navToolbar) {
+  // Preference first: the page may already carry a hash (opened straight
+  // onto one section), and the toolbar's initial glyph must reflect the
+  // DOM the reveal path just adjusted.
+  initSectionCollapsePreference();
+  initAnchorReveal();
+  initNavToolbar();
+}
 if (FEATURES.sidebar) initSidebar();
 if (FEATURES.onPageToc) initOnPageToc();
 if (FEATURES.copyCode) initCodeLabels();

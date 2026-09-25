@@ -8,6 +8,7 @@ import {
   buildDitaOtSpawnSpec,
   buildNavManifest,
   buildThemeBootstrapScript,
+  buildCollapseBootstrapScript,
   classifyLogLine,
   createLineBuffer,
   normalizeIndexHtmlLinks,
@@ -606,5 +607,65 @@ describe('buildThemeBootstrapScript', () => {
   it('fails silently (adds nothing, does not throw) when localStorage access throws, e.g. private browsing', () => {
     assert.doesNotThrow(() => run({ stored: null, throwsOnGet: true, matches: true }));
     assert.deepStrictEqual(run({ stored: null, throwsOnGet: true, matches: true }), []);
+  });
+});
+
+describe('buildCollapseBootstrapScript', () => {
+  // Same fake-DOM treatment as buildThemeBootstrapScript above: this JS only
+  // ever runs inside an exported static site, so a unit test is the only
+  // place anything executes it.
+  interface FakeEl {
+    tag: string;
+    className: string;
+    parentNode: FakeEl | null;
+    nodeType: number;
+  }
+  function section(className: string, parent: FakeEl | null): FakeEl {
+    return { tag: 'section', className, parentNode: parent, nodeType: 1 };
+  }
+  function run(opts: { stored: string | null; hash?: string; throws?: boolean; sections: FakeEl[] }) {
+    const fakeDocument = {
+      getElementsByTagName: (t: string) => (t === 'section' ? opts.sections : []),
+    };
+    const fakeLocalStorage = {
+      getItem: () => {
+        if (opts.throws) throw new Error('SecurityError: storage disabled');
+        return opts.stored;
+      },
+    };
+    const fn = new Function('document', 'location', 'localStorage', buildCollapseBootstrapScript());
+    fn(fakeDocument, { hash: opts.hash ?? '' }, fakeLocalStorage);
+    return opts.sections.map((s) => s.className.includes('dv-collapsed'));
+  }
+
+  it('returns raw JS, not wrapped in <script></script> (caller assembles the tag)', () => {
+    assert.doesNotThrow(() => new Function(buildCollapseBootstrapScript()));
+    assert.ok(!buildCollapseBootstrapScript().includes('<script'));
+  });
+
+  it('marks only TOP-LEVEL section.section elements when the stored preference is collapse-all', () => {
+    const inner = section('section inner', null);
+    const outer = section('section outer', null);
+    inner.parentNode = outer;
+    const sibling = section('section sibling', null);
+    const notASection = section('other-class', null);
+    const result = run({ stored: '1', sections: [outer, inner, sibling, notASection] });
+    assert.deepStrictEqual(result, [true, false, true, false], 'top-level sections marked, nested and non-.section elements left alone');
+  });
+
+  it('does nothing when the preference is absent or explicitly expanded', () => {
+    const mk = () => [section('section a', null), section('section b', null)];
+    assert.deepStrictEqual(run({ stored: null, sections: mk() }), [false, false]);
+    assert.deepStrictEqual(run({ stored: '0', sections: mk() }), [false, false]);
+  });
+
+  it('skips entirely when the URL carries a hash -- a deep link outranks the stored preference', () => {
+    assert.deepStrictEqual(run({ stored: '1', hash: '#sec-2', sections: [section('section a', null)] }), [false]);
+  });
+
+  it('fails silently when localStorage access throws, e.g. private browsing', () => {
+    const el = section('section a', null);
+    assert.doesNotThrow(() => run({ stored: null, throws: true, sections: [el] }));
+    assert.ok(!el.className.includes('dv-collapsed'));
   });
 });

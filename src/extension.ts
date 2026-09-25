@@ -12,6 +12,7 @@ import {
   buildDitaOtSpawnSpec,
   buildNavManifest,
   buildThemeBootstrapScript,
+  buildCollapseBootstrapScript,
   classifyLogLine,
   createLineBuffer,
   normalizeIndexHtmlLinks,
@@ -656,6 +657,18 @@ function injectSiteChrome(
         // as initDarkMode(), which now only reflects the class applied here.
         const themeBootstrap = '<script>' + buildThemeBootstrapScript() + '</script>';
         html = html.replace('</head>', darkLink + themeBootstrap + '</head>');
+      }
+
+      if (features.navToolbar) {
+        // Same no-flash treatment for the section-collapse preference: the
+        // stored 'dv-section-collapse' key is applied during head parsing so
+        // a collapse-all reader doesn't see every topic paint expanded until
+        // the end-of-body chrome script runs. Skipped when the URL has a
+        // hash (see buildCollapseBootstrapScript). Gated on navToolbar --
+        // without the toolbar, 'dv-collapsed' is never set nor styled, so
+        // there is nothing to pre-apply.
+        const collapseBootstrap = '<script>' + buildCollapseBootstrapScript() + '</script>';
+        html = html.replace('</head>', collapseBootstrap + '</head>');
       }
 
       html = html.replace('</body>', '<script src="' + prefix + 'dita-viewer-chrome.js"></script></body>');
