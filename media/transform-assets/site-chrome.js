@@ -110,13 +110,23 @@ function initSidebar() {
 
 function initOnPageToc() {
   if (isIndex()) return;
+  var counter = 0;
+  function ensureId(el) {
+    // Real DITA-OT html5 output never puts an id on <section> or on its
+    // h2.sectiontitle/h3.sectiontitle -- only <h1> reliably gets one. Without
+    // this, the loops below always find zero section-level items and the
+    // on-page TOC silently never renders, regardless of how many headings
+    // the page actually has.
+    if (!el.id) el.id = 'dv-toc-' + (counter++);
+    return el.id;
+  }
   var items = [];
-  document.querySelectorAll('section[id]').forEach(function (sec) {
+  document.querySelectorAll('section').forEach(function (sec) {
     var titleEl = sec.querySelector('h2.sectiontitle, h3.sectiontitle');
-    if (titleEl) items.push({ id: sec.id, text: titleEl.textContent });
+    if (titleEl) items.push({ id: ensureId(titleEl), text: titleEl.textContent });
   });
-  var h1 = document.querySelector('h1[id]');
-  if (h1 && items.length > 0) items.unshift({ id: h1.id, text: h1.textContent });
+  var h1 = document.querySelector('h1');
+  if (h1 && items.length > 0) items.unshift({ id: ensureId(h1), text: h1.textContent });
   if (items.length < 2) return;
   var container = document.createElement('div'); container.className = 'dv-page-toc';
   var title = document.createElement('div'); title.className = 'dv-page-toc-title';
