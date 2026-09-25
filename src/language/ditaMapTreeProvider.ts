@@ -6,8 +6,10 @@
 // is the single root row (its title, not a bare list of its children),
 // branches start collapsed -- including frontmatter and keydef entries,
 // which are listed again now that nothing auto-expands them -- and
-// expand-all/collapse-all act on the selected node's subtree, with the
-// resulting expansion state persisted per map.
+// expand-all/collapse-all act on the selected node, with expand-all opening
+// its whole subtree and collapse-all folding that subtree together with the
+// selected row (the main map row excepted, so collapsing from the root keeps
+// the one-level outline); the resulting expansion state is persisted per map.
 //
 // Each row's context menu (also Oxygen-DITA-Maps-Manager-flavored) offers
 // Open with Oxygen, Reveal in Explorer, Export as HTML, and Copy
@@ -33,6 +35,7 @@ import { mapTreeLabel, mapTreeIconId } from './mapTreePresentation';
 import {
   ROOT_NODE_ID,
   ExpansionDeviations,
+  collapseAllIds,
   expansionFor,
   markExpanded,
   markCollapsed,
@@ -382,17 +385,26 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
   }
 
   /**
-   * Collapses every branch under the target, the target itself excepted --
-   * the row the command was invoked on stays open with its children
-   * folded, so "collapse all" on a submap reads as "fold this submap up",
-   * not "make my own row a leaf". Collapsing the whole map from the root
-   * row lands on the one-level outline a fresh tree starts at.
+   * Collapses the target's whole subtree, the target row included --
+   * "Collapse All" closes the row it was invoked on, like the same command
+   * in every other tree. That inclusion is what makes the command work at
+   * all on the standard chapter shape: a topichead over leaf topicrefs has
+   * no descendant branch to fold, so a descendants-only collapse-all marked
+   * nothing and read as dead on it. The root map row is the one row left
+   * open -- see collapseAllIds.
    */
   async collapseAll(element?: MapTreeNode): Promise<void> {
     const target = this.expansionTarget(element);
     if (!target) return;
+    const branches = this.collectBranchIds(target.node, false);
+    const ids = collapseAllIds(this.nodeIds.get(target.node), branches);
+    // Nothing to mark: a row from before a reload re-parsed the map (it
+    // carries no id, and neither does anything below it), or a target with
+    // no fold left -- the root of a map whose top level is all leaf rows.
+    // Skip the persist, refresh and re-anchor instead of pretending to act.
+    if (ids.length === 0) return;
     const deviations = this.currentDeviations();
-    for (const id of this.collectBranchIds(target.node, false)) markCollapsed(deviations, id);
+    for (const id of ids) markCollapsed(deviations, id);
     this.schedulePersist();
     this._onDidChangeTreeData.fire();
     await this.revealTarget(target);

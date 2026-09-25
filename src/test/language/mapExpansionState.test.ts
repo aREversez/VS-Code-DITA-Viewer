@@ -2,6 +2,7 @@ import * as assert from 'assert';
 import {
   ROOT_NODE_ID,
   ExpansionDeviations,
+  collapseAllIds,
   expansionFor,
   isExpandedByDefault,
   markExpanded,
@@ -56,6 +57,60 @@ describe('mapExpansionState', () => {
       markExpanded(deviations, ROOT_NODE_ID);
       assert.strictEqual(ROOT_NODE_ID in deviations, false);
       assert.strictEqual(expansionFor(deviations, ROOT_NODE_ID), 'e');
+    });
+  });
+
+  describe('collapseAllIds', () => {
+    it('folds the target row itself, so a one-level topichead collapses visibly', () => {
+      // A chapter topichead whose children are all leaves: the descendant
+      // branch set is empty, and without the target's own id the command
+      // marked nothing and read as dead.
+      const chapterId = 'root/topichead:Chapter 1';
+      assert.deepStrictEqual(collapseAllIds(chapterId, []), [chapterId]);
+    });
+
+    it('marks every descendant branch plus the target', () => {
+      assert.deepStrictEqual(
+        collapseAllIds('root/part', ['root/part/submap', 'root/part/submap/topicref']),
+        ['root/part/submap', 'root/part/submap/topicref', 'root/part'],
+      );
+    });
+
+    it('leaves the root map row open, collapsing to the one-level outline', () => {
+      assert.deepStrictEqual(collapseAllIds(ROOT_NODE_ID, ['root/chapter']), ['root/chapter']);
+    });
+
+    it('has nothing to fold on a root whose top level is all leaf rows', () => {
+      // The one shape where the command legitimately does nothing: folding
+      // the main map row too would take the tree's anchor out from under
+      // the reader instead of landing on a one-level outline.
+      assert.deepStrictEqual(collapseAllIds(ROOT_NODE_ID, []), []);
+    });
+
+    it('marks nothing for a stale row carrying no structural id', () => {
+      assert.deepStrictEqual(collapseAllIds(undefined, []), []);
+    });
+
+    it('collapses an expanded chapter, flipping the id that rebuilds the row', () => {
+      // End to end at the pure level, because the id is the mechanism: VS
+      // Code preserves a row's rendered state across a refresh while its
+      // TreeItem id matches, and the id encodes the expansion mark -- so an
+      // expanded chapter of leaf topics only folds on screen if this
+      // command's ids take its mark back to the collapsed default.
+      const mapKey = '/w/maps/main.ditamap';
+      const chapterId = 'root/topichead:第 1 章 产品简介';
+      const deviations: ExpansionDeviations = {};
+      markExpanded(deviations, chapterId);
+      const before = treeItemId(
+        mapKey,
+        chapterId,
+        expansionFor(deviations, chapterId),
+      );
+      for (const id of collapseAllIds(chapterId, [])) markCollapsed(deviations, id);
+      const mark = expansionFor(deviations, chapterId);
+      assert.strictEqual(mark, 'c');
+      assert.strictEqual(chapterId in deviations, false);
+      assert.notStrictEqual(treeItemId(mapKey, chapterId, mark), before);
     });
   });
 

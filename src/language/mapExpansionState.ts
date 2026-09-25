@@ -4,9 +4,10 @@
  * ids both are keyed by.
  *
  * Pure of the vscode module so the decisions worth pinning down -- what a
- * stored value is trusted to mean, what an id is stable against, and what
- * the TreeItem id has to encode -- can be unit-tested. The wiring (tree
- * view events, workspaceState reads/writes) is in ditaMapTreeProvider.ts.
+ * stored value is trusted to mean, what an id is stable against, what the
+ * TreeItem id has to encode, and which rows a scoped collapse-all folds --
+ * can be unit-tested. The wiring (tree view events, workspaceState
+ * reads/writes) is in ditaMapTreeProvider.ts.
  *
  * Why ids at all: the tree collapses every branch by default except the
  * root map row, and what the user then expands has to survive two very
@@ -51,6 +52,35 @@ export function markExpanded(deviations: ExpansionDeviations, nodeId: string): v
 export function markCollapsed(deviations: ExpansionDeviations, nodeId: string): void {
   if (isExpandedByDefault(nodeId)) deviations[nodeId] = 'c';
   else delete deviations[nodeId];
+}
+
+/**
+ * The ids a scoped collapse-all marks: every branch under the target (the
+ * provider's collectBranchIds output) plus the target row itself.
+ *
+ * The invoked row is part of the fold because that is what "Collapse All"
+ * means in every other tree -- and because on the standard chapter shape
+ * it is the only fold there is: a topichead whose children are all leaf
+ * topicrefs, which is how each chapter of a manual's map is written,
+ * contributes no descendant branch at all, so a descendants-only
+ * collapse-all marked nothing and read as dead on exactly the rows users
+ * try it on.
+ *
+ * The main map row is the one exception, named for what it is rather than
+ * inferred from the expansion defaults: it anchors the tree, so collapsing
+ * from it lands on the one-level outline a fresh tree starts at instead of
+ * a single bare row -- and a map whose top level is all leaf rows
+ * accordingly has nothing to do. An undefined target id is a row from
+ * before a reload re-parsed the map, which records nothing (same stance as
+ * noteExpansion).
+ */
+export function collapseAllIds(
+  targetId: string | undefined,
+  descendantBranchIds: readonly string[],
+): string[] {
+  const ids = [...descendantBranchIds];
+  if (targetId !== undefined && targetId !== ROOT_NODE_ID) ids.push(targetId);
+  return ids;
 }
 
 /**

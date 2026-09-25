@@ -101,6 +101,26 @@ describe('map explorer toolbar', () => {
     }
   });
 
+  it('folds the invoked row through collapseAllIds, not just the branches below it', () => {
+    // The dead-command bug lived in this wiring as much as in the decision:
+    // collapseAll marked the collected descendant branches directly, and a
+    // chapter topichead over leaf topicrefs collects none of those -- so on
+    // exactly that shape the command marked nothing and the row on screen
+    // never changed. What has to hold is that the marking loop runs over
+    // collapseAllIds' result (the branches plus the invoked row) rather than
+    // over the raw collectBranchIds output.
+    const start = providerSource.indexOf('async collapseAll(');
+    assert.ok(start >= 0, 'collapseAll is there to test');
+    const end = providerSource.indexOf('/** Re-anchor the view', start);
+    const body = providerSource.slice(start, end);
+    assert.ok(body.includes('markCollapsed'), 'and it is the folding command');
+    assert.ok(body.includes('collapseAllIds('), 'collapseAll folds via collapseAllIds');
+    assert.ok(
+      !/for \(const id of this\.collectBranchIds\([\s\S]*?\)\)\s*markCollapsed/.test(body),
+      'the collected branch ids are not marked on their own, target row missing',
+    );
+  });
+
   it('records chevron toggles so expansion survives reloads', () => {
     assert.ok(
       providerSource.includes('treeView.onDidExpandElement((e) => provider.noteExpanded(e.element))'),
