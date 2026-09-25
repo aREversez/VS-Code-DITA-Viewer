@@ -2219,7 +2219,7 @@ describe('toolbar scaffold/font-prefs/font-width-tag-tooltips scripts (a3\' extr
       getToolbarFontWidthTagTooltipsButtonsScript({ ...buttonsOpts, includeFontReset: true, resetFont: 'Reset font' }),
       getSiteSidebarToggleScript({ toggleTitle: 'T' }),
       getModeToggleScript({ switchModeTitle: 'T', modeOutline: 'O', modeBook: 'B', modeSite: 'S', switchModeMsgType: 'switchMode', switchingLabel: 'Switching…' }),
-      getSiteOpenSourceScript({ openSourceMsgType: 'm', menuLabel: 'M', buttonLabel: 'B', buttonTitle: 'T' }),
+      getSiteOpenSourceScript({ openSourceMsgType: 'm', navContextMsgType: 'nav', menuLabel: 'M', openMapLabel: 'OM', oxygenLabel: 'OX', revealLabel: 'RV', findUnreferencedLabel: 'FU', exportLabel: 'EX', copyTitleLabel: 'CT', copyHrefLabel: 'CH', expandAllLabel: 'EA', collapseAllLabel: 'CA', buttonLabel: 'B', buttonTitle: 'T' }),
       getProfilingFilterScript({ buttonLabel: 'F', buttonTitle: 'T', closeLabel: 'C', emptyLabel: 'E' }),
       getSiteNavExpandCollapseAllButtonsScript({ expandAllTitle: 'E', collapseAllTitle: 'C' }),
       getSiteHistoryButtonsScript({ backLabel: 'B', backTitle: 'B', forwardLabel: 'F', forwardTitle: 'F' }),
@@ -4441,53 +4441,125 @@ describe('getSiteNavExpandCollapseAllButtonsScript + getSiteNavCollapseStateHelp
   });
 });
 
-describe('getSiteOpenSourceScript (docsite: open a topic source)', () => {
-  const opts = { openSourceMsgType: 'openTopicSource', menuLabel: 'Open source', buttonLabel: 'Source', buttonTitle: 'Open this topic\'s source' };
+describe('getSiteOpenSourceScript (sidebar Source button + row context menu)', () => {
+  const opts = {
+    openSourceMsgType: 'openTopicSource',
+    navContextMsgType: 'navContextAction',
+    menuLabel: 'Open source',
+    openMapLabel: 'Open Map in Editor',
+    oxygenLabel: 'Open with Oxygen',
+    revealLabel: 'Reveal in Explorer',
+    findUnreferencedLabel: 'Find Unreferenced',
+    exportLabel: 'Export as HTML',
+    copyTitleLabel: 'Copy Title',
+    copyHrefLabel: 'Copy Href',
+    expandAllLabel: 'Expand All',
+    collapseAllLabel: 'Collapse All',
+    buttonLabel: 'Source',
+    buttonTitle: "Open this topic's source",
+  };
 
-  function setup(activeTarget: string | null) {
-    const posted: Array<{ type: string; target: string }> = [];
-    const listeners: Record<string, (e: unknown) => void> = {};
-    const btnListeners: Record<string, () => void> = {};
-    const fakeBtn = {
-      style: {}, id: '', textContent: '', title: '',
-      setAttribute: () => {},
-      addEventListener: (evt: string, fn: () => void) => { btnListeners[evt] = fn; },
+  interface El {
+    tag: string;
+    className: string;
+    textContent: string;
+    children: El[];
+    addEventListener: (evt: string, fn: (e: { stopPropagation: () => void }) => void) => void;
+    click: () => void;
+    [k: string]: unknown;
+  }
+
+  function runScript(activeTarget: string | null) {
+    const posted: Array<Record<string, unknown>> = [];
+    const collapseCalls: boolean[] = [];
+    const docListeners: Record<string, (e: unknown) => void> = {};
+    const allElements: El[] = [];
+    const makeEl = (tag: string): El => {
+      const listeners: Record<string, (e: { stopPropagation: () => void }) => void> = {};
+      const el = {
+        tag, className: '', textContent: '', id: '', title: '', style: {},
+        children: [] as El[], offsetWidth: 0, offsetHeight: 0,
+        setAttribute: () => {}, remove: () => {}, contains: () => false,
+        appendChild(c: El) { el.children.push(c); return c; },
+        addEventListener: (evt: string, fn: (e: { stopPropagation: () => void }) => void) => { listeners[evt] = fn; },
+        click: () => listeners.click && listeners.click({ stopPropagation: () => {} }),
+      } as unknown as El;
+      allElements.push(el);
+      return el;
     };
-    const fakeDocument = {
-      createElement: () => ({ ...fakeBtn, appendChild: () => {}, remove: () => {}, contains: () => false, style: {}, offsetWidth: 0, offsetHeight: 0, addEventListener: () => {}, setAttribute: () => {} }),
+    const document = {
+      createElement: makeEl,
       querySelector: (sel: string) =>
         sel === '.site-nav-link.active[data-site-target]' && activeTarget !== null
           ? { getAttribute: () => activeTarget }
           : null,
-      addEventListener: (evt: string, fn: (e: unknown) => void) => { listeners[evt] = fn; },
+      addEventListener: (evt: string, fn: (e: unknown) => void) => { docListeners[evt] = fn; },
       body: { appendChild: () => {} },
     };
     const script = getSiteOpenSourceScript(opts);
-    const fn = new Function('btnStyle', 'document', 'vscode', 'window', script + '; return siteOpenSourceBtn;');
-    fn('', { ...fakeDocument, createElement: (tag: string) => (tag === 'button' && !btnListeners['click'] ? fakeBtn : fakeDocument.createElement()) }, { postMessage: (m: { type: string; target: string }) => posted.push(m) }, { innerWidth: 800, innerHeight: 600 });
-    return { posted, listeners, btnListeners };
+    const fn = new Function(
+      'btnStyle', 'document', 'vscode', 'window', 'setAllSiteNavCollapsed',
+      script + '; return siteOpenSourceBtn;',
+    );
+    const btn = fn('', document, { postMessage: (m: Record<string, unknown>) => posted.push(m) }, { innerWidth: 800, innerHeight: 600 }, (v: boolean) => collapseCalls.push(v));
+    return { posted, collapseCalls, docListeners, allElements, btn };
   }
 
+  const fireContextMenu = (r: ReturnType<typeof runScript>, target: string | null) => {
+    let prevented = false;
+    r.docListeners['contextmenu']({
+      target: { closest: () => (target === null ? null : { getAttribute: () => target }) },
+      preventDefault: () => { prevented = true; },
+      clientX: 1, clientY: 1,
+    });
+    return prevented;
+  };
+
   it('the toolbar button posts the ACTIVE page\'s target', () => {
-    const { btnListeners, posted } = setup('/book/a.dita');
-    btnListeners['click']();
-    assert.deepStrictEqual(posted, [{ type: 'openTopicSource', target: '/book/a.dita' }]);
+    const r = runScript('/book/a.dita');
+    r.btn.click();
+    assert.deepStrictEqual(r.posted, [{ type: 'openTopicSource', target: '/book/a.dita' }]);
   });
 
   it('the toolbar button posts nothing when no page is active', () => {
-    const { btnListeners, posted } = setup(null);
-    btnListeners['click']();
-    assert.deepStrictEqual(posted, []);
+    const r = runScript(null);
+    r.btn.click();
+    assert.deepStrictEqual(r.posted, []);
   });
 
-  it('right-click on a topic row is intercepted, on anything else is left to the browser', () => {
-    const { listeners } = setup('/book/a.dita');
-    let prevented = false;
-    listeners['contextmenu']({ target: { closest: () => ({ getAttribute: () => '/book/b.dita' }) }, preventDefault: () => { prevented = true; }, clientX: 1, clientY: 1 });
-    assert.strictEqual(prevented, true);
-    prevented = false;
-    listeners['contextmenu']({ target: { closest: () => null }, preventDefault: () => { prevented = true; }, clientX: 1, clientY: 1 });
-    assert.strictEqual(prevented, false);
+  it('right-click on a topic row is intercepted; on anything else it is left to the browser', () => {
+    const r = runScript('/book/a.dita');
+    assert.strictEqual(fireContextMenu(r, '/book/b.dita'), true);
+    assert.strictEqual(fireContextMenu(r, null), false);
+  });
+
+  it('the row menu is built grouped, with a separator between every group', () => {
+    const r = runScript('/book/a.dita');
+    fireContextMenu(r, '/book/b.dita');
+    const menu = r.allElements.find((e) => e.className === 'dita-img-ctxmenu');
+    assert.ok(menu, 'a context menu was built');
+    const items = menu!.children.filter((e) => e.tag === 'button');
+    const seps = menu!.children.filter((e) => e.className === 'dita-img-ctxmenu-sep');
+    assert.strictEqual(items.length, 10, 'one button per menu entry');
+    assert.strictEqual(seps.length, 4, 'a divider between each of the 5 groups');
+  });
+
+  it('a row-scoped entry posts navContextAction with the row\'s target', () => {
+    const r = runScript('/book/a.dita');
+    fireContextMenu(r, '/book/b.dita');
+    const copyTitle = r.allElements.find((e) => e.tag === 'button' && e.textContent === 'Copy Title');
+    assert.ok(copyTitle);
+    copyTitle!.click();
+    assert.deepStrictEqual(r.posted, [{ type: 'navContextAction', action: 'copyTitle', target: '/book/b.dita' }]);
+  });
+
+  it('Expand All / Collapse All act in-page and never post a message', () => {
+    const r = runScript('/book/a.dita');
+    fireContextMenu(r, '/book/b.dita');
+    r.allElements.find((e) => e.textContent === 'Expand All')!.click();
+    r.allElements.find((e) => e.textContent === 'Collapse All')!.click();
+    assert.deepStrictEqual(r.collapseCalls, [false, true]);
+    assert.deepStrictEqual(r.posted, []);
   });
 });
 

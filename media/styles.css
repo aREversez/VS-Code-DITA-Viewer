@@ -539,6 +539,12 @@ img[data-load-error] { cursor: default; }
   outline: none;
 }
 .dita-img-ctxmenu-item:disabled { cursor: default; opacity: 0.7; }
+/* Group divider for the sidebar's multi-item context menu (see
+   getSiteOpenSourceScript), matching how a native menu separates groups. */
+.dita-img-ctxmenu-sep {
+  height: 1px; margin: 2px 4px;
+  background: var(--vscode-menu-separatorBackground, var(--vscode-widget-border, #454545));
+}
 
 /* Transient feedback pill for the lightbox's Ctrl+C copy path, which has
    no menu item of its own to update the way the right-click menu does. */

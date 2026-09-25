@@ -1420,6 +1420,13 @@ export interface DocsiteNavEntry {
    *  exactly when isGroup is true (see below) --
    *  a group entry has no topic file of its own to resolve one from. */
   absPath?: string;
+  /** The entry's own raw DITA href (as written in the map, unresolved and
+   *  possibly carrying a fragment), carried so the webview's sidebar
+   *  context menu can offer "Copy Href" without ever putting an untrusted
+   *  reference into the rendered DOM -- the host reads this back from the
+   *  cached manifest by absPath. Undefined for a group entry (no href by
+   *  definition) and never rendered into markup. */
+  href?: string;
   title: string;
   /** Nesting level, 0 at the map's own top level -- for sidebar indentation. */
   depth: number;
@@ -1660,7 +1667,7 @@ export function buildBookNavManifest(
     const topicType = resolveTopicType ? resolveTopicType(entry.href) : undefined;
     // pos.id is this navigable entry's absPath (see computeManifestEntryPositions),
     // so it doubles as `absPath` directly rather than resolving it again here.
-    result.push({ id: pos.id, absPath: pos.id, title, depth: pos.depth, role: entry.role, topicType });
+    result.push({ id: pos.id, absPath: pos.id, href: entry.href, title, depth: pos.depth, role: entry.role, topicType });
   }
   return result;
 }
@@ -3705,23 +3712,67 @@ export function getModeToggleScript(opts: {
 }
 
 /**
- * "Open the source of this topic" for docsite mode: a toolbar button (acts on
- * the page being shown) and a right-click menu on any sidebar topic row (acts
- * on that row, without switching page). Both only post the topic's absolute
- * path -- the extension host validates it against the map's own manifest and
- * decides which tab group the source opens in.
+ * The Book/Site sidebar's toolbar "Source" button and an Oxygen-style
+ * right-click context menu on any sidebar topic row. The menu mirrors the
+ * native DITA Map tree's context menu, acting on the row's own file without
+ * switching page. Every row-scoped entry posts a single
+ * {type: navContextMsgType, action, target} message -- the host validates
+ * `target` against the map's own manifest and reads the trusted title/href
+ * back from it, so no untrusted value (never mind a raw DITA href) is ever
+ * placed in the DOM. The final group (Expand/Collapse All) acts in-page
+ * through setAllSiteNavCollapsed, which
+ * getSiteNavExpandCollapseAllButtonsScript declares in the same IIFE scope.
  *
  * Declares `siteOpenSourceBtn` for the caller to place, same build-always/
  * append-conditionally convention as the other toolbar scripts. The menu
- * reuses the image menu's CSS classes so both look alike; it needs `vscode`
- * in scope. Group rows (topichead) carry no data-site-target, so they never
- * match the menu's selector.
+ * reuses the image menu's CSS classes (plus `.dita-img-ctxmenu-sep`) so both
+ * look alike; it needs `vscode` in scope. Group rows (topichead) carry no
+ * data-site-target, so they never match the menu's selector.
  */
-export function getSiteOpenSourceScript(opts: { openSourceMsgType: string; menuLabel: string; buttonLabel: string; buttonTitle: string }): string {
+export function getSiteOpenSourceScript(opts: {
+  openSourceMsgType: string;
+  navContextMsgType: string;
+  menuLabel: string;
+  openMapLabel: string;
+  oxygenLabel: string;
+  revealLabel: string;
+  findUnreferencedLabel: string;
+  exportLabel: string;
+  copyTitleLabel: string;
+  copyHrefLabel: string;
+  expandAllLabel: string;
+  collapseAllLabel: string;
+  buttonLabel: string;
+  buttonTitle: string;
+}): string {
   const msgType = JSON.stringify(opts.openSourceMsgType);
-  const menuLabel = JSON.stringify(opts.menuLabel);
+  const navMsgType = JSON.stringify(opts.navContextMsgType);
   const buttonLabel = JSON.stringify(opts.buttonLabel);
   const buttonTitle = JSON.stringify(opts.buttonTitle);
+  // Groups are serialized as plain data (labels are host-supplied, trusted
+  // l10n text), so building the menu in the webview never interpolates an
+  // untrusted string into executable script. `action` is posted to the host;
+  // `local` is handled in-page. Separator lines are drawn between groups.
+  const menuGroups = [
+    [
+      { action: 'openMapSource', label: opts.openMapLabel },
+      { action: 'openSource', label: opts.menuLabel },
+      { action: 'openWithOxygen', label: opts.oxygenLabel },
+    ],
+    [
+      { action: 'revealInExplorer', label: opts.revealLabel },
+      { action: 'findUnreferenced', label: opts.findUnreferencedLabel },
+    ],
+    [{ action: 'exportHtml', label: opts.exportLabel }],
+    [
+      { action: 'copyTitle', label: opts.copyTitleLabel },
+      { action: 'copyHref', label: opts.copyHrefLabel },
+    ],
+    [
+      { local: 'expandAll', label: opts.expandAllLabel },
+      { local: 'collapseAll', label: opts.collapseAllLabel },
+    ],
+  ];
   return `
   function requestOpenTopicSource(target) {
     if (target) vscode.postMessage({ type: ${msgType}, target: target });
@@ -3738,11 +3789,17 @@ export function getSiteOpenSourceScript(opts: { openSourceMsgType: string; menuL
     if (active) requestOpenTopicSource(active.getAttribute('data-site-target'));
   });
 
+  var NAV_CTX_GROUPS = ${JSON.stringify(menuGroups)};
   var srcCtxMenu = null;
   function closeSrcCtxMenu() {
     if (!srcCtxMenu) return;
     srcCtxMenu.remove();
     srcCtxMenu = null;
+  }
+  function runNavItem(entry, target) {
+    if (entry.local === 'expandAll') { setAllSiteNavCollapsed(false); return; }
+    if (entry.local === 'collapseAll') { setAllSiteNavCollapsed(true); return; }
+    vscode.postMessage({ type: ${navMsgType}, action: entry.action, target: target });
   }
   document.addEventListener('contextmenu', function(e) {
     var link = e.target && e.target.closest ? e.target.closest('.site-nav-link[data-site-target]') : null;
@@ -3752,16 +3809,25 @@ export function getSiteOpenSourceScript(opts: { openSourceMsgType: string; menuL
     var target = link.getAttribute('data-site-target');
     var menu = document.createElement('div');
     menu.className = 'dita-img-ctxmenu';
-    var item = document.createElement('button');
-    item.type = 'button';
-    item.className = 'dita-img-ctxmenu-item';
-    item.textContent = ${menuLabel};
-    item.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      closeSrcCtxMenu();
-      requestOpenTopicSource(target);
+    NAV_CTX_GROUPS.forEach(function(group, gi) {
+      if (gi > 0) {
+        var sep = document.createElement('div');
+        sep.className = 'dita-img-ctxmenu-sep';
+        menu.appendChild(sep);
+      }
+      group.forEach(function(entry) {
+        var item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'dita-img-ctxmenu-item';
+        item.textContent = entry.label;
+        item.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          closeSrcCtxMenu();
+          runNavItem(entry, target);
+        });
+        menu.appendChild(item);
+      });
     });
-    menu.appendChild(item);
     document.body.appendChild(menu);
     // Clamped to the viewport once its real size is known, like the image menu.
     menu.style.left = Math.min(e.clientX, window.innerWidth - menu.offsetWidth - 4) + 'px';

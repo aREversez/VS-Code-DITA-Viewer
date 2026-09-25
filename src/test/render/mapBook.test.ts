@@ -1044,8 +1044,8 @@ describe('resolveBookTopicPath / buildBookNavManifest (docsite nav manifest)', (
     ];
     const manifest = buildBookNavManifest(entries, docDir);
     assert.deepStrictEqual(manifest, [
-      { id: join(docDir, 'topics/ch1.dita'), absPath: join(docDir, 'topics/ch1.dita'), title: 'Chapter One', depth: 0, role: 'Chapter 1', topicType: undefined },
-      { id: join(docDir, 'topics/ch1-s1.dita'), absPath: join(docDir, 'topics/ch1-s1.dita'), title: 'Section 1.1', depth: 1, role: undefined, topicType: undefined },
+      { id: join(docDir, 'topics/ch1.dita'), absPath: join(docDir, 'topics/ch1.dita'), href: 'topics/ch1.dita', title: 'Chapter One', depth: 0, role: 'Chapter 1', topicType: undefined },
+      { id: join(docDir, 'topics/ch1-s1.dita'), absPath: join(docDir, 'topics/ch1-s1.dita'), href: 'topics/ch1-s1.dita', title: 'Section 1.1', depth: 1, role: undefined, topicType: undefined },
       // The trailing hrefless entry has nothing deeper following it, so
       // it's dropped rather than becoming an empty group header.
     ]);
@@ -1060,9 +1060,24 @@ describe('resolveBookTopicPath / buildBookNavManifest (docsite nav manifest)', (
     const manifest = buildBookNavManifest(entries, docDir);
     assert.deepStrictEqual(manifest, [
       { id: 'grp:0', title: 'Chapter 1: Intro', depth: 0, role: undefined, isGroup: true },
-      { id: join(docDir, 'topics/about.dita'), absPath: join(docDir, 'topics/about.dita'), title: 'About', depth: 1, role: undefined, topicType: undefined },
-      { id: join(docDir, 'topics/overview.dita'), absPath: join(docDir, 'topics/overview.dita'), title: 'Overview', depth: 1, role: undefined, topicType: undefined },
+      { id: join(docDir, 'topics/about.dita'), absPath: join(docDir, 'topics/about.dita'), href: 'topics/about.dita', title: 'About', depth: 1, role: undefined, topicType: undefined },
+      { id: join(docDir, 'topics/overview.dita'), absPath: join(docDir, 'topics/overview.dita'), href: 'topics/overview.dita', title: 'Overview', depth: 1, role: undefined, topicType: undefined },
     ]);
+  });
+
+  it('carries the raw href on a navigable entry (for the sidebar menu\'s Copy Href) and none on a group', () => {
+    const entries: MapEntry[] = [
+      { href: undefined, displayName: 'Part I', displayNameExplicit: true, depth: 0 },
+      { href: 'topics/one.dita#frag', displayName: 'One', displayNameExplicit: true, depth: 1 },
+    ];
+    const manifest = buildBookNavManifest(entries, docDir);
+    assert.strictEqual(manifest.length, 2);
+    // Group entry: no href of its own -- the key is absent, not undefined-valued.
+    assert.ok(!('href' in manifest[0]), 'a group entry carries no href key');
+    // Navigable entry: the raw href, fragment and all (unresolved -- the
+    // host reads it back by absPath, and Copy Href wants exactly what the
+    // map wrote, not the resolved path).
+    assert.strictEqual(manifest[1].href, 'topics/one.dita#frag');
   });
 
   it('drops a hrefless entry with no descendants (a bare key-only topicref/keydef used only for keyref substitution) rather than showing an empty group', () => {

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
 import { openSourceBesidePreview } from './sourceEditorOpener';
+import { resolveLocalHrefPath, computeUnreferencedFiles } from './mapReferenceTools';
 import { discoverTemplates, templateDisplayName, SiteTemplate, TemplateRoot } from './siteTemplates';
 import { buildTemplateStyleText, templateBodyAttrs, templateDataAttr } from './templateStyle';
 import { mapTitleFromXml, renderChrome, wrapShell } from './templateChrome';
@@ -16,7 +17,7 @@ import { foldPendingRender, foldSiteRefresh, escalateAfterFailure, PendingRender
 import { sharedWebviewStrings } from './webviewL10n';
 import { buildKeyMap, FONT_PREFS_KEY, DEFAULT_FONT_PREFS, WIDTH_SELECTION_KEY, TAG_TOOLTIPS_KEY, DEFAULT_TAG_TOOLTIPS, escapeJson } from './DitaViewerProvider';
 import { formatLocalizedRole } from '../language/bookRoleL10n';
-import { basename, dirname, join, resolve } from 'path';
+import { basename, dirname, join, relative, resolve } from 'path';
 import { randomBytes } from 'crypto';
 import { readForDocument, writeForDocument } from './perDocumentState';
 import { trackSourceReads, dependsOn } from './sourceText';
@@ -73,6 +74,14 @@ const MSG_SWITCH_SITE_PAGE = 'switchSitePage';
 // Docsite mode: open a topic's source file in the text editor, in a tab
 // group other than the preview's. webview -> host only.
 const MSG_OPEN_TOPIC_SOURCE = 'openTopicSource';
+// The Book/Site sidebar's row context menu: one message carrying an
+// `action` (openMapSource/openSource/openWithOxygen/revealInExplorer/
+// findUnreferenced/exportHtml/copyTitle/copyHref) and, for the row-scoped
+// actions, the row's resolved `target` path. The host validates `target`
+// against the map's own manifest before acting, so the webview cannot name
+// an arbitrary file. Expand/Collapse All never reach here -- they act
+// in-page. webview -> host only.
+const MSG_NAV_CONTEXT = 'navContextAction';
 // Docsite/book view: the reader picked a template ('' = none). webview -> host.
 const MSG_SET_TEMPLATE = 'setTemplate';
 // Book mode's own sidebar refresh (nested-fold-and-highlight-plan.md item
@@ -176,6 +185,19 @@ function getMapWebviewScript(
     siteOpenSource: vscode.l10n.t('Source'),
     siteOpenSourceTitle: vscode.l10n.t('Open this topic\'s source in the editor'),
     siteOpenSourceMenu: vscode.l10n.t('Open source'),
+    // Book/Site sidebar row context-menu labels (see getSiteOpenSourceScript).
+    // "Open source" above is reused for that menu's second item; the rest are
+    // menu-only. Titles match the native DITA Map tree's context menu where an
+    // equivalent exists.
+    navMenuOpenMap: vscode.l10n.t('Open Map in Editor'),
+    navMenuOpenWithOxygen: vscode.l10n.t('Open with Oxygen XML Editor'),
+    navMenuRevealInExplorer: vscode.l10n.t('Reveal in Explorer'),
+    navMenuFindUnreferenced: vscode.l10n.t('Find Unreferenced Resources…'),
+    navMenuExportHtml: vscode.l10n.t('Export as HTML…'),
+    navMenuCopyTitle: vscode.l10n.t('Copy Title'),
+    navMenuCopyHref: vscode.l10n.t('Copy Href'),
+    navMenuExpandAll: vscode.l10n.t('Expand All'),
+    navMenuCollapseAll: vscode.l10n.t('Collapse All'),
     templateTitle: vscode.l10n.t('Template'),
     templateNone: vscode.l10n.t('Default look'),
     sitePrevTopic: vscode.l10n.t('Previous topic'),
@@ -324,7 +346,17 @@ function getMapWebviewScript(
   // any topic's) -- docsite mode only, like the buttons around it.
   ${getSiteOpenSourceScript({
     openSourceMsgType: MSG_OPEN_TOPIC_SOURCE,
+    navContextMsgType: MSG_NAV_CONTEXT,
     menuLabel: L.siteOpenSourceMenu,
+    openMapLabel: L.navMenuOpenMap,
+    oxygenLabel: L.navMenuOpenWithOxygen,
+    revealLabel: L.navMenuRevealInExplorer,
+    findUnreferencedLabel: L.navMenuFindUnreferenced,
+    exportLabel: L.navMenuExportHtml,
+    copyTitleLabel: L.navMenuCopyTitle,
+    copyHrefLabel: L.navMenuCopyHref,
+    expandAllLabel: L.navMenuExpandAll,
+    collapseAllLabel: L.navMenuCollapseAll,
     buttonLabel: L.siteOpenSource,
     buttonTitle: L.siteOpenSourceTitle,
   })}
@@ -893,6 +925,51 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         if (typeof target !== 'string' || !siteManifestCache) return;
         if (!siteNavigableEntries(siteManifestCache.manifest).some((entry) => entry.absPath === target)) return;
         void openSourceBesidePreview(vscode.Uri.file(target), webviewPanel.viewColumn);
+      } else if (message.type === MSG_NAV_CONTEXT) {
+        // The sidebar row context menu. Map-level actions carry no target;
+        // row-scoped ones resolve the untrusted `target` against this map's
+        // manifest, rebuilt on demand here rather than read from
+        // siteManifestCache -- that cache is only warm in site mode, while
+        // the menu exists in book mode too, and a right-click is a one-off
+        // action where the re-parse is cheaper than threading a manifest
+        // through book mode's render.
+        const action = typeof message.action === 'string' ? message.action : '';
+        const target = typeof message.target === 'string' ? message.target : '';
+        if (action === 'openMapSource') {
+          void openSourceBesidePreview(document.uri, webviewPanel.viewColumn);
+          return;
+        }
+        if (action === 'findUnreferenced') {
+          void this.findUnreferencedInPreviewMap(document);
+          return;
+        }
+        if (!target) return;
+        const built = this.buildSiteManifest(document);
+        if (built.error !== undefined) return;
+        const entry = siteNavigableEntries(built.manifest).find((e) => e.absPath === target);
+        if (!entry) return;
+        const uri = vscode.Uri.file(entry.absPath);
+        switch (action) {
+          case 'openSource':
+            void openSourceBesidePreview(uri, webviewPanel.viewColumn);
+            break;
+          case 'openWithOxygen':
+            void vscode.commands.executeCommand('ditaViewer.openWithOxygen', uri);
+            break;
+          case 'revealInExplorer':
+            void vscode.commands.executeCommand('revealFileInOS', uri);
+            break;
+          case 'exportHtml':
+            void vscode.commands.executeCommand('ditaViewer.exportHtml', uri);
+            break;
+          case 'copyTitle':
+            void vscode.env.clipboard.writeText(entry.title);
+            break;
+          case 'copyHref':
+            if (entry.href) void vscode.env.clipboard.writeText(entry.href);
+            else void vscode.window.showInformationMessage(vscode.l10n.t('This entry has no href to copy.'));
+            break;
+        }
       } else if (message.type === MSG_SWITCH_SITE_PAGE) {
         const target = message.target as string;
         if (!target || target === currentSitePage) return;
@@ -1428,6 +1505,52 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       const message = err instanceof Error ? err.message : String(err);
       return { error: message };
     }
+  }
+
+  /**
+   * "Find Unreferenced Resources" for this preview's own map: every .dita
+   * file under the map's folder that no href in the (submap-expanded) map
+   * resolves to. Mirrors DitaMapTreeProvider.findUnreferencedResources, but
+   * scoped to the document this panel is showing rather than whichever map
+   * the tree happens to have active -- the two views can legitimately be on
+   * different maps. Referenced paths come from every collectMapEntries href
+   * (not just the navigable manifest), so a resource-only or since-deleted
+   * reference is counted the same way the tree counts it.
+   */
+  private async findUnreferencedInPreviewMap(document: vscode.TextDocument): Promise<void> {
+    const mapDir = dirname(document.uri.fsPath);
+    let referenced: string[];
+    try {
+      const mapDoc = parseDitamap(preprocessEntities(document.getText()));
+      expandDitamapRefs(mapDoc.root, mapDir);
+      const keyMap = buildKeyMap(document.uri);
+      const entries = collectMapEntries(mapDoc.root, (k) => keyMap.get(k), formatLocalizedRole);
+      referenced = [];
+      for (const entry of entries) {
+        const abs = resolveLocalHrefPath(mapDir, entry.href);
+        if (abs) referenced.push(abs);
+      }
+    } catch {
+      return; // The map no longer parses; nothing meaningful to report.
+    }
+    const found = await vscode.workspace.findFiles(
+      new vscode.RelativePattern(mapDir, '**/*.dita'),
+      '**/node_modules/**',
+      2000,
+    );
+    const unreferenced = computeUnreferencedFiles(found.map((u) => u.fsPath), referenced, process.platform)
+      .map((p) => ({ label: basename(p), description: relative(mapDir, p), fsPath: p }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    if (unreferenced.length === 0) {
+      vscode.window.showInformationMessage(
+        vscode.l10n.t('No unreferenced .dita topics found under {0}.', basename(mapDir)),
+      );
+      return;
+    }
+    const picked = await vscode.window.showQuickPick(unreferenced, {
+      placeHolder: vscode.l10n.t('{0} unreferenced .dita topic(s) found — select one to open', String(unreferenced.length)),
+    });
+    if (picked) await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(picked.fsPath));
   }
 
   /**
