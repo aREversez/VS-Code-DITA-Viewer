@@ -335,10 +335,17 @@ pre.codeblock, pre.pre {
 }
 /* Content column: sits just right of the (centered) sidebar and is capped to
    --dv-page-max minus the nav, so the sidebar + content read as one centered
-   block. margin-left is relative to the body's padded content box, hence the
-   `- var(--dv-page-gutter)` reclaiming the left gutter already applied there. */
+   block with no gap between them. margin-left is relative to the body's
+   padded content box (body already applies --dv-page-gutter as its own
+   left padding), so this only needs to add back the sidebar's own left
+   offset *beyond* that padding -- max(0, (100vw - page-max) / 2 - gutter)
+   is exactly that -- plus the sidebar's width. A trailing "+ gutter" here
+   would double-count the padding on any viewport narrower than
+   page-max + 2*gutter (i.e. most ordinary desktop widths, not just small
+   screens), leaving a stray gap the width of one gutter between the
+   sidebar and the content on those widths -- do not add it back. */
 .dv-has-sidebar {
-  margin-left: calc(max(0px, (100vw - var(--dv-page-max)) / 2 - var(--dv-page-gutter)) + 280px + var(--dv-page-gutter));
+  margin-left: calc(max(0px, (100vw - var(--dv-page-max)) / 2 - var(--dv-page-gutter)) + 280px);
   max-width: calc(var(--dv-page-max) - 280px - var(--dv-page-gutter));
 }
 
