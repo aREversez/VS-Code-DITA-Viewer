@@ -184,5 +184,10 @@
   "Failed to launch Oxygen XML Editor: {0}": "Failed to launch Oxygen XML Editor: {0}",
   "This file is not part of the DITA map currently shown in the navigator.": "This file is not part of the DITA map currently shown in the navigator.",
   "No unreferenced .dita topics found under {0}.": "No unreferenced .dita topics found under {0}.",
-  "{0} unreferenced .dita topic(s) found — select one to open": "{0} unreferenced .dita topic(s) found — select one to open"
+  "{0} unreferenced .dita topic(s) found — select one to open": "{0} unreferenced .dita topic(s) found — select one to open",
+  "No template (legacy site enhancements)": "No template (legacy site enhancements)",
+  "Select a site template for the export": "Select a site template for the export",
+  "Select the enhancements to enable on top of the template (all enabled by default)": "Select the enhancements to enable on top of the template (all enabled by default)",
+  "\n[DITA-OT] Template \"{0}\" applied to the site.": "\n[DITA-OT] Template \"{0}\" applied to the site.",
+  "Cannot add the template: \"{0}\" already exists as a file in the output.": "Cannot add the template: \"{0}\" already exists as a file in the output."
 }

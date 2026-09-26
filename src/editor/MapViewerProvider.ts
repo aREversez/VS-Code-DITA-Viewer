@@ -3,11 +3,10 @@ import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
 import { openSourceBesidePreview } from './sourceEditorOpener';
 import { resolveLocalHrefPath, computeUnreferencedFiles } from './mapReferenceTools';
-import { discoverTemplates, templateDisplayName, SiteTemplate, TemplateRoot } from './siteTemplates';
+import { discoverTemplates, discoverTemplateRoots, templateDisplayName, SiteTemplate, TemplateRoot } from './siteTemplates';
 import { buildTemplateStyleText, templateBodyAttrs, templateDataAttr } from './templateStyle';
 import { mapTitleFromXml, renderChrome, wrapShell } from './templateChrome';
 import { TEMPLATE_SELECTION_KEY, parseTemplateSelection, withTemplate, pickTemplate } from './templateSelection';
-import { resolveDirectoryPath } from './cssDiscovery';
 import { readFileSync } from 'fs';
 import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getImageMapSupportScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getRefreshButtonScript, decodeHrefPart, openHrefTarget, buildBookNavManifest, siteNavigableEntries, renderSiteNavTreeHtml, wrapSiteNavTreeHtml, getSiteNavClickHandlerScript, getSidebarUpdateScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getOutlineSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavKeyboardScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteOpenSourceScript, getTemplateSelectScript, getToolbarPlacementScript, PREV_TOPIC_ICON_SVG, NEXT_TOPIC_ICON_SVG, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, HISTORY_BACK_ICON_SVG, HISTORY_FORWARD_ICON_SVG, DocsiteNavEntry, SITE_HOME_TARGET, buildSiteHomeTiles, renderSiteHomeHtml, getSiteHomeButtonScript } from './ditaRenderUtils';
 import { getBookSearchIndex, searchBookIndex, buildBookSearchResultsPayload, getBookSearchScript, invalidateBookSearchIndex } from './bookSearchIndex';
@@ -1912,14 +1911,15 @@ ${shell.html}
   // Where templates live: the built-in ones shipped in media/templates, then
   // the folders of dita-viewer.templatesDirectory (later roots override
   // earlier ones with the same id, so a user template can replace a built-in).
+  // The lookup itself is shared with the DITA-OT transform's picker
+  // (discoverTemplateRoots in siteTemplates.ts).
   private templateRoots(document: vscode.TextDocument): TemplateRoot[] {
-    const roots: TemplateRoot[] = [{ dir: join(this.context.extensionPath, 'media', 'templates'), builtin: true }];
-    const configured = vscode.workspace.getConfiguration('dita-viewer').get<string[]>('templatesDirectory') ?? [];
-    for (const dir of configured) {
-      const resolved = resolveDirectoryPath(dir, dirname(document.uri.fsPath));
-      if (resolved) roots.push({ dir: resolved, builtin: false });
-    }
-    return roots;
+    return discoverTemplateRoots({
+      extensionPath: this.context.extensionPath,
+      configuredDirs: vscode.workspace.getConfiguration('dita-viewer').get<string[]>('templatesDirectory') ?? [],
+      refDir: dirname(document.uri.fsPath),
+      workspaceRoots: (vscode.workspace.workspaceFolders || []).map((f) => f.uri.fsPath),
+    });
   }
 
   private loadTemplates(document: vscode.TextDocument): SiteTemplate[] {

@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { discoverTemplates, parseTemplateJson, parseTemplateOpt, resolveInside, templateDisplayName } from '../../editor/siteTemplates';
+import { discoverTemplateRoots, discoverTemplates, parseTemplateJson, parseTemplateOpt, resolveInside, templateDisplayName } from '../../editor/siteTemplates';
 
 const OPT = `<?xml version="1.0" encoding="UTF-8"?>
 <publishing-template>
@@ -49,6 +49,93 @@ describe('parseTemplateOpt', () => {
   it('rejects other XML and a template without css', () => {
     assert.strictEqual(parseTemplateOpt('<foo/>').ok, false);
     assert.strictEqual(parseTemplateOpt('<publishing-template><name>x</name></publishing-template>').ok, false);
+  });
+
+  it('scans css only inside the <webhelp> section, so a <pdf> section repeating a file does not duplicate it', () => {
+    const r = parseTemplateOpt(
+      '<publishing-template>' +
+      '<webhelp><resources><css file="a.css"/><css file="b.css"/></resources></webhelp>' +
+      '<pdf><resources><css file="a.css"/><css file="pdf-only.css"/></resources></pdf>' +
+      '</publishing-template>',
+    );
+    assert.ok(r.ok);
+    if (!r.ok) return;
+    // The webhelp scan must not see the pdf section's css at all -- this is
+    // the whole point of the segmentation (the old whole-document scan handed
+    // back a.css twice once an export repeated it under <pdf>).
+    assert.deepStrictEqual(r.descriptor.css, ['a.css', 'b.css']);
+    assert.deepStrictEqual(r.descriptor.pdfCss, ['a.css', 'pdf-only.css']);
+  });
+
+  it('falls back to the whole document when there is no <webhelp> section', () => {
+    const r = parseTemplateOpt(
+      '<publishing-template><name>x</name><resources><css file="top.css"/></resources></publishing-template>',
+    );
+    assert.ok(r.ok);
+    if (!r.ok) return;
+    assert.deepStrictEqual(r.descriptor.css, ['top.css']);
+    assert.strictEqual(r.descriptor.pdfCss, undefined);
+  });
+
+  it('pdfCss is undefined when the descriptor names no <pdf> css', () => {
+    const r = parseTemplateOpt(OPT);
+    assert.ok(r.ok);
+    if (!r.ok) return;
+    assert.strictEqual(r.descriptor.pdfCss, undefined);
+  });
+});
+
+describe('discoverTemplateRoots', () => {
+  let tmp: string;
+  beforeEach(() => { tmp = mkdtempSync(join(tmpdir(), 'tplroots-')); });
+  afterEach(() => { rmSync(tmp, { recursive: true, force: true }); });
+
+  it('always lists the built-in media/templates first, then the configured dirs (absolute and ref-relative)', () => {
+    const extPath = join(tmp, 'ext');
+    mkdirSync(join(extPath, 'media', 'templates'), { recursive: true });
+    const abs = join(tmp, 'abs-tpl');
+    mkdirSync(abs, { recursive: true });
+    const refDir = join(tmp, 'refdir');
+    const rel = join(refDir, 'rel-tpl');
+    mkdirSync(rel, { recursive: true });
+    const roots = discoverTemplateRoots({
+      extensionPath: extPath,
+      configuredDirs: [abs, 'rel-tpl'],
+      refDir,
+    });
+    assert.deepStrictEqual(roots, [
+      { dir: join(extPath, 'media', 'templates'), builtin: true },
+      { dir: abs, builtin: false },
+      { dir: rel, builtin: false },
+    ]);
+  });
+
+  it('drops a configured dir that resolves to nothing on disk', () => {
+    const extPath = join(tmp, 'ext');
+    mkdirSync(join(extPath, 'media', 'templates'), { recursive: true });
+    const roots = discoverTemplateRoots({
+      extensionPath: extPath,
+      configuredDirs: ['does-not-exist'],
+      refDir: tmp,
+      workspaceRoots: [join(tmp, 'ws')],
+    });
+    assert.strictEqual(roots.length, 1);
+    assert.strictEqual(roots[0].builtin, true);
+  });
+
+  it('resolves a relative configured dir against a workspace root when the ref dir misses', () => {
+    const extPath = join(tmp, 'ext');
+    mkdirSync(join(extPath, 'media', 'templates'), { recursive: true });
+    const ws = join(tmp, 'ws');
+    const wsTpl = join(ws, 'tpls');
+    mkdirSync(wsTpl, { recursive: true });
+    const roots = discoverTemplateRoots({
+      extensionPath: extPath,
+      configuredDirs: ['tpls'],
+      refDir: join(tmp, 'refdir'),
+      workspaceRoots: [ws],
+    });
+    assert.deepStrictEqual(roots[1], { dir: wsTpl, builtin: false });
   });
 });
 

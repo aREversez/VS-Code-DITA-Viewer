@@ -61,9 +61,16 @@ function cur() {
 function isIndex() { return cur() === 'index.html'; }
 
 function rootPrefix() {
-  var link = document.querySelector('link[href*="dita-viewer-chrome"]');
-  if (!link) return '';
-  var href = link.getAttribute('href');
+  // The site assets (css links, the chrome <script>) all live at the site
+  // root and are referenced with the same '../'-repeat depth prefix from any
+  // page, so any one of them yields the path back to the root. Legacy pages
+  // carry a 'dita-viewer-chrome.css' link; template-shell pages instead load
+  // 'dita-viewer-site-shell.css' / the deferred 'dita-viewer-chrome.js'.
+  var el = document.querySelector(
+    'link[href*="dita-viewer-chrome"], link[href*="dita-viewer-site-shell"], script[src*="dita-viewer-chrome"]',
+  );
+  if (!el) return '';
+  var href = el.getAttribute('href') || el.getAttribute('src') || '';
   var idx = href.lastIndexOf('/');
   return idx >= 0 ? href.substring(0, idx + 1) : '';
 }
@@ -416,10 +423,20 @@ function initCodeLabels() {
 function initBackToTop() {
   var btn = document.createElement('button'); btn.className = 'dv-back-to-top';
   btn.textContent = '\u2191'; btn.title = T.backToTop;
-  window.addEventListener('scroll', function () {
-    btn.classList.toggle('visible', window.scrollY > 400);
+  // In a template-shell page the body never scrolls -- #dita-content-root
+  // owns the vertical scrollbar (site-shell.css), so watch and scroll that
+  // pane instead of the window (which would never move past its first
+  // viewport of a long topic).
+  var pane = FEATURES.siteShell ? shellScroller() : null;
+  var watch = pane || window;
+  var pos = function () { return pane ? pane.scrollTop : window.scrollY; };
+  watch.addEventListener('scroll', function () {
+    btn.classList.toggle('visible', pos() > 400);
   });
-  btn.onclick = function () { window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  btn.onclick = function () {
+    if (pane && pane.scrollTo) { pane.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
   document.body.appendChild(btn);
 }
 
@@ -436,13 +453,134 @@ function initDarkMode() {
   btn.title = dark ? T.switchToLight : T.switchToDark;
   btn.onclick = function () {
     var isDark = document.documentElement.classList.toggle('dark');
-    localStorage.setItem('dv-theme', isDark ? 'dark' : 'light');
+    try { localStorage.setItem('dv-theme', isDark ? 'dark' : 'light'); } catch (e) {}
+    // In a template-shell page the template's own palette is keyed on
+    // body.template-dark (see templateExport.ts's body bootstrap); keep it
+    // in step with html.dark so one button drives both layers.
+    if (FEATURES.siteShell) syncTemplateDark();
     btn.textContent = isDark ? '\u2600' : '\uD83C\uDF19';
     btn.title = isDark ? T.switchToLight : T.switchToDark;
   };
   document.body.appendChild(btn);
 }
 
+// Reconciles body.template-dark with the html.dark class the toggle (and
+// the <head> bootstrap) owns. The inline body bootstrap already stamped
+// the class before paint; this only ever runs after a toggle click, and
+// keeps both markers telling the same story.
+function syncTemplateDark() {
+  var dark = document.documentElement.classList.contains('dark');
+  var b = document.body;
+  if (!b) return;
+  var has = (' ' + b.className + ' ').indexOf(' template-dark ') >= 0;
+  if (dark && !has) b.className += (b.className ? ' ' : '') + 'template-dark';
+  if (!dark && has) b.className = b.className.replace(/\s*\btemplate-dark\b/, '');
+}
+
+// ── Template shell (site mode export) wiring ──
+//
+// When the export was rebuilt around a media/templates/* template
+// (injectTemplateChrome in extension.ts), the sidebar is real nested
+// markup with real page links and a build-time `active` row -- the legacy
+// dv-toolbar/dv-sidebar never load here (their feature flags stay off),
+// and only three small behaviors need JS: clicking a row navigates,
+// the fold toggles work and persist, and back-to-top scrolls the
+// #dita-content-root pane instead of the window.
+
+function shellScroller() {
+  return document.getElementById('dita-content-root');
+}
+
+// Sidebar links carry their destination in data-site-target (the '_root_/'
+// pseudo-path shared with the preview's markup); href stays "#" so the
+// roving-tabindex keyboard model and the middle-click story don't fight
+// each other. Rewriting them happens once at load.
+function initTemplateNavLinks() {
+  var nav = document.querySelector('.site-nav');
+  if (!nav) return;
+  var links = nav.querySelectorAll('.site-nav-link[data-site-target]');
+  for (var i = 0; i < links.length; i++) {
+    var a = links[i];
+    var target = a.getAttribute('data-site-target');
+    if (!target || target.indexOf('_root_/') !== 0) continue;
+    a.setAttribute('href', rootPrefix() + target.substring('_root_/'.length));
+  }
+  // Bring the reader's own row into sight inside the scrollable sidebar --
+  // the preview does this when it swaps pages; here the row is already
+  // active in the markup, only the scroll position needs a nudge.
+  var active = nav.querySelector('.site-nav-link.active');
+  if (active && active.scrollIntoView) {
+    try { active.scrollIntoView({ block: 'center' }); } catch (e) {}
+  }
+}
+
+function setShellNavItemCollapsed(item, collapsed) {
+  if (!item || !item.classList) return;
+  if (collapsed) item.classList.add('collapsed');
+  else item.classList.remove('collapsed');
+  item.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  var toggle = item.querySelector(':scope > .site-nav-toggle');
+  if (toggle) {
+    toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    toggle.setAttribute('aria-label', collapsed ? (toggle.getAttribute('data-expand-label') || 'Expand') : (toggle.getAttribute('data-collapse-label') || 'Collapse'));
+  }
+}
+
+function reportShellNavCollapseState() {
+  try {
+    var ids = [];
+    var nav = document.querySelector('.site-nav');
+    var active = nav ? nav.querySelector('.site-nav-link.active') : null;
+    var items = document.querySelectorAll('.site-nav-item.has-children');
+    for (var i = 0; i < items.length; i++) {
+      var id = items[i].getAttribute('data-nav-id');
+      // The ancestors of the active row are the build-time revealed path
+      // to the current page: they always arrive expanded and stay out of
+      // the stored set, so a stored fold can never strand the reader's own
+      // row (the same exemption renderSiteNavTreeHtml's revealActive gives
+      // them at render time).
+      var isActiveAncestor = active && items[i].contains(active);
+      if (id && items[i].classList.contains('collapsed') && !isActiveAncestor) ids.push(id);
+    }
+    localStorage.setItem('dv-site-nav-collapsed', JSON.stringify(ids));
+  } catch (e) {}
+}
+
+function initTemplateNavFolds() {
+  var nav = document.querySelector('.site-nav');
+  if (!nav) return;
+  // Restore the stored folds first (skipping the active row's ancestors,
+  // which the build already revealed), then wire the toggles.
+  try {
+    var stored = JSON.parse(localStorage.getItem('dv-site-nav-collapsed') || '[]');
+    if (stored && stored.length) {
+      var active = nav.querySelector('.site-nav-link.active');
+      var wanted = {};
+      for (var s = 0; s < stored.length; s++) wanted[stored[s]] = true;
+      var items = nav.querySelectorAll('.site-nav-item.has-children[data-nav-id]');
+      for (var i = 0; i < items.length; i++) {
+        var isActiveAncestor = active && items[i].contains(active);
+        if (wanted[items[i].getAttribute('data-nav-id')] && !isActiveAncestor) {
+          setShellNavItemCollapsed(items[i], true);
+        }
+      }
+    }
+  } catch (e) {}
+  nav.addEventListener('click', function (e) {
+    var toggle = e.target && e.target.closest ? e.target.closest('.site-nav-toggle') : null;
+    if (!toggle) return;
+    e.preventDefault();
+    var item = toggle.closest ? toggle.closest('.site-nav-item') : null;
+    if (!item) return;
+    setShellNavItemCollapsed(item, !item.classList.contains('collapsed'));
+    reportShellNavCollapseState();
+  });
+}
+
+if (FEATURES.siteShell) {
+  initTemplateNavLinks();
+  initTemplateNavFolds();
+}
 if (FEATURES.navToolbar) {
   // Preference first: the page may already carry a hash (opened straight
   // onto one section), and the toolbar's initial glyph must reflect the

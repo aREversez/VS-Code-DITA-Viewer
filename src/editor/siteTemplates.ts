@@ -25,6 +25,12 @@ export interface SiteTemplate {
   outline: boolean;
   /** Absolute paths, in injection order. At least one. */
   css: string[];
+  /**
+   * Absolute paths of the <pdf> section's css, when the descriptor is an
+   * .opt that names any. Parsed but not consumed anywhere yet -- reserved
+   * for a future PDF template path; the webhelp/export flows ignore it.
+   */
+  pdfCss?: string[];
   thumbnail?: string;
   /** The page header (brand bar / banner), when the template has one. */
   header?: TemplateHeader;
@@ -73,7 +79,10 @@ export interface TemplateDescriptor {
   layout?: string;
   defaultDark: boolean;
   outline: boolean;
+  /** Relative paths, as written in the descriptor (webhelp section for .opt). */
   css: string[];
+  /** Relative paths from the <pdf> section of an .opt; absent when none. */
+  pdfCss?: string[];
   thumbnail?: string;
   header?: TemplateHeader;
   footer?: TemplateFooter;
@@ -242,16 +251,31 @@ export function parseTemplateOpt(text: string): ParseResult {
     if (type === 'color' && value === 'dark') defaultDark = true;
   }
 
-  const attr = (tag: string, name: string): string[] => {
+  const attr = (tag: string, scanXml: string): string[] => {
     const out: string[] = [];
-    const re = new RegExp(`<${tag}\\b[^>]*?\\b${name}\\s*=\\s*"([^"]*)"`, 'g');
-    for (let m = re.exec(xml); m; m = re.exec(xml)) if (m[1].trim()) out.push(decodeXmlText(m[1]));
+    const re = new RegExp(`<${tag}\\b[^>]*?\\bfile\\s*=\\s*"([^"]*)"`, 'g');
+    for (let m = re.exec(scanXml); m; m = re.exec(scanXml)) if (m[1].trim()) out.push(decodeXmlText(m[1]));
     return out;
   };
 
-  const css = attr('css', 'file');
+  // css/preview-image are scanned inside the <webhelp> section only: an
+  // Oxygen export repeats <css file="..."/> in a <pdf> section, and the
+  // whole-document scan used to hand back each file twice. Without a
+  // <webhelp> section, fall back to the whole document so a minimal
+  // descriptor that carries <css/> at top level stays parseable. The
+  // <pdf> section's css goes to pdfCss for a future PDF template path
+  // (parsed, deliberately not consumed anywhere yet).
+  const sectionOf = (section: string): string | undefined => {
+    const m = new RegExp(`<${section}\\b[\\s\\S]*?</${section}>`, 'i').exec(xml);
+    return m ? m[0] : undefined;
+  };
+  const scanXml = sectionOf('webhelp') ?? xml;
+  const css = [...new Set(attr('css', scanXml))];
   if (css.length === 0) return { ok: false, error: '.opt lists no <css file="..."/>' };
-  return { ok: true, warnings: [], descriptor: { names, layout, defaultDark, outline: false, css, thumbnail: attr('preview-image', 'file')[0] } };
+  const pdfSection = sectionOf('pdf');
+  const pdfCss = pdfSection ? [...new Set(attr('css', pdfSection))] : undefined;
+  const thumbnail = attr('preview-image', scanXml)[0];
+  return { ok: true, warnings: [], descriptor: { names, layout, defaultDark, outline: false, css, pdfCss, thumbnail } };
 }
 
 export interface TemplateRoot {
@@ -314,6 +338,9 @@ function loadTemplateDir(dir: string, id: string, builtin: boolean, diagnostics:
     diagnostics.push({ dir, message: 'no usable css file; template skipped' });
     return undefined;
   }
+  const pdfCss = d.pdfCss
+    ?.map((c) => resolveFile(c, 'pdf css'))
+    .filter((c): c is string => c !== undefined);
   return {
     id,
     names: d.names,
@@ -322,6 +349,7 @@ function loadTemplateDir(dir: string, id: string, builtin: boolean, diagnostics:
     defaultDark: d.defaultDark,
     outline: d.outline,
     css,
+    pdfCss: pdfCss && pdfCss.length > 0 ? pdfCss : undefined,
     thumbnail: d.thumbnail ? resolveFile(d.thumbnail, 'thumbnail') : undefined,
     header: d.header
       ? { ...d.header, logo: d.header.logo ? resolveFile(d.header.logo, 'header logo') : undefined, banner: d.header.banner ? resolveFile(d.header.banner, 'header banner') : undefined }
@@ -366,4 +394,31 @@ export function discoverTemplates(roots: readonly TemplateRoot[]): { templates: 
 export function templateDisplayName(t: SiteTemplate, lang: string): string {
   const l = lang.toLowerCase();
   return t.names[l] ?? t.names[l.split('-')[0]] ?? t.names[''] ?? Object.values(t.names)[0] ?? t.id;
+}
+
+/**
+ * The template roots to discover from: the built-in media/templates folder
+ * shipped with the extension, then every configured dita-viewer.templatesDirectory
+ * (later roots override earlier ones with the same id, so a user template can
+ * replace a built-in). A configured directory resolves against `refDir` first,
+ * then the workspace roots — the same rule cssDiscovery's
+ * resolveDirectoryPath uses, kept vscode-free here by passing the roots in.
+ * Shared by the map webview preview (MapViewerProvider) and the DITA-OT
+ * transform's template picker (extension.ts).
+ */
+export function discoverTemplateRoots(input: {
+  extensionPath: string;
+  configuredDirs: readonly string[];
+  refDir: string;
+  workspaceRoots?: readonly string[];
+}): TemplateRoot[] {
+  const roots: TemplateRoot[] = [{ dir: join(input.extensionPath, 'media', 'templates'), builtin: true }];
+  for (const dir of input.configuredDirs) {
+    const candidates = isAbsolute(dir)
+      ? [dir]
+      : [resolve(input.refDir, dir), ...(input.workspaceRoots ?? []).map((w) => resolve(w, dir))];
+    const found = candidates.find((c) => existsSync(c));
+    if (found) roots.push({ dir: found, builtin: false });
+  }
+  return roots;
 }

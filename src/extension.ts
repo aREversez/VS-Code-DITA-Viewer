@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import { spawn } from 'child_process';
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs';
-import { basename, dirname, isAbsolute, join, resolve } from 'path';
+import { cpSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
 import { registerSourceOverlay } from './editor/sourceOverlayFeed';
 import { registerSourceEditorTracker } from './editor/sourceEditorOpener';
-import { DitaViewerProvider, findDitamapFiles, getLastRenderedHtmlForTesting, clearAllCaches } from './editor/DitaViewerProvider';
+import { DitaViewerProvider, findDitamapFiles, getLastRenderedHtmlForTesting, clearAllCaches, buildKeyMap } from './editor/DitaViewerProvider';
 import { MapViewerProvider, getLastRenderedMapHtmlForTesting, clearMapCache } from './editor/MapViewerProvider';
 import {
   resolveDitaOtExecutable,
@@ -19,6 +19,19 @@ import {
   CssArg,
   SiteChromeFeatures,
 } from './editor/ditaOtUtils';
+import { discoverTemplateRoots, discoverTemplates, templateDisplayName, SiteTemplate } from './editor/siteTemplates';
+import {
+  buildHeadInjectHtml,
+  buildShellPageHtml,
+  buildTemplateCssText,
+  buildTemplateDarkBootstrapScript,
+  buildTemplateNav,
+  readShellCss,
+  readTemplateChromeCss,
+  renderSidebarHtml,
+} from './editor/templateExport';
+import { mapTitleFromXml } from './editor/templateChrome';
+import { makeFileTitleResolver } from './editor/ditaRenderUtils';
 import { registerLanguageFeatures } from './language/ditaLanguageFeatures';
 import { registerMapTreeView } from './language/ditaMapTreeProvider';
 import { ditaFileWatcherCounts } from './editor/ditaFileWatcher';
@@ -28,6 +41,21 @@ import { resolveOxygenLaunch, buildOxygenSpawnArgs } from './editor/oxygenLaunch
 import { registerFindReferencingMapsCommand } from './editor/findDitaReferences';
 
 const TRANSFORM_CMD = 'ditaViewer.transformWithDitaOt';
+
+/** globalState key holding the transform QuickPick's last template choice
+ *  (a template id, or '' for "no template / legacy site chrome") -- the
+ *  picker highlights that entry next time, which is what makes the
+ *  template path the recommended default without forcing it. */
+const LAST_TRANSFORM_TEMPLATE_KEY = 'ditaViewer.lastTransformTemplate';
+
+/** The legacy feature-flag base every html5/xhtml run starts from (all
+ *  enhancements on -- the pre-template defaults). */
+function chromeFeatureBase(): SiteChromeFeatures {
+  return {
+    navToolbar: true, sidebar: true, onPageToc: true,
+    copyCode: true, backToTop: true, darkMode: true,
+  };
+}
 
 export function activate(context: vscode.ExtensionContext) {
   // Unsaved editor text into the sources the previews read (sourceText.ts).
@@ -301,9 +329,50 @@ export function activate(context: vscode.ExtensionContext) {
         }
       }
 
-      // 5. Pick optional CSS (html5/xhtml only)
-      let cssArg: CssArg | undefined;
+      // 5. Pick the export template (html5/xhtml only). The template system
+      // (media/templates/*, shared with the Docsite preview) is the primary
+      // styling path for the static export; the last choice is highlighted,
+      // and "no template" falls back to the legacy site-chrome look.
+      let template: SiteTemplate | undefined;
       if (transtype === 'html5' || transtype === 'xhtml') {
+        const roots = discoverTemplateRoots({
+          extensionPath,
+          configuredDirs: vscode.workspace.getConfiguration('dita-viewer').get<string[]>('templatesDirectory') ?? [],
+          refDir: mapDir,
+          workspaceRoots: (vscode.workspace.workspaceFolders || []).map((f) => f.uri.fsPath),
+        });
+        const { templates } = discoverTemplates(roots);
+        const lang = vscode.env.language;
+        const legacyLabel = vscode.l10n.t('No template (legacy site enhancements)');
+        const lastId = context.globalState.get<string>(LAST_TRANSFORM_TEMPLATE_KEY, '');
+        // showQuickPick has no "preselect this item" option, so the last
+        // choice is marked with a check glyph instead -- the picker still
+        // defaults to the first row, but the remembered template is obvious.
+        const check = (id: string) => (id === lastId ? '$(check) ' : '');
+        const items: (vscode.QuickPickItem & { id: string })[] = [
+          { label: `${check('')}$(circle-large-outline) ${legacyLabel}`, id: '' },
+          ...templates.map((t) => ({
+            label: `${check(t.id)}$(symbol-color) ${templateDisplayName(t, lang)}`,
+            description: t.description,
+            detail: t.builtin ? undefined : dirname(t.dir),
+            id: t.id,
+          })),
+        ];
+        const picked = await vscode.window.showQuickPick(items, {
+          placeHolder: vscode.l10n.t('Select a site template for the export'),
+          ignoreFocusOut: false,
+        });
+        if (!picked) return; // cancelled (no default on this step)
+        void context.globalState.update(LAST_TRANSFORM_TEMPLATE_KEY, picked.id);
+        template = picked.id ? templates.find((t) => t.id === picked.id) : undefined;
+      }
+      const templateMode = template !== undefined;
+
+      // 6. Pick optional CSS (html5/xhtml only, legacy path only -- a
+      // template carries its own stylesheet, and a second one injected via
+      // --args.css would fight it with no ordering guarantee).
+      let cssArg: CssArg | undefined;
+      if ((transtype === 'html5' || transtype === 'xhtml') && !templateMode) {
         const cssFiles = scanCssFiles(mapDir);
         if (cssFiles.length > 0) {
           const items: (vscode.QuickPickItem & { css?: CssArg })[] = [
@@ -322,7 +391,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
       }
 
-      // 6. Pick optional DITAVAL filter
+      // 7. Pick optional DITAVAL filter
       let ditavalFile: string | undefined;
       const ditavalUri = await vscode.window.showOpenDialog({
         canSelectFiles: true,
@@ -335,39 +404,56 @@ export function activate(context: vscode.ExtensionContext) {
         ditavalFile = normalizeDriveLetter(ditavalUri[0].fsPath);
       }
 
-      // 7. Pick site chrome features (html5/xhtml only)
+      // 8. Pick site chrome features (html5/xhtml only). On the template
+      // path the layout toggles (navToolbar/sidebar) are the template's
+      // job and never ask -- only the four functional widgets stack on
+      // top of any template.
       let siteChromeFeatures: SiteChromeFeatures | undefined;
       if (transtype === 'html5' || transtype === 'xhtml') {
-        const featureItems: (vscode.QuickPickItem & { key: keyof SiteChromeFeatures })[] = [
-          { label: vscode.l10n.t('Navigation Toolbar'), description: vscode.l10n.t('Prev/Next page + collapsible sections'), key: 'navToolbar', picked: true },
-          { label: vscode.l10n.t('Sidebar Outline'), description: vscode.l10n.t('Fixed table of contents on the left'), key: 'sidebar', picked: true },
-          { label: vscode.l10n.t('On-This-Page'), description: vscode.l10n.t('Right-hand navigation for headings on the current page'), key: 'onPageToc', picked: true },
-          { label: vscode.l10n.t('Copy-Code Button'), description: vscode.l10n.t('Copy button on code blocks'), key: 'copyCode', picked: true },
-          { label: vscode.l10n.t('Back to Top'), description: vscode.l10n.t('Back-to-top button in the bottom-right corner'), key: 'backToTop', picked: true },
-          { label: vscode.l10n.t('Dark Mode'), description: vscode.l10n.t('Light/dark theme toggle'), key: 'darkMode', picked: true },
-        ];
+        // A template that ships its own right-hand outline column (atlas:
+        // template.json "outline": true) already IS the on-this-page nav, so
+        // the export must not stack the floating dv-page-toc widget on top of
+        // it -- the option isn't offered and the flag is forced off below.
+        const providesOutline = templateMode && !!template?.outline;
+        const featureItems: (vscode.QuickPickItem & { key: keyof SiteChromeFeatures })[] = templateMode
+          ? [
+            ...(providesOutline
+              ? []
+              : [{ label: vscode.l10n.t('On-This-Page'), description: vscode.l10n.t('Right-hand navigation for headings on the current page'), key: 'onPageToc' as const, picked: true }]),
+            { label: vscode.l10n.t('Copy-Code Button'), description: vscode.l10n.t('Copy button on code blocks'), key: 'copyCode', picked: true },
+            { label: vscode.l10n.t('Back to Top'), description: vscode.l10n.t('Back-to-top button in the bottom-right corner'), key: 'backToTop', picked: true },
+            { label: vscode.l10n.t('Dark Mode'), description: vscode.l10n.t('Light/dark theme toggle'), key: 'darkMode', picked: true },
+          ]
+          : [
+            { label: vscode.l10n.t('Navigation Toolbar'), description: vscode.l10n.t('Prev/Next page + collapsible sections'), key: 'navToolbar', picked: true },
+            { label: vscode.l10n.t('Sidebar Outline'), description: vscode.l10n.t('Fixed table of contents on the left'), key: 'sidebar', picked: true },
+            { label: vscode.l10n.t('On-This-Page'), description: vscode.l10n.t('Right-hand navigation for headings on the current page'), key: 'onPageToc', picked: true },
+            { label: vscode.l10n.t('Copy-Code Button'), description: vscode.l10n.t('Copy button on code blocks'), key: 'copyCode', picked: true },
+            { label: vscode.l10n.t('Back to Top'), description: vscode.l10n.t('Back-to-top button in the bottom-right corner'), key: 'backToTop', picked: true },
+            { label: vscode.l10n.t('Dark Mode'), description: vscode.l10n.t('Light/dark theme toggle'), key: 'darkMode', picked: true },
+          ];
         const picked = await vscode.window.showQuickPick(featureItems, {
           canPickMany: true,
-          placeHolder: vscode.l10n.t('Select the site enhancements to enable (all enabled by default)'),
+          placeHolder: templateMode
+            ? vscode.l10n.t('Select the enhancements to enable on top of the template (all enabled by default)')
+            : vscode.l10n.t('Select the site enhancements to enable (all enabled by default)'),
           ignoreFocusOut: false,
         });
         if (picked) {
-          const features: SiteChromeFeatures = {
-            navToolbar: false, sidebar: false, onPageToc: false,
-            copyCode: false, backToTop: false, darkMode: false,
-          };
+          const features = templateMode
+            ? { navToolbar: false, sidebar: false, onPageToc: false, copyCode: false, backToTop: false, darkMode: false, siteShell: true }
+            : chromeFeatureBase();
           for (const item of picked) features[(item as { key: keyof SiteChromeFeatures }).key] = true;
           siteChromeFeatures = features;
         } else {
           // User cancelled: enable all by default (keep backward compatibility)
-          siteChromeFeatures = {
-            navToolbar: true, sidebar: true, onPageToc: true,
-            copyCode: true, backToTop: true, darkMode: true,
-          };
+          siteChromeFeatures = templateMode
+            ? { navToolbar: false, sidebar: false, onPageToc: !providesOutline, copyCode: true, backToTop: true, darkMode: true, siteShell: true }
+            : chromeFeatureBase();
         }
       }
 
-      // 8. Run transformation
+      // 9. Run transformation
       const args = buildDitaOtArgs({ mapPath, transtype, outputDir, cssArg, ditavalFile });
       const outputChannel = transformOutputChannel;
       outputChannel.clear();
@@ -482,10 +568,16 @@ export function activate(context: vscode.ExtensionContext) {
                 }
               }
 
-              // 9b. Inject site chrome (features enabled via QuickPick during flow)
+              // 9b. Inject the site layer (features enabled via QuickPick during
+              // flow): the template shell rebuilds every page around the chosen
+              // template, the legacy path bolts the dv-* chrome onto DITA-OT's
+              // untouched output.
               if (transtype === 'html5' || transtype === 'xhtml') {
                 try {
-                  if (siteChromeFeatures) {
+                  if (template && siteChromeFeatures) {
+                    injectTemplateChrome(extensionPath, mapPath, outputDir, template, siteChromeFeatures);
+                    outputChannel.appendLine(vscode.l10n.t('\n[DITA-OT] Template "{0}" applied to the site.', template.id));
+                  } else if (siteChromeFeatures) {
                     injectSiteChrome(extensionPath, mapPath, outputDir, siteChromeFeatures);
                     outputChannel.appendLine(vscode.l10n.t('\n[DITA-OT] Site enhancements injected.'));
                   }
@@ -678,6 +770,133 @@ function injectSiteChrome(
       }
 
       html = html.replace('</body>', '<script src="' + prefix + 'dita-viewer-chrome.js"></script></body>');
+      writeFileSync(full, html, 'utf-8');
+    }
+  }
+  walk(outputDir);
+}
+
+// ── Template-shell injection ──
+
+/**
+ * Rebuild the DITA-OT html5/xhtml output as a site wearing one of the
+ * media/templates/* templates -- the same shell the Docsite preview renders
+ * in VS Code, materialised as static files. The whole template folder is
+ * copied in (`_template/<id>/`) so its css and images resolve as ordinary
+ * relative files in any browser, and every generated page is re-wrapped
+ * around its own <main role="main"> with the baked sidebar/outline/header/
+ * footer. The four stacked feature widgets (copy-code, back-to-top, dark
+ * toggle, on-this-page) run over the top via the shared site-chrome.js in
+ * its siteShell variant; the layout toggles are the template's job and never
+ * fire. The legacy injectSiteChrome path is untouched by anything here.
+ */
+function injectTemplateChrome(
+  extPath: string,
+  mapPath: string,
+  outputDir: string,
+  template: SiteTemplate,
+  features: SiteChromeFeatures,
+): void {
+  const toPosix = (p: string) => p.replace(/\\/g, '/');
+  const mapDir = dirname(mapPath);
+
+  // 1. Copy the template folder into the site. A file (not dir) already at
+  //    that name means DITA-OT produced something that clashes -- refuse
+  //    rather than clobber it.
+  const tmplDirName = '_template';
+  const clashRoot = join(outputDir, tmplDirName);
+  if (existsSync(clashRoot) && !statSync(clashRoot).isDirectory()) {
+    throw new Error(vscode.l10n.t('Cannot add the template: "{0}" already exists as a file in the output.', clashRoot));
+  }
+  const templateTarget = join(clashRoot, template.id);
+  cpSync(template.dir, templateTarget, { recursive: true, force: true });
+
+  // 2. The template's own css as one file inside the copied folder, so its
+  //    url()s point at the resource files now sitting right beside it (they
+  //    stay relative to the css file, needing no per-page depth prefix).
+  const relInTemplate = (abs: string) => toPosix(relative(template.dir, abs));
+  const templateCssName = 'dv-styles.css';
+  writeFileSync(join(templateTarget, templateCssName), buildTemplateCssText(template, relInTemplate), 'utf-8');
+
+  // 3. The static-shell assets, written once at the site root.
+  writeFileSync(join(outputDir, 'dita-viewer-site-shell.css'), readShellCss(extPath), 'utf-8');
+  writeFileSync(join(outputDir, 'dita-viewer-template-chrome.css'), readTemplateChromeCss(extPath), 'utf-8');
+
+  // 4. Nav tree + reading-order pages, then the chrome script (manifest and
+  //    the siteShell feature flags baked into its placeholders).
+  const keyMap = buildKeyMap(vscode.Uri.file(mapPath));
+  const resolveKey = (k: string) => keyMap.get(k);
+  const nav = buildTemplateNav({ mapPath, resolveKey, resolveTopicTitle: makeFileTitleResolver(mapDir, undefined, resolveKey) });
+  const pageKeys = new Set(nav.pages.map((p) => p.file));
+
+  const jsTemplate = readFileSync(join(extPath, 'media', 'transform-assets', 'site-chrome.js'), 'utf-8');
+  const js = jsTemplate
+    .replace('/* __DV_MANIFEST__ */', JSON.stringify(nav.pages))
+    .replace('/* __DV_FEATURES__ */', JSON.stringify(features));
+  writeFileSync(join(outputDir, 'dita-viewer-chrome.js'), js, 'utf-8');
+
+  const mapTitle = mapTitleFromXml(readFileSync(mapPath, 'utf-8'), basename(mapPath), resolveKey);
+  const year = new Date().getFullYear();
+  const headBootstrap = buildThemeBootstrapScript();
+  const bodyBootstrap = '<script>' + buildTemplateDarkBootstrapScript(template.defaultDark) + '</script>';
+  const sidebarLabels = {
+    nav: vscode.l10n.t('Topics'),
+    expand: vscode.l10n.t('Expand'),
+    collapse: vscode.l10n.t('Collapse'),
+  };
+
+  // 5. Re-wrap every page. The '_template' copy is pruned (its own files are
+  //    assets, not pages); a page already carrying data-template is skipped
+  //    so a re-run on an untouched output is idempotent.
+  function walk(dir: string) {
+    for (const entry of readdirSync(dir)) {
+      const full = join(dir, entry);
+      let isDir = false;
+      try {
+        isDir = statSync(full).isDirectory();
+      } catch {
+        continue;
+      }
+      if (isDir) {
+        if (dir === outputDir && entry === tmplDirName) continue;
+        walk(full);
+        continue;
+      }
+      if (!entry.toLowerCase().endsWith('.html')) continue;
+      let html = readFileSync(full, 'utf-8');
+      if (html.includes('data-template=')) continue;
+
+      const rel = toPosix(relative(outputDir, full));
+      const depth = rel.split('/').length - 1;
+      const prefix = depth > 0 ? '../'.repeat(depth) : '';
+      const assetBase = prefix + tmplDirName + '/' + template.id + '/';
+
+      const sidebarHtml = renderSidebarHtml(
+        nav.manifest,
+        pageKeys.has(rel) ? '_root_/' + rel : '',
+        sidebarLabels,
+      );
+      const headInjectHtml = buildHeadInjectHtml(
+        {
+          templateCss: assetBase + templateCssName,
+          shellCss: prefix + 'dita-viewer-site-shell.css',
+          chromeCss: prefix + 'dita-viewer-template-chrome.css',
+          chromeJs: prefix + 'dita-viewer-chrome.js',
+        },
+        headBootstrap,
+      );
+
+      html = buildShellPageHtml({
+        html,
+        template,
+        sidebarHtml,
+        outline: template.outline,
+        mapTitle,
+        year,
+        toRelative: (abs) => assetBase + relInTemplate(abs),
+        bodyBootstrapHtml: bodyBootstrap,
+        headInjectHtml,
+      });
       writeFileSync(full, html, 'utf-8');
     }
   }

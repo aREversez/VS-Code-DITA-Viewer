@@ -15,6 +15,14 @@ export interface SiteChromeFeatures {
   copyCode: boolean;
   backToTop: boolean;
   darkMode: boolean;
+  /**
+   * Template-mode marker (injectTemplateChrome in extension.ts): the page
+   * layout comes from a media/templates/* shell rather than the legacy
+   * dv-sidebar/dv-toolbar chrome. site-chrome.js keys its sidebar link
+   * rewriting, fold persistence and pane-scroll behaviors off this flag;
+   * the layout toggles above stay false on that path.
+   */
+  siteShell?: boolean;
 }
 
 export function buildNavManifest(mapPath: string): NavManifestEntry[] {

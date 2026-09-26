@@ -184,5 +184,10 @@
   "Failed to launch Oxygen XML Editor: {0}": "启动 Oxygen XML Editor 失败：{0}",
   "This file is not part of the DITA map currently shown in the navigator.": "此文件不属于导航栏中当前显示的 DITA Map。",
   "No unreferenced .dita topics found under {0}.": "在 {0} 下未找到未被引用的 .dita 主题。",
-  "{0} unreferenced .dita topic(s) found — select one to open": "找到 {0} 个未被引用的 .dita 主题 — 选择一个以打开"
+  "{0} unreferenced .dita topic(s) found — select one to open": "找到 {0} 个未被引用的 .dita 主题 — 选择一个以打开",
+  "No template (legacy site enhancements)": "不使用模板（旧站点增强）",
+  "Select a site template for the export": "选择用于导出的站点模板",
+  "Select the enhancements to enable on top of the template (all enabled by default)": "选择在模板基础上启用的增强功能（默认全部启用）",
+  "\n[DITA-OT] Template \"{0}\" applied to the site.": "\n[DITA-OT] 已将模板 \"{0}\" 应用于站点。",
+  "Cannot add the template: \"{0}\" already exists as a file in the output.": "无法添加模板：输出目录中 \"{0}\" 已作为文件存在。"
 }

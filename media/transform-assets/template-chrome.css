@@ -1,0 +1,171 @@
+/* Feature-widget styles for the DITA-OT transform's TEMPLATE export mode
+   (injectTemplateChrome in extension.ts). The functional toggles a reader
+   picks alongside a template -- on-page TOC, copy-code labels, back-to-top,
+   dark-mode button -- are the same dv-* widgets site-chrome.js builds on
+   the legacy path, and they keep their dv- class names; this file re-ships
+   ONLY those widgets' styles for a site whose layout comes from the
+   template shell (site-shell.css) instead of the legacy dv-sidebar /
+   dv-toolbar chrome, so a template-mode export never loads the
+   site-chrome.css rules that would fight the template's own look.
+
+   Colours keep reading the --dv-* tokens (declared by each template's css
+   fallbacks here too, and overridden by dark-mode.css under html.dark --
+   which the template path still uses for the DITA-OT-produced content and
+   these widgets, side by side with body.template-dark for the template's
+   own palette). */
+
+body {
+  --dv-bg: #ffffff;
+  --dv-bg-soft: #f6f8fa;
+  --dv-fg: #1f2328;
+  --dv-muted: #59636e;
+  --dv-border: #d1d9e0;
+  --dv-accent: #0b62d6;
+  --dv-accent-fg: #ffffff;
+  --dv-accent-soft: #e8f1fd;
+  --dv-active-bg: #e8f1fd;
+  --dv-active-fg: #0b62d6;
+  --dv-radius: 8px;
+  --dv-radius-sm: 5px;
+  --dv-shadow: 0 4px 16px rgba(15, 23, 42, 0.1), 0 1px 2px rgba(15, 23, 42, 0.06);
+  --dv-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+}
+html.dark body {
+  color-scheme: dark;
+  --dv-bg: #191e24;
+  --dv-bg-soft: #14181d;
+  --dv-fg: #d8dee4;
+  --dv-muted: #8b96a1;
+  --dv-border: #2b333c;
+  --dv-accent: #5aa6ff;
+  --dv-accent-fg: #0b1422;
+  --dv-accent-soft: #1c2a3d;
+  --dv-active-bg: #1c2a3d;
+  --dv-active-fg: #5aa6ff;
+}
+
+/* ── On-page TOC (feature toggle: onPageToc) ──
+   Only ever present for a template that does NOT ship its own outline
+   column: extension.ts suppresses this feature whenever the template opts
+   into "outline" (atlas et al.), because the template's right-hand
+   .tpl-outline already is the on-this-page nav and a second one would just
+   collide with it. So this floating panel parks over the content pane's
+   right edge in the one case where nothing else occupies that space, sized
+   to stay clear of the back-to-top / dark-toggle buttons stacked below it. */
+.dv-page-toc {
+  position: fixed;
+  right: 20px;
+  bottom: 128px;
+  z-index: 998;
+  width: 180px;
+  max-height: min(45vh, 340px);
+  overflow-y: auto;
+  background: var(--dv-bg);
+  border: 1px solid var(--dv-border);
+  border-radius: var(--dv-radius);
+  padding: 8px 10px;
+  font-size: 12.5px;
+  font-family: var(--dv-font);
+  box-shadow: var(--dv-shadow);
+}
+.dv-page-toc-title {
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--dv-muted);
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--dv-border);
+}
+.dv-page-toc ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.dv-page-toc li {
+  margin: 1px 0;
+}
+.dv-page-toc a {
+  text-decoration: none;
+  color: var(--dv-muted);
+  display: block;
+  padding: 4px 6px;
+  border-radius: 4px;
+  line-height: 1.35;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.dv-page-toc a:hover {
+  background: var(--dv-accent-soft);
+  color: var(--dv-accent);
+}
+
+/* ── Code language label / copy button (feature toggle: copyCode) ── */
+.dv-code-lang {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: var(--dv-font);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  background: var(--dv-bg-soft);
+  color: var(--dv-muted);
+  border-radius: 0 var(--dv-radius-sm) 0 var(--dv-radius-sm);
+  user-select: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.dv-code-lang:hover {
+  background: var(--dv-accent-soft);
+  color: var(--dv-accent);
+}
+
+/* ── Back to top / dark toggle (feature toggles: backToTop, darkMode) ──
+   site-chrome.js scrolls window in legacy pages and #dita-content-root in
+   shell pages (initBackToTop checks for the shell); both keep the same
+   floating-button markup. */
+.dv-back-to-top,
+.dv-dark-toggle {
+  position: fixed;
+  right: 20px;
+  z-index: 999;
+  cursor: pointer;
+  border: 1px solid var(--dv-border);
+  border-radius: 50%;
+  width: 42px;
+  height: 42px;
+  font-size: 18px;
+  background: var(--dv-bg);
+  color: var(--dv-muted);
+  box-shadow: var(--dv-shadow);
+  transition: background 0.15s ease, color 0.15s ease, opacity 0.25s ease, transform 0.25s ease;
+}
+.dv-back-to-top {
+  bottom: 20px;
+  opacity: 0;
+  transform: translateY(20px);
+  pointer-events: none;
+}
+.dv-back-to-top.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.dv-dark-toggle {
+  bottom: 70px;
+}
+.dv-back-to-top:hover,
+.dv-dark-toggle:hover {
+  background: var(--dv-accent-soft);
+  color: var(--dv-accent);
+}
+
+@media (max-width: 768px) {
+  .dv-page-toc {
+    display: none;
+  }
+}
