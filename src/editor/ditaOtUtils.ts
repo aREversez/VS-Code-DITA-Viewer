@@ -89,6 +89,14 @@ export function buildThemeBootstrapScript(): string {
     // private browsing) doesn't leave the dark-class logic half-run either.
     + "var t=localStorage.getItem('dv-chrome-theme');"
     + "if(t)document.documentElement.setAttribute('data-dv-theme',t);"
+    // Index-page layout (tree vs tile, data-dv-index-layout) is also
+    // independent of dark/light and the accent theme, and needs the same
+    // before-paint treatment as both -- otherwise a reader who picked "tile"
+    // sees the tree layout flash on every visit to index.html until
+    // site-chrome.js runs at the end of <body>. Harmless on non-index pages:
+    // the CSS this attribute drives is scoped under ".dv-index".
+    + "var l=localStorage.getItem('dv-index-layout');"
+    + "if(l)document.documentElement.setAttribute('data-dv-index-layout',l);"
     + "}catch(e){}})();";
 }
 

@@ -154,3 +154,39 @@ describe('site-chrome.css content baseline (checked against real DITA-OT output)
     assert.ok(/\.xref\s*\{[^}]*color:\s*var\(--dv-accent\)/.test(css));
   });
 });
+
+describe('site-chrome.css tile homepage layout (html[data-dv-index-layout="tile"])', () => {
+  it('lays ul.map out as a responsive grid only under the tile attribute, leaving the default (tree) rule untouched', () => {
+    assert.ok(REAL_INDEX_NAV.includes('class="map"'), 'fixture sanity check');
+    const css = chromeCss();
+    // The existing tree-mode rule (flex column) must survive unchanged --
+    // tile mode is an added override, not a replacement of the default.
+    assert.ok(/\.dv-index nav ul\.map\s*\{[^}]*display:\s*flex/.test(css), 'tree-mode ul.map rule should still be a flex column');
+    const start = css.search(/html\[data-dv-index-layout="tile"\]\s+\.dv-index nav ul\.map\s*\{/);
+    assert.ok(start >= 0, 'expected a tile-scoped grid rule for ul.map');
+    const body = css.slice(css.indexOf('{', start) + 1, css.indexOf('}', start));
+    assert.ok(/display:\s*grid/.test(body), 'expected the tile rule to switch ul.map to a grid');
+  });
+
+  it('turns each real topichead group into a self-contained card (border/radius/padding), not just a heading, only under the tile attribute', () => {
+    const css = chromeCss();
+    const start = css.search(/html\[data-dv-index-layout="tile"\]\s+\.dv-index nav ul\.map li\.topichead\s*\{/);
+    assert.ok(start >= 0, 'expected a tile-scoped card rule for li.topichead');
+    const body = css.slice(css.indexOf('{', start) + 1, css.indexOf('}', start));
+    assert.ok(/border/.test(body) && /border-radius/.test(body), 'expected the topichead tile to look like a card, not a plain heading');
+  });
+
+  it('does not touch the tree-mode topichead heading rule (unscoped, no [data-dv-index-layout] anywhere in its selector)', () => {
+    const css = chromeCss();
+    const start = css.search(/(^|\n)\.dv-index nav ul\.map li\.topichead\s*\{/);
+    assert.ok(start >= 0, 'expected the original unscoped tree-mode rule to still exist verbatim');
+  });
+
+  it('also cards a standalone top-level entry (li.topicref that is not a topichead) under tile mode, for maps with ungrouped top-level topics', () => {
+    const css = chromeCss();
+    assert.ok(
+      /html\[data-dv-index-layout="tile"\]\s+\.dv-index nav ul\.map\s*>\s*li\.topicref:not\(\.topichead\)/.test(css),
+      'expected a tile rule for a standalone top-level li.topicref',
+    );
+  });
+});

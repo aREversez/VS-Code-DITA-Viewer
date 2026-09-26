@@ -398,6 +398,55 @@ pre.codeblock, pre.pre {
   transform: translateX(2px);
 }
 
+/* ── Index page: tile layout (opt-in, toolbar <select>, html[data-dv-index-layout="tile"]) ──
+   An alternative to the tree list above for maps whose top level reads
+   better as a grid of chapter cards (Oxygen's WebHelp "tiles" template is
+   the reference point). Purely additive: every rule here is scoped under
+   the attribute selector, so the default tree-mode rules above are never
+   touched and a reader who never opens the layout <select> sees no change.
+   Built entirely from the existing --dv- tokens, so dark mode needs no
+   separate override here. */
+html[data-dv-index-layout="tile"] .dv-index nav {
+  max-width: 1080px;
+}
+html[data-dv-index-layout="tile"] .dv-index nav ul.map {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  align-items: start;
+  gap: 20px;
+}
+/* Each chapter/topichead group becomes its own card instead of a plain
+   heading + flat list -- title stays visible, its topic links become the
+   card's compact inner list. */
+html[data-dv-index-layout="tile"] .dv-index nav ul.map li.topichead {
+  margin: 0;
+  padding: 18px;
+  border: 1px solid var(--dv-border);
+  border-radius: var(--dv-radius);
+  background: var(--dv-bg);
+  box-shadow: var(--dv-shadow-sm);
+}
+html[data-dv-index-layout="tile"] .dv-index nav ul.map li.topichead > ul {
+  gap: 4px;
+}
+html[data-dv-index-layout="tile"] .dv-index nav ul.map li.topichead > ul a {
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+}
+html[data-dv-index-layout="tile"] .dv-index nav ul.map li.topichead > ul a:hover {
+  background: var(--dv-bg-soft);
+  transform: none;
+}
+/* A top-level entry with no chapter grouping around it: the card itself is
+   the single link (not confirmed in the sample map we styled against, which
+   groups everything under topichead, but DITA-OT allows ungrouped top-level
+   topicrefs and this keeps them from falling back to the tree-mode row). */
+html[data-dv-index-layout="tile"] .dv-index nav ul.map > li.topicref:not(.topichead) > a {
+  height: 100%;
+  box-shadow: var(--dv-shadow-sm);
+}
+
 /* ── On-page TOC ── */
 .dv-page-toc {
   position: fixed;

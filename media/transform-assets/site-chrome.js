@@ -26,6 +26,9 @@ var LABELS = {
     themeClassic: 'Classic',
     themeAurora: 'Aurora',
     themeReader: 'Reader',
+    layout: 'Homepage layout',
+    layoutTree: 'List',
+    layoutTile: 'Tiles',
   },
   zh: {
     collapseAllSections: '\u6298\u53E0\u5168\u90E8\u7AE0\u8282',
@@ -43,6 +46,9 @@ var LABELS = {
     themeClassic: '\u7ECF\u5178',
     themeAurora: '\u6781\u5149',
     themeReader: '\u9605\u8BFB',
+    layout: '\u9996\u9875\u7248\u5F0F',
+    layoutTree: '\u5217\u8868',
+    layoutTile: '\u5361\u7247',
   },
 };
 var T = LABELS[LANG];
@@ -278,6 +284,31 @@ function initNavToolbar() {
     }
   };
   bar.appendChild(sel);
+  // Homepage layout (tree vs tile) only means anything on the index page --
+  // a topic page has no ul.map to lay out, so the control would be dead
+  // weight (and confusing) everywhere else.
+  if (isIndex()) {
+    var LAYOUTS = [['tree', T.layoutTree], ['tile', T.layoutTile]];
+    var layoutSel = document.createElement('select'); layoutSel.title = T.layout;
+    LAYOUTS.forEach(function (l) {
+      var opt = document.createElement('option'); opt.value = l[0]; opt.textContent = l[1];
+      layoutSel.appendChild(opt);
+    });
+    // buildThemeBootstrapScript() already applied any stored layout to <html>
+    // before this script ran (avoids a flash of the wrong layout); read it
+    // back here just to initialise the control's displayed value.
+    layoutSel.value = document.documentElement.getAttribute('data-dv-index-layout') || 'tree';
+    layoutSel.onchange = function () {
+      if (layoutSel.value === 'tree') {
+        document.documentElement.removeAttribute('data-dv-index-layout');
+        localStorage.setItem('dv-index-layout', '');
+      } else {
+        document.documentElement.setAttribute('data-dv-index-layout', layoutSel.value);
+        localStorage.setItem('dv-index-layout', layoutSel.value);
+      }
+    };
+    bar.appendChild(layoutSel);
+  }
   document.body.appendChild(bar);
 }
 

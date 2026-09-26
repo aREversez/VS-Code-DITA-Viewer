@@ -563,7 +563,7 @@ describe('buildThemeBootstrapScript', () => {
   // of this project) the same way getSearchOverlayScript et al. are tested
   // in ditaRenderUtils.test.ts, since tsc/eslint/npm test never execute
   // template-string webview JS otherwise.
-  function run(opts: { stored: string | null; throwsOnGet?: boolean; matches?: boolean; hasMatchMedia?: boolean; storedTheme?: string | null }) {
+  function run(opts: { stored: string | null; throwsOnGet?: boolean; matches?: boolean; hasMatchMedia?: boolean; storedTheme?: string | null; storedLayout?: string | null }) {
     const added: string[] = [];
     const attrs: Record<string, string> = {};
     const fakeDocument = {
@@ -578,6 +578,7 @@ describe('buildThemeBootstrapScript', () => {
           throw new Error('SecurityError: storage disabled');
         }
         if (key === 'dv-chrome-theme') return opts.storedTheme ?? null;
+        if (key === 'dv-index-layout') return opts.storedLayout ?? null;
         return opts.stored;
       },
     };
@@ -627,6 +628,29 @@ describe('buildThemeBootstrapScript', () => {
   it('fails silently on both the dark class and the theme attribute when localStorage throws, not just the first read', () => {
     const result = run({ stored: 'dark', throwsOnGet: true, matches: false });
     assert.deepStrictEqual(result.added, []);
+    assert.deepStrictEqual(result.attrs, {});
+  });
+
+  it('applies a stored index-page layout (data-dv-index-layout) before paint, independent of dark/light and the accent theme', () => {
+    assert.deepStrictEqual(
+      run({ stored: 'light', storedLayout: 'tile' }).attrs,
+      { 'data-dv-index-layout': 'tile' },
+    );
+  });
+
+  it('sets no data-dv-index-layout attribute at all when nothing is stored (tree default needs no attribute)', () => {
+    assert.deepStrictEqual(run({ stored: 'light', storedLayout: null }).attrs, {});
+  });
+
+  it('applies the theme attribute and the layout attribute together without either clobbering the other', () => {
+    assert.deepStrictEqual(
+      run({ stored: 'light', storedTheme: 'aurora', storedLayout: 'tile' }).attrs,
+      { 'data-dv-theme': 'aurora', 'data-dv-index-layout': 'tile' },
+    );
+  });
+
+  it('fails silently on the layout attribute too when localStorage throws', () => {
+    const result = run({ stored: 'dark', throwsOnGet: true, matches: false, storedLayout: 'tile' });
     assert.deepStrictEqual(result.attrs, {});
   });
 });
