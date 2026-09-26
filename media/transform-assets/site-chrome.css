@@ -15,6 +15,17 @@
   --dv-shadow: 0 4px 16px rgba(15, 23, 42, 0.10), 0 1px 2px rgba(15, 23, 42, 0.06);
   --dv-shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.08);
   --dv-gap: 6px;
+  /* Page-level side gutters, so the legacy site doesn't run flush to the
+     window edges (mirrors the template export's body padding in
+     site-shell.css). Only the in-flow content and the sidebar read this --
+     the fixed floating controls (toolbar, on-this-page, dark toggle,
+     back-to-top) stay pinned to the corner. */
+  --dv-page-gutter: clamp(0.75rem, 3vw, 3rem);
+  /* Whole-page cap: on a wide screen the sidebar + content collapse into one
+     centered block of this width instead of stretching edge-to-edge (which
+     left a big empty band between the nav and the reading column). Below
+     this width the layout falls back to the plain side gutters. */
+  --dv-page-max: 1200px;
   --dv-bg: #ffffff;
   --dv-bg-soft: #f6f8fa;
   --dv-fg: #1f2328;
@@ -97,6 +108,9 @@ body {
   color: var(--dv-fg);
   background: var(--dv-bg);
   line-height: 1.65;
+  box-sizing: border-box;
+  padding-left: var(--dv-page-gutter);
+  padding-right: var(--dv-page-gutter);
 }
 main[role="main"] {
   box-sizing: border-box;
@@ -272,13 +286,14 @@ pre.codeblock, pre.pre {
 /* ── Sidebar TOC ── */
 .dv-sidebar {
   position: fixed;
-  left: 0;
-  top: 0;
-  bottom: 0;
+  left: max(var(--dv-page-gutter), calc((100vw - var(--dv-page-max)) / 2));
+  top: var(--dv-page-gutter);
+  bottom: var(--dv-page-gutter);
   width: 280px;
   overflow-y: auto;
   background: var(--dv-bg-soft);
-  border-right: 1px solid var(--dv-border);
+  border: 1px solid var(--dv-border);
+  border-radius: var(--dv-radius);
   padding: 1.25rem 1rem;
   box-sizing: border-box;
   font-family: var(--dv-font);
@@ -318,7 +333,14 @@ pre.codeblock, pre.pre {
   font-weight: 600;
   box-shadow: inset 3px 0 0 var(--dv-accent);
 }
-.dv-has-sidebar { margin-left: 280px; }
+/* Content column: sits just right of the (centered) sidebar and is capped to
+   --dv-page-max minus the nav, so the sidebar + content read as one centered
+   block. margin-left is relative to the body's padded content box, hence the
+   `- var(--dv-page-gutter)` reclaiming the left gutter already applied there. */
+.dv-has-sidebar {
+  margin-left: calc(max(0px, (100vw - var(--dv-page-max)) / 2 - var(--dv-page-gutter)) + 280px + var(--dv-page-gutter));
+  max-width: calc(var(--dv-page-max) - 280px - var(--dv-page-gutter));
+}
 
 /* ── Index page (no sidebar) ── */
 .dv-index {
@@ -541,8 +563,9 @@ html[data-dv-index-layout="tile"] .dv-index nav ul.map > li.topicref:not(.topich
   .dv-sidebar {
     position: static;
     width: auto;
-    border-right: none;
+    border: none;
     border-bottom: 1px solid var(--dv-border);
+    border-radius: 0;
   }
   .dv-has-sidebar { margin-left: 0; }
   .dv-page-toc { display: none; }
