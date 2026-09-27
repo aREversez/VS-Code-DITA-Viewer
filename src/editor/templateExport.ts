@@ -210,6 +210,38 @@ export interface ShellPageInput {
 }
 
 /**
+ * The inside of `<tagName ...>` starting at `openTagEnd` (just past its
+ * opening tag), up to the close that actually balances the open. A literal
+ * `</tagName>` inside the content -- reachable through DITA's foreign-content
+ * pass-through, where raw markup is not escaped -- must not end the region,
+ * so this counts nested opens (+1) and closes (-1) instead of stopping at
+ * the first close the way a non-greedy regex does. Undefined when no
+ * balancing close exists (malformed input; the caller keeps its fallback).
+ */
+function extractBalancedContent(html: string, tagName: string, openTagEnd: number): string | undefined {
+  const openRe = new RegExp(`<${tagName}\\b`, 'gi');
+  const closeRe = new RegExp(`</${tagName}\\s*>`, 'gi');
+  let depth = 1;
+  let pos = openTagEnd;
+  while (depth > 0) {
+    openRe.lastIndex = pos;
+    closeRe.lastIndex = pos;
+    const nextOpen = openRe.exec(html);
+    const nextClose = closeRe.exec(html);
+    if (!nextClose) return undefined;
+    if (nextOpen && nextOpen.index < nextClose.index) {
+      depth++;
+      pos = nextOpen.index + nextOpen[0].length;
+    } else {
+      depth--;
+      pos = nextClose.index + nextClose[0].length;
+      if (depth === 0) return html.slice(openTagEnd, nextClose.index);
+    }
+  }
+  return undefined;
+}
+
+/**
  * Rebuilds one DITA-OT output page inside the template shell. The topic's
  * own <main role="main"> moves into #dita-content-root.site-main UNCHANGED
  * (relative links inside it keep resolving from the page's own folder --
@@ -217,6 +249,8 @@ export interface ShellPageInput {
  * header, sidebar, outline, footer -- is the same pure chrome the preview
  * uses. A page without a <main> (DITA-OT's map landing page, whose body IS
  * the TOC) has its whole body content treated as the main region instead.
+ * The main region runs to its balancing close, so an embedded literal
+ * `</main>` (foreign content) cannot truncate it.
  */
 export function buildShellPageHtml(input: ShellPageInput): string {
   const bodyMatch = /<body\b([^>]*)>/i.exec(input.html);
@@ -224,8 +258,10 @@ export function buildShellPageHtml(input: ShellPageInput): string {
   if (!bodyMatch || bodyClose < 0) return input.html;
 
   const inner = input.html.slice(bodyMatch.index + bodyMatch[0].length, bodyClose);
-  const main = /<main\b[^>]*\brole\s*=\s*["']main["'][^>]*>([\s\S]*?)<\/main>/i.exec(inner) || /<main\b[^>]*>([\s\S]*?)<\/main>/i.exec(inner);
-  let contentHtml = main ? main[1] : inner;
+  const open =
+    /<main\b[^>]*\brole\s*=\s*["']main["'][^>]*>/i.exec(inner) || /<main\b[^>]*>/i.exec(inner);
+  const extracted = open ? extractBalancedContent(inner, 'main', open.index + open[0].length) : undefined;
+  let contentHtml = extracted ?? inner;
 
   let outline = '';
   if (input.outline) {

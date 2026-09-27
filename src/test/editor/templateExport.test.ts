@@ -191,6 +191,25 @@ describe('templateExport: buildShellPageHtml', () => {
     assert.ok(out.includes('data-template="test"'), 'template hook stamped on body');
   });
 
+  it('keeps the whole <main> body when an embedded foreign <main> closes inside it', () => {
+    // Raw markup passes through DITA's foreign-content mechanism unescaped,
+    // so a nested `<main>…</main>` example can appear literally inside the
+    // topic. The extraction must end at the close that balances the OUTER
+    // open (depth-aware), not at the first `</main>` it sees.
+    const html =
+      '<html><head></head><body class="topic">' +
+      '<main role="main"><h1 id="t">Title</h1>' +
+      '<foreign><main class="example">example</main></foreign>' +
+      '<p>After the embedded close</p></main>' +
+      '<footer class="dita-footer">DITA footer</footer></body></html>';
+    const out = buildShellPageHtml({ ...base, html, sidebarHtml: '<nav class="site-nav">x</nav>' });
+    assert.ok(
+      out.includes('<p>After the embedded close</p></div>'),
+      'content after the literal </main> stays inside the extracted body',
+    );
+    assert.ok(!out.includes('DITA footer'), "DITA-OT's footer stays outside #dita-content-root");
+  });
+
   it('treats the whole body as the content region when there is no <main> (map landing page)', () => {
     const html = '<html><head></head><body><h1>Home</h1><ul><li>toc</li></ul></body></html>';
     const out = buildShellPageHtml({ ...base, html, sidebarHtml: '' });
