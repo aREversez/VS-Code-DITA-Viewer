@@ -38,6 +38,7 @@ import { ditaFileWatcherCounts } from './editor/ditaFileWatcher';
 import { registerExportHtmlCommand, getActiveDitaUri } from './editor/exportHtml';
 import { registerCompareCommand } from './editor/ditaDiffProvider';
 import { resolveOxygenLaunch, buildOxygenSpawnArgs } from './editor/oxygenLauncher';
+import { registerWrapSelectionCommand } from './editor/wrapSelectionCommand';
 import { registerFindReferencingMapsCommand } from './editor/findDitaReferences';
 
 const TRANSFORM_CMD = 'ditaViewer.transformWithDitaOt';
@@ -77,6 +78,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   // "Compare with Git Version" — rendered diff view for .dita files
   registerCompareCommand(context);
+
+  // Oxygen-style "select text, press Enter, pick a tag to wrap it in"
+  registerWrapSelectionCommand(context);
 
   // "Open with Oxygen" — hands the file to Oxygen XML Editor
   context.subscriptions.push(

@@ -189,5 +189,8 @@
   "Select a site template for the export": "Select a site template for the export",
   "Select the enhancements to enable on top of the template (all enabled by default)": "Select the enhancements to enable on top of the template (all enabled by default)",
   "\n[DITA-OT] Template \"{0}\" applied to the site.": "\n[DITA-OT] Template \"{0}\" applied to the site.",
-  "Cannot add the template: \"{0}\" already exists as a file in the output.": "Cannot add the template: \"{0}\" already exists as a file in the output."
+  "Cannot add the template: \"{0}\" already exists as a file in the output.": "Cannot add the template: \"{0}\" already exists as a file in the output.",
+  "Select a tag to wrap the selection (type to search)": "Select a tag to wrap the selection (type to search)",
+  "Custom tag": "Custom tag",
+  "Select some text in a DITA topic or map to wrap it with a tag.": "Select some text in a DITA topic or map to wrap it with a tag."
 }

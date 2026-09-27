@@ -156,6 +156,11 @@
         "icon": "$(link-external)"
       },
       {
+        "command": "ditaViewer.wrapSelectionWithTag",
+        "title": "%command.wrapSelectionWithTag.title%",
+        "icon": "$(symbol-tag)"
+      },
+      {
         "command": "ditaViewer.findReferencingMaps",
         "title": "%command.findReferencingMaps.title%",
         "icon": "$(references)"
@@ -239,6 +244,11 @@
         "command": "ditaViewer.showMapRendered",
         "key": "ctrl+k v",
         "when": "editorLangId == ditamap || resourceExtname == .ditamap"
+      },
+      {
+        "command": "ditaViewer.wrapSelectionWithTag",
+        "key": "enter",
+        "when": "editorTextFocus && editorHasSelection && !suggestWidgetVisible && !renameInputVisible && (editorLangId == dita || editorLangId == ditamap || resourceExtname == .dita || resourceExtname == .ditamap)"
       }
     ],
     "snippets": [
