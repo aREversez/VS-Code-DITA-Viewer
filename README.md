@@ -319,6 +319,10 @@ When transforming to `html5` or `xhtml`, you can select a CSS file that gets pas
 
 You can optionally select a `.ditaval` filter file during the transform flow. When chosen, it's passed to DITA-OT via `--filter`, enabling conditional content filtering (profiling) during the formal publish.
 
+#### PDF output customization
+
+The `pdf` transtype runs through DITA-OT's default `org.dita.pdf2` pipeline (Apache FOP + XSL-FO). The extension passes a bundled customization folder via `args.customization.dir` (`media/pdf-customization/`) so two default behaviors get fixed without touching your local DITA-OT installation or installing a plug-in: oversized images are scaled down to fit the page column instead of running off the edge, and inline `<codeph>` gets a light background so it reads differently from surrounding prose. A very long, space-free `<codeph>` string (e.g. a long package path) can still overflow the column — that's a known, deliberate gap pending a real-world check of how often it matters.
+
 #### Site-chrome enhancements
 
 For `html5` / `xhtml` output, the extension automatically injects a **navigation toolbar**, **sidebar TOC**, **on-page heading navigation**, **code language labels with click-to-copy**, **back-to-top button**, and a **dark mode toggle**. All features are opt-out — deselect any you don't need during the QuickPick step, or re-enable them on subsequent transforms. The enhancements are written directly into the DITA-OT output directory as `dita-viewer-chrome.js`, `dita-viewer-chrome.css`, and (if dark mode is enabled) `dita-viewer-dark.css`, then linked into every HTML file.

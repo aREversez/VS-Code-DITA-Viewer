@@ -453,8 +453,11 @@ export function activate(context: vscode.ExtensionContext) {
         }
       }
 
-      // 9. Run transformation
-      const args = buildDitaOtArgs({ mapPath, transtype, outputDir, cssArg, ditavalFile });
+      // 9. Run transformation. The pdf transtype gets the bundled
+      // media/pdf-customization/ folder via --args.customization.dir (see
+      // buildDitaOtArgs for why only pdf picks this up).
+      const pdfCustomizationDir = join(extensionPath, 'media', 'pdf-customization');
+      const args = buildDitaOtArgs({ mapPath, transtype, outputDir, cssArg, ditavalFile, pdfCustomizationDir });
       const outputChannel = transformOutputChannel;
       outputChannel.clear();
 

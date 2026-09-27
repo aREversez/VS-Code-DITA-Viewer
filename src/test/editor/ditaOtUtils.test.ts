@@ -280,6 +280,37 @@ describe('buildDitaOtArgs', () => {
       '--filter', '/filter.ditaval',
     ]);
   });
+
+  it('should include customization.dir for the pdf transtype', () => {
+    const args = buildDitaOtArgs({
+      mapPath: '/map.ditamap',
+      transtype: 'pdf',
+      outputDir: '/out',
+      pdfCustomizationDir: '/ext/media/pdf-customization',
+    });
+    assert.deepStrictEqual(args, [
+      '-i', '/map.ditamap',
+      '-f', 'pdf',
+      '-o', '/out',
+      '--nav-toc=full',
+      '--args.customization.dir', '/ext/media/pdf-customization',
+    ]);
+  });
+
+  it('should not include customization.dir for a non-pdf transtype', () => {
+    const args = buildDitaOtArgs({
+      mapPath: '/map.ditamap',
+      transtype: 'html5',
+      outputDir: '/out',
+      pdfCustomizationDir: '/ext/media/pdf-customization',
+    });
+    assert.ok(!args.includes('--args.customization.dir'));
+  });
+
+  it('should not include customization.dir for pdf when none is given', () => {
+    const args = buildDitaOtArgs({ mapPath: '/map.ditamap', transtype: 'pdf', outputDir: '/out' });
+    assert.ok(!args.includes('--args.customization.dir'));
+  });
 });
 
 describe('buildNavManifest', () => {
