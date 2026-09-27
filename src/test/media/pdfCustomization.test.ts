@@ -117,16 +117,72 @@ describe('media/pdf-customization: fo/attrs/custom.xsl attribute-set overrides',
     assert.ok(/font-family">\s*monospace\s*</.test(body), 'codeph must keep font-family="monospace"');
     assert.ok(/background-color">/.test(body), 'codeph must set a background-color');
   });
+
+  it('suppresses the plain-map blank page the body reset would otherwise force, without touching bookmaps', () => {
+    // The startPageNumbering reset makes the body start on an odd page, which
+    // would drive a plain map's TOC to pad itself with a blank page (recto
+    // alignment). __force__page__count is overridden so the non-bookmap branch
+    // is no-force (no pad) while the bookmap branch stays "even" (real books
+    // keep duplex recto layout). If either branch drifts, the fix is silently
+    // undone: a stray blank page reappears, or bookmaps lose their padding.
+    const body = attributeSetBody('__force__page__count');
+    assert.ok(body !== undefined, 'expected a `__force__page__count` attribute-set override');
+    assert.ok(/bookmap\/bookmap/.test(body), 'override must keep the bookmap branch');
+    assert.ok(/'even'/.test(body), 'bookmap branch must stay force-page-count="even"');
+    assert.ok(/'no-force'/.test(body), 'non-bookmap branch must be force-page-count="no-force"');
+  });
+
+  it('numbers the cover page in lowercase roman so the front matter reads i, ii, iii', () => {
+    // org.dita.pdf2's page-sequence.cover ships with no `format`, so FOP renders
+    // the cover as arabic "1" even though the TOC after it is already roman -
+    // the front matter read "1, ii, iii". The override adds format="i" (and
+    // repeats the inherited __force__page__count, since an override replaces the
+    // set wholesale) so the cover reads "i".
+    const body = attributeSetBody('page-sequence.cover');
+    assert.ok(body !== undefined, 'expected a `page-sequence.cover` attribute-set override');
+    assert.ok(/<xsl:attribute\s+name="format">\s*i\s*</.test(body), 'cover must set format="i" (lowercase roman)');
+    // use-attribute-sets lives on the opening tag, not in the body, so match the
+    // whole file: the override must still inherit __force__page__count (an
+    // attribute-set override replaces the default wholesale).
+    assert.ok(
+      /<xsl:attribute-set\s+name="page-sequence\.cover"[^>]*use-attribute-sets="__force__page__count"/.test(attrs),
+      'cover override must keep the inherited __force__page__count',
+    );
+  });
 });
 
-describe('media/pdf-customization: fo/xsl/custom.xsl stays a loadable empty shell', () => {
-  it('has no stray templates', () => {
-    // It's referenced from catalog.xml, so it has to parse even while it
-    // overrides nothing yet (the long-codeph-string fix is deferred; see the
-    // comment in the file itself, and the well-formedness check above for
-    // what actually validates it loads). A half-written template here would
-    // break the whole customization load, not just its own rule.
-    const xsl = readFileSync(join(customizationRoot, 'fo', 'xsl', 'custom.xsl'), 'utf-8');
-    assert.ok(!/<xsl:template/.test(xsl), 'no template overrides yet -- this file is a placeholder');
+describe('media/pdf-customization: fo/xsl/custom.xsl template overrides', () => {
+  const xslPath = join(customizationRoot, 'fo', 'xsl', 'custom.xsl');
+  const xsl = readFileSync(xslPath, 'utf-8');
+
+  it('restarts body page numbering at 1 via a startPageNumbering override', () => {
+    // org.dita.pdf2's own startPageNumbering (xsl/fo/commons.xsl) is empty, so
+    // the body page-sequence inherits no starting number and its arabic counter
+    // runs on from the roman front matter (first body page reads 4, not 1).
+    // This file is imported last, so a template of this name here replaces that
+    // empty one; if the name drifts or the reset disappears, the override
+    // silently does nothing and the numbering bug is back.
+    assert.ok(
+      /<xsl:template\s+name="startPageNumbering"/.test(xsl),
+      'expected a startPageNumbering template override',
+    );
+    // The attribute MUST be initial-page-number, not the XSL-FO name
+    // initial-value: FOP silently ignores initial-value (verified against a real
+    // 2.11 run), so a future "cleanup" to the spec name would quietly undo the
+    // whole fix while still passing every other check.
+    assert.ok(
+      /<xsl:attribute\s+name="initial-page-number">\s*1\s*<\/xsl:attribute>/.test(xsl),
+      'startPageNumbering must emit initial-page-number="1" (not initial-value, which FOP ignores)',
+    );
+    assert.ok(
+      !/name="initial-value"/.test(xsl),
+      'must not use initial-value: FOP ignores it and the body would not restart',
+    );
+    // Guard against regressing into "every chapter restarts": the reset must
+    // stay conditional, not emit unconditionally.
+    assert.ok(
+      /<xsl:if\b[\s\S]*initial-page-number/.test(xsl),
+      'the reset must be behind a conditional guard (only the first body sequence restarts)',
+    );
   });
 });

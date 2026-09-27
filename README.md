@@ -338,7 +338,13 @@ You can optionally select a `.ditaval` filter file during the transform flow. Wh
 
 #### PDF output customization
 
-The `pdf` transtype runs through DITA-OT's default `org.dita.pdf2` pipeline (Apache FOP + XSL-FO). The extension passes a bundled customization folder via `customization.dir` (`media/pdf-customization/`) so two default behaviors get fixed without touching your local DITA-OT installation or installing a plug-in: oversized images are scaled down to fit the page column instead of running off the edge, and inline `<codeph>` gets a light background so it reads differently from surrounding prose. A very long, space-free `<codeph>` string (e.g. a long package path) can still overflow the column — that's a known, deliberate gap pending a real-world check of how often it matters.
+The `pdf` transtype runs through DITA-OT's default `org.dita.pdf2` pipeline (Apache FOP + XSL-FO). The extension passes a bundled customization folder via `customization.dir` (`media/pdf-customization/`) so a few default behaviors get fixed without touching your local DITA-OT installation or installing a plug-in:
+
+- **Oversized images** are scaled down to fit the page column instead of running off the edge.
+- **Inline `<codeph>`** gets a light background so it reads differently from surrounding prose.
+- **Body page numbering restarts at 1.** By default the body's arabic page counter keeps running from the roman front matter, so the first body page is numbered `4` (or whatever) instead of `1`. The customization resets the first body page sequence to start at 1, so the footer page number, the cross-references that cite it ("see page N"), and the PDF reader's page label all read `1` on the first body page. The front matter (cover, TOC) is numbered in lowercase roman (`i`, `ii`, `iii`, …) — the cover included, which DITA-OT otherwise leaves as arabic `1` — and for a bookmap only the first chapter resets (later chapters keep counting). No blank page is added: an odd page-1 start would otherwise make a plain map's table of contents pad itself to keep the body on a right-hand (recto) page, so that padding is turned off for plain maps while bookmaps keep their normal duplex layout.
+
+A very long, space-free `<codeph>` string (e.g. a long package path) can still overflow the column — that's a known, deliberate gap pending a real-world check of how often it matters.
 
 #### Site-chrome enhancements
 

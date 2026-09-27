@@ -57,4 +57,49 @@
     <xsl:attribute name="padding-end">2pt</xsl:attribute>
   </xsl:attribute-set>
 
+  <!--
+    Fix: stop the body page-number reset (fo/xsl/custom.xsl) from inserting a
+    blank page at the end of the table of contents.
+
+    Once the body sequence carries an explicit initial-page-number (odd, = 1),
+    a preceding sequence with force-page-count="auto" pads itself to an even
+    page count so the body opens on a right-hand (recto) page. For a plain
+    <map> that padding is just a stray blank TOC page — pointless on screen and
+    in single-sided output — so the non-bookmap branch drops from "auto" to
+    "no-force". The bookmap branch is kept exactly as org.dita.pdf2 ships it
+    ("even"): a real book is duplex-printed, so its recto alignment (and the
+    blank pages that buy it) is intentional and left untouched.
+
+    Override replaces the whole set, so the bookmap branch is repeated verbatim
+    from cfg/fo/attrs/commons-attr.xsl; only the <xsl:otherwise> value differs.
+  -->
+  <xsl:attribute-set name="__force__page__count">
+    <xsl:attribute name="force-page-count">
+      <xsl:choose>
+        <xsl:when test="/*[contains(@class, ' bookmap/bookmap ')]">
+          <xsl:value-of select="'even'"/>
+        </xsl:when>
+        <xsl:otherwise>
+          <xsl:value-of select="'no-force'"/>
+        </xsl:otherwise>
+      </xsl:choose>
+    </xsl:attribute>
+  </xsl:attribute-set>
+
+  <!--
+    Fix: number the cover/title page with a lowercase roman numeral too.
+
+    The front cover is its own page-sequence (org.dita.pdf2's createFrontMatter,
+    master-reference "front-matter") using the page-sequence.cover attribute-set,
+    which ships with no `format`, so FOP defaults it to arabic: the reader showed
+    the cover as "1" while the TOC right after it was already lowercase roman
+    (ii, iii). Adding format="i" makes the cover "i", so the front matter reads
+    i, ii, iii ... before the body restarts at 1. Override replaces the set
+    wholesale, so the inherited __force__page__count is repeated to keep parity
+    handling identical to the default.
+  -->
+  <xsl:attribute-set name="page-sequence.cover" use-attribute-sets="__force__page__count">
+    <xsl:attribute name="format">i</xsl:attribute>
+  </xsl:attribute-set>
+
 </xsl:stylesheet>
