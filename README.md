@@ -282,7 +282,7 @@ Transform your DITA maps to HTML5 (or other formats) using a local DITA-OT insta
 
 - Install [DITA-OT](https://www.dita-ot.org/documentation/installing). The extension does **not** bundle DITA-OT — it detects and runs your existing installation.
 - **A Java runtime (JRE/JDK) is required for every transform** — `html5`, `pdf`, `xhtml`, and `markdown` alike, PDF included — because DITA-OT itself is a Java program. The extension neither bundles Java nor starts it directly: it launches `dita`, which then invokes `java`. Two independent things must both hold:
-  - **Right version.** DITA-OT 4.x needs **Java 17**. An older runtime (e.g. a Java 8 JRE) aborts with `UnsupportedClassVersionError`.
+  - **Right version.** DITA-OT 4.x needs **Java 17**. If an older runtime wins the lookup (a common case: a Java 8 JRE on `PATH` and no `JAVA_HOME`), the transform dies with `java.lang.UnsupportedClassVersionError: org/dita/dost/invoker/Main has been compiled by a more recent version of the Java Runtime (class file version 61.0), this version ... only recognizes class file versions up to 52.0` — `61.0` is Java 17, `52.0` is Java 8. Point `JAVA_HOME` at a Java 17 home to fix it (`JAVA_HOME` takes priority over `PATH`, so it overrides a stale Java 8 even if that stays on `PATH`).
   - **Reachable.** Java has to be found via `JAVA_HOME` (i.e. `%JAVA_HOME%\bin\java.exe` exists) or, failing that, `java.exe` on `PATH`. Having Java installed but neither wired up fails up front with `'"java.exe"' is not recognized…` (Windows exit code 9009). If you set `JAVA_HOME` or edit `PATH`, **restart VS Code** afterward — the transform's child process inherits the environment VS Code was launched with.
 
 > Note: this is about the **DITA-OT Transform** command only. The built-in **Export as HTML** (self-contained `.html`, rendered by the extension itself) needs neither DITA-OT nor Java.
@@ -292,6 +292,19 @@ Transform your DITA maps to HTML5 (or other formats) using a local DITA-OT insta
 1. **Setting** — `dita-viewer.ditaOtPath` configured in VS Code settings (absolute path to DITA-OT directory)
 2. **Environment** — `DITA_HOME` environment variable pointing to the DITA-OT root
 3. **PATH** — `dita` (or `dita.bat` on Windows) found in system PATH
+
+### Troubleshooting
+
+The transform runs `dita.bat`, which locates Java the same way every time: `%JAVA_HOME%\bin\java.exe` first, else `java.exe` on `PATH`. Almost every failure is one of these two — and both are about your machine's Java, not this extension:
+
+| Log shows | Cause | Fix |
+|---|---|---|
+| `'"java.exe"' is not recognized …` / `Process exited with code: 9009` | No Java reachable via `JAVA_HOME` **or** `PATH` | Install a Java 17 runtime, then set `JAVA_HOME` to it (or put its `bin` on `PATH`) |
+| `UnsupportedClassVersionError … class file version 61.0 … only recognizes … 52.0` | An older Java (8/11) is being picked up instead of 17 | Set `JAVA_HOME` to a Java 17 home — it beats the `PATH` entry |
+
+After changing `JAVA_HOME` or `PATH`, **quit VS Code completely and relaunch it** (closing the window / *Reload Window* is not enough). The transform spawns `dita.bat` as a child of the VS Code process, so it inherits whatever environment VS Code had when it started — the new value is invisible to it until VS Code is restarted from a context that has the change. Verify the version you're actually handing to DITA-OT with `"%JAVA_HOME%\bin\java.exe" -version` (should print `17.x`).
+
+> A Java 17 that ships inside another app (e.g. an IDE's bundled `jre`) works as a `JAVA_HOME` target, but depending on it is fragile — that app can move or drop it on update. A standalone JDK/JRE 17 is the durable choice.
 
 ### Usage
 
