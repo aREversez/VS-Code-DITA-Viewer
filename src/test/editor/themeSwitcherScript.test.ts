@@ -18,6 +18,7 @@ function scriptWithPlaceholdersFilled(manifest: unknown): string {
 }
 
 function fakeElement(tag: string) {
+  const elAttrs: Record<string, string> = {};
   const el: Record<string, unknown> = {
     tagName: tag.toUpperCase(),
     value: '',
@@ -29,6 +30,8 @@ function fakeElement(tag: string) {
     children: [] as unknown[],
   };
   el.appendChild = (child: unknown) => (el.children as unknown[]).push(child);
+  el.setAttribute = (k: string, v: string) => { elAttrs[k] = v; };
+  el.getAttribute = (k: string) => elAttrs[k] ?? null;
   return el;
 }
 
@@ -46,9 +49,10 @@ function run(initialThemeAttr: string | null) {
     body: { appendChild: (el: ReturnType<typeof fakeElement>) => appendedToBody.push(el) },
     createElement: (tag: string) => fakeElement(tag),
     querySelector: () => null,
+    addEventListener() {},
   };
   const fakeWindow = { addEventListener() {}, scrollY: 0 };
-  const fakeLocation = { pathname: '/topics/product_intro.html', href: '' };
+  const fakeLocation = { pathname: '/topics/product_intro.html', href: '', hash: '' };
   const fakeLocalStorage = {
     getItem: (k: string) => storage[k] ?? null,
     setItem: (k: string, v: string) => { storage[k] = v; },
