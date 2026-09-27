@@ -217,12 +217,14 @@ export function buildDitaOtArgs(input: {
   /**
    * Absolute path to a DITA-OT PDF customization folder (a `catalog.xml` plus
    * `fo/attrs/custom.xsl` / `fo/xsl/custom.xsl` next to it, same layout as
-   * `org.dita.pdf2/Customization`). Passed through as
-   * `--args.customization.dir` so the default FOP pipeline picks up the
-   * override attribute-sets/templates without installing anything into the
-   * user's local DITA-OT or running the integrator. Only meaningful for the
-   * `pdf` transtype — ignored otherwise (the other transtypes don't read that
-   * parameter). See `media/pdf-customization/`.
+   * `org.dita.pdf2/Customization`). Passed through as `--customization.dir` so
+   * the default FOP pipeline picks up the override attribute-sets/templates
+   * without installing anything into the user's local DITA-OT or running the
+   * integrator. Note the flag has NO `args.` prefix — DITA-OT registers
+   * `--customization.dir` as a top-level option (see `dita --help`); the
+   * `--args.` prefix is only for the `args.*` property family and is rejected
+   * as an unsupported option for this one. Only meaningful for the `pdf`
+   * transtype — ignored otherwise. See `media/pdf-customization/`.
    */
   pdfCustomizationDir?: string;
 }): string[] {
@@ -237,7 +239,7 @@ export function buildDitaOtArgs(input: {
     args.push('--filter', input.ditavalFile);
   }
   if (input.transtype === 'pdf' && input.pdfCustomizationDir) {
-    args.push('--args.customization.dir', input.pdfCustomizationDir);
+    args.push('--customization.dir', input.pdfCustomizationDir);
   }
   return args;
 }

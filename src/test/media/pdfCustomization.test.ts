@@ -32,8 +32,8 @@ function parseStrictXml(xml: string, label: string): void {
  * attribute-set whose name doesn't match what org.dita.pdf2 actually declares,
  * means the customization is quietly ignored and the PDF comes out with the
  * old, un-fixed styling rather than failing the transform. These are tripwires
- * on the three shapes that have to hold for `--args.customization.dir` to do
- * anything at all.
+ * on the three shapes that have to hold for the `customization.dir` option to
+ * do anything at all.
  *
  * They match on file text, so a legitimate rewording (a comment edit, an
  * attribute added to an existing set) won't fail them; only losing the

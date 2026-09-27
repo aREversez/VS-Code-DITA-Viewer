@@ -280,8 +280,12 @@ Transform your DITA maps to HTML5 (or other formats) using a local DITA-OT insta
 
 ### Prerequisites
 
-- Install [DITA-OT](https://www.dita-ot.org/documentation/installing) (requires Java Runtime Environment)
-- The extension does **not** bundle DITA-OT — it detects your existing installation
+- Install [DITA-OT](https://www.dita-ot.org/documentation/installing). The extension does **not** bundle DITA-OT — it detects and runs your existing installation.
+- **A Java runtime (JRE/JDK) is required for every transform** — `html5`, `pdf`, `xhtml`, and `markdown` alike, PDF included — because DITA-OT itself is a Java program. The extension neither bundles Java nor starts it directly: it launches `dita`, which then invokes `java`. Two independent things must both hold:
+  - **Right version.** DITA-OT 4.x needs **Java 17**. An older runtime (e.g. a Java 8 JRE) aborts with `UnsupportedClassVersionError`.
+  - **Reachable.** Java has to be found via `JAVA_HOME` (i.e. `%JAVA_HOME%\bin\java.exe` exists) or, failing that, `java.exe` on `PATH`. Having Java installed but neither wired up fails up front with `'"java.exe"' is not recognized…` (Windows exit code 9009). If you set `JAVA_HOME` or edit `PATH`, **restart VS Code** afterward — the transform's child process inherits the environment VS Code was launched with.
+
+> Note: this is about the **DITA-OT Transform** command only. The built-in **Export as HTML** (self-contained `.html`, rendered by the extension itself) needs neither DITA-OT nor Java.
 
 ### Detection priority
 
@@ -321,7 +325,7 @@ You can optionally select a `.ditaval` filter file during the transform flow. Wh
 
 #### PDF output customization
 
-The `pdf` transtype runs through DITA-OT's default `org.dita.pdf2` pipeline (Apache FOP + XSL-FO). The extension passes a bundled customization folder via `args.customization.dir` (`media/pdf-customization/`) so two default behaviors get fixed without touching your local DITA-OT installation or installing a plug-in: oversized images are scaled down to fit the page column instead of running off the edge, and inline `<codeph>` gets a light background so it reads differently from surrounding prose. A very long, space-free `<codeph>` string (e.g. a long package path) can still overflow the column — that's a known, deliberate gap pending a real-world check of how often it matters.
+The `pdf` transtype runs through DITA-OT's default `org.dita.pdf2` pipeline (Apache FOP + XSL-FO). The extension passes a bundled customization folder via `customization.dir` (`media/pdf-customization/`) so two default behaviors get fixed without touching your local DITA-OT installation or installing a plug-in: oversized images are scaled down to fit the page column instead of running off the edge, and inline `<codeph>` gets a light background so it reads differently from surrounding prose. A very long, space-free `<codeph>` string (e.g. a long package path) can still overflow the column — that's a known, deliberate gap pending a real-world check of how often it matters.
 
 #### Site-chrome enhancements
 

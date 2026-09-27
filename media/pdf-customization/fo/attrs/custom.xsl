@@ -2,7 +2,7 @@
 <!--
   Attribute-set overrides for the default org.dita.pdf2 (FOP) PDF pipeline.
   Loaded via media/pdf-customization/catalog.xml when the extension passes
-  the `args.customization.dir` option for the `pdf` transtype (buildDitaOtArgs).
+  the `customization.dir` option for the `pdf` transtype (buildDitaOtArgs).
 
   Overriding an attribute-set here replaces the default one wholesale, so any
   attribute the default already sets has to be repeated, not just the new ones

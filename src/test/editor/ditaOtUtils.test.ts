@@ -281,7 +281,7 @@ describe('buildDitaOtArgs', () => {
     ]);
   });
 
-  it('should include customization.dir for the pdf transtype', () => {
+  it('should include customization.dir (no args. prefix) for the pdf transtype', () => {
     const args = buildDitaOtArgs({
       mapPath: '/map.ditamap',
       transtype: 'pdf',
@@ -293,7 +293,7 @@ describe('buildDitaOtArgs', () => {
       '-f', 'pdf',
       '-o', '/out',
       '--nav-toc=full',
-      '--args.customization.dir', '/ext/media/pdf-customization',
+      '--customization.dir', '/ext/media/pdf-customization',
     ]);
   });
 
@@ -304,12 +304,12 @@ describe('buildDitaOtArgs', () => {
       outputDir: '/out',
       pdfCustomizationDir: '/ext/media/pdf-customization',
     });
-    assert.ok(!args.includes('--args.customization.dir'));
+    assert.ok(!args.includes('--customization.dir'));
   });
 
   it('should not include customization.dir for pdf when none is given', () => {
     const args = buildDitaOtArgs({ mapPath: '/map.ditamap', transtype: 'pdf', outputDir: '/out' });
-    assert.ok(!args.includes('--args.customization.dir'));
+    assert.ok(!args.includes('--customization.dir'));
   });
 });
 

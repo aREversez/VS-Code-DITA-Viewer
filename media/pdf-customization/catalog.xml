@@ -3,13 +3,12 @@
   PDF customization for the DITA-OT `pdf` transtype (route A: keep the default
   org.dita.pdf2 / Apache FOP pipeline, just override its own extension points).
 
-  Passed to DITA-OT as `args.customization.dir=<this folder>` (the command-line
-  spelling of that, with its leading dashes, is the `customization.dir` option
-  documented on dita-ot.org; see
-  buildDitaOtArgs in src/editor/ditaOtUtils.ts). The folder layout mirrors
-  org.dita.pdf2/Customization: this catalog tells the toolkit where to find the
-  override stylesheets, which are loaded in place of the (by default empty)
-  counterparts bundled inside org.dita.pdf2/cfg/.
+  Passed to DITA-OT as the `customization.dir` command-line option, pointed at
+  this folder (note: a top-level option, NOT part of the `args.` property
+  family; buildDitaOtArgs in src/editor/ditaOtUtils.ts wires it). The folder
+  layout mirrors org.dita.pdf2/Customization: this catalog tells the toolkit
+  where to find the override stylesheets, which are loaded in place of the (by
+  default empty) counterparts bundled inside org.dita.pdf2/cfg/.
 -->
 <catalog prefer="system" xmlns="urn:oasis:names:tc:entity:xmlns:xml:catalog">
   <uri name="cfg:fo/attrs/custom.xsl" uri="fo/attrs/custom.xsl"/>
