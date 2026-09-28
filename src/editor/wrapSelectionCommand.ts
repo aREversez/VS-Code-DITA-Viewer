@@ -1,18 +1,20 @@
 // "Surround selection with DITA tag" -- Oxygen-style: select text in a .dita
 // or .ditamap source editor, press Enter, pick a tag (with search) from a
-// QuickPick, and the selection is wrapped in <tag>...</tag>. Typing a name
-// that isn't in the known candidate list offers a "wrap with <input>"
-// fallback, so specializations and custom elements still work.
+// QuickPick, and the selection is wrapped in <tag>...</tag>. Only known DITA
+// tags are offered (no custom names); typing filters by tag-name PREFIX.
+// Selections whose tags are unpaired, or whose edges cut through a tag, are
+// refused so the result is always well-formed XML.
 
 import * as vscode from 'vscode';
 import {
+  filterWrapCandidates,
   getWrapTagCandidates,
-  isValidCustomTagName,
   orderCandidatesWithMru,
   pushMruTag,
   wrapTextWithTag,
   WrapTagCandidate,
 } from './wrapSelectionTags';
+import { validateWrapSelection } from '../language/xmlTagBalance';
 
 const MRU_KEY_TOPIC = 'ditaViewer.wrapTagMru.topic';
 const MRU_KEY_MAP = 'ditaViewer.wrapTagMru.map';
@@ -26,35 +28,28 @@ interface WrapQuickPickItem extends vscode.QuickPickItem {
 }
 
 function toQuickPickItem(c: WrapTagCandidate): WrapQuickPickItem {
-  return { tag: c.tag, label: `<${c.tag}>`, description: c.basetype };
+  // alwaysShow: we filter ourselves (prefix match); VS Code's own fuzzy
+  // substring filter would re-admit tags that merely contain the letters.
+  return { tag: c.tag, label: `<${c.tag}>`, description: c.basetype, alwaysShow: true };
 }
 
 /** Shows the searchable tag picker and resolves to the chosen tag name, or
  * undefined if the user dismissed it without picking anything. */
 async function pickTag(candidates: WrapTagCandidate[]): Promise<string | undefined> {
-  const baseItems = candidates.map(toQuickPickItem);
   const qp = vscode.window.createQuickPick<WrapQuickPickItem>();
   qp.placeholder = vscode.l10n.t('Select a tag to wrap the selection (type to search)');
-  qp.matchOnDescription = true;
-  qp.items = baseItems;
+  qp.matchOnDescription = false;
+  qp.items = candidates.map(toQuickPickItem);
 
   return new Promise<string | undefined>((resolve) => {
     qp.onDidChangeValue((value) => {
-      const trimmed = value.trim();
-      const isKnown = candidates.some((c) => c.tag === trimmed);
-      if (trimmed.length > 0 && isValidCustomTagName(trimmed) && !isKnown) {
-        qp.items = [
-          { tag: trimmed, label: `<${trimmed}>`, description: vscode.l10n.t('Custom tag') },
-          ...baseItems,
-        ];
-      } else {
-        qp.items = baseItems;
-      }
+      qp.items = filterWrapCandidates(candidates, value).map(toQuickPickItem);
     });
     qp.onDidAccept(() => {
       const picked = qp.selectedItems[0];
+      if (!picked) return; // nothing matches: keep the picker open
       qp.hide();
-      resolve(picked?.tag);
+      resolve(picked.tag);
     });
     qp.onDidHide(() => {
       qp.dispose();
@@ -86,6 +81,23 @@ export function registerWrapSelectionCommand(context: vscode.ExtensionContext): 
           vscode.window.showInformationMessage(
             vscode.l10n.t('Select some text in a DITA topic or map to wrap it with a tag.'),
           );
+          return;
+        }
+
+        const fullText = editor.document.getText();
+        for (const selection of selections) {
+          const check = validateWrapSelection(
+            fullText,
+            editor.document.offsetAt(selection.start),
+            editor.document.offsetAt(selection.end),
+          );
+          if (check.ok) continue;
+          const message = check.reason === 'cuts-markup'
+            ? vscode.l10n.t('Cannot wrap: the selection starts or ends inside a tag or comment. Select whole text or whole elements.')
+            : check.tagName
+              ? vscode.l10n.t('Cannot wrap: the selection contains an unpaired tag <{0}>. Select the whole element, including its end tag.', check.tagName)
+              : vscode.l10n.t('Cannot wrap: the selection contains unpaired tags. Select whole elements.');
+          vscode.window.showWarningMessage(message);
           return;
         }
 

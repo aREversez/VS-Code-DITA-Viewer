@@ -73,12 +73,16 @@ export function orderCandidatesWithMru(
 }
 
 /**
- * Is `tag` a syntactically plausible element name a user could type into the
- * picker's search box (letters/digits/hyphen, must start with a letter)?
- * Used to decide whether to offer a "wrap with <input>" fallback item for
- * tags that aren't in the known candidate list (specializations we don't
- * enumerate, or deliberately custom elements).
+ * Filters candidates by what the user typed: a case-insensitive PREFIX match
+ * on the tag name ("ui" -> uicontrol, not required-cleanup / supequip). A
+ * leading "<" is ignored so typing "<ui" works too. Empty query keeps
+ * everything; the input order (MRU first) is preserved.
  */
-export function isValidCustomTagName(tag: string): boolean {
-  return /^[A-Za-z][A-Za-z0-9-]*$/.test(tag);
+export function filterWrapCandidates(
+  candidates: readonly WrapTagCandidate[],
+  query: string,
+): WrapTagCandidate[] {
+  const q = query.trim().replace(/^</, '').toLowerCase();
+  if (!q) return [...candidates];
+  return candidates.filter((c) => c.tag.toLowerCase().startsWith(q));
 }

@@ -191,6 +191,12 @@
   "\n[DITA-OT] Template \"{0}\" applied to the site.": "\n[DITA-OT] 已将模板 \"{0}\" 应用于站点。",
   "Cannot add the template: \"{0}\" already exists as a file in the output.": "无法添加模板：输出目录中 \"{0}\" 已作为文件存在。",
   "Select a tag to wrap the selection (type to search)": "选择要包裹所选内容的标签（可输入搜索）",
-  "Custom tag": "自定义标签",
-  "Select some text in a DITA topic or map to wrap it with a tag.": "请先在 DITA 主题或 map 中选中一段文本，再用标签包裹它。"
+  "Select some text in a DITA topic or map to wrap it with a tag.": "请先在 DITA 主题或 map 中选中一段文本，再用标签包裹它。",
+  "The element type \"{0}\" must be terminated by the matching end-tag \"</{0}>\".": "元素类型 \"{0}\" 必须由匹配的结束标签 \"</{0}>\" 终止。",
+  "The end-tag \"</{0}>\" has no matching start-tag.": "结束标签 \"</{0}>\" 没有匹配的起始标签。",
+  "This tag is not terminated: expected \">\".": "此标签未结束：缺少 \">\"。",
+  "Invalid markup: \"<\" must start a tag, or be written as \"&lt;\".": "无效标记：\"<\" 必须开始一个标签，或写作 \"&lt;\"。",
+  "Cannot wrap: the selection starts or ends inside a tag or comment. Select whole text or whole elements.": "无法包裹：选区的起点或终点位于标签或注释内部。请选择完整的文本或完整的元素。",
+  "Cannot wrap: the selection contains an unpaired tag <{0}>. Select the whole element, including its end tag.": "无法包裹：选区包含未配对的标签 <{0}>。请选择完整的元素（含其结束标签）。",
+  "Cannot wrap: the selection contains unpaired tags. Select whole elements.": "无法包裹：选区包含未配对的标签。请选择完整的元素。"
 }

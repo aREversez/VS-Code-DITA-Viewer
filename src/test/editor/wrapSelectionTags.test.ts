@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import {
   getWrapTagCandidates,
-  isValidCustomTagName,
+  filterWrapCandidates,
   orderCandidatesWithMru,
   pushMruTag,
   wrapTextWithTag,
@@ -91,23 +91,27 @@ describe('orderCandidatesWithMru', () => {
   });
 });
 
-describe('isValidCustomTagName', () => {
-  it('should accept simple lowercase element names', () => {
-    assert.ok(isValidCustomTagName('myelement'));
+describe('filterWrapCandidates', () => {
+  const candidates = getWrapTagCandidates(false);
+
+  it('should match by tag-name prefix only, not by substring', () => {
+    const tags = filterWrapCandidates(candidates, 'ui').map((c) => c.tag);
+    assert.ok(tags.includes('uicontrol'));
+    assert.ok(tags.every((t) => t.startsWith('ui')));
+    assert.ok(!tags.includes('required-cleanup'));
+    assert.ok(!tags.includes('supequip'));
   });
 
-  it('should accept names with digits and hyphens after the first letter', () => {
-    assert.ok(isValidCustomTagName('my-element2'));
+  it('should be case-insensitive and ignore a leading "<" and whitespace', () => {
+    const a = filterWrapCandidates(candidates, ' <UI ').map((c) => c.tag);
+    assert.deepStrictEqual(a, filterWrapCandidates(candidates, 'ui').map((c) => c.tag));
   });
 
-  it('should reject names starting with a digit or hyphen', () => {
-    assert.ok(!isValidCustomTagName('2element'));
-    assert.ok(!isValidCustomTagName('-element'));
+  it('should return everything for an empty query, preserving order', () => {
+    assert.deepStrictEqual(filterWrapCandidates(candidates, ''), candidates);
   });
 
-  it('should reject empty strings and names with spaces or angle brackets', () => {
-    assert.ok(!isValidCustomTagName(''));
-    assert.ok(!isValidCustomTagName('my element'));
-    assert.ok(!isValidCustomTagName('<p>'));
+  it('should return nothing (no custom-tag fallback) when no tag matches', () => {
+    assert.deepStrictEqual(filterWrapCandidates(candidates, 'zzzz'), []);
   });
 });

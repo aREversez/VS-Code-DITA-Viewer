@@ -191,6 +191,12 @@
   "\n[DITA-OT] Template \"{0}\" applied to the site.": "\n[DITA-OT] Template \"{0}\" applied to the site.",
   "Cannot add the template: \"{0}\" already exists as a file in the output.": "Cannot add the template: \"{0}\" already exists as a file in the output.",
   "Select a tag to wrap the selection (type to search)": "Select a tag to wrap the selection (type to search)",
-  "Custom tag": "Custom tag",
-  "Select some text in a DITA topic or map to wrap it with a tag.": "Select some text in a DITA topic or map to wrap it with a tag."
+  "Select some text in a DITA topic or map to wrap it with a tag.": "Select some text in a DITA topic or map to wrap it with a tag.",
+  "The element type \"{0}\" must be terminated by the matching end-tag \"</{0}>\".": "The element type \"{0}\" must be terminated by the matching end-tag \"</{0}>\".",
+  "The end-tag \"</{0}>\" has no matching start-tag.": "The end-tag \"</{0}>\" has no matching start-tag.",
+  "This tag is not terminated: expected \">\".": "This tag is not terminated: expected \">\".",
+  "Invalid markup: \"<\" must start a tag, or be written as \"&lt;\".": "Invalid markup: \"<\" must start a tag, or be written as \"&lt;\".",
+  "Cannot wrap: the selection starts or ends inside a tag or comment. Select whole text or whole elements.": "Cannot wrap: the selection starts or ends inside a tag or comment. Select whole text or whole elements.",
+  "Cannot wrap: the selection contains an unpaired tag <{0}>. Select the whole element, including its end tag.": "Cannot wrap: the selection contains an unpaired tag <{0}>. Select the whole element, including its end tag.",
+  "Cannot wrap: the selection contains unpaired tags. Select whole elements.": "Cannot wrap: the selection contains unpaired tags. Select whole elements."
 }

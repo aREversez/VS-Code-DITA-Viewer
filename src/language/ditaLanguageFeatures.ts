@@ -37,6 +37,7 @@ import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParse
 import { DitaNode } from '../parser/domTypes';
 import { STANDARD_TAG_TO_BASETYPE } from '../parser/standardTagMap';
 import { MAP_STANDARD_TAG_TO_BASETYPE } from '../parser/mapTagMap';
+import { scanMarkup } from './xmlTagBalance';
 
 const DITA_SELECTOR: vscode.DocumentSelector = [
   { language: 'dita' },
@@ -589,9 +590,38 @@ function validateDocument(document: vscode.TextDocument, collection: vscode.Diag
     }
   }
 
+  diagnostics.push(...collectWellFormednessDiagnostics(document));
   diagnostics.push(...collectUnknownElementDiagnostics(document));
 
   collection.set(document.uri, diagnostics);
+}
+
+// Tag-balance errors (unclosed element, stray end tag, unterminated tag), so
+// malformed source like <b><uicontrol>x</b></uicontrol> is flagged in the
+// editor instead of only failing later in Oxygen / DITA-OT.
+function collectWellFormednessDiagnostics(document: vscode.TextDocument): vscode.Diagnostic[] {
+  return scanMarkup(document.getText()).issues.map((issue) => {
+    const range = new vscode.Range(document.positionAt(issue.start), document.positionAt(issue.end));
+    const name = issue.tagName ?? '';
+    let message: string;
+    switch (issue.kind) {
+      case 'unclosed-element':
+        message = vscode.l10n.t('The element type "{0}" must be terminated by the matching end-tag "</{0}>".', name);
+        break;
+      case 'unexpected-end-tag':
+        message = vscode.l10n.t('The end-tag "</{0}>" has no matching start-tag.', name);
+        break;
+      case 'unterminated-markup':
+        message = vscode.l10n.t('This tag is not terminated: expected ">".');
+        break;
+      default:
+        message = vscode.l10n.t('Invalid markup: "<" must start a tag, or be written as "&lt;".');
+    }
+    const d = new vscode.Diagnostic(range, message, vscode.DiagnosticSeverity.Error);
+    d.source = 'dita';
+    d.code = 'malformed-xml';
+    return d;
+  });
 }
 
 // renderEffectiveNode() in renderer.ts drops any element the parser could not
