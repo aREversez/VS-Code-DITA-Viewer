@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import {
   filterWrapCandidates,
   getWrapTagCandidates,
+  innerRangesAfterWrap,
   orderCandidatesWithMru,
   pushMruTag,
   wrapTextWithTag,
@@ -59,18 +60,6 @@ async function pickTag(candidates: WrapTagCandidate[]): Promise<string | undefin
   });
 }
 
-/** New selection ranges after replacing `original` with `<tag>text</tag>`,
- * covering just the wrapped payload so a further Enter press can nest
- * another tag around it immediately (matches Oxygen's chaining behavior). */
-function innerSelectionAfterWrap(original: vscode.Selection, tag: string): vscode.Selection {
-  const openLen = tag.length + 2; // "<tag>"
-  const newStart = original.start.translate(0, openLen);
-  const newEnd = original.start.line === original.end.line
-    ? original.end.translate(0, openLen)
-    : original.end; // closing tag is appended after this position, so it doesn't move
-  return new vscode.Selection(newStart, newEnd);
-}
-
 export function registerWrapSelectionCommand(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerTextEditorCommand(
@@ -109,6 +98,13 @@ export function registerWrapSelectionCommand(context: vscode.ExtensionContext): 
         const tag = await pickTag(candidates);
         if (!tag) return;
 
+        // Offsets are taken from the pre-edit document; the payload ranges
+        // are then converted back to positions in the post-edit one.
+        const before = selections.map((s) => ({
+          start: editor.document.offsetAt(s.start),
+          end: editor.document.offsetAt(s.end),
+        }));
+
         await editor.edit((editBuilder) => {
           for (const selection of selections) {
             const text = editor.document.getText(selection);
@@ -116,7 +112,12 @@ export function registerWrapSelectionCommand(context: vscode.ExtensionContext): 
           }
         });
 
-        editor.selections = selections.map((sel) => innerSelectionAfterWrap(sel, tag));
+        const doc = editor.document;
+        editor.selections = innerRangesAfterWrap(before, tag).map((r, i) => {
+          const start = doc.positionAt(r.start);
+          const end = doc.positionAt(r.end);
+          return selections[i].isReversed ? new vscode.Selection(end, start) : new vscode.Selection(start, end);
+        });
 
         await context.globalState.update(mruKey, pushMruTag(mru, tag));
       },

@@ -86,3 +86,32 @@ export function filterWrapCandidates(
   if (!q) return [...candidates];
   return candidates.filter((c) => c.tag.toLowerCase().startsWith(q));
 }
+
+export interface OffsetRange {
+  start: number;
+  end: number;
+}
+
+/**
+ * Where each wrapped payload sits after every range in `ranges` (document
+ * offsets BEFORE the edit) has been replaced by `<tag>text</tag>`: just the
+ * payload, so a further Enter can nest another tag around it. Results come
+ * back in the input order (the editor's primary selection is first, not
+ * necessarily earliest in the document).
+ *
+ * All wraps land in one edit, so each range is shifted by the tags added by
+ * every range before it in document order, not only by its own open tag --
+ * two selections on one line (Ctrl+D on a repeated word) would otherwise
+ * end up offset.
+ */
+export function innerRangesAfterWrap(ranges: readonly OffsetRange[], tag: string): OffsetRange[] {
+  const openLen = tag.length + 2; // "<tag>"
+  const closeLen = tag.length + 3; // "</tag>"
+  const byStart = ranges.map((_, i) => i).sort((a, b) => ranges[a].start - ranges[b].start);
+  const out: OffsetRange[] = new Array(ranges.length);
+  byStart.forEach((idx, rank) => {
+    const shift = rank * (openLen + closeLen) + openLen;
+    out[idx] = { start: ranges[idx].start + shift, end: ranges[idx].end + shift };
+  });
+  return out;
+}
