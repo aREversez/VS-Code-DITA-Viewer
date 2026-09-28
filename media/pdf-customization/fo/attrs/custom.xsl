@@ -102,4 +102,31 @@
     <xsl:attribute name="format">i</xsl:attribute>
   </xsl:attribute-set>
 
+  <!--
+    Fix: a table-of-contents / list-of-figures / list-of-tables page that sits
+    in <backmatter> was numbered in lowercase roman, and the roman numeral
+    carried on from the body (a 895-page book listed its "List of Figures" at
+    page "dcccxcv").
+
+    org.dita.pdf2 gives page-sequence.toc (and lot / lof, which inherit it)
+    the frontmatter attribute-set, whose only member is format="i". That is
+    right for a booklist in <frontmatter>, where the pages really do come
+    before the arabic body. In <backmatter> the same pages come AFTER the body,
+    so their counter keeps running from it, and a roman format prints - and
+    cites, in the TOC's page-number-citation - that running count in roman.
+
+    The sequence's context node is the ot-placeholder:* element; its @id is the
+    id of the booklist entry in the merged map (the same pairing
+    processTopicNotices uses for backmatter notices), so the map tells us which
+    matter it belongs to. Backmatter -> arabic ("1"), everything else keeps "i".
+    The condition lives inside the attribute value because an attribute-set may
+    contain only xsl:attribute. Own members override used sets, so this wins
+    over the inherited page-sequence.frontmatter format; force-page-count is
+    repeated from __force__page__count exactly as the default composes it.
+  -->
+  <xsl:attribute-set name="page-sequence.toc" use-attribute-sets="__force__page__count page-sequence.frontmatter">
+    <xsl:attribute name="format"
+        select="if (exists(@id) and exists(key('map-id', @id)/ancestor::*[contains(@class, ' bookmap/backmatter ')])) then '1' else 'i'"/>
+  </xsl:attribute-set>
+
 </xsl:stylesheet>

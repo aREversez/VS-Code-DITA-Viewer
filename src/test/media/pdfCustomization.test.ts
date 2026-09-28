@@ -218,3 +218,23 @@ describe('media/pdf-customization: fo/xsl/custom.xsl template overrides', () => 
     }
   });
 });
+
+describe('media/pdf-customization: backmatter booklist page numbers', () => {
+  const attrs = readFileSync(join(customizationRoot, 'fo', 'attrs', 'custom.xsl'), 'utf-8');
+  const code = attrs.replace(/<!--[\s\S]*?-->/g, '');
+
+  it('overrides page-sequence.toc so a booklist in <backmatter> is not numbered in roman', () => {
+    // org.dita.pdf2 gives page-sequence.toc (and lot/lof, which inherit it)
+    // format="i" via page-sequence.frontmatter. A List of Figures/Tables in
+    // <backmatter> comes after the body, so its counter runs on from the body
+    // and a roman format printed page 895 as "dcccxcv" in the TOC.
+    const m = /<xsl:attribute-set\s+name="page-sequence\.toc"[^>]*>([\s\S]*?)<\/xsl:attribute-set>/.exec(code);
+    assert.ok(m, 'expected a page-sequence.toc attribute-set override');
+    assert.ok(/name="format"/.test(m[1]), 'the override must set format itself (own members beat used sets)');
+    assert.ok(/bookmap\/backmatter/.test(m[1]), 'format must depend on whether the entry is inside bookmap/backmatter');
+    assert.ok(/then\s+'1'\s+else\s+'i'/.test(m[1]), "backmatter -> arabic '1', everything else keeps roman 'i'");
+    // The composed sets must survive the wholesale replacement.
+    assert.ok(/use-attribute-sets="[^"]*__force__page__count[^"]*page-sequence\.frontmatter[^"]*"/.test(m[0]),
+      'must keep the default __force__page__count and page-sequence.frontmatter members');
+  });
+});
