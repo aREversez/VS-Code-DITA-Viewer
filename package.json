@@ -248,7 +248,7 @@
       {
         "command": "ditaViewer.wrapSelectionWithTag",
         "key": "enter",
-        "when": "editorTextFocus && editorHasSelection && !suggestWidgetVisible && !renameInputVisible && (editorLangId == dita || editorLangId == ditamap || resourceExtname == .dita || resourceExtname == .ditamap)"
+        "when": "editorTextFocus && editorHasSelection && !editorReadonly && !inSnippetMode && !suggestWidgetVisible && !renameInputVisible && config.dita-viewer.wrapSelectionOnEnter && (editorLangId == dita || editorLangId == ditamap || resourceExtname == .dita || resourceExtname == .ditamap)"
       }
     ],
     "snippets": [
@@ -542,6 +542,11 @@
     "configuration": {
       "title": "%configuration.title%",
       "properties": {
+        "dita-viewer.wrapSelectionOnEnter": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.wrapSelectionOnEnter.description%"
+        },
         "dita-viewer.customCss": {
           "type": "array",
           "items": {

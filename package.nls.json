@@ -16,6 +16,7 @@
   "view.mapExplorer.name": "DITA Map",
   "view.mapExplorer.welcome": "No DITA map is associated with the current file.\nOpen a .dita or .ditamap file to see its structure here.",
   "configuration.title": "DITA Viewer",
+  "config.wrapSelectionOnEnter.description": "In .dita/.ditamap source editors, pressing Enter with text selected opens the tag picker to wrap the selection. Turn off to keep Enter inserting a newline (the command stays available in the Command Palette).",
   "config.customCss.description": "Custom CSS file paths to apply to the preview. Supports absolute paths, paths relative to workspace root, and paths relative to the DITA file directory.",
   "config.cssDirectory.description": "Directories to scan for available CSS files. Supports absolute paths, workspace-relative paths, and document-relative paths. CSS files found here appear in the preview theme dropdown.",
   "config.templatesDirectory.description": "Folders that contain site/book templates, one sub-folder per template (each with a template.json or a publishing-template .opt file, plus its css). Supports absolute paths, workspace-relative paths, and document-relative paths. Templates found here appear in the Template dropdown of Docsite and Book view, next to the built-in ones.",

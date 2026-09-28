@@ -16,6 +16,7 @@
   "view.mapExplorer.name": "DITA Map",
   "view.mapExplorer.welcome": "当前文件没有关联的 DITA Map。\n打开一个 .dita 或 .ditamap 文件即可在此查看其结构。",
   "configuration.title": "DITA Viewer",
+  "config.wrapSelectionOnEnter.description": "在 .dita/.ditamap 源码编辑器中，选中文本后按 Enter 会打开标签选择器以包裹所选内容。关闭后 Enter 恢复为插入换行（该命令仍可在命令面板中使用）。",
   "config.customCss.description": "应用于预览的自定义 CSS 文件路径。支持绝对路径、相对于工作区根目录的路径、以及相对于 DITA 文件所在目录的路径。",
   "config.cssDirectory.description": "用于扫描可用 CSS 文件的目录。支持绝对路径、相对于工作区的路径、以及相对于文档的路径。在此找到的 CSS 文件会出现在预览的主题下拉菜单中。",
   "config.templatesDirectory.description": "包含站点/书本模板的文件夹，每个模板占一个子文件夹（内含 template.json 或 publishing-template 的 .opt 文件，以及样式 css）。支持绝对路径、相对于工作区的路径、以及相对于文档的路径。在此找到的模板会与内置模板一起出现在 Docsite 和 Book 视图的模板下拉菜单中。",
