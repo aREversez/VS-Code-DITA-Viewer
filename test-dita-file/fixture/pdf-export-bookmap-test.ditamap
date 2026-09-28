@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE bookmap PUBLIC "-//OASIS//DTD DITA BookMap//EN" "bookmap.dtd">
+<!--
+  Manual check for the chapter/appendix numbering override in
+  media/pdf-customization/fo/xsl/custom.xsl (real `dita -f pdf` run). The two
+  key-only entries print nothing, so the TOC and the chapter titles must read
+  "Chapter 1", "Chapter 2" and "Appendix A", not "Chapter 2", "Chapter 3" and
+  "Appendix B".
+-->
+<bookmap>
+    <booktitle><mainbooktitle>PDF Bookmap Numbering Check</mainbooktitle></booktitle>
+    <frontmatter><booklists><toc/></booklists></frontmatter>
+    <chapter keys="product_version"><topicmeta><linktext>1.0</linktext></topicmeta></chapter>
+    <chapter href="topics/pdf-export-test.dita"/>
+    <chapter href="topics/db_overview.dita"/>
+    <appendices>
+        <appendix keys="appendix_placeholder"><topicmeta><linktext>-</linktext></topicmeta></appendix>
+        <appendix href="topics/db_config.dita"/>
+    </appendices>
+</bookmap>

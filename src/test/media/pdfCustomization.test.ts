@@ -185,4 +185,36 @@ describe('media/pdf-customization: fo/xsl/custom.xsl template overrides', () => 
       'the reset must be behind a conditional guard (only the first body sequence restarts)',
     );
   });
+
+  it('numbers chapters, appendices and parts by the entries that render, not every element', () => {
+    // org.dita.pdf2 numbers a bookmap chapter with <xsl:number count=chapter>
+    // over the map, so a key-only <chapter keys="..."> (no @href, no topic, no
+    // page) still consumes a number: the first real chapter reads "Chapter 2"
+    // in the TOC and in its own title. All three numbering templates live in
+    // the topicTitleNumber mode; if any of them stops overriding the default,
+    // or stops filtering by "has a topic", the skew silently returns.
+    const templates = xsl.match(/<xsl:template\b[^>]*mode="topicTitleNumber"[^>]*>/g) ?? [];
+    for (const cls of ['bookmap/chapter', 'bookmap/appendix', 'bookmap/part']) {
+      assert.ok(
+        templates.some((t) => t.includes(`' ${cls} '`)),
+        `expected a topicTitleNumber override matching ${cls}`,
+      );
+    }
+    assert.ok(
+      /<xsl:function\s+name="vdv:renders-topic"/.test(xsl),
+      'expected the vdv:renders-topic predicate that tells a rendered entry from a key-only one',
+    );
+    assert.ok(
+      /key\(\s*'topic-id'/.test(xsl),
+      "the predicate must ask whether a topic with the entry's id exists (topic-id key)",
+    );
+    // Every number must go through the predicate; a bare count over all
+    // chapters/appendices/parts is the bug itself.
+    const code = xsl.replace(/<!--[\s\S]*?-->/g, ''); // comments quote the default <xsl:number>
+    const numberings = code.match(/<xsl:number\b[\s\S]*?\/>/g) ?? [];
+    assert.strictEqual(numberings.length, 3, 'expected exactly the chapter, appendix and part numberings');
+    for (const n of numberings) {
+      assert.ok(n.includes('vdv:renders-topic'), `numbering must filter by vdv:renders-topic: ${n}`);
+    }
+  });
 });

@@ -9,6 +9,9 @@
 <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
     xmlns:fo="http://www.w3.org/1999/XSL/Format"
     xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    xmlns:opentopic="http://www.idiominc.com/opentopic"
+    xmlns:vdv="urn:dita-viewer:pdf-customization"
+    exclude-result-prefixes="xs opentopic vdv"
     version="3.0">
 
   <!--
@@ -51,6 +54,55 @@
     <xsl:if test="empty($precedingBody)">
       <xsl:attribute name="initial-page-number">1</xsl:attribute>
     </xsl:if>
+  </xsl:template>
+
+  <!--
+    Chapter / appendix / part numbers count only entries that produce a page.
+
+    org.dita.pdf2 numbers a bookmap chapter (and appendix, part) with
+    <xsl:number count="bookmap/chapter"> over the map, i.e. it counts every
+    <chapter> element, including ones that never become a topic in the PDF:
+    a key-only <chapter keys="product_version"> (a keydef in disguise, kept in
+    the map purely for keyref text substitution) has no @href, so it renders
+    nothing, yet it still consumed a number. The first real chapter came out as
+    "Chapter 2", and the same skewed number appears in both the table of
+    contents and the chapter's own title (both go through the topicTitleNumber
+    mode), so the TOC no longer matched what a reader counting the printed
+    chapters would expect.
+
+    An entry renders if, and only if, the merged intermediate file holds a
+    topic carrying the entry's @id (the same map-id <-> topic-id pairing
+    org.dita.pdf2 itself relies on to find a chapter's topic); a key-only
+    entry has no such topic. A resource-only entry is already dropped from the
+    merged map before this stylesheet runs, so it needs no case of its own.
+    Everything else about the numbering is kept as the default has it:
+    chapters run on across <part> boundaries, appendices restart within their
+    parent, and a plain <map> (whose top-level topicrefs are matched by the
+    default template too, but which it leaves un-numbered) is still
+    un-numbered.
+  
+  -->
+  <xsl:function name="vdv:renders-topic" as="xs:boolean">
+    <xsl:param name="entry" as="element()"/>
+    <xsl:sequence select="exists($entry/@id) and exists(key('topic-id', $entry/@id, root($entry)))"/>
+  </xsl:function>
+
+  <xsl:template match="*[contains(@class, ' bookmap/chapter ')] |
+                       opentopic:map/*[contains(@class, ' map/topicref ')]" mode="topicTitleNumber" priority="-1">
+    <xsl:variable name="self" select="." as="element()"/>
+    <xsl:if test="contains(@class, ' bookmap/chapter ') and vdv:renders-topic($self)">
+      <xsl:number value="count($map/descendant::*[contains(@class, ' bookmap/chapter ')][vdv:renders-topic(.)]
+                                                 [. &lt;&lt; $self or . is $self])"
+                  format="1"/>
+    </xsl:if>
+  </xsl:template>
+
+  <xsl:template match="*[contains(@class, ' bookmap/appendix ')]" mode="topicTitleNumber">
+    <xsl:number format="A" count="*[contains(@class, ' bookmap/appendix ')][vdv:renders-topic(.)]"/>
+  </xsl:template>
+
+  <xsl:template match="*[contains(@class, ' bookmap/part ')]" mode="topicTitleNumber">
+    <xsl:number format="I" count="*[contains(@class, ' bookmap/part ')][vdv:renders-topic(.)]"/>
   </xsl:template>
 
   <!--
