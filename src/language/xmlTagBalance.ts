@@ -165,8 +165,15 @@ export type WrapSelectionCheck =
  * versa). A selection lying wholly inside one comment or CDATA section is
  * opaque text and always fine.
  */
-export function validateWrapSelection(fullText: string, start: number, end: number): WrapSelectionCheck {
-  const { tokens } = scanMarkup(fullText);
+export function validateWrapSelection(
+  fullText: string,
+  start: number,
+  end: number,
+  // Pass one scan when checking several selections of the same text, so the
+  // whole document is scanned once instead of once per selection.
+  scan: MarkupScan = scanMarkup(fullText),
+): WrapSelectionCheck {
+  const { tokens } = scan;
   for (const t of tokens) {
     const startInside = t.start < start && start < t.end;
     const endInside = t.start < end && end < t.end;

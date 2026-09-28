@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { scanMarkup, validateWrapSelection } from '../../language/xmlTagBalance';
+import { MarkupScan, scanMarkup, validateWrapSelection } from '../../language/xmlTagBalance';
 
 const kinds = (t: string) => scanMarkup(t).issues.map((i) => `${i.kind}:${i.tagName ?? ''}`);
 
@@ -97,5 +97,25 @@ describe('validateWrapSelection', () => {
     const d = '<p><!-- a <b> c --></p>';
     const s = d.indexOf('a <b>');
     assert.deepStrictEqual(validateWrapSelection(d, s, s + 5), { ok: true });
+  });
+});
+
+describe('validateWrapSelection with a precomputed scan', () => {
+  // Wrapping N selections must not rescan the whole document N times: the
+  // command scans once and hands the result to every call.
+  it('should use the supplied scan rather than rescanning the text', () => {
+    const text = 'plain text, no markup at all';
+    // A fabricated token straddling offset 5: only honoured if the scan
+    // argument is used; a rescan of `text` would find no tokens and say ok.
+    const fake: MarkupScan = { tokens: [{ kind: 'start', start: 3, end: 9, name: 'x' }], issues: [] };
+    assert.deepStrictEqual(validateWrapSelection(text, 5, 8, fake), { ok: false, reason: 'cuts-markup' });
+  });
+
+  it('should give the same answer as the default rescan when given the real scan', () => {
+    const text = '<p>a <b>b</b> c</p>';
+    const scan = scanMarkup(text);
+    for (const [a, b] of [[3, 13], [3, 8], [0, text.length], [5, 6]]) {
+      assert.deepStrictEqual(validateWrapSelection(text, a, b, scan), validateWrapSelection(text, a, b));
+    }
   });
 });

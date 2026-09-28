@@ -15,7 +15,7 @@ import {
   wrapTextWithTag,
   WrapTagCandidate,
 } from './wrapSelectionTags';
-import { validateWrapSelection } from '../language/xmlTagBalance';
+import { scanMarkup, validateWrapSelection } from '../language/xmlTagBalance';
 
 const MRU_KEY_TOPIC = 'ditaViewer.wrapTagMru.topic';
 const MRU_KEY_MAP = 'ditaViewer.wrapTagMru.map';
@@ -49,8 +49,10 @@ async function pickTag(candidates: WrapTagCandidate[]): Promise<string | undefin
     qp.onDidAccept(() => {
       const picked = qp.selectedItems[0];
       if (!picked) return; // nothing matches: keep the picker open
-      qp.hide();
+      // Resolve first: hide() raises onDidHide, whose handler resolves
+      // undefined, and the first resolve wins.
       resolve(picked.tag);
+      qp.hide();
     });
     qp.onDidHide(() => {
       qp.dispose();
@@ -74,11 +76,13 @@ export function registerWrapSelectionCommand(context: vscode.ExtensionContext): 
         }
 
         const fullText = editor.document.getText();
+        const scan = scanMarkup(fullText);
         for (const selection of selections) {
           const check = validateWrapSelection(
             fullText,
             editor.document.offsetAt(selection.start),
             editor.document.offsetAt(selection.end),
+            scan,
           );
           if (check.ok) continue;
           const message = check.reason === 'cuts-markup'
@@ -95,8 +99,13 @@ export function registerWrapSelectionCommand(context: vscode.ExtensionContext): 
         const mru = context.globalState.get<string[]>(mruKey, []);
         const candidates = orderCandidatesWithMru(getWrapTagCandidates(isMap), mru);
 
+        const versionBeforePick = editor.document.version;
         const tag = await pickTag(candidates);
         if (!tag) return;
+        // The selections (and the validation above) describe the text as it
+        // was when the picker opened; if it changed meanwhile, wrapping those
+        // ranges would wrap the wrong text.
+        if (editor.document.version !== versionBeforePick) return;
 
         // Offsets are taken from the pre-edit document; the payload ranges
         // are then converted back to positions in the post-edit one.
@@ -105,12 +114,13 @@ export function registerWrapSelectionCommand(context: vscode.ExtensionContext): 
           end: editor.document.offsetAt(s.end),
         }));
 
-        await editor.edit((editBuilder) => {
+        const applied = await editor.edit((editBuilder) => {
           for (const selection of selections) {
             const text = editor.document.getText(selection);
             editBuilder.replace(selection, wrapTextWithTag(text, tag));
           }
         });
+        if (!applied) return; // rejected (e.g. the editor closed): no re-select, no MRU bump
 
         const doc = editor.document;
         editor.selections = innerRangesAfterWrap(before, tag).map((r, i) => {
