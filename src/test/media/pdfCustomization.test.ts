@@ -238,3 +238,26 @@ describe('media/pdf-customization: backmatter booklist page numbers', () => {
       'must keep the default __force__page__count and page-sequence.frontmatter members');
   });
 });
+
+describe('media/pdf-customization: image fitting', () => {
+  const xsl = readFileSync(join(customizationRoot, 'fo', 'xsl', 'custom.xsl'), 'utf-8');
+  const code = xsl.replace(/<!--[\s\S]*?-->/g, '');
+
+  it('wraps the stock placeImage template rather than copying it', () => {
+    assert.ok(/<xsl:template\s+match="\*\[contains\(@class,\s*' topic\/image '\)\]"\s+mode="placeImage"\s+priority="10"/.test(code),
+      'expected a higher-priority placeImage override for topic/image');
+    assert.ok(/<xsl:next-match>/.test(code), 'must delegate to the toolkit template via xsl:next-match');
+  });
+
+  it('reads the measured sizes from the staged image-sizes.xml next to the customization folder', () => {
+    assert.ok(/customizationDir\.url/.test(code), 'must locate the sidecar through customizationDir.url');
+    assert.ok(/image-sizes\.xml/.test(code), 'sidecar file name must match IMAGE_SIZES_FILE');
+    assert.ok(/doc-available\(/.test(code), 'a missing sidecar must degrade to the old behaviour, not fail the transform');
+  });
+
+  it('applies @scale first, narrows unsized portrait images, then shrinks what still overflows', () => {
+    assert.ok(/\$pct/.test(code) && /@scale/.test(code), 'must honour @scale (own or inherited)');
+    assert.ok(/\$h0 gt 1\.2 \* \$w0/.test(code), 'portrait images need their own rule');
+    assert.ok(/min\(\(1,\s*\$col div \$w1,\s*\$maxH div \$h1\)\)/.test(code), 'final step must cap at column width and page height, never enlarge');
+  });
+});

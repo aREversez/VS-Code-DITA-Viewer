@@ -106,6 +106,179 @@
   </xsl:template>
 
   <!--
+    Images: honour @scale first, then keep whatever still overflows on the page.
+
+    Before this, FOP only shrank an image to the column WIDTH
+    (attrs/custom.xsl "image"), and a @scale (or @width) then replaced even that
+    with a fixed size, so a scaled-up or very wide image still ran off the page
+    and a long portrait screenshot was stretched to the full column and ran
+    onto (and past) the next page, with its text drawn far too large.
+
+    FOP cannot fit a height without a fixed viewport, and this stylesheet cannot
+    read a bitmap header itself (Saxon-HE: unparsed-text rejects the control bytes
+    every PNG starts with; no Java extensions), so the extension measures the
+    images up front and stages them as image-sizes.xml beside this folder (see
+    src/editor/pdfImageSizes.ts; the folder's location arrives as the
+    customizationDir.url parameter). An image that is not in that file - or a
+    run without the file - keeps the previous width-only behaviour.
+
+    Sizing, in points, for an image found in the file:
+      1. natural size = pixels at the file's own density (72 dpi if it records
+         none, which is what FOP itself assumes);
+      2. an explicit @width / @height wins, else @scale% (own or inherited, exactly
+         as org.dita.pdf2 reads it), else the natural size;
+      3. a portrait image (taller than 1.2 x its width) with neither of those
+         is capped at 60% of the column: a phone-shaped screenshot at full
+         column width is a page tall with oversized text, and this is the one
+         case where "as large as fits" is the wrong default;
+      4. whatever is still wider than the column, or taller than 80% of the
+         body height (room for the figure title and the text around it), is
+         shrunk uniformly until it fits. Images are never enlarged past step 2.
+
+    Not touched: images inside table cells (the cell width is unknown here, the
+    old width-only fit still applies) and anything the file has no entry for.
+    The 60% / 80% constants are the two tuning knobs.
+
+    Implemented as a wrapper around the stock placeImage template
+    (xsl:next-match), then a rewrite of the size attributes on the one
+    fo:external-graphic it produced, so nothing else in that template (alignment,
+    alt text, ditaval flags) is copied here or can drift from the toolkit.
+  -->
+  <xsl:variable name="vdv:image-sizes-uri" as="xs:string?"
+      select="if (string($customizationDir.url) != '')
+              then replace($customizationDir.url, '/+$', '') || '/image-sizes.xml'
+              else ()"/>
+  <xsl:variable name="vdv:image-sizes" as="document-node()?"
+      select="if (exists($vdv:image-sizes-uri) and doc-available($vdv:image-sizes-uri))
+              then doc($vdv:image-sizes-uri) else ()"/>
+  <xsl:key name="vdv-image-size" match="image" use="@key"/>
+
+  <xsl:variable name="vdv:portrait-width-ratio" as="xs:double" select="0.6"/>
+  <xsl:variable name="vdv:max-height-ratio" as="xs:double" select="0.8"/>
+  <xsl:variable name="vdv:list-indent-pt" as="xs:double" select="24"/>
+
+  <!-- A length as points; a bare number is a pixel (FOP: 96 ppi), as org.dita.pdf2 treats @width/@height. -->
+  <xsl:function name="vdv:pt" as="xs:double?">
+    <xsl:param name="length" as="xs:string?"/>
+    <xsl:variable name="v" select="normalize-space($length)"/>
+    <xsl:if test="matches($v, '^-?[0-9]*\.?[0-9]+\s*(mm|cm|in|pt|pc|px)?$')">
+      <xsl:variable name="n" select="xs:double(replace($v, '^(-?[0-9]*\.?[0-9]+).*$', '$1'))"/>
+      <xsl:variable name="unit" select="replace($v, '^-?[0-9]*\.?[0-9]+\s*', '')"/>
+      <xsl:sequence select="$n * (if ($unit = 'mm') then 72 div 25.4
+                                  else if ($unit = 'cm') then 72 div 2.54
+                                  else if ($unit = 'in') then 72
+                                  else if ($unit = 'pc') then 12
+                                  else if ($unit = 'pt') then 1
+                                  else 0.75)"/>
+    </xsl:if>
+  </xsl:function>
+
+  <!-- Same recipe as imageSizeKey() in src/editor/pdfImageSizes.ts. -->
+  <xsl:function name="vdv:image-key" as="xs:string">
+    <xsl:param name="url" as="xs:string"/>
+    <xsl:variable name="path" select="replace(replace(replace($url, '\\', '/'), '^file:', '', 'i'), '^/+', '')"/>
+    <xsl:variable name="segments" as="xs:string*"
+        select="fold-left(tokenize($path, '/')[not(. = ('', '.'))], (),
+                          function($acc as xs:string*, $s as xs:string) as xs:string* {
+                            if ($s = '..') then $acc[position() lt last()] else ($acc, $s)
+                          })"/>
+    <xsl:sequence select="lower-case(iri-to-uri(string-join($segments, '/')))"/>
+  </xsl:function>
+
+  <xsl:mode name="vdv:fit-image" on-no-match="shallow-copy"/>
+
+  <xsl:template match="*[contains(@class, ' topic/image ')]" mode="placeImage" priority="10">
+    <xsl:param name="imageAlign"/>
+    <xsl:param name="href"/>
+    <xsl:param name="height" as="xs:string?"/>
+    <xsl:param name="width" as="xs:string?"/>
+    <xsl:variable name="scale" as="xs:string?"
+        select="(@scale, ancestor::*[@scale][1]/@scale)[1]/string()"/>
+    <xsl:variable name="rendered" as="node()*">
+      <xsl:next-match>
+        <xsl:with-param name="imageAlign" select="$imageAlign"/>
+        <xsl:with-param name="href" select="$href"/>
+        <xsl:with-param name="height" select="$height"/>
+        <xsl:with-param name="width" select="$width"/>
+      </xsl:next-match>
+    </xsl:variable>
+
+    <xsl:variable name="fit" as="attribute()*">
+      <xsl:if test="exists($vdv:image-sizes)
+                    and empty(ancestor::*[contains(@class, ' topic/entry ') or contains(@class, ' topic/stentry ')])">
+        <xsl:variable name="m" as="element()?"
+            select="key('vdv-image-size', vdv:image-key(string($href)), $vdv:image-sizes)[1]"/>
+        <xsl:if test="exists($m) and xs:double($m/@width) gt 0 and xs:double($m/@height) gt 0">
+          <xsl:variable name="dpi" select="xs:double($m/@dpi)"/>
+          <xsl:variable name="w0" select="xs:double($m/@width) * 72 div $dpi"/>
+          <xsl:variable name="h0" select="xs:double($m/@height) * 72 div $dpi"/>
+          <xsl:variable name="reqW" select="vdv:pt($width)"/>
+          <xsl:variable name="reqH" select="vdv:pt($height)"/>
+          <xsl:variable name="pct" as="xs:double?"
+              select="if (matches($scale, '^\s*[0-9]*\.?[0-9]+\s*$') and xs:double($scale) gt 0)
+                      then xs:double($scale) div 100 else ()"/>
+          <xsl:variable name="sized" as="xs:boolean"
+              select="exists($reqW) or exists($reqH) or exists($pct)"/>
+          <!-- step 2: the size the author asked for -->
+          <xsl:variable name="want" as="xs:double+"
+              select="if (exists($reqW) and exists($reqH)) then ($reqW, $reqH)
+                      else if (exists($reqW)) then ($reqW, $reqW * $h0 div $w0)
+                      else if (exists($reqH)) then ($reqH * $w0 div $h0, $reqH)
+                      else if (exists($pct)) then ($w0 * $pct, $h0 * $pct)
+                      else ($w0, $h0)"/>
+          <!-- step 3: an unsized portrait image is narrowed -->
+          <xsl:variable name="bodyW" as="xs:double"
+              select="vdv:pt($page-width) - vdv:pt($page-margin-inside) - vdv:pt($page-margin-outside)"/>
+          <!-- A top-level bookmap topic's own body (before its child topics) is set in the
+               right-hand 65% cell of the "in this chapter" table (createMiniToc: 10pt padding
+               + 1pt rule); everything else sits in the body column indented by side-col-width. -->
+          <xsl:variable name="topLevel" as="element()?"
+              select="if (count(ancestor::*[contains(@class, ' topic/topic ')]) = 1)
+                      then key('map-id', ancestor::*[contains(@class, ' topic/topic ')][1]/@id)[1] else ()"/>
+          <xsl:variable name="inMiniToc" as="xs:boolean"
+              select="exists($topLevel[contains(@class, ' bookmap/chapter ') or contains(@class, ' bookmap/appendix ')
+                                       or contains(@class, ' bookmap/part ') or contains(@class, ' bookmap/preface ')])"/>
+          <xsl:variable name="col" as="xs:double"
+              select="(if ($inMiniToc) then $bodyW * 0.65 - 11 else $bodyW - vdv:pt($side-col-width))
+                      - $vdv:list-indent-pt * count(ancestor::*[contains(@class, ' topic/li ')
+                                                                or contains(@class, ' topic/sli ')
+                                                                or contains(@class, ' topic/dd ')])"/>
+          <xsl:variable name="k1" as="xs:double"
+              select="if (not($sized) and $h0 gt 1.2 * $w0)
+                      then min((1, $col * $vdv:portrait-width-ratio div $want[1])) else 1"/>
+          <xsl:variable name="w1" select="$want[1] * $k1"/>
+          <xsl:variable name="h1" select="$want[2] * $k1"/>
+          <!-- step 4: whatever still overflows the column or the page is shrunk -->
+          <xsl:variable name="maxH" as="xs:double"
+              select="(vdv:pt($page-height) - vdv:pt($page-margin-top) - vdv:pt($page-margin-bottom))
+                      * $vdv:max-height-ratio"/>
+          <xsl:variable name="k2" as="xs:double"
+              select="min((1, $col div $w1, $maxH div $h1))"/>
+          <xsl:if test="$col gt 0 and $maxH gt 0 and $w1 * $k2 ge 1 and $h1 * $k2 ge 1">
+            <xsl:attribute name="width" select="concat(format-number($w1 * $k2, '0.##'), 'pt')"/>
+            <xsl:attribute name="height" select="concat(format-number($h1 * $k2, '0.##'), 'pt')"/>
+            <xsl:attribute name="content-width" select="'scale-to-fit'"/>
+            <xsl:attribute name="content-height" select="'scale-to-fit'"/>
+            <xsl:attribute name="scaling" select="'uniform'"/>
+          </xsl:if>
+        </xsl:if>
+      </xsl:if>
+    </xsl:variable>
+    <xsl:apply-templates select="$rendered" mode="vdv:fit-image">
+      <xsl:with-param name="fit" select="$fit" tunnel="yes"/>
+    </xsl:apply-templates>
+  </xsl:template>
+
+  <xsl:template match="fo:external-graphic" mode="vdv:fit-image">
+    <xsl:param name="fit" as="attribute()*" tunnel="yes"/>
+    <xsl:copy>
+      <xsl:copy-of select="@* except @*[node-name(.) = $fit/node-name(.)]"/>
+      <xsl:copy-of select="$fit"/>
+      <xsl:apply-templates select="node()" mode="#current"/>
+    </xsl:copy>
+  </xsl:template>
+
+  <!--
     Still open here (deliberately, pending a real render): a long, space-free
     <codeph> string can push past the column edge because XSL-FO only breaks
     lines at existing break opportunities. A fix would override the codeph

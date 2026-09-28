@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
 import { spawn } from 'child_process';
-import { cpSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs';
+import { cpSync, existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
 import { registerSourceOverlay } from './editor/sourceOverlayFeed';
+import { stagePdfCustomization } from './editor/pdfImageSizes';
 import { registerSourceEditorTracker } from './editor/sourceEditorOpener';
 import { DitaViewerProvider, findDitamapFiles, getLastRenderedHtmlForTesting, clearAllCaches, buildKeyMap } from './editor/DitaViewerProvider';
 import { MapViewerProvider, getLastRenderedMapHtmlForTesting, clearMapCache } from './editor/MapViewerProvider';
@@ -460,7 +461,20 @@ export function activate(context: vscode.ExtensionContext) {
       // 9. Run transformation. The pdf transtype gets the bundled
       // media/pdf-customization/ folder via --args.customization.dir (see
       // buildDitaOtArgs for why only pdf picks this up).
-      const pdfCustomizationDir = join(extensionPath, 'media', 'pdf-customization');
+      let pdfCustomizationDir = join(extensionPath, 'media', 'pdf-customization');
+      if (transtype === 'pdf') {
+        // The PDF stylesheet fits images from their measured pixel sizes, which
+        // XSLT cannot read itself: stage a temp copy of the customization folder
+        // with an image-sizes.xml beside it (see pdfImageSizes.ts). Scan the
+        // workspace folder that holds the map so images referenced via ../ are
+        // covered; fall back to the pristine folder if staging fails.
+        const imageRoot = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(mapDir))?.uri.fsPath ?? mapDir;
+        const staged = stagePdfCustomization(pdfCustomizationDir, imageRoot);
+        if (staged) {
+          pdfCustomizationDir = staged;
+          disposables.push({ dispose: () => rmSync(staged, { recursive: true, force: true }) });
+        }
+      }
       const args = buildDitaOtArgs({ mapPath, transtype, outputDir, cssArg, ditavalFile, pdfCustomizationDir });
       const outputChannel = transformOutputChannel;
       outputChannel.clear();
