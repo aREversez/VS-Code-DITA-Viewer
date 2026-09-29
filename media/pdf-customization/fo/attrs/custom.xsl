@@ -36,6 +36,35 @@
   </xsl:attribute-set>
 
   <!--
+    Fix: Latin text alternated between serif and sans-serif, which looked
+    messy next to the (serif) CJK glyphs.
+
+    org.dita.pdf2 sets the page root (__fo__root) to `serif`, but two of its
+    attribute-sets hard-code `sans-serif`, and font-family inherits, so
+    everything under them switches typeface:
+      - `common.title` (cfg/fo/attrs/commons-attr.xsl): the base of every
+        title (topic, section, example, table, figure, front-matter, running
+        head/foot ...). Its only member is the font-family, so the override is
+        just that one attribute.
+      - `__toc__mini` (cfg/fo/attrs/toc-attr.xsl): the in-topic "mini TOC"
+        (a heading block and its link list). An override replaces the set
+        wholesale, so its two other members (font-size, end-indent) are
+        repeated from the default.
+    Both now say `serif`, the same logical font as the root, so the whole
+    document resolves through the one Serif entry of font-mappings.xml.
+    codeph and the other code/UI/markup sets stay monospace on purpose.
+  -->
+  <xsl:attribute-set name="common.title">
+    <xsl:attribute name="font-family">serif</xsl:attribute>
+  </xsl:attribute-set>
+
+  <xsl:attribute-set name="__toc__mini">
+    <xsl:attribute name="font-size">10.5pt</xsl:attribute>
+    <xsl:attribute name="font-family">serif</xsl:attribute>
+    <xsl:attribute name="end-indent">5pt</xsl:attribute>
+  </xsl:attribute-set>
+
+  <!--
     Fix: <codeph> was plain monospace with no visual separation from the
     surrounding sentence. The default (org.dita.pdf2/cfg/fo/attrs/pr-domain-attr.xsl)
     sets only font-family: monospace, which has to be repeated here since an

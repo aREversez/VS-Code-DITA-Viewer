@@ -118,6 +118,34 @@ describe('media/pdf-customization: fo/attrs/custom.xsl attribute-set overrides',
     assert.ok(/background-color">/.test(body), 'codeph must set a background-color');
   });
 
+  it('sets every title and the mini-TOC in serif, matching the serif body text', () => {
+    // org.dita.pdf2 sets the page root to `serif`, but its `common.title` set
+    // (topic/section/table/figure titles, running headers, front matter, ...)
+    // and `__toc__mini` (the in-topic "mini TOC") to `sans-serif`. The PDF then
+    // alternates serif body / sans-serif heading, and a Latin word in a title
+    // no longer matches the (serif) CJK glyphs around it. Overrides replace the
+    // set wholesale, so `__toc__mini` must also repeat its two other members.
+    const title = attributeSetBody('common.title');
+    assert.ok(title !== undefined, 'expected a `common.title` attribute-set override');
+    assert.ok(/font-family">\s*serif\s*</.test(title), 'common.title must set font-family="serif"');
+    assert.ok(!/sans-serif/.test(title), 'common.title must not fall back to sans-serif');
+
+    const mini = attributeSetBody('__toc__mini');
+    assert.ok(mini !== undefined, 'expected a `__toc__mini` attribute-set override');
+    assert.ok(/font-family">\s*serif\s*</.test(mini), '__toc__mini must set font-family="serif"');
+    assert.ok(!/sans-serif/.test(mini), '__toc__mini must not fall back to sans-serif');
+    assert.ok(/font-size">\s*10\.5pt\s*</.test(mini), '__toc__mini must keep its default font-size');
+    assert.ok(/end-indent">\s*5pt\s*</.test(mini), '__toc__mini must keep its default end-indent');
+  });
+
+  it('does not reintroduce sans-serif anywhere in the customization', () => {
+    // Catches a future attribute-set copied from the defaults with its
+    // sans-serif intact. Comments are stripped so this file's own explanation
+    // of the problem does not trip it.
+    const withoutComments = attrs.replace(/<!--[\s\S]*?-->/g, '');
+    assert.ok(!/sans-serif/.test(withoutComments), 'no attribute-set in custom.xsl may use sans-serif');
+  });
+
   it('suppresses the plain-map blank page the body reset would otherwise force, without touching bookmaps', () => {
     // The startPageNumbering reset makes the body start on an odd page, which
     // would drive a plain map's TOC to pad itself with a blank page (recto
