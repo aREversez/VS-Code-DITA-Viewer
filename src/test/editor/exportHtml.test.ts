@@ -87,6 +87,22 @@ describe('makeDataUriInliner', () => {
     const result = inliner('images/logo.gif');
     assert.ok(result.startsWith('data:image/gif;base64,'));
   });
+
+  it('should inline a BMP file with the correct MIME type, not fall back to octet-stream (KILL: pre-fix IMAGE_MIME had no bmp entry, so a valid image rendered as a broken-image icon in the exported HTML)', () => {
+    const bmpPath = join(tmpDir, 'scan.bmp');
+    writeFileSync(bmpPath, Buffer.from([0x42, 0x4d])); // 'BM' header
+    const inliner = makeDataUriInliner(tmpDir);
+    const result = inliner('scan.bmp');
+    assert.ok(result.startsWith('data:image/bmp;base64,'), `got: ${result}`);
+  });
+
+  it('should inline TIF/TIFF files with the correct MIME type', () => {
+    writeFileSync(join(tmpDir, 'a.tif'), Buffer.from([0x49, 0x49, 0x2a, 0x00]));
+    writeFileSync(join(tmpDir, 'b.tiff'), Buffer.from([0x49, 0x49, 0x2a, 0x00]));
+    const inliner = makeDataUriInliner(tmpDir);
+    assert.ok(inliner('a.tif').startsWith('data:image/tiff;base64,'));
+    assert.ok(inliner('b.tiff').startsWith('data:image/tiff;base64,'));
+  });
 });
 
 describe('buildBookHeading', () => {

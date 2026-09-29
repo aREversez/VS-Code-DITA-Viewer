@@ -1,7 +1,8 @@
 import { readFileSync } from 'fs';
-import { basename, extname } from 'path';
+import { dirname, relative, resolve } from 'path';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { collectMapEntries } from '../render/mapTypeMap';
+import { expandDitamapRefs, decodeHrefPart } from './ditaRenderUtils';
 
 export interface NavManifestEntry {
   file: string;
@@ -25,16 +26,44 @@ export interface SiteChromeFeatures {
   siteShell?: boolean;
 }
 
+function toPosix(p: string): string {
+  return p.replace(/\\/g, '/');
+}
+
+/** Mirrors DITA-OT's own output naming for a topic reached from `docDir`:
+ *  the last path segment gets a `.html` extension, with the rest of the
+ *  relative path preserved -- matching htmlOutPath in templateExport.ts, so
+ *  a manifest entry always names the file DITA-OT actually wrote, not a
+ *  flattened basename that collides across sibling folders. */
+function navHtmlOutPath(fromMapRelPosix: string): string {
+  const stripped = fromMapRelPosix.replace(/^(\.\.\/)+/, '');
+  const slash = stripped.lastIndexOf('/');
+  const dot = stripped.lastIndexOf('.');
+  return dot > slash ? stripped.slice(0, dot) + '.html' : stripped + '.html';
+}
+
 export function buildNavManifest(mapPath: string): NavManifestEntry[] {
+  const docDir = dirname(mapPath);
   const raw = readFileSync(mapPath, 'utf-8');
   const doc = parseDitamap(preprocessEntities(raw));
+  // Submap topicrefs must be inlined before collectMapEntries walks the
+  // tree -- collectMapEntries treats a .ditamap href as a transparent
+  // wrapper around already-spliced children (see its own isDitamapRef
+  // branch) and never emits an entry for it, so without this step every
+  // topic reached only through a nested submap silently never reaches the
+  // nav manifest at all (no prev/next on those pages).
+  expandDitamapRefs(doc.root, docDir);
   const entries = collectMapEntries(doc.root);
   return entries
-    .filter((e) => !e.resourceOnly && e.href && e.href.toLowerCase().endsWith('.dita'))
-    .map((e) => ({
-      file: basename(e.href!, extname(e.href!)) + '.html',
-      title: e.displayName,
-    }));
+    .filter((e) => !e.resourceOnly && e.href && !e.href.split('#')[0].toLowerCase().endsWith('.ditamap'))
+    .map((e) => {
+      const absPath = resolve(docDir, decodeHrefPart(e.href!.split('#')[0]));
+      const fromMap = toPosix(relative(docDir, absPath));
+      return {
+        file: navHtmlOutPath(fromMap),
+        title: e.displayName,
+      };
+    });
 }
 
 /**
@@ -158,12 +187,25 @@ export function resolveDitaOtExecutable(input: {
   pathEnv?: string;
   platform: NodeJS.Platform;
   fileExists: (p: string) => boolean;
+  /**
+   * Distinguishes a directory from a file at a path fileExists already
+   * reported as existing. fs.existsSync() (the usual fileExists
+   * implementation) is true for directories too, so without this, a
+   * configuredPath pointing at the DITA-OT *installation directory* --
+   * exactly what the ditaOtPath setting's own description tells users to
+   * provide -- would be treated as the executable itself instead of
+   * falling through to append bin/dita[.bat], and spawn() would then be
+   * handed a directory and fail. Optional (defaults to "never a
+   * directory") only so existing narrow test doubles that already model
+   * an exact bin/dita path don't need updating.
+   */
+  isDirectory?: (p: string) => boolean;
 }): DetectionResult {
   // Priority 1: configured path
   if (input.configuredPath) {
     const trimmed = input.configuredPath.trim();
     // If the configured path itself looks like a file that exists, use it directly
-    if (input.fileExists(trimmed)) {
+    if (input.fileExists(trimmed) && !(input.isDirectory?.(trimmed) ?? false)) {
       return { found: true, location: { executablePath: trimmed, source: 'setting' } };
     }
     // Otherwise assume it's an installation directory: append bin/{dita|dita.bat}
@@ -277,13 +319,47 @@ export function buildDitaOtSpawnSpec(
   };
 }
 
+/**
+ * Splices the nav manifest and feature-flag JSON into the shared
+ * site-chrome.js template (injectSiteChrome/injectTemplateChrome in
+ * extension.ts). Function replacers, not strings: String.replace
+ * interprets $&, $$, $`, $', $1-$99 in a *string* replacement even when
+ * the search value isn't a regex, so a topic/map title containing e.g.
+ * "$&" would splice the matched placeholder text back into the output and
+ * corrupt this file's syntax -- breaking prev/next, sidebar and dark mode
+ * on every page, since one chrome.js serves the whole exported site.
+ */
+export function buildSiteChromeScript(jsTemplate: string, manifest: unknown, features: unknown): string {
+  return jsTemplate
+    .replace('/* __DV_MANIFEST__ */', () => JSON.stringify(manifest))
+    .replace('/* __DV_FEATURES__ */', () => JSON.stringify(features));
+}
+
 export type LogLevel = 'error' | 'warn' | 'info';
 
-const ERROR_RE = /^.*?\[ERROR\]/i;
+const ERROR_RE = /^.*?\[(ERROR|FATAL)\]/i;
 const WARN_RE = /^.*?\[WARN\]/i;
+// DITA-OT's toolchain doesn't only report failures through its own
+// [ERROR]/[FATAL] log4j markers: Ant's own "BUILD FAILED" banner, a raw
+// JVM launch failure ("Error: Could not find or load main class ..." --
+// thrown before DITA-OT's own logger is even running, e.g. a bad
+// JAVA_HOME), and an Ant task echoing its own failure (FOP's [fop]/[java]
+// lines don't use the [ERROR] convention at all) would otherwise all be
+// silently counted as "info" -- undercounting the error summary shown to
+// the user on a run that still exits 0 (e.g. continue-on-error).
+const BUILD_FAILED_RE = /^\s*BUILD FAILED\b/;
+const JVM_LAUNCH_ERROR_RE = /^\s*Error:\s/;
+const ANT_TASK_ERROR_RE = /^\s*\[[\w.:-]+\]\s*Error\b/;
 
 export function classifyLogLine(line: string): LogLevel {
-  if (ERROR_RE.test(line)) return 'error';
+  if (
+    ERROR_RE.test(line) ||
+    BUILD_FAILED_RE.test(line) ||
+    JVM_LAUNCH_ERROR_RE.test(line) ||
+    ANT_TASK_ERROR_RE.test(line)
+  ) {
+    return 'error';
+  }
   if (WARN_RE.test(line)) return 'warn';
   return 'info';
 }
@@ -295,6 +371,14 @@ export interface LineBuffer {
   flush(): string[];
 }
 
+/** Strips one trailing \r, so a CRLF-emitting process (DITA-OT/Java on
+ *  Windows) yields the same line text as an LF-only one -- callers that do
+ *  more than classifyLogLine's loose substring match (an exact-match line
+ *  consumer, say) would otherwise silently see a dangling \r on Windows. */
+function stripTrailingCr(line: string): string {
+  return line.endsWith('\r') ? line.slice(0, -1) : line;
+}
+
 export function createLineBuffer(): LineBuffer {
   let buffer = '';
   return {
@@ -302,10 +386,10 @@ export function createLineBuffer(): LineBuffer {
       buffer += chunk;
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
-      return lines;
+      return lines.map(stripTrailingCr);
     },
     flush(): string[] {
-      const remaining = buffer;
+      const remaining = stripTrailingCr(buffer);
       buffer = '';
       return remaining ? [remaining] : [];
     },

@@ -43,6 +43,13 @@ const IMAGE_MIME: Record<string, string> = {
   gif: 'image/gif',
   svg: 'image/svg+xml',
   webp: 'image/webp',
+  bmp: 'image/bmp',
+  // Browsers don't render TIFF either, but the mislabeled fallback below
+  // (application/octet-stream) is strictly worse: at least this MIME type
+  // matches the actual bytes, and some browser extensions/PDF-export paths
+  // that consume the exported HTML do understand it.
+  tif: 'image/tiff',
+  tiff: 'image/tiff',
 };
 
 /** Returns a callback that inlines images as data URIs. */

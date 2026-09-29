@@ -622,7 +622,7 @@ describe('expandDitamapRefs', () => {
     assert.strictEqual(node.children.length, 0);
   });
 
-  it('should handle circular references via visited set', () => {
+  it('should handle circular references without infinite recursion (ancestry is scoped to the current chain, not a permanent global visited set)', () => {
     const node = makeEl('map/topicref', { href: 'a.ditamap' });
     const childA = makeEl('map/topicref', { href: 'b.ditamap' });
     node.children = [childA];
@@ -637,13 +637,43 @@ describe('expandDitamapRefs', () => {
       return '';
     };
 
-    const visited = new Set<string>();
-    expandDitamapRefs(node, '/dir', readFile, visited);
+    const ancestry = new Set<string>();
+    // Must terminate at all -- a self-referential a<->b chain would hang
+    // forever without the cycle guard.
+    expandDitamapRefs(node, '/dir', readFile, ancestry);
 
     // a.ditamap expands: adds b.ditamap ref from file
-    // Then b.ditamap ref is expanded: but a.ditamap is in visited set, so it stops
+    // Then b.ditamap ref is expanded: but a.ditamap is on the current
+    // ancestor chain, so that inner expansion stops there.
     assert.strictEqual(node.children.length, 2); // original child + expanded from a.ditamap
-    assert.strictEqual(visited.size, 2); // a.ditamap and b.ditamap
+    // Unlike the old global "visited forever" set, the ancestry is a
+    // proper DFS stack: every entry added on the way down is removed again
+    // on the way back up, so by the time the whole call returns it is
+    // empty again -- see the "reuse" test below for why that matters.
+    assert.strictEqual(ancestry.size, 0);
+  });
+
+  it('expands the SAME submap twice when it is legitimately referenced from two different topicrefs (KILL: pre-fix used one visited set for the whole tree, so a shared appendix/legal-notices submap pulled into two different chapters would only expand the first time and silently vanish from the second)', () => {
+    const ref1 = makeEl('map/topicref', { href: 'shared.ditamap', format: 'ditamap' });
+    const ref2 = makeEl('map/topicref', { href: 'shared.ditamap', format: 'ditamap' });
+    const book = makeEl('map/topicref', { href: 'chapter-container' }, [ref1, ref2]);
+
+    let reads = 0;
+    const readFile: FileReader = (path) => {
+      if (path.replace(/\\/g, '/').endsWith('shared.ditamap')) {
+        reads++;
+        return `<map><topicref href="shared-topic.dita"/></map>`;
+      }
+      throw new Error('unexpected: ' + path);
+    };
+
+    expandDitamapRefs(book, '/dir', readFile);
+
+    assert.strictEqual(reads, 2, 'shared.ditamap should be read and expanded once per reference, not deduped globally');
+    assert.strictEqual(ref1.children.length, 1);
+    assert.strictEqual(ref1.children[0].attributes?.href, 'shared-topic.dita');
+    assert.strictEqual(ref2.children.length, 1);
+    assert.strictEqual(ref2.children[0].attributes?.href, 'shared-topic.dita');
   });
 
   it('should still expand children when the node itself points at a visited map', () => {

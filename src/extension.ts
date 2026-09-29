@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { spawn } from 'child_process';
+import { StringDecoder } from 'string_decoder';
 import { cpSync, existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
 import { registerSourceOverlay } from './editor/sourceOverlayFeed';
@@ -12,6 +13,7 @@ import {
   buildDitaOtArgs,
   buildDitaOtSpawnSpec,
   buildNavManifest,
+  buildSiteChromeScript,
   buildThemeBootstrapScript,
   buildCollapseBootstrapScript,
   classifyLogLine,
@@ -266,6 +268,13 @@ export function activate(context: vscode.ExtensionContext) {
         pathEnv: process.env.PATH,
         platform: process.platform,
         fileExists: (p: string) => existsSync(p),
+        isDirectory: (p: string) => {
+          try {
+            return statSync(p).isDirectory();
+          } catch {
+            return false;
+          }
+        },
       });
 
       if (!result.found) {
@@ -533,13 +542,22 @@ export function activate(context: vscode.ExtensionContext) {
 
             let errorCount = 0;
             const lineBuffer = createLineBuffer();
+            // A pipe's 'data' chunks can split a multi-byte UTF-8 character
+            // across two Buffers; decoding each chunk with its own
+            // .toString() mangles that character into replacement bytes.
+            // DITA-OT's own log output (and the paths it processes)
+            // routinely contains non-ASCII text, so stdout and stderr each
+            // get one persistent StringDecoder that carries an incomplete
+            // trailing sequence over to the next chunk instead.
+            const stdoutDecoder = new StringDecoder('utf-8');
+            const stderrDecoder = new StringDecoder('utf-8');
 
             child.stdout?.on('data', (data: Buffer) => {
-              outputChannel.append(data.toString());
+              outputChannel.append(stdoutDecoder.write(data));
             });
 
             child.stderr?.on('data', (data: Buffer) => {
-              const text = data.toString();
+              const text = stderrDecoder.write(data);
               outputChannel.append(text);
               const lines = lineBuffer.processChunk(text);
               for (const line of lines) {
@@ -554,7 +572,16 @@ export function activate(context: vscode.ExtensionContext) {
 
             child.on('close', async (code) => {
               if (killTimer) clearTimeout(killTimer);
-              // Process any remaining partial line in the buffer
+              // Flush any byte sequence the decoders were still holding
+              // (a chunk boundary landing mid-character right at EOF), then
+              // process any remaining partial line in the buffer.
+              const trailingStdout = stdoutDecoder.end();
+              if (trailingStdout) outputChannel.append(trailingStdout);
+              const trailingStderr = stderrDecoder.end();
+              if (trailingStderr) {
+                outputChannel.append(trailingStderr);
+                lineBuffer.processChunk(trailingStderr);
+              }
               for (const line of lineBuffer.flush()) {
                 if (classifyLogLine(line) === 'error') errorCount++;
               }
@@ -726,9 +753,7 @@ function injectSiteChrome(
 ): void {
   const manifest = buildNavManifest(mapPath);
   const jsTemplate = readFileSync(join(extPath, 'media', 'transform-assets', 'site-chrome.js'), 'utf-8');
-  const js = jsTemplate
-    .replace('/* __DV_MANIFEST__ */', JSON.stringify(manifest))
-    .replace('/* __DV_FEATURES__ */', JSON.stringify(features));
+  const js = buildSiteChromeScript(jsTemplate, manifest, features);
   writeFileSync(join(outputDir, 'dita-viewer-chrome.js'), js, 'utf-8');
 
   const css = readFileSync(join(extPath, 'media', 'transform-assets', 'site-chrome.css'), 'utf-8');
@@ -851,9 +876,7 @@ function injectTemplateChrome(
   const pageKeys = new Set(nav.pages.map((p) => p.file));
 
   const jsTemplate = readFileSync(join(extPath, 'media', 'transform-assets', 'site-chrome.js'), 'utf-8');
-  const js = jsTemplate
-    .replace('/* __DV_MANIFEST__ */', JSON.stringify(nav.pages))
-    .replace('/* __DV_FEATURES__ */', JSON.stringify(features));
+  const js = buildSiteChromeScript(jsTemplate, nav.pages, features);
   writeFileSync(join(outputDir, 'dita-viewer-chrome.js'), js, 'utf-8');
 
   const mapTitle = mapTitleFromXml(readFileSync(mapPath, 'utf-8'), basename(mapPath), resolveKey);

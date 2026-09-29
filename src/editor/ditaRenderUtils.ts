@@ -909,18 +909,26 @@ export function expandDitamapRefs(
   node: DitaNode,
   docDir: string,
   readFile: FileReader = readSourceText,
-  visited?: Set<string>,
+  ancestry?: Set<string>,
 ): void {
   if (node.type !== 'element') return;
 
   if (isDitamapRef(node)) {
     const href = node.attributes!.href!;
     const targetPath = resolve(docDir, decodeHrefPart(href.split('#')[0]));
-    if (!visited) visited = new Set();
-    // Already-inlined maps are skipped, but this node's other children
-    // (and siblings via the loop below) must still be expanded.
-    if (!visited.has(targetPath)) {
-      visited.add(targetPath);
+    if (!ancestry) ancestry = new Set();
+    // Scoped to the current chain of ancestor submaps (added on the way
+    // down, removed on the way back up), NOT every submap expanded
+    // anywhere else in the tree -- this guards only against a map that
+    // (directly, or through a chain of further submaps) refers back to
+    // one of its own ancestors, which would otherwise recurse forever. It
+    // deliberately does NOT block the same submap being referenced twice
+    // from two different topicrefs elsewhere in the map, which is a
+    // legitimate, supported DITA pattern (e.g. a shared appendix or legal-
+    // notices submap pulled into two different chapters) -- each such
+    // reference gets its own independent expansion.
+    if (!ancestry.has(targetPath)) {
+      ancestry.add(targetPath);
       try {
         const content = readFile(targetPath, 'utf-8');
         const doc = parseDitamap(preprocessEntities(content));
@@ -938,11 +946,19 @@ export function expandDitamapRefs(
       } catch {
         // file not found or parse error — skip silently
       }
+      // Recurse into this node's now-spliced-in children (and any it
+      // already had) while targetPath is still on the ancestry chain, so a
+      // nested submap-of-a-submap is still cycle-checked correctly.
+      for (const child of node.children || []) {
+        expandDitamapRefs(child, docDir, readFile, ancestry);
+      }
+      ancestry.delete(targetPath);
+      return;
     }
   }
 
   for (const child of node.children || []) {
-    expandDitamapRefs(child, docDir, readFile, visited);
+    expandDitamapRefs(child, docDir, readFile, ancestry);
   }
 }
 
