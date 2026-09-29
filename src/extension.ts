@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { spawn } from 'child_process';
 import { StringDecoder } from 'string_decoder';
 import { cpSync, existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs';
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
+import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'path';
 import { registerSourceOverlay } from './editor/sourceOverlayFeed';
 import { stagePdfCustomization } from './editor/pdfImageSizes';
 import { registerSourceEditorTracker } from './editor/sourceEditorOpener';
@@ -331,20 +331,35 @@ export function activate(context: vscode.ExtensionContext) {
         (chosenUri && chosenUri.length > 0) ? chosenUri[0].fsPath : defaultDir,
       );
 
-      if (existsSync(outputDir)) {
+      // 4b. Prepare the output location according to the transtype's shape.
+      if (transtype === 'pdf') {
+        // PDF emits a single file, so an existing directory is fine: prompt
+        // only when that exact target file is already present (overwrite it?).
+        const pdfPath = join(outputDir, basename(mapPath, extname(mapPath)) + '.pdf');
+        if (existsSync(pdfPath)) {
+          const overwriteLabel = vscode.l10n.t('Overwrite');
+          const overwrite = await vscode.window.showWarningMessage(
+            vscode.l10n.t('The file already exists: {0}. Overwrite it?', pdfPath),
+            { modal: true },
+            overwriteLabel,
+          );
+          if (overwrite !== overwriteLabel) return;
+        }
+      } else if (existsSync(outputDir)) {
+        // Webhelp-style transforms (html5/xhtml/markdown) emit a whole site of
+        // interlinked files. Asking to "overwrite" would leave stale files from
+        // a previous export behind, so clear the directory first the way Oxygen
+        // does -- the result is exactly this run's output.
         try {
-          const entries = readdirSync(outputDir);
-          if (entries.length > 0) {
-            const overwriteLabel = vscode.l10n.t('Overwrite');
-            const overwrite = await vscode.window.showWarningMessage(
-              vscode.l10n.t('The output directory already exists and is not empty: {0}. Overwrite it?', outputDir),
-              { modal: true },
-              overwriteLabel,
-            );
-            if (overwrite !== overwriteLabel) return;
+          for (const entry of readdirSync(outputDir)) {
+            rmSync(join(outputDir, entry), { recursive: true, force: true });
           }
         } catch (e) {
-          console.warn(`Failed to check output directory contents: ${outputDir}`, e instanceof Error ? e.message : e);
+          const message = e instanceof Error ? e.message : String(e);
+          vscode.window.showErrorMessage(
+            vscode.l10n.t('Failed to clear the output directory: {0}. {1}', outputDir, message),
+          );
+          return;
         }
       }
 
