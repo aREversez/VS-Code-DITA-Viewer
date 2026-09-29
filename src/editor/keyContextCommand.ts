@@ -8,7 +8,7 @@
 import * as vscode from 'vscode';
 import { basename } from 'path';
 import { getKeyContextMap, setKeyContextMap, onKeyContextChanged, onKeyContextMissing } from './keyContext';
-import { buildContextPickItems, contextStatusText } from './keyContextPicker';
+import { buildContextPickItems, contextStatusText, shouldShowContextStatus } from './keyContextPicker';
 
 export const SELECT_KEY_CONTEXT_CMD = 'ditaViewer.selectContextMap';
 
@@ -17,10 +17,15 @@ const KEY_CONTEXT_STATE_KEY = 'ditaViewer.keyContextMap';
 
 const MAP_SEARCH_LIMIT = 500;
 
-function isDitaFile(uri: vscode.Uri | undefined): boolean {
-  if (!uri) return false;
-  const lower = uri.fsPath.toLowerCase();
-  return lower.endsWith('.dita') || lower.endsWith('.ditamap');
+/**
+ * The file in front of the user. A preview is a custom editor, not a text
+ * editor, so window.activeTextEditor is empty while one is active; the active
+ * tab's input covers both.
+ */
+function activeDitaFilePath(): string | undefined {
+  const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+  if (input instanceof vscode.TabInputText || input instanceof vscode.TabInputCustom) return input.uri.fsPath;
+  return vscode.window.activeTextEditor?.document.uri.fsPath;
 }
 
 export function registerKeyContextCommand(context: vscode.ExtensionContext): void {
@@ -36,9 +41,10 @@ export function registerKeyContextCommand(context: vscode.ExtensionContext): voi
     item.tooltip = current
       ? vscode.l10n.t('Key context map: {0}\nEvery keyref resolves against this map. Click to change.', current)
       : vscode.l10n.t('No key context map: keys come from the maps around each file. Click to choose one.');
-    // Only where it is relevant: a DITA file is in front of the user, or a
-    // context is in force (which then must stay visible and clearable).
-    if (current !== undefined || isDitaFile(vscode.window.activeTextEditor?.document.uri)) item.show();
+    // Only where it is relevant: a DITA file (source or preview) is in front
+    // of the user, or a context is in force (which then must stay visible and
+    // clearable).
+    if (shouldShowContextStatus(activeDitaFilePath(), current !== undefined)) item.show();
     else item.hide();
   };
   updateItem();
@@ -46,6 +52,8 @@ export function registerKeyContextCommand(context: vscode.ExtensionContext): voi
   context.subscriptions.push(
     item,
     vscode.window.onDidChangeActiveTextEditor(updateItem),
+    vscode.window.tabGroups.onDidChangeTabs(updateItem),
+    vscode.window.tabGroups.onDidChangeTabGroups(updateItem),
     onKeyContextChanged(() => {
       void context.workspaceState.update(KEY_CONTEXT_STATE_KEY, getKeyContextMap());
       updateItem();

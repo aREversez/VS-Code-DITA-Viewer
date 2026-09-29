@@ -45,3 +45,30 @@ describe('contextStatusText', () => {
     assert.strictEqual(contextStatusText(undefined, 'Keys: auto'), '$(key) Keys: auto');
   });
 });
+
+import { isDitaPath, shouldShowContextStatus } from '../../editor/keyContextPicker';
+
+describe('isDitaPath', () => {
+  it('accepts .dita and .ditamap in any case, and rejects other files and no file', () => {
+    assert.strictEqual(isDitaPath('/ws/a.dita'), true);
+    assert.strictEqual(isDitaPath('C:\\ws\\B.DITAMAP'), true);
+    assert.strictEqual(isDitaPath('/ws/a.xml'), false);
+    assert.strictEqual(isDitaPath(undefined), false);
+  });
+});
+
+describe('shouldShowContextStatus', () => {
+  it('shows while a DITA file (text editor or preview) is active', () => {
+    assert.strictEqual(shouldShowContextStatus('/ws/a.ditamap', false), true);
+  });
+
+  it('hides for other files when no context is set', () => {
+    assert.strictEqual(shouldShowContextStatus('/ws/a.md', false), false);
+    assert.strictEqual(shouldShowContextStatus(undefined, false), false);
+  });
+
+  it('stays visible whenever a context is set, so it can always be cleared', () => {
+    assert.strictEqual(shouldShowContextStatus('/ws/a.md', true), true);
+    assert.strictEqual(shouldShowContextStatus(undefined, true), true);
+  });
+});

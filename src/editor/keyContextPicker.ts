@@ -36,3 +36,15 @@ export function contextStatusText(current: string | undefined, autoLabel: string
 function baseName(path: string): string {
   return path.split(/[\\/]/).pop() || path;
 }
+
+export function isDitaPath(fsPath: string | undefined): boolean {
+  if (!fsPath) return false;
+  const lower = fsPath.toLowerCase();
+  return lower.endsWith('.dita') || lower.endsWith('.ditamap');
+}
+
+/** The status item is for DITA work: shown while a DITA file is in front of
+ *  the user, and always while a context is set so it can be seen and cleared. */
+export function shouldShowContextStatus(activePath: string | undefined, contextSet: boolean): boolean {
+  return contextSet || isDitaPath(activePath);
+}
