@@ -97,6 +97,45 @@ Content carrying DITA's `select-atts` group (`props`, `platform`, `product`, `au
 
 In map/book view, a `topicref`'s own profiling attributes (set directly in the ditamap source) cascade down to every descendant `topicref` that doesn't set its own value for the same attribute — a child's own value replaces, rather than merges with, an inherited one. This is a separate scope from a topic's own inline profiling: opening a `.dita` file directly only ever reads that file's own markup, regardless of what any ditamap referencing it says.
 
+### Context Menus
+
+Right-click entries the extension adds or powers, by where you right-click.
+
+**In a `.dita` / `.ditamap` source editor**
+
+| Entry | Applies to | Notes |
+| --- | --- | --- |
+| Open DITA Reading View | `.dita` | Top level, `Ctrl+K V` |
+| Open DITA Map Reading View | `.ditamap` | Top level, `Ctrl+K V` |
+| **DITA** submenu → Export as HTML… | both | |
+| **DITA** submenu → DITA-OT: Transform Map… | `.ditamap` | |
+| **DITA** submenu → Find Maps Referencing This File… | both | |
+| **DITA** submenu → Reveal in Map Navigator | both | |
+| **DITA** submenu → Open with Oxygen XML Editor | both | |
+| **DITA** submenu → Compare with Git Version… | `.dita` | |
+
+The editor menu also shows **Go to Definition**, **Go to References**, **Peek** and **Find All References**. These are VS Code's own entries; the extension supplies their results for `keyref`, `conref`, `href` and element ids (see [Features](#features)), so they appear wherever VS Code puts them rather than in the DITA submenu.
+
+**In VS Code's file Explorer** (right-click a `.dita` / `.ditamap` file)
+
+- Open with Oxygen XML Editor
+- Find Maps Referencing This File…
+- Reveal in Map Navigator
+- Export as HTML…
+
+**In the DITA Map sidebar tree** (right-click a row)
+
+- Open with Oxygen XML Editor, Reveal in Explorer, Export as HTML… — rows that point to a file on disk
+- Copy Title
+- Copy Href — rows with an `href` or `keys` (not the root row)
+- Find Unreferenced Resources… — root row only
+- Expand All / Collapse All
+
+**In the reading views (webview)**
+
+- Right-click a topic in the Book/Docsite sidebar: Open Map in Editor, Open source, Open with Oxygen XML Editor, Reveal in File Explorer, Find Unreferenced Resources…, Export as HTML…, Copy Title, Copy Href, Expand All, Collapse All.
+- Right-click an image (inline or in the enlarged view), in either the topic or the map reading view: Copy Image.
+
 ## Custom CSS
 
 You can customize the preview appearance with your own stylesheets. CSS files are loaded into the preview's **Theme dropdown** in the top-right toolbar, letting you switch between themes instantly without re-opening the preview.
