@@ -44,6 +44,23 @@ html.dark body {
   --dv-active-fg: #5aa6ff;
 }
 
+/* ── Content normalisation vs DITA-OT's own base css ──
+   DITA-OT ships a different commonltr.css per transtype, and the template
+   path keeps that file linked untouched. The xhtml transtype's copy
+   hard-codes `.sectiontitle { color: black }`; the html5 transtype's does
+   not. A template normally themes heading colour by setting #dita-content-root
+   and letting headings INHERIT it -- but an explicit `color` on the element
+   always beats inheritance, so an xhtml export renders every section
+   subheading black while the same template over html5 output looks correct.
+   Neutralise the hard-coded colour so section titles inherit the template's
+   content colour again. `#dita-content-root .sectiontitle` (id+class) outspecifies
+   commonltr's bare `.sectiontitle` (class); a template that genuinely wants a
+   custom section-title colour still wins, since every built-in template scopes
+   its rules under `body[data-template=…] #dita-content-root …` (higher
+   specificity). The legacy no-template path needs nothing here -- site-chrome.css
+   already sets `.title.sectiontitle { color: var(--dv-fg) }` explicitly. */
+#dita-content-root .sectiontitle { color: inherit; }
+
 /* ── On-page TOC (feature toggle: onPageToc) ──
    Only ever present for a template that does NOT ship its own outline
    column: extension.ts suppresses this feature whenever the template opts
