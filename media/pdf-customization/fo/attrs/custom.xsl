@@ -160,28 +160,30 @@
   </xsl:attribute-set>
 
   <!--
-    Fix: keep a chapter's content on the same page as its title.
+    Fix: drop the "in this chapter" mini-TOC from bookmap chapter openers.
 
-    Each bookmap chapter opens with a two-column "in this chapter" table
-    (createMiniToc: left column = the subtopic list, right column = the
-    chapter's own shortdesc/body), and the child topics flow *after* that table.
-    org.dita.pdf2 puts page-break-after="always" on the table
-    (cfg/fo/attrs/toc-attr.xsl __toc__mini__table), so the child topics were
-    forced onto a fresh page - leaving the title + subtopic list alone on the
-    opener page, which reads as "the chapter title got its own page". Setting
-    the break to auto lets the first child topic continue on the same page.
+    The default layout (cfg/fo/attrs/basic-settings.xsl, $chapterLayout =
+    'MINITOC') opens every chapter/appendix/part with a two-column createMiniToc
+    table: a "Contents:" list of the chapter's child topics on the left, the
+    chapter's own shortdesc/body on the right. That list is noise for a short
+    manual, and the table (with its page-break-after) was also what stranded the
+    title on its own page. DITA-OT already has a supported switch: with
+    $chapterLayout = 'BASIC', processChapter renders the chapter's own body
+    directly (shortdesc included, via topic.xsl's shortdesc path) and skips
+    createMiniToc entirely, so the child topics simply follow the title.
 
-    It has to be set to "auto" explicitly, not simply omitted: an attribute-set
-    override here is merged per-attribute with the default (verified - dropping
-    page-break-after from the override left the default "always" on the rendered
-    fo:table), so removing an inherited attribute by omission does not work; you
-    have to override its value. table-layout and width are repeated to keep them
-    explicit regardless.
+    chapterLayout is a global xsl:variable (derived from the antArgsChapterLayout
+    param, which the CLI feeds from args.chapter.layout). Redeclaring it here
+    wins by import precedence - this file is imported last - so BASIC is the
+    default for exports through this extension; appendix/part/notices layouts
+    inherit from it, so every opener loses the mini-TOC, not just chapters.
+
+    This supersedes the earlier __toc__mini__table page-break-after override,
+    which is removed here: createMiniToc is no longer called, so that set is
+    unused. (The general lesson from it still holds: an attribute-set override
+    merges with the default per-attribute, so a value must be set explicitly to
+    change it - omitting an attribute does not drop the default's.)
   -->
-  <xsl:attribute-set name="__toc__mini__table">
-    <xsl:attribute name="table-layout">fixed</xsl:attribute>
-    <xsl:attribute name="width">100%</xsl:attribute>
-    <xsl:attribute name="page-break-after">auto</xsl:attribute>
-  </xsl:attribute-set>
+  <xsl:variable name="chapterLayout" select="'BASIC'"/>
 
 </xsl:stylesheet>

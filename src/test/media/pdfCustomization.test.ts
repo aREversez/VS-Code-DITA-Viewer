@@ -178,18 +178,23 @@ describe('media/pdf-customization: fo/attrs/custom.xsl attribute-set overrides',
     );
   });
 
-  it('keeps chapter content on the title page by clearing the mini-TOC forced break', () => {
-    // createMiniToc's two-column table carries page-break-after="always" in the
-    // default, which pushes the chapter's own child topics onto a fresh page and
-    // strands the title (plus the subtopic list) on a page of its own. It must
-    // be set to "auto" EXPLICITLY: an attribute-set override here merges with the
-    // default per-attribute, so merely omitting page-break-after leaves the
-    // default "always" in place (verified against a real render).
-    const body = attributeSetBody('__toc__mini__table');
-    assert.ok(body !== undefined, 'expected a `__toc__mini__table` attribute-set override');
+  it('drops the in-chapter mini-TOC by switching the chapter layout to BASIC', () => {
+    // The default layout (org.dita.pdf2 basic-settings.xsl, $chapterLayout =
+    // 'MINITOC') opens each chapter/appendix/part with a two-column createMiniToc
+    // table - a "Contents:" list of the child topics beside the chapter's own
+    // body. That list reads as noise in a short manual and the table stranded
+    // the title on its own page. Redeclaring the global chapterLayout variable
+    // to 'BASIC' (import precedence: this file loads last) makes processChapter
+    // render the body directly and skip createMiniToc, so title + content share
+    // a page. This supersedes the old __toc__mini__table page-break override,
+    // now removed because createMiniToc is no longer emitted at all.
+    assert.match(
+      attrs,
+      /<xsl:variable\s+name="chapterLayout"\s+select="'BASIC'"\s*\/>/,
+    );
     assert.ok(
-      /<xsl:attribute\s+name="page-break-after">\s*auto\s*<\/xsl:attribute>/.test(body),
-      '__toc__mini__table must set page-break-after="auto" explicitly (omission keeps the default "always")',
+      !/<xsl:attribute-set\s+name="__toc__mini__table"/.test(attrs),
+      'the obsolete __toc__mini__table override must be gone under BASIC',
     );
   });
 });
