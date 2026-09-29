@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="welcome">
+  <title>Welcome to <ph keyref="demo-product"/></title>
+  <shortdesc>Published by <ph keyref="demo-company"/>.</shortdesc>
+  <conbody>
+    <p>This page is written once. Its product name (<ph keyref="demo-product"/>), company (<ph keyref="demo-company"/>) and vendor (<ph keyref="demo-vendor"/>) change with the key context map you choose.</p>
+  </conbody>
+</concept>

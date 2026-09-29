@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<map id="demo-all-in-one">
+  <title><keyword keyref="demo-product"/> user guide</title>
+  <!--
+    Manual test for "DITA: Select Key Context Map…" (Oxygen's DITA Maps
+    Manager "context"). The three brand keydef maps below define the SAME keys
+    (demo-product, demo-company, demo-vendor) with different values; without a
+    context the first one referenced wins. Choose keys/brand-b.ditamap (or
+    brand-c) as the context and every open preview, the Map Navigator tree and
+    the "key not defined" diagnostics follow it. Each keydef map still shows
+    its own content when opened on its own.
+    demo-company and demo-vendor are defined together (keys="a b").
+  -->
+  <mapref href="keys/brand-a.ditamap" format="ditamap"/>
+  <mapref href="keys/brand-b.ditamap" format="ditamap"/>
+  <mapref href="keys/brand-c.ditamap" format="ditamap"/>
+  <topicref href="topics/welcome.dita"/>
+</map>
