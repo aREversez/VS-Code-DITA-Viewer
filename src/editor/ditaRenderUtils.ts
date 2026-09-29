@@ -1757,7 +1757,10 @@ export interface SiteHomeTile {
  * entry's subtree is every following entry up to (not including) the next
  * one at its own depth or shallower.
  */
-export function buildSiteHomeTiles(manifest: DocsiteNavEntry[]): SiteHomeTile[] {
+export function buildSiteHomeTiles(
+  manifest: DocsiteNavEntry[],
+  genericTopicLabel: string | undefined = defaultTopicTypeLabel('topic'),
+): SiteHomeTile[] {
   const tiles: SiteHomeTile[] = [];
   for (let i = 0; i < manifest.length; i++) {
     const entry = manifest[i];
@@ -1771,7 +1774,13 @@ export function buildSiteHomeTiles(manifest: DocsiteNavEntry[]): SiteHomeTile[] 
       title: entry.title,
       target,
       role: entry.role,
-      topicType: entry.isGroup ? undefined : entry.topicType,
+      // The generic <topic> chip stays off a tile: the sidebar shows it so a
+      // plain topic isn't the odd row out among specializations, but on a
+      // home tile a chapter whose file happens to be a plain <topic> (the
+      // normal bookmap case) would read "CHAPTER 1 | TOPIC" on every card,
+      // and only the map's own <topichead> chapters (no file, so no chip)
+      // would look different. Specializations (Task, Concept, ...) still show.
+      topicType: entry.isGroup || entry.topicType === genericTopicLabel ? undefined : entry.topicType,
       topicCount: subtreeNavigable.length,
     });
   }

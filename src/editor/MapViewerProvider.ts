@@ -1621,7 +1621,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     const mapTitle = mapTitleFromXml(document.getText(), basename(document.fileName), (k) => titleKeys.get(k));
     const topicCountLabel = (count: number): string =>
       count === 1 ? vscode.l10n.t('1 topic') : vscode.l10n.t('{0} topics', count);
-    return renderSiteHomeHtml(buildSiteHomeTiles(manifest), { heading: mapTitle, topicCountLabel });
+    return renderSiteHomeHtml(buildSiteHomeTiles(manifest, localizeTopicTypeLabel('topic')), { heading: mapTitle, topicCountLabel });
   }
 
   /**

@@ -21,6 +21,27 @@ describe('buildSiteHomeTiles', () => {
     assert.deepStrictEqual(tiles[1], { title: 'Beta', target: '/w/b.dita', role: undefined, topicType: undefined, topicCount: 1 });
   });
 
+  it('drops the generic Topic chip from a tile but keeps specialization chips', () => {
+    const manifest: DocsiteNavEntry[] = [
+      { absPath: '/w/a.dita', title: 'Alpha', depth: 0, role: 'Chapter 1', topicType: 'Topic' },
+      { absPath: '/w/b.dita', title: 'Beta', depth: 0, role: 'Chapter 2', topicType: 'Task' },
+    ];
+    const tiles = buildSiteHomeTiles(manifest);
+    assert.strictEqual(tiles[0].topicType, undefined, 'a plain <topic> chapter gets no type chip on its tile');
+    assert.strictEqual(tiles[0].role, 'Chapter 1', 'the role chip is untouched');
+    assert.strictEqual(tiles[1].topicType, 'Task', 'a specialization still gets its chip');
+  });
+
+  it('matches the generic label the caller passes, so a localized label is dropped too', () => {
+    const manifest: DocsiteNavEntry[] = [
+      { absPath: '/w/a.dita', title: 'Alpha', depth: 0, role: 'Chapter 1', topicType: '\u4e3b\u9898' },
+      { absPath: '/w/b.dita', title: 'Beta', depth: 0, topicType: 'Topic' },
+    ];
+    const tiles = buildSiteHomeTiles(manifest, '\u4e3b\u9898');
+    assert.strictEqual(tiles[0].topicType, undefined);
+    assert.strictEqual(tiles[1].topicType, 'Topic', 'only the label the caller names is treated as generic');
+  });
+
   it('targets a group entry (topichead/href-less topicref) at its first navigable descendant, not itself', () => {
     const manifest: DocsiteNavEntry[] = [
       { title: 'Part One', depth: 0, isGroup: true, role: 'Part I' },
