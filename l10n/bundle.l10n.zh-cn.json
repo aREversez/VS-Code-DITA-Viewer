@@ -92,6 +92,7 @@
   "this file": "当前文件",
   "The configured DITA-OT path is invalid: no dita executable was found under {0}.": "配置的 DITA-OT 路径无效：{0} 下未找到 dita 可执行文件。",
   "The file already exists: {0}. Overwrite it?": "文件已存在：{0}。是否覆盖？",
+  "The output directory is not empty: {0}. Its contents will be cleared before exporting. Overwrite it?": "输出目录非空：{0}。导出前将清空其内容。是否覆盖？",
   "Failed to clear the output directory: {0}. {1}": "清空输出目录失败：{0}。{1}",
   "Use DITA-OT default styles": "使用 DITA-OT 默认样式",
   "Use regex": "使用正则表达式",

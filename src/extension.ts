@@ -347,11 +347,28 @@ export function activate(context: vscode.ExtensionContext) {
         }
       } else if (existsSync(outputDir)) {
         // Webhelp-style transforms (html5/xhtml/markdown) emit a whole site of
-        // interlinked files. Asking to "overwrite" would leave stale files from
-        // a previous export behind, so clear the directory first the way Oxygen
-        // does -- the result is exactly this run's output.
+        // interlinked files, so a stale file from a previous export would linger
+        // if we only overwrote in place -- clear the directory first the way
+        // Oxygen does, so the result is exactly this run's output. Clearing is
+        // destructive, so when the directory already holds content, warn and
+        // proceed only on confirmation.
+        let entries: string[] = [];
         try {
-          for (const entry of readdirSync(outputDir)) {
+          entries = readdirSync(outputDir);
+        } catch (e) {
+          console.warn(`Failed to read output directory contents: ${outputDir}`, e instanceof Error ? e.message : e);
+        }
+        if (entries.length > 0) {
+          const overwriteLabel = vscode.l10n.t('Overwrite');
+          const overwrite = await vscode.window.showWarningMessage(
+            vscode.l10n.t('The output directory is not empty: {0}. Its contents will be cleared before exporting. Overwrite it?', outputDir),
+            { modal: true },
+            overwriteLabel,
+          );
+          if (overwrite !== overwriteLabel) return;
+        }
+        try {
+          for (const entry of entries) {
             rmSync(join(outputDir, entry), { recursive: true, force: true });
           }
         } catch (e) {

@@ -92,6 +92,7 @@
   "this file": "this file",
   "The configured DITA-OT path is invalid: no dita executable was found under {0}.": "The configured DITA-OT path is invalid: no dita executable was found under {0}.",
   "The file already exists: {0}. Overwrite it?": "The file already exists: {0}. Overwrite it?",
+  "The output directory is not empty: {0}. Its contents will be cleared before exporting. Overwrite it?": "The output directory is not empty: {0}. Its contents will be cleared before exporting. Overwrite it?",
   "Failed to clear the output directory: {0}. {1}": "Failed to clear the output directory: {0}. {1}",
   "Use DITA-OT default styles": "Use DITA-OT default styles",
   "Use regex": "Use regex",
