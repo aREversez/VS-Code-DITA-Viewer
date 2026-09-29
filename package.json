@@ -290,34 +290,39 @@
           "group": "navigation@1"
         },
         {
-          "command": "ditaViewer.mapExplorer.expandAll",
+          "command": "ditaViewer.selectContextMap",
           "when": "view == ditaViewer.mapExplorer",
           "group": "navigation@2"
         },
         {
-          "command": "ditaViewer.mapExplorer.collapseAll",
+          "command": "ditaViewer.mapExplorer.expandAll",
           "when": "view == ditaViewer.mapExplorer",
           "group": "navigation@3"
         },
         {
-          "command": "ditaViewer.mapExplorer.findUnreferenced",
+          "command": "ditaViewer.mapExplorer.collapseAll",
           "when": "view == ditaViewer.mapExplorer",
           "group": "navigation@4"
         },
         {
+          "command": "ditaViewer.mapExplorer.findUnreferenced",
+          "when": "view == ditaViewer.mapExplorer",
+          "group": "navigation@5"
+        },
+        {
           "command": "ditaViewer.mapExplorer.pin",
           "when": "view == ditaViewer.mapExplorer && !ditaViewer.mapExplorer.pinned",
-          "group": "navigation@5"
+          "group": "navigation@6"
         },
         {
           "command": "ditaViewer.mapExplorer.unpin",
           "when": "view == ditaViewer.mapExplorer && ditaViewer.mapExplorer.pinned",
-          "group": "navigation@5"
+          "group": "navigation@6"
         },
         {
           "command": "ditaViewer.mapExplorer.refresh",
           "when": "view == ditaViewer.mapExplorer",
-          "group": "navigation@6"
+          "group": "navigation@7"
         }
       ],
       "view/item/context": [

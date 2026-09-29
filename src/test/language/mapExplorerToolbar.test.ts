@@ -35,20 +35,40 @@ function viewTitleEntries(): MenuEntry[] {
 }
 
 describe('map explorer toolbar', () => {
-  it('keeps Expand All and Collapse All adjacent, right after Select Map', () => {
+  it('keeps Expand All and Collapse All adjacent, after Select Map and the key context button', () => {
     const order = viewTitleEntries().map((e) => e.command);
     const expandIdx = order.indexOf('ditaViewer.mapExplorer.expandAll');
     const collapseIdx = order.indexOf('ditaViewer.mapExplorer.collapseAll');
     assert.ok(expandIdx >= 0, 'expandAll is on the title bar');
     assert.ok(collapseIdx >= 0, 'collapseAll is on the title bar');
     assert.strictEqual(collapseIdx, expandIdx + 1, 'the two buttons sit together');
-    assert.strictEqual(order.indexOf('ditaViewer.mapExplorer.selectMap'), expandIdx - 1);
-    // Nothing else is squeezed between Select Map and the expand/collapse pair
-    assert.deepStrictEqual(order.slice(0, 3), [
+    // The key context button sits between Select Map and the expand/collapse
+    // pair (both of which are about the tree; this one is about what its
+    // keyrefs resolve to), and nothing else is squeezed in there.
+    assert.deepStrictEqual(order.slice(0, 4), [
       'ditaViewer.mapExplorer.selectMap',
+      'ditaViewer.selectContextMap',
       'ditaViewer.mapExplorer.expandAll',
       'ditaViewer.mapExplorer.collapseAll',
     ]);
+  });
+
+  it('gives the key context button a slot of its own, not shared with a neighbour', () => {
+    // (Pin and Unpin do share one slot on purpose -- their when clauses are
+    // mutually exclusive -- so this checks the new button, not every button.)
+    const entries = viewTitleEntries();
+    const mine = entries.find((e) => e.command === 'ditaViewer.selectContextMap');
+    assert.ok(mine, 'the key context button is on the title bar');
+    assert.strictEqual(entries.filter((e) => e.group === mine.group).length, 1, `${mine.group} is shared`);
+  });
+
+  it('offers Select Key Context Map with the key codicon, and leaves it in the command palette', () => {
+    const cmd = pkg.contributes.commands.find((c: { command: string }) => c.command === 'ditaViewer.selectContextMap');
+    assert.strictEqual(cmd?.icon, '$(key)');
+    const hidden = pkg.contributes.menus.commandPalette.find(
+      (e: { command: string }) => e.command === 'ditaViewer.selectContextMap',
+    );
+    assert.strictEqual(hidden, undefined, 'the palette is still a way in for it');
   });
 
   it('registers both commands with their codicons', () => {
