@@ -48,10 +48,10 @@
     </result>
     <example>
       <p>若使用静态 IP 的网络环境，请在屏幕 <menucascade><uicontrol>网络设置</uicontrol><uicontrol>高级</uicontrol><uicontrol>手动配置</uicontrol></menucascade> 中填写以下参数：</p>
-      <codeblock><![CDATA[IP 地址:   192.168.1.50
+      <codeblock>IP 地址:   192.168.1.50
 子网掩码:  255.255.255.0
 网关:      192.168.1.1
-DNS:       192.168.1.1 或 223.5.5.5]]></codeblock>
+DNS:       192.168.1.1 或 223.5.5.5</codeblock>
       <p>网线直连失败时，请参见 <xref href="ts_network.dita"/>。</p>
     </example>
     <postreq>

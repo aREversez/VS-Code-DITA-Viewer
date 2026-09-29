@@ -16,27 +16,7 @@
     条件处理: 剔除 developer 内容、品牌 B 内容与规划中特性（rev="planned"）。
   -->
   <!-- ===== 品牌相关 keydef：换品牌仅替换本块 ===== -->
-  <keydef keys="product-name">
-    <topicmeta><keywords><keyword>星枢 N1</keyword></keywords></topicmeta>
-  </keydef>
-  <keydef keys="product-model">
-    <topicmeta><keywords><keyword>N1</keyword></keywords></topicmeta>
-  </keydef>
-  <keydef keys="brand-name">
-    <topicmeta><keywords><keyword>星枢</keyword></keywords></topicmeta>
-  </keydef>
-  <keydef keys="company-name">
-    <topicmeta><keywords><keyword>星澜科技</keyword></keywords></topicmeta>
-  </keydef>
-  <keydef keys="version">
-    <topicmeta><keywords><keyword>2.1.0</keyword></keywords></topicmeta>
-  </keydef>
-  <keydef keys="release-year">
-    <topicmeta><keywords><keyword>2026</keyword></keywords></topicmeta>
-  </keydef>
-  <keydef keys="support-phone">
-    <topicmeta><keywords><keyword>400-810-1234</keyword></keywords></topicmeta>
-  </keydef>
+  <topicref href="./common/keys_main.ditamap" format="ditamap"/>
   <!--
     support-url / support-mail / logo：href 型 keydef，故意不通过 keyref 从
     正文引用。当前渲染器（src/render/baseTypeMap.ts 的 topic/xref、
@@ -47,10 +27,6 @@
     contact_support.dita 里对应的链接故意保留硬编码 href，没有跟着改成
     keyref，避免链接被静默吞掉。
   -->
-  <keydef keys="support-url" href="https://support.example-starlumos.com" scope="external" format="html"/>
-  <keydef keys="support-mail" href="mailto:support@example-starlumos.com" scope="external" format="mailto"/>
-  <keydef keys="logo" href="./images/logo-brandA.svg" format="svg"/>
-  <keydef keys="shared-brand" href="./shared/conref-brandA.dita"/>
 
   <!-- ===== 目录 ===== -->
   <topichead navtitle="第 1 章 产品简介">
