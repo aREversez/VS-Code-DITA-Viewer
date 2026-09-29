@@ -40,7 +40,8 @@ export interface MapTreeLabelContext {
  *   the keys value. Never the target topic's own title -- that names the
  *   topic, not the reusable string the key stands for.
  * - Everything else keeps the docsite sidebar's resolution order: an
- *   authored navtitle/linktext wins; failing that the referenced topic's
+ *   authored navtitle/linktext wins (a topicmeta shortdesc or keyword never
+ *   names a row); failing that the referenced topic's
  *   own <title> off disk; the href file name is the last resort.
  */
 export function mapTreeLabel(node: DitaNode, ctx: MapTreeLabelContext): string {
@@ -59,7 +60,9 @@ export function mapTreeLabel(node: DitaNode, ctx: MapTreeLabelContext): string {
     if (nameInfo.explicit) return nameInfo.text;
     return node.attributes?.keys || nameInfo.text;
   }
-  const nameInfo = getDisplayNameInfo(node, ctx.resolveKey);
+  // Only navtitle/linktext name a row; shortdesc, keywords and any other
+  // topicmeta content the map carries are never shown in the tree.
+  const nameInfo = getDisplayNameInfo(node, ctx.resolveKey, { keywords: false });
   if (nameInfo.explicit) return nameInfo.text;
   if (isDitamapRef(node)) {
     const inlined = getMapTitleText(node, ctx.resolveKey);

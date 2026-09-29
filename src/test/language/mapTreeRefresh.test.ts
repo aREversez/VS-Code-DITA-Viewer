@@ -45,7 +45,7 @@ describe('shouldRefreshMapTree', () => {
   });
 
   it('does NOT reload when a .dita\'s contents change, since no label is read out of the topic', () => {
-    // getDisplayName reads topicmeta/navtitle, linktext, shortdesc, a keyword,
+    // getDisplayName reads topicmeta/navtitle, linktext, a keyword,
     // then falls back to the href's filename and the keys attribute -- it never
     // opens the referenced topic. Reloading for an edit here would rebuild the
     // whole tree and collapse the user's expansion state for no visible gain.

@@ -131,6 +131,39 @@ describe('mapTreeLabel', () => {
     assert.strictEqual(label, '快速安装');
   });
 
+  it('shows the topic\'s title, not a topicmeta shortdesc the map attached to the chapter', () => {
+    const root = parse(
+      '<bookmap><chapter href="topics/install.dita"><topicmeta>' +
+        '<shortdesc>本章介绍如何安装设备。</shortdesc></topicmeta></chapter></bookmap>',
+    );
+    const label = mapTreeLabel(root.children[0], {
+      isRoot: false,
+      resolveKey,
+      readTitle: (href) => (href === 'topics/install.dita' ? '安装设备' : undefined),
+      rootFallback: 'main',
+    });
+    assert.strictEqual(label, '安装设备');
+  });
+
+  it('never falls back to a topicmeta shortdesc when the topic title cannot be read', () => {
+    const root = parse(
+      '<map><topicref href="topics/install.dita"><topicmeta><shortdesc>本章介绍如何安装设备。</shortdesc></topicmeta></topicref></map>',
+    );
+    const label = mapTreeLabel(root.children[0], { isRoot: false, resolveKey, readTitle: noTitle, rootFallback: 'main' });
+    assert.strictEqual(label, 'install');
+  });
+
+  it('ignores other topicmeta content (keywords, shortdesc) on a topicref row; only navtitle/linktext name it', () => {
+    const root = parse(
+      '<map><topicref href="topics/a.dita"><topicmeta><shortdesc>描述</shortdesc>' +
+        '<keywords><keyword>某关键字</keyword></keywords></topicmeta></topicref>' +
+        '<topicref href="topics/b.dita"><topicmeta><shortdesc>描述</shortdesc><linktext>链接文字</linktext></topicmeta></topicref></map>',
+    );
+    const readTitle = (href: string) => (href === 'topics/a.dita' ? 'A 标题' : undefined);
+    assert.strictEqual(mapTreeLabel(root.children[0], { isRoot: false, resolveKey, readTitle, rootFallback: 'main' }), 'A 标题');
+    assert.strictEqual(mapTreeLabel(root.children[1], { isRoot: false, resolveKey, readTitle, rootFallback: 'main' }), '链接文字');
+  });
+
   it('labels a bookmap structural container by its tag name', () => {
     const root = parse('<bookmap><frontmatter><chapter href="a.dita"/></frontmatter></bookmap>');
     const frontmatter = root.children[0];

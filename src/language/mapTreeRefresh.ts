@@ -14,7 +14,7 @@ import type { DitaFileEventKind } from '../editor/ditaFileWatcher';
  * True when a file event should reload the map tree.
  *
  * Everything the tree displays comes out of the map file itself: getDisplayName
- * reads topicmeta navtitle, then linktext, then shortdesc, then a keyword, and
+ * reads topicmeta navtitle, then linktext (a keydef also its keyword), and
  * falls back to the href's filename and the keys attribute -- it never opens
  * the referenced topic. So editing a .dita cannot change any label, icon or
  * description in the tree, and reloading for one would only rebuild the whole
