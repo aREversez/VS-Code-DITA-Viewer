@@ -106,6 +106,36 @@
   </xsl:template>
 
   <!--
+    Drop the big chapter-number band from the chapter opener page.
+
+    org.dita.pdf2 (xsl/fo/commons.xsl, insertChapterFirstpageStaticContent)
+    paints, above every chapter/part/appendix title, a bordered band built from
+    the localized 'Chapter with number' variable with the number wrapped in a
+    40pt BLOCK-level fo:block. Two problems, both visible in the render:
+      - the number block forces a line break on each side of itself, so the
+        Chinese label "第{n}章" (cfg/common/vars/zh_cn.xml) stacks into three
+        lines "第" / giant "1" / "章"; English "Chapter {n}" only hides this
+        because it has no trailing word to push onto a third line.
+      - the band repeats the number that the chapter title already carries
+        (the title below is the auto-numbered "第 1 章 产品简介"), so the page
+        shows "第 1 章" twice.
+    Removing the band fixes both and leaves the chapter opening on its title.
+
+    The band's wrapper <fo:block id="..."> is the internal-destination the PDF
+    bookmark tree and the TOC links point at, so it is kept (as an empty, zero
+    height block); only the number content is dropped. Overriding by the same
+    match+mode wins because this stylesheet is imported last.
+  -->
+  <xsl:template match="*" mode="insertChapterFirstpageStaticContent">
+    <xsl:param name="type" as="xs:string"/>
+    <fo:block>
+      <xsl:attribute name="id">
+        <xsl:call-template name="generate-toc-id"/>
+      </xsl:attribute>
+    </fo:block>
+  </xsl:template>
+
+  <!--
     Images: honour @scale first, then keep whatever still overflows on the page.
 
     Before this, FOP only shrank an image to the column WIDTH

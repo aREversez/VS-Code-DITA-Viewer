@@ -177,6 +177,21 @@ describe('media/pdf-customization: fo/attrs/custom.xsl attribute-set overrides',
       'cover override must keep the inherited __force__page__count',
     );
   });
+
+  it('keeps chapter content on the title page by clearing the mini-TOC forced break', () => {
+    // createMiniToc's two-column table carries page-break-after="always" in the
+    // default, which pushes the chapter's own child topics onto a fresh page and
+    // strands the title (plus the subtopic list) on a page of its own. It must
+    // be set to "auto" EXPLICITLY: an attribute-set override here merges with the
+    // default per-attribute, so merely omitting page-break-after leaves the
+    // default "always" in place (verified against a real render).
+    const body = attributeSetBody('__toc__mini__table');
+    assert.ok(body !== undefined, 'expected a `__toc__mini__table` attribute-set override');
+    assert.ok(
+      /<xsl:attribute\s+name="page-break-after">\s*auto\s*<\/xsl:attribute>/.test(body),
+      '__toc__mini__table must set page-break-after="auto" explicitly (omission keeps the default "always")',
+    );
+  });
 });
 
 describe('media/pdf-customization: fo/xsl/custom.xsl template overrides', () => {
@@ -244,6 +259,21 @@ describe('media/pdf-customization: fo/xsl/custom.xsl template overrides', () => 
     for (const n of numberings) {
       assert.ok(n.includes('vdv:renders-topic'), `numbering must filter by vdv:renders-topic: ${n}`);
     }
+  });
+
+  it('drops the big chapter-number band from the opener but keeps its anchor id', () => {
+    // org.dita.pdf2's insertChapterFirstpageStaticContent paints a bordered band
+    // with the number in a 40pt BLOCK, which stacks "第{n}章" across three lines
+    // for CJK and repeats the number the chapter title already carries. The
+    // override keeps the <fo:block id="..."> (the PDF bookmark / TOC link target)
+    // but emits no band; if the number container or the 'Chapter with number'
+    // variable crept back in, the broken band would silently return.
+    const m =
+      /<xsl:template\b[^>]*mode="insertChapterFirstpageStaticContent"[^>]*>([\s\S]*?)<\/xsl:template>/.exec(xsl);
+    assert.ok(m, 'expected an insertChapterFirstpageStaticContent template override');
+    assert.ok(/generate-toc-id/.test(m[1]), 'must keep the anchor id (bookmark / TOC link target)');
+    assert.ok(!/__chapter__frontmatter__number__container/.test(m[1]), 'must not emit the big number container');
+    assert.ok(!/Chapter with number/.test(m[1]), 'must not emit the "Chapter with number" band');
   });
 });
 

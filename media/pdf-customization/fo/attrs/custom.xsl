@@ -47,9 +47,10 @@
         head/foot ...). Its only member is the font-family, so the override is
         just that one attribute.
       - `__toc__mini` (cfg/fo/attrs/toc-attr.xsl): the in-topic "mini TOC"
-        (a heading block and its link list). An override replaces the set
-        wholesale, so its two other members (font-size, end-indent) are
-        repeated from the default.
+        (a heading block and its link list). Only font-family is actually
+        changed; font-size and end-indent are repeated for explicitness (the
+        toolkit merges an override with the default per-attribute, so they would
+        carry over anyway - see the __toc__mini__table note further down).
     Both now say `serif`, the same logical font as the root, so the whole
     document resolves through the one Serif entry of font-mappings.xml.
     codeph and the other code/UI/markup sets stay monospace on purpose.
@@ -67,8 +68,8 @@
   <!--
     Fix: <codeph> was plain monospace with no visual separation from the
     surrounding sentence. The default (org.dita.pdf2/cfg/fo/attrs/pr-domain-attr.xsl)
-    sets only font-family: monospace, which has to be repeated here since an
-    override replaces rather than merges.
+    sets only font-family: monospace, repeated here for explicitness (an
+    override merges with the default per-attribute, so it would persist anyway).
 
     Deliberately not addressed here: a very long, space-free <codeph> string
     (e.g. a long API path or hash) can still push past the column edge —
@@ -156,6 +157,31 @@
   <xsl:attribute-set name="page-sequence.toc" use-attribute-sets="__force__page__count page-sequence.frontmatter">
     <xsl:attribute name="format"
         select="if (exists(@id) and exists(key('map-id', @id)/ancestor::*[contains(@class, ' bookmap/backmatter ')])) then '1' else 'i'"/>
+  </xsl:attribute-set>
+
+  <!--
+    Fix: keep a chapter's content on the same page as its title.
+
+    Each bookmap chapter opens with a two-column "in this chapter" table
+    (createMiniToc: left column = the subtopic list, right column = the
+    chapter's own shortdesc/body), and the child topics flow *after* that table.
+    org.dita.pdf2 puts page-break-after="always" on the table
+    (cfg/fo/attrs/toc-attr.xsl __toc__mini__table), so the child topics were
+    forced onto a fresh page - leaving the title + subtopic list alone on the
+    opener page, which reads as "the chapter title got its own page". Setting
+    the break to auto lets the first child topic continue on the same page.
+
+    It has to be set to "auto" explicitly, not simply omitted: an attribute-set
+    override here is merged per-attribute with the default (verified - dropping
+    page-break-after from the override left the default "always" on the rendered
+    fo:table), so removing an inherited attribute by omission does not work; you
+    have to override its value. table-layout and width are repeated to keep them
+    explicit regardless.
+  -->
+  <xsl:attribute-set name="__toc__mini__table">
+    <xsl:attribute name="table-layout">fixed</xsl:attribute>
+    <xsl:attribute name="width">100%</xsl:attribute>
+    <xsl:attribute name="page-break-after">auto</xsl:attribute>
   </xsl:attribute-set>
 
 </xsl:stylesheet>
