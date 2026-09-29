@@ -45,6 +45,7 @@ import { registerWrapSelectionCommand } from './editor/wrapSelectionCommand';
 import { registerFindReferencingMapsCommand } from './editor/findDitaReferences';
 import { registerKeyContextCommand } from './editor/keyContextCommand';
 import { registerUnreferencedResourcesCommand } from './editor/unreferencedResourcesUi';
+import { registerCompletenessCommand } from './editor/completenessCheckUi';
 
 const TRANSFORM_CMD = 'ditaViewer.transformWithDitaOt';
 
@@ -84,6 +85,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   // "Find Unreferenced Resources…" (Oxygen DITA Maps Manager style)
   registerUnreferencedResourcesCommand(context, { currentTreeMap: () => mapTree.currentMapPath() });
+
+  // "Validate and Check for Completeness…" (Oxygen DITA Map Completeness Check style)
+  registerCompletenessCommand(context, { currentTreeMap: () => mapTree.currentMapPath() });
 
   // "Export as HTML" command (self-contained file, no DITA-OT needed)
   registerExportHtmlCommand(context);

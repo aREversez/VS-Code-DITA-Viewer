@@ -671,6 +671,12 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
     await vscode.commands.executeCommand('ditaViewer.findUnreferencedResources', vscode.Uri.file(this.mapPath));
   }
 
+  /** "Validate and Check for Completeness" for the current map. */
+  async validateCompleteness(): Promise<void> {
+    if (!this.mapPath) return;
+    await vscode.commands.executeCommand('ditaViewer.validateMapCompleteness', vscode.Uri.file(this.mapPath));
+  }
+
   get currentMapPath(): string | undefined {
     return this.mapPath;
   }
@@ -854,6 +860,9 @@ export function registerMapTreeView(context: vscode.ExtensionContext): MapTreeVi
     ),
     vscode.commands.registerCommand('ditaViewer.mapExplorer.findUnreferenced', () =>
       provider.findUnreferencedResources(),
+    ),
+    vscode.commands.registerCommand('ditaViewer.mapExplorer.validateCompleteness', () =>
+      provider.validateCompleteness(),
     ),
     // Chevron clicks (and the row replacements a data change performs)
     // report their element; recording the resulting state is what makes it

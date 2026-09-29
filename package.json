@@ -209,6 +209,16 @@
         "command": "ditaViewer.findUnreferencedResources",
         "title": "%command.findUnreferencedResources.title%",
         "icon": "$(search)"
+      },
+      {
+        "command": "ditaViewer.validateMapCompleteness",
+        "title": "%command.validateMapCompleteness.title%",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "ditaViewer.mapExplorer.validateCompleteness",
+        "title": "%command.mapExplorerValidateCompleteness.title%",
+        "icon": "$(checklist)"
       }
     ],
     "icons": {
@@ -321,19 +331,24 @@
           "group": "navigation@5"
         },
         {
+          "command": "ditaViewer.mapExplorer.validateCompleteness",
+          "when": "view == ditaViewer.mapExplorer",
+          "group": "navigation@6"
+        },
+        {
           "command": "ditaViewer.mapExplorer.pin",
           "when": "view == ditaViewer.mapExplorer && !ditaViewer.mapExplorer.pinned",
-          "group": "navigation@6"
+          "group": "navigation@7"
         },
         {
           "command": "ditaViewer.mapExplorer.unpin",
           "when": "view == ditaViewer.mapExplorer && ditaViewer.mapExplorer.pinned",
-          "group": "navigation@6"
+          "group": "navigation@7"
         },
         {
           "command": "ditaViewer.mapExplorer.refresh",
           "when": "view == ditaViewer.mapExplorer",
-          "group": "navigation@7"
+          "group": "navigation@8"
         }
       ],
       "view/item/context": [
@@ -366,6 +381,11 @@
           "command": "ditaViewer.mapExplorer.findUnreferenced",
           "when": "view == ditaViewer.mapExplorer && viewItem =~ /\\broot\\b/",
           "group": "4_find@1"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.validateCompleteness",
+          "when": "view == ditaViewer.mapExplorer && viewItem =~ /\\broot\\b/",
+          "group": "4_find@2"
         },
         {
           "command": "ditaViewer.mapExplorer.expandAll",
@@ -457,6 +477,11 @@
           "command": "ditaViewer.findUnreferencedResources",
           "when": "resourceExtname == .ditamap",
           "group": "4_check@1"
+        },
+        {
+          "command": "ditaViewer.validateMapCompleteness",
+          "when": "resourceExtname == .ditamap",
+          "group": "4_check@2"
         }
       ],
       "explorer/context": [
@@ -484,6 +509,11 @@
           "command": "ditaViewer.findUnreferencedResources",
           "when": "resourceExtname == .ditamap",
           "group": "3_check@1"
+        },
+        {
+          "command": "ditaViewer.validateMapCompleteness",
+          "when": "resourceExtname == .ditamap",
+          "group": "3_check@2"
         }
       ],
       "commandPalette": [
@@ -578,6 +608,14 @@
         {
           "command": "ditaViewer.findUnreferencedResources",
           "when": "resourceExtname == .ditamap || ditaViewer.hasMap"
+        },
+        {
+          "command": "ditaViewer.validateMapCompleteness",
+          "when": "resourceExtname == .ditamap || ditaViewer.hasMap"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.validateCompleteness",
+          "when": "false"
         }
       ]
     },
@@ -627,6 +665,25 @@
           "type": "string",
           "default": "",
           "description": "%config.oxygenPath.description%"
+        },
+        "dita-viewer.completenessCheck.profilingAttributes": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "description": "%config.completenessProfilingAttributes.description%"
+        },
+        "dita-viewer.completenessCheck.singleValueProfilingAttributes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "%config.completenessSingleValueProfilingAttributes.description%"
         }
       }
     }

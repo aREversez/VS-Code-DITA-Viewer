@@ -113,7 +113,7 @@ async function openUnreferencedDialog(context: vscode.ExtensionContext, arg: unk
               const base = roots.find((r) => !relative(r, abs).startsWith('..')) ?? dirname(abs);
               return { abs, rel: relative(base, abs).replace(/\\/g, '/') };
             });
-            const problems = res.crawl.fileIssues.length;
+            const problems = res.crawl.fileIssues.filter((i) => !i.structural).length;
             post({
               type: 'results',
               items,
