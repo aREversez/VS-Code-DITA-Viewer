@@ -32,6 +32,7 @@ import { isDitamapRef } from '../render/mapTypeMap';
 import { resolveLocalHrefPath, computeUnreferencedFiles } from '../editor/mapReferenceTools';
 import { formatLocalizedRole } from './bookRoleL10n';
 import { shouldRefreshMapTree } from './mapTreeRefresh';
+import { decideMapFollow } from './mapTreeFollow';
 import { mapTreeLabel, mapTreeIconId } from './mapTreePresentation';
 import {
   ROOT_NODE_ID,
@@ -152,32 +153,31 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
 
   /**
    * Re-evaluates which map to show based on the active editor's document.
-   * Auto-following only ever crosses a *workspace-folder* boundary -- the
-   * common layout where each product/book lives isolated in its own folder,
-   * each with its own map. Opening another topic inside the map's own
-   * folder never switches the tree: DITA's nested map/topic references make
-   * "the" owning map ambiguous within one folder (a topic can be reachable
-   * from several maps), so picking one automatically on every keystroke
-   * would fight both nested references and a manual choice made moments
-   * ago. A topic opened from outside every workspace folder is left alone
-   * too -- there's no "project" to have switched into.
+   * A .ditamap always wins -- the tree shows the map the user is looking at,
+   * whether in its source editor or its preview. A .dita topic only switches
+   * the tree across a *workspace-folder* boundary (the common layout where
+   * each product/book lives isolated in its own folder, each with its own
+   * map); inside the map's own folder, DITA's nested map/topic references
+   * make \"the\" owning map ambiguous (a topic can be reachable from several
+   * maps), so focusing a topic never swaps the map out from under a manual
+   * choice. See decideMapFollow for the exact rule.
    */
   setActiveDocument(uri: vscode.Uri | undefined): void {
     if (!uri) return; // Keep the last map when focus moves to non-file views
     if (this.pinned) return; // Manual choice in force: editor activity never overrides it
     const fsPath = uri.fsPath;
-    const lower = fsPath.toLowerCase();
-    if (!lower.endsWith('.ditamap') && !lower.endsWith('.dita')) return; // Unrelated file type: keep showing the current map
 
     const folder = vscode.workspace.getWorkspaceFolder(uri);
-    if (!folder) return; // External topic outside any workspace folder: keep the current map
-
     const currentFolder = this.mapPath
       ? vscode.workspace.getWorkspaceFolder(vscode.Uri.file(this.mapPath))
       : undefined;
-    if (currentFolder && folder.uri.fsPath === currentFolder.uri.fsPath) return; // Same project folder: not a project switch
+    const decision = decideMapFollow(fsPath, {
+      inWorkspaceFolder: !!folder,
+      sameFolderAsCurrentMap: !!folder && !!currentFolder && folder.uri.fsPath === currentFolder.uri.fsPath,
+    });
+    if (decision === 'ignore') return;
 
-    const nextMap = lower.endsWith('.ditamap') ? fsPath : findDitamapFiles(uri)[0];
+    const nextMap = decision === 'map' ? fsPath : findDitamapFiles(uri)[0];
     if (!nextMap) return;
 
     // Keep the sidebar view visible even when the user moves on to other files
@@ -199,7 +199,7 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
   unpin(): void {
     this.pinned = false;
     vscode.commands.executeCommand('setContext', 'ditaViewer.mapExplorer.pinned', false);
-    this.setActiveDocument(vscode.window.activeTextEditor?.document.uri);
+    this.setActiveDocument(activeDocumentUri());
   }
 
   /**
@@ -215,7 +215,7 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
   async selectMap(): Promise<void> {
     const scopeUri = this.mapPath
       ? vscode.Uri.file(this.mapPath)
-      : vscode.window.activeTextEditor?.document.uri;
+      : activeDocumentUri();
     const folder = scopeUri ? vscode.workspace.getWorkspaceFolder(scopeUri) : undefined;
     const pattern = folder ? new vscode.RelativePattern(folder, '**/*.ditamap') : '**/*.ditamap';
     const found = await vscode.workspace.findFiles(pattern, '**/node_modules/**', 200);
@@ -804,6 +804,19 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
   }
 }
 
+/**
+ * The file behind whatever editor tab is focused: a source editor's file, or
+ * the file a custom editor (the map/topic preview) was opened on. Falls back
+ * to activeTextEditor for hosts where the tab model has no answer, and to
+ * undefined for tabs with no single file (diffs, settings, terminals), which
+ * setActiveDocument treats as \"keep the current map\".
+ */
+function activeDocumentUri(): vscode.Uri | undefined {
+  const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+  if (input instanceof vscode.TabInputText || input instanceof vscode.TabInputCustom) return input.uri;
+  return vscode.window.activeTextEditor?.document.uri;
+}
+
 /** What registerMapTreeView hands back to extension.ts -- just enough to
  *  wire the Explorer-side "Reveal in Map Navigator" command
  *  (ditaViewer.revealInMapExplorer) without exposing the provider itself. */
@@ -872,9 +885,14 @@ export function registerMapTreeView(context: vscode.ExtensionContext): MapTreeVi
     // survive the next reload and the next session.
     treeView.onDidExpandElement((e) => provider.noteExpanded(e.element)),
     treeView.onDidCollapseElement((e) => provider.noteCollapsed(e.element)),
-    vscode.window.onDidChangeActiveTextEditor((editor) =>
-      provider.setActiveDocument(editor?.document.uri),
-    ),
+    vscode.window.onDidChangeActiveTextEditor(() => provider.setActiveDocument(activeDocumentUri())),
+    // A map's preview is a custom editor, which never becomes
+    // activeTextEditor (that goes undefined while one has focus), so the
+    // listener above alone never sees a switch to a preview tab -- or from
+    // one preview tab to another. The tab model reports both source and
+    // preview tabs.
+    vscode.window.tabGroups.onDidChangeTabs(() => provider.setActiveDocument(activeDocumentUri())),
+    vscode.window.tabGroups.onDidChangeTabGroups(() => provider.setActiveDocument(activeDocumentUri())),
     // Kept alongside the provider's own watcher rather than replaced by it:
     // this still covers a map saved in an editor when that map lives outside
     // every workspace folder, where the watcher's base is the map's own
@@ -885,6 +903,6 @@ export function registerMapTreeView(context: vscode.ExtensionContext): MapTreeVi
     }),
     new vscode.Disposable(() => provider.dispose()),
   );
-  provider.setActiveDocument(vscode.window.activeTextEditor?.document.uri);
+  provider.setActiveDocument(activeDocumentUri());
   return { revealPath: (fsPath: string) => provider.revealPath(fsPath) };
 }
