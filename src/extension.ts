@@ -19,6 +19,7 @@ import {
   classifyLogLine,
   createLineBuffer,
   normalizeIndexHtmlLinks,
+  isUnsafeExportClearTarget,
   CssArg,
   SiteChromeFeatures,
 } from './editor/ditaOtUtils';
@@ -340,6 +341,7 @@ export function activate(context: vscode.ExtensionContext) {
       );
 
       // 4b. Prepare the output location according to the transtype's shape.
+      let outputEntriesToClear: string[] = [];
       if (transtype === 'pdf') {
         // PDF emits a single file, so an existing directory is fine: prompt
         // only when that exact target file is already present (overwrite it?).
@@ -358,15 +360,24 @@ export function activate(context: vscode.ExtensionContext) {
         // interlinked files, so a stale file from a previous export would linger
         // if we only overwrote in place -- clear the directory first the way
         // Oxygen does, so the result is exactly this run's output. Clearing is
-        // destructive, so when the directory already holds content, warn and
-        // proceed only on confirmation.
-        let entries: string[] = [];
+        // destructive, so: refuse a target that contains the map or a workspace
+        // folder (the open dialog lets the user pick any folder), warn when the
+        // directory already holds content, and defer the actual deletion to
+        // just before the transform runs (step 9) so that cancelling one of the
+        // later pickers never leaves a wiped directory behind.
+        const workspaceRoots = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
+        if (isUnsafeExportClearTarget(outputDir, mapPath, workspaceRoots)) {
+          vscode.window.showErrorMessage(
+            vscode.l10n.t('Cannot export into {0}: it contains your map or workspace folder, and its contents are cleared before exporting. Choose a dedicated output folder.', outputDir),
+          );
+          return;
+        }
         try {
-          entries = readdirSync(outputDir);
+          outputEntriesToClear = readdirSync(outputDir);
         } catch (e) {
           console.warn(`Failed to read output directory contents: ${outputDir}`, e instanceof Error ? e.message : e);
         }
-        if (entries.length > 0) {
+        if (outputEntriesToClear.length > 0) {
           const overwriteLabel = vscode.l10n.t('Overwrite');
           const overwrite = await vscode.window.showWarningMessage(
             vscode.l10n.t('The output directory is not empty: {0}. Its contents will be cleared before exporting. Overwrite it?', outputDir),
@@ -374,17 +385,6 @@ export function activate(context: vscode.ExtensionContext) {
             overwriteLabel,
           );
           if (overwrite !== overwriteLabel) return;
-        }
-        try {
-          for (const entry of entries) {
-            rmSync(join(outputDir, entry), { recursive: true, force: true });
-          }
-        } catch (e) {
-          const message = e instanceof Error ? e.message : String(e);
-          vscode.window.showErrorMessage(
-            vscode.l10n.t('Failed to clear the output directory: {0}. {1}', outputDir, message),
-          );
-          return;
         }
       }
 
@@ -510,6 +510,21 @@ export function activate(context: vscode.ExtensionContext) {
             ? { navToolbar: false, sidebar: false, onPageToc: !providesOutline, copyCode: true, backToTop: true, darkMode: true, siteShell: true }
             : chromeFeatureBase();
         }
+      }
+
+      // 8b. Everything the user had to confirm is settled: now clear the
+      // output directory (webhelp-style transtypes only; the list was taken and
+      // confirmed in step 4b).
+      try {
+        for (const entry of outputEntriesToClear) {
+          rmSync(join(outputDir, entry), { recursive: true, force: true });
+        }
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        vscode.window.showErrorMessage(
+          vscode.l10n.t('Failed to clear the output directory: {0}. {1}', outputDir, message),
+        );
+        return;
       }
 
       // 9. Run transformation. The pdf transtype gets the bundled

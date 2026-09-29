@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import {
@@ -13,6 +13,7 @@ import {
   classifyLogLine,
   createLineBuffer,
   normalizeIndexHtmlLinks,
+  isUnsafeExportClearTarget,
 } from '../../editor/ditaOtUtils';
 
 describe('resolveDitaOtExecutable', () => {
@@ -885,5 +886,35 @@ describe('buildCollapseBootstrapScript', () => {
     const el = section('section a', null);
     assert.doesNotThrow(() => run({ stored: null, throws: true, sections: [el] }));
     assert.ok(!el.className.includes('dv-collapsed'));
+  });
+});
+
+describe('isUnsafeExportClearTarget', () => {
+  const map = join(tmpdir(), 'ws', 'docs', 'guide', 'main.ditamap');
+  const ws = join(tmpdir(), 'ws');
+
+  it('refuses the map\'s own folder and its ancestors', () => {
+    assert.strictEqual(isUnsafeExportClearTarget(join(tmpdir(), 'ws', 'docs', 'guide'), map), true);
+    assert.strictEqual(isUnsafeExportClearTarget(join(tmpdir(), 'ws', 'docs'), map), true);
+    assert.strictEqual(isUnsafeExportClearTarget(ws, map), true);
+  });
+
+  it('refuses a workspace folder root even when the map lives elsewhere', () => {
+    const otherMap = join(tmpdir(), 'elsewhere', 'a.ditamap');
+    assert.strictEqual(isUnsafeExportClearTarget(ws, otherMap, [ws]), true);
+    assert.strictEqual(isUnsafeExportClearTarget(tmpdir(), otherMap, [ws]), true);
+  });
+
+  it('refuses a filesystem root', () => {
+    assert.strictEqual(isUnsafeExportClearTarget(resolve('/'), map), true);
+  });
+
+  it('allows a dedicated output folder beside or below the map', () => {
+    assert.strictEqual(isUnsafeExportClearTarget(join(tmpdir(), 'ws', 'docs', 'guide', 'out', 'html5'), map, [ws]), false);
+    assert.strictEqual(isUnsafeExportClearTarget(join(tmpdir(), 'ws', 'build', 'site'), map, [ws]), false);
+  });
+
+  it('does not treat a sibling with a shared name prefix as an ancestor', () => {
+    assert.strictEqual(isUnsafeExportClearTarget(join(tmpdir(), 'ws', 'docs', 'guide-out'), map, [ws]), false);
   });
 });

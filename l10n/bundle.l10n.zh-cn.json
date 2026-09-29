@@ -94,6 +94,7 @@
   "The file already exists: {0}. Overwrite it?": "文件已存在：{0}。是否覆盖？",
   "The output directory is not empty: {0}. Its contents will be cleared before exporting. Overwrite it?": "输出目录非空：{0}。导出前将清空其内容。是否覆盖？",
   "Failed to clear the output directory: {0}. {1}": "清空输出目录失败：{0}。{1}",
+  "Cannot export into {0}: it contains your map or workspace folder, and its contents are cleared before exporting. Choose a dedicated output folder.": "无法导出到 {0}：该目录包含你的 map 或工作区文件夹，而导出前会清空其内容。请选择一个专用的输出文件夹。",
   "Use DITA-OT default styles": "使用 DITA-OT 默认样式",
   "Use regex": "使用正则表达式",
   "View Install Instructions": "查看安装说明",
