@@ -9,7 +9,7 @@ import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { foldPendingRender, escalateAfterFailure, PendingRender } from './pendingRender';
 import { sharedWebviewStrings } from './webviewL10n';
 import { discoverCssFiles } from './cssDiscovery';
-import { findDitamapFiles, buildKeyMap, clearKeyMapCache } from './keyMap';
+import { findDitamapFiles, buildKeyMap, getKeySourceMaps, clearKeyMapCache } from './keyMap';
 import { readForDocument, writeForDocument } from './perDocumentState';
 import { trackSourceReads } from './sourceText';
 import { affectsPanel } from './sourceOverlaySync';
@@ -1290,4 +1290,4 @@ export function escapeJson(text: string): string {
 // so MapViewerProvider.ts, ditaDiffProvider.ts, exportHtml.ts,
 // extension.ts, ditaLanguageFeatures.ts and ditaMapTreeProvider.ts don't
 // need their import paths touched.
-export { findDitamapFiles, buildKeyMap };
+export { findDitamapFiles, buildKeyMap, getKeySourceMaps };

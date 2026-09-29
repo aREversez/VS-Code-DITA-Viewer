@@ -104,6 +104,24 @@ export interface KeySpace {
   status: KeyContextStatus;
 }
 
+/** A context counts only while its file (or an unsaved copy of it) exists. */
+export function isKeyContextAvailable(contextMap: string | undefined): contextMap is string {
+  return contextMap !== undefined && sourceStamp(contextMap) !== '?';
+}
+
+/**
+ * The ditamaps the key definitions come from: the context map alone when one
+ * is set and available, otherwise the ancestor maps. The single answer to
+ * "where do keys come from" -- the key map behind previews and diagnostics
+ * (buildKeySpace) and go-to-definition on a keyref must both ask this, or a
+ * preview can show one brand's value while F12 jumps to another's.
+ * `ancestorMaps` is a function so the directory walk is skipped when the
+ * context answers.
+ */
+export function keySourceMaps(contextMap: string | undefined, ancestorMaps: () => string[]): string[] {
+  return isKeyContextAvailable(contextMap) ? [contextMap] : ancestorMaps();
+}
+
 /**
  * The key space every keyref in the workspace resolves against.
  *
@@ -130,17 +148,12 @@ export function buildKeySpace(
     return read(path, encoding);
   };
 
+  const sources = keySourceMaps(contextMap, () => ancestorMaps);
   let status: KeyContextStatus = 'none';
-  let sources = ancestorMaps;
   if (contextMap !== undefined) {
     // Listed even when missing, so the file reappearing changes the stamp.
     files.push(contextMap);
-    if (sourceStamp(contextMap) !== '?') {
-      status = 'active';
-      sources = [contextMap];
-    } else {
-      status = 'missing';
-    }
+    status = isKeyContextAvailable(contextMap) ? 'active' : 'missing';
   }
 
   const keys = new Map<string, string>();

@@ -12,8 +12,9 @@
 import * as vscode from 'vscode';
 import { readSourceText, noteSourceDependencies } from './sourceText';
 import { dirname } from 'path';
-import { stampFiles, collectDitamapFilesUpward, FileReader } from './ditaRenderUtils';
-import { collectMapKeys } from './keySpace';
+import { stampFiles, collectDitamapFilesUpward } from './ditaRenderUtils';
+import { buildKeySpace, keySourceMaps, isKeyContextAvailable } from './keySpace';
+import { getKeyContextMap, reportKeyContextMissing } from './keyContext';
 import { parseDocRoot } from './docPaths';
 
 export function findDitamapFiles(docUri: vscode.Uri, stopAtFirstMatch = true): string[] {
@@ -49,43 +50,52 @@ export function clearKeyMapCache(): void {
   keyMapCache.clear();
 }
 
+/**
+ * The ditamaps key definitions come from for a document: the workspace's
+ * context map when one is set (and still exists), otherwise the ancestor
+ * maps. Go-to-definition on a keyref uses this so it lands in the same map
+ * the preview's values came from.
+ */
+export function getKeySourceMaps(docUri: vscode.Uri): string[] {
+  return keySourceMaps(getKeyContextMap(), () => findDitamapFiles(docUri, false));
+}
+
 export function buildKeyMap(docUri: vscode.Uri): Map<string, string> {
   const docDir = dirname(docUri.fsPath);
+  const context = getKeyContextMap();
   // Scan all ancestor folders (not just the nearest one with a map) so keydef
   // maps living in outer folders are still picked up; maps referenced from any
   // scanned map are followed via expandDitamapRefs regardless of location.
-  const mapFiles = findDitamapFiles(docUri, false);
-  const mapFilesKey = mapFiles.join('|');
+  // With a context map the ancestors are not consulted at all (see
+  // buildKeySpace), so the directory walk is skipped too.
+  const mapFiles = getKeySourceMaps(docUri);
+  // A context's key space does not depend on which document asks, so it gets
+  // one entry; the ancestor scan is per document directory.
+  const cacheKey = isKeyContextAvailable(context) ? `context:${context}` : docDir;
+  const mapFilesKey = `${context ?? ''}#${mapFiles.join('|')}`;
 
-  const cached = keyMapCache.get(docDir);
+  const cached = keyMapCache.get(cacheKey);
   if (cached && cached.mapFilesKey === mapFilesKey && stampFiles(cached.files) === cached.stamps) {
     // A hit reads nothing, but every render using this map depends on these files.
     noteSourceDependencies(cached.files);
     return cached.map;
   }
 
-  const map = new Map<string, string>();
-  const involvedFiles = [...mapFiles];
-  const recordingRead: FileReader = (path, encoding) => {
-    involvedFiles.push(path);
-    return readSourceText(path, encoding);
-  };
-  for (const mf of mapFiles) {
-    try {
-      collectMapKeys(mf, map, recordingRead);
-    } catch (e) {
-      console.warn(`Failed to parse keymap from ${mf}:`, e instanceof Error ? e.message : e);
-    }
-  }
+  const space = buildKeySpace(context, mapFiles, readSourceText, (mf, e) => {
+    console.warn(`Failed to parse keymap from ${mf}:`, e instanceof Error ? e.message : e);
+  });
+  if (space.status === 'missing' && context !== undefined) reportKeyContextMissing(context);
+  const map = space.keys;
+  const involvedFiles = [...new Set([...mapFiles, ...space.files])];
 
-  if (keyMapCache.size >= KEY_MAP_CACHE_MAX && !keyMapCache.has(docDir)) {
+  if (keyMapCache.size >= KEY_MAP_CACHE_MAX && !keyMapCache.has(cacheKey)) {
     const oldest = keyMapCache.keys().next().value;
     if (oldest !== undefined) keyMapCache.delete(oldest);
   }
-  keyMapCache.set(docDir, {
+  keyMapCache.set(cacheKey, {
     mapFilesKey,
-    stamps: stampFiles([...new Set(involvedFiles)]),
-    files: [...new Set(involvedFiles)],
+    stamps: stampFiles(involvedFiles),
+    files: involvedFiles,
     map,
   });
   return map;

@@ -31,7 +31,7 @@ import {
   splitRefFragment,
 } from './ditaLanguageUtils';
 import { collectReferenceableFiles, WalkEntry } from './referenceableFiles';
-import { buildKeyMap, findDitamapFiles } from '../editor/DitaViewerProvider';
+import { buildKeyMap, getKeySourceMaps } from '../editor/DitaViewerProvider';
 import { decodeHrefPart } from '../editor/ditaRenderUtils';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { DitaNode } from '../parser/domTypes';
@@ -55,12 +55,13 @@ function isMapDocument(document: vscode.TextDocument): boolean {
 const MAP_SCAN_LIMIT = 50;
 
 /**
- * Finds the location of the keydef that defines a key: scans ancestor-folder
- * ditamaps first, then follows ditamap references from those maps (the same
- * key space buildKeyMap uses, but yielding a source location).
+ * Finds the location of the keydef that defines a key: scans the maps the key
+ * space comes from (the context map, or the ancestor-folder ditamaps),
+ * then follows ditamap references from those maps (the same key space
+ * buildKeyMap uses, but yielding a source location).
  */
 function findKeyDefinitionLocation(docUri: vscode.Uri, key: string): vscode.Location | undefined {
-  const queue = findDitamapFiles(docUri, false);
+  const queue = getKeySourceMaps(docUri);
   const visited = new Set<string>();
   while (queue.length > 0 && visited.size < MAP_SCAN_LIMIT) {
     const mf = resolve(queue.shift()!);
