@@ -37,5 +37,6 @@
   "config.oxygenPath.description": "Oxygen XML Editor 可执行文件的路径（也可以是其安装目录，或 macOS 上的 .app 包路径）。留空则自动检测 macOS 默认安装位置，或 PATH 中的 oxygen 可执行文件。",
   "command.wrapSelectionWithTag.title": "DITA：用标签包裹所选内容…",
   "command.selectContextMap.title": "DITA：选择键上下文 Map…",
-  "submenu.editorContext.label": "DITA"
+  "submenu.editorContext.label": "DITA",
+  "command.findUnreferencedResources.title": "DITA：查找未引用的资源…"
 }

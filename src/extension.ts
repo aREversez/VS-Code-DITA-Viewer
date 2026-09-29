@@ -44,6 +44,7 @@ import { resolveOxygenLaunch, buildOxygenSpawnArgs } from './editor/oxygenLaunch
 import { registerWrapSelectionCommand } from './editor/wrapSelectionCommand';
 import { registerFindReferencingMapsCommand } from './editor/findDitaReferences';
 import { registerKeyContextCommand } from './editor/keyContextCommand';
+import { registerUnreferencedResourcesCommand } from './editor/unreferencedResourcesUi';
 
 const TRANSFORM_CMD = 'ditaViewer.transformWithDitaOt';
 
@@ -80,6 +81,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Explorer sidebar tree view of the active DITA map
   const mapTree = registerMapTreeView(context);
+
+  // "Find Unreferenced Resources…" (Oxygen DITA Maps Manager style)
+  registerUnreferencedResourcesCommand(context, { currentTreeMap: () => mapTree.currentMapPath() });
 
   // "Export as HTML" command (self-contained file, no DITA-OT needed)
   registerExportHtmlCommand(context);

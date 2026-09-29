@@ -204,6 +204,11 @@
         "command": "ditaViewer.mapExplorer.findUnreferenced",
         "title": "%command.mapExplorerFindUnreferenced.title%",
         "icon": "$(search)"
+      },
+      {
+        "command": "ditaViewer.findUnreferencedResources",
+        "title": "%command.findUnreferencedResources.title%",
+        "icon": "$(search)"
       }
     ],
     "icons": {
@@ -447,6 +452,11 @@
           "command": "ditaViewer.compareWithGit",
           "when": "resourceExtname == .dita",
           "group": "3_external@2"
+        },
+        {
+          "command": "ditaViewer.findUnreferencedResources",
+          "when": "resourceExtname == .ditamap",
+          "group": "4_check@1"
         }
       ],
       "explorer/context": [
@@ -469,6 +479,11 @@
           "command": "ditaViewer.exportHtml",
           "when": "resourceExtname == .dita || resourceExtname == .ditamap",
           "group": "2_export"
+        },
+        {
+          "command": "ditaViewer.findUnreferencedResources",
+          "when": "resourceExtname == .ditamap",
+          "group": "3_check@1"
         }
       ],
       "commandPalette": [
@@ -559,6 +574,10 @@
         {
           "command": "ditaViewer.mapExplorer.findUnreferenced",
           "when": "false"
+        },
+        {
+          "command": "ditaViewer.findUnreferencedResources",
+          "when": "resourceExtname == .ditamap || ditaViewer.hasMap"
         }
       ]
     },

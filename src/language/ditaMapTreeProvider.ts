@@ -20,16 +20,15 @@
 
 import * as vscode from 'vscode';
 import { existsSync, readFileSync } from 'fs';
-import { basename, dirname, relative, resolve } from 'path';
+import { basename, dirname, resolve } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { expandDitamapRefs, decodeHrefPart, makeFileTitleResolver, makeFileTopicTypeResolver } from '../editor/ditaRenderUtils';
 import { acquireDitaFileWatcher, ditaWatchBase } from '../editor/ditaFileWatcher';
 import { onKeyContextChanged } from '../editor/keyContext';
 import { buildKeyMap, findDitamapFiles } from '../editor/DitaViewerProvider';
-import { createBookRoleLabeler, collectMapEntries } from '../render/mapTypeMap';
+import { createBookRoleLabeler } from '../render/mapTypeMap';
 import { isDitamapRef } from '../render/mapTypeMap';
-import { resolveLocalHrefPath, computeUnreferencedFiles } from '../editor/mapReferenceTools';
 import { formatLocalizedRole } from './bookRoleL10n';
 import { shouldRefreshMapTree } from './mapTreeRefresh';
 import { decideMapFollow } from './mapTreeFollow';
@@ -663,43 +662,17 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
   }
 
   /**
-   * "Find Unreferenced Resources": every .dita file under the current
-   * map's own folder that no href in this map (at any depth, including
-   * spliced-in submaps -- this.mapRoot already has expandDitamapRefs
-   * applied, see reload()) resolves to. Scoped to the map's folder rather
-   * than the whole workspace, matching Oxygen's DITA Maps Manager, where
-   * this is a per-project action, not a workspace-wide one.
+   * "Find Unreferenced Resources": opens the dialog (unreferencedResourcesUi.ts)
+   * with the current map preselected -- the dialog itself lets the user add
+   * other maps and choose which folders to check.
    */
   async findUnreferencedResources(): Promise<void> {
-    if (!this.mapPath || !this.mapRoot) return;
-    const mapDir = dirname(this.mapPath);
+    if (!this.mapPath) return;
+    await vscode.commands.executeCommand('ditaViewer.findUnreferencedResources', vscode.Uri.file(this.mapPath));
+  }
 
-    const entries = collectMapEntries(this.mapRoot, this.resolveKey, formatLocalizedRole);
-    const referenced: string[] = [];
-    for (const entry of entries) {
-      const abs = resolveLocalHrefPath(mapDir, entry.href);
-      if (abs) referenced.push(abs);
-    }
-
-    const found = await vscode.workspace.findFiles(
-      new vscode.RelativePattern(mapDir, '**/*.dita'),
-      '**/node_modules/**',
-      2000,
-    );
-    const unreferenced = computeUnreferencedFiles(found.map((u) => u.fsPath), referenced, process.platform)
-      .map((p) => ({ label: basename(p), description: relative(mapDir, p), fsPath: p }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-
-    if (unreferenced.length === 0) {
-      vscode.window.showInformationMessage(
-        vscode.l10n.t('No unreferenced .dita topics found under {0}.', basename(mapDir)),
-      );
-      return;
-    }
-    const picked = await vscode.window.showQuickPick(unreferenced, {
-      placeHolder: vscode.l10n.t('{0} unreferenced .dita topic(s) found — select one to open', String(unreferenced.length)),
-    });
-    if (picked) await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(picked.fsPath));
+  get currentMapPath(): string | undefined {
+    return this.mapPath;
   }
 
   /**
@@ -822,6 +795,8 @@ function activeDocumentUri(): vscode.Uri | undefined {
  *  (ditaViewer.revealInMapExplorer) without exposing the provider itself. */
 export interface MapTreeViewHandle {
   revealPath(fsPath: string): Promise<boolean>;
+  /** The map the navigator is currently showing, if any. */
+  currentMapPath(): string | undefined;
 }
 
 export function registerMapTreeView(context: vscode.ExtensionContext): MapTreeViewHandle {
@@ -904,5 +879,5 @@ export function registerMapTreeView(context: vscode.ExtensionContext): MapTreeVi
     new vscode.Disposable(() => provider.dispose()),
   );
   provider.setActiveDocument(activeDocumentUri());
-  return { revealPath: (fsPath: string) => provider.revealPath(fsPath) };
+  return { revealPath: (fsPath: string) => provider.revealPath(fsPath), currentMapPath: () => provider.currentMapPath };
 }

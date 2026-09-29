@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
 import { openSourceBesidePreview } from './sourceEditorOpener';
-import { resolveLocalHrefPath, computeUnreferencedFiles } from './mapReferenceTools';
 import { discoverTemplates, discoverTemplateRoots, templateDisplayName, SiteTemplate, TemplateRoot } from './siteTemplates';
 import { buildTemplateStyleText, templateBodyAttrs, templateDataAttr } from './templateStyle';
 import { mapTitleFromXml, renderChrome, wrapShell } from './templateChrome';
@@ -17,7 +16,7 @@ import { onKeyContextChanged } from './keyContext';
 import { sharedWebviewStrings } from './webviewL10n';
 import { buildKeyMap, FONT_PREFS_KEY, DEFAULT_FONT_PREFS, WIDTH_SELECTION_KEY, TAG_TOOLTIPS_KEY, DEFAULT_TAG_TOOLTIPS, escapeJson } from './DitaViewerProvider';
 import { formatLocalizedRole } from '../language/bookRoleL10n';
-import { basename, dirname, join, relative, resolve } from 'path';
+import { basename, dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
 import { readForDocument, writeForDocument } from './perDocumentState';
 import { trackSourceReads, dependsOn } from './sourceText';
@@ -1522,49 +1521,13 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
   }
 
   /**
-   * "Find Unreferenced Resources" for this preview's own map: every .dita
-   * file under the map's folder that no href in the (submap-expanded) map
-   * resolves to. Mirrors DitaMapTreeProvider.findUnreferencedResources, but
-   * scoped to the document this panel is showing rather than whichever map
-   * the tree happens to have active -- the two views can legitimately be on
-   * different maps. Referenced paths come from every collectMapEntries href
-   * (not just the navigable manifest), so a resource-only or since-deleted
-   * reference is counted the same way the tree counts it.
+   * "Find Unreferenced Resources" for this preview's own map: opens the
+   * dialog (unreferencedResourcesUi.ts) on the document this panel is showing
+   * rather than whichever map the tree happens to have active -- the two
+   * views can legitimately be on different maps.
    */
   private async findUnreferencedInPreviewMap(document: vscode.TextDocument): Promise<void> {
-    const mapDir = dirname(document.uri.fsPath);
-    let referenced: string[];
-    try {
-      const mapDoc = parseDitamap(preprocessEntities(document.getText()));
-      expandDitamapRefs(mapDoc.root, mapDir);
-      const keyMap = buildKeyMap(document.uri);
-      const entries = collectMapEntries(mapDoc.root, (k) => keyMap.get(k), formatLocalizedRole);
-      referenced = [];
-      for (const entry of entries) {
-        const abs = resolveLocalHrefPath(mapDir, entry.href);
-        if (abs) referenced.push(abs);
-      }
-    } catch {
-      return; // The map no longer parses; nothing meaningful to report.
-    }
-    const found = await vscode.workspace.findFiles(
-      new vscode.RelativePattern(mapDir, '**/*.dita'),
-      '**/node_modules/**',
-      2000,
-    );
-    const unreferenced = computeUnreferencedFiles(found.map((u) => u.fsPath), referenced, process.platform)
-      .map((p) => ({ label: basename(p), description: relative(mapDir, p), fsPath: p }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-    if (unreferenced.length === 0) {
-      vscode.window.showInformationMessage(
-        vscode.l10n.t('No unreferenced .dita topics found under {0}.', basename(mapDir)),
-      );
-      return;
-    }
-    const picked = await vscode.window.showQuickPick(unreferenced, {
-      placeHolder: vscode.l10n.t('{0} unreferenced .dita topic(s) found — select one to open', String(unreferenced.length)),
-    });
-    if (picked) await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(picked.fsPath));
+    await vscode.commands.executeCommand('ditaViewer.findUnreferencedResources', document.uri);
   }
 
   /**
