@@ -36,5 +36,6 @@
   "command.mapExplorerFindUnreferenced.title": "Find Unreferenced Resources…",
   "config.oxygenPath.description": "Path to the Oxygen XML Editor executable (or its installation directory, or its .app bundle on macOS). Leave empty to auto-detect the default macOS install location or an \"oxygen\" executable on PATH.",
   "command.wrapSelectionWithTag.title": "DITA: Wrap Selection with Tag…",
-  "command.selectContextMap.title": "DITA: Select Key Context Map…"
+  "command.selectContextMap.title": "DITA: Select Key Context Map…",
+  "submenu.editorContext.label": "DITA"
 }

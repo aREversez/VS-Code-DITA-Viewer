@@ -282,6 +282,12 @@
         "contents": "%view.mapExplorer.welcome%"
       }
     ],
+    "submenus": [
+      {
+        "id": "ditaViewer.editorContext",
+        "label": "%submenu.editorContext.label%"
+      }
+    ],
     "menus": {
       "view/title": [
         {
@@ -398,42 +404,49 @@
         {
           "command": "ditaViewer.showRendered",
           "when": "resourceExtname == .dita",
-          "group": "navigation"
+          "group": "navigation@1"
         },
         {
           "command": "ditaViewer.showMapRendered",
           "when": "resourceExtname == .ditamap",
-          "group": "navigation"
+          "group": "navigation@1"
+        },
+        {
+          "submenu": "ditaViewer.editorContext",
+          "when": "resourceExtname == .dita || resourceExtname == .ditamap",
+          "group": "navigation@2"
+        }
+      ],
+      "ditaViewer.editorContext": [
+        {
+          "command": "ditaViewer.exportHtml",
+          "when": "resourceExtname == .dita || resourceExtname == .ditamap",
+          "group": "1_output@1"
         },
         {
           "command": "ditaViewer.transformWithDitaOt",
           "when": "resourceExtname == .ditamap",
-          "group": "navigation"
-        },
-        {
-          "command": "ditaViewer.openWithOxygen",
-          "when": "resourceExtname == .dita || resourceExtname == .ditamap",
-          "group": "0_oxygen"
+          "group": "1_output@2"
         },
         {
           "command": "ditaViewer.findReferencingMaps",
           "when": "resourceExtname == .dita || resourceExtname == .ditamap",
-          "group": "1_nav"
+          "group": "2_nav@1"
         },
         {
           "command": "ditaViewer.revealInMapExplorer",
           "when": "resourceExtname == .dita || resourceExtname == .ditamap",
-          "group": "1_nav"
+          "group": "2_nav@2"
         },
         {
-          "command": "ditaViewer.exportHtml",
+          "command": "ditaViewer.openWithOxygen",
           "when": "resourceExtname == .dita || resourceExtname == .ditamap",
-          "group": "1_export"
+          "group": "3_external@1"
         },
         {
           "command": "ditaViewer.compareWithGit",
           "when": "resourceExtname == .dita",
-          "group": "1_export"
+          "group": "3_external@2"
         }
       ],
       "explorer/context": [
