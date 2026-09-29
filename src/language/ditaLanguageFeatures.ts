@@ -32,6 +32,7 @@ import {
 } from './ditaLanguageUtils';
 import { collectReferenceableFiles, WalkEntry } from './referenceableFiles';
 import { buildKeyMap, getKeySourceMaps } from '../editor/DitaViewerProvider';
+import { onKeyContextChanged } from '../editor/keyContext';
 import { decodeHrefPart } from '../editor/ditaRenderUtils';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { DitaNode } from '../parser/domTypes';
@@ -751,6 +752,11 @@ export function registerLanguageFeatures(context: vscode.ExtensionContext): void
         timers.delete(key);
       }
       collection.delete(d.uri);
+    }),
+    // "Key not defined" depends on the key space, which the context map
+    // decides: re-check everything open when it changes.
+    onKeyContextChanged(() => {
+      for (const doc of vscode.workspace.textDocuments) scheduleValidation(doc);
     }),
     { dispose: () => timers.forEach((t) => clearTimeout(t)) },
   );

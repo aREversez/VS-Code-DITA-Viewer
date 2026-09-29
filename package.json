@@ -166,6 +166,11 @@
         "icon": "$(references)"
       },
       {
+        "command": "ditaViewer.selectContextMap",
+        "title": "%command.selectContextMap.title%",
+        "icon": "$(key)"
+      },
+      {
         "command": "ditaViewer.revealInMapExplorer",
         "title": "%command.revealInMapExplorer.title%",
         "icon": "$(target)"

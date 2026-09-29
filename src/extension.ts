@@ -43,6 +43,7 @@ import { registerCompareCommand } from './editor/ditaDiffProvider';
 import { resolveOxygenLaunch, buildOxygenSpawnArgs } from './editor/oxygenLauncher';
 import { registerWrapSelectionCommand } from './editor/wrapSelectionCommand';
 import { registerFindReferencingMapsCommand } from './editor/findDitaReferences';
+import { registerKeyContextCommand } from './editor/keyContextCommand';
 
 const TRANSFORM_CMD = 'ditaViewer.transformWithDitaOt';
 
@@ -68,6 +69,10 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Remembers which tab group was active last, for "open source" in docsite mode.
   registerSourceEditorTracker(context);
+
+  // Key context map (Oxygen's DITA Maps Manager "context"): restored before
+  // anything can render, so the first key resolution already follows it.
+  registerKeyContextCommand(context);
 
   // Language features: go-to-definition, completion, outline symbols,
   // broken-reference diagnostics (items shared by .dita and .ditamap)

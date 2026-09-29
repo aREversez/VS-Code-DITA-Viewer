@@ -198,5 +198,11 @@
   "Invalid markup: \"<\" must start a tag, or be written as \"&lt;\".": "Invalid markup: \"<\" must start a tag, or be written as \"&lt;\".",
   "Cannot wrap: the selection starts or ends inside a tag or comment. Select whole text or whole elements.": "Cannot wrap: the selection starts or ends inside a tag or comment. Select whole text or whole elements.",
   "Cannot wrap: the selection contains an unpaired tag <{0}>. Select the whole element, including its end tag.": "Cannot wrap: the selection contains an unpaired tag <{0}>. Select the whole element, including its end tag.",
-  "Cannot wrap: the selection contains unpaired tags. Select whole elements.": "Cannot wrap: the selection contains unpaired tags. Select whole elements."
+  "Cannot wrap: the selection contains unpaired tags. Select whole elements.": "Cannot wrap: the selection contains unpaired tags. Select whole elements.",
+  "Keys: auto": "Keys: auto",
+  "Key context map: {0}\nEvery keyref resolves against this map. Click to change.": "Key context map: {0}\nEvery keyref resolves against this map. Click to change.",
+  "No key context map: keys come from the maps around each file. Click to choose one.": "No key context map: keys come from the maps around each file. Click to choose one.",
+  "The key context map {0} no longer exists. Keys are resolved from the surrounding maps again.": "The key context map {0} no longer exists. Keys are resolved from the surrounding maps again.",
+  "No context (resolve keys from the maps around each file)": "No context (resolve keys from the maps around each file)",
+  "Select the map that every keyref resolves against": "Select the map that every keyref resolves against"
 }

@@ -10,6 +10,7 @@ import { foldPendingRender, escalateAfterFailure, PendingRender } from './pendin
 import { sharedWebviewStrings } from './webviewL10n';
 import { discoverCssFiles } from './cssDiscovery';
 import { findDitamapFiles, buildKeyMap, getKeySourceMaps, clearKeyMapCache } from './keyMap';
+import { onKeyContextChanged } from './keyContext';
 import { readForDocument, writeForDocument } from './perDocumentState';
 import { trackSourceReads } from './sourceText';
 import { affectsPanel } from './sourceOverlaySync';
@@ -1060,6 +1061,11 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       else postContentUpdate();
     });
 
+    // Choosing another key context map changes what every keyref in this
+    // topic resolves to, though no file it reads changed, so the file watcher
+    // above never hears of it.
+    const keyContextSubscription = onKeyContextChanged(() => requestUpdate('content'));
+
     updateWebview();
 
     webviewPanel.onDidDispose(() => {
@@ -1072,6 +1078,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       selectionSub.dispose();
       themeSubscription.dispose();
       viewStateSubscription.dispose();
+      keyContextSubscription.dispose();
       lastRenderedHtmlByUri.delete(document.uri.toString());
     });
   }

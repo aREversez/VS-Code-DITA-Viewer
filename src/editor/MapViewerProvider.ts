@@ -13,6 +13,7 @@ import { getBookSearchIndex, searchBookIndex, buildBookSearchResultsPayload, get
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
 import { foldPendingRender, foldSiteRefresh, escalateAfterFailure, PendingRender, SiteRefresh } from './pendingRender';
+import { onKeyContextChanged } from './keyContext';
 import { sharedWebviewStrings } from './webviewL10n';
 import { buildKeyMap, FONT_PREFS_KEY, DEFAULT_FONT_PREFS, WIDTH_SELECTION_KEY, TAG_TOOLTIPS_KEY, DEFAULT_TAG_TOOLTIPS, escapeJson } from './DitaViewerProvider';
 import { formatLocalizedRole } from '../language/bookRoleL10n';
@@ -1439,6 +1440,15 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       else postContentUpdate();
     });
 
+    // Choosing another key context map changes what keyrefs resolve to (topic
+    // titles, the sidebar, every inlined topic) though no file this map reads
+    // changed, so nothing above hears of it. Treated as a map edit: the site
+    // sidebar is rebuilt too, not just the page.
+    const keyContextSubscription = onKeyContextChanged(() => {
+      siteRefresh = foldSiteRefresh(siteRefresh, 'full');
+      requestUpdate('content');
+    });
+
     updateWebview();
 
     webviewPanel.onDidDispose(() => {
@@ -1448,6 +1458,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       referencedFilesWatcher.dispose();
       themeSubscription.dispose();
       viewStateSubscription.dispose();
+      keyContextSubscription.dispose();
       lastRenderedHtmlByUri.delete(document.uri.toString());
     });
   }

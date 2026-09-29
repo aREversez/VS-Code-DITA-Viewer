@@ -198,5 +198,11 @@
   "Invalid markup: \"<\" must start a tag, or be written as \"&lt;\".": "无效标记：\"<\" 必须开始一个标签，或写作 \"&lt;\"。",
   "Cannot wrap: the selection starts or ends inside a tag or comment. Select whole text or whole elements.": "无法包裹：选区的起点或终点位于标签或注释内部。请选择完整的文本或完整的元素。",
   "Cannot wrap: the selection contains an unpaired tag <{0}>. Select the whole element, including its end tag.": "无法包裹：选区包含未配对的标签 <{0}>。请选择完整的元素（含其结束标签）。",
-  "Cannot wrap: the selection contains unpaired tags. Select whole elements.": "无法包裹：选区包含未配对的标签。请选择完整的元素。"
+  "Cannot wrap: the selection contains unpaired tags. Select whole elements.": "无法包裹：选区包含未配对的标签。请选择完整的元素。",
+  "Keys: auto": "键：自动",
+  "Key context map: {0}\nEvery keyref resolves against this map. Click to change.": "键上下文 Map：{0}\n所有 keyref 都基于此 Map 解析。点击更改。",
+  "No key context map: keys come from the maps around each file. Click to choose one.": "未设置键上下文 Map：key 取自各文件周围的 Map。点击选择。",
+  "The key context map {0} no longer exists. Keys are resolved from the surrounding maps again.": "键上下文 Map {0} 已不存在，key 重新按周围的 Map 解析。",
+  "No context (resolve keys from the maps around each file)": "无上下文（key 取自各文件周围的 Map）",
+  "Select the map that every keyref resolves against": "选择所有 keyref 解析所依据的 Map"
 }

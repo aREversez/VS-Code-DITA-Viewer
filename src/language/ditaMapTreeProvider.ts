@@ -25,6 +25,7 @@ import { DitaNode } from '../parser/domTypes';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { expandDitamapRefs, decodeHrefPart, makeFileTitleResolver, makeFileTopicTypeResolver } from '../editor/ditaRenderUtils';
 import { acquireDitaFileWatcher, ditaWatchBase } from '../editor/ditaFileWatcher';
+import { onKeyContextChanged } from '../editor/keyContext';
 import { buildKeyMap, findDitamapFiles } from '../editor/DitaViewerProvider';
 import { createBookRoleLabeler, collectMapEntries } from '../render/mapTypeMap';
 import { isDitamapRef } from '../render/mapTypeMap';
@@ -829,6 +830,9 @@ export function registerMapTreeView(context: vscode.ExtensionContext): MapTreeVi
   });
   context.subscriptions.push(
     treeView,
+    // Row titles resolve keyrefs, and the key context map decides what those
+    // resolve to; no file changed, so the file watcher would never reload it.
+    onKeyContextChanged(() => provider.requestRefresh()),
     vscode.commands.registerCommand('ditaViewer.mapExplorer.refresh', () => provider.refresh()),
     vscode.commands.registerCommand('ditaViewer.mapExplorer.selectMap', () => provider.selectMap()),
     vscode.commands.registerCommand('ditaViewer.mapExplorer.pin', () => provider.pin()),
