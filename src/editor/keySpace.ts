@@ -9,6 +9,7 @@ import { dirname } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { expandDitamapRefs, FileReader } from './ditaRenderUtils';
+import { sourceStamp } from './sourceText';
 
 function extractTextFromNode(node: DitaNode): string {
   if (node.type === 'text') return node.text || '';
@@ -87,4 +88,68 @@ export function collectMapKeys(mapPath: string, into: Map<string, string>, read:
     for (const child of node.children || []) walk(child);
   }
   for (const child of mapRoot.children || []) walk(child);
+}
+
+// ── key space: context map vs. ancestor scan ──
+
+export type KeyContextStatus = 'none' | 'active' | 'missing';
+
+export interface KeySpace {
+  keys: Map<string, string>;
+  /** Every file the key values were derived from (for cache stamping). */
+  files: string[];
+  /** 'none': no context set. 'active': keys come from the context map alone.
+   *  'missing': a context is set but its file no longer exists, so the
+   *  ancestor scan was used instead. */
+  status: KeyContextStatus;
+}
+
+/**
+ * The key space every keyref in the workspace resolves against.
+ *
+ * With a context map (Oxygen's DITA Maps Manager "context"), the keys are
+ * those of that one map, expanded through its map references, and nothing
+ * else: the ancestor maps are NOT consulted, so choosing one brand's keydef
+ * map cannot pick up another brand's definition of the same key. Without a
+ * context it is the ancestor scan buildKeyMap always did.
+ *
+ * A context whose file no longer exists falls back to the ancestor scan and
+ * says so ('missing') -- the caller decides how to tell the user. A context
+ * that exists but cannot be parsed is reported through onError and yields an
+ * empty key space rather than quietly resolving against other maps.
+ */
+export function buildKeySpace(
+  contextMap: string | undefined,
+  ancestorMaps: string[],
+  read: FileReader,
+  onError: (mapPath: string, error: unknown) => void = () => undefined,
+): KeySpace {
+  const files: string[] = [];
+  const recordingRead: FileReader = (path, encoding) => {
+    files.push(path);
+    return read(path, encoding);
+  };
+
+  let status: KeyContextStatus = 'none';
+  let sources = ancestorMaps;
+  if (contextMap !== undefined) {
+    // Listed even when missing, so the file reappearing changes the stamp.
+    files.push(contextMap);
+    if (sourceStamp(contextMap) !== '?') {
+      status = 'active';
+      sources = [contextMap];
+    } else {
+      status = 'missing';
+    }
+  }
+
+  const keys = new Map<string, string>();
+  for (const mf of sources) {
+    try {
+      collectMapKeys(mf, keys, recordingRead);
+    } catch (e) {
+      onError(mf, e);
+    }
+  }
+  return { keys, files: [...new Set(files)], status };
 }
