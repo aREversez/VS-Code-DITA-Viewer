@@ -221,29 +221,6 @@
         "icon": "$(checklist)"
       },
       {
-        "command": "ditaViewer.mapChecks.clear",
-        "title": "%command.mapChecksClear.title%",
-        "icon": "$(clear-all)"
-      },
-      {
-        "command": "ditaViewer.mapChecks.reveal",
-        "title": "%command.mapChecksReveal.title%"
-      },
-      {
-        "command": "ditaViewer.mapChecks.copyPath",
-        "title": "%command.mapChecksCopyPath.title%"
-      },
-      {
-        "command": "ditaViewer.mapChecks.rerunCompleteness",
-        "title": "%command.mapChecksRerun.title%",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "ditaViewer.mapChecks.changeCompleteness",
-        "title": "%command.mapChecksChangeCompleteness.title%",
-        "icon": "$(edit)"
-      },
-      {
         "command": "ditaViewer.clearMapCheckResults",
         "title": "%command.clearMapCheckResults.title%"
       }
@@ -315,12 +292,6 @@
           "name": "%view.mapExplorer.name%",
           "icon": "media/icons/map-preview.svg",
           "when": "resourceExtname == .dita || resourceExtname == .ditamap || ditaViewer.hasMap"
-        },
-        {
-          "id": "ditaViewer.mapChecks",
-          "name": "%view.mapChecks.name%",
-          "icon": "$(checklist)",
-          "when": "resourceExtname == .dita || resourceExtname == .ditamap || ditaViewer.hasMap || ditaViewer.mapChecks.hasResults"
         }
       ]
     },
@@ -328,10 +299,6 @@
       {
         "view": "ditaViewer.mapExplorer",
         "contents": "%view.mapExplorer.welcome%"
-      },
-      {
-        "view": "ditaViewer.mapChecks",
-        "contents": "%view.mapChecks.welcome%"
       }
     ],
     "submenus": [
@@ -386,21 +353,6 @@
           "command": "ditaViewer.mapExplorer.refresh",
           "when": "view == ditaViewer.mapExplorer",
           "group": "navigation@8"
-        },
-        {
-          "command": "ditaViewer.mapChecks.clear",
-          "when": "view == ditaViewer.mapChecks && ditaViewer.mapChecks.hasResults",
-          "group": "navigation@1"
-        },
-        {
-          "command": "ditaViewer.findUnreferencedResources",
-          "when": "view == ditaViewer.mapChecks",
-          "group": "1_run@1"
-        },
-        {
-          "command": "ditaViewer.validateMapCompleteness",
-          "when": "view == ditaViewer.mapChecks",
-          "group": "1_run@2"
         }
       ],
       "view/item/context": [
@@ -448,26 +400,6 @@
           "command": "ditaViewer.mapExplorer.collapseAll",
           "when": "view == ditaViewer.mapExplorer",
           "group": "expandcollapse@2"
-        },
-        {
-          "command": "ditaViewer.mapChecks.rerunCompleteness",
-          "when": "view == ditaViewer.mapChecks && viewItem == mapChecks.completeness",
-          "group": "inline@1"
-        },
-        {
-          "command": "ditaViewer.mapChecks.changeCompleteness",
-          "when": "view == ditaViewer.mapChecks && viewItem == mapChecks.completeness",
-          "group": "inline@2"
-        },
-        {
-          "command": "ditaViewer.mapChecks.reveal",
-          "when": "view == ditaViewer.mapChecks && viewItem == mapChecks.issue",
-          "group": "1_open@1"
-        },
-        {
-          "command": "ditaViewer.mapChecks.copyPath",
-          "when": "view == ditaViewer.mapChecks && viewItem == mapChecks.issue",
-          "group": "2_copy@1"
         }
       ],
       "editor/title": [
@@ -687,26 +619,6 @@
         },
         {
           "command": "ditaViewer.mapExplorer.validateCompleteness",
-          "when": "false"
-        },
-        {
-          "command": "ditaViewer.mapChecks.clear",
-          "when": "false"
-        },
-        {
-          "command": "ditaViewer.mapChecks.reveal",
-          "when": "false"
-        },
-        {
-          "command": "ditaViewer.mapChecks.copyPath",
-          "when": "false"
-        },
-        {
-          "command": "ditaViewer.mapChecks.rerunCompleteness",
-          "when": "false"
-        },
-        {
-          "command": "ditaViewer.mapChecks.changeCompleteness",
           "when": "false"
         }
       ]

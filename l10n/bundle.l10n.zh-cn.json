@@ -209,7 +209,6 @@
   "DITA Maps": "DITA Map",
   "Select Folders": "选择文件夹",
   "Search failed: {0}": "搜索失败：{0}",
-  "Open": "打开",
   "Referenced topic not found: {0}": "找不到引用的主题：{0}",
   "Referenced map not found: {0}": "找不到引用的 Map：{0}",
   "Referenced conref target not found: {0}": "找不到 conref 引用的目标：{0}",
@@ -292,11 +291,6 @@
   "Choose another map…": "选择其他 Map…",
   "Profiling and other settings": "过滤及其他设置",
   "Checking {0}…": "正在检查 {0}…",
-  "{0} finding(s)": "{0} 项发现",
-  "Completeness Check": "完整性检查",
-  "no problems · {0}": "无问题 · {0}",
-  "{0} error(s), {1} warning(s)": "{0} 个错误，{1} 个警告",
-  "First occurrence: {0}": "首次出现位置：{0}",
   "{0} maps": "{0} 个 Map",
   "Scanning {0}…": "正在扫描 {0}…",
   "all {0} referenced": "全部 {0} 个都已被引用",
@@ -316,5 +310,7 @@
   "DITA Unreferenced Resources": "DITA 未引用的资源",
   "Show Problems": "显示问题",
   "Copy List": "复制列表",
-  "{0} unreferenced resource(s) found among {1} file(s) checked — listed in the Problems panel.": "在已检查的 {1} 个文件中发现 {0} 个未引用的资源 — 已列在“问题”面板中。"
+  "{0} unreferenced resource(s) found among {1} file(s) checked — listed in the Problems panel.": "在已检查的 {1} 个文件中发现 {0} 个未引用的资源 — 已列在“问题”面板中。",
+  "{0}: no problems found.": "{0}：未发现问题。",
+  "{0}: {1} error(s), {2} warning(s) — listed in the Problems panel.": "{0}：{1} 个错误，{2} 个警告 — 已列在“问题”面板中。"
 }

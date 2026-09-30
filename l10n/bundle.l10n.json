@@ -209,7 +209,6 @@
   "DITA Maps": "DITA Maps",
   "Select Folders": "Select Folders",
   "Search failed: {0}": "Search failed: {0}",
-  "Open": "Open",
   "Referenced topic not found: {0}": "Referenced topic not found: {0}",
   "Referenced map not found: {0}": "Referenced map not found: {0}",
   "Referenced conref target not found: {0}": "Referenced conref target not found: {0}",
@@ -292,11 +291,6 @@
   "Choose another map…": "Choose another map…",
   "Profiling and other settings": "Profiling and other settings",
   "Checking {0}…": "Checking {0}…",
-  "{0} finding(s)": "{0} finding(s)",
-  "Completeness Check": "Completeness Check",
-  "no problems · {0}": "no problems · {0}",
-  "{0} error(s), {1} warning(s)": "{0} error(s), {1} warning(s)",
-  "First occurrence: {0}": "First occurrence: {0}",
   "{0} maps": "{0} maps",
   "Scanning {0}…": "Scanning {0}…",
   "all {0} referenced": "all {0} referenced",
@@ -316,5 +310,7 @@
   "DITA Unreferenced Resources": "DITA Unreferenced Resources",
   "Show Problems": "Show Problems",
   "Copy List": "Copy List",
-  "{0} unreferenced resource(s) found among {1} file(s) checked — listed in the Problems panel.": "{0} unreferenced resource(s) found among {1} file(s) checked — listed in the Problems panel."
+  "{0} unreferenced resource(s) found among {1} file(s) checked — listed in the Problems panel.": "{0} unreferenced resource(s) found among {1} file(s) checked — listed in the Problems panel.",
+  "{0}: no problems found.": "{0}: no problems found.",
+  "{0}: {1} error(s), {2} warning(s) — listed in the Problems panel.": "{0}: {1} error(s), {2} warning(s) — listed in the Problems panel."
 }

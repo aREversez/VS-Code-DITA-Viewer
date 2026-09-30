@@ -33,6 +33,7 @@ import {
   summarizeExtensions,
 } from './unreferencedResources';
 import { CrawlResult, crawlMaps } from './mapCrawl';
+import { clearCompletenessResults } from './completenessCheckUi';
 import { computeUnreferencedFiles } from './mapReferenceTools';
 import {
   MapCheckDeps,
@@ -300,9 +301,9 @@ export function registerUnreferencedResourcesCommand(context: vscode.ExtensionCo
       const map = mapFromArg(arg) ?? activeMapPath(deps);
       await findUnreferenced(context, map ? [map] : []);
     }),
-    vscode.commands.registerCommand('ditaViewer.clearMapCheckResults', async () => {
+    vscode.commands.registerCommand('ditaViewer.clearMapCheckResults', () => {
       clearUnreferencedResults();
-      await vscode.commands.executeCommand('ditaViewer.mapChecks.clear');
+      clearCompletenessResults();
     }),
     new vscode.Disposable(() => {
       collection?.dispose();

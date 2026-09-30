@@ -2,9 +2,9 @@
 //
 // Native VS Code UI: one multi-select quick pick lists the checks (Oxygen's
 // option set, grouped, with the last choice checked; Enter runs it), a
-// notification shows progress with a cancel button, findings go to the
-// Problems panel and to the Map Checks view in the Explorer. Which checks
-// are on and which DITAVAL files apply are ordinary settings
+// notification shows progress with a cancel button, and the findings go to
+// the Problems panel (the category is shown beside each one) with a summary
+// notification that opens it. Which checks are on and which DITAVAL files apply are ordinary settings
 // (dita-viewer.completenessCheck.*), so a team can share them in
 // .vscode/settings.json. The checks themselves are pure and live in
 // mapCrawl.ts / mapChecks.ts.
@@ -36,7 +36,6 @@ import {
   mapFromArg,
   updateSetting,
 } from './mapCheckShared';
-import { CompletenessState, MapChecksView } from './mapCheckResultsView';
 
 const VALIDATE_CMD = 'ditaViewer.validateMapCompleteness';
 const SETTINGS = 'dita-viewer.completenessCheck';
@@ -114,12 +113,6 @@ async function checkRemote(url: string): Promise<boolean> {
   }
 }
 
-const CATEGORY_ORDER: IssueCategory[] = [
-  'validation', 'missing-reference', 'missing-resource', 'remote-resource', 'outside-folder',
-  'unreferenced-link', 'multiple-reference', 'duplicate-id', 'duplicate-key', 'unreferenced-key',
-  'unreferenced-reusable', 'table-layout', 'profiling-conflict', 'profiling-preference',
-];
-
 function categoryLabel(c: IssueCategory): string {
   switch (c) {
     case 'validation': return vscode.l10n.t('Validation');
@@ -151,7 +144,7 @@ function publishDiagnostics(issues: Issue[]): void {
     const line = Math.max(0, i.line - 1);
     const d = new vscode.Diagnostic(new vscode.Range(line, 0, line, Number.MAX_SAFE_INTEGER), localizeMsg(i.msg), toSeverity(i.severity));
     d.source = vscode.l10n.t('DITA Completeness Check');
-    d.code = i.category;
+    d.code = categoryLabel(i.category);
     if (i.related?.length) {
       d.relatedInformation = i.related.map(
         (r) => new vscode.DiagnosticRelatedInformation(new vscode.Location(vscode.Uri.file(r.file), new vscode.Position(Math.max(0, r.line - 1), 0)), vscode.l10n.t('First occurrence')),
@@ -287,24 +280,14 @@ function pickChecks(map: string, ditavalCount: number): Promise<PickResult> {
 
 // -- Running --------------------------------------------------------------------
 
-function toState(map: string, issues: Issue[]): CompletenessState {
-  const groups = CATEGORY_ORDER.map((c) => ({
-    label: categoryLabel(c),
-    items: issues
-      .filter((i) => i.category === c)
-      .map((i) => ({ file: i.file, line: i.line, severity: i.severity, text: localizeMsg(i.msg), related: i.related })),
-  })).filter((g) => g.items.length > 0);
-  return {
-    map,
-    groups,
-    errors: issues.filter((i) => i.severity === 'error').length,
-    warnings: issues.filter((i) => i.severity === 'warning').length,
-  };
-}
-
 let lastMap: string | undefined;
 
-async function run(view: MapChecksView, map: string): Promise<void> {
+/** Clears this check's findings from the Problems panel. */
+export function clearCompletenessResults(): void {
+  diagnostics?.clear();
+}
+
+async function run(map: string): Promise<void> {
   lastMap = map;
   const options = optionsFromSettings(readEnabled(), readDitavalFiles(dirname(map)));
   await vscode.window.withProgress(
@@ -314,8 +297,7 @@ async function run(view: MapChecksView, map: string): Promise<void> {
         const issues = await runCompleteness(map, options, token);
         if (token.isCancellationRequested) return;
         publishDiagnostics(issues);
-        view.setCompleteness(toState(map, issues));
-        await view.reveal();
+        await announce(map, issues);
       } catch (err) {
         void vscode.window.showErrorMessage(vscode.l10n.t('Check failed: {0}', err instanceof Error ? err.message : String(err)));
       }
@@ -323,8 +305,22 @@ async function run(view: MapChecksView, map: string): Promise<void> {
   );
 }
 
+/** One-line summary with a button to the Problems panel, where the findings are. */
+async function announce(map: string, issues: Issue[]): Promise<void> {
+  if (issues.length === 0) {
+    void vscode.window.showInformationMessage(vscode.l10n.t('{0}: no problems found.', basename(map)));
+    return;
+  }
+  const errors = issues.filter((i) => i.severity === 'error').length;
+  const warnings = issues.filter((i) => i.severity === 'warning').length;
+  const show = vscode.l10n.t('Show Problems');
+  const text = vscode.l10n.t('{0}: {1} error(s), {2} warning(s) — listed in the Problems panel.', basename(map), String(errors), String(warnings));
+  const pick = await (errors > 0 ? vscode.window.showErrorMessage(text, show) : vscode.window.showWarningMessage(text, show));
+  if (pick === show) await vscode.commands.executeCommand('workbench.actions.view.problems');
+}
+
 /** Asks which checks to run (remembering the answer in settings), then runs them. */
-async function chooseAndRun(view: MapChecksView, map: string): Promise<void> {
+async function chooseAndRun(map: string): Promise<void> {
   const ditavalCount = readDitavalFiles(dirname(map)).length;
   const res = await pickChecks(map, ditavalCount);
   if (!res) return;
@@ -335,10 +331,10 @@ async function chooseAndRun(view: MapChecksView, map: string): Promise<void> {
     else await updateSetting(SETTINGS, 'ditavalFiles', files.map((f) => toStoredPath(dirname(res.map), f)));
   }
   await updateSetting(SETTINGS, 'enabledChecks', picked);
-  await run(view, res.map);
+  await run(res.map);
 }
 
-export function registerCompletenessCommand(context: vscode.ExtensionContext, deps: MapCheckDeps, view: MapChecksView): void {
+export function registerCompletenessCommand(context: vscode.ExtensionContext, deps: MapCheckDeps): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(VALIDATE_CMD, async (arg?: unknown) => {
       const map = mapFromArg(arg) ?? activeMapPath(deps) ?? lastMap;
@@ -346,15 +342,7 @@ export function registerCompletenessCommand(context: vscode.ExtensionContext, de
         void vscode.window.showErrorMessage(vscode.l10n.t('Please open a .ditamap file first.'));
         return;
       }
-      await chooseAndRun(view, map);
-    }),
-    vscode.commands.registerCommand('ditaViewer.mapChecks.rerunCompleteness', async () => {
-      const last = view.lastCompleteness;
-      if (last) await run(view, last.map);
-    }),
-    vscode.commands.registerCommand('ditaViewer.mapChecks.changeCompleteness', async () => {
-      const map = view.lastCompleteness?.map ?? activeMapPath(deps) ?? lastMap;
-      if (map) await chooseAndRun(view, map);
+      await chooseAndRun(map);
     }),
     new vscode.Disposable(() => {
       diagnostics?.dispose();

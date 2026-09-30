@@ -70,9 +70,8 @@ describe('completeness check message templates', () => {
 
 describe('Validate and Check for Completeness wiring', () => {
   const ids = ['ditaViewer.validateMapCompleteness', 'ditaViewer.mapExplorer.validateCompleteness'];
-  const resultIds = ['ditaViewer.mapChecks.rerunCompleteness', 'ditaViewer.mapChecks.changeCompleteness'];
   it('declares its commands with titles present in both package.nls files', () => {
-    for (const id of [...ids, ...resultIds]) {
+    for (const id of ids) {
       const c = cmd(id);
       assert.ok(c, id);
       const key = c.title.replace(/%/g, '');
@@ -83,7 +82,7 @@ describe('Validate and Check for Completeness wiring', () => {
 
   it('keeps node-only commands out of the Command Palette', () => {
     const hidden = pkg.contributes.menus.commandPalette.filter((m: { when: string }) => m.when === 'false').map((m: { command: string }) => m.command);
-    for (const id of [...resultIds, 'ditaViewer.mapExplorer.validateCompleteness']) assert.ok(hidden.includes(id), id);
+    assert.ok(hidden.includes('ditaViewer.mapExplorer.validateCompleteness'));
   });
 
   it('the picker offers every check id; the enabledChecks setting matches CHECK_IDS and the Oxygen defaults', () => {
@@ -95,11 +94,24 @@ describe('Validate and Check for Completeness wiring', () => {
     assert.ok(pkg.contributes.configuration.properties['dita-viewer.completenessCheck.ditavalFiles']);
   });
 
-  it('no webview forms: a quick pick asks, a notification shows progress, the Map Checks view lists findings', () => {
+  it('native UI only: a quick pick asks, a notification shows progress, the Problems panel lists the findings', () => {
     const ui = read('src', 'editor', 'completenessCheckUi.ts');
-    assert.ok(!ui.includes('createWebviewPanel'));
-    assert.ok(ui.includes('createQuickPick') && ui.includes('ProgressLocation.Notification'));
+    assert.ok(!ui.includes('createWebviewPanel') && !ui.includes('createTreeView'));
+    assert.ok(ui.includes('createQuickPick') && ui.includes('ProgressLocation.Notification') && ui.includes('createDiagnosticCollection'));
     assert.ok(!read('src', 'editor', 'mapCheckShared.ts').includes('LIST_SCRIPT'));
+  });
+
+  it('there is no separate Map Checks view: the Explorer keeps only the map navigator', () => {
+    const ids = pkg.contributes.views.explorer.map((v: { id: string }) => v.id);
+    assert.ok(!ids.includes('ditaViewer.mapChecks'));
+    assert.ok(!Object.keys(pkg.contributes.menus).includes('ditaViewer.mapChecks'));
+    assert.ok(pkg.contributes.commands.every((c: { command: string }) => !c.command.startsWith('ditaViewer.mapChecks.')));
+  });
+
+  it('one command clears the findings of both checks', () => {
+    assert.ok(cmd('ditaViewer.clearMapCheckResults'));
+    const ui = read('src', 'editor', 'unreferencedResourcesUi.ts');
+    assert.ok(ui.includes('clearUnreferencedResults()') && ui.includes('clearCompletenessResults()'));
   });
 
   it('map navigator toolbar: Find, Validate, then Pin/Unpin (one slot, exclusive), then Refresh', () => {
