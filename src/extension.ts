@@ -336,9 +336,11 @@ export function activate(context: vscode.ExtensionContext) {
         defaultUri: vscode.Uri.file(defaultDir),
         openLabel: vscode.l10n.t('Select Output Directory'),
       });
-      const outputDir = normalizeDriveLetter(
-        (chosenUri && chosenUri.length > 0) ? chosenUri[0].fsPath : defaultDir,
-      );
+      // Dismissing the dialog (Esc / close) cancels the export; it must not fall
+      // back to the default directory, because everything after this point may
+      // clear that directory and write into it.
+      if (!chosenUri || chosenUri.length === 0) return;
+      const outputDir = normalizeDriveLetter(chosenUri[0].fsPath);
 
       // 4b. Prepare the output location according to the transtype's shape.
       let outputEntriesToClear: string[] = [];
