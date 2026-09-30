@@ -20,6 +20,17 @@ export const DEFAULT_UNREFERENCED_FILTERS: UnreferencedFilters = {
   excludeFolders: 'CVS,.svn,_svn,.git,.hg,temp,out',
 };
 
+/** Fills blank/missing filter settings with Oxygen's defaults (a blank include means "everything"). */
+export function normalizeFilters(raw: Partial<UnreferencedFilters> | undefined): UnreferencedFilters {
+  const pick = (v: unknown, dflt: string): string => (typeof v === 'string' && v.trim() !== '' ? v : dflt);
+  return {
+    includeFiles: pick(raw?.includeFiles, DEFAULT_UNREFERENCED_FILTERS.includeFiles),
+    // Exclusions may legitimately be emptied out, so only a missing value falls back.
+    excludeFiles: typeof raw?.excludeFiles === 'string' ? raw.excludeFiles : DEFAULT_UNREFERENCED_FILTERS.excludeFiles,
+    excludeFolders: typeof raw?.excludeFolders === 'string' ? raw.excludeFolders : DEFAULT_UNREFERENCED_FILTERS.excludeFolders,
+  };
+}
+
 export interface DirEntry {
   name: string;
   isDir: boolean;

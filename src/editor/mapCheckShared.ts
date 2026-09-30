@@ -1,10 +1,9 @@
-// Shared plumbing for the map-check dialogs (Find Unreferenced Resources,
+// Shared plumbing for the map-check commands (Find Unreferenced Resources,
 // Validate and Check for Completeness): file-system adapters for the pure
-// crawl/check modules, a small webview page shell styled with VS Code theme
-// variables, and the "which map?" default.
-//
-// The dialogs themselves live in unreferencedResourcesUi.ts and
-// completenessCheckUi.ts.
+// crawl/check modules, the "which map?" default, a multi-select picker, and
+// progress. All UI is native VS Code -- quick picks, a notification with a
+// cancel button, a tree view for results (mapCheckResultsView.ts) -- not
+// custom webview forms.
 
 import * as vscode from 'vscode';
 import { promises as fsp } from 'fs';
@@ -16,8 +15,6 @@ export interface MapCheckDeps {
   /** The map the navigator is showing, when the active editor gives no better answer. */
   currentTreeMap(): string | undefined;
 }
-
-// ── Host adapters ───────────────────────────────────────────────────────
 
 export function makeHost(token?: vscode.CancellationToken): CrawlHost {
   return {
@@ -42,7 +39,116 @@ export const listHost = {
   },
 };
 
-// ── Webview plumbing ────────────────────────────────────────────────────
+/** The map a command should act on when none was passed: the active editor's, else the navigator's. */
+export function activeMapPath(deps: MapCheckDeps): string | undefined {
+  const active = getActiveDitaUri();
+  if (active && /\.ditamap$/i.test(active.fsPath)) return active.fsPath;
+  return deps.currentTreeMap();
+}
+
+/** A map handed in by a menu or toolbar (a Uri), else undefined. */
+export function mapFromArg(arg: unknown): string | undefined {
+  return arg instanceof vscode.Uri && /\.ditamap$/i.test(arg.fsPath) ? arg.fsPath : undefined;
+}
+
+export async function browseFiles(title: string, extensions: string[], many: boolean): Promise<string[]> {
+  const uris = await vscode.window.showOpenDialog({
+    canSelectMany: many,
+    canSelectFiles: true,
+    canSelectFolders: false,
+    filters: { [title]: extensions },
+    title,
+  });
+  return (uris ?? []).map((u) => u.fsPath);
+}
+
+export async function browseFolders(title: string): Promise<string[]> {
+  const uris = await vscode.window.showOpenDialog({ canSelectMany: true, canSelectFiles: false, canSelectFolders: true, title });
+  return (uris ?? []).map((u) => u.fsPath);
+}
+
+export interface PickManyItem extends vscode.QuickPickItem {
+  value: string;
+}
+
+export interface PickManyOptions {
+  title: string;
+  placeholder: string;
+  items: PickManyItem[];
+  /** Adds a "Browse…" title-bar button that appends whatever the callback returns (selected). */
+  browse?: { tooltip: string; run: () => Promise<PickManyItem[]> };
+  /** Extra title-bar buttons (open settings, …). */
+  buttons?: Array<{ icon: string; tooltip: string; run: () => void }>;
+}
+
+/**
+ * A multi-select quick pick: items marked `picked` start checked, Enter
+ * accepts, Esc cancels (undefined). Standard VS Code idiom for choosing from
+ * a list that the user may also extend from disk.
+ */
+export function pickMany(opts: PickManyOptions): Promise<string[] | undefined> {
+  return new Promise((resolve) => {
+    const qp = vscode.window.createQuickPick<PickManyItem>();
+    qp.title = opts.title;
+    qp.placeholder = opts.placeholder;
+    qp.canSelectMany = true;
+    qp.ignoreFocusOut = true;
+    qp.matchOnDescription = true;
+    qp.items = opts.items;
+    qp.selectedItems = opts.items.filter((i) => i.picked);
+
+    const browseButton: vscode.QuickInputButton | undefined = opts.browse
+      ? { iconPath: new vscode.ThemeIcon('folder-opened'), tooltip: opts.browse.tooltip }
+      : undefined;
+    const extra = (opts.buttons ?? []).map((b) => ({
+      button: { iconPath: new vscode.ThemeIcon(b.icon), tooltip: b.tooltip } as vscode.QuickInputButton,
+      run: b.run,
+    }));
+    qp.buttons = [...(browseButton ? [browseButton] : []), ...extra.map((e) => e.button)];
+
+    let done = false;
+    const finish = (v: string[] | undefined) => {
+      if (done) return;
+      done = true;
+      resolve(v);
+      qp.dispose();
+    };
+    qp.onDidTriggerButton(async (b) => {
+      if (b === browseButton && opts.browse) {
+        const added = await opts.browse.run();
+        const known = new Set(qp.items.map((i) => i.value));
+        const fresh = added.filter((i) => !known.has(i.value));
+        const selected = [...qp.selectedItems, ...added.filter((i) => known.has(i.value)).map((i) => qp.items.find((x) => x.value === i.value)!)];
+        qp.items = [...fresh, ...qp.items];
+        qp.selectedItems = [...selected, ...fresh];
+        return;
+      }
+      extra.find((e) => e.button === b)?.run();
+    });
+    qp.onDidAccept(() => finish(qp.selectedItems.map((i) => i.value)));
+    qp.onDidHide(() => finish(undefined));
+    qp.show();
+  });
+}
+
+/**
+ * Writes a setting where it already lives (workspace folder, then workspace,
+ * then user); if unset anywhere, in the user settings so a check never
+ * creates .vscode/settings.json in someone's repository on its own.
+ */
+export async function updateSetting(section: string, key: string, value: unknown): Promise<void> {
+  const cfg = vscode.workspace.getConfiguration(section);
+  const info = cfg.inspect(key);
+  const target =
+    info?.workspaceFolderValue !== undefined
+      ? vscode.ConfigurationTarget.WorkspaceFolder
+      : info?.workspaceValue !== undefined
+        ? vscode.ConfigurationTarget.Workspace
+        : vscode.ConfigurationTarget.Global;
+  await cfg.update(key, value, target);
+}
+
+// ── Webview plumbing (used by the completeness dialog until it moves to the same native UI) ────────────────────────────────────────────────────
 
 export function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);

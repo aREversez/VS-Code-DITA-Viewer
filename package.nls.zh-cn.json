@@ -38,9 +38,19 @@
   "command.wrapSelectionWithTag.title": "DITA：用标签包裹所选内容…",
   "command.selectContextMap.title": "DITA：选择键上下文 Map…",
   "submenu.editorContext.label": "DITA",
-  "command.findUnreferencedResources.title": "DITA：查找未引用的资源…",
+  "command.findUnreferencedResources.title": "DITA：查找未引用的资源",
   "command.validateMapCompleteness.title": "DITA：验证并检查完整性…",
   "command.mapExplorerValidateCompleteness.title": "验证并检查完整性…",
   "config.completenessProfilingAttributes.description": "完整性检查中“报告与过滤首选项冲突的属性和值”所使用的过滤属性及其允许的取值。例如：{\"audience\": [\"admin\", \"user\"], \"platform\": []}。空列表表示允许任意值。",
-  "config.completenessSingleValueProfilingAttributes.description": "只能取单个值的过滤属性；完整性检查会报告其中带有多个值的属性。"
+  "config.completenessSingleValueProfilingAttributes.description": "只能取单个值的过滤属性；完整性检查会报告其中带有多个值的属性。",
+  "view.mapChecks.name": "Map 检查",
+  "view.mapChecks.welcome": "查找没有被任何 DITA Map 引用的图片和其他文件。\n[查找未引用的资源](command:ditaViewer.findUnreferencedResources)",
+  "command.mapChecksClear.title": "清除结果",
+  "command.mapChecksRerun.title": "重新运行",
+  "command.mapChecksChangeUnreferenced.title": "更改 Map 和文件夹…",
+  "command.mapChecksReveal.title": "在资源管理器中显示",
+  "command.mapChecksCopyPath.title": "复制路径",
+  "config.unrefIncludeFiles.description": "查找未引用资源时要包含的文件名模式（以逗号分隔；* 和 ? 为通配符）。",
+  "config.unrefExcludeFiles.description": "查找未引用资源时要跳过的文件名模式（以逗号分隔；* 和 ? 为通配符）。",
+  "config.unrefExcludeFolders.description": "查找未引用资源时要跳过的文件夹名称，其下的所有内容一并跳过（以逗号分隔）。"
 }

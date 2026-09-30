@@ -1,221 +1,156 @@
-// "Find Unreferenced Resources…" (ditaViewer.findUnreferencedResources): a
-// form in a webview panel modeled on Oxygen's dialog -- DITA maps, folders,
-// include/exclude filters -- and a clickable result list. The search itself
-// is pure and lives in unreferencedResources.ts / mapCrawl.ts.
+// "Find Unreferenced Resources" (ditaViewer.findUnreferencedResources).
+//
+// From a menu or toolbar on a map it just runs: that map, its folder, the
+// filters from settings. From the Command Palette it first offers two quick
+// picks (maps, then folders) with the active map and its folder checked, so
+// the usual case is Enter, Enter. Results land in the Map Checks view, where
+// "Change Maps and Folders…" and "Run Again" are one click away. Filters are
+// ordinary settings (dita-viewer.unreferencedResources.*).
 
 import * as vscode from 'vscode';
-import { dirname, relative } from 'path';
+import { dirname } from 'path';
 import {
-  DEFAULT_UNREFERENCED_FILTERS,
   UnreferencedFilters,
   findUnreferencedResources,
+  normalizeFilters,
 } from './unreferencedResources';
 import {
-  LIST_SCRIPT,
   MapCheckDeps,
-  esc,
+  PickManyItem,
+  activeMapPath,
+  browseFiles,
+  browseFolders,
   listHost,
   makeHost,
-  page,
-  pickFiles,
-  pickFolders,
-  resolveMapArg,
+  mapFromArg,
+  pickMany,
 } from './mapCheckShared';
+import { MapChecksView } from './mapCheckResultsView';
 
 const FIND_CMD = 'ditaViewer.findUnreferencedResources';
-const UNREF_STATE_KEY = 'ditaViewer.unreferencedFilters';
+const SETTINGS = 'dita-viewer.unreferencedResources';
 
-// ── Find Unreferenced Resources ─────────────────────────────────────────
-
-interface UnrefFormState {
+interface Scope {
   maps: string[];
   folders: string[];
-  filters: UnreferencedFilters;
 }
 
-let unrefPanel: vscode.WebviewPanel | undefined;
+let lastScope: Scope | undefined;
 
-async function openUnreferencedDialog(context: vscode.ExtensionContext, arg: unknown, deps: MapCheckDeps): Promise<void> {
-  const map = resolveMapArg(arg, deps);
-  const saved = context.globalState.get<UnreferencedFilters>(UNREF_STATE_KEY);
-  const state: UnrefFormState = {
-    maps: map ? [map] : [],
-    folders: map ? [dirname(map)] : [],
-    filters: { ...DEFAULT_UNREFERENCED_FILTERS, ...(saved ?? {}) },
-  };
+export function readFilters(): UnreferencedFilters {
+  const cfg = vscode.workspace.getConfiguration(SETTINGS);
+  return normalizeFilters({
+    includeFiles: cfg.get<string>('includeFiles'),
+    excludeFiles: cfg.get<string>('excludeFiles'),
+    excludeFolders: cfg.get<string>('excludeFolders'),
+  });
+}
 
-  if (unrefPanel) {
-    unrefPanel.dispose();
+const relLabel = (p: string): string => vscode.workspace.asRelativePath(p, true);
+
+function item(value: string, picked: boolean, description?: string): PickManyItem {
+  return { value, label: relLabel(value), description, picked };
+}
+
+async function workspaceMaps(): Promise<string[]> {
+  const found = await vscode.workspace.findFiles('**/*.ditamap', '**/{node_modules,.git,out,temp}/**', 200);
+  return found.map((u) => u.fsPath).sort((a, b) => a.localeCompare(b));
+}
+
+/** Step 1: which maps. Step 2: which folders. Both start from `initial`. */
+async function pickScope(initial: Scope | undefined, hintMap: string | undefined): Promise<Scope | undefined> {
+  const preMaps = initial?.maps ?? (hintMap ? [hintMap] : []);
+  const known = new Set(preMaps);
+  const mapItems = [
+    ...preMaps.map((m) => item(m, true)),
+    ...(await workspaceMaps()).filter((m) => !known.has(m)).map((m) => item(m, false)),
+  ];
+  const maps = await pickMany({
+    title: vscode.l10n.t('Find Unreferenced Resources — DITA maps (1/2)'),
+    placeholder: vscode.l10n.t('Select the maps whose references count; files they do not reach are reported'),
+    items: mapItems,
+    browse: {
+      tooltip: vscode.l10n.t('Browse for maps…'),
+      run: async () => (await browseFiles(vscode.l10n.t('DITA Maps'), ['ditamap'], true)).map((p) => item(p, true)),
+    },
+  });
+  if (!maps) return undefined;
+  if (maps.length === 0) {
+    void vscode.window.showWarningMessage(vscode.l10n.t('Select at least one DITA map.'));
+    return undefined;
   }
-  const panel = vscode.window.createWebviewPanel('ditaViewer.findUnreferenced', vscode.l10n.t('Find Unreferenced Resources'), vscode.ViewColumn.Active, {
-    enableScripts: true,
-    retainContextWhenHidden: true,
-  });
-  unrefPanel = panel;
-  panel.onDidDispose(() => {
-    if (unrefPanel === panel) unrefPanel = undefined;
-  });
-  panel.webview.html = unreferencedHtml(state);
 
-  let running: vscode.CancellationTokenSource | undefined;
-  const post = (m: unknown) => void panel.webview.postMessage(m);
-  panel.onDidDispose(() => running?.cancel());
-
-  panel.webview.onDidReceiveMessage(async (m: { type: string; [k: string]: unknown }) => {
-    switch (m.type) {
-      case 'addMap': {
-        const picked = await pickFiles(vscode.l10n.t('Select DITA Maps'), { [vscode.l10n.t('DITA Maps')]: ['ditamap'] });
-        for (const p of picked) if (!state.maps.includes(p)) state.maps.push(p);
-        post({ type: 'maps', items: state.maps });
-        break;
-      }
-      case 'removeMap':
-        state.maps = state.maps.filter((x) => x !== m.value);
-        post({ type: 'maps', items: state.maps });
-        break;
-      case 'addFolder': {
-        const picked = await pickFolders(vscode.l10n.t('Select Folders'));
-        for (const p of picked) if (!state.folders.includes(p)) state.folders.push(p);
-        post({ type: 'folders', items: state.folders });
-        break;
-      }
-      case 'removeFolder':
-        state.folders = state.folders.filter((x) => x !== m.value);
-        post({ type: 'folders', items: state.folders });
-        break;
-      case 'cancelRun':
-        running?.cancel();
-        break;
-      case 'find': {
-        state.filters = {
-          includeFiles: String(m.includeFiles ?? '*'),
-          excludeFiles: String(m.excludeFiles ?? ''),
-          excludeFolders: String(m.excludeFolders ?? ''),
-        };
-        await context.globalState.update(UNREF_STATE_KEY, state.filters);
-        if (state.maps.length === 0 || state.folders.length === 0) {
-          post({ type: 'notice', text: vscode.l10n.t('Add at least one DITA map and one folder.') });
-          break;
-        }
-        running = new vscode.CancellationTokenSource();
-        post({ type: 'busy', on: true });
-        try {
-          const res = await findUnreferencedResources(
-            { maps: state.maps, folders: state.folders, filters: state.filters },
-            makeHost(running.token),
-            listHost,
-          );
-          if (running.token.isCancellationRequested) {
-            post({ type: 'notice', text: vscode.l10n.t('Search cancelled.') });
-          } else {
-            const roots = state.folders;
-            const items = res.unreferenced.map((abs) => {
-              const base = roots.find((r) => !relative(r, abs).startsWith('..')) ?? dirname(abs);
-              return { abs, rel: relative(base, abs).replace(/\\/g, '/') };
-            });
-            const problems = res.crawl.fileIssues.filter((i) => !i.structural).length;
-            post({
-              type: 'results',
-              items,
-              summary:
-                items.length === 0
-                  ? vscode.l10n.t('No unreferenced resources found ({0} file(s) checked).', String(res.scanned))
-                  : vscode.l10n.t('{0} unreferenced resource(s) among {1} file(s) checked.', String(items.length), String(res.scanned)),
-              warning:
-                problems > 0
-                  ? vscode.l10n.t('{0} referenced file(s) could not be read or parsed, so what they reference may be reported as unreferenced. Run "Validate and Check for Completeness" for details.', String(problems))
-                  : '',
-            });
-          }
-        } catch (err) {
-          post({ type: 'notice', text: vscode.l10n.t('Search failed: {0}', err instanceof Error ? err.message : String(err)) });
-        } finally {
-          running.dispose();
-          running = undefined;
-          post({ type: 'busy', on: false });
-        }
-        break;
-      }
-      case 'open':
-        await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(String(m.path)), { preview: true });
-        break;
-      case 'reveal':
-        await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(String(m.path)));
-        break;
-      case 'copy':
-        await vscode.env.clipboard.writeText(String(m.text ?? ''));
-        vscode.window.showInformationMessage(vscode.l10n.t('Copied to clipboard.'));
-        break;
-    }
+  const f = readFilters();
+  const preFolders = initial?.folders?.length ? initial.folders : maps.map((m) => dirname(m));
+  const folderSet = new Set(preFolders);
+  const extra = [
+    ...maps.map((m) => dirname(m)),
+    ...(vscode.workspace.workspaceFolders ?? []).map((w) => w.uri.fsPath),
+  ].filter((d, i, all) => !folderSet.has(d) && all.indexOf(d) === i);
+  const folders = await pickMany({
+    title: vscode.l10n.t('Find Unreferenced Resources — folders to check (2/2)'),
+    placeholder: vscode.l10n.t('Filters: include {0} · exclude files {1} · exclude folders {2}', f.includeFiles, f.excludeFiles, f.excludeFolders),
+    items: [...[...folderSet].map((d) => item(d, true)), ...extra.map((d) => item(d, false))],
+    browse: { tooltip: vscode.l10n.t('Browse for folders…'), run: async () => (await browseFolders(vscode.l10n.t('Select Folders'))).map((p) => item(p, true)) },
+    buttons: [
+      {
+        icon: 'gear',
+        tooltip: vscode.l10n.t('Edit filters in Settings'),
+        run: () => void vscode.commands.executeCommand('workbench.action.openSettings', SETTINGS),
+      },
+    ],
   });
-}
-
-function unreferencedHtml(state: UnrefFormState): string {
-  const body = `
-<p class="lead">${esc(vscode.l10n.t('All files from the listed folders that are not referenced from the specified DITA Maps will be reported.'))}</p>
-<h2>${esc(vscode.l10n.t('DITA Maps:'))}</h2>
-<div class="list" id="maps"></div>
-<div class="row end"><button id="addMap">${esc(vscode.l10n.t('Add'))}</button><button id="removeMap">${esc(vscode.l10n.t('Remove'))}</button></div>
-<h2>${esc(vscode.l10n.t('Folders:'))}</h2>
-<div class="list" id="folders"></div>
-<div class="row end"><button id="addFolder">${esc(vscode.l10n.t('Add'))}</button><button id="removeFolder">${esc(vscode.l10n.t('Remove'))}</button></div>
-<fieldset><legend>${esc(vscode.l10n.t('Filters'))}</legend>
-  <div class="fld"><span>${esc(vscode.l10n.t('Include files:'))}</span><input type="text" id="includeFiles" value="${esc(state.filters.includeFiles)}"></div>
-  <div class="fld"><span>${esc(vscode.l10n.t('Exclude files:'))}</span><input type="text" id="excludeFiles" value="${esc(state.filters.excludeFiles)}"></div>
-  <div class="fld"><span>${esc(vscode.l10n.t('Exclude folders:'))}</span><input type="text" id="excludeFolders" value="${esc(state.filters.excludeFolders)}"></div>
-  <div class="muted">${esc(vscode.l10n.t('Comma-separated patterns; * and ? are wildcards.'))}</div>
-</fieldset>
-<div class="row end"><button class="primary" id="find">${esc(vscode.l10n.t('Find'))}</button><button id="cancel" disabled>${esc(vscode.l10n.t('Cancel'))}</button></div>
-<div id="results"></div>`;
-  const script = `
-${LIST_SCRIPT}
-const T = ${JSON.stringify({
-    none: vscode.l10n.t('(none)'),
-    copyAll: vscode.l10n.t('Copy list'),
-    open: vscode.l10n.t('Open'),
-    reveal: vscode.l10n.t('Reveal'),
-  })};
-const maps = bindList('maps'), folders = bindList('folders');
-renderList(maps, ${JSON.stringify(state.maps)}, T.none);
-renderList(folders, ${JSON.stringify(state.folders)}, T.none);
-const $ = (id) => document.getElementById(id);
-$('addMap').onclick = () => vscode.postMessage({ type: 'addMap' });
-$('removeMap').onclick = () => { const v = selected(maps); if (v) vscode.postMessage({ type: 'removeMap', value: v }); };
-$('addFolder').onclick = () => vscode.postMessage({ type: 'addFolder' });
-$('removeFolder').onclick = () => { const v = selected(folders); if (v) vscode.postMessage({ type: 'removeFolder', value: v }); };
-$('find').onclick = () => vscode.postMessage({ type: 'find', includeFiles: $('includeFiles').value, excludeFiles: $('excludeFiles').value, excludeFolders: $('excludeFolders').value });
-$('cancel').onclick = () => vscode.postMessage({ type: 'cancelRun' });
-window.addEventListener('message', (e) => {
-  const m = e.data;
-  if (m.type === 'maps') renderList(maps, m.items, T.none);
-  else if (m.type === 'folders') renderList(folders, m.items, T.none);
-  else if (m.type === 'busy') { $('find').disabled = m.on; $('cancel').disabled = !m.on; if (m.on) $('results').textContent = '…'; }
-  else if (m.type === 'notice') { $('results').textContent = m.text; }
-  else if (m.type === 'results') {
-    const box = $('results'); box.textContent = '';
-    const s = document.createElement('div'); s.textContent = m.summary; box.appendChild(s);
-    if (m.warning) { const w = document.createElement('div'); w.className = 'sev-warning'; w.textContent = m.warning; box.appendChild(w); }
-    if (m.items.length) {
-      const bar = document.createElement('div'); bar.className = 'row';
-      const b = document.createElement('button'); b.textContent = T.copyAll;
-      b.onclick = () => vscode.postMessage({ type: 'copy', text: m.items.map((i) => i.abs).join('\\n') });
-      bar.appendChild(b); box.appendChild(bar);
-    }
-    for (const it of m.items) {
-      const d = document.createElement('div'); d.className = 'item'; d.title = it.abs;
-      const p = document.createElement('span'); p.className = 'path'; p.textContent = it.rel;
-      d.appendChild(p);
-      d.onclick = () => vscode.postMessage({ type: 'open', path: it.abs });
-      d.oncontextmenu = (ev) => { ev.preventDefault(); vscode.postMessage({ type: 'reveal', path: it.abs }); };
-      box.appendChild(d);
-    }
+  if (!folders) return undefined;
+  if (folders.length === 0) {
+    void vscode.window.showWarningMessage(vscode.l10n.t('Select at least one folder.'));
+    return undefined;
   }
-});`;
-  return page(vscode.l10n.t('Find Unreferenced Resources'), body, script);
+  return { maps, folders };
 }
 
-export function registerUnreferencedResourcesCommand(context: vscode.ExtensionContext, deps: MapCheckDeps): void {
+async function run(view: MapChecksView, scope: Scope): Promise<void> {
+  lastScope = scope;
+  const filters = readFilters();
+  await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('Finding unreferenced resources…'), cancellable: true },
+    async (_progress, token) => {
+      try {
+        const res = await findUnreferencedResources({ maps: scope.maps, folders: scope.folders, filters }, makeHost(token), listHost);
+        if (token.isCancellationRequested) return;
+        view.setUnreferenced({
+          maps: scope.maps,
+          folders: scope.folders,
+          scanned: res.scanned,
+          files: res.unreferenced,
+          unreadable: res.crawl.fileIssues.filter((i) => !i.structural).length,
+        });
+        await view.reveal();
+      } catch (err) {
+        void vscode.window.showErrorMessage(vscode.l10n.t('Search failed: {0}', err instanceof Error ? err.message : String(err)));
+      }
+    },
+  );
+}
+
+export function registerUnreferencedResourcesCommand(
+  context: vscode.ExtensionContext,
+  deps: MapCheckDeps,
+  view: MapChecksView,
+): void {
   context.subscriptions.push(
-    vscode.commands.registerCommand(FIND_CMD, (arg?: unknown) => openUnreferencedDialog(context, arg, deps)),
+    vscode.commands.registerCommand(FIND_CMD, async (arg?: unknown) => {
+      const direct = mapFromArg(arg);
+      if (direct) return run(view, { maps: [direct], folders: [dirname(direct)] });
+      const scope = await pickScope(view.lastUnreferenced ?? lastScope, activeMapPath(deps));
+      if (scope) await run(view, scope);
+    }),
+    vscode.commands.registerCommand('ditaViewer.mapChecks.rerunUnreferenced', async () => {
+      const last = view.lastUnreferenced;
+      if (last) await run(view, { maps: last.maps, folders: last.folders });
+    }),
+    vscode.commands.registerCommand('ditaViewer.mapChecks.changeUnreferenced', async () => {
+      const scope = await pickScope(view.lastUnreferenced ?? lastScope, activeMapPath(deps));
+      if (scope) await run(view, scope);
+    }),
   );
 }

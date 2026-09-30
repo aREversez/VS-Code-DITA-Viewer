@@ -4,6 +4,7 @@ import {
   globToRegExp,
   splitPatterns,
   listFilteredFiles,
+  normalizeFilters,
   findUnreferencedResources,
   DEFAULT_UNREFERENCED_FILTERS,
   ListHost,
@@ -122,5 +123,20 @@ describe('unreferenced: finding', () => {
     );
     const names = res.unreferenced.map((p) => join(p).replace(/\\/g, '/').replace(/.*\/proj\//, ''));
     assert.deepStrictEqual(names, ['img/unused.png']);
+  });
+});
+
+describe('unreferenced: filter settings', () => {
+  it('fills missing values with the defaults and treats a blank include as everything', () => {
+    assert.deepStrictEqual(normalizeFilters(undefined), DEFAULT_UNREFERENCED_FILTERS);
+    assert.strictEqual(normalizeFilters({ includeFiles: '  ' }).includeFiles, '*');
+  });
+  it('keeps an exclusion list the user emptied out', () => {
+    const f = normalizeFilters({ excludeFiles: '', excludeFolders: '' });
+    assert.strictEqual(f.excludeFiles, '');
+    assert.strictEqual(f.excludeFolders, '');
+  });
+  it('keeps custom values', () => {
+    assert.strictEqual(normalizeFilters({ includeFiles: '*.png' }).includeFiles, '*.png');
   });
 });

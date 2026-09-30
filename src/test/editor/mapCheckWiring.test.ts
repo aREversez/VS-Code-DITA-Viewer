@@ -10,24 +10,65 @@ const read = (...p: string[]) => readFileSync(join(root, ...p), 'utf8');
 const pkg = JSON.parse(read('package.json'));
 const nls = JSON.parse(read('package.nls.json'));
 
+const nlsZh = JSON.parse(read('package.nls.zh-cn.json'));
+const cmd = (id: string) => pkg.contributes.commands.find((x: { command: string }) => x.command === id);
+
 describe('Find Unreferenced Resources wiring', () => {
-  it('declares the command with a title that exists in package.nls.json', () => {
-    const c = pkg.contributes.commands.find((x: { command: string }) => x.command === 'ditaViewer.findUnreferencedResources');
-    assert.ok(c);
-    assert.ok(nls[c.title.replace(/%/g, '')]);
+  const ids = [
+    'ditaViewer.findUnreferencedResources',
+    'ditaViewer.mapChecks.clear',
+    'ditaViewer.mapChecks.rerunUnreferenced',
+    'ditaViewer.mapChecks.changeUnreferenced',
+    'ditaViewer.mapChecks.reveal',
+    'ditaViewer.mapChecks.copyPath',
+  ];
+  it('declares its commands with titles present in both package.nls files', () => {
+    for (const id of ids) {
+      const c = cmd(id);
+      assert.ok(c, id);
+      const key = c.title.replace(/%/g, '');
+      assert.ok(nls[key], `${id} en`);
+      assert.ok(nlsZh[key], `${id} zh-cn`);
+    }
   });
-  it('the navigator toolbar entry and the preview menu reach the dialog', () => {
+
+  it('adds a Map Checks view to the Explorer with a welcome panel that runs the command', () => {
+    const view = pkg.contributes.views.explorer.find((v: { id: string }) => v.id === 'ditaViewer.mapChecks');
+    assert.ok(view);
+    const welcome = pkg.contributes.viewsWelcome.find((w: { view: string }) => w.view === 'ditaViewer.mapChecks');
+    assert.ok(nls[welcome.contents.replace(/%/g, '')].includes('command:ditaViewer.findUnreferencedResources'));
+  });
+
+  it('keeps node-only commands out of the Command Palette', () => {
+    const hidden = pkg.contributes.menus.commandPalette
+      .filter((m: { when: string }) => m.when === 'false')
+      .map((m: { command: string }) => m.command);
+    for (const id of ids.filter((i) => i !== 'ditaViewer.findUnreferencedResources')) assert.ok(hidden.includes(id), id);
+  });
+
+  it('contributes the filter settings with Oxygen defaults', () => {
+    const props = pkg.contributes.configuration.properties;
+    assert.strictEqual(props['dita-viewer.unreferencedResources.includeFiles'].default, '*');
+    assert.ok(props['dita-viewer.unreferencedResources.excludeFiles'].default.includes('.DS_Store'));
+    assert.ok(props['dita-viewer.unreferencedResources.excludeFolders'].default.includes('.git'));
+  });
+
+  it('the navigator toolbar entry and the preview menu pass the map straight to the command', () => {
     assert.ok(read('src', 'language', 'ditaMapTreeProvider.ts').includes("'ditaViewer.findUnreferencedResources'"));
     assert.ok(read('src', 'editor', 'MapViewerProvider.ts').includes("'ditaViewer.findUnreferencedResources'"));
   });
+
   it('is registered on activation with the navigator as the fallback map', () => {
     const ext = read('src', 'extension.ts');
     assert.ok(ext.includes('registerUnreferencedResourcesCommand(context'));
     assert.ok(ext.includes('mapTree.currentMapPath()'));
   });
-});
 
-// ── Validate and Check for Completeness ──
+  it('no webview forms: results are a native tree view', () => {
+    assert.ok(!read('src', 'editor', 'unreferencedResourcesUi.ts').includes('createWebviewPanel'));
+    assert.ok(read('src', 'editor', 'mapCheckResultsView.ts').includes('createTreeView'));
+  });
+});
 
 describe('completeness check message templates', () => {
   it('every template has a literal vscode.l10n.t call in completenessCheckUi.ts', () => {
