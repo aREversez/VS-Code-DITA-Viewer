@@ -52,5 +52,8 @@
   "command.mapChecksCopyPath.title": "复制路径",
   "config.unrefIncludeFiles.description": "查找未引用资源时要包含的文件名模式（以逗号分隔；* 和 ? 为通配符）。",
   "config.unrefExcludeFiles.description": "查找未引用资源时要跳过的文件名模式（以逗号分隔；* 和 ? 为通配符）。",
-  "config.unrefExcludeFolders.description": "查找未引用资源时要跳过的文件夹名称，其下的所有内容一并跳过（以逗号分隔）。"
+  "config.unrefExcludeFolders.description": "查找未引用资源时要跳过的文件夹名称，其下的所有内容一并跳过（以逗号分隔）。",
+  "command.mapChecksChangeCompleteness.title": "选择检查项…",
+  "config.completenessEnabledChecks.description": "“验证并检查完整性”要运行的检查项。在检查项选择器中确认后会自动更新；也可以在此编辑，以便与团队共享。",
+  "config.completenessDitavalFiles.description": "完整性检查使用的 DITAVAL 文件（相对于 Map 所在文件夹的路径，或绝对路径）。当 enabledChecks 包含 \"useDitaval\" 时生效；每个文件各运行一次检查。"
 }

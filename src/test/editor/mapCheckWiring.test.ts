@@ -2,6 +2,7 @@ import * as assert from 'assert';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { MESSAGE_TEMPLATES, fill, formatMessage, msg } from '../../editor/mapCheckMessages';
+import { CHECK_IDS, DEFAULT_ENABLED_CHECKS } from '../../editor/mapChecks';
 
 // The UI modules import `vscode`, so (like mapToolbarOrder.test.ts) the
 // wiring is asserted on source/manifest text.
@@ -88,12 +89,36 @@ describe('completeness check message templates', () => {
 
 describe('Validate and Check for Completeness wiring', () => {
   const ids = ['ditaViewer.validateMapCompleteness', 'ditaViewer.mapExplorer.validateCompleteness'];
-  it('declares both commands with titles that exist in package.nls.json', () => {
-    for (const id of ids) {
-      const c = pkg.contributes.commands.find((x: { command: string }) => x.command === id);
+  const resultIds = ['ditaViewer.mapChecks.rerunCompleteness', 'ditaViewer.mapChecks.changeCompleteness'];
+  it('declares its commands with titles present in both package.nls files', () => {
+    for (const id of [...ids, ...resultIds]) {
+      const c = cmd(id);
       assert.ok(c, id);
-      assert.ok(nls[c.title.replace(/%/g, '')], `${id} title`);
+      const key = c.title.replace(/%/g, '');
+      assert.ok(nls[key], `${id} en`);
+      assert.ok(nlsZh[key], `${id} zh-cn`);
     }
+  });
+
+  it('keeps node-only commands out of the Command Palette', () => {
+    const hidden = pkg.contributes.menus.commandPalette.filter((m: { when: string }) => m.when === 'false').map((m: { command: string }) => m.command);
+    for (const id of [...resultIds, 'ditaViewer.mapExplorer.validateCompleteness']) assert.ok(hidden.includes(id), id);
+  });
+
+  it('the picker offers every check id; the enabledChecks setting matches CHECK_IDS and the Oxygen defaults', () => {
+    const ui = read('src', 'editor', 'completenessCheckUi.ts');
+    const setting = pkg.contributes.configuration.properties['dita-viewer.completenessCheck.enabledChecks'];
+    for (const id of setting.items.enum) assert.ok(ui.includes(`'${id}'`), `picker lacks ${id}`);
+    assert.deepStrictEqual([...setting.items.enum].sort(), [...CHECK_IDS].sort());
+    assert.deepStrictEqual(setting.default, DEFAULT_ENABLED_CHECKS);
+    assert.ok(pkg.contributes.configuration.properties['dita-viewer.completenessCheck.ditavalFiles']);
+  });
+
+  it('no webview forms: a quick pick asks, a notification shows progress, the Map Checks view lists findings', () => {
+    const ui = read('src', 'editor', 'completenessCheckUi.ts');
+    assert.ok(!ui.includes('createWebviewPanel'));
+    assert.ok(ui.includes('createQuickPick') && ui.includes('ProgressLocation.Notification'));
+    assert.ok(!read('src', 'editor', 'mapCheckShared.ts').includes('LIST_SCRIPT'));
   });
 
   it('map navigator toolbar: Find, Validate, then Pin/Unpin (one slot, exclusive), then Refresh', () => {
@@ -106,7 +131,7 @@ describe('Validate and Check for Completeness wiring', () => {
     assert.deepStrictEqual(slot('ditaViewer.mapExplorer.refresh'), ['navigation@8']);
   });
 
-  it('the navigator toolbar entry reaches the dialog and it is registered on activation', () => {
+  it('the navigator toolbar entry reaches the command and it is registered on activation', () => {
     assert.ok(read('src', 'language', 'ditaMapTreeProvider.ts').includes("'ditaViewer.validateMapCompleteness'"));
     assert.ok(read('src', 'extension.ts').includes('registerCompletenessCommand(context'));
   });

@@ -242,6 +242,16 @@
       {
         "command": "ditaViewer.mapChecks.copyPath",
         "title": "%command.mapChecksCopyPath.title%"
+      },
+      {
+        "command": "ditaViewer.mapChecks.rerunCompleteness",
+        "title": "%command.mapChecksRerun.title%",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "ditaViewer.mapChecks.changeCompleteness",
+        "title": "%command.mapChecksChangeCompleteness.title%",
+        "icon": "$(edit)"
       }
     ],
     "icons": {
@@ -392,6 +402,11 @@
           "command": "ditaViewer.findUnreferencedResources",
           "when": "view == ditaViewer.mapChecks",
           "group": "1_run@1"
+        },
+        {
+          "command": "ditaViewer.validateMapCompleteness",
+          "when": "view == ditaViewer.mapChecks",
+          "group": "1_run@2"
         }
       ],
       "view/item/context": [
@@ -458,6 +473,26 @@
         {
           "command": "ditaViewer.mapChecks.copyPath",
           "when": "view == ditaViewer.mapChecks && viewItem == mapChecks.file",
+          "group": "2_copy@1"
+        },
+        {
+          "command": "ditaViewer.mapChecks.rerunCompleteness",
+          "when": "view == ditaViewer.mapChecks && viewItem == mapChecks.completeness",
+          "group": "inline@1"
+        },
+        {
+          "command": "ditaViewer.mapChecks.changeCompleteness",
+          "when": "view == ditaViewer.mapChecks && viewItem == mapChecks.completeness",
+          "group": "inline@2"
+        },
+        {
+          "command": "ditaViewer.mapChecks.reveal",
+          "when": "view == ditaViewer.mapChecks && viewItem == mapChecks.issue",
+          "group": "1_open@1"
+        },
+        {
+          "command": "ditaViewer.mapChecks.copyPath",
+          "when": "view == ditaViewer.mapChecks && viewItem == mapChecks.issue",
           "group": "2_copy@1"
         }
       ],
@@ -699,6 +734,14 @@
         {
           "command": "ditaViewer.mapChecks.copyPath",
           "when": "false"
+        },
+        {
+          "command": "ditaViewer.mapChecks.rerunCompleteness",
+          "when": "false"
+        },
+        {
+          "command": "ditaViewer.mapChecks.changeCompleteness",
+          "when": "false"
         }
       ]
     },
@@ -782,6 +825,43 @@
           "type": "string",
           "default": "CVS,.svn,_svn,.git,.hg,temp,out",
           "description": "%config.unrefExcludeFolders.description%"
+        },
+        "dita-viewer.completenessCheck.enabledChecks": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "batchValidate",
+              "checkNonDita",
+              "includeRemote",
+              "useDitaval",
+              "reportOutsideMapFolder",
+              "reportUnreferencedLinks",
+              "reportMultipleRefs",
+              "checkDuplicateTopicIds",
+              "reportDuplicateKeys",
+              "reportUnreferencedKeys",
+              "reportUnreferencedReusable",
+              "reportTableProblems",
+              "identifyProfilingConflicts",
+              "reportProfilingPreferences"
+            ]
+          },
+          "default": [
+            "batchValidate",
+            "checkNonDita",
+            "reportUnreferencedLinks",
+            "reportTableProblems"
+          ],
+          "description": "%config.completenessEnabledChecks.description%"
+        },
+        "dita-viewer.completenessCheck.ditavalFiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "%config.completenessDitavalFiles.description%"
         }
       }
     }

@@ -91,7 +91,7 @@ export function activate(context: vscode.ExtensionContext) {
   registerUnreferencedResourcesCommand(context, { currentTreeMap: () => mapTree.currentMapPath() }, mapChecksView);
 
   // "Validate and Check for Completeness…" (Oxygen DITA Map Completeness Check style)
-  registerCompletenessCommand(context, { currentTreeMap: () => mapTree.currentMapPath() });
+  registerCompletenessCommand(context, { currentTreeMap: () => mapTree.currentMapPath() }, mapChecksView);
 
   // "Export as HTML" command (self-contained file, no DITA-OT needed)
   registerExportHtmlCommand(context);

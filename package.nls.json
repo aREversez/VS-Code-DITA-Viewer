@@ -52,5 +52,8 @@
   "command.mapChecksCopyPath.title": "Copy Path",
   "config.unrefIncludeFiles.description": "File name patterns to include when looking for unreferenced resources (comma-separated; * and ? are wildcards).",
   "config.unrefExcludeFiles.description": "File name patterns to skip when looking for unreferenced resources (comma-separated; * and ? are wildcards).",
-  "config.unrefExcludeFolders.description": "Folder names to skip, along with everything under them, when looking for unreferenced resources (comma-separated)."
+  "config.unrefExcludeFolders.description": "Folder names to skip, along with everything under them, when looking for unreferenced resources (comma-separated).",
+  "command.mapChecksChangeCompleteness.title": "Choose Checks…",
+  "config.completenessEnabledChecks.description": "Checks that \"Validate and Check for Completeness\" runs. Updated when you accept the check picker; edit here to share the choice with a team.",
+  "config.completenessDitavalFiles.description": "DITAVAL files for the completeness check (paths relative to the map's folder, or absolute). Used while \"useDitaval\" is in enabledChecks; the check runs once per file."
 }

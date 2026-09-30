@@ -7,7 +7,7 @@
 //   - Profiling preferences come from the dita-viewer.completenessCheck.*
 //     settings rather than Oxygen's preferences page.
 
-import { dirname } from 'path';
+import { dirname, isAbsolute, relative, resolve } from 'path';
 import { normalizePathForCompare } from './mapReferenceTools';
 import { CrawlHost, CrawlResult, Location, Reference } from './mapCrawl';
 import { Msg, MsgCode, formatMessage, msg } from './mapCheckMessages';
@@ -46,6 +46,59 @@ export const DEFAULT_COMPLETENESS_OPTIONS: CompletenessOptions = {
   identifyProfilingConflicts: false,
   reportProfilingPreferences: false,
 };
+
+/** Boolean checks, in the order the picker lists them. */
+export const CHECK_IDS = [
+  'batchValidate',
+  'checkNonDita',
+  'includeRemote',
+  'useDitaval',
+  'reportOutsideMapFolder',
+  'reportUnreferencedLinks',
+  'reportMultipleRefs',
+  'checkDuplicateTopicIds',
+  'reportDuplicateKeys',
+  'reportUnreferencedKeys',
+  'reportUnreferencedReusable',
+  'reportTableProblems',
+  'identifyProfilingConflicts',
+  'reportProfilingPreferences',
+] as const;
+
+export type CheckId = (typeof CHECK_IDS)[number];
+
+/** Oxygen's defaults, as the ids the `enabledChecks` setting stores. */
+export const DEFAULT_ENABLED_CHECKS: CheckId[] = ['batchValidate', 'checkNonDita', 'reportUnreferencedLinks', 'reportTableProblems'];
+
+/**
+ * Options from the `enabledChecks` setting: unknown ids are ignored, and the
+ * DITAVAL files only count while "useDitaval" is enabled. "includeRemote" is
+ * only meaningful together with "checkNonDita".
+ */
+export function optionsFromSettings(enabled: readonly string[] | undefined, ditavalFiles: readonly string[] | undefined): CompletenessOptions {
+  const on = new Set(enabled ?? DEFAULT_ENABLED_CHECKS);
+  const o: CompletenessOptions = { ...DEFAULT_COMPLETENESS_OPTIONS, ditavalFiles: [] };
+  const flags = o as unknown as Record<string, unknown>;
+  for (const id of CHECK_IDS) if (id !== 'useDitaval') flags[id] = on.has(id);
+  o.includeRemote = o.includeRemote && o.checkNonDita;
+  o.ditavalFiles = on.has('useDitaval') ? [...(ditavalFiles ?? [])] : [];
+  return o;
+}
+
+/** Ids to store in the `enabledChecks` setting for a set of picked ids (known ids only, in list order). */
+export function normalizeEnabled(picked: readonly string[]): CheckId[] {
+  return CHECK_IDS.filter((id) => picked.includes(id));
+}
+
+/** A DITAVAL path as stored in settings: relative to the map's folder when inside it, else absolute. */
+export function toStoredPath(mapDir: string, abs: string): string {
+  const rel = relative(mapDir, abs);
+  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel) ? rel.replace(/\\/g, '/') : abs;
+}
+
+export function resolveStoredPath(mapDir: string, stored: string): string {
+  return isAbsolute(stored) ? stored : resolve(mapDir, stored);
+}
 
 export type IssueCategory =
   | 'validation'

@@ -1,36 +1,45 @@
-// "Validate and Check for Completeness…" (ditaViewer.validateMapCompleteness):
-// a form in a webview panel modeled on Oxygen's DITA Map Completeness Check
-// dialog, with the same options and defaults; last-used settings are
-// remembered and can be exported/imported. Findings are listed in the panel
-// and published to the Problems panel. The checks themselves are pure and
-// live in mapCrawl.ts / mapChecks.ts.
+// "Validate and Check for Completeness" (ditaViewer.validateMapCompleteness).
+//
+// Native VS Code UI: one multi-select quick pick lists the checks (Oxygen's
+// option set, grouped, with the last choice checked; Enter runs it), a
+// notification shows progress with a cancel button, findings go to the
+// Problems panel and to the Map Checks view in the Explorer. Which checks
+// are on and which DITAVAL files apply are ordinary settings
+// (dita-viewer.completenessCheck.*), so a team can share them in
+// .vscode/settings.json. The checks themselves are pure and live in
+// mapCrawl.ts / mapChecks.ts.
 
 import * as vscode from 'vscode';
 import { promises as fsp } from 'fs';
-import { basename, dirname, join } from 'path';
+import { basename, dirname } from 'path';
 import { crawlMaps } from './mapCrawl';
 import { parseDitaval, DitavalFilter } from './ditaval';
 import {
+  CheckId,
   CompletenessOptions,
-  DEFAULT_COMPLETENESS_OPTIONS,
+  DEFAULT_ENABLED_CHECKS,
   Issue,
   IssueCategory,
   ProfilingPreferences,
+  normalizeEnabled,
+  optionsFromSettings,
+  resolveStoredPath,
   runChecks,
+  toStoredPath,
 } from './mapChecks';
 import { Msg, MsgCode, formatMessage } from './mapCheckMessages';
 import {
-  LIST_SCRIPT,
   MapCheckDeps,
-  esc,
+  activeMapPath,
+  browseFiles,
   makeHost,
-  page,
-  pickFiles,
-  resolveMapArg,
+  mapFromArg,
+  updateSetting,
 } from './mapCheckShared';
+import { CompletenessState, MapChecksView } from './mapCheckResultsView';
 
 const VALIDATE_CMD = 'ditaViewer.validateMapCompleteness';
-const COMPLETENESS_STATE_KEY = 'ditaViewer.completenessOptions';
+const SETTINGS = 'dita-viewer.completenessCheck';
 
 // ── Localization of finding text ────────────────────────────────────────
 // One literal vscode.l10n.t(...) per template: scripts/check-l10n.cjs finds
@@ -80,9 +89,6 @@ export function localizeMsg(m: Msg): string {
   }
 }
 
-// ── Validate and Check for Completeness ─────────────────────────────────
-
-let completenessPanel: vscode.WebviewPanel | undefined;
 let diagnostics: vscode.DiagnosticCollection | undefined;
 
 function readProfilingPreferences(): ProfilingPreferences {
@@ -158,111 +164,6 @@ function publishDiagnostics(issues: Issue[]): void {
   for (const [file, list] of byFile) diagnostics.set(vscode.Uri.file(file), list);
 }
 
-interface CompletenessFormState {
-  map: string;
-  options: CompletenessOptions;
-}
-
-async function openCompletenessDialog(context: vscode.ExtensionContext, arg: unknown, deps: MapCheckDeps): Promise<void> {
-  const map = resolveMapArg(arg, deps);
-  if (!map) {
-    vscode.window.showErrorMessage(vscode.l10n.t('Please open a .ditamap file first.'));
-    return;
-  }
-  const saved = context.globalState.get<Partial<CompletenessOptions>>(COMPLETENESS_STATE_KEY);
-  const state: CompletenessFormState = { map, options: { ...DEFAULT_COMPLETENESS_OPTIONS, ...(saved ?? {}) } };
-
-  completenessPanel?.dispose();
-  const panel = vscode.window.createWebviewPanel('ditaViewer.completeness', vscode.l10n.t('DITA Map Completeness Check'), vscode.ViewColumn.Active, {
-    enableScripts: true,
-    retainContextWhenHidden: true,
-  });
-  completenessPanel = panel;
-  let running: vscode.CancellationTokenSource | undefined;
-  panel.onDidDispose(() => {
-    if (completenessPanel === panel) completenessPanel = undefined;
-    running?.cancel();
-  });
-  panel.webview.html = completenessHtml(state);
-  const post = (m: unknown) => void panel.webview.postMessage(m);
-
-  panel.webview.onDidReceiveMessage(async (m: { type: string; [k: string]: unknown }) => {
-    switch (m.type) {
-      case 'addDitaval': {
-        const picked = await pickFiles(vscode.l10n.t('DITAVAL Filter Files'), { [vscode.l10n.t('DITAVAL Filter Files')]: ['ditaval'] });
-        for (const p of picked) if (!state.options.ditavalFiles.includes(p)) state.options.ditavalFiles.push(p);
-        post({ type: 'ditaval', items: state.options.ditavalFiles });
-        break;
-      }
-      case 'removeDitaval':
-        state.options.ditavalFiles = state.options.ditavalFiles.filter((x) => x !== m.value);
-        post({ type: 'ditaval', items: state.options.ditavalFiles });
-        break;
-      case 'changeMap': {
-        const picked = await pickFiles(vscode.l10n.t('Select DITA Maps'), { [vscode.l10n.t('DITA Maps')]: ['ditamap'] }, false);
-        if (picked[0]) {
-          state.map = picked[0];
-          post({ type: 'map', value: state.map });
-        }
-        break;
-      }
-      case 'exportSettings': {
-        const target = await vscode.window.showSaveDialog({ defaultUri: vscode.Uri.file(join(dirname(state.map), 'completeness-check-settings.json')), filters: { JSON: ['json'] } });
-        if (target) {
-          const opts = readOptions(m.options, state.options);
-          await vscode.workspace.fs.writeFile(target, Buffer.from(JSON.stringify(opts, null, 2) + '\n', 'utf8'));
-          vscode.window.showInformationMessage(vscode.l10n.t('Settings exported to {0}', basename(target.fsPath)));
-        }
-        break;
-      }
-      case 'importSettings': {
-        const [file] = await pickFiles(vscode.l10n.t('Import settings'), { JSON: ['json'] }, false);
-        if (!file) break;
-        try {
-          const parsed = JSON.parse(await fsp.readFile(file, 'utf8'));
-          state.options = readOptions(parsed, state.options);
-          post({ type: 'options', options: state.options });
-        } catch (err) {
-          vscode.window.showErrorMessage(vscode.l10n.t('Could not import settings: {0}', err instanceof Error ? err.message : String(err)));
-        }
-        break;
-      }
-      case 'cancelRun':
-        running?.cancel();
-        break;
-      case 'check': {
-        state.options = readOptions(m.options, state.options);
-        await context.globalState.update(COMPLETENESS_STATE_KEY, state.options);
-        running = new vscode.CancellationTokenSource();
-        post({ type: 'busy', on: true });
-        try {
-          const issues = await runCompleteness(state.map, state.options, running.token);
-          if (running.token.isCancellationRequested) {
-            post({ type: 'notice', text: vscode.l10n.t('Check cancelled.') });
-          } else {
-            publishDiagnostics(issues);
-            post({ type: 'results', ...summarize(issues) });
-            if (issues.length > 0) void vscode.commands.executeCommand('workbench.actions.view.problems');
-          }
-        } catch (err) {
-          post({ type: 'notice', text: vscode.l10n.t('Check failed: {0}', err instanceof Error ? err.message : String(err)) });
-        } finally {
-          running.dispose();
-          running = undefined;
-          post({ type: 'busy', on: false });
-        }
-        break;
-      }
-      case 'open': {
-        const line = Math.max(0, Number(m.line ?? 1) - 1);
-        await vscode.window.showTextDocument(vscode.Uri.file(String(m.path)), { selection: new vscode.Range(line, 0, line, 0), preview: true, viewColumn: vscode.ViewColumn.Beside });
-        break;
-      }
-    }
-  });
-}
-
-/** Runs the check for the given map, once per DITAVAL file (or once, unfiltered). */
 export async function runCompleteness(map: string, options: CompletenessOptions, token?: vscode.CancellationToken): Promise<Issue[]> {
   const host = makeHost(token);
   const filters: Array<DitavalFilter | undefined> = [];
@@ -293,127 +194,168 @@ export async function runCompleteness(map: string, options: CompletenessOptions,
   return all;
 }
 
-function summarize(issues: Issue[]) {
-  const errors = issues.filter((i) => i.severity === 'error').length;
-  const warnings = issues.filter((i) => i.severity === 'warning').length;
+
+// -- Settings ---------------------------------------------------------------
+
+function readEnabled(): string[] {
+  const v = vscode.workspace.getConfiguration(SETTINGS).get<string[]>('enabledChecks');
+  return Array.isArray(v) ? v : DEFAULT_ENABLED_CHECKS;
+}
+
+function readDitavalFiles(mapDir: string): string[] {
+  const v = vscode.workspace.getConfiguration(SETTINGS).get<string[]>('ditavalFiles');
+  return (Array.isArray(v) ? v : []).map((s) => resolveStoredPath(mapDir, s));
+}
+
+// -- The check picker ---------------------------------------------------------
+
+interface CheckItem extends vscode.QuickPickItem {
+  id?: CheckId;
+}
+
+function checkItems(picked: Set<string>, ditavalCount: number): CheckItem[] {
+  const it = (id: CheckId, label: string, description?: string): CheckItem => ({ id, label, description, picked: picked.has(id) });
+  const sep = (label: string): CheckItem => ({ label, kind: vscode.QuickPickItemKind.Separator });
+  return [
+    sep(vscode.l10n.t('Files and resources')),
+    it('batchValidate', vscode.l10n.t('Validate referenced DITA files'), vscode.l10n.t('XML errors; topic id, title and root element')),
+    it('checkNonDita', vscode.l10n.t('Check that referenced images and other files exist')),
+    it('includeRemote', vscode.l10n.t('Also check remote (http/https) resources'), vscode.l10n.t('needs the check above')),
+    it(
+      'useDitaval',
+      vscode.l10n.t('Filter with DITAVAL files'),
+      ditavalCount > 0 ? vscode.l10n.t('{0} file(s) — check runs once per file', String(ditavalCount)) : vscode.l10n.t('choose files after accepting'),
+    ),
+    sep(vscode.l10n.t('References')),
+    it('reportOutsideMapFolder', vscode.l10n.t('References to resources outside the map folder')),
+    it('reportUnreferencedLinks', vscode.l10n.t('Links to topics not referenced in any map')),
+    it('reportMultipleRefs', vscode.l10n.t('Multiple references to the same topic'), vscode.l10n.t('a unique copy-to counts as a different topic')),
+    sep(vscode.l10n.t('IDs and keys')),
+    it('checkDuplicateTopicIds', vscode.l10n.t('Duplicate topic IDs within the map')),
+    it('reportDuplicateKeys', vscode.l10n.t('Duplicate key definitions')),
+    it('reportUnreferencedKeys', vscode.l10n.t('Unreferenced key definitions')),
+    it('reportUnreferencedReusable', vscode.l10n.t('Unreferenced reusable elements'), vscode.l10n.t('ids in resource-only topics that no conref uses')),
+    sep(vscode.l10n.t('Content')),
+    it('reportTableProblems', vscode.l10n.t('Table layout problems')),
+    it('identifyProfilingConflicts', vscode.l10n.t('Conflicts in profiling attribute values')),
+    it('reportProfilingPreferences', vscode.l10n.t('Attributes and values that conflict with profiling preferences'), vscode.l10n.t('uses the profiling settings')),
+  ];
+}
+
+type PickResult = { picked: CheckId[]; map: string } | undefined;
+
+function pickChecks(map: string, ditavalCount: number): Promise<PickResult> {
+  return new Promise((resolve) => {
+    let currentMap = map;
+    const qp = vscode.window.createQuickPick<CheckItem>();
+    qp.canSelectMany = true;
+    qp.ignoreFocusOut = true;
+    qp.matchOnDescription = true;
+    const setTitle = () => (qp.title = vscode.l10n.t('Validate and Check for Completeness — {0}', basename(currentMap)));
+    setTitle();
+    qp.placeholder = vscode.l10n.t('Choose the checks to run, then press Enter');
+    const items = checkItems(new Set(readEnabled()), ditavalCount);
+    qp.items = items;
+    qp.selectedItems = items.filter((i) => i.picked);
+    const btn = (icon: string, tooltip: string): vscode.QuickInputButton => ({ iconPath: new vscode.ThemeIcon(icon), tooltip });
+    const changeMap = btn('file-code', vscode.l10n.t('Choose another map…'));
+    const openSettings = btn('gear', vscode.l10n.t('Profiling and other settings'));
+    qp.buttons = [changeMap, openSettings];
+    let done = false;
+    const finish = (v: PickResult) => {
+      if (done) return;
+      done = true;
+      resolve(v);
+      qp.dispose();
+    };
+    qp.onDidTriggerButton(async (b) => {
+      if (b === changeMap) {
+        const [m] = await browseFiles(vscode.l10n.t('DITA Maps'), ['ditamap'], false);
+        if (m) {
+          currentMap = m;
+          setTitle();
+        }
+      } else if (b === openSettings) {
+        void vscode.commands.executeCommand('workbench.action.openSettings', SETTINGS);
+      }
+    });
+    qp.onDidAccept(() => finish({ picked: qp.selectedItems.map((i) => i.id).filter((x): x is CheckId => !!x), map: currentMap }));
+    qp.onDidHide(() => finish(undefined));
+    qp.show();
+  });
+}
+
+// -- Running --------------------------------------------------------------------
+
+function toState(map: string, issues: Issue[]): CompletenessState {
   const groups = CATEGORY_ORDER.map((c) => ({
     label: categoryLabel(c),
     items: issues
       .filter((i) => i.category === c)
-      .map((i) => ({ file: i.file, line: i.line, severity: i.severity, text: localizeMsg(i.msg), name: basename(i.file) })),
+      .map((i) => ({ file: i.file, line: i.line, severity: i.severity, text: localizeMsg(i.msg), related: i.related })),
   })).filter((g) => g.items.length > 0);
   return {
-    summary:
-      issues.length === 0
-        ? vscode.l10n.t('No problems found.')
-        : vscode.l10n.t('{0} error(s), {1} warning(s). Also shown in the Problems panel.', String(errors), String(warnings)),
+    map,
     groups,
+    errors: issues.filter((i) => i.severity === 'error').length,
+    warnings: issues.filter((i) => i.severity === 'warning').length,
   };
 }
 
-const BOOL_OPTIONS: Array<keyof CompletenessOptions> = [
-  'batchValidate', 'checkNonDita', 'includeRemote', 'reportOutsideMapFolder', 'reportUnreferencedLinks',
-  'reportMultipleRefs', 'checkDuplicateTopicIds', 'reportDuplicateKeys', 'reportUnreferencedKeys',
-  'reportUnreferencedReusable', 'reportTableProblems', 'identifyProfilingConflicts', 'reportProfilingPreferences',
-];
+let lastMap: string | undefined;
 
-/** Merges untrusted form/file input over a base, keeping only known keys of the right type. */
-export function readOptions(input: unknown, base: CompletenessOptions): CompletenessOptions {
-  const out: CompletenessOptions = { ...base, ditavalFiles: [...base.ditavalFiles] };
-  if (!input || typeof input !== 'object') return out;
-  const src = input as Record<string, unknown>;
-  const o = out as unknown as Record<string, unknown>;
-  for (const k of BOOL_OPTIONS) if (typeof src[k] === 'boolean') o[k] = src[k];
-  if (Array.isArray(src.ditavalFiles)) out.ditavalFiles = src.ditavalFiles.filter((x): x is string => typeof x === 'string');
-  return out;
-}
-
-function completenessHtml(state: CompletenessFormState): string {
-  const o = state.options;
-  const cb = (id: keyof CompletenessOptions, label: string, sub = false, hint = '') =>
-    `<label class="${sub ? 'sub' : ''}" ${hint ? `title="${esc(hint)}"` : ''}><input type="checkbox" id="${id}" ${o[id] ? 'checked' : ''}>${esc(label)}</label>`;
-  const body = `
-<p class="lead">${esc(vscode.l10n.t('This operation will perform an XML validation and DITA completeness check on all the topics and maps referenced from the current map.'))}</p>
-<div class="row"><span class="muted">${esc(vscode.l10n.t('Map:'))}</span><span class="grow" id="mapPath" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span><button id="changeMap">${esc(vscode.l10n.t('Change…'))}</button></div>
-${cb('batchValidate', vscode.l10n.t('Batch validate referenced DITA resources'), false, vscode.l10n.t('XML well-formedness plus DITA structure (root element, topic id, title). No DTD/RNG validation.'))}
-${cb('checkNonDita', vscode.l10n.t('Check the existence of referenced non-DITA resources'))}
-${cb('includeRemote', vscode.l10n.t('Include remote resources'), true)}
-<label><input type="checkbox" id="useDitaval" ${o.ditavalFiles.length ? 'checked' : ''}>${esc(vscode.l10n.t('Use DITAVAL filters:'))}</label>
-<div class="sub" id="ditavalBox">
-  <div class="list" id="ditaval"></div>
-  <div class="row end"><button id="addDitaval">${esc(vscode.l10n.t('Add'))}</button><button id="removeDitaval">${esc(vscode.l10n.t('Remove'))}</button></div>
-</div>
-${cb('reportOutsideMapFolder', vscode.l10n.t('Report references to resources outside of the DITA map folder'))}
-${cb('reportUnreferencedLinks', vscode.l10n.t('Report links to topics not referenced in DITA maps'))}
-${cb('reportMultipleRefs', vscode.l10n.t('Report multiple references to the same topic'))}
-${cb('checkDuplicateTopicIds', vscode.l10n.t('Check for duplicate topic IDs within the DITA map context'))}
-${cb('reportDuplicateKeys', vscode.l10n.t('Report duplicate key definitions'))}
-${cb('reportUnreferencedKeys', vscode.l10n.t('Report unreferenced key definitions'))}
-${cb('reportUnreferencedReusable', vscode.l10n.t('Report unreferenced reusable elements'))}
-${cb('reportTableProblems', vscode.l10n.t('Report table layout problems'))}
-${cb('identifyProfilingConflicts', vscode.l10n.t('Identify possible conflicts in profiling attribute values'))}
-${cb('reportProfilingPreferences', vscode.l10n.t('Report attributes and values that conflict with profiling preferences'), false, vscode.l10n.t('Uses the dita-viewer.completenessCheck.profilingAttributes setting.'))}
-<div class="row" style="margin-top:14px">
-  <button id="exportSettings">${esc(vscode.l10n.t('Export settings'))}</button><button id="importSettings">${esc(vscode.l10n.t('Import settings'))}</button>
-  <span class="grow"></span>
-  <button class="primary" id="check">${esc(vscode.l10n.t('Check'))}</button><button id="cancel" disabled>${esc(vscode.l10n.t('Cancel'))}</button>
-</div>
-<div id="results"></div>`;
-  const script = `
-${LIST_SCRIPT}
-const ids = ${JSON.stringify(BOOL_OPTIONS)};
-const $ = (id) => document.getElementById(id);
-const ditaval = bindList('ditaval');
-const NONE = ${JSON.stringify(vscode.l10n.t('(none)'))};
-renderList(ditaval, ${JSON.stringify(o.ditavalFiles)}, NONE);
-$('mapPath').textContent = ${JSON.stringify(state.map)};
-$('mapPath').title = ${JSON.stringify(state.map)};
-function syncDitaval() { const on = $('useDitaval').checked; $('ditavalBox').style.opacity = on ? 1 : .5; $('addDitaval').disabled = !on; $('removeDitaval').disabled = !on; }
-$('useDitaval').onchange = syncDitaval; syncDitaval();
-function collect() {
-  const o = {};
-  for (const id of ids) o[id] = $(id).checked;
-  o.ditavalFiles = $('useDitaval').checked ? [...ditaval.querySelectorAll('div[data-v]')].map((d) => d.dataset.v) : [];
-  return o;
-}
-$('addDitaval').onclick = () => { $('useDitaval').checked = true; vscode.postMessage({ type: 'addDitaval' }); };
-$('removeDitaval').onclick = () => { const v = selected(ditaval); if (v) vscode.postMessage({ type: 'removeDitaval', value: v }); };
-$('changeMap').onclick = () => vscode.postMessage({ type: 'changeMap' });
-$('exportSettings').onclick = () => vscode.postMessage({ type: 'exportSettings', options: collect() });
-$('importSettings').onclick = () => vscode.postMessage({ type: 'importSettings' });
-$('check').onclick = () => vscode.postMessage({ type: 'check', options: collect() });
-$('cancel').onclick = () => vscode.postMessage({ type: 'cancelRun' });
-const SEV = { error: '✖', warning: '⚠', info: 'ℹ' };
-window.addEventListener('message', (e) => {
-  const m = e.data;
-  if (m.type === 'ditaval') { renderList(ditaval, m.items, NONE); }
-  else if (m.type === 'map') { $('mapPath').textContent = m.value; $('mapPath').title = m.value; }
-  else if (m.type === 'options') { for (const id of ids) $(id).checked = !!m.options[id]; renderList(ditaval, m.options.ditavalFiles, NONE); $('useDitaval').checked = m.options.ditavalFiles.length > 0; syncDitaval(); }
-  else if (m.type === 'busy') { $('check').disabled = m.on; $('cancel').disabled = !m.on; if (m.on) $('results').textContent = '…'; }
-  else if (m.type === 'notice') { $('results').textContent = m.text; }
-  else if (m.type === 'results') {
-    const box = $('results'); box.textContent = '';
-    const s = document.createElement('div'); s.textContent = m.summary; box.appendChild(s);
-    for (const g of m.groups) {
-      const h = document.createElement('div'); h.className = 'cat'; h.textContent = g.label + ' (' + g.items.length + ')'; box.appendChild(h);
-      for (const it of g.items) {
-        const d = document.createElement('div'); d.className = 'item'; d.title = it.file + ':' + it.line;
-        const sev = document.createElement('span'); sev.className = 'sev sev-' + it.severity; sev.textContent = SEV[it.severity] || '';
-        const txt = document.createElement('span'); txt.textContent = it.text;
-        const loc = document.createElement('span'); loc.className = 'path'; loc.textContent = it.name + ':' + it.line;
-        d.append(sev, txt, loc);
-        d.onclick = () => vscode.postMessage({ type: 'open', path: it.file, line: it.line });
-        box.appendChild(d);
+async function run(view: MapChecksView, map: string): Promise<void> {
+  lastMap = map;
+  const options = optionsFromSettings(readEnabled(), readDitavalFiles(dirname(map)));
+  await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('Checking {0}…', basename(map)), cancellable: true },
+    async (_progress, token) => {
+      try {
+        const issues = await runCompleteness(map, options, token);
+        if (token.isCancellationRequested) return;
+        publishDiagnostics(issues);
+        view.setCompleteness(toState(map, issues));
+        await view.reveal();
+      } catch (err) {
+        void vscode.window.showErrorMessage(vscode.l10n.t('Check failed: {0}', err instanceof Error ? err.message : String(err)));
       }
-    }
-  }
-});`;
-  return page(vscode.l10n.t('DITA Map Completeness Check'), body, script);
+    },
+  );
 }
 
-export function registerCompletenessCommand(context: vscode.ExtensionContext, deps: MapCheckDeps): void {
+/** Asks which checks to run (remembering the answer in settings), then runs them. */
+async function chooseAndRun(view: MapChecksView, map: string): Promise<void> {
+  const ditavalCount = readDitavalFiles(dirname(map)).length;
+  const res = await pickChecks(map, ditavalCount);
+  if (!res) return;
+  let picked = normalizeEnabled(res.picked);
+  if (picked.includes('useDitaval') && readDitavalFiles(dirname(res.map)).length === 0) {
+    const files = await browseFiles(vscode.l10n.t('DITAVAL Filter Files'), ['ditaval'], true);
+    if (files.length === 0) picked = picked.filter((id) => id !== 'useDitaval');
+    else await updateSetting(SETTINGS, 'ditavalFiles', files.map((f) => toStoredPath(dirname(res.map), f)));
+  }
+  await updateSetting(SETTINGS, 'enabledChecks', picked);
+  await run(view, res.map);
+}
+
+export function registerCompletenessCommand(context: vscode.ExtensionContext, deps: MapCheckDeps, view: MapChecksView): void {
   context.subscriptions.push(
-    vscode.commands.registerCommand(VALIDATE_CMD, (arg?: unknown) => openCompletenessDialog(context, arg, deps)),
+    vscode.commands.registerCommand(VALIDATE_CMD, async (arg?: unknown) => {
+      const map = mapFromArg(arg) ?? activeMapPath(deps) ?? lastMap;
+      if (!map) {
+        void vscode.window.showErrorMessage(vscode.l10n.t('Please open a .ditamap file first.'));
+        return;
+      }
+      await chooseAndRun(view, map);
+    }),
+    vscode.commands.registerCommand('ditaViewer.mapChecks.rerunCompleteness', async () => {
+      const last = view.lastCompleteness;
+      if (last) await run(view, last.map);
+    }),
+    vscode.commands.registerCommand('ditaViewer.mapChecks.changeCompleteness', async () => {
+      const map = view.lastCompleteness?.map ?? activeMapPath(deps) ?? lastMap;
+      if (map) await chooseAndRun(view, map);
+    }),
     new vscode.Disposable(() => {
       diagnostics?.dispose();
       diagnostics = undefined;

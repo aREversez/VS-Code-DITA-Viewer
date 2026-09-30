@@ -1,7 +1,18 @@
 import * as assert from 'assert';
 import { resolve } from 'path';
 import { crawlMaps, CrawlHost } from '../../editor/mapCrawl';
-import { runChecks, DEFAULT_COMPLETENESS_OPTIONS, CompletenessOptions, Issue } from '../../editor/mapChecks';
+import {
+  runChecks,
+  DEFAULT_COMPLETENESS_OPTIONS,
+  DEFAULT_ENABLED_CHECKS,
+  CHECK_IDS,
+  CompletenessOptions,
+  Issue,
+  optionsFromSettings,
+  normalizeEnabled,
+  toStoredPath,
+  resolveStoredPath,
+} from '../../editor/mapChecks';
 import { parseDitaval } from '../../editor/ditaval';
 
 const P = (p: string) => resolve('/proj', p);
@@ -354,5 +365,39 @@ describe('ditaval', () => {
     const f = parseDitaval('<val><prop att="deliveryTarget" val="pdf" action="exclude"/></val>');
     assert.strictEqual(f.excludes({ props: 'deliveryTarget(pdf)' }), true);
     assert.strictEqual(f.excludes({ props: 'deliveryTarget(html)' }), false);
+  });
+});
+
+describe('completeness: settings mapping', () => {
+  it('the default enabled list reproduces Oxygen defaults', () => {
+    const o = optionsFromSettings(undefined, undefined);
+    assert.deepStrictEqual(o, DEFAULT_COMPLETENESS_OPTIONS);
+    assert.deepStrictEqual(normalizeEnabled(DEFAULT_ENABLED_CHECKS), DEFAULT_ENABLED_CHECKS);
+  });
+  it('turns listed ids on and everything else off; ignores unknown ids', () => {
+    const o = optionsFromSettings(['reportDuplicateKeys', 'nonsense'], []);
+    assert.strictEqual(o.reportDuplicateKeys, true);
+    assert.strictEqual(o.batchValidate, false);
+    assert.strictEqual(o.reportTableProblems, false);
+  });
+  it('remote checking needs non-DITA checking', () => {
+    assert.strictEqual(optionsFromSettings(['includeRemote'], []).includeRemote, false);
+    assert.strictEqual(optionsFromSettings(['checkNonDita', 'includeRemote'], []).includeRemote, true);
+  });
+  it('DITAVAL files count only while useDitaval is enabled', () => {
+    assert.deepStrictEqual(optionsFromSettings(['batchValidate'], ['a.ditaval']).ditavalFiles, []);
+    assert.deepStrictEqual(optionsFromSettings(['useDitaval'], ['a.ditaval']).ditavalFiles, ['a.ditaval']);
+  });
+  it('every check id is a real option (or useDitaval)', () => {
+    for (const id of CHECK_IDS) assert.ok(id === 'useDitaval' || id in DEFAULT_COMPLETENESS_OPTIONS, id);
+  });
+  it('normalizeEnabled keeps list order and drops unknown ids', () => {
+    assert.deepStrictEqual(normalizeEnabled(['reportTableProblems', 'x', 'batchValidate']), ['batchValidate', 'reportTableProblems']);
+  });
+  it('stores DITAVAL paths relative to the map folder when inside it', () => {
+    assert.strictEqual(toStoredPath(P('docs'), P('docs/filters/a.ditaval')), 'filters/a.ditaval');
+    assert.strictEqual(toStoredPath(P('docs'), P('other/a.ditaval')), P('other/a.ditaval'));
+    assert.strictEqual(resolveStoredPath(P('docs'), 'filters/a.ditaval'), P('docs/filters/a.ditaval'));
+    assert.strictEqual(resolveStoredPath(P('docs'), P('other/a.ditaval')), P('other/a.ditaval'));
   });
 });
