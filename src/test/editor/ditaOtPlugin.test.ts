@@ -1,8 +1,10 @@
 import * as assert from 'assert';
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync } from 'fs';
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import {
+  BACKUP_DIR_NAME,
+  backupIntegratorFiles,
   CJK_SPACING_PLUGIN_ID,
   getPluginStatus,
   installPlugin,
@@ -51,5 +53,37 @@ describe('ditaOtPlugin', () => {
     assert.ok(integrated, 'integration runs after the copy');
     assert.ok(!existsSync(join(dir, 'stale.txt')));
     assert.strictEqual(getPluginStatus(ot, bundled), 'installed');
+  });
+
+  it('backs up the integrator-rewritten files before touching anything', async () => {
+    const base = join(ot, 'plugins', 'org.dita.base');
+    mkdirSync(base, { recursive: true });
+    writeFileSync(join(base, 'build.xml'), 'ORIGINAL');
+    let seenAtIntegrate = '';
+    const backup = await installPlugin(ot, bundled, async () => {
+      // simulate the integrator rewriting the file
+      writeFileSync(join(base, 'build.xml'), 'REWRITTEN');
+      seenAtIntegrate = 'ran';
+    });
+    assert.strictEqual(seenAtIntegrate, 'ran');
+    assert.strictEqual(readFileSync(join(backup, 'plugins/org.dita.base/build.xml'), 'utf-8'), 'ORIGINAL');
+    assert.ok(backup.includes(BACKUP_DIR_NAME));
+  });
+
+  it('skips files that do not exist and keeps every earlier backup', () => {
+    const first = backupIntegratorFiles(ot, new Date(2026, 8, 30, 8, 0, 0));
+    const second = backupIntegratorFiles(ot, new Date(2026, 8, 30, 8, 0, 0));
+    assert.notStrictEqual(first, second, 'same-second backups do not collide');
+    assert.ok(existsSync(first) && existsSync(second));
+    assert.ok(first.endsWith('20260930-080000'));
+  });
+
+  it('does not modify the installation when the backup fails', async () => {
+    // A file where the backup folder must go makes the backup throw.
+    writeFileSync(join(ot, BACKUP_DIR_NAME), 'blocker');
+    let integrated = false;
+    await assert.rejects(installPlugin(ot, bundled, async () => { integrated = true; }));
+    assert.ok(!integrated);
+    assert.ok(!existsSync(join(ot, 'plugins', CJK_SPACING_PLUGIN_ID)));
   });
 });

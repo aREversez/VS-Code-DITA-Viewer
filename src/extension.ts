@@ -92,7 +92,7 @@ async function offerCjkSpacingPlugin(
   if (choice !== installLabel) return;
 
   try {
-    await installPlugin(otHome, bundledDir, () => new Promise<void>((resolveRun, rejectRun) => {
+    const backupDir = await installPlugin(otHome, bundledDir, () => new Promise<void>((resolveRun, rejectRun) => {
       const spec = buildDitaOtSpawnSpec(ditaExecutable, ['install'], process.platform);
       const child = spawn(spec.command, spec.args, { windowsVerbatimArguments: spec.windowsVerbatimArguments });
       child.stdout?.on('data', (d) => outputChannel.append(String(d)));
@@ -100,11 +100,12 @@ async function offerCjkSpacingPlugin(
       child.on('error', rejectRun);
       child.on('close', (code) => (code === 0 ? resolveRun() : rejectRun(new Error(`dita install exited with code ${code}`))));
     }));
-    vscode.window.showInformationMessage(vscode.l10n.t('CJK spacing plugin installed.'));
+    outputChannel.appendLine(`Backup of the DITA-OT files changed by the install: ${backupDir}`);
+    vscode.window.showInformationMessage(vscode.l10n.t('CJK spacing plugin installed. The DITA-OT files it changed were backed up to {0}', backupDir));
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     vscode.window.showWarningMessage(
-      vscode.l10n.t('Could not install the CJK spacing plugin: {0}. The transform will continue without it; installing may need write access to the DITA-OT folder.', message),
+      vscode.l10n.t('Could not install the CJK spacing plugin: {0}. The transform will continue without it; installing may need write access to the DITA-OT folder. If the install had already started, the files it changed were backed up under the dita-viewer-backup folder in the DITA-OT directory.', message),
     );
   }
 }
