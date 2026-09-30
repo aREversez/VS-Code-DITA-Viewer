@@ -77,16 +77,18 @@ export interface PickManyOptions {
   items: PickManyItem[];
   /** Adds a "Browse…" title-bar button that appends whatever the callback returns (selected). */
   browse?: { tooltip: string; run: () => Promise<PickManyItem[]> };
-  /** Extra title-bar buttons (open settings, …). */
-  buttons?: Array<{ icon: string; tooltip: string; run: () => void }>;
+  /** Extra title-bar buttons: run something, or close the picker so the caller can start over. */
+  buttons?: Array<{ icon: string; tooltip: string; run?: () => void; restart?: boolean }>;
 }
+
+export type PickManyResult = { kind: 'accept'; values: string[] } | { kind: 'restart' } | undefined;
 
 /**
  * A multi-select quick pick: items marked `picked` start checked, Enter
  * accepts, Esc cancels (undefined). Standard VS Code idiom for choosing from
  * a list that the user may also extend from disk.
  */
-export function pickMany(opts: PickManyOptions): Promise<string[] | undefined> {
+export function pickMany(opts: PickManyOptions): Promise<PickManyResult> {
   return new Promise((resolve) => {
     const qp = vscode.window.createQuickPick<PickManyItem>();
     qp.title = opts.title;
@@ -102,12 +104,12 @@ export function pickMany(opts: PickManyOptions): Promise<string[] | undefined> {
       : undefined;
     const extra = (opts.buttons ?? []).map((b) => ({
       button: { iconPath: new vscode.ThemeIcon(b.icon), tooltip: b.tooltip } as vscode.QuickInputButton,
-      run: b.run,
+      spec: b,
     }));
     qp.buttons = [...(browseButton ? [browseButton] : []), ...extra.map((e) => e.button)];
 
     let done = false;
-    const finish = (v: string[] | undefined) => {
+    const finish = (v: PickManyResult) => {
       if (done) return;
       done = true;
       resolve(v);
@@ -118,14 +120,17 @@ export function pickMany(opts: PickManyOptions): Promise<string[] | undefined> {
         const added = await opts.browse.run();
         const known = new Set(qp.items.map((i) => i.value));
         const fresh = added.filter((i) => !known.has(i.value));
-        const selected = [...qp.selectedItems, ...added.filter((i) => known.has(i.value)).map((i) => qp.items.find((x) => x.value === i.value)!)];
+        const reselected = added.filter((i) => known.has(i.value)).map((i) => qp.items.find((x) => x.value === i.value)!);
+        const selected = [...qp.selectedItems, ...reselected];
         qp.items = [...fresh, ...qp.items];
         qp.selectedItems = [...selected, ...fresh];
         return;
       }
-      extra.find((e) => e.button === b)?.run();
+      const hit = extra.find((e) => e.button === b);
+      if (hit?.spec.restart) finish({ kind: 'restart' });
+      else hit?.spec.run?.();
     });
-    qp.onDidAccept(() => finish(qp.selectedItems.map((i) => i.value)));
+    qp.onDidAccept(() => finish({ kind: 'accept', values: qp.selectedItems.map((i) => i.value) }));
     qp.onDidHide(() => finish(undefined));
     qp.show();
   });

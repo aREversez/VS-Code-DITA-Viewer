@@ -88,7 +88,7 @@ export function activate(context: vscode.ExtensionContext) {
   // "Find Unreferenced Resources…" (Oxygen DITA Maps Manager style)
   const mapChecksView = new MapChecksView();
   registerResultsCommands(context, mapChecksView);
-  registerUnreferencedResourcesCommand(context, { currentTreeMap: () => mapTree.currentMapPath() }, mapChecksView);
+  registerUnreferencedResourcesCommand(context, { currentTreeMap: () => mapTree.currentMapPath() });
 
   // "Validate and Check for Completeness…" (Oxygen DITA Map Completeness Check style)
   registerCompletenessCommand(context, { currentTreeMap: () => mapTree.currentMapPath() }, mapChecksView);

@@ -226,16 +226,6 @@
         "icon": "$(clear-all)"
       },
       {
-        "command": "ditaViewer.mapChecks.rerunUnreferenced",
-        "title": "%command.mapChecksRerun.title%",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "ditaViewer.mapChecks.changeUnreferenced",
-        "title": "%command.mapChecksChangeUnreferenced.title%",
-        "icon": "$(edit)"
-      },
-      {
         "command": "ditaViewer.mapChecks.reveal",
         "title": "%command.mapChecksReveal.title%"
       },
@@ -252,6 +242,10 @@
         "command": "ditaViewer.mapChecks.changeCompleteness",
         "title": "%command.mapChecksChangeCompleteness.title%",
         "icon": "$(edit)"
+      },
+      {
+        "command": "ditaViewer.clearMapCheckResults",
+        "title": "%command.clearMapCheckResults.title%"
       }
     ],
     "icons": {
@@ -454,26 +448,6 @@
           "command": "ditaViewer.mapExplorer.collapseAll",
           "when": "view == ditaViewer.mapExplorer",
           "group": "expandcollapse@2"
-        },
-        {
-          "command": "ditaViewer.mapChecks.rerunUnreferenced",
-          "when": "view == ditaViewer.mapChecks && viewItem == mapChecks.unreferenced",
-          "group": "inline@1"
-        },
-        {
-          "command": "ditaViewer.mapChecks.changeUnreferenced",
-          "when": "view == ditaViewer.mapChecks && viewItem == mapChecks.unreferenced",
-          "group": "inline@2"
-        },
-        {
-          "command": "ditaViewer.mapChecks.reveal",
-          "when": "view == ditaViewer.mapChecks && viewItem == mapChecks.file",
-          "group": "1_open@1"
-        },
-        {
-          "command": "ditaViewer.mapChecks.copyPath",
-          "when": "view == ditaViewer.mapChecks && viewItem == mapChecks.file",
-          "group": "2_copy@1"
         },
         {
           "command": "ditaViewer.mapChecks.rerunCompleteness",
@@ -717,14 +691,6 @@
         },
         {
           "command": "ditaViewer.mapChecks.clear",
-          "when": "false"
-        },
-        {
-          "command": "ditaViewer.mapChecks.rerunUnreferenced",
-          "when": "false"
-        },
-        {
-          "command": "ditaViewer.mapChecks.changeUnreferenced",
           "when": "false"
         },
         {

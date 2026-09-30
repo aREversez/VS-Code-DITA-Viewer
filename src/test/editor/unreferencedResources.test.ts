@@ -5,11 +5,20 @@ import {
   splitPatterns,
   listFilteredFiles,
   normalizeFilters,
+  extensionOf,
+  summarizeExtensions,
+  defaultCheckedExtensions,
+  rememberExtensions,
+  referencedResourceFolders,
+  mergeRoots,
+  filesUnder,
+  folderStats,
+  suggestFolders,
   findUnreferencedResources,
   DEFAULT_UNREFERENCED_FILTERS,
   ListHost,
 } from '../../editor/unreferencedResources';
-import { CrawlHost } from '../../editor/mapCrawl';
+import { CrawlHost, crawlMaps } from '../../editor/mapCrawl';
 
 const R = (p: string) => resolve('/proj', p);
 
@@ -138,5 +147,81 @@ describe('unreferenced: filter settings', () => {
   });
   it('keeps custom values', () => {
     assert.strictEqual(normalizeFilters({ includeFiles: '*.png' }).includeFiles, '*.png');
+  });
+});
+
+describe('unreferenced: choosing where to look', () => {
+  const rel = (p: string) => p.replace(/\\/g, '/').replace(/.*\/proj\//, '');
+
+  it('extensionOf: lower-case, no dot, dotfiles have none', () => {
+    assert.strictEqual(extensionOf('/a/B.PNG'), 'png');
+    assert.strictEqual(extensionOf('/a/archive.tar.gz'), 'gz');
+    assert.strictEqual(extensionOf('/a/.gitignore'), '');
+    assert.strictEqual(extensionOf('/a/README'), '');
+  });
+
+  it('summarizeExtensions sorts by count, then name', () => {
+    assert.deepStrictEqual(summarizeExtensions(['/a.png', '/b.png', '/c.py', '/d.css', '/e']), [
+      { ext: 'png', count: 2 },
+      { ext: '', count: 1 },
+      { ext: 'css', count: 1 },
+      { ext: 'py', count: 1 },
+    ]);
+  });
+
+  it('defaults to resource-like extensions; remembered choices win either way', () => {
+    const exts = ['png', 'py', 'css', 'dita'];
+    assert.deepStrictEqual([...defaultCheckedExtensions(exts)].sort(), ['dita', 'png']);
+    const remembered = { checked: ['py'], unchecked: ['dita'] };
+    assert.deepStrictEqual([...defaultCheckedExtensions(exts, remembered)].sort(), ['png', 'py']);
+  });
+
+  it('rememberExtensions keeps what it was told about extensions not shown this time', () => {
+    const r = rememberExtensions({ checked: ['png'], unchecked: ['py'] }, ['css', 'png'], ['css']);
+    assert.deepStrictEqual([...r.checked].sort(), ['css']);
+    assert.deepStrictEqual([...r.unchecked].sort(), ['png', 'py']);
+  });
+
+  it('referencedResourceFolders: folders of images/media the maps use, not DITA files or URLs', async () => {
+    const crawl = await crawlMaps(
+      [R('root.ditamap')],
+      fakeFs({
+        'root.ditamap': '<map><topicref href="a.dita"/><keydef keys="k" href="art/logo.svg" format="svg"/></map>',
+        'a.dita': '<topic id="a"><title>A</title><body><image href="img/x.png"/><image href="https://e.com/y.png"/><xref href="b.dita"/></body></topic>',
+        'b.dita': '<topic id="b"><title>B</title><body/></topic>',
+      }).host,
+    );
+    assert.deepStrictEqual(referencedResourceFolders(crawl).map(rel), ['art', 'img']);
+  });
+
+  it('mergeRoots drops folders nested in another and duplicates', () => {
+    assert.deepStrictEqual(mergeRoots([R('a/b'), R('a'), R('a'), R('c')]).map(rel), ['a', 'c']);
+  });
+
+  it('filesUnder keeps files inside any of the folders, recursively', () => {
+    const files = [R('img/a.png'), R('img/sub/b.png'), R('css/x.css'), R('imgx/y.png')];
+    assert.deepStrictEqual(filesUnder(files, [R('img')]).map(rel), ['img/a.png', 'img/sub/b.png']);
+  });
+
+  it('folderStats counts recursively per folder down to the depth limit', () => {
+    const all = [R('img/a.png'), R('img/sub/b.png'), R('img/sub/deep/c.png'), R('css/x.css'), R('top.dita')];
+    const unref = [R('img/a.png'), R('img/sub/deep/c.png'), R('css/x.css')];
+    const stats = folderStats(all, unref, [R('.')], 2);
+    const by = Object.fromEntries(stats.map((s) => [rel(s.dir) || '.', [s.total, s.unreferenced]]));
+    assert.deepStrictEqual(by[rel(R('.'))], [5, 3]);
+    assert.deepStrictEqual(by['img'], [3, 2]);
+    assert.deepStrictEqual(by['img/sub'], [2, 1]);
+    assert.strictEqual(by['img/sub/deep'], undefined); // depth 3 > limit 2
+    assert.deepStrictEqual(by['css'], [1, 1]);
+  });
+
+  it('suggestFolders: resource folders when there are any (nearest listed ancestor if deeper), else the map folders', () => {
+    const stats = [
+      { dir: R('.'), total: 9, unreferenced: 4 },
+      { dir: R('img'), total: 5, unreferenced: 2 },
+      { dir: R('css'), total: 2, unreferenced: 2 },
+    ];
+    assert.deepStrictEqual(suggestFolders(stats, [R('img'), R('img/icons/deep')], [R('.')]).map(rel), ['img']);
+    assert.deepStrictEqual(suggestFolders(stats, [], [R('.')]).map(rel), [rel(R('.'))]);
   });
 });
