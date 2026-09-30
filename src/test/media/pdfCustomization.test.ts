@@ -44,6 +44,7 @@ describe('media/pdf-customization: every file is well-formed XML', () => {
     'catalog.xml',
     join('fo', 'attrs', 'custom.xsl'),
     join('fo', 'xsl', 'custom.xsl'),
+    join('fo', 'i18n', 'zh_CN.xml'),
   ];
   for (const rel of files) {
     it(`${rel} parses with a strict XML parser`, () => {
@@ -386,5 +387,38 @@ describe('media/pdf-customization: booklist page numbers follow position, not ju
   it('declares the vdv and xs namespaces the function uses', () => {
     assert.ok(/xmlns:vdv="urn:dita-viewer:pdf-customization"/.test(attrs));
     assert.ok(/xmlns:xs="http:\/\/www\.w3\.org\/2001\/XMLSchema"/.test(attrs));
+  });
+});
+
+describe('media/pdf-customization: zh_CN i18n config keeps Latin words out of the CJK font', () => {
+  // Read lazily so a missing file is a failing assertion, not a load-time crash.
+  const load = (): string => {
+    const path = join(customizationRoot, 'fo', 'i18n', 'zh_CN.xml');
+    assert.ok(existsSync(path), 'expected media/pdf-customization/fo/i18n/zh_CN.xml');
+    return readFileSync(path, 'utf-8').replace(/<!--[\s\S]*?-->/g, '');
+  };
+
+  it('the Simplified Chinese alphabet reaches the fullwidth punctuation block (U+FF08 etc.)', () => {
+    // Stock range ends at U+FF00, so the fullwidth parentheses in
+    // "正交性（Orthogonality）" stayed in the same default run as the Latin
+    // letters, and FOP set the whole run in the CJK face.
+    const code = load();
+    const m = /<alphabet\s+char-set="Simplified Chinese">([\s\S]*?)<\/alphabet>/.exec(code);
+    assert.ok(m, 'expected a Simplified Chinese alphabet');
+    const ends = [...m[1].matchAll(/<end[^>]*>&#x([0-9a-fA-F]+);<\/end>/g)].map((x) => parseInt(x[1], 16));
+    assert.ok(ends.some((e) => e >= 0xff60), 'a range must extend past U+FF08 (fullwidth parentheses)');
+    assert.ok(ends.every((e) => e < 0xffff), 'ranges must not swallow the whole BMP');
+  });
+
+  it('never claims ASCII letters for the CJK alphabet', () => {
+    const code = load();
+    const starts = [...code.matchAll(/<start[^>]*>&#x([0-9a-fA-F]+);<\/start>/g)].map((x) => parseInt(x[1], 16));
+    assert.ok(starts.every((st) => st >= 0x0100), 'no range may start inside ASCII/Latin-1');
+  });
+
+  it('keeps the symbol alphabets of the stock file', () => {
+    const code = load();
+    assert.ok(/char-set="SymbolsSuperscript"/.test(code));
+    assert.ok(/char-set="SubmenuSymbol"/.test(code));
   });
 });

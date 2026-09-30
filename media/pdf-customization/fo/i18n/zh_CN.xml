@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Replacement for org.dita.pdf2's cfg/fo/i18n/zh_CN.xml, picked up through the
+  `customization.dir` option (build.xml resolves
+  ${customization.dir}/fo/i18n/${document.locale}.xml before its own copy).
+  Only the "Simplified Chinese" alphabet differs from the stock file: it also
+  claims the fullwidth punctuation block, see the comment on that alphabet.
+  Derived from the DITA Open Toolkit file (Apache License 2.0).
+-->
+<configuration>
+    <alphabet char-set="SymbolsSuperscript">
+        <character-set>
+            <!-- Copyright -->
+            <character>&#169;</character>
+            <!-- Registered Trademark -->
+            <character>&#174;</character>
+            <!-- Trademark -->
+            <character>&#8482;</character>
+            <!-- Service mark -->
+            <character>&#x2120;</character>
+        </character-set>
+    </alphabet>
+    <alphabet char-set="SubmenuSymbol">
+        <character-set>
+            <character>&#x27A4;</character>
+        </character-set>
+    </alphabet>
+
+    <!--
+      Fix: Latin words next to fullwidth punctuation were set in the CJK font.
+
+      The stock range stops at U+FF00, so fullwidth punctuation (the
+      parentheses in "正交性（Orthogonality）", fullwidth comma, colon ...,
+      U+FF01-FF60 and the halfwidth/fullwidth forms up to U+FFEF) is classified
+      as "default", i.e. it stays in the same text run as the Latin letters
+      around it. That run is asked for `Times New Roman, ..., SimSun`; Times New
+      Roman has no fullwidth parenthesis, FOP falls back to the CJK face for it,
+      and the whole run - "（Orthogonality）", "（Boundary skewness angle）" -
+      came out in the CJK font's Latin glyphs, while a Latin word that happened
+      to sit in its own inline (bold, a keyword) stayed in Times.
+
+      Extending the range to U+FFEF makes those characters their own CJK run
+      (the "Simplified Chinese" faces of font-mappings.xml), leaving the Latin
+      letters as a pure default run that resolves to Times New Roman. Only the
+      end of the third range changed.
+    -->
+    <alphabet char-set="Simplified Chinese">
+       <character-set>
+          <character-range>
+       <start include="yes">&#x4e00;</start>
+       <end include="yes">&#x9fff;</end>
+    </character-range>
+          <character-range>
+       <start include="yes">&#x3400;</start>
+       <end include="yes">&#x4dff;</end>
+    </character-range>
+          <character-range>
+       <start include="yes">&#x0100;</start>
+       <end include="yes">&#xffef;</end>
+    </character-range>
+       </character-set>
+    </alphabet>
+
+</configuration>
