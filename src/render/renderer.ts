@@ -1,5 +1,6 @@
 import { DitaNode, SourceRange } from '../parser/domTypes';
 import { BASE_TYPE_RENDERERS } from './baseTypeMap';
+import { computeKeyrefSpacing } from './cjkSpacing';
 
 export interface RenderContext {
   headingLevel: number;
@@ -441,7 +442,16 @@ export function renderElement(node: DitaNode, context: RenderContext): string {
 }
 
 function renderChildren(node: DitaNode, context: RenderContext): string {
-  return (node.children || []).map((child) => renderElement(child, context)).join('');
+  const children = node.children || [];
+  // Resolved key text can leave CJK and Latin glued together (`打开` + `ABC`).
+  // Insert a display-only space outside the key element; the source is untouched.
+  const spacing = computeKeyrefSpacing(children, node.baseType, context.resolveKey);
+  return children
+    .map((child, i) => {
+      const html = renderElement(child, context);
+      return (spacing[i].before ? ' ' : '') + html + (spacing[i].after ? ' ' : '');
+    })
+    .join('');
 }
 
 export function renderDocument(
