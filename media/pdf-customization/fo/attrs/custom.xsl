@@ -14,6 +14,9 @@
 -->
 <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
     xmlns:fo="http://www.w3.org/1999/XSL/Format"
+    xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    xmlns:vdv="urn:dita-viewer:pdf-customization"
+    exclude-result-prefixes="xs vdv"
     version="3.0">
 
   <!--
@@ -144,16 +147,32 @@
 
     The sequence's context node is the ot-placeholder:* element; its @id is the
     id of the booklist entry in the merged map (the same pairing
-    processTopicNotices uses for backmatter notices), so the map tells us which
-    matter it belongs to. Backmatter -> arabic ("1"), everything else keeps "i".
-    The condition lives inside the attribute value because an attribute-set may
-    contain only xsl:attribute. Own members override used sets, so this wins
-    over the inherited page-sequence.frontmatter format; force-page-count is
-    repeated from __force__page__count exactly as the default composes it.
+    processTopicNotices uses for backmatter notices). Whether the pages come
+    before or after the body is decided by vdv:follows-body below: inside
+    <backmatter>, OR after any chapter/part/appendix that renders a topic (a
+    list written after the chapters, outside <backmatter>, is tolerated by
+    DITA-OT with only a validation error and used to fall back to roman).
+    Follows body -> arabic ("1"),
+    everything else keeps "i". The condition lives inside the attribute value
+    because an attribute-set may contain only xsl:attribute. Own members
+    override used sets, so this wins over the inherited
+    page-sequence.frontmatter format; force-page-count is repeated from
+    __force__page__count exactly as the default composes it.
   -->
+  <xsl:function name="vdv:follows-body" as="xs:boolean">
+    <xsl:param name="placeholder" as="element()"/>
+    <xsl:variable name="entry" as="element()?"
+        select="if (exists($placeholder/@id)) then key('map-id', $placeholder/@id, root($placeholder))[1] else ()"/>
+    <xsl:sequence select="exists($entry) and (
+        exists($entry/ancestor::*[contains(@class, ' bookmap/backmatter ')])
+        or exists($entry/preceding::*[contains(@class, ' bookmap/chapter ') or contains(@class, ' bookmap/part ')
+                                      or contains(@class, ' bookmap/appendix ')]
+                                     [exists(@id) and exists(key('topic-id', @id, root($entry)))]))"/>
+  </xsl:function>
+
   <xsl:attribute-set name="page-sequence.toc" use-attribute-sets="__force__page__count page-sequence.frontmatter">
     <xsl:attribute name="format"
-        select="if (exists(@id) and exists(key('map-id', @id)/ancestor::*[contains(@class, ' bookmap/backmatter ')])) then '1' else 'i'"/>
+        select="if (vdv:follows-body(.)) then '1' else 'i'"/>
   </xsl:attribute-set>
 
   <!--

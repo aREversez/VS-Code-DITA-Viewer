@@ -325,7 +325,8 @@ describe('media/pdf-customization: backmatter booklist page numbers', () => {
     const m = /<xsl:attribute-set\s+name="page-sequence\.toc"[^>]*>([\s\S]*?)<\/xsl:attribute-set>/.exec(code);
     assert.ok(m, 'expected a page-sequence.toc attribute-set override');
     assert.ok(/name="format"/.test(m[1]), 'the override must set format itself (own members beat used sets)');
-    assert.ok(/bookmap\/backmatter/.test(m[1]), 'format must depend on whether the entry is inside bookmap/backmatter');
+    // The backmatter test itself now lives in vdv:follows-body (covered below).
+    assert.ok(/bookmap\/backmatter/.test(code), 'the override must still know about bookmap/backmatter');
     assert.ok(/then\s+'1'\s+else\s+'i'/.test(m[1]), "backmatter -> arabic '1', everything else keeps roman 'i'");
     // The composed sets must survive the wholesale replacement.
     assert.ok(/use-attribute-sets="[^"]*__force__page__count[^"]*page-sequence\.frontmatter[^"]*"/.test(m[0]),
@@ -353,5 +354,37 @@ describe('media/pdf-customization: image fitting', () => {
     assert.ok(/\$pct/.test(code) && /@scale/.test(code), 'must honour @scale (own or inherited)');
     assert.ok(/\$h0 gt 1\.2 \* \$w0/.test(code), 'portrait images need their own rule');
     assert.ok(/min\(\(1,\s*\$col div \$w1,\s*\$maxH div \$h1\)\)/.test(code), 'final step must cap at column width and page height, never enlarge');
+  });
+});
+
+describe('media/pdf-customization: booklist page numbers follow position, not just <backmatter>', () => {
+  const attrs = readFileSync(join(customizationRoot, 'fo', 'attrs', 'custom.xsl'), 'utf-8');
+  const code = attrs.replace(/<!--[\s\S]*?-->/g, '');
+
+  it('page-sequence.toc decides arabic vs roman through vdv:follows-body', () => {
+    // A list written after the chapters but outside <backmatter> (DITA-OT
+    // tolerates it with only a validation error) used to fall through the
+    // ancestor::backmatter test to roman "i", so its pages printed and were
+    // cited in the TOC as e.g. "dcclxxx".
+    const m = /<xsl:attribute-set\s+name="page-sequence\.toc"[^>]*>([\s\S]*?)<\/xsl:attribute-set>/.exec(code);
+    assert.ok(m, 'expected a page-sequence.toc attribute-set override');
+    assert.ok(/vdv:follows-body\(\s*\.\s*\)/.test(m[1]), 'format must be decided by vdv:follows-body(.)');
+    assert.ok(/then\s+'1'\s+else\s+'i'/.test(m[1]), "follows body -> '1', otherwise roman 'i'");
+  });
+
+  it('vdv:follows-body treats backmatter AND anything after a rendered chapter/part/appendix as after the body', () => {
+    const f = /<xsl:function\s+name="vdv:follows-body"[^>]*>([\s\S]*?)<\/xsl:function>/.exec(code);
+    assert.ok(f, 'expected the vdv:follows-body function');
+    assert.ok(/bookmap\/backmatter/.test(f[1]), 'backmatter entries follow the body');
+    assert.ok(/preceding::/.test(f[1]), 'position after a preceding chapter/part/appendix also counts');
+    for (const cls of ['bookmap/chapter', 'bookmap/part', 'bookmap/appendix']) {
+      assert.ok(f[1].includes(cls), `${cls} must count as body`);
+    }
+    assert.ok(/topic-id/.test(f[1]), 'key-only chapters that print nothing must not count as body');
+  });
+
+  it('declares the vdv and xs namespaces the function uses', () => {
+    assert.ok(/xmlns:vdv="urn:dita-viewer:pdf-customization"/.test(attrs));
+    assert.ok(/xmlns:xs="http:\/\/www\.w3\.org\/2001\/XMLSchema"/.test(attrs));
   });
 });
