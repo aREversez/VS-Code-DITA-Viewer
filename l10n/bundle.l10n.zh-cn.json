@@ -312,5 +312,12 @@
   "Copy List": "复制列表",
   "{0} unreferenced resource(s) found among {1} file(s) checked — listed in the Problems panel.": "在已检查的 {1} 个文件中发现 {0} 个未引用的资源 — 已列在“问题”面板中。",
   "{0}: no problems found.": "{0}：未发现问题。",
-  "{0}: {1} error(s), {2} warning(s) — listed in the Problems panel.": "{0}：{1} 个错误，{2} 个警告 — 已列在“问题”面板中。"
+  "{0}: {1} error(s), {2} warning(s) — listed in the Problems panel.": "{0}：{1} 个错误，{2} 个警告 — 已列在“问题”面板中。",
+  "Update": "更新",
+  "Install": "安装",
+  "Don't ask again": "不再询问",
+  "A newer version of the CJK spacing plugin is available for your DITA-OT. It adds a space between Chinese text and English key values in the output. Update it?": "你的 DITA-OT 有新版本的中英文间距插件，可在输出中为中文与英文 key 值之间补空格。是否更新？",
+  "Install the CJK spacing plugin into your DITA-OT? It adds a space between Chinese text and English key values (such as an English brand name) in the output. Source files are not changed.": "是否将中英文间距插件安装到你的 DITA-OT？它会在输出中为中文与英文 key 值（如英文品牌名）之间补空格，不会修改源文件。",
+  "CJK spacing plugin installed.": "中英文间距插件已安装。",
+  "Could not install the CJK spacing plugin: {0}. The transform will continue without it; installing may need write access to the DITA-OT folder.": "无法安装中英文间距插件：{0}。转换将不带该插件继续；安装可能需要对 DITA-OT 目录的写权限。"
 }

@@ -312,5 +312,12 @@
   "Copy List": "Copy List",
   "{0} unreferenced resource(s) found among {1} file(s) checked — listed in the Problems panel.": "{0} unreferenced resource(s) found among {1} file(s) checked — listed in the Problems panel.",
   "{0}: no problems found.": "{0}: no problems found.",
-  "{0}: {1} error(s), {2} warning(s) — listed in the Problems panel.": "{0}: {1} error(s), {2} warning(s) — listed in the Problems panel."
+  "{0}: {1} error(s), {2} warning(s) — listed in the Problems panel.": "{0}: {1} error(s), {2} warning(s) — listed in the Problems panel.",
+  "Update": "Update",
+  "Install": "Install",
+  "Don't ask again": "Don't ask again",
+  "A newer version of the CJK spacing plugin is available for your DITA-OT. It adds a space between Chinese text and English key values in the output. Update it?": "A newer version of the CJK spacing plugin is available for your DITA-OT. It adds a space between Chinese text and English key values in the output. Update it?",
+  "Install the CJK spacing plugin into your DITA-OT? It adds a space between Chinese text and English key values (such as an English brand name) in the output. Source files are not changed.": "Install the CJK spacing plugin into your DITA-OT? It adds a space between Chinese text and English key values (such as an English brand name) in the output. Source files are not changed.",
+  "CJK spacing plugin installed.": "CJK spacing plugin installed.",
+  "Could not install the CJK spacing plugin: {0}. The transform will continue without it; installing may need write access to the DITA-OT folder.": "Could not install the CJK spacing plugin: {0}. The transform will continue without it; installing may need write access to the DITA-OT folder."
 }

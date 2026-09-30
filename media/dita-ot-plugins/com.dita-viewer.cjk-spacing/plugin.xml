@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  DITA Viewer: CJK/Latin spacing around resolved keyref text.
+
+  Runs right after key resolution, on the temp copies only (sources are never
+  touched). Classic pipeline (pdf, xhtml, ...): no keyref.post point exists, so
+  conrefpush.pre, the first stage after keyref, is used. Map-first pipeline
+  (html5 in DITA-OT 4.x): topics.post. A build runs one pipeline or the other.
+
+  Everything the integrator inlines into build.xml (this file's attribute
+  values and conductor.xml targets) must stay pure ASCII: the integrator uses
+  the platform default charset (GBK on Chinese Windows). Comments are not
+  inlined, and xsl/*.xsl is read directly by the XSLT engine.
+-->
+<plugin id="com.dita-viewer.cjk-spacing" version="1.0.0">
+  <require plugin="org.dita.base"/>
+  <feature extension="depend.preprocess.conrefpush.pre" value="dv-cjk-spacing"/>
+  <feature extension="depend.preprocess2.topics.post" value="dv-cjk-spacing"/>
+  <feature extension="dita.conductor.target.relative" file="conductor.xml"/>
+</plugin>

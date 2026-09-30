@@ -36,6 +36,7 @@ import {
 } from './editor/templateExport';
 import { mapTitleFromXml } from './editor/templateChrome';
 import { makeFileTitleResolver } from './editor/ditaRenderUtils';
+import { ditaOtHomeFromExecutable, getPluginStatus, installPlugin, CJK_SPACING_PLUGIN_ID } from './editor/ditaOtPlugin';
 import { registerLanguageFeatures } from './language/ditaLanguageFeatures';
 import { registerMapTreeView } from './language/ditaMapTreeProvider';
 import { ditaFileWatcherCounts } from './editor/ditaFileWatcher';
@@ -58,6 +59,56 @@ const LAST_TRANSFORM_TEMPLATE_KEY = 'ditaViewer.lastTransformTemplate';
 
 /** The legacy feature-flag base every html5/xhtml run starts from (all
  *  enhancements on -- the pre-template defaults). */
+/** globalState key prefix: DITA-OT homes where the user declined the CJK spacing plugin. */
+const CJK_PLUGIN_DECLINED_KEY = 'ditaViewer.cjkSpacingPluginDeclined:';
+
+async function offerCjkSpacingPlugin(
+  context: vscode.ExtensionContext,
+  extensionPath: string,
+  ditaExecutable: string,
+  outputChannel: vscode.OutputChannel,
+): Promise<void> {
+  const bundledDir = join(extensionPath, 'media', 'dita-ot-plugins', CJK_SPACING_PLUGIN_ID);
+  if (!existsSync(join(bundledDir, 'plugin.xml'))) return;
+  const otHome = ditaOtHomeFromExecutable(ditaExecutable);
+  const status = getPluginStatus(otHome, bundledDir);
+  if (status === 'installed') return;
+  const declinedKey = CJK_PLUGIN_DECLINED_KEY + otHome;
+  if (context.globalState.get<boolean>(declinedKey, false)) return;
+
+  const installLabel = status === 'outdated' ? vscode.l10n.t('Update') : vscode.l10n.t('Install');
+  const neverLabel = vscode.l10n.t("Don't ask again");
+  const choice = await vscode.window.showInformationMessage(
+    status === 'outdated'
+      ? vscode.l10n.t('A newer version of the CJK spacing plugin is available for your DITA-OT. It adds a space between Chinese text and English key values in the output. Update it?')
+      : vscode.l10n.t('Install the CJK spacing plugin into your DITA-OT? It adds a space between Chinese text and English key values (such as an English brand name) in the output. Source files are not changed.'),
+    installLabel,
+    neverLabel,
+  );
+  if (choice === neverLabel) {
+    await context.globalState.update(declinedKey, true);
+    return;
+  }
+  if (choice !== installLabel) return;
+
+  try {
+    await installPlugin(otHome, bundledDir, () => new Promise<void>((resolveRun, rejectRun) => {
+      const spec = buildDitaOtSpawnSpec(ditaExecutable, ['install'], process.platform);
+      const child = spawn(spec.command, spec.args, { windowsVerbatimArguments: spec.windowsVerbatimArguments });
+      child.stdout?.on('data', (d) => outputChannel.append(String(d)));
+      child.stderr?.on('data', (d) => outputChannel.append(String(d)));
+      child.on('error', rejectRun);
+      child.on('close', (code) => (code === 0 ? resolveRun() : rejectRun(new Error(`dita install exited with code ${code}`))));
+    }));
+    vscode.window.showInformationMessage(vscode.l10n.t('CJK spacing plugin installed.'));
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    vscode.window.showWarningMessage(
+      vscode.l10n.t('Could not install the CJK spacing plugin: {0}. The transform will continue without it; installing may need write access to the DITA-OT folder.', message),
+    );
+  }
+}
+
 function chromeFeatureBase(): SiteChromeFeatures {
   return {
     navToolbar: true, sidebar: true, onPageToc: true,
@@ -528,6 +579,12 @@ export function activate(context: vscode.ExtensionContext) {
         );
         return;
       }
+
+      // 8c. Offer the bundled CJK/Latin spacing plugin (spaces around resolved
+      // key text, e.g. 打开<ph keyref="brand"/> with an English brand name).
+      // It edits the DITA-OT installation, so it is opt-in: asked once per
+      // install unless the user picks "Don't ask again".
+      await offerCjkSpacingPlugin(context, extensionPath, result.location.executablePath, transformOutputChannel);
 
       // 9. Run transformation. The pdf transtype gets the bundled
       // media/pdf-customization/ folder via --args.customization.dir (see

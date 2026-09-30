@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Disable per build with -Ddv.cjk.spacing.mode=off -->
+<project xmlns:dita="http://dita-ot.sourceforge.net"
+         xmlns:if="ant:if"
+         xmlns:unless="ant:unless">
+
+  <condition property="dv.cjk.spacing.skip">
+    <equals arg1="${dv.cjk.spacing.mode}" arg2="off"/>
+  </condition>
+
+  <target name="dv-cjk-spacing" unless="dv.cjk.spacing.skip">
+    <pipeline message="Insert CJK/Latin spacing around key text." taskname="dv-cjk-spacing">
+      <xslt basedir="${dita.temp.dir}"
+            style="${dita.plugin.com.dita-viewer.cjk-spacing.dir}/xsl/cjk-spacing.xsl"
+            filenameparameter="file-being-processed">
+        <ditafileset format="dita"/>
+      </xslt>
+    </pipeline>
+  </target>
+</project>
