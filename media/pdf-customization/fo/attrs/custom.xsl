@@ -88,32 +88,29 @@
   </xsl:attribute-set>
 
   <!--
-    Fix: stop the body page-number reset (fo/xsl/custom.xsl) from inserting a
-    blank page at the end of the table of contents.
+    Fix: no blank pages after chapters (and after the cover / table of contents).
 
-    Once the body sequence carries an explicit initial-page-number (odd, = 1),
-    a preceding sequence with force-page-count="auto" pads itself to an even
-    page count so the body opens on a right-hand (recto) page. For a plain
-    <map> that padding is just a stray blank TOC page — pointless on screen and
-    in single-sided output — so the non-bookmap branch drops from "auto" to
-    "no-force". The bookmap branch is kept exactly as org.dita.pdf2 ships it
-    ("even"): a real book is duplex-printed, so its recto alignment (and the
-    blank pages that buy it) is intentional and left untouched.
+    org.dita.pdf2 gives every page sequence force-page-count="even" in a
+    bookmap: a sequence with an odd number of pages is padded with one blank
+    page so the next sequence starts on a right-hand (recto) page. Because each
+    chapter, appendix and part is its own page sequence, a book whose chapters
+    run 5, 3, 3 ... pages gets a blank page after nearly every one of them (seen
+    on DITA-OT 4.4.1: chapters 1, 2, 4 ... each followed by an empty page), and
+    the cover and the table of contents get one as well. That is a print-shop
+    convention for duplex books; for a manual read on screen or printed
+    single-sided it is just wasted pages, and the printed page numbers then jump
+    over them.
 
-    Override replaces the whole set, so the bookmap branch is repeated verbatim
-    from cfg/fo/attrs/commons-attr.xsl; only the <xsl:otherwise> value differs.
+    The set is now "no-force" for every map type. The cost is that a chapter may
+    open on a left-hand (verso) page in a duplex printout. The same value also
+    keeps the restarted body numbering (fo/xsl/custom.xsl, initial-page-number)
+    from padding the table of contents to an even length.
+
+    Override replaces the whole set; it is composed by every page-sequence
+    attribute set that uses __force__page__count, so this one value covers them.
   -->
   <xsl:attribute-set name="__force__page__count">
-    <xsl:attribute name="force-page-count">
-      <xsl:choose>
-        <xsl:when test="/*[contains(@class, ' bookmap/bookmap ')]">
-          <xsl:value-of select="'even'"/>
-        </xsl:when>
-        <xsl:otherwise>
-          <xsl:value-of select="'no-force'"/>
-        </xsl:otherwise>
-      </xsl:choose>
-    </xsl:attribute>
+    <xsl:attribute name="force-page-count">no-force</xsl:attribute>
   </xsl:attribute-set>
 
   <!--
@@ -174,9 +171,14 @@
 
     chapterLayout is a global xsl:variable (derived from the antArgsChapterLayout
     param, which the CLI feeds from args.chapter.layout). Redeclaring it here
-    wins by import precedence - this file is imported last - so BASIC is the
-    default for exports through this extension; appendix/part/notices layouts
-    inherit from it, so every opener loses the mini-TOC, not just chapters.
+    wins by import precedence - this file is imported last - so BASIC is FIXED
+    for exports through this extension: an args.chapter.layout passed to DITA-OT
+    is ignored, because this variable no longer reads antArgsChapterLayout. The
+    extension builds the DITA-OT command line itself and offers no way to set
+    that argument, so nothing is lost in practice; anyone running this
+    customization folder by hand should know the parameter has no effect.
+    appendix/part/notices layouts inherit from it, so every opener loses the
+    mini-TOC, not just chapters.
 
     This supersedes the earlier __toc__mini__table page-break-after override,
     which is removed here: createMiniToc is no longer called, so that set is
@@ -185,5 +187,19 @@
     change it - omitting an attribute does not drop the default's.)
   -->
   <xsl:variable name="chapterLayout" select="'BASIC'"/>
+
+  <!--
+    Single-line "Chapter N" / "第 N 章" label above a chapter, appendix or part
+    title (emitted by insertChapterFirstpageStaticContent in fo/xsl/custom.xsl,
+    only when the title does not already carry the label). Plain bold text, no
+    band: the stock band's 40pt block-level number is what split the Chinese
+    label over three lines.
+  -->
+  <xsl:attribute-set name="__vdv__opener__label">
+    <xsl:attribute name="font-size">12pt</xsl:attribute>
+    <xsl:attribute name="font-weight">bold</xsl:attribute>
+    <xsl:attribute name="space-after">4pt</xsl:attribute>
+    <xsl:attribute name="keep-with-next.within-page">always</xsl:attribute>
+  </xsl:attribute-set>
 
 </xsl:stylesheet>

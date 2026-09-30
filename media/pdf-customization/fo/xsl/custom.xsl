@@ -106,25 +106,98 @@
   </xsl:template>
 
   <!--
-    Drop the big chapter-number band from the chapter opener page.
+    Chapter / appendix / part numbering label, shown once.
+
+    The label ("Chapter 1", "第 1 章") is the localized 'Chapter with number' /
+    'Appendix with number' / 'Part with number' variable filled with the entry's
+    number. It is shown in two places, the chapter opener and the table of
+    contents (whose prefix is the 'Table of Contents Chapter' variable), and
+    both must cope with a title that ALREADY starts with that label. That is
+    common: an author who wants "第 1 章 产品简介" in the HTML outputs, which do
+    not number chapters, types the number into the title or @navtitle. Adding
+    the auto label on top printed "第 1 章 第 1 章 产品简介" in the TOC (seen on
+    DITA-OT 4.4.1). So the auto label is skipped whenever the title starts with
+    it - ignoring whitespace ("第1章" matches "第 1 章") and not matching a
+    longer number ("Chapter 1" does not match "Chapter 10").
+  -->
+  <xsl:function name="vdv:title-has-label" as="xs:boolean">
+    <xsl:param name="title" as="xs:string"/>
+    <xsl:param name="label" as="xs:string"/>
+    <!-- DITA-OT's localized variables use no-break spaces ("第&#xA0;1&#xA0;章"),
+         which normalize-space() and \s do not treat as whitespace. -->
+    <xsl:variable name="chars" as="xs:string*"
+        select="for $i in 1 to string-length($label)
+                return substring($label, $i, 1)[not(matches(., '[\s&#xA0;]'))]"/>
+    <xsl:variable name="regex" as="xs:string"
+        select="string-join(
+                  for $c in $chars
+                  return if (matches($c, '[\\.\[\]()*+?{}|^$-]')) then concat('\', $c) else $c,
+                  '[\s&#xA0;]*')"/>
+    <xsl:sequence select="exists($chars)
+                          and matches(replace($title, '&#xA0;', ' '), concat('^\s*', $regex, '([^0-9A-Za-z]|$)'))"/>
+  </xsl:function>
+
+  <!-- The label text for a bookmap chapter/appendix/part entry, or '' for any other kind. -->
+  <xsl:template name="vdv:entry-label" as="xs:string">
+    <xsl:param name="entry" as="element()"/>
+    <xsl:variable name="id" as="xs:string?"
+        select="if ($entry[contains(@class, ' bookmap/chapter ')]) then 'Chapter with number'
+                else if ($entry[contains(@class, ' bookmap/appendix ')]) then 'Appendix with number'
+                else if ($entry[contains(@class, ' bookmap/part ')]) then 'Part with number'
+                else ()"/>
+    <xsl:variable name="label">
+      <xsl:if test="exists($id)">
+        <xsl:call-template name="getVariable">
+          <xsl:with-param name="id" select="$id"/>
+          <xsl:with-param name="params">
+            <number><xsl:apply-templates select="$entry" mode="topicTitleNumber"/></number>
+          </xsl:with-param>
+        </xsl:call-template>
+      </xsl:if>
+    </xsl:variable>
+    <xsl:sequence select="normalize-space(string($label))"/>
+  </xsl:template>
+
+  <xsl:function name="vdv:entry-title" as="xs:string">
+    <xsl:param name="entry" as="element()"/>
+    <xsl:sequence select="normalize-space(string(key('topic-id', $entry/@id, root($entry))[1]/*[contains(@class, ' topic/title ')]))"/>
+  </xsl:function>
+
+  <!--
+    Table of contents prefix: the stock prefix, unless the title already carries
+    the label. next-match hands back exactly what org.dita.pdf2 would have
+    printed, so the wording of the prefix ("Chapter 1: ") is untouched.
+  -->
+  <xsl:template match="*[contains(@class, ' bookmap/chapter ')] |
+                       *[contains(@class, ' bookmap/appendix ')] |
+                       *[contains(@class, ' bookmap/part ')]" mode="tocPrefix">
+    <xsl:variable name="label" as="xs:string">
+      <xsl:call-template name="vdv:entry-label"><xsl:with-param name="entry" select="."/></xsl:call-template>
+    </xsl:variable>
+    <xsl:if test="not(vdv:title-has-label(vdv:entry-title(.), $label))">
+      <xsl:next-match/>
+    </xsl:if>
+  </xsl:template>
+
+  <!--
+    Chapter opener: no big number band, one plain label line instead.
 
     org.dita.pdf2 (xsl/fo/commons.xsl, insertChapterFirstpageStaticContent)
     paints, above every chapter/part/appendix title, a bordered band built from
     the localized 'Chapter with number' variable with the number wrapped in a
-    40pt BLOCK-level fo:block. Two problems, both visible in the render:
-      - the number block forces a line break on each side of itself, so the
-        Chinese label "第{n}章" (cfg/common/vars/zh_cn.xml) stacks into three
-        lines "第" / giant "1" / "章"; English "Chapter {n}" only hides this
-        because it has no trailing word to push onto a third line.
-      - the band repeats the number that the chapter title already carries
-        (the title below is the auto-numbered "第 1 章 产品简介"), so the page
-        shows "第 1 章" twice.
-    Removing the band fixes both and leaves the chapter opening on its title.
+    40pt BLOCK-level fo:block: the number block forces a line break on each side
+    of itself, so the Chinese label "第 {n} 章" stacks into three lines
+    "第" / giant "1" / "章". English only hides this because "Chapter {n}" has no
+    trailing word. The band is replaced by the same label as a single ordinary
+    line (attribute set __vdv__opener__label), and left out when the title
+    already starts with it (see vdv:title-has-label above). Dropping the band
+    altogether, as an earlier version did, lost the number from every chapter
+    whose title does not carry it.
 
-    The band's wrapper <fo:block id="..."> is the internal-destination the PDF
-    bookmark tree and the TOC links point at, so it is kept (as an empty, zero
-    height block); only the number content is dropped. Overriding by the same
-    match+mode wins because this stylesheet is imported last.
+    Kept as-is: the wrapper <fo:block id="..."> is the internal destination the
+    PDF bookmark tree and the TOC links point at. Preface, notices and the
+    appendices container keep no band: they have no number, and their own title
+    already names them.
   -->
   <xsl:template match="*" mode="insertChapterFirstpageStaticContent">
     <xsl:param name="type" as="xs:string"/>
@@ -132,6 +205,21 @@
       <xsl:attribute name="id">
         <xsl:call-template name="generate-toc-id"/>
       </xsl:attribute>
+      <xsl:if test="$type = ('chapter', 'appendix', 'part')">
+        <xsl:variable name="entry" as="element()?" select="key('map-id', @id)[1]"/>
+        <xsl:if test="exists($entry)">
+          <xsl:variable name="label" as="xs:string">
+            <xsl:call-template name="vdv:entry-label"><xsl:with-param name="entry" select="$entry"/></xsl:call-template>
+          </xsl:variable>
+          <xsl:variable name="title" as="xs:string"
+              select="normalize-space(string(*[contains(@class, ' topic/title ')]))"/>
+          <xsl:if test="$label ne '' and not(vdv:title-has-label($title, $label))">
+            <fo:block xsl:use-attribute-sets="__vdv__opener__label">
+              <xsl:value-of select="$label"/>
+            </fo:block>
+          </xsl:if>
+        </xsl:if>
+      </xsl:if>
     </fo:block>
   </xsl:template>
 

@@ -146,18 +146,18 @@ describe('media/pdf-customization: fo/attrs/custom.xsl attribute-set overrides',
     assert.ok(!/sans-serif/.test(withoutComments), 'no attribute-set in custom.xsl may use sans-serif');
   });
 
-  it('suppresses the plain-map blank page the body reset would otherwise force, without touching bookmaps', () => {
-    // The startPageNumbering reset makes the body start on an odd page, which
-    // would drive a plain map's TOC to pad itself with a blank page (recto
-    // alignment). __force__page__count is overridden so the non-bookmap branch
-    // is no-force (no pad) while the bookmap branch stays "even" (real books
-    // keep duplex recto layout). If either branch drifts, the fix is silently
-    // undone: a stray blank page reappears, or bookmaps lose their padding.
+  it('never pads a page sequence to an even page count (no blank pages after chapters)', () => {
+    // org.dita.pdf2 sets force-page-count="even" on every bookmap sequence, so a
+    // chapter with an odd number of pages is followed by a blank page (DITA-OT
+    // 4.4.1: a blank page after nearly every chapter, plus one after the cover
+    // and one after the TOC). The override must be "no-force" for every map
+    // type; the same value keeps the restarted body numbering from padding a
+    // plain map's TOC.
     const body = attributeSetBody('__force__page__count');
     assert.ok(body !== undefined, 'expected a `__force__page__count` attribute-set override');
-    assert.ok(/bookmap\/bookmap/.test(body), 'override must keep the bookmap branch');
-    assert.ok(/'even'/.test(body), 'bookmap branch must stay force-page-count="even"');
-    assert.ok(/'no-force'/.test(body), 'non-bookmap branch must be force-page-count="no-force"');
+    assert.ok(/no-force/.test(body), 'force-page-count must be "no-force"');
+    assert.ok(!/even|auto/.test(body), 'no branch may pad to an even/auto page count');
+    assert.ok(!/bookmap\/bookmap/.test(body), 'bookmaps must not be treated differently any more');
   });
 
   it('numbers the cover page in lowercase roman so the front matter reads i, ii, iii', () => {
@@ -279,6 +279,37 @@ describe('media/pdf-customization: fo/xsl/custom.xsl template overrides', () => 
     assert.ok(/generate-toc-id/.test(m[1]), 'must keep the anchor id (bookmark / TOC link target)');
     assert.ok(!/__chapter__frontmatter__number__container/.test(m[1]), 'must not emit the big number container');
     assert.ok(!/Chapter with number/.test(m[1]), 'must not emit the "Chapter with number" band');
+  });
+
+  it('replaces the chapter band with a single-line label that is skipped when the title already has it', () => {
+    // Removing the band outright lost the number from every chapter whose title
+    // does not carry it; the label is therefore emitted as one plain line, and
+    // only when vdv:title-has-label says the title lacks it.
+    const m =
+      /<xsl:template\b[^>]*mode="insertChapterFirstpageStaticContent"[^>]*>([\s\S]*?)<\/xsl:template>/.exec(xsl);
+    assert.ok(m, 'expected an insertChapterFirstpageStaticContent template override');
+    assert.ok(/__vdv__opener__label/.test(m[1]), 'must emit the single-line opener label');
+    assert.ok(/vdv:title-has-label/.test(m[1]), 'must skip the label when the title already carries it');
+    const attrsSrc = readFileSync(join(customizationRoot, 'fo', 'attrs', 'custom.xsl'), 'utf-8');
+    assert.ok(/<xsl:attribute-set\s+name="__vdv__opener__label"/.test(attrsSrc), 'the opener label attribute-set must be defined');
+  });
+
+  it('does not repeat the chapter label in the table of contents when the title already has it', () => {
+    // A title / @navtitle typed as "第 1 章 产品简介" plus the auto prefix
+    // "第 1 章 " printed "第 1 章 第 1 章 产品简介" in the TOC.
+    const m = /<xsl:template\b[^>]*mode="tocPrefix"[^>]*>([\s\S]*?)<\/xsl:template>/.exec(xsl);
+    assert.ok(m, 'expected a tocPrefix override');
+    assert.ok(/vdv:title-has-label/.test(m[1]), 'must consult vdv:title-has-label');
+    assert.ok(/xsl:next-match/.test(m[1]), 'must fall back to the stock prefix via next-match');
+  });
+
+  it('title-has-label treats no-break spaces as spaces and guards the number boundary', () => {
+    // DITA-OT's zh_CN variables are "第&#xA0;{n}&#xA0;章"; \s and normalize-space
+    // do not cover U+00A0, and "Chapter 1" must not match "Chapter 10".
+    const f = /<xsl:function\s+name="vdv:title-has-label"[\s\S]*?<\/xsl:function>/.exec(xsl);
+    assert.ok(f, 'expected vdv:title-has-label');
+    assert.ok(/&#xA0;/.test(f[0]), 'must treat U+00A0 as whitespace');
+    assert.ok(/\[\^0-9A-Za-z\]/.test(f[0]), 'must require a non-alphanumeric char after the label');
   });
 });
 
