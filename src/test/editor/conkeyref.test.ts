@@ -97,3 +97,41 @@ describe('resolveConkeyref', () => {
     assert.strictEqual(resolveConkeyref('', defs, load), undefined);
   });
 });
+
+// A key's href may carry a fragment ("file.dita#topicid/elemid"). The real
+// loader (renderContext.ts) strips it before reading the file, so the pure
+// resolver has to apply it itself.
+describe('resolveConkeyref with a fragment on the key href', () => {
+  const topic = () =>
+    el('topic', { id: 'common' }, [
+      el('body', {}, [
+        el('p', { id: 'legal' }, [txt('LEGAL')]),
+        el('p', { id: 'other' }, [txt('OTHER')]),
+      ]),
+    ]);
+  const load = (_baseDir: string, href: string): DitaNode | undefined =>
+    href.split('#')[0] === 'common.dita' ? topic() : undefined;
+
+  it('bare key resolves to the element named by href#topicid/elemid, not the whole topic', () => {
+    const defs = new Map<string, KeyHrefDef>([['legal', { href: 'common.dita#common/legal', baseDir: '/maps' }]]);
+    const node = resolveConkeyref('legal', defs, load);
+    assert.strictEqual(node?.attributes?.id, 'legal');
+  });
+
+  it('bare key whose href names only the topic still resolves to the topic', () => {
+    const defs = new Map<string, KeyHrefDef>([['common', { href: 'common.dita#common', baseDir: '/maps' }]]);
+    const node = resolveConkeyref('common', defs, load);
+    assert.strictEqual(node?.attributes?.id, 'common');
+  });
+
+  it('an explicit key/elementid wins over the fragment on the key href', () => {
+    const defs = new Map<string, KeyHrefDef>([['legal', { href: 'common.dita#common/legal', baseDir: '/maps' }]]);
+    const node = resolveConkeyref('legal/other', defs, load);
+    assert.strictEqual(node?.attributes?.id, 'other');
+  });
+
+  it('a fragment naming a missing element is unresolvable, so the caller can fall back', () => {
+    const defs = new Map<string, KeyHrefDef>([['legal', { href: 'common.dita#common/nope', baseDir: '/maps' }]]);
+    assert.strictEqual(resolveConkeyref('legal', defs, load), undefined);
+  });
+});

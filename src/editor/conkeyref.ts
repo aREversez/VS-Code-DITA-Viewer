@@ -39,6 +39,25 @@ function parseConkeyref(conkeyref: string): { keyName: string; elementId?: strin
   return { keyName, elementId };
 }
 
+/**
+ * The element id a key's own href addresses: the last path segment of its
+ * fragment ("file.dita#topicid/elemid" -> "elemid"; "file.dita#topicid" ->
+ * "topicid"), or undefined when the href has no fragment. This is what a bare
+ * conkeyref="keyname" points at when the key was defined against an element.
+ */
+function hrefFragmentTarget(href: string): string | undefined {
+  const hash = href.indexOf('#');
+  if (hash < 0) return undefined;
+  const segments = href.slice(hash + 1).split('/').filter((s) => s !== '');
+  if (segments.length === 0) return undefined;
+  const last = segments[segments.length - 1];
+  try {
+    return decodeURIComponent(last);
+  } catch {
+    return last;
+  }
+}
+
 function findElementById(root: DitaNode, targetId: string): DitaNode | undefined {
   if (root.attributes?.id === targetId) return root;
   for (const child of root.children || []) {
@@ -82,7 +101,10 @@ export function resolveConkeyref(
   const root = loadTopic(def.baseDir, def.href);
   if (!root) return undefined;
 
-  // No element id -- the reference targets the key's whole topic.
-  if (!elementId) return root;
-  return findElementById(root, elementId);
+  // An id in the conkeyref itself wins; otherwise the key's own href may name
+  // the element ("file.dita#topicid/elemid"); with neither, the reference
+  // targets the key's whole topic.
+  const targetId = elementId ?? hrefFragmentTarget(def.href);
+  if (!targetId) return root;
+  return findElementById(root, targetId);
 }
