@@ -4,6 +4,7 @@ import { mkdtempSync, writeFileSync, rmSync, unlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, basename } from 'path';
 import { setKeyContextMap, onKeyContextMissing } from '../../editor/keyContext';
+import { getKeyDefs } from '../../editor/keySpace';
 
 // keyMap.ts imports vscode at module scope (parseDocRoot / Uri), which the
 // mocha process does not have. This loads the REAL keyMap.ts against a
@@ -73,6 +74,27 @@ describe('buildKeyMap with a context map (real keyMap.ts, vscode stubbed)', () =
         /* already removed by the test */
       }
     }
+  });
+
+  it('hands back the same Map instance conkeyref keys its defs on (WeakMap identity)', () => {
+    // conkeyref looks up a key's href through a WeakMap keyed on the exact
+    // values-map instance buildKeySpace produced (keySpace.ts: registerKeyDefs).
+    // buildKeyMap must hand back that same instance; a defensive copy
+    // (`new Map(space.keys)`) or any rewrap on a cache miss would drop the defs
+    // and silently disable conkeyref while every *text* keyref kept working --
+    // exactly the drift the render-side identity caching cannot see.
+    const legal = join(root, 'legal.ditamap');
+    writeFileSync(
+      legal,
+      '<map><keydef keys="legal" href="common/legal.dita"><topicmeta><keywords><keyword>Legal</keyword></keywords></topicmeta></keydef></map>',
+    );
+    setKeyContextMap(legal);
+    const keys = keyMap.buildKeyMap(topic);
+    assert.strictEqual(keys.get('legal'), 'Legal');
+    const defs = getKeyDefs(keys);
+    assert.ok(defs, 'buildKeyMap must return the instance buildKeySpace registered defs against');
+    assert.strictEqual(defs.get('legal')?.href, 'common/legal.dita', 'the href a keydef declares must reach conkeyref');
+    unlinkSync(legal);
   });
 
   it('without a context resolves against the ancestor maps (unchanged)', () => {
