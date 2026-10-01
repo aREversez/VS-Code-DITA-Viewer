@@ -67,31 +67,11 @@ describe('resolveConkeyref', () => {
     assert.strictEqual(resolveConkeyref('gone/shared', defs2, load), undefined);
   });
 
-  it('terminates a self-cycle: a conkeyref already visited resolves to nothing', () => {
-    const visited = new Set(['brand/shared']);
-    assert.strictEqual(resolveConkeyref('brand/shared', defs, load, visited), undefined);
-  });
-
-  it('resolves a two-document A <-> B cycle by stopping at the revisited link', () => {
-    // A's <p conkeyref="b/pInB"> resolves into B; B's <p conkeyref="a/pInA">
-    // would point back into A. A render walking the chain adds each resolved
-    // conkeyref to `visited`, so re-entering "a/pInA" must return undefined
-    // rather than recurse forever.
-    const cycleDefs = new Map<string, KeyHrefDef>([
-      ['a', { href: 'a.dita', baseDir: '/maps' }],
-      ['b', { href: 'b.dita', baseDir: '/maps' }],
-    ]);
-    const topicA = el('topic', { id: 'aT' }, [el('p', { id: 'pInA', conkeyref: 'b/pInB' }, [txt('A')])]);
-    const topicB = el('topic', { id: 'bT' }, [el('p', { id: 'pInB', conkeyref: 'a/pInA' }, [txt('B')])]);
-    const cycleLoad = loaderFor({ 'a.dita': topicA, 'b.dita': topicB });
-
-    const first = resolveConkeyref('a/pInA', cycleDefs, cycleLoad);
-    assert.strictEqual(first?.attributes?.id, 'pInA');
-    // Following the chain: after resolving a/pInA then b/pInB, the reference
-    // back to a/pInA is guarded.
-    const visited = new Set(['a/pInA', 'b/pInB']);
-    assert.strictEqual(resolveConkeyref('a/pInA', cycleDefs, cycleLoad, visited), undefined);
-  });
+  // Cycle protection lives in the renderer, not in this function: see
+  // conkeyrefRender.test.ts ("does not re-resolve a conkeyref already on the
+  // branch"), which asserts resolveConrefForNode never calls this for a value
+  // already on the conrefChain. A conkeyref that also carries a direct @conref
+  // falls back to it (DITA 1.3 spec behaviour), exercised above.
 
   it('returns undefined for an empty value', () => {
     assert.strictEqual(resolveConkeyref('', defs, load), undefined);

@@ -70,27 +70,25 @@ function findElementById(root: DitaNode, targetId: string): DitaNode | undefined
 /**
  * Resolve a conkeyref to its target element.
  *
+ * Cycle protection is deliberately NOT done here. A conkeyref that resolves
+ * back into an already-rendered chain (A -> B -> A) is caught one level up, by
+ * the renderer: resolveConrefForNode only calls this when the value is not
+ * already on its conrefChain, mirroring direct-conref cycle protection. Keeping
+ * the guard out of this pure function means one owner for the rule and no dead
+ * parameter at the call sites (buildRenderContext never threads a chain in).
+ *
  * @param conkeyref the raw @conkeyref value.
  * @param defs      the key space's href definitions (from KeySpace.defs).
  * @param loadTopic loads and parses the topic at `href` (relative to
  *                  `baseDir`), returning its root, or undefined when the file
  *                  is missing or unparseable.
- * @param visited   conkeyref values already resolved on the current branch;
- *                  re-entering one returns undefined so an A -> B -> A cycle
- *                  terminates instead of recursing (the renderer threads its
- *                  conref chain through here, mirroring direct-conref
- *                  cycle protection).
  */
 export function resolveConkeyref(
   conkeyref: string,
   defs: ReadonlyMap<string, KeyHrefDef>,
   loadTopic: (baseDir: string, href: string) => DitaNode | undefined,
-  visited?: ReadonlySet<string>,
 ): DitaNode | undefined {
   if (!conkeyref) return undefined;
-  // A conkeyref already resolved on this branch points back here -- stop the
-  // cycle and let the caller fall back (conref / literal content).
-  if (visited?.has(conkeyref)) return undefined;
 
   const { keyName, elementId } = parseConkeyref(conkeyref);
   if (!keyName) return undefined;
