@@ -1,5 +1,7 @@
 {
   "extension.description": "VS Code 的 DITA 阅读视图 — 将 .dita 文件渲染为格式化的只读预览",
+  "capabilities.virtualWorkspaces.description": "DITA Viewer 通过本地文件系统读取 map、topic 和媒体文件，预览与检查功能不支持虚拟工作区。",
+  "capabilities.untrustedWorkspaces.description": "阅读视图、Map 导航器和各项检查在不受信任的工作区中照常可用；会启动外部程序的命令（DITA-OT 转换、在 Oxygen 中打开、与 Git 版本对比）需要受信任的工作区。",
   "command.showRendered.title": "打开 DITA 阅读视图",
   "command.showSource.title": "返回 DITA 源码",
   "command.showMapRendered.title": "打开 DITA Map 阅读视图",

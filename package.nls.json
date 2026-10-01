@@ -1,5 +1,7 @@
 {
   "extension.description": "DITA reading view for VS Code — renders .dita files as formatted read-only preview",
+  "capabilities.virtualWorkspaces.description": "DITA Viewer reads maps, topics and media from the local file system, so previews and checks do not work in virtual workspaces.",
+  "capabilities.untrustedWorkspaces.description": "Reading views, the Map Navigator and the checks keep working; commands that start external programs (DITA-OT Transform, Open in Oxygen, Compare with Git Version) need a trusted workspace.",
   "command.showRendered.title": "Open DITA Reading View",
   "command.showSource.title": "Back to DITA Source",
   "command.showMapRendered.title": "Open DITA Map Reading View",

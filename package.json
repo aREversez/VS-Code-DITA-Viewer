@@ -37,6 +37,17 @@
     "Visualization",
     "Other"
   ],
+  "capabilities": {
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "%capabilities.virtualWorkspaces.description%"
+    },
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "%capabilities.untrustedWorkspaces.description%",
+      "restrictedConfigurations": []
+    }
+  },
   "main": "./dist/extension.js",
   "l10n": "./l10n",
   "contributes": {
