@@ -11,7 +11,9 @@ scripts/**
 tsconfig.json
 tsconfig.e2e.json
 tsconfig.test.json
+tsconfig.visual.json
 .mocharc.json
+.mocharc.visual.json
 test-runner.cjs
 esbuild.config.js
 eslint.config.js
