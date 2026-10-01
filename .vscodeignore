@@ -2,10 +2,12 @@
 .vscode-test/**
 test-dita-file/**
 test/**
+test-visual/**
 src/**
 dist/test/**
 dist/**/*.map
 dist-test/**
+dist-test-visual/**
 scripts/**
 .github/**
 tsconfig.json

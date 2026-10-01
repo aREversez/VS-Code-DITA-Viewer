@@ -39,11 +39,16 @@ const REQUIRED_DIRS = [
 
 // Must NOT appear at all -- source, test fixtures, CI config, dev build output
 // and the dev-only toolchain configs belong on disk, not in a user's install.
+// dist-test/ and dist-test-visual/ are the two tsc test-output dirs; test-visual/
+// holds Playwright screenshots -- both leak into the vsix if .vscodeignore drifts
+// (it had, for the -visual siblings of already-ignored paths).
 const FORBIDDEN = [
   'extension/src/',
   'extension/test-dita-file/',
   'extension/.github/',
   'extension/dist-test/',
+  'extension/dist-test-visual/',
+  'extension/test-visual/',
   'extension/tsconfig.visual.json',
   'extension/.mocharc.visual.json',
 ];
