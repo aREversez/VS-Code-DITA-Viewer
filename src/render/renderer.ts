@@ -315,6 +315,16 @@ function injectAttributes(html: string, tagName: string, range: SourceRange): st
 // target is the same baseType (DITA's "same-type" conref semantics) —
 // otherwise the target's tag/baseType wins instead, since a same-shaped
 // substitution isn't possible.
+//
+// KNOWN LIMITATION: a reference chain resolves one hop only. When the target
+// carries its own conref/conkeyref (A -> B -> C), the merge takes B's literal
+// children and drops B's reference attributes (filtered out of restAttrs and
+// targetAttrs), so C is not pulled in here. Conrefs nested *inside* the
+// resolved content are still followed, since renderNode resolves each child as
+// it walks. The plain-conref path behaves the same way — existing design, not
+// spec-complete (DITA requires transitive resolution). Recorded for the README
+// "Known limitations" section; deliberately left as-is so it does not mix with
+// the P5 pure-refactor work.
 function mergeConrefTarget(node: DitaNode, target: DitaNode): DitaNode {
   const restAttrs = Object.fromEntries(
     Object.entries(node.attributes || {}).filter(([k]) => k !== 'conref' && k !== 'conrefend' && k !== 'conkeyref')
