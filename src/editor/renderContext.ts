@@ -35,6 +35,8 @@ import {
   readImageDimensions,
   decodeHrefPart,
 } from './ditaRenderUtils';
+import { getKeyDefs, KeyHrefDef } from './keySpace';
+import { resolveConkeyref } from './conkeyref';
 
 export interface BuildRenderContextInput {
   /** Directory hrefs in this document resolve against (== RenderContext.documentDir). */
@@ -45,6 +47,14 @@ export interface BuildRenderContextInput {
   titleMap: Map<string, string>;
   /** Resolved key values for keyref / conkeyref. */
   keyMap: Map<string, string>;
+  /**
+   * Each key's resource target (href + defining map dir), used to resolve
+   * conkeyref. Normally left undefined: the defs are looked up from `keyMap`
+   * by instance identity (getKeyDefs), since both come from one buildKeySpace
+   * call and the render paths thread the keyMap through everywhere. Pass it
+   * explicitly only to drive conkeyref with a hand-built keyMap (tests).
+   */
+  keyDefs?: ReadonlyMap<string, KeyHrefDef>;
   /** Per-path URI function; the callers keep their vscode-dependent versions. */
   asWebviewUri: (relPath: string) => string;
   headingLevel: number;
@@ -104,6 +114,22 @@ export function buildRenderContext(input: BuildRenderContextInput): BuiltRenderC
 
   if (input.includeIndexLabel) ctx.indexLabel = detectIndexLabel(ownRoot, uiLanguage);
   if (input.bookMembers) ctx.isInCurrentBook = makeIsInCurrentBook(docDir, input.bookMembers);
+
+  // conkeyref rides on the same file cache: a key's href resolves against the
+  // map that defined it (baseDir), not the topic being rendered, so it needs
+  // the absolute-path loader rather than the docDir-relative conref resolver.
+  // Discovered from keyMap by identity unless the caller passed defs directly.
+  const keyDefs = input.keyDefs ?? getKeyDefs(keyMap);
+  if (keyDefs && keyDefs.size > 0) {
+    const loadTopic = (baseDir: string, href: string): DitaNode | undefined => {
+      const absPath = resolve(baseDir, decodeHrefPart(href.split('#')[0]));
+      // A conkeyref target is a real dependency of the rendered HTML, exactly
+      // like a conref target; record it when the caller tracks dependencies.
+      input.collectDependencies?.add(absPath);
+      return fileCache.loadAbsPath(absPath);
+    };
+    ctx.resolveConkeyref = (conkeyref: string) => resolveConkeyref(conkeyref, keyDefs, loadTopic);
+  }
 
   return { ctx, touchedFiles: () => fileCache.touchedFiles() };
 }

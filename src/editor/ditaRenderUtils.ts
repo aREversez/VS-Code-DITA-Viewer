@@ -235,7 +235,17 @@ export function makeFileCache(docDir: string) {
   const cache = new Map<string, DitaNode | undefined>();
 
   function loadFile(filePath: string): DitaNode | undefined {
-    const absPath = resolve(docDir, decodeHrefPart(filePath));
+    return loadAbsPath(resolve(docDir, decodeHrefPart(filePath)));
+  }
+
+  /**
+   * Parse-and-cache a file already addressed by absolute path. loadFile is the
+   * docDir-relative convenience wrapper; conkeyref needs this directly because
+   * a key's href resolves against the *defining map's* directory, not the topic
+   * being rendered. Sharing one cache keeps a conkeyref target and a conref
+   * target of the same file parsed once, and lands both in touchedFiles.
+   */
+  function loadAbsPath(absPath: string): DitaNode | undefined {
     if (cache.has(absPath)) return cache.get(absPath);
     if (!existsSync(absPath)) { cache.set(absPath, undefined); return undefined; }
     try {
@@ -290,7 +300,7 @@ export function makeFileCache(docDir: string) {
     return [...cache.keys()];
   }
 
-  return { loadFile, findElementById, findTitleOfElement, touchedFiles };
+  return { loadFile, loadAbsPath, findElementById, findTitleOfElement, touchedFiles };
 }
 
 export function makeConrefResolver(

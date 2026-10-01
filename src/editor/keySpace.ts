@@ -192,5 +192,34 @@ export function buildKeySpace(
       onError(mf, e);
     }
   }
+  // Pair the href definitions with the values map they were built from, so a
+  // consumer handed only the values map (the render paths thread `keyMap`
+  // everywhere but not `defs`) can still find the conkeyref targets for that
+  // exact instance. Registered here rather than in keyMap.ts so every producer
+  // of a KeySpace -- including the direct buildKeySpace callers the conkeyref
+  // tests drive -- gets it, and so renderContext.ts can read it without
+  // importing the vscode-dependent keyMap.ts.
+  registerKeyDefs(keys, defs);
   return { keys, defs, files: [...new Set(files)], status };
+}
+
+// ── values map -> href defs, by instance identity ──
+//
+// The keys a map defines (values) and their resource targets (defs) are always
+// produced together by one buildKeySpace call, and buildKeyMap hands back the
+// SAME values-map instance for as long as its cache entry is valid -- the exact
+// identity property renderTopicCached already leans on for cache keying. So a
+// WeakMap from the values map to its defs travels with it: any render path that
+// has the keyMap has its conkeyref defs, with no new field to thread through the
+// many interfaces keyMap already passes through (and no path able to forget to).
+const defsByKeyMap = new WeakMap<Map<string, string>, ReadonlyMap<string, KeyHrefDef>>();
+
+export function registerKeyDefs(keys: Map<string, string>, defs: ReadonlyMap<string, KeyHrefDef>): void {
+  defsByKeyMap.set(keys, defs);
+}
+
+/** The href defs paired with a given values map, or undefined if it was not
+ *  produced by buildKeySpace (e.g. a hand-built map in a test). */
+export function getKeyDefs(keys: Map<string, string>): ReadonlyMap<string, KeyHrefDef> | undefined {
+  return defsByKeyMap.get(keys);
 }
