@@ -62,17 +62,39 @@ export function splitKeyNames(keys: string): string[] {
 }
 
 /**
+ * A key's resource target, captured alongside its text value so conkeyref can
+ * resolve `keyname/elementid` to a file. `href` is relative to `baseDir` (the
+ * directory of the map that first defined the key, after referenced-submap
+ * hrefs are rebased by expandDitamapRefs). A key that defines a text value but
+ * no resource is still recorded, with `href` undefined -- conkeyref against
+ * such a key falls back to `conref`, distinct from a key that is not defined at
+ * all. First definition wins, mirroring the value map's precedence.
+ */
+export interface KeyHrefDef {
+  href?: string;
+  baseDir: string;
+}
+
+/**
  * Parses one ditamap, expands the ditamaps it references, and adds every
  * key it defines to `into` (first definition wins, in document order).
- * Throws if the map itself cannot be read or parsed; the caller decides
- * whether that is fatal.
+ * When `hrefs` is supplied, each newly defined key also records its resource
+ * target there (same first-definition-wins gate as the value), keyed by the
+ * individual name. Throws if the map itself cannot be read or parsed; the
+ * caller decides whether that is fatal.
  */
-export function collectMapKeys(mapPath: string, into: Map<string, string>, read: FileReader): void {
+export function collectMapKeys(
+  mapPath: string,
+  into: Map<string, string>,
+  read: FileReader,
+  hrefs?: Map<string, KeyHrefDef>,
+): void {
   const content = read(mapPath, 'utf-8');
   const doc = parseDitamap(preprocessEntities(content));
   const mapRoot = doc.root;
+  const mapDir = dirname(mapPath);
   // Expand referenced ditamaps so keydefs from included maps are visible
-  expandDitamapRefs(mapRoot, dirname(mapPath), read);
+  expandDitamapRefs(mapRoot, mapDir, read);
   function walk(node: DitaNode) {
     if (node.type !== 'element') return;
     const baseType = node.baseType;
@@ -82,7 +104,10 @@ export function collectMapKeys(mapPath: string, into: Map<string, string>, read:
       // with the same resource. First definition of each name wins (DITA
       // precedence; nearest map scanned first).
       for (const name of splitKeyNames(node.attributes.keys)) {
-        if (!into.has(name)) into.set(name, value || name);
+        if (!into.has(name)) {
+          into.set(name, value || name);
+          hrefs?.set(name, { href: node.attributes?.href, baseDir: mapDir });
+        }
       }
     }
     for (const child of node.children || []) walk(child);
@@ -96,6 +121,8 @@ export type KeyContextStatus = 'none' | 'active' | 'missing';
 
 export interface KeySpace {
   keys: Map<string, string>;
+  /** Each key's resource target (href + defining map dir), for conkeyref. */
+  defs: Map<string, KeyHrefDef>;
   /** Every file the key values were derived from (for cache stamping). */
   files: string[];
   /** 'none': no context set. 'active': keys come from the context map alone.
@@ -157,12 +184,13 @@ export function buildKeySpace(
   }
 
   const keys = new Map<string, string>();
+  const defs = new Map<string, KeyHrefDef>();
   for (const mf of sources) {
     try {
-      collectMapKeys(mf, keys, recordingRead);
+      collectMapKeys(mf, keys, recordingRead, defs);
     } catch (e) {
       onError(mf, e);
     }
   }
-  return { keys, files: [...new Set(files)], status };
+  return { keys, defs, files: [...new Set(files)], status };
 }

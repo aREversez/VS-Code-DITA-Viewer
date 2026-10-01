@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { collectMapKeys } from '../../editor/keySpace';
+import { collectMapKeys, KeyHrefDef } from '../../editor/keySpace';
 
 const read = (p: string, enc: 'utf-8') => readFileSync(p, enc);
 
@@ -94,5 +94,70 @@ describe('collectMapKeys', () => {
     collectMapKeys(m, into, read);
     assert.strictEqual(into.get('logo'), 'Acme');
     assert.strictEqual(into.get('alt'), 'Acme');
+  });
+});
+
+describe('collectMapKeys href capture (for conkeyref)', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'keyspace-href-test-'));
+  });
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  function writeMap(name: string, body: string): string {
+    const p = join(root, name);
+    writeFileSync(p, `<?xml version="1.0"?><map>${body}</map>`);
+    return p;
+  }
+
+  it('records the keydef href for every name a space-separated keys list defines', () => {
+    const m = writeMap('a.ditamap', '<keydef keys="a b" href="shared/t.dita"/>');
+    const into = new Map<string, string>();
+    const defs = new Map<string, KeyHrefDef>();
+    collectMapKeys(m, into, read, defs);
+    assert.strictEqual(defs.get('a')?.href, 'shared/t.dita');
+    assert.strictEqual(defs.get('b')?.href, 'shared/t.dita');
+  });
+
+  it('anchors the href to the defining map\'s directory, not the topic\'s', () => {
+    mkdirSync(join(root, 'maps'));
+    const p = join(root, 'maps', 'a.ditamap');
+    writeFileSync(p, '<?xml version="1.0"?><map><keydef keys="k" href="../t.dita"/></map>');
+    const defs = new Map<string, KeyHrefDef>();
+    collectMapKeys(p, new Map<string, string>(), read, defs);
+    assert.strictEqual(defs.get('k')?.baseDir, join(root, 'maps'));
+  });
+
+  it('rebases an included submap\'s keydef href to the outer map directory', () => {
+    mkdirSync(join(root, 'sub'));
+    writeFileSync(join(root, 'sub', 'brand.ditamap'), '<map><keydef keys="k" href="topic.dita"/></map>');
+    const m = writeMap('all.ditamap', '<mapref href="sub/brand.ditamap" format="ditamap"/>');
+    const defs = new Map<string, KeyHrefDef>();
+    collectMapKeys(m, new Map<string, string>(), read, defs);
+    // href is re-based by expandDitamapRefs to the map collectMapKeys was given,
+    // so it resolves against dirname(all.ditamap) == root.
+    assert.strictEqual(defs.get('k')?.href, 'sub/topic.dita');
+    assert.strictEqual(defs.get('k')?.baseDir, root);
+  });
+
+  it('keeps the first definition\'s href, per name, in document order', () => {
+    const m = writeMap('a.ditamap', '<keydef keys="k" href="first.dita"/><keydef keys="k" href="second.dita"/>');
+    const defs = new Map<string, KeyHrefDef>();
+    collectMapKeys(m, new Map<string, string>(), read, defs);
+    assert.strictEqual(defs.get('k')?.href, 'first.dita');
+  });
+
+  it('records a defined key that carries no href (undefined href, not a missing entry)', () => {
+    const m = writeMap('a.ditamap', '<keydef keys="brand"><topicmeta><keywords><keyword>Acme</keyword></keywords></topicmeta></keydef>');
+    const into = new Map<string, string>();
+    const defs = new Map<string, KeyHrefDef>();
+    collectMapKeys(m, into, read, defs);
+    assert.strictEqual(into.get('brand'), 'Acme');
+    assert.ok(defs.has('brand'));
+    assert.strictEqual(defs.get('brand')?.href, undefined);
   });
 });
