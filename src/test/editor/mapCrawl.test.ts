@@ -35,7 +35,11 @@ describe('mapCrawl: references', () => {
     const targets = crawl.refs.map((r) => r.target).sort();
     assert.ok(targets.includes(P('img/x.png')));
     assert.strictEqual(crawl.maps.size, 2);
-    assert.deepStrictEqual([...crawl.topics].map((t) => t.replace(/.*\/proj\//, '')).sort(), ['a.dita', 'b.dita', 'c.dita', 'sub/s.dita']);
+    // Normalize separators before stripping the root: on Windows, resolve()
+    // yields H:\proj\a.dita for a "/proj" root, which the POSIX-only pattern
+    // used to leave unstripped.
+    const rel = (p: string) => p.split('\\').join('/').replace(/.*\/proj\//, '');
+    assert.deepStrictEqual([...crawl.topics].map(rel).sort(), ['a.dita', 'b.dita', 'c.dita', 'sub/s.dita']);
   });
 
   it('records keydef targets, ignores URLs and external scope, and decodes escaped paths', async () => {
