@@ -90,6 +90,7 @@ describe('site/book template visual check (real Chromium)', function () {
       id: 'kill-test-bad',
       names: { '': 'Kill Test' },
       defaultDark: false,
+      outline: false,
       css: ['/virtual/bad.css'],
       dir: '/virtual',
       builtin: false,
