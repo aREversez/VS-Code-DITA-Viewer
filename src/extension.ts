@@ -48,6 +48,7 @@ import { registerFindReferencingMapsCommand } from './editor/findDitaReferences'
 import { registerKeyContextCommand } from './editor/keyContextCommand';
 import { registerUnreferencedResourcesCommand } from './editor/unreferencedResourcesUi';
 import { registerCompletenessCommand } from './editor/completenessCheckUi';
+import { ensureCommandAllowed } from './editor/workspaceTrustGate';
 
 const TRANSFORM_CMD = 'ditaViewer.transformWithDitaOt';
 
@@ -154,6 +155,9 @@ export function activate(context: vscode.ExtensionContext) {
   // "Open with Oxygen" — hands the file to Oxygen XML Editor
   context.subscriptions.push(
     vscode.commands.registerCommand('ditaViewer.openWithOxygen', async (uri?: vscode.Uri) => {
+      // Untrusted workspaces never spawn Oxygen (mapExplorer.openWithOxygen
+      // delegates here, so both row and editor/explorer entries are covered).
+      if (!(await ensureCommandAllowed('ditaViewer.openWithOxygen'))) return;
       const target = uri ?? getActiveDitaUri();
       if (!target) {
         vscode.window.showErrorMessage(vscode.l10n.t('Please open a .dita or .ditamap file first.'));
@@ -311,6 +315,9 @@ export function activate(context: vscode.ExtensionContext) {
   const transformOutputChannel = vscode.window.createOutputChannel('DITA-OT Transform');
   context.subscriptions.push(transformOutputChannel);
   const transformCommand = vscode.commands.registerCommand(TRANSFORM_CMD, async () => {
+    // The transform spawns DITA-OT and can install a plugin into its home;
+    // both are execution, so an untrusted workspace stops at the gate.
+    if (!(await ensureCommandAllowed(TRANSFORM_CMD))) return;
     const tokenSource = new vscode.CancellationTokenSource();
     const disposables: vscode.Disposable[] = [];
 

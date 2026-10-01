@@ -37,6 +37,7 @@ import {
   GitCommitInfo,
 } from './ditaGitUtils';
 import { getActiveDitaUri } from './exportHtml';
+import { ensureCommandAllowed } from './workspaceTrustGate';
 
 const DIFF_PANELS = new Map<string, vscode.WebviewPanel>();
 
@@ -53,6 +54,9 @@ const DIFF_STATE = new WeakMap<vscode.WebviewPanel, { result: TopicDiffResult; l
 export function registerCompareCommand(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('ditaViewer.compareWithGit', async () => {
+      // The diff shells out to `git` (ditaGitUtils.ts); an untrusted
+      // workspace stops at the gate rather than running it.
+      if (!(await ensureCommandAllowed('ditaViewer.compareWithGit'))) return;
       const uri = getActiveDitaUri();
       if (!uri || !uri.fsPath.toLowerCase().endsWith('.dita')) {
         vscode.window.showErrorMessage(vscode.l10n.t('Please open a .dita file first.'));
