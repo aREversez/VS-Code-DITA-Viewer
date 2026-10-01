@@ -10,14 +10,10 @@ import {
   buildKeyMap,
 } from './DitaViewerProvider';
 import {
-  makeConrefResolver,
-  makeConrefRangeResolver,
-  makeFileTitleResolver,
-  detectNoteLabels,
   decodeHrefPart,
-  readImageDimensions,
   escapeHtml,
 } from './ditaRenderUtils';
+import { buildRenderContext } from './renderContext';
 import {
   diffTopics,
   AlignedRow,
@@ -224,23 +220,18 @@ function computeDiff(
   // passing a placeholder in its place, which crashed on every use. Called
   // once per side, after diffTopics has actually parsed that side's XML.
   const buildRenderBlock = (root: DitaNode, sideDocDir: string) => {
-    const conrefResolver = makeConrefResolver(sideDocDir, root);
-    const conrefRangeResolver = makeConrefRangeResolver(sideDocDir, root);
-    const fileTitleResolver = makeFileTitleResolver(sideDocDir);
-    const titleMap = new Map<string, string>();
-
-    const ctx: RenderContext = {
-      headingLevel: 1,
+    const { ctx } = buildRenderContext({
+      docDir: sideDocDir,
+      ownRoot: root,
+      titleMap: new Map<string, string>(),
+      keyMap,
       // The single-topic preview (DitaViewerProvider.ts) has always used
       // the real webview.asWebviewUri() -- the only URI scheme a webview's
       // CSP + localResourceRoots will actually let an <img> load from.
-      // This diff panel used a hand-rolled 'vscode-resource:' + path
-      // string instead, a scheme VS Code stopped supporting years ago;
-      // every image in the diff view failed to load, silently (broken
-      // image icon, no console error surfaced to the user). Fixed by
-      // reusing the real webview instance, which callers can now provide
-      // because the panel is created before computeDiff runs instead of
-      // after -- see getOrCreateDiffPanel.
+      // This diff panel used a hand-rolled 'vscode-resource:' + path string
+      // instead, a scheme VS Code stopped supporting years ago; every image
+      // in the diff view failed to load, silently. Fixed by reusing the real
+      // webview instance -- see getOrCreateDiffPanel.
       asWebviewUri: (relPath: string) => {
         try {
           return webview.asWebviewUri(vscode.Uri.file(resolve(sideDocDir, decodeHrefPart(relPath)))).toString();
@@ -248,17 +239,11 @@ function computeDiff(
           return relPath;
         }
       },
-      documentDir: sideDocDir,
-      resolveTitle: (id: string) => titleMap.get(id) || fileTitleResolver(id),
-      resolveKey: (key: string) => keyMap.get(key),
-      resolveConref: (conref: string) => conrefResolver(conref),
-      resolveConrefRange: (conref: string, conrefend: string) => conrefRangeResolver(conref, conrefend),
-      noteLabels: detectNoteLabels(root, vscode.env.language),
-      getImageDimensions: (relPath: string) => {
-        try { return readImageDimensions(resolve(sideDocDir, decodeHrefPart(relPath))); }
-        catch { return undefined; }
-      },
-    };
+      headingLevel: 1,
+      uiLanguage: vscode.env.language,
+      // includeIndexLabel omitted: the diff view never surfaces indexterm
+      // chips, so it has never set ctx.indexLabel (preserved byte-for-byte).
+    });
 
     return (node: DitaNode, parentBaseType: string, headingLevel: number) => {
       const blockCtx: RenderContext = { ...ctx, headingLevel, parentBaseType };

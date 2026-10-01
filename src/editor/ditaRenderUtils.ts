@@ -7,6 +7,10 @@ import type { MapEntry } from '../render/mapTypeMap';
 import { extractText, getMapTitleText, isDitamapRef } from '../render/mapTypeMap';
 import type { BookPart } from './bookPatch';
 import { sourceStamp, readSourceText, noteSourceDependencies } from './sourceText';
+// Shared render-context factory. It imports the resolver helpers defined
+// below; this function calls it only at render time, so the (type-level
+// fine, runtime-hoisted) cycle is safe under both tsc and esbuild.
+import { buildRenderContext } from './renderContext';
 
 // ── Image dimensions (for reserving layout space before the image loads) ──
 //
@@ -823,6 +827,29 @@ export type FileReader = (path: string, encoding: 'utf-8') => string;
 const URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 
 /**
+ * Builds the render context's isInCurrentBook resolver: given a cross-file
+ * xref's raw href, return the absolute path of the target IF it is one of
+ * the book's members, else undefined. Same local-reference guard the
+ * inline version (renderTopicXml) applied before ever touching the file
+ * system: never probe a URL-scheme or absolute href, and a fragment-only
+ * href has no file part to resolve. Extracted for the shared
+ * buildRenderContext factory (renderContext.ts) so the three render paths
+ * agree on one implementation.
+ */
+export function makeIsInCurrentBook(
+  docDir: string,
+  bookMembers: ReadonlySet<string>,
+): (href: string) => string | undefined {
+  return (href: string): string | undefined => {
+    if (!href || URL_SCHEME_RE.test(href) || isAbsolute(href)) return undefined;
+    const pathPart = href.split('#')[0];
+    if (!pathPart) return undefined;
+    const absPath = resolve(docDir, decodeHrefPart(pathPart));
+    return bookMembers.has(absPath) ? absPath : undefined;
+  };
+}
+
+/**
  * Percent-decodes an href path segment for filesystem lookups. DITA tools
  * URL-encode spaces and special characters in hrefs (e.g. "my%20image.png"),
  * but the file on disk keeps the literal name. Malformed escape sequences
@@ -968,70 +995,29 @@ export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
     const preprocessedXml = preprocessEntities(xml);
     const ditaDoc = parseDita(preprocessedXml);
     const titleMap = buildTitleMap(ditaDoc.root);
-    const noteLabels = detectNoteLabels(ditaDoc.root, uiLanguage);
-    const indexLabel = detectIndexLabel(ditaDoc.root, uiLanguage);
 
-    // One cache shared by all three resolvers. They routinely load the same
-    // conref/title target, and three independent caches each parsed it again;
-    // sharing also gives a single place to read back the complete set of
-    // files this render touched, which is what lets renderTopicCached key its
-    // reuse on something both narrower and more correct than "some file in
-    // the workspace changed".
-    const fileCache = makeFileCache(docDir);
-    const conrefResolver = makeConrefResolver(docDir, ditaDoc.root, fileCache);
-    const conrefRangeResolver = makeConrefRangeResolver(docDir, ditaDoc.root, fileCache);
-    const fileTitleResolver = makeFileTitleResolver(docDir, fileCache);
-
-    const resolveTitle = (id: string): string | undefined => {
-      const local = titleMap.get(id);
-      if (local) return local;
-      return fileTitleResolver(id);
-    };
-
-    // Same local-reference guard makeFileTitleResolver applies before ever
-    // touching the filesystem: never probe for a URL-scheme or absolute
-    // href, and a fragment-only href has no file part to resolve.
-    const isInCurrentBook = bookMembers
-      ? (href: string): string | undefined => {
-          if (!href || URL_SCHEME_RE.test(href) || isAbsolute(href)) return undefined;
-          const pathPart = href.split('#')[0];
-          if (!pathPart) return undefined;
-          const absPath = resolve(docDir, decodeHrefPart(pathPart));
-          return bookMembers.has(absPath) ? absPath : undefined;
-        }
-      : undefined;
-
-    const html = renderDocument(ditaDoc.root, {
-      headingLevel,
+    // Resolvers, note/index labels and image dimensions are assembled by the
+    // shared buildRenderContext factory (renderContext.ts) so this path, the
+    // single-topic preview and the diff panel wire them identically. The book
+    // extras (isInCurrentBook, collectDependencies) and indexLabel are on here.
+    const { ctx, touchedFiles } = buildRenderContext({
+      docDir,
+      ownRoot: ditaDoc.root,
+      titleMap,
+      keyMap,
       asWebviewUri,
-      documentDir: docDir,
-      resolveTitle,
-      isInCurrentBook,
-      resolveKey: (key: string) => keyMap.get(key),
-      resolveConref: (conref: string) => conrefResolver(conref),
-      resolveConrefRange: (conref: string, conrefend: string) => conrefRangeResolver(conref, conrefend),
-      noteLabels,
-      indexLabel,
+      headingLevel,
+      uiLanguage,
+      includeIndexLabel: true,
       suppressIndexterm,
-      getImageDimensions: (relPath: string) => {
-        try {
-          const absPath = resolve(docDir, decodeHrefPart(relPath));
-          // An image's bytes are not parsed into the output, but its
-          // dimensions are (the width/height attributes), so the file is a
-          // genuine dependency of the rendered HTML and has to be recorded
-          // alongside the conref/title targets. readImageDimensions caches
-          // dimensions on its own, so without this a replaced image would
-          // slip through an otherwise-valid topic cache entry.
-          collectDependencies?.add(absPath);
-          return readImageDimensions(absPath);
-        } catch {
-          return undefined;
-        }
-      },
+      bookMembers,
+      collectDependencies,
     });
 
+    const html = renderDocument(ditaDoc.root, ctx);
+
     if (collectDependencies) {
-      for (const touched of fileCache.touchedFiles()) collectDependencies.add(touched);
+      for (const touched of touchedFiles()) collectDependencies.add(touched);
     }
 
     const titleNode = (ditaDoc.root.children || []).find(

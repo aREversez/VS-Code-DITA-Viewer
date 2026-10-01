@@ -3,7 +3,8 @@ import { parseDita, preprocessEntities } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
 import { dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
-import { buildTitleMap, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getImageMapSupportScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getRefreshButtonScript, decodeHrefPart, openHrefTarget, detectNoteLabels, detectIndexLabel, readImageDimensions, clearImageDimensionsCache, clearTopicRenderCache, clearBookMembersCache } from './ditaRenderUtils';
+import { buildTitleMap, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getImageMapSupportScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getRefreshButtonScript, decodeHrefPart, openHrefTarget, clearImageDimensionsCache, clearTopicRenderCache, clearBookMembersCache } from './ditaRenderUtils';
+import { buildRenderContext } from './renderContext';
 import { clearBookSearchIndexCache } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { foldPendingRender, escalateAfterFailure, PendingRender } from './pendingRender';
@@ -1111,7 +1112,6 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     webview: vscode.Webview,
   ): { html: string; error?: undefined } | { html?: undefined; error: string } {
     const docRootDir = dirname(document.uri.fsPath);
-    const docRoot = vscode.Uri.file(docRootDir);
     const asWebviewUri = (relPath: string): string => {
       try {
         const resolvedPath = resolve(docRootDir, decodeHrefPart(relPath));
@@ -1131,51 +1131,26 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       const ditaDoc = parseDita(preprocessedXml);
       const titleMap = buildTitleMap(ditaDoc.root);
 
-      // Note-type labels (Warning/Attention/...): prefer the topic's own
-      // xml:lang, but most individual topic files don't repeat it on every
-      // file (commonly set once at the map/bookmap level and left implicit
-      // on topics), so fall back to the editor's own display language
-      // rather than leaving those topics stuck in English regardless of
-      // locale. Uses the shared, complete (all 13 DITA note/@type values)
-      // implementation from ditaRenderUtils.ts instead of the separate,
-      // partial (7 of 13 types) local copy this used to carry.
-      const noteLabels = detectNoteLabels(ditaDoc.root, vscode.env.language);
-      const indexLabel = detectIndexLabel(ditaDoc.root, vscode.env.language);
-
       // Build key map from DITAMAP
       const keyMap = buildKeyMap(document.uri);
 
-      // Build conref resolver
-      const conrefResolver = makeConrefResolver(docRootDir, ditaDoc.root);
-      const conrefRangeResolver = makeConrefRangeResolver(docRootDir, ditaDoc.root);
-      const fileTitleResolver = makeFileTitleResolver(docRootDir);
-
-      const resolveTitle = (id: string): string | undefined => {
-        // Local id match first
-        const local = titleMap.get(id);
-        if (local) return local;
-        // Cross-file: id may be "file.dita#topicId" or just "file.dita"
-        return fileTitleResolver(id);
-      };
-
-      const content = renderDocument(ditaDoc.root, {
-        headingLevel: 1,
+      // Note/index labels, conref/title resolvers and image dimensions all
+      // come from the shared buildRenderContext factory (renderContext.ts) --
+      // the same wiring the book/site path and the diff panel use, so a
+      // resolver change lands once. uiLanguage keeps the previous fallback:
+      // the topic's own xml:lang wins, else the editor display language.
+      const { ctx } = buildRenderContext({
+        docDir: docRootDir,
+        ownRoot: ditaDoc.root,
+        titleMap,
+        keyMap,
         asWebviewUri,
-        documentDir: docRoot.fsPath,
-        resolveTitle,
-        resolveKey: (key: string) => keyMap.get(key),
-        resolveConref: (conref: string) => conrefResolver(conref),
-        resolveConrefRange: (conref: string, conrefend: string) => conrefRangeResolver(conref, conrefend),
-        noteLabels,
-        indexLabel,
-        getImageDimensions: (relPath: string) => {
-          try {
-            return readImageDimensions(resolve(docRootDir, decodeHrefPart(relPath)));
-          } catch {
-            return undefined;
-          }
-        },
+        headingLevel: 1,
+        uiLanguage: vscode.env.language,
+        includeIndexLabel: true,
       });
+
+      const content = renderDocument(ditaDoc.root, ctx);
 
       return { html: content };
     } catch (err) {
