@@ -658,6 +658,7 @@
         "dita-viewer.ditaOtPath": {
           "type": "string",
           "default": "",
+          "scope": "machine",
           "description": "%config.ditaOtPath.description%"
         },
         "dita-viewer.ditaOtInjectNavToolbar": {
@@ -668,6 +669,7 @@
         "dita-viewer.oxygenPath": {
           "type": "string",
           "default": "",
+          "scope": "machine",
           "description": "%config.oxygenPath.description%"
         },
         "dita-viewer.completenessCheck.profilingAttributes": {
