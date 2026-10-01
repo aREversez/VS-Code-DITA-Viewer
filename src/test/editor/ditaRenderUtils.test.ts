@@ -3631,10 +3631,28 @@ describe('getModeToggleScript (docsite mode)', () => {
     const listeners: Record<string, () => void> = {};
     const fakeBtn = { style: {}, disabled: false, setAttribute: () => {}, addEventListener: (evt: string, fn: () => void) => { listeners[evt] = fn; } };
 
-    function makeEl(): any {
-      const el: any = { style: {}, children: [] as any[], classList: { add: (c: string) => { el.className = ((el.className ?? '') + ' ' + c).trim(); } } };
-      el.setAttribute = (k: string, v: string) => { el[`attr_${k}`] = v; };
-      el.appendChild = (child: unknown) => { el.children.push(child); };
+    // A hand-rolled fake DOM element. Modeled with a concrete (recursive)
+    // type instead of `any` so the read-backs below (children[0].className,
+    // children[1].textContent) are checked; the index signature covers the
+    // attr_* / className fields the script sets dynamically at runtime.
+    interface FakeElement {
+      style: Record<string, string>;
+      children: FakeElement[];
+      classList: { add: (c: string) => void };
+      setAttribute: (k: string, v: string) => void;
+      appendChild: (child: FakeElement) => void;
+      className?: string;
+      textContent?: string;
+      [key: string]: unknown;
+    }
+    function makeEl(): FakeElement {
+      const el: FakeElement = {
+        style: {},
+        children: [],
+        classList: { add: (c: string) => { el.className = ((el.className ?? '') + ' ' + c).trim(); } },
+        setAttribute: (k: string, v: string) => { el[`attr_${k}`] = v; },
+        appendChild: (child: FakeElement) => { el.children.push(child); },
+      };
       return el;
     }
     const contentRoot = makeEl();

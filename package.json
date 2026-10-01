@@ -761,7 +761,7 @@
     "build": "node esbuild.config.js",
     "build:dev": "node esbuild.config.js --dev",
     "watch": "node esbuild.config.js --watch",
-    "lint": "eslint src/",
+    "lint": "eslint src/ --max-warnings 0",
     "lint:fix": "eslint src/ --fix",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check:l10n": "node scripts/check-l10n.cjs",
