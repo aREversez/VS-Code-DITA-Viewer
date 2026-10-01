@@ -8,7 +8,7 @@
 import { dirname } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
-import { expandDitamapRefs, FileReader } from './ditaRenderUtils';
+import { expandDitamapRefs, FileReader } from './refResolvers';
 import { sourceStamp } from './sourceText';
 
 function extractTextFromNode(node: DitaNode): string {

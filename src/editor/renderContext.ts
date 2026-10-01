@@ -34,7 +34,7 @@ import {
   detectIndexLabel,
   readImageDimensions,
   decodeHrefPart,
-} from './ditaRenderUtils';
+} from './refResolvers';
 import { getKeyDefs, KeyHrefDef } from './keySpace';
 import { resolveConkeyref } from './conkeyref';
 
