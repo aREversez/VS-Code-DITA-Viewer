@@ -1,6 +1,8 @@
 import * as assert from 'assert';
 import { DitaNode } from '../../parser/domTypes';
 import { renderElement, RenderContext } from '../../render/renderer';
+import { KeyHrefDef } from '../../editor/keySpace';
+import { resolveConkeyref } from '../../editor/conkeyref';
 
 /**
  * P3 renderer wiring: conkeyref is the key-based analogue of a direct conref.
@@ -77,5 +79,42 @@ describe('renderElement conkeyref handling', () => {
     const ref = el('p', { conkeyref: 'brand/shared' }, [txt('X')]);
     const html = renderElement(ref, ctx({ resolveConkeyref: () => target }));
     assert.ok(!html.includes('conkeyref'), html);
+  });
+});
+
+// The two unit tests that drove resolveConkeyref's old `visited` parameter are
+// gone; the cycle rule now lives in the renderer. The test above only proves
+// the guard is *consulted* for a pre-seeded chain. This one proves the chain is
+// actually *populated* as the renderer descends, using the real resolver, so a
+// genuine A <-> B conkeyref loop terminates instead of recursing forever.
+describe('renderElement conkeyref cycles (real resolveConkeyref)', () => {
+  // A cycle only exists if the substituted content itself contains a
+  // conkeyref: the target element's own children are rendered after the swap,
+  // and one of them points back. s1 (in A) holds a ref into s2 (in B), and s2
+  // holds a ref back into s1.
+  const defs = new Map<string, KeyHrefDef>([
+    ['a', { href: 'a.dita', baseDir: '/maps' }],
+    ['b', { href: 'b.dita', baseDir: '/maps' }],
+  ]);
+  const s1 = el('section', { id: 's1' }, [el('p', { conkeyref: 'b/s2' }, [txt('A-LITERAL')])]);
+  const s2 = el('section', { id: 's2' }, [el('p', { conkeyref: 'a/s1' }, [txt('B-LITERAL')])]);
+  const topicA = el('topic', { id: 'aT' }, [el('body', {}, [s1])]);
+  const topicB = el('topic', { id: 'bT' }, [el('body', {}, [s2])]);
+  const load = (_baseDir: string, href: string): DitaNode | undefined =>
+    href === 'a.dita' ? topicA : href === 'b.dita' ? topicB : undefined;
+
+  it('terminates when A\'s conkeyref leads into B, whose content points back into A', () => {
+    const html = renderElement(s1, ctx({ resolveConkeyref: (v) => resolveConkeyref(v, defs, load) }));
+    assert.ok(html.includes('LITERAL'), `expected the loop to stop at literal content: ${html}`);
+  });
+
+  it('terminates when a section\'s content refers back to the section itself', () => {
+    const inner = el('p', { conkeyref: 'a/self' }, [txt('SELF-LITERAL')]);
+    const self = el('section', { id: 'self' }, [inner]);
+    const topic = el('topic', { id: 'aT' }, [el('body', {}, [self])]);
+    const html = renderElement(self, ctx({
+      resolveConkeyref: (v) => resolveConkeyref(v, defs, (_b, h) => (h === 'a.dita' ? topic : undefined)),
+    }));
+    assert.ok(html.includes('SELF-LITERAL'), html);
   });
 });
