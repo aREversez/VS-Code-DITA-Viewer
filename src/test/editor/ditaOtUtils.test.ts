@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import { join, resolve } from 'path';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'fs';
-import { tmpdir } from 'os';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, symlinkSync } from 'fs';
+import { homedir, tmpdir } from 'os';
 import {
   resolveDitaOtExecutable,
   buildDitaOtArgs,
@@ -916,5 +916,34 @@ describe('isUnsafeExportClearTarget', () => {
 
   it('does not treat a sibling with a shared name prefix as an ancestor', () => {
     assert.strictEqual(isUnsafeExportClearTarget(join(tmpdir(), 'ws', 'docs', 'guide-out'), map, [ws]), false);
+  });
+
+  it('still refuses an ancestor when the map sits in a folder whose name starts with ".."', () => {
+    const dotted = join(tmpdir(), 'ws2', '..hidden', 'main.ditamap');
+    assert.strictEqual(isUnsafeExportClearTarget(join(tmpdir(), 'ws2'), dotted), true);
+    assert.strictEqual(isUnsafeExportClearTarget(join(tmpdir(), 'ws2', '..hidden'), dotted), true);
+  });
+
+  it('refuses a symlink that points at the map folder', function () {
+    const base = mkdtempSync(join(tmpdir(), 'dv-clear-'));
+    try {
+      const real = join(base, 'real');
+      mkdirSync(real);
+      const mapFile = join(real, 'main.ditamap');
+      writeFileSync(mapFile, '<map/>');
+      const link = join(base, 'link');
+      try {
+        symlinkSync(real, link, 'dir');
+      } catch {
+        this.skip(); // no symlink permission (Windows without developer mode)
+      }
+      assert.strictEqual(isUnsafeExportClearTarget(link, mapFile), true);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses the user home directory', () => {
+    assert.strictEqual(isUnsafeExportClearTarget(homedir(), join(tmpdir(), 'elsewhere', 'a.ditamap')), true);
   });
 });

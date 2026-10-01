@@ -1,5 +1,6 @@
-import { readFileSync } from 'fs';
-import { dirname, isAbsolute, relative, resolve } from 'path';
+import { readFileSync, realpathSync } from 'fs';
+import { homedir } from 'os';
+import { dirname, isAbsolute, relative, resolve, sep } from 'path';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { collectMapEntries } from '../render/mapTypeMap';
 import { expandDitamapRefs, decodeHrefPart } from './ditaRenderUtils';
@@ -396,23 +397,37 @@ export function createLineBuffer(): LineBuffer {
   };
 }
 
+/** Resolves symlinks when the path exists, else just normalises it. */
+function realOrResolved(p: string): string {
+  const abs = resolve(p);
+  try {
+    return realpathSync(abs);
+  } catch {
+    return abs;
+  }
+}
+
 /**
  * True when wiping `outputDir` would also wipe something the user cares about:
  * the map itself (the output dir is the map's folder or one of its ancestors),
- * a workspace folder root (or an ancestor of one), or a filesystem root. The
- * webhelp-style export clears the output directory before writing, so such a
- * target must be refused outright rather than confirmed.
+ * a workspace folder root (or an ancestor of one), the user's home directory,
+ * or a filesystem root. Symlinks are resolved first so a link to the map's
+ * folder is caught too. The webhelp-style export clears the output directory
+ * before writing, so such a target must be refused outright rather than
+ * confirmed.
  */
 export function isUnsafeExportClearTarget(
   outputDir: string,
   mapPath: string,
   workspaceRoots: readonly string[] = [],
 ): boolean {
-  const target = resolve(outputDir);
+  const target = realOrResolved(outputDir);
   if (dirname(target) === target) return true; // filesystem root
   const containsOrEquals = (candidate: string): boolean => {
-    const rel = relative(target, resolve(candidate));
-    return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+    const rel = relative(target, realOrResolved(candidate));
+    // `..` must be a whole path segment: a folder named "..hidden" is inside.
+    const escapes = rel === '..' || rel.startsWith('..' + sep);
+    return rel === '' || (!escapes && !isAbsolute(rel));
   };
-  return containsOrEquals(mapPath) || workspaceRoots.some(containsOrEquals);
+  return containsOrEquals(mapPath) || containsOrEquals(homedir()) || workspaceRoots.some(containsOrEquals);
 }
