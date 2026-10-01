@@ -59,3 +59,33 @@ jobs:
       # keeping the zero-runtime-dependency footprint); package --no-dependencies
       # mirrors what a real publish would ship.
       - run: npm run check:package
+
+  # Real-browser check for the site/book template feature: loads the same
+  # template snapshot HTML the preview builds into headless Chromium and asserts
+  # computed-style/structural invariants (a template must not break the
+  # content-visibility rule; headers/footers must have height; light vs dark
+  # palettes must differ). Not part of `npm test` -- it needs a Chromium download
+  # and is slower -- so it runs here, its own job. Not a pixel-diff (no committed
+  # baselines), so it is deterministic: two consecutive local runs passed clean
+  # (~15s, ~8s), hence blocking rather than continue-on-error.
+  visual:
+    name: Visual (Playwright Chromium)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Cache the browser directory keyed on the lockfile (pins the Playwright
+      # version); install then becomes a no-op download on a cache hit. The
+      # test itself needs no VS Code or build -- tsconfig.visual compiles the
+      # pure template modules straight into dist-test-visual.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:visual
