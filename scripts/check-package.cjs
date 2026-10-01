@@ -53,6 +53,40 @@ const FORBIDDEN = [
   'extension/.mocharc.visual.json',
 ];
 
+// The ONLY things allowed at the top level of the package. FORBIDDEN above is a
+// denylist, so it only catches leaks someone already thought of; a new stray
+// file in the repo root (a plan, a scratch note, a new tool config) would ship
+// silently. Anything not listed here fails the check. Compared case-insensitively
+// because vsce normalises README/CHANGELOG/LICENSE names inside the archive.
+const ALLOWED_TOP_LEVEL = new Set([
+  'package.json',
+  'package.nls.json',
+  'package.nls.zh-cn.json',
+  'readme.md',
+  'changelog.md',
+  'license.txt',
+  'dist',
+  'l10n',
+  'media',
+  'snippets',
+]);
+// vsce's own package metadata, which sits beside the extension/ folder.
+const ALLOWED_ARCHIVE_ROOT = new Set(['[content_types].xml', 'extension.vsixmanifest']);
+
+/** Top-level names under extension/ that are not on the allowlist. */
+function unexpectedTopLevel(names) {
+  const bad = new Set();
+  for (const n of names) {
+    if (!n.startsWith('extension/')) {
+      if (!ALLOWED_ARCHIVE_ROOT.has(n.toLowerCase())) bad.add(n.split('/')[0]);
+      continue;
+    }
+    const top = n.slice('extension/'.length).split('/')[0];
+    if (top && !ALLOWED_TOP_LEVEL.has(top.toLowerCase())) bad.add('extension/' + top);
+  }
+  return [...bad].sort();
+}
+
 /** Read every entry name from a zip's central directory (no inflate, no deps). */
 function readZipEntryNames(buf) {
   const SIG_EOCD = 0x06054b50;
@@ -121,7 +155,13 @@ function main() {
     leaked.forEach((d) => console.error(`    ${d}`));
   }
 
-  const problems = missingFiles.length + missingDirs.length + leaked.length;
+  const unexpected = unexpectedTopLevel([...names]);
+  if (unexpected.length) {
+    console.error(`\nUNEXPECTED top-level entries (${unexpected.length}) -- not on the allowlist, add to .vscodeignore or, if it must ship, to ALLOWED_TOP_LEVEL:`);
+    unexpected.forEach((f) => console.error(`    ${f}`));
+  }
+
+  const problems = missingFiles.length + missingDirs.length + leaked.length + unexpected.length;
   console.log(`\n${problems === 0 ? 'OK' : 'PROBLEMS: ' + problems}`);
   process.exit(problems === 0 ? 0 : 1);
 }

@@ -766,7 +766,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "verify": "npm run typecheck && tsc --noEmit -p tsconfig.e2e.json && npm run lint && npm run build && npm run check:l10n && npm test",
     "check:l10n": "node scripts/check-l10n.cjs",
-    "check:package": "npx --yes @vscode/vsce package --no-dependencies --allow-missing-repository && node scripts/check-package.cjs",
+    "check:package": "npx --yes @vscode/vsce@4.0.0 package --no-dependencies --allow-missing-repository && node scripts/check-package.cjs",
   "bench:book-render": "node scripts/bench-book-render.js",
     "build:icons": "node scripts/build-icon-font.js",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
