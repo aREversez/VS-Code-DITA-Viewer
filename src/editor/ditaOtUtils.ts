@@ -1,6 +1,6 @@
 import { readFileSync, realpathSync } from 'fs';
 import { homedir } from 'os';
-import { dirname, isAbsolute, relative, resolve, sep } from 'path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'path';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { collectMapEntries } from '../render/mapTypeMap';
 import { expandDitamapRefs, decodeHrefPart } from './ditaRenderUtils';
@@ -397,13 +397,29 @@ export function createLineBuffer(): LineBuffer {
   };
 }
 
-/** Resolves symlinks when the path exists, else just normalises it. */
+/**
+ * Resolves symlinks on the path, or on its nearest existing ancestor when the
+ * path itself does not exist yet (an export target often is created only by
+ * the export, and a workspace root in a test may never be). Walking up matters
+ * because a bare `resolve()` of a missing path keeps the symlinked spelling of
+ * its parents: on macOS `/var` is a link to `/private/var`, so an existing
+ * tmpdir() realpaths to `/private/var/...` while a not-yet-existing child of
+ * it stays `/var/...` -- the two then never compare as inside one another.
+ */
 function realOrResolved(p: string): string {
   const abs = resolve(p);
-  try {
-    return realpathSync(abs);
-  } catch {
-    return abs;
+  const missing: string[] = [];
+  let cur = abs;
+  for (;;) {
+    try {
+      const real = realpathSync(cur);
+      return missing.length ? join(real, ...missing) : real;
+    } catch {
+      const parent = dirname(cur);
+      if (parent === cur) return abs; // walked to the filesystem root: nothing exists
+      missing.unshift(basename(cur));
+      cur = parent;
+    }
   }
 }
 
