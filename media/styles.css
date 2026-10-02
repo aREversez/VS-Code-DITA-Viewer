@@ -28,6 +28,7 @@
   --color-profiling-label-text: #2a3a12;
   --color-indexterm-chip-bg: #e6f0fa;
   --color-indexterm-chip-text: #2c5282;
+  --color-menucascade-arrow: #767676;
 }
 
 .vscode-dark {
@@ -47,6 +48,7 @@
   --color-profiling-label-text: #eef7dc;
   --color-indexterm-chip-bg: #1f2f42;
   --color-indexterm-chip-text: #9dc4ea;
+  --color-menucascade-arrow: #aaaaaa;
 }
 
 body {
@@ -79,6 +81,44 @@ body {
    thing that should ever intentionally move it. */
 #dita-content-root {
   overflow-anchor: none;
+}
+
+/* In-place mode switch (toolbar-persistence work): added to the OLD content
+   root by the mode button's click handler the instant it fires, since its
+   own label flips immediately while the new stage is still being rendered
+   asynchronously on the host side (getModeToggleScript). Gives that gap a
+   visible "switching" state instead of the button and the page silently
+   disagreeing for a moment. Needs no matching removal -- applyModeStage
+   (MapViewerProvider.ts) discards this exact node once the new stage lands
+   and inserts a fresh, undimmed one in its place. */
+#dita-content-root.mode-switching {
+  opacity: 0.5;
+  transition: opacity 0.1s ease-out;
+  pointer-events: none;
+  /* Positioning context for .dita-mode-switch-overlay below -- scoped to
+     this class rather than added unconditionally so it never affects
+     #dita-content-root's normal (non-switching) layout. */
+  position: relative;
+}
+
+/* getModeToggleScript's delayed "still switching" overlay: only appended if
+   a switch takes longer than its 400ms grace period (see that script's own
+   comment for why), as a child of the OLD #dita-content-root, so it is
+   scoped to the content area alone -- the toolbar above it stays fully
+   visible and interactive throughout, which is the entire point of the
+   in-place-switch work this belongs to. .dita-loading-spinner is the same
+   spinner the full-reload path's book-mode placeholder uses
+   (MapViewerProvider.ts's generateLoadingHtml); here it is a small overlay
+   instead of a full-page one. */
+.dita-mode-switch-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--vscode-descriptionForeground, #999);
 }
 
 /* Topic article */
@@ -499,6 +539,12 @@ img[data-load-error] { cursor: default; }
   outline: none;
 }
 .dita-img-ctxmenu-item:disabled { cursor: default; opacity: 0.7; }
+/* Group divider for the sidebar's multi-item context menu (see
+   getSiteOpenSourceScript), matching how a native menu separates groups. */
+.dita-img-ctxmenu-sep {
+  height: 1px; margin: 2px 4px;
+  background: var(--vscode-menu-separatorBackground, var(--vscode-widget-border, #454545));
+}
 
 /* Transient feedback pill for the lightbox's Ctrl+C copy path, which has
    no menu item of its own to update the way the right-click menu does. */
@@ -509,8 +555,26 @@ img[data-load-error] { cursor: default; }
   border: 1px solid var(--vscode-notifications-border, var(--vscode-widget-border, #454545));
   color: var(--vscode-notifications-foreground, var(--vscode-editor-foreground, #ccc));
   padding: 6px 14px; border-radius: 4px; font-size: 13px;
+  /* UI chrome, not document content: stays sans-serif regardless of the
+     reading-font toggle (Serif is a common choice there, and a serif toast
+     reads noticeably slower for a quick transient message). */
+  font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  max-width: 92vw;
+  /* Kept to one line: a short toast that wraps to two is more disruptive
+     to read at a glance than one that's simply not padded to a fixed box
+     width. The message itself is kept short enough to fit in the common
+     case; text-overflow is only a safety net for an unusually long locale
+     string or width-option label. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
 }
+/* For feedback tied to a top-of-page control (the width dropdown): a
+   bottom toast is easy to miss entirely, or costs a big jump down to
+   notice, right after the user's focus and click just landed at the top. */
+.dita-img-toast--top { bottom: auto; top: 48px; }
 
 /* Figures */
 /* Left-aligned rather than centered: a fig's image should sit flush with
@@ -586,7 +650,7 @@ pre code { background: none; padding: 0; border-radius: 0; }
 
 /* User Interface domain */
 .uicontrol { font-weight: 500; color: var(--vscode-textLink-foreground); }
-.menucascade .uicontrol + .uicontrol::before { content: ' › '; color: var(--color-border); font-weight: normal; }
+.menucascade .uicontrol + .uicontrol::before { content: ' › '; color: var(--color-menucascade-arrow); font-weight: normal; }
 .wintitle { font-style: italic; font-weight: 600; }
 .filepath { font-family: var(--code-font); font-size: 0.9em; padding: 0.1em 0.3em; background: var(--color-code-bg); border-radius: 3px; color: var(--vscode-editor-foreground); }
 .userinput { font-family: var(--code-font); font-size: 0.9em; padding: 0.1em 0.3em; background: var(--color-code-bg); border-radius: 3px; border: 1px dashed var(--color-border); color: var(--vscode-editor-foreground); }
@@ -946,12 +1010,20 @@ section, .example { margin: 1.5rem 0; }
    assembling every topic into one document finishes. Standalone body-level
    rules rather than scoped to a wrapper class: the shell document has
    nothing else in it. */
-/* Docsite mode (MapViewerProvider.ts, mode 'site') -- a sidebar of topic
-   links beside one topic's rendered content, instead of Book mode's single
-   long page. body itself is the flex row; #dita-content-root.site-main is
-   the only piece a page switch ever touches (see postSitePageUpdate's own
-   comment) -- .site-nav is a sibling, never replaced by that message. */
-body.mode-site {
+/* Docsite mode (MapViewerProvider.ts, mode 'site') and Book mode's own
+   sidebar (mode 'book', nested-fold-and-highlight-plan.md item 1) -- a
+   sidebar of topic links beside the content, instead of the old plain
+   single-column page. Both modes share this exact layout: site mode swaps
+   which ONE topic's content shows on a sidebar click (a real page fetch,
+   #dita-content-root.site-main is the only piece that message ever
+   touches -- see postSitePageUpdate's own comment), while book mode's
+   sidebar instead scrolls to an anchor already sitting in the one long
+   document that was always there (getBookNavClickHandlerScript) -- but the
+   surrounding shell (flex row, fixed height, sidebar/resizer/content-pane
+   split) is identical either way, so one shared selector list covers both
+   rather than two copies that could drift apart on this shell. body itself
+   is the flex row; .site-nav is a sibling. */
+body.mode-site, body.mode-book:has(.site-nav) {
   display: flex;
   align-items: stretch;
   max-width: none;
@@ -997,7 +1069,8 @@ body.mode-site {
    border-box plus flex-basis:0 and overflow:hidden below is what makes it
    disappear visually, not display:none, so no re-layout of the links
    themselves is needed when it reopens. */
-body.mode-site.site-nav-collapsed .site-nav {
+body.mode-site.site-nav-collapsed .site-nav,
+body.mode-book.site-nav-collapsed .site-nav {
   flex-basis: 0;
   padding-left: 0;
   padding-right: 0;
@@ -1033,7 +1106,8 @@ body.mode-site.site-nav-collapsed .site-nav {
   width: 2px;
   background: var(--vscode-focusBorder, #007fd4);
 }
-body.mode-site.site-nav-collapsed .site-nav-resizer {
+body.mode-site.site-nav-collapsed .site-nav-resizer,
+body.mode-book.site-nav-collapsed .site-nav-resizer {
   display: none;
 }
 /* Sidebar tree structure (renderSiteNavHtml, ditaRenderUtils.ts) -- plain
@@ -1129,6 +1203,14 @@ body.mode-site.site-nav-collapsed .site-nav-resizer {
   min-width: 0;
 }
 .site-nav-link:hover { background: var(--vscode-list-hoverBackground); }
+/* Keyboard focus in the sidebar tree (arrow-key navigation). The row's own
+   box is what gets the ring: the toggle is out of the Tab order and the
+   li wraps a whole subtree, so neither is a good place to draw it. */
+.site-nav-link:focus-visible,
+.site-nav-group-label:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
 .site-nav-link.active {
   background: var(--vscode-list-activeSelectionBackground);
   color: var(--vscode-list-activeSelectionForeground);
@@ -1177,22 +1259,79 @@ body.mode-site.site-nav-collapsed .site-nav-resizer {
   color: var(--vscode-list-activeSelectionForeground);
   opacity: 1;
 }
-/* Prev/next toolbar buttons (site mode) -- explicit opacity/cursor rather
-   than relying on the browser's native disabled look, since btnStyle
+/* Docsite home page (renderSiteHomeHtml) -- an Oxygen-WebHelp-style tile
+   gallery in place of always landing on the first topic. Sits directly in
+   #dita-content-root, so it gets that element's own max-width/centering;
+   only its own padding is set here. */
+.site-home {
+  padding: 2rem 0 1rem;
+}
+.site-home-title {
+  margin: 0 0 1.25rem;
+}
+.site-home-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+}
+/* A tile is a plain link, not .site-nav-link (see renderSiteHomeHtml's own
+   comment on why) -- styled to match the sidebar's look-and-feel (the same
+   chip classes, the same hover/focus treatment) without being wired into
+   the sidebar's own click/history/roving-tabindex machinery. */
+.site-home-tile {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 1rem;
+  border: 1px solid var(--color-border, var(--vscode-widget-border, #555));
+  border-radius: 6px;
+  color: var(--vscode-editor-foreground);
+  text-decoration: none;
+  background: var(--vscode-editor-background);
+}
+.site-home-tile:hover {
+  background: var(--vscode-list-hoverBackground);
+  border-color: var(--color-link, #4a76c9);
+}
+.site-home-tile:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+.site-home-tile-icon {
+  flex-shrink: 0;
+  color: var(--color-link, #4a76c9);
+  opacity: 0.8;
+  line-height: 0;
+}
+.site-home-tile-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3em;
+  min-width: 0;
+}
+.site-home-tile-chips:empty {
+  display: none;
+}
+.site-home-tile-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.site-home-tile-meta {
+  font-size: 0.85em;
+  color: var(--vscode-descriptionForeground, #999);
+}
+/* Back/forward/prev/next toolbar buttons (site mode) -- explicit opacity/cursor
+   rather than relying on the browser's native disabled look, since btnStyle
    (getToolbarScaffoldScript) sets background/border/color explicitly and
    would otherwise mostly hide it. Disabled at the first/last topic.
-   min-width only, deliberately no min-height: an earlier version bumped
-   font-size to 20px with a matching 1.9em min-height to make these two
-   easier to hit than the rest of the icon-sized toolbar, but that made
-   them visibly taller than every other button in the same toolbar row.
-   Same font-size as the rest of the toolbar now (btnStyle's default,
-   via 'font-size:14px' close to but not exactly it -- see
-   getSitePrevNextButtonsScript's own inline style), just wider, so the
-   two read as a slightly bigger target without breaking the toolbar's
-   otherwise-uniform row height. */
-#__site-prev-btn, #__site-next-btn {
-  min-width: 2.4em;
-}
+   Deliberately NO width here: all four share SITE_NAV_BTN_STYLE's inline
+   width (ditaRenderUtils.ts). A min-width on prev/next used to sit in this
+   rule and, being a min-, beat that inline width -- so the two came out
+   wider than back/forward whatever the inline width was set to. */
+#__site-home-btn:disabled,
+#__site-back-btn:disabled, #__site-forward-btn:disabled,
 #__site-prev-btn:disabled, #__site-next-btn:disabled {
   opacity: 0.4;
   cursor: default;
@@ -1206,6 +1345,47 @@ body.mode-site.site-nav-collapsed .site-nav-resizer {
   margin: 0 auto;
   padding: 2rem 1.5rem;
 }
+
+/* On-this-page outline column (site-book-templates-plan.md item 4). Fourth
+   child of .site-frame, after the content pane -- same fixed-width-sibling
+   shape as .site-nav (below), just on the other side, and the same
+   independent overflow-y:auto so a long list scrolls on its own without
+   moving the content pane's own scroll position. Only ever present when
+   MapViewerProvider.ts decided to render it (site mode, template opted in
+   via template.json's "outline" field) -- there is no book-mode or no-
+   template variant of this rule to guard against; the element itself
+   simply isn't in the DOM then. Colour is intentionally NOT set here: a
+   template that opts in styles .tpl-outline-link itself (see e.g.
+   media/templates/atlas/atlas.css), the same division of labour as every
+   other template-coloured piece of chrome in this file. getOutlineSyncScript
+   toggles tpl-outline--empty when the current page has fewer than two
+   headings to list; the reader plainly never had a list, and the column
+   collapsing to nothing is less confusing than a static line saying so
+   would be. */
+.tpl-outline {
+  flex: 0 0 220px;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 1.25rem 1rem 1.25rem 0.75rem;
+  font-size: 0.85rem;
+}
+.tpl-outline--empty { display: none; }
+.tpl-outline-inner { display: flex; flex-direction: column; gap: 0.1rem; }
+.tpl-outline-link {
+  display: block;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  text-decoration: none;
+  color: inherit;
+  opacity: 0.72;
+  line-height: 1.35;
+  overflow-wrap: break-word;
+}
+.tpl-outline-link[data-outline-level="1"] { font-weight: 600; opacity: 0.9; }
+.tpl-outline-link[data-outline-level="2"] { padding-left: 1.1rem; }
+.tpl-outline-link[data-outline-level="3"] { padding-left: 1.75rem; font-size: 0.92em; }
+.tpl-outline-link:hover { opacity: 1; }
+.tpl-outline-link.active { opacity: 1; font-weight: 600; }
 
 body.dita-loading {
   display: flex;
@@ -1228,4 +1408,162 @@ body.dita-loading {
 }
 @keyframes dita-loading-spin {
   to { transform: rotate(360deg); }
+}
+
+/* Docsite/book page shell (wrapShell): a column of [top bar] / [template
+   header] / .site-frame / [template footer]. .site-frame takes over as the
+   flex row that the body itself used to be, and is the only part that
+   stretches; the body stays exactly one viewport tall so the sidebar and the
+   content pane scroll on their own. The selector list mirrors the shell rule
+   it overrides (its :has() form is more specific, hence the doubled class). */
+body.mode-site.site-shell.site-shell,
+body.mode-book.site-shell.site-shell:has(.site-nav) {
+  flex-direction: column;
+  align-items: stretch;
+}
+.site-shell > .site-frame {
+  flex: 1 1 0;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.site-shell > #__topbar,
+.site-shell > .tpl-header,
+.site-shell > .tpl-footer { flex: 0 0 auto; }
+/* Structure hooks a template's css styles; the base look is deliberately
+   bare (its own css supplies colours, size and spacing). The toolbar is not
+   part of the header: it is the page's top bar, above it. */
+.tpl-header, .tpl-footer {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  box-sizing: border-box;
+  padding: 0.6rem 1rem;
+}
+.tpl-header { flex-wrap: wrap; background-size: cover; background-position: center; }
+.tpl-footer { justify-content: space-between; flex-wrap: wrap; }
+.tpl-brand, .tpl-footer-brand { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+.tpl-brand-text { display: flex; flex-direction: column; min-width: 0; }
+.tpl-logo { height: 32px; width: auto; max-width: 160px; zoom: 1; border-radius: 0; cursor: default; }
+.tpl-logo--footer { height: 20px; }
+.tpl-links { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; }
+.tpl-link { text-decoration: none; }
+
+/* Top bar (getToolbarPlacementScript): the toolbar as the first row of a
+   docsite/book page. !important on the toolbar because the scaffold styles it
+   with an inline cssText for the floating case (fixed, top/right, opacity,
+   blur, its own background and border). The left side is the map's title
+   while the bar is wide enough; the buttons keep the right side, and wrap
+   only once they no longer fit on the row. */
+#__topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 10px;
+  box-sizing: border-box;
+  padding: 2px 6px;
+  background: var(--vscode-editor-background);
+  border-bottom: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.3));
+  container: topbar / inline-size;
+}
+#__topbar > .in-topbar {
+  position: static !important;
+  z-index: auto !important;
+  opacity: 1 !important;
+  backdrop-filter: none !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 100%;
+  margin-left: auto;
+}
+.topbar-title {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}
+@container topbar (max-width: 760px) {
+  .topbar-title { display: none; }
+}
+/* The same bar on a page that is one long scrolling document (outline view,
+   and a book with an empty map). The bar is NOT a fixed overlay here: the
+   body becomes a one-viewport-tall flex column, the bar is its full-width
+   first ROW, and the content scrolls in its own area beneath that row. So
+   the vertical scrollbar belongs to the content, starts below the bar and
+   sits at the window's right edge -- it never runs beside the bar and never
+   nudges the right-aligned buttons left the way a fixed, full-viewport bar
+   did. The bar reserves only its own height (flex: 0 0 auto); the content
+   region takes the rest (min-height: 0 lets it shrink so its own overflow
+   takes over instead of the page growing). Readable width lives on the
+   content's own child, so the scrollbar stays at the true window edge while
+   the text stays centered. No scroll-padding: the bar no longer overlaps
+   the content, so an anchor jump lands cleanly below it. */
+body:has(> #__topbar.topbar--top) {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  box-sizing: border-box;
+  height: 100vh;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+body:has(> #__topbar.topbar--top) > #__topbar { flex: 0 0 auto; }
+body:has(> #__topbar.topbar--top) > #dita-content-root {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0;
+}
+body:has(> #__topbar.topbar--top) > #dita-content-root > * {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+/* Mode-specific toolbar buttons, keyed on the body's mode-* class.
+
+   The map webview is a superset script (getMapWebviewScript): EVERY mode's
+   toolbar buttons are built and appended on load and an in-place mode switch
+   (applyModeStage) only swaps the body class, never the toolbar. Hiding the
+   buttons a mode has no use for here -- rather than building them per-mode --
+   is what lets the always-present right-hand cluster, and the mode button in
+   it, hold one fixed spot across a switch, so the toolbar never shifts or
+   briefly disappears.
+
+   outline (tree): no sidebar, no template, no page navigation -- hide them all.
+   book: has a sidebar and a template, but is one long document, so the
+     back/forward/prev/next/open-source page controls (which walk docsite pages)
+     have nothing to act on. docsite (site) shows everything. */
+body.mode-tree #__site-sidebar-toggle-btn,
+body.mode-tree #__site-expand-all-btn,
+body.mode-tree #__site-collapse-all-btn,
+body.mode-tree #__template-select,
+body.mode-tree #__site-home-btn,
+body.mode-tree #__site-back-btn,
+body.mode-tree #__site-forward-btn,
+body.mode-tree #__site-prev-btn,
+body.mode-tree #__site-next-btn,
+body.mode-tree #__site-open-source-btn {
+  display: none !important;
+}
+body.mode-book #__site-home-btn,
+body.mode-book #__site-back-btn,
+body.mode-book #__site-forward-btn,
+body.mode-book #__site-prev-btn,
+body.mode-book #__site-next-btn,
+body.mode-book #__site-open-source-btn {
+  display: none !important;
 }

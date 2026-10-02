@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<map>
+    <title>keys-main</title>
+    <keydef keys="product-name">
+        <topicmeta>
+            <keywords>
+                <keyword>星枢 N1</keyword>
+            </keywords>
+        </topicmeta>
+    </keydef>
+    <keydef keys="product-model">
+        <topicmeta>
+            <keywords>
+                <keyword>N1</keyword>
+            </keywords>
+        </topicmeta>
+    </keydef>
+    <keydef keys="brand-name">
+        <topicmeta>
+            <keywords>
+                <keyword>星枢</keyword>
+            </keywords>
+        </topicmeta>
+    </keydef>
+    <keydef keys="company-name">
+        <topicmeta>
+            <keywords>
+                <keyword>星澜科技</keyword>
+            </keywords>
+        </topicmeta>
+    </keydef>
+    <keydef keys="version">
+        <topicmeta>
+            <keywords>
+                <keyword>2.1.0</keyword>
+            </keywords>
+        </topicmeta>
+    </keydef>
+    <keydef keys="release-year">
+        <topicmeta>
+            <keywords>
+                <keyword>2026</keyword>
+            </keywords>
+        </topicmeta>
+    </keydef>
+    <keydef keys="support-phone">
+        <topicmeta>
+            <keywords>
+                <keyword>400-810-1234</keyword>
+            </keywords>
+        </topicmeta>
+    </keydef>
+    <keydef keys="support-url" href="https://support.example-starlumos.com" scope="external"
+        format="html"/>
+    <keydef keys="support-mail" href="mailto:support@example-starlumos.com" scope="external"
+        format="mailto"/>
+    <keydef keys="logo" href="../images/logo-brandA.svg" format="svg"/>
+    <keydef keys="shared-brand" href="../shared/conref-brandA.dita"/>
+</map>

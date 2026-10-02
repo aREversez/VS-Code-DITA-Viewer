@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync, statSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, planCurrentMarkMove, getSearchOverlayScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getSiteNavToggleScript, getSitePrevNextButtonsScript, getSiteSidebarToggleScript, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
+import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, getSearchOverlayScript, getProfilingFilterScript, getRefreshButtonScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getOutlineSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteSidebarToggleScript, getSiteOpenSourceScript, getSiteHomeButtonScript, getTemplateSelectScript, getToolbarPlacementScript, PREV_TOPIC_ICON_SVG, NEXT_TOPIC_ICON_SVG, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities } from '../../parser/ditaParser';
 import { renderDocument } from '../../render/renderer';
 import type { DitaNode } from '../../parser/domTypes';
@@ -361,11 +361,15 @@ describe('renderTopicCached', () => {
     const a = writeTopic('a.dita', '<p>first</p>');
     assert.ok(render(a).html.includes('first'));
 
-    writeTopic('a.dita', '<p>second</p>'); // new content, same pinned mtime
+    // New content of the SAME LENGTH at the same pinned mtime: the stamp is
+    // mtime:size, so a different length would (correctly) invalidate -- see
+    // sourceText.test.ts. Equal length is what leaves nothing for the stamp
+    // to notice.
+    writeTopic('a.dita', '<p>other</p>');
 
     const again = render(a);
     assert.ok(again.html.includes('first'), 'no dependency changed, so the stored HTML is what should answer');
-    assert.ok(!again.html.includes('second'), 'a re-render would have picked up the new content');
+    assert.ok(!again.html.includes('other'), 'a re-render would have picked up the new content');
   });
 
   it('should re-render a topic once its own file mtime changes', () => {
@@ -618,7 +622,7 @@ describe('expandDitamapRefs', () => {
     assert.strictEqual(node.children.length, 0);
   });
 
-  it('should handle circular references via visited set', () => {
+  it('should handle circular references without infinite recursion (ancestry is scoped to the current chain, not a permanent global visited set)', () => {
     const node = makeEl('map/topicref', { href: 'a.ditamap' });
     const childA = makeEl('map/topicref', { href: 'b.ditamap' });
     node.children = [childA];
@@ -633,13 +637,43 @@ describe('expandDitamapRefs', () => {
       return '';
     };
 
-    const visited = new Set<string>();
-    expandDitamapRefs(node, '/dir', readFile, visited);
+    const ancestry = new Set<string>();
+    // Must terminate at all -- a self-referential a<->b chain would hang
+    // forever without the cycle guard.
+    expandDitamapRefs(node, '/dir', readFile, ancestry);
 
     // a.ditamap expands: adds b.ditamap ref from file
-    // Then b.ditamap ref is expanded: but a.ditamap is in visited set, so it stops
+    // Then b.ditamap ref is expanded: but a.ditamap is on the current
+    // ancestor chain, so that inner expansion stops there.
     assert.strictEqual(node.children.length, 2); // original child + expanded from a.ditamap
-    assert.strictEqual(visited.size, 2); // a.ditamap and b.ditamap
+    // Unlike the old global "visited forever" set, the ancestry is a
+    // proper DFS stack: every entry added on the way down is removed again
+    // on the way back up, so by the time the whole call returns it is
+    // empty again -- see the "reuse" test below for why that matters.
+    assert.strictEqual(ancestry.size, 0);
+  });
+
+  it('expands the SAME submap twice when it is legitimately referenced from two different topicrefs (KILL: pre-fix used one visited set for the whole tree, so a shared appendix/legal-notices submap pulled into two different chapters would only expand the first time and silently vanish from the second)', () => {
+    const ref1 = makeEl('map/topicref', { href: 'shared.ditamap', format: 'ditamap' });
+    const ref2 = makeEl('map/topicref', { href: 'shared.ditamap', format: 'ditamap' });
+    const book = makeEl('map/topicref', { href: 'chapter-container' }, [ref1, ref2]);
+
+    let reads = 0;
+    const readFile: FileReader = (path) => {
+      if (path.replace(/\\/g, '/').endsWith('shared.ditamap')) {
+        reads++;
+        return `<map><topicref href="shared-topic.dita"/></map>`;
+      }
+      throw new Error('unexpected: ' + path);
+    };
+
+    expandDitamapRefs(book, '/dir', readFile);
+
+    assert.strictEqual(reads, 2, 'shared.ditamap should be read and expanded once per reference, not deduped globally');
+    assert.strictEqual(ref1.children.length, 1);
+    assert.strictEqual(ref1.children[0].attributes?.href, 'shared-topic.dita');
+    assert.strictEqual(ref2.children.length, 1);
+    assert.strictEqual(ref2.children[0].attributes?.href, 'shared-topic.dita');
   });
 
   it('should still expand children when the node itself points at a visited map', () => {
@@ -750,6 +784,21 @@ describe('makeFileTitleResolver', () => {
     writeFileSync(join(dir, 'topic.dita'), `<topic id="t1"><title>Real Topic Title</title></topic>`);
     // File deliberately named like a bare id — must NOT be picked up
     writeFileSync(join(dir, 'someid'), `<topic id="someid"><title>Ghost Title</title></topic>`);
+    // A title carrying keyrefs — the software-manual pattern (product name,
+    // version number as reusable variables) the Explorer map tree resolves
+    // so submap/topic rows show the key's value, not a dropped word.
+    writeFileSync(
+      join(dir, 'keyed.dita'),
+      `<topic id="k1"><title><ph keyref="product"/> 安装指南 <keyword keyref="version"/></title></topic>`,
+    );
+    writeFileSync(
+      join(dir, 'manual.ditamap'),
+      `<map><title><keyword keyref="product"/> 用户手册</title><topicref href="topic.dita"/></map>`,
+    );
+    writeFileSync(
+      join(dir, 'book.ditamap'),
+      `<bookmap><booktitle><mainbooktitle><keyword keyref="product"/> 安装手册</mainbooktitle><subtitle>副标题</subtitle></booktitle></bookmap>`,
+    );
   });
 
   after(() => {
@@ -775,6 +824,32 @@ describe('makeFileTitleResolver', () => {
   it('should not treat a bare id as a filename even when a matching file exists', () => {
     const resolver = makeFileTitleResolver(dir);
     assert.strictEqual(resolver('someid'), undefined);
+  });
+
+  it('should resolve keyrefs inside a topic title when a key resolver is given', () => {
+    const resolver = makeFileTitleResolver(dir, undefined, (key) =>
+      key === 'product' ? '星枢 N1' : key === 'version' ? '2.1.0' : undefined,
+    );
+    assert.strictEqual(resolver('keyed.dita'), '星枢 N1 安装指南 2.1.0');
+  });
+
+  it('should leave a keyref unresolved (word dropped) when no key resolver is given, as before', () => {
+    const resolver = makeFileTitleResolver(dir);
+    assert.strictEqual(resolver('keyed.dita'), ' 安装指南 ');
+  });
+
+  it('should resolve a local .ditamap href to the map\'s own <title>, keyrefs resolved', () => {
+    const resolver = makeFileTitleResolver(dir, undefined, (key) =>
+      key === 'product' ? '星枢 N1' : undefined,
+    );
+    assert.strictEqual(resolver('manual.ditamap'), '星枢 N1 用户手册');
+  });
+
+  it('should resolve a local .ditamap href to a bookmap\'s mainbooktitle, not the subtitle', () => {
+    const resolver = makeFileTitleResolver(dir, undefined, (key) =>
+      key === 'product' ? '星枢 N1' : undefined,
+    );
+    assert.strictEqual(resolver('book.ditamap'), '星枢 N1 安装手册');
   });
 });
 
@@ -824,9 +899,9 @@ describe('makeFileTopicTypeResolver (sniffRootTagName)', () => {
     assert.strictEqual(resolver('full-preamble.dita'), 'Concept');
   });
 
-  it('should return undefined for the generic <topic> root, since the default labeler drops it to avoid a row of identical chips with no information', () => {
+  it('should label the generic <topic> root "Topic" like every other type, so a plain topic in a mixed map is not the one row with no chip', () => {
     const resolver = makeFileTopicTypeResolver(dir);
-    assert.strictEqual(resolver('generic.dita'), undefined);
+    assert.strictEqual(resolver('generic.dita'), 'Topic');
   });
 
   it('should let a custom labeler override the default (e.g. localize, or hide tags the default would show)', () => {
@@ -1261,94 +1336,6 @@ describe('findTextMatches', () => {
   });
 });
 
-describe('planCurrentMarkMove', () => {
-  it('moves the highlight by naming only the mark it leaves and the mark it lands on', () => {
-    // The whole point of the function: the loop this replaced named all five.
-    assert.deepStrictEqual(planCurrentMarkMove(2, 3, 5), { clear: 2, set: 3 });
-  });
-
-  it('names nothing to clear when no mark is lit yet', () => {
-    // The state performSearch leaves behind: it has just built a fresh set of
-    // marks, none of which carries '__current', so clearing is work for nothing.
-    assert.deepStrictEqual(planCurrentMarkMove(-1, 0, 5), { clear: -1, set: 0 });
-  });
-
-  it('handles wrap-around in both directions', () => {
-    assert.deepStrictEqual(planCurrentMarkMove(4, 0, 5), { clear: 4, set: 0 });
-    assert.deepStrictEqual(planCurrentMarkMove(0, 4, 5), { clear: 0, set: 4 });
-  });
-
-  it('does not clear and re-set the mark that is already current', () => {
-    // gotoNextMatch on a single-match search lands back where it started.
-    // Clearing first would take the highlight off and put it back on within one
-    // task -- a visible flash if the browser happens to paint in between, and
-    // pointless work either way.
-    assert.deepStrictEqual(planCurrentMarkMove(2, 2, 5), { clear: -1, set: 2 });
-    assert.deepStrictEqual(planCurrentMarkMove(0, 0, 1), { clear: -1, set: 0 });
-  });
-
-  it('takes the highlight off entirely when there is no next match', () => {
-    assert.deepStrictEqual(planCurrentMarkMove(2, -1, 5), { clear: 2, set: -1 });
-  });
-
-  it('does nothing at all when there are no marks, stale index included', () => {
-    assert.deepStrictEqual(planCurrentMarkMove(-1, -1, 0), { clear: -1, set: -1 });
-    assert.deepStrictEqual(planCurrentMarkMove(3, 0, 0), { clear: -1, set: -1 });
-  });
-
-  it('drops a stale previous index rather than naming a mark that no longer exists', () => {
-    // Reachable, not theoretical: the document changed under an open search bar,
-    // so the match list shrank while the index tracked from the longer list
-    // survived it by one update.
-    assert.deepStrictEqual(planCurrentMarkMove(7, 0, 3), { clear: -1, set: 0 });
-  });
-
-  it('drops a stale next index but still clears the mark it left', () => {
-    assert.deepStrictEqual(planCurrentMarkMove(1, 9, 3), { clear: 1, set: -1 });
-  });
-
-  it('never names an index outside the list', () => {
-    // The caller uses these to index a real array, so this is the property that
-    // turns any future slip in the decision table into a no-op instead of a
-    // silent write to the wrong mark. Covers negative and past-the-end inputs on
-    // both sides, including an empty list.
-    for (let count = 0; count <= 6; count++) {
-      for (let previous = -2; previous <= 8; previous++) {
-        for (let next = -2; next <= 8; next++) {
-          const move = planCurrentMarkMove(previous, next, count);
-          for (const index of [move.clear, move.set]) {
-            assert.ok(
-              index === -1 || (index >= 0 && index < count),
-              `planCurrentMarkMove(${previous}, ${next}, ${count}) named ${index}`,
-            );
-          }
-        }
-      }
-    }
-  });
-
-  it('leaves exactly the marks lit that walking all of them would have left lit', () => {
-    // Exhaustive over a small grid rather than a hand-picked sequence, because
-    // the optimisation is only worth having if it is equivalent to the O(n) loop
-    // it replaced. `expected` is that loop's output verbatim: it lit the current
-    // match and cleared every other one. `marks` is the state the loop would
-    // have left behind on the previous move, which is what makes the two
-    // comparable -- the optimised path only ever sees one mark lit, and if that
-    // ever stopped being true the divergence would show up here.
-    const count = 4;
-    for (let previous = -1; previous < count; previous++) {
-      for (let next = -1; next < count; next++) {
-        const marks = Array.from({ length: count }, (_, i) => i === previous);
-        const expected = Array.from({ length: count }, (_, i) => i === next);
-        const move = planCurrentMarkMove(previous, next, count);
-        if (move.clear >= 0) marks[move.clear] = false;
-        if (move.set >= 0) marks[move.set] = true;
-        assert.deepStrictEqual(marks, expected, `move from ${previous} to ${next} of ${count}`);
-      }
-    }
-  });
-});
-
 describe('getSearchOverlayScript', () => {
   const opts = {
     placeholder: 'Find',
@@ -1363,55 +1350,772 @@ describe('getSearchOverlayScript', () => {
   it('emits a script that parses as JavaScript', () => {
     // The overlay is one long template literal with a dozen interpolations in
     // it, so a stray backtick or an unescaped interpolation anywhere ships a
-    // search bar that silently never runs. Nothing else in the suite would
-    // notice: there is no DOM here to execute it against, and the e2e harness
-    // cannot reach into a webview. Compiling it is the cheapest assertion that
-    // catches the whole class -- new Function parses the body without running
-    // it, so the document and NodeFilter references inside are never touched.
+    // search bar that silently never runs. new Function parses the body
+    // without running it, so this only catches syntax errors -- the fake-DOM
+    // harness further below is what actually executes it.
     assert.doesNotThrow(() => new Function(getSearchOverlayScript(opts)));
   });
 
-  it('injects the exported planCurrentMarkMove rather than a second copy of its rules', () => {
+  it('injects the exported findTextMatches verbatim rather than a second copy of its rules', () => {
     // The comment at the injection site promises webview and tests always run
-    // the same algorithm. Comparing the emitted text against the function's own
-    // source is what makes that promise load-bearing instead of decorative: it
-    // fails the moment someone hand-copies the decision table into the template,
-    // which is the natural thing to do and the natural way for the two to drift.
+    // the same matching algorithm. Comparing the emitted text against the
+    // function's own source is what makes that promise load-bearing instead
+    // of decorative: it fails the moment someone hand-copies the regex logic
+    // into the template, which is the natural way for the two to drift.
     const script = getSearchOverlayScript(opts);
     assert.ok(
-      script.includes('var planCurrentMarkMoveCore = ' + planCurrentMarkMove.toString() + ';'),
-      'expected the overlay script to inject the exported planCurrentMarkMove verbatim',
+      script.includes('var findTextMatchesCore = ' + findTextMatches.toString() + ';'),
+      'expected the overlay script to inject the exported findTextMatches verbatim',
     );
   });
 
-  it('injects a body that still works once lifted out of this module', () => {
-    // The webview has none of this module's bindings, so an injected function
-    // that reaches for one is dead on arrival -- and it would look perfectly
-    // healthy here, where the binding is in scope. new Function builds the
-    // function against the global scope instead, which turns that free
-    // identifier into a ReferenceError the first time it is called.
-    const revived = new Function(
-      'return (' + planCurrentMarkMove.toString() + ')',
-    )() as typeof planCurrentMarkMove;
-    assert.deepStrictEqual(revived(2, 3, 5), { clear: 2, set: 3 });
-    assert.deepStrictEqual(revived(-1, 0, 5), { clear: -1, set: 0 });
-    assert.deepStrictEqual(revived(2, 2, 5), { clear: -1, set: 2 });
-    assert.deepStrictEqual(revived(7, 0, 3), { clear: -1, set: 0 });
-    assert.deepStrictEqual(revived(2, -1, 0), { clear: -1, set: -1 });
+  it('excludes docsite mode\'s sidebar (.site-nav) from search matches, not just the toolbar/search bar', () => {
+    // Source-text regression guard, kept alongside the behavioral fake-DOM
+    // test below ('does not create highlight ranges inside the .site-nav
+    // sidebar') which exercises the same rule end to end.
+    const script = getSearchOverlayScript(opts);
+    assert.ok(script.includes("classList.contains('site-nav')"), 'the search text collection should exclude the sidebar');
   });
 
-  it('excludes docsite mode\'s sidebar (.site-nav) from search matches, not just the toolbar/search bar', () => {
-    // Regression guard, not a behavioral test: there's no DOM here to
-    // actually run the TreeWalker filter against (see the parse-check
-    // test's own comment on why), so this only confirms the source text
-    // still contains the sidebar exclusion rather than someone quietly
-    // dropping it in a future refactor of this same walk-up loop. Without
-    // it, Ctrl+F in site mode would also match/highlight sidebar topic
-    // titles and chips -- .site-nav sits beside #dita-content-root as a
-    // sibling under body, not inside it, and isn't caught by the existing
-    // __toolbar/__search_bar id checks.
+  // ── CSS Custom Highlight API behavior ──
+  // The e2e harness only captures rendered HTML strings -- it cannot reach
+  // into a webview to run script and read state back (see extension.ts's own
+  // _test export comment), and jsdom is not a dependency of this project. So,
+  // same spirit as getImageLightboxScript's fake DOM further down this file,
+  // this hand-rolls just enough of document/Range/CSS.highlights to actually
+  // execute performSearch and assert on what it did, rather than only
+  // pinning source text.
+  interface FakeTextNode {
+    nodeType: 3;
+    textContent: string;
+    parentNode: FakeElement | null;
+    parentElement: FakeElement | null;
+  }
+  type FakeNode = FakeElement | FakeTextNode;
+  interface FakeElement {
+    nodeType: 1;
+    tagName: string;
+    id: string;
+    classListSet: Set<string>;
+    classList: { contains: (c: string) => boolean; add: (c: string) => void; remove: (c: string) => void };
+    style: Record<string, string>;
+    children: FakeNode[];
+    childNodes: FakeNode[];
+    parentNode: FakeElement | null;
+    parentElement: FakeElement | null;
+    listeners: Record<string, Array<(e: Record<string, unknown>) => void>>;
+    attrs: Record<string, string>;
+    textContent: string;
+    innerHTML: string;
+    title: string;
+    placeholder: string;
+    value: string;
+    scrollIntoViewCalls: Array<Record<string, unknown> | undefined>;
+    scrollIntoView: (opts?: Record<string, unknown>) => void;
+    checkVisibility?: () => boolean;
+    focus: () => void;
+    select: () => void;
+    appendChild: <T extends FakeNode>(child: T) => T;
+    setAttribute: (name: string, value: string) => void;
+    addEventListener: (type: string, fn: (e: Record<string, unknown>) => void) => void;
+  }
+
+  function makeFakeText(text: string): FakeTextNode {
+    const node: FakeTextNode = {
+      nodeType: 3,
+      textContent: text,
+      parentNode: null,
+      get parentElement() { return node.parentNode; },
+    };
+    return node;
+  }
+
+  function makeFakeElement(tag: string): FakeElement {
+    const el: FakeElement = {
+      nodeType: 1,
+      tagName: tag.toUpperCase(),
+      id: '',
+      classListSet: new Set<string>(),
+      classList: undefined as unknown as FakeElement['classList'],
+      style: {},
+      children: [],
+      get childNodes() { return el.children; },
+      parentNode: null,
+      get parentElement() { return el.parentNode; },
+      listeners: {},
+      attrs: {},
+      textContent: '',
+      innerHTML: '',
+      title: '',
+      placeholder: '',
+      value: '',
+      scrollIntoViewCalls: [],
+      scrollIntoView(opts) { el.scrollIntoViewCalls.push(opts); },
+      focus() {},
+      select() {},
+      appendChild(child) {
+        child.parentNode = el;
+        el.children.push(child);
+        return child;
+      },
+      setAttribute(name, value) { el.attrs[name] = value; },
+      addEventListener(type, fn) {
+        if (!el.listeners[type]) el.listeners[type] = [];
+        el.listeners[type].push(fn);
+      },
+    };
+    el.classList = {
+      contains: (c) => el.classListSet.has(c),
+      add: (c) => { el.classListSet.add(c); },
+      remove: (c) => { el.classListSet.delete(c); },
+    };
+    return el;
+  }
+
+  function collectTextNodes(root: FakeElement): FakeTextNode[] {
+    const out: FakeTextNode[] = [];
+    (function walk(node: FakeElement) {
+      for (const c of node.children) {
+        if (c.nodeType === 3) out.push(c);
+        else walk(c);
+      }
+    })(root);
+    return out;
+  }
+
+  /** Fake Range: only what performSearch/updateCurrentMatch actually use --
+   *  setStart/setEnd on a single text node, toString() for the matched
+   *  substring, and a stubbed rect (scroll-position math isn't asserted on
+   *  here, only that scrollTo gets called). */
+  class FakeRange {
+    get startContainer(): FakeTextNode | null { return this.startNode; }
+    startNode: FakeTextNode | null = null;
+    startOffset = 0;
+    endNode: FakeTextNode | null = null;
+    endOffset = 0;
+    setStart(node: FakeTextNode, offset: number): void { this.startNode = node; this.startOffset = offset; }
+    setEnd(node: FakeTextNode, offset: number): void { this.endNode = node; this.endOffset = offset; }
+    toString(): string {
+      const { startNode, endNode } = this;
+      if (!startNode || !endNode) return '';
+      if (startNode === endNode) return startNode.textContent.substring(this.startOffset, this.endOffset);
+      // Across nodes: the tail of the first, every text node between them in
+      // document order, the head of the last -- what a real Range stringifies to.
+      let root: FakeElement = startNode.parentNode!;
+      while (root.parentNode) root = root.parentNode;
+      const all = collectTextNodes(root);
+      const from = all.indexOf(startNode);
+      const to = all.indexOf(endNode);
+      let out = startNode.textContent.substring(this.startOffset);
+      for (let i = from + 1; i < to; i++) out += all[i].textContent;
+      return out + endNode.textContent.substring(0, this.endOffset);
+    }
+    /** Tests that care about geometry install a function here; the default
+     *  (all zeros) is what an unlaid-out/hidden range reports. */
+    static rectFn: () => { top: number; left: number; width: number; height: number } = () => ({ top: 0, left: 0, width: 0, height: 0 });
+    getBoundingClientRect() { return FakeRange.rectFn(); }
+  }
+
+  /** Fake Highlight: a plain Set of ranges is all the real Highlight class
+   *  is from the outside (it implements Set<Range>), and all this script
+   *  ever does with one. */
+  class FakeHighlight {
+    items = new Set<FakeRange>();
+    add(r: FakeRange): void { this.items.add(r); }
+    clear(): void { this.items.clear(); }
+  }
+
+
+  /** Runs the overlay script against a fake body tree and returns the
+   *  CSS.highlights registry (a real Map -- HighlightRegistry is Map-shaped
+   *  from the outside), every fake element the script created (so the test
+   *  can find its search input/buttons the same way a real DOM query would),
+   *  and every window.scrollTo call. */
+  function runOverlay(body: FakeElement, winExtras: Record<string, unknown> = {}) {
+    const created: FakeElement[] = [];
+    const docListeners: Record<string, Array<() => void>> = {};
+    const head = makeFakeElement('head');
+    const doc = {
+      body,
+      head,
+      createElement: (tag: string) => { const el = makeFakeElement(tag); created.push(el); return el; },
+      createRange: () => new FakeRange(),
+      addEventListener: (type: string, fn: () => void) => { (docListeners[type] ||= []).push(fn); },
+      querySelectorAll: () => [] as FakeElement[],
+    };
+    const highlights = new Map<string, FakeHighlight>();
+    const css = { highlights };
+    const scrollCalls: Record<string, unknown>[] = [];
+    const win = { scrollY: 0, innerHeight: 768, scrollTo: (o: Record<string, unknown>) => { scrollCalls.push(o); }, ...winExtras };
     const script = getSearchOverlayScript(opts);
-    assert.ok(script.includes("classList.contains('site-nav')"), 'search TreeWalker filter should exclude the sidebar');
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    const api = new Function('document', 'window', 'CSS', 'Highlight', script + '\nreturn { refresh: typeof refreshSearchAfterDomChange === "function" ? refreshSearchAfterDomChange : function() {}, open: openSearchBar };')(
+      doc, win, css, FakeHighlight,
+    ) as { refresh: () => void; open: () => void };
+    return { highlights, elements: created, scrollCalls, docListeners, ...api };
+  }
+
+  function findInput(elements: FakeElement[]): FakeElement {
+    return elements.find((e) => e.tagName === 'INPUT')!;
+  }
+  function findCaseBtn(elements: FakeElement[]): FakeElement {
+    return elements.find((e) => e.tagName === 'BUTTON' && e.textContent === 'Aa')!;
+  }
+  function findNextBtn(elements: FakeElement[]): FakeElement {
+    return elements.find((e) => e.tagName === 'BUTTON' && e.innerHTML === '&darr;')!;
+  }
+  function findCloseBtn(elements: FakeElement[]): FakeElement {
+    return elements.find((e) => e.tagName === 'BUTTON' && e.innerHTML === '&times;')!;
+  }
+  /** Runs a search the same way a reader toggling "Match case" would --
+   *  that click handler calls performSearch synchronously, unlike the
+   *  search input's own debounced 'input' listener. */
+  function runSearch(elements: FakeElement[], term: string): void {
+    findInput(elements).value = term;
+    findCaseBtn(elements).listeners['click'][0]({});
+  }
+
+  it('highlights matches via CSS.highlights instead of wrapping them in <mark> elements', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('the quick fox and the quick hare'));
+
+    const { highlights, elements } = runOverlay(body);
+    runSearch(elements, 'quick');
+
+    const allHl = highlights.get('dita-search-all')!;
+    assert.ok(allHl, 'expected an "all matches" highlight to be registered');
+    assert.strictEqual(allHl.items.size, 2, 'expected two "quick" matches to be registered as highlight ranges');
+    assert.deepStrictEqual(
+      Array.from(allHl.items).map((r) => r.toString()).sort(),
+      ['quick', 'quick'],
+    );
+    assert.ok(!elements.some((e) => e.tagName === 'MARK'), 'expected no <mark> elements to be created');
+  });
+
+  it('tracks the current match in a separate CSS.highlights entry from all matches, and advances it on next', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('cat cat cat'));
+
+    const { highlights, elements } = runOverlay(body);
+    runSearch(elements, 'cat');
+
+    const currentOffset = () => {
+      const cur = Array.from(highlights.get('dita-search-current')!.items)[0];
+      return cur ? cur.startOffset : -1;
+    };
+    assert.strictEqual(highlights.get('dita-search-current')!.items.size, 1);
+    assert.strictEqual(currentOffset(), 0);
+    assert.strictEqual(p.scrollIntoViewCalls.length, 1, 'expected the initial match to scroll into view once');
+
+    const nextBtn = findNextBtn(elements);
+    nextBtn.listeners['click'][0]({});
+    assert.strictEqual(currentOffset(), 4);
+    nextBtn.listeners['click'][0]({});
+    assert.strictEqual(currentOffset(), 8);
+    nextBtn.listeners['click'][0]({});
+    assert.strictEqual(currentOffset(), 0, 'expected next to wrap back to the first match');
+  });
+
+  it('scrolls the match via its own element, not window.scrollTo (site/book mode scrolls #dita-content-root, body is overflow:hidden)', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('cat cat'));
+
+    const { elements, scrollCalls } = runOverlay(body);
+    runSearch(elements, 'cat');
+    findNextBtn(elements).listeners['click'][0]({});
+
+    assert.strictEqual(scrollCalls.length, 0, 'window.scrollTo is a no-op when the scroller is #dita-content-root; must not be relied on');
+    assert.strictEqual(p.scrollIntoViewCalls.length, 2, 'expected one scrollIntoView on the match\'s element per navigation');
+    assert.strictEqual(p.scrollIntoViewCalls[0]?.block, 'center');
+    assert.strictEqual(
+      p.scrollIntoViewCalls[0]?.behavior,
+      'instant',
+      'a smooth animation is computed against layout that content-visibility:auto entries change while it runs, so it lands short/long of the match',
+    );
+  });
+
+  it('re-centers the match when the first jump lands off-center, because skipped content-visibility entries change height once rendered', () => {
+    // Real cause (book mode, content-visibility:auto entries with a 600px
+    // size estimate): scrollIntoView aims using the estimated layout, the
+    // entries near the viewport then render at their real height, and the
+    // match ends up far from where it was aimed. Measure after the jump and
+    // correct the scroller until the match sits at the viewport's centre.
+    const body = makeFakeElement('body');
+    const root = body.appendChild(makeFakeElement('div'));
+    root.id = 'dita-content-root';
+    const scroller = Object.assign(root, {
+      scrollTop: 0,
+      scrollHeight: 5000,
+      clientHeight: 700,
+      getBoundingClientRect: () => ({ top: 0, left: 0, width: 900, height: 700 }),
+    });
+    const p = root.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('cat'));
+
+    // The match really sits 1000px down the scroller; scrollIntoView (a
+    // no-op in this fake) is the "landed wrong" coarse jump.
+    FakeRange.rectFn = () => ({ left: 0, width: 30, height: 20, top: 1000 - scroller.scrollTop });
+    const frames: Array<() => void> = [];
+    const { elements } = runOverlay(body, {
+      requestAnimationFrame: (cb: () => void) => { frames.push(cb); return frames.length; },
+      getComputedStyle: (el: FakeElement) => ({ overflowY: el === root ? 'auto' : 'visible' }),
+    });
+    try {
+      runSearch(elements, 'cat');
+      for (let i = 0; i < 10 && frames.length; i++) frames.shift()!();
+
+      const centre = FakeRange.rectFn().top + 10;
+      assert.ok(Math.abs(centre - 350) <= 4, `expected the match centred in the 700px scroller, but its centre is at ${centre}`);
+    } finally {
+      FakeRange.rectFn = () => ({ top: 0, left: 0, width: 0, height: 0 });
+    }
+  });
+
+  it('stops correcting once the reader scrolls (wheel) so it never fights them', () => {
+    const body = makeFakeElement('body');
+    const root = body.appendChild(makeFakeElement('div'));
+    root.id = 'dita-content-root';
+    const scroller = Object.assign(root, {
+      scrollTop: 0,
+      scrollHeight: 5000,
+      clientHeight: 700,
+      getBoundingClientRect: () => ({ top: 0, left: 0, width: 900, height: 700 }),
+    });
+    const p = root.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('cat'));
+    FakeRange.rectFn = () => ({ left: 0, width: 30, height: 20, top: 1000 - scroller.scrollTop });
+    const frames: Array<() => void> = [];
+    const { elements, docListeners } = runOverlay(body, {
+      requestAnimationFrame: (cb: () => void) => { frames.push(cb); return frames.length; },
+      getComputedStyle: (el: FakeElement) => ({ overflowY: el === root ? 'auto' : 'visible' }),
+    });
+    try {
+      runSearch(elements, 'cat');
+      const settled = scroller.scrollTop;
+      // Layout shifts again after the first settle, but the reader has grabbed the wheel.
+      FakeRange.rectFn = () => ({ left: 0, width: 30, height: 20, top: 1500 - scroller.scrollTop });
+      docListeners['wheel'].forEach((fn) => fn());
+      for (let i = 0; i < 10 && frames.length; i++) frames.shift()!();
+      assert.strictEqual(scroller.scrollTop, settled, 'a pending correction must not yank the view after the reader scrolled');
+    } finally {
+      FakeRange.rectFn = () => ({ top: 0, left: 0, width: 0, height: 0 });
+    }
+  });
+
+  it('keeps correcting after the first settle, because layout can shift again a few frames later', () => {
+    const body = makeFakeElement('body');
+    const root = body.appendChild(makeFakeElement('div'));
+    root.id = 'dita-content-root';
+    const scroller = Object.assign(root, {
+      scrollTop: 0,
+      scrollHeight: 5000,
+      clientHeight: 700,
+      getBoundingClientRect: () => ({ top: 0, left: 0, width: 900, height: 700 }),
+    });
+    const p = root.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('cat'));
+    let shift = 0;
+    FakeRange.rectFn = () => ({ left: 0, width: 30, height: 20, top: 1000 + shift - scroller.scrollTop });
+    const frames: Array<() => void> = [];
+    const { elements } = runOverlay(body, {
+      requestAnimationFrame: (cb: () => void) => { frames.push(cb); return frames.length; },
+      getComputedStyle: (el: FakeElement) => ({ overflowY: el === root ? 'auto' : 'visible' }),
+    });
+    try {
+      runSearch(elements, 'cat');
+      frames.shift()!(); frames.shift()!(); // settled, then...
+      shift = 170; // ...content-visibility entries finish rendering and push the match down
+      for (let i = 0; i < 10 && frames.length; i++) frames.shift()!();
+      const centre = FakeRange.rectFn().top + 10;
+      assert.ok(Math.abs(centre - 350) <= 4, `expected the late shift to be corrected, centre is at ${centre}`);
+    } finally {
+      FakeRange.rectFn = () => ({ top: 0, left: 0, width: 0, height: 0 });
+    }
+  });
+
+  it('does not match text inside content that is not rendered (display:none, e.g. profile-filtered-out), which has no box to highlight or scroll to', () => {
+    const body = makeFakeElement('body');
+    const shown = body.appendChild(makeFakeElement('p'));
+    shown.appendChild(makeFakeText('cat here'));
+    const hidden = body.appendChild(makeFakeElement('p'));
+    hidden.checkVisibility = () => false;
+    hidden.appendChild(makeFakeText('cat hidden'));
+
+    const { elements, highlights } = runOverlay(body);
+    runSearch(elements, 'cat');
+
+    assert.strictEqual(highlights.get('dita-search-all')!.items.size, 1, 'only the rendered match counts');
+    assert.strictEqual(elements.find((e) => e.textContent === '1/1') !== undefined, true, 'and the counter agrees');
+  });
+
+  describe('re-running the search after the DOM changed underneath it', () => {
+    function setup(text: string) {
+      const body = makeFakeElement('body');
+      const p = body.appendChild(makeFakeElement('p'));
+      const node = makeFakeText(text);
+      p.appendChild(node);
+      const env = runOverlay(body);
+      const counter = () => env.elements.find((e) => e.tagName === 'SPAN')!.textContent;
+      return { ...env, p, node, counter };
+    }
+
+    it('keeps the match the reader was on and does not scroll -- a live edit must not yank the preview back to the first match', () => {
+      const { elements, p, counter, open, refresh } = setup('cat cat cat');
+      runSearch(elements, 'cat');
+      findNextBtn(elements).listeners['click'][0]({});
+      assert.strictEqual(counter(), '2/3');
+      const scrolls = p.scrollIntoViewCalls.length;
+
+      open();
+      refresh();
+
+      assert.strictEqual(counter(), '2/3', 'still on the second match');
+      assert.strictEqual(p.scrollIntoViewCalls.length, scrolls, 'no scroll: the reader has not asked to go anywhere');
+    });
+
+    it('clamps to the last match when the edit removed matches at or after the current one', () => {
+      const { elements, node, counter, open, refresh } = setup('cat cat cat');
+      runSearch(elements, 'cat');
+      findNextBtn(elements).listeners['click'][0]({});
+      findNextBtn(elements).listeners['click'][0]({});
+      assert.strictEqual(counter(), '3/3');
+
+      node.textContent = 'cat';
+      open();
+      refresh();
+
+      assert.strictEqual(counter(), '1/1');
+    });
+
+    it('does nothing while the search bar is closed', () => {
+      const { elements, counter, refresh } = setup('cat cat');
+      runSearch(elements, 'cat');
+      findCloseBtn(elements).listeners['click'][0]({});
+      refresh();
+      assert.strictEqual(counter(), '');
+    });
+  });
+
+  it('caps the number of matches it tracks, and says the count is a floor', () => {
+    const body = makeFakeElement('body');
+    // findTextMatches already stops at 1000 per text node, so it takes several nodes to reach the overall cap.
+    for (let i = 0; i < 6; i++) body.appendChild(makeFakeElement('p')).appendChild(makeFakeText('a'.repeat(1000)));
+    const { elements, highlights } = runOverlay(body);
+    runSearch(elements, 'a');
+    assert.strictEqual(highlights.get('dita-search-all')!.items.size, 5000);
+    assert.ok(elements.some((e) => e.textContent === '1/5000+'), 'the counter must not claim 5000 is the total');
+  });
+
+  it('re-runs the page search when a profiling-filter checkbox changes what is displayed', () => {
+    const script = getProfilingFilterScript({ buttonLabel: 'Filter', buttonTitle: 'Filter', closeLabel: 'Close', emptyLabel: 'None' });
+    assert.ok(
+      /addEventListener\('change'[\s\S]{0,300}pfApplyFilter\(\);[\s\S]{0,250}refreshSearchAfterDomChange/.test(script),
+      'the checkbox change handler must refresh the page search after pfApplyFilter: hidden/shown content changes the match set',
+    );
+  });
+
+  it('does not scroll toward a match that has no layout box (hidden content reports an all-zero rect)', () => {
+    const body = makeFakeElement('body');
+    const root = body.appendChild(makeFakeElement('div'));
+    root.id = 'dita-content-root';
+    const scroller = Object.assign(root, {
+      scrollTop: 500,
+      scrollHeight: 5000,
+      clientHeight: 700,
+      getBoundingClientRect: () => ({ top: 0, left: 0, width: 900, height: 700 }),
+    });
+    const p = root.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('cat'));
+    const frames: Array<() => void> = [];
+    const { elements } = runOverlay(body, {
+      requestAnimationFrame: (cb: () => void) => { frames.push(cb); return frames.length; },
+      getComputedStyle: (el: FakeElement) => ({ overflowY: el === root ? 'auto' : 'visible' }),
+    });
+    runSearch(elements, 'cat');
+    for (let i = 0; i < 10 && frames.length; i++) frames.shift()!();
+    assert.strictEqual(scroller.scrollTop, 500, 'a zero rect means "not laid out", not "at the top of the scroller"');
+  });
+
+  it('clears both highlight registries when the search bar is closed', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('dog dog'));
+
+    const { highlights, elements } = runOverlay(body);
+    runSearch(elements, 'dog');
+    assert.strictEqual(highlights.get('dita-search-all')!.items.size, 2);
+    assert.strictEqual(highlights.get('dita-search-current')!.items.size, 1);
+
+    findCloseBtn(elements).listeners['click'][0]({});
+
+    assert.strictEqual(highlights.get('dita-search-all')!.items.size, 0);
+    assert.strictEqual(highlights.get('dita-search-current')!.items.size, 0);
+  });
+
+  it('does not create highlight ranges inside the .site-nav sidebar', () => {
+    const body = makeFakeElement('body');
+    const nav = body.appendChild(makeFakeElement('div'));
+    nav.classList.add('site-nav');
+    nav.appendChild(makeFakeText('quick reference'));
+    const p = body.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('a quick fox'));
+
+    const { highlights, elements } = runOverlay(body);
+    runSearch(elements, 'quick');
+
+    assert.strictEqual(
+      highlights.get('dita-search-all')!.items.size,
+      1,
+      'expected the sidebar\'s own "quick" text to be excluded from search matches',
+    );
+  });
+
+  // ── Matches that cross inline element boundaries (F1) ──
+  // Whether two adjacent pieces of text read as one string is decided by the
+  // page's own layout: an element whose computed display is 'inline' (or
+  // 'contents') flows into its neighbours; anything else is a boundary. The
+  // fake getComputedStyle below stands in for that, keyed by tag.
+  const INLINE_TAGS = new Set(['STRONG', 'EM', 'SPAN', 'CODE', 'A']);
+  const layoutExtras = {
+    getComputedStyle: (el: FakeElement) => ({
+      display: INLINE_TAGS.has(el.tagName) ? 'inline' : 'block',
+      overflowY: 'visible',
+    }),
+  };
+  function ranges(highlights: Map<string, FakeHighlight>): FakeRange[] {
+    return Array.from(highlights.get('dita-search-all')!.items);
+  }
+  function counter(elements: FakeElement[]): string {
+    return elements.find((e) => e.tagName === 'SPAN')!.textContent;
+  }
+
+  it('matches a term that spans an inline element boundary as ONE range from the first text node to the last', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    const before = p.appendChild(makeFakeText('Click '));
+    const strong = p.appendChild(makeFakeElement('strong'));
+    strong.appendChild(makeFakeText('OK'));
+    const after = p.appendChild(makeFakeText(' now'));
+
+    const { highlights, elements } = runOverlay(body, layoutExtras);
+    runSearch(elements, 'Click OK now');
+
+    const rs = ranges(highlights);
+    assert.strictEqual(rs.length, 1);
+    assert.strictEqual(rs[0].toString(), 'Click OK now');
+    assert.strictEqual(rs[0].startNode, before);
+    assert.strictEqual(rs[0].startOffset, 0);
+    assert.strictEqual(rs[0].endNode, after);
+    assert.strictEqual(rs[0].endOffset, 4);
+    assert.strictEqual(counter(elements), '1/1');
+  });
+
+  it('works for CJK text with an inline element in the middle (no whitespace to lean on)', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('点击'));
+    p.appendChild(makeFakeElement('strong')).appendChild(makeFakeText('确定'));
+    p.appendChild(makeFakeText('按钮'));
+
+    const { highlights, elements } = runOverlay(body, layoutExtras);
+    runSearch(elements, '击确定按');
+
+    assert.deepStrictEqual(ranges(highlights).map((r) => r.toString()), ['击确定按']);
+  });
+
+  it('maps several matches in one run to the right nodes, including one that straddles a boundary', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('bar and ba'));
+    p.appendChild(makeFakeElement('em')).appendChild(makeFakeText('r'));
+    p.appendChild(makeFakeText(' and bar'));
+
+    const { highlights, elements } = runOverlay(body, layoutExtras);
+    runSearch(elements, 'bar');
+
+    assert.deepStrictEqual(ranges(highlights).map((r) => r.toString()), ['bar', 'bar', 'bar']);
+    assert.strictEqual(counter(elements), '1/3');
+  });
+
+  it('ends a match at the end of its own text node instead of starting an empty range in the next one', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    const first = p.appendChild(makeFakeText('ab'));
+    p.appendChild(makeFakeElement('strong')).appendChild(makeFakeText('cd'));
+
+    const { highlights, elements } = runOverlay(body, layoutExtras);
+    runSearch(elements, 'ab');
+
+    const [r] = ranges(highlights);
+    assert.strictEqual(r.endNode, first);
+    assert.strictEqual(r.endOffset, 2);
+  });
+
+  it('never matches across a block boundary: \"Hello</p><p>World\" does not contain \"oW\"', () => {
+    const body = makeFakeElement('body');
+    body.appendChild(makeFakeElement('p')).appendChild(makeFakeText('Hello'));
+    body.appendChild(makeFakeElement('p')).appendChild(makeFakeText('World'));
+
+    const { highlights, elements } = runOverlay(body, layoutExtras);
+    runSearch(elements, 'oW');
+
+    assert.strictEqual(ranges(highlights).length, 0);
+    assert.strictEqual(counter(elements), '0/0');
+  });
+
+  it('a block child splits its parent\'s text: \"A<p>B</p>C\" does not contain \"AC\" or \"AB\"', () => {
+    const body = makeFakeElement('body');
+    const li = body.appendChild(makeFakeElement('li'));
+    li.appendChild(makeFakeText('A'));
+    li.appendChild(makeFakeElement('p')).appendChild(makeFakeText('B'));
+    li.appendChild(makeFakeText('C'));
+
+    const { highlights, elements } = runOverlay(body, layoutExtras);
+    for (const term of ['AC', 'AB', 'BC']) {
+      runSearch(elements, term);
+      assert.strictEqual(ranges(highlights).length, 0, `\"${term}\" must not match across the block boundary`);
+    }
+    runSearch(elements, 'B');
+    assert.strictEqual(ranges(highlights).length, 1);
+  });
+
+  it('a line break is a boundary even though <br> is display:inline', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('one'));
+    p.appendChild(makeFakeElement('br'));
+    p.appendChild(makeFakeText('two'));
+    const { highlights, elements } = runOverlay(body, {
+      getComputedStyle: () => ({ display: 'inline', overflowY: 'visible' }),
+    });
+    runSearch(elements, 'onetwo');
+    assert.strictEqual(ranges(highlights).length, 0);
+  });
+
+  it('text around a hidden inline element reads as one string, while the hidden text itself stays unsearchable', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('foo'));
+    const hidden = p.appendChild(makeFakeElement('span'));
+    hidden.checkVisibility = () => false;
+    hidden.appendChild(makeFakeText('XYZ'));
+    p.appendChild(makeFakeText('bar'));
+
+    const { highlights, elements } = runOverlay(body, layoutExtras);
+    runSearch(elements, 'XYZ');
+    assert.strictEqual(ranges(highlights).length, 0, 'hidden text stays unsearchable');
+    runSearch(elements, 'foobar');
+    assert.strictEqual(ranges(highlights).length, 1, 'display:none removes it from the flow, so the text around it reads as one string');
+  });
+
+  it('without layout information every element is a boundary, i.e. matching stays per text node', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeText('Click '));
+    p.appendChild(makeFakeElement('strong')).appendChild(makeFakeText('OK'));
+
+    const { highlights, elements } = runOverlay(body);
+    runSearch(elements, 'Click OK');
+    assert.strictEqual(ranges(highlights).length, 0);
+    runSearch(elements, 'OK');
+    assert.strictEqual(ranges(highlights).length, 1);
+  });
+
+  it('whitespace between inline siblings is part of the string, whitespace-only blocks are not searchable', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    p.appendChild(makeFakeElement('code')).appendChild(makeFakeText('a'));
+    p.appendChild(makeFakeText(' '));
+    p.appendChild(makeFakeElement('code')).appendChild(makeFakeText('b'));
+    body.appendChild(makeFakeElement('div')).appendChild(makeFakeText('   '));
+
+    const { highlights, elements } = runOverlay(body, layoutExtras);
+    runSearch(elements, 'a b');
+    assert.deepStrictEqual(ranges(highlights).map((r) => r.toString()), ['a b']);
+    runSearch(elements, '   ');
+    assert.strictEqual(ranges(highlights).length, 0, 'an indentation-only block was never searchable and still is not');
+  });
+
+  // ── Whitespace the browser collapses (F1 follow-up) ──
+  // Source indentation ("Click\n    <b>OK</b>") renders as one space, and the
+  // full-book index collapses it too, so a term typed with single spaces has
+  // to find it. Ranges keep pointing at the RAW text.
+  it('finds a term across a newline+indent inside one text node and ranges over the raw characters', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    const t = p.appendChild(makeFakeText('Click\n      OK now'));
+
+    const { highlights, elements } = runOverlay(body, layoutExtras);
+    runSearch(elements, 'Click OK');
+
+    const [r] = ranges(highlights);
+    assert.strictEqual(ranges(highlights).length, 1);
+    assert.strictEqual(r.startNode, t);
+    assert.strictEqual(r.startOffset, 0);
+    assert.strictEqual(r.endOffset, 'Click\n      OK'.length);
+  });
+
+  it('collapses whitespace that spans a node boundary into a single space', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    const before = p.appendChild(makeFakeText('Click\n'));
+    const strong = p.appendChild(makeFakeElement('strong'));
+    const inner = strong.appendChild(makeFakeText('   OK'));
+
+    const { highlights, elements } = runOverlay(body, layoutExtras);
+    runSearch(elements, 'Click OK');
+
+    const [r] = ranges(highlights);
+    assert.strictEqual(ranges(highlights).length, 1);
+    assert.strictEqual(r.startNode, before);
+    assert.strictEqual(r.startOffset, 0);
+    assert.strictEqual(r.endNode, inner);
+    assert.strictEqual(r.endOffset, '   OK'.length);
+  });
+
+  it('a match that starts right after leading whitespace starts at the first visible character', () => {
+    const body = makeFakeElement('body');
+    const p = body.appendChild(makeFakeElement('p'));
+    const t = p.appendChild(makeFakeText('\n     Hello'));
+
+    const { highlights, elements } = runOverlay(body, layoutExtras);
+    runSearch(elements, 'Hello');
+
+    const [r] = ranges(highlights);
+    assert.strictEqual(r.startNode, t);
+    assert.strictEqual(r.startOffset, 6);
+    assert.strictEqual(r.endOffset, 11);
+  });
+
+  it('does not collapse inside white-space:pre, where every space is real', () => {
+    const body = makeFakeElement('body');
+    body.appendChild(makeFakeElement('pre')).appendChild(makeFakeText('a  b'));
+    const { highlights, elements } = runOverlay(body, {
+      getComputedStyle: (el: FakeElement) => ({
+        display: el.tagName === 'PRE' ? 'block' : 'block',
+        whiteSpace: el.tagName === 'PRE' ? 'pre' : 'normal',
+        overflowY: 'visible',
+      }),
+    });
+    runSearch(elements, 'a  b');
+    assert.strictEqual(ranges(highlights).length, 1);
+    runSearch(elements, 'a b');
+    assert.strictEqual(ranges(highlights).length, 0);
+  });
+
+  it('still excludes the toolbar and search bar when they sit between inline content', () => {
+    const body = makeFakeElement('body');
+    const bar = body.appendChild(makeFakeElement('div'));
+    bar.id = '__toolbar';
+    bar.appendChild(makeFakeText('quick toolbar'));
+    body.appendChild(makeFakeElement('p')).appendChild(makeFakeText('a quick fox'));
+
+    const { highlights, elements } = runOverlay(body, layoutExtras);
+    runSearch(elements, 'quick');
+    assert.strictEqual(ranges(highlights).length, 1);
   });
 });
 
@@ -1424,6 +2128,45 @@ describe('toolbar scaffold/font-prefs/font-width-tag-tooltips scripts (a3\' extr
 
   it('getToolbarScaffoldScript emits a script that parses as JavaScript', () => {
     assert.doesNotThrow(() => new Function(getToolbarScaffoldScript({ previewToolbar: 'Preview toolbar' })));
+  });
+
+  it('gives every toolbar button and dropdown the same fixed, border-box height', () => {
+    // Root cause of the reported unevenness: btnStyle used line-height:1
+    // with no explicit height, so a button's rendered height tracked
+    // whatever font-size it happened to carry -- historically several
+    // different ones (11/12/13/14px), before the compact pass unified every
+    // control on the scaffold's single 11px. Pinning the box height directly,
+    // via box-sizing:border-box, keeps every button's box the same even if a
+    // button ever does grow its own font-size again.
+    const script = getToolbarScaffoldScript({ previewToolbar: 'Preview toolbar' });
+    const btnStyleMatch = /var btnStyle = '([^']*)'/.exec(script);
+    const ddStyleMatch = /var ddStyle = '([^']*)'/.exec(script);
+    assert.ok(btnStyleMatch, 'expected to find the btnStyle declaration');
+    assert.ok(ddStyleMatch, 'expected to find the ddStyle declaration');
+    const btnStyle = btnStyleMatch![1];
+    const ddStyle = ddStyleMatch![1];
+
+    const heightOf = (style: string) => /height:(\d+px)/.exec(style)?.[1];
+    assert.ok(btnStyle.includes('box-sizing:border-box'), 'btnStyle should fix its own box height regardless of padding/font-size');
+    assert.ok(ddStyle.includes('box-sizing:border-box'), 'ddStyle should fix its own box height regardless of padding/font-size');
+    assert.ok(heightOf(btnStyle), 'btnStyle should set an explicit height');
+    assert.strictEqual(
+      heightOf(btnStyle),
+      heightOf(ddStyle),
+      'buttons and dropdowns (select elements) should share the exact same height so the toolbar reads as one even row',
+    );
+  });
+
+  it('strips native <select> chrome from the dropdown style so its box height actually matches a button\'s', () => {
+    // box-sizing/height alone don't reach a <select>'s own UA styling (the
+    // built-in chevron and its reserved padding) in every browser -- without
+    // appearance:none, the two dropdowns (theme CSS, page width) can still
+    // render taller than a same-height button even with identical CSS height.
+    const script = getToolbarScaffoldScript({ previewToolbar: 'Preview toolbar' });
+    const ddStyleMatch = /var ddStyle = '([^']*)'/.exec(script);
+    assert.ok(ddStyleMatch, 'expected to find the ddStyle declaration');
+    const ddStyle = ddStyleMatch![1];
+    assert.ok(ddStyle.includes('appearance:none'), 'expected ddStyle to neutralize the select\'s native appearance');
   });
 
   it('getFontPrefsScript emits a script that parses as JavaScript', () => {
@@ -1444,6 +2187,7 @@ describe('toolbar scaffold/font-prefs/font-width-tag-tooltips scripts (a3\' extr
     widthWide: 'Wide',
     widthDesktop: 'Desktop',
     widthNarrow: 'Narrow',
+    widthTooNarrow: 'Window too narrow at "{0}" width.',
     pageWidth: 'Page width',
     setWidthSelectionMsgType: 'setWidthSelection',
     tagTooltipsLabel: 'Tags',
@@ -1479,6 +2223,57 @@ describe('toolbar scaffold/font-prefs/font-width-tag-tooltips scripts (a3\' extr
     const bold = getToolbarFontWidthTagTooltipsButtonsScript({ ...buttonsOpts, fontSizeButtonExtraStyle: 'font-weight:bold;' });
     assert.ok(bold.includes("fsDown.style.cssText = btnStyle + 'font-weight:bold;';"));
     assert.ok(bold.includes("fsUp.style.cssText = btnStyle + 'font-weight:bold;';"));
+  });
+
+  it('puts one shared 11px font-size on every toolbar control -- no per-button overrides', () => {
+    // The compact toolbar: tbStyle/btnStyle/ddStyle all carry 11px and every
+    // button script assigns plain btnStyle (or btnStyle plus layout-only
+    // extras like justify-content), so the row reads as one toolbar rather
+    // than several sizes stitched together (A−/A+ used to be 13px, the
+    // ☰ sidebar toggle 14px, fontReset 12px, everything else 11px).
+    // A reintroduced `btnStyle + 'font-size:...'` override anywhere below is
+    // exactly the drift this tripwire exists to catch. getRefreshButtonScript
+    // is in this list because it was extracted out of the providers
+    // precisely to be here: the providers need the `vscode` module, so this
+    // file cannot import them and would otherwise never see their buttons
+    // drift. getSiteHomeButtonScript belongs here for the same reason it is
+    // written like the other nav buttons: it shares SITE_NAV_BTN_STYLE, so a
+    // font-size smuggled into that constant or the home button would ship
+    // past this file otherwise.
+    const scaffold = getToolbarScaffoldScript({ previewToolbar: 'Preview toolbar' });
+    for (const decl of ['tbStyle', 'btnStyle', 'ddStyle']) {
+      const style = new RegExp("var " + decl + " = '([^']*)'").exec(scaffold)![1];
+      assert.ok(/(?:^|;)font-size:11px/.test(style), decl + ' should carry the shared 11px font-size: ' + style);
+    }
+    const scripts = [
+      getToolbarFontWidthTagTooltipsButtonsScript({ ...buttonsOpts, includeFontReset: true, resetFont: 'Reset font' }),
+      getSiteSidebarToggleScript({ toggleTitle: 'T' }),
+      getModeToggleScript({ switchModeTitle: 'T', modeOutline: 'O', modeBook: 'B', modeSite: 'S', switchModeMsgType: 'switchMode', switchingLabel: 'Switching…' }),
+      getSiteOpenSourceScript({ openSourceMsgType: 'm', navContextMsgType: 'nav', menuLabel: 'M', openMapLabel: 'OM', oxygenLabel: 'OX', revealLabel: 'RV', findUnreferencedLabel: 'FU', exportLabel: 'EX', copyTitleLabel: 'CT', copyHrefLabel: 'CH', expandAllLabel: 'EA', collapseAllLabel: 'CA', buttonLabel: 'B', buttonTitle: 'T' }),
+      getProfilingFilterScript({ buttonLabel: 'F', buttonTitle: 'T', closeLabel: 'C', emptyLabel: 'E' }),
+      getSiteNavExpandCollapseAllButtonsScript({ expandAllTitle: 'E', collapseAllTitle: 'C' }),
+      getSiteHistoryButtonsScript({ backLabel: 'B', backTitle: 'B', forwardLabel: 'F', forwardTitle: 'F' }),
+      getSitePrevNextButtonsScript({ prevLabel: 'P', prevTitle: 'P', nextLabel: 'N', nextTitle: 'N' }),
+      getSiteHomeButtonScript({ title: 'H', switchSitePageMsgType: 'switchSitePage' }),
+      getRefreshButtonScript({ title: 'R' }),
+    ];
+    for (const script of scripts) {
+      assert.ok(!/btnStyle \+ 'font-size:/.test(script), 'no toolbar button should override the shared font-size');
+    }
+  });
+
+  it('builds the shared refresh button as plain btnStyle posting a refresh message', () => {
+    // One script for both previews (each provider appendChilds it last on
+    // its bar), so a regression here lands on two toolbars at once. Plain
+    // btnStyle: the shared 11px is the whole compact-toolbar point. The
+    // tripwire above only sees what this file can import -- this assertion
+    // pins the emitted text itself.
+    const script = getRefreshButtonScript({ title: 'Reload DITA content' });
+    assert.ok(script.includes('refreshBtn.title = "Reload DITA content";'));
+    assert.ok(script.includes('refreshBtn.setAttribute(\'aria-label\', "Reload DITA content");'));
+    assert.ok(script.includes('refreshBtn.style.cssText = btnStyle;'), 'plain btnStyle, no font-size/padding override');
+    assert.ok(script.includes("vscode.postMessage({ type: 'refresh' })"));
+    assert.doesNotThrow(() => new Function('document', 'btnStyle', 'vscode', script));
   });
 
   it('applies the page-width selection as the --max-width custom property (not just body.style.maxWidth), so it also reaches #dita-content-root.site-main in docsite mode -- body.style.maxWidth alone only ever affected the outer flex row body becomes in site mode, which site mode\'s own CSS already resets to none, making every width selection a no-op there', () => {
@@ -1529,8 +2324,73 @@ describe('toolbar scaffold/font-prefs/font-width-tag-tooltips scripts (a3\' extr
     (fakeDocument as unknown as { body: { style: typeof bodyStyle } }).body = { style: bodyStyle };
     applyWidth('1400px');
     assert.deepStrictEqual(setProps, [['--max-width', '1400px']], 'expected the CSS custom property to be set, not just body.style.maxWidth');
+    // Kill-test for the toolbar-jump bug: book/site mode's CSS resets body
+    // itself to max-width:none/margin:0 so the top bar and shell frame span
+    // the full window; an inline body.style.maxWidth/margin write here would
+    // override that class-based reset (inline always wins) and visibly
+    // shrink/re-center body -- and the top bar riding on it -- on every
+    // width change. Only the custom property may move; body's own inline
+    // style must stay exactly as it started.
+    assert.strictEqual(bodyStyle.maxWidth, '', 'body.style.maxWidth must be left untouched -- book/site mode CSS depends on it staying unset');
+    assert.strictEqual(bodyStyle.margin, '', 'body.style.margin must be left untouched -- book/site mode CSS depends on it staying unset');
     applyWidth('');
     assert.deepStrictEqual(removedProps, ['--max-width'], 'expected the property to be cleared (falling back to :root\'s default), not set to an empty/invalid value');
+    assert.strictEqual(bodyStyle.maxWidth, '', 'body.style.maxWidth must stay untouched after clearing the selection too');
+    assert.strictEqual(bodyStyle.margin, '', 'body.style.margin must stay untouched after clearing the selection too');
+  });
+
+  it('warns via toast when the selected width is not narrower than the current window -- otherwise every option renders identically to Auto/Full and looks like nothing happened', () => {
+    const script = getToolbarFontWidthTagTooltipsButtonsScript(buttonsOpts);
+    const toasts: Array<{ text: string; opts: { top?: boolean; duration?: number } | undefined }> = [];
+    let changeHandler: (() => void) | undefined;
+    const fakeSelect = {
+      style: {},
+      value: '',
+      options: [] as Array<{ textContent: string }>,
+      selectedIndex: 0,
+      setAttribute: () => {},
+      appendChild: (opt: { textContent: string }) => { fakeSelect.options.push(opt); },
+      addEventListener: (_evt: string, handler: () => void) => { changeHandler = handler; },
+    };
+    const fakeOption = { value: '', textContent: '', selected: false };
+    const fakeDocument = {
+      createElement: (tag: string) => {
+        if (tag === 'select') return fakeSelect;
+        if (tag === 'option') return { ...fakeOption };
+        return { style: {}, setAttribute: () => {}, addEventListener: () => {} };
+      },
+      getElementById: () => null,
+      documentElement: { clientWidth: 600 },
+      body: { style: { setProperty: () => {}, removeProperty: () => {} } },
+    };
+    const fontPrefsStub = 'var fontSize = 100; var isSerif = false; var SERIF_STACK = "serif";';
+    const imageToastStub = 'function showCenteredToast(text, opts) { window.__toasts.push({ text: text, opts: opts }); }';
+    const vscodeStub = { postMessage: () => {} };
+    new Function(
+      'document', 'btnStyle', 'ddStyle', 'window', 'vscode',
+      fontPrefsStub + imageToastStub + script,
+    )(fakeDocument, '', '', { __fontPrefs: undefined, __widthSelection: undefined, __tagTooltips: undefined, __toasts: toasts }, vscodeStub);
+    // Simulate selecting "1400px" (Wide) while the window is 600px wide --
+    // narrower than every fixed option, so the change can't be seen.
+    const wideOption = fakeSelect.options.find((o) => o.textContent === 'Wide')!;
+    fakeSelect.value = '1400px';
+    fakeSelect.selectedIndex = fakeSelect.options.indexOf(wideOption);
+    changeHandler!();
+    assert.strictEqual(toasts.length, 1, 'expected exactly one toast for a selection with no visible effect');
+    assert.ok(toasts[0].text.includes('Wide'), 'toast should name the option the user picked');
+    // Shown near the width dropdown (top: true) rather than the
+    // image-copy toast's default bottom placement, and long enough on
+    // screen to actually read a full sentence, not the 1200ms tuned for a
+    // short "Copied" pill.
+    assert.strictEqual(toasts[0].opts?.top, true, 'should be placed near the top, where the width dropdown itself is');
+    assert.ok((toasts[0].opts?.duration ?? 0) >= 3500, 'should stay up long enough to actually read the message, not the short default toast duration');
+    // Selecting "Auto" (no numeric px) never warns -- there's no fixed
+    // width to compare the window against.
+    toasts.length = 0;
+    fakeSelect.value = '';
+    fakeSelect.selectedIndex = fakeSelect.options.findIndex((o) => o.textContent === 'Auto');
+    changeHandler!();
+    assert.strictEqual(toasts.length, 0, 'Auto has no fixed width to be "too narrow" for');
   });
 
   it('does not append any of its buttons to a toolbar itself -- ordering stays with the caller', () => {
@@ -1543,6 +2403,10 @@ describe('toolbar scaffold/font-prefs/font-width-tag-tooltips scripts (a3\' extr
 });
 
 describe('getSiteNavClickHandlerScript (docsite mode)', () => {
+  // The script registers its arrow-key page turning on the window (which a key
+  // reaches after every document-level handler); nothing here needs it to fire.
+  const fakeWindow = { addEventListener: () => {} };
+
   it('emits a script that parses as JavaScript', () => {
     assert.doesNotThrow(() => new Function(getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' })));
   });
@@ -1559,13 +2423,58 @@ describe('getSiteNavClickHandlerScript (docsite mode)', () => {
     // without erroring on document.getElementById returning null for
     // buttons that were never appended there.
     const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
-    const fn = new Function('document', 'vscode', script + '; return typeof updatePrevNextButtons;');
+    const fn = new Function('document', 'window', 'vscode', script + '; return typeof updatePrevNextButtons;');
     const fakeDocument = {
       getElementById: () => null,
       querySelectorAll: () => [],
+      // The deferred init looks for the active link to seed the history from.
+      querySelector: () => null,
       addEventListener: () => {},
     };
-    assert.doesNotThrow(() => fn(fakeDocument, { postMessage: () => {} }));
+    assert.doesNotThrow(() => fn(fakeDocument, fakeWindow, { postMessage: () => {} }));
+  });
+
+  it('does not try to wire up prev/next buttons until they actually exist in the DOM (deferred to next tick)', () => {
+    // Regression test for a reported bug: MapViewerProvider.ts injects
+    // getSiteNavClickHandlerScript (which is what calls
+    // updatePrevNextButtons() to establish initial state) *before*
+    // getSitePrevNextButtonsScript creates the prev/next buttons and before
+    // the toolbar containing them is appended to the page. Calling
+    // updatePrevNextButtons() synchronously at that point, as it used to,
+    // ran while document.getElementById('__site-prev-btn') still returned
+    // null -- a silent no-op (see the test above) -- so the buttons were
+    // left with no onclick handler at all until the first manual sidebar
+    // click called updatePrevNextButtons() again, by which point the
+    // buttons did exist. Reported symptom: prev/next do nothing until you
+    // switch topics once by hand.
+    //
+    // Deferring the initial call to a macrotask means it always runs after
+    // the rest of the synchronous page-load script (wherever the buttons
+    // get created) has finished, regardless of which order the two scripts
+    // happen to be textually assembled in -- so this is simulated here by
+    // running the script against a document where the buttons genuinely
+    // don't exist yet, then only creating them before letting the deferred
+    // callback fire, the same way the real page-load script creates them
+    // later than this one runs.
+    const timers: Array<() => void> = [];
+    const fakeSetTimeout = (fn: () => void) => { timers.push(fn); return 0; };
+    const bTopic = makeFakeElement({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/book/b.dita' } });
+    const aTopic = makeFakeElement({ classes: ['site-nav-link', 'active'], attrs: { 'data-site-target': '/book/a.dita' } });
+    const elementsById: Record<string, { scrollIntoView?: () => void; disabled?: boolean; onclick?: (() => void) | null }> = {};
+    const { document } = makeFakeSiteDocument([aTopic, bTopic], elementsById);
+
+    const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
+    new Function('document', 'window', 'vscode', 'setTimeout', script)(document, fakeWindow, { postMessage: () => {} }, fakeSetTimeout);
+
+    assert.strictEqual(timers.length, 1, 'expected the initial updatePrevNextButtons() call to be deferred exactly once');
+
+    const nextBtn = { disabled: true, onclick: null as (() => void) | null };
+    elementsById['__site-next-btn'] = nextBtn;
+
+    timers[0]();
+
+    assert.strictEqual(nextBtn.disabled, false, 'expected next to be enabled once the buttons exist when the deferred call actually runs');
+    assert.strictEqual(typeof nextBtn.onclick, 'function', 'expected next to have a click handler wired up on the very first load, not only after a manual sidebar click');
   });
 
   // --- book-internal cross-topic xref clicks (docsite design doc, 3.2/4.5) ---
@@ -1598,7 +2507,7 @@ describe('getSiteNavClickHandlerScript (docsite mode)', () => {
     return el;
   }
 
-  function makeFakeSiteDocument(navLinks: ReturnType<typeof makeFakeElement>[], elementsById: Record<string, { scrollIntoView: () => void }>) {
+  function makeFakeSiteDocument(navLinks: ReturnType<typeof makeFakeElement>[], elementsById: Record<string, { scrollIntoView?: () => void; disabled?: boolean; onclick?: (() => void) | null }>) {
     const listeners: Record<string, Array<(e: unknown) => void>> = {};
     const document = {
       addEventListener: (evt: string, fn: (e: unknown) => void) => {
@@ -1623,7 +2532,7 @@ describe('getSiteNavClickHandlerScript (docsite mode)', () => {
     const aTopic = makeFakeElement({ classes: ['site-nav-link', 'active'], attrs: { 'data-site-target': '/book/a.dita' } });
     const { document, click } = makeFakeSiteDocument([aTopic, bTopic], {});
     const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
-    new Function('document', 'vscode', script)(document, { postMessage: (m: { type: string; target: string }) => posted.push(m) });
+    new Function('document', 'window', 'vscode', script)(document, fakeWindow, { postMessage: (m: { type: string; target: string }) => posted.push(m) });
 
     const xrefLink = makeFakeElement({ attrs: { 'data-dita-book-xref': '/book/b.dita#sec1' } });
     click(xrefLink);
@@ -1641,7 +2550,7 @@ describe('getSiteNavClickHandlerScript (docsite mode)', () => {
       'sec2': { scrollIntoView: () => scrolled.push('sec2') },
     });
     const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
-    new Function('document', 'vscode', script)(document, { postMessage: (m: unknown) => posted.push(m) });
+    new Function('document', 'window', 'vscode', script)(document, fakeWindow, { postMessage: (m: unknown) => posted.push(m) });
 
     const xrefLink = makeFakeElement({ attrs: { 'data-dita-book-xref': '/book/a.dita#sec2' } });
     click(xrefLink);
@@ -1654,7 +2563,7 @@ describe('getSiteNavClickHandlerScript (docsite mode)', () => {
     const posted: unknown[] = [];
     const { document, click } = makeFakeSiteDocument([], {});
     const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
-    new Function('document', 'vscode', script)(document, { postMessage: (m: unknown) => posted.push(m) });
+    new Function('document', 'window', 'vscode', script)(document, fakeWindow, { postMessage: (m: unknown) => posted.push(m) });
 
     const xrefLink = makeFakeElement({ attrs: { 'data-dita-book-xref': '/book/nowhere.dita' } });
     assert.doesNotThrow(() => click(xrefLink));
@@ -1669,18 +2578,743 @@ describe('getSiteNavClickHandlerScript (docsite mode)', () => {
       '': { scrollIntoView: () => scrolled.push('') },
     });
     const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
-    new Function('document', 'vscode', script)(document, { postMessage: () => {} });
+    new Function('document', 'window', 'vscode', script)(document, fakeWindow, { postMessage: () => {} });
 
     const xrefLink = makeFakeElement({ attrs: { 'data-dita-book-xref': '/book/b.dita' } });
     click(xrefLink);
 
     assert.strictEqual(bTopic.classList.contains('active'), true);
   });
+
+  // --- revealing the newly-active row inside collapsed branches ---
+  interface NavNode {
+    parentElement: NavNode | null;
+    classList: { contains: (c: string) => boolean; add: (c: string) => void; remove: (c: string) => void };
+    getAttribute: (n: string) => string | null;
+    setAttribute: (n: string, v: string) => void;
+    querySelector: (s: string) => unknown;
+    closest: (s: string) => unknown;
+    scrollIntoViewCalls: Array<Record<string, unknown> | undefined>;
+    scrollIntoView: (o?: Record<string, unknown>) => void;
+  }
+  function makeNavNode(classes: string[], attrs: Record<string, string> = {}, parent: NavNode | null = null): NavNode {
+    const cls = new Set(classes);
+    const at: Record<string, string> = { ...attrs };
+    const node: NavNode = {
+      parentElement: parent,
+      classList: { contains: (c) => cls.has(c), add: (c) => cls.add(c), remove: (c) => cls.delete(c) },
+      getAttribute: (n) => (n in at ? at[n] : null),
+      setAttribute: (n, v) => { at[n] = v; },
+      querySelector: () => null,
+      closest(sel: string): unknown {
+        const need = sel.split('.').filter(Boolean);
+        for (let el: NavNode | null = node; el; el = el.parentElement) if (need.every((c) => el!.classList.contains(c))) return el;
+        return null;
+      },
+      scrollIntoViewCalls: [],
+      scrollIntoView(o) { node.scrollIntoViewCalls.push(o); },
+    };
+    return node;
+  }
+
+  function buildCollapsedBranch() {
+    // Part(collapsed) > ul > Chapter(collapsed) > ul > leaf > <a>
+    const part = makeNavNode(['site-nav-item', 'has-children', 'collapsed']);
+    const partUl = makeNavNode(['site-nav-children'], {}, part);
+    const chapter = makeNavNode(['site-nav-item', 'has-children', 'collapsed'], {}, partUl);
+    const chapterUl = makeNavNode(['site-nav-children'], {}, chapter);
+    const leaf = makeNavNode(['site-nav-item'], {}, chapterUl);
+    const hidden = makeNavNode(['site-nav-link'], { 'data-site-target': '/book/deep.dita' }, leaf);
+    const visible = makeNavNode(['site-nav-link', 'active'], { 'data-site-target': '/book/top.dita' });
+    return { part, chapter, hidden, visible };
+  }
+
+  function runSiteScript(navLinks: NavNode[], posted: Array<{ type: string }>) {
+    const listeners: Array<(e: unknown) => void> = [];
+    const document = {
+      addEventListener: (evt: string, fn: (e: unknown) => void) => { if (evt === 'click') listeners.push(fn); },
+      querySelectorAll: (sel: string) => (sel === '.site-nav-link' ? navLinks : []),
+      querySelector: (sel: string) => (sel === '.site-nav-link.active' ? navLinks.find((l) => l.classList.contains('active')) ?? null : null),
+      getElementById: () => null,
+    };
+    // Same assembly as MapViewerProvider.ts: one scope, collapse helper alongside the click handler.
+    const script =
+      getSiteNavCollapseStateHelperScript({ reportCollapseMsgType: 'setNavCollapsed' }) +
+      getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
+    new Function('document', 'window', 'vscode', 'setTimeout', script)(document, fakeWindow, { postMessage: (m: { type: string }) => posted.push(m) }, () => 0);
+    return (target: unknown) => listeners.forEach((fn) => fn({ target, preventDefault: () => {} }));
+  }
+
+  it('expands every collapsed ancestor of the page switched to, so the active row is actually visible (prev/next and xref jumps walk into collapsed branches)', () => {
+    const { part, chapter, hidden, visible } = buildCollapsedBranch();
+    const click = runSiteScript([visible, hidden], []);
+    click(hidden);
+
+    assert.strictEqual(hidden.classList.contains('active'), true);
+    assert.strictEqual(chapter.classList.contains('collapsed'), false, 'the direct parent branch must open');
+    assert.strictEqual(part.classList.contains('collapsed'), false, 'and so must its own collapsed parent');
+    assert.strictEqual(chapter.getAttribute('aria-expanded'), 'true');
+  });
+
+  it('scrolls the sidebar just enough to bring the newly-active row into view', () => {
+    const { hidden, visible } = buildCollapsedBranch();
+    runSiteScript([visible, hidden], [])(hidden);
+    assert.strictEqual(hidden.scrollIntoViewCalls.length, 1);
+    assert.strictEqual(hidden.scrollIntoViewCalls[0]?.block, 'nearest', "'nearest' so an already-visible row does not jump");
+  });
+
+  it('does not persist the expansion: the reader only navigated, they did not choose to unfold those branches', () => {
+    const { hidden, visible } = buildCollapsedBranch();
+    const posted: Array<{ type: string }> = [];
+    runSiteScript([visible, hidden], posted)(hidden);
+    assert.deepStrictEqual(posted.map((m) => m.type), ['switchSitePage'], 'only the page switch is posted, no setNavCollapsed');
+  });
+});
+
+describe('getBookNavClickHandlerScript (book mode sidebar, nested-fold-and-highlight-plan.md item 1)', () => {
+  it('emits a script that parses as JavaScript', () => {
+    assert.doesNotThrow(() => new Function(getBookNavClickHandlerScript()));
+  });
+
+  // Book mode has no separate page-fetch to simulate (unlike
+  // getSiteNavClickHandlerScript's switchToSitePage) -- clicking a sidebar
+  // link should just find the matching [data-book-anchor] element already
+  // sitting in the DOM and scroll to it, so the fakes here model that
+  // directly rather than a page-switch postMessage.
+  function makeFakeElement(opts: { classes?: string[]; attrs?: Record<string, string> }) {
+    const classes = new Set(opts.classes || []);
+    const attrs = opts.attrs || {};
+    const el = {
+      classList: {
+        contains: (c: string) => classes.has(c),
+        add: (c: string) => classes.add(c),
+        remove: (c: string) => classes.delete(c),
+      },
+      getAttribute: (name: string) => (name in attrs ? attrs[name] : null),
+      closest(selector: string): unknown {
+        if (selector.startsWith('.')) return classes.has(selector.slice(1)) ? el : null;
+        return null;
+      },
+    };
+    return el;
+  }
+
+  function makeFakeAnchor(id: string, scrolled: string[]) {
+    return {
+      getAttribute: (name: string) => (name === 'data-book-anchor' ? id : null),
+      scrollIntoView: () => scrolled.push(id),
+    };
+  }
+
+  function makeFakeBookDocument(
+    navLinks: ReturnType<typeof makeFakeElement>[],
+    anchors: ReturnType<typeof makeFakeAnchor>[],
+  ) {
+    const listeners: Array<(e: unknown) => void> = [];
+    const document = {
+      addEventListener: (evt: string, fn: (e: unknown) => void) => {
+        if (evt === 'click') listeners.push(fn);
+      },
+      querySelectorAll: (sel: string) => (sel === '[data-book-anchor]' ? anchors : []),
+      querySelector: (sel: string) =>
+        sel === '.site-nav-link.active' ? navLinks.find((l) => l.classList.contains('active')) ?? null : null,
+    };
+    return {
+      document,
+      click(target: ReturnType<typeof makeFakeElement>) {
+        for (const fn of listeners) fn({ target, preventDefault: () => {} });
+      },
+    };
+  }
+
+  it('scrolls to the matching data-book-anchor element and marks the clicked link active', () => {
+    const scrolled: string[] = [];
+    const bLink = makeFakeElement({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/book/b.dita' } });
+    const aLink = makeFakeElement({ classes: ['site-nav-link', 'active'], attrs: { 'data-site-target': '/book/a.dita' } });
+    const bAnchor = makeFakeAnchor('/book/b.dita', scrolled);
+    const { document, click } = makeFakeBookDocument([aLink, bLink], [makeFakeAnchor('/book/a.dita', scrolled), bAnchor]);
+    const script = getBookNavClickHandlerScript();
+    new Function('document', script)(document);
+
+    click(bLink);
+
+    assert.deepStrictEqual(scrolled, ['/book/b.dita']);
+    assert.strictEqual(bLink.classList.contains('active'), true);
+    assert.strictEqual(aLink.classList.contains('active'), false, 'the previously active link loses it');
+  });
+
+  it('compares data-book-anchor by exact string value rather than building a CSS selector, so a Windows-style backslash path matches instead of throwing or silently mismatching', () => {
+    const scrolled: string[] = [];
+    const target = 'C:\\proj\\docs\\topics\\ch1.dita';
+    const link = makeFakeElement({ classes: ['site-nav-link'], attrs: { 'data-site-target': target } });
+    const anchor = makeFakeAnchor(target, scrolled);
+    const { document, click } = makeFakeBookDocument([link], [anchor]);
+    const script = getBookNavClickHandlerScript();
+    new Function('document', script)(document);
+
+    assert.doesNotThrow(() => click(link));
+    assert.deepStrictEqual(scrolled, [target]);
+  });
+
+  it('does nothing when the clicked link has no matching anchor in the DOM, rather than throwing', () => {
+    const link = makeFakeElement({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/book/missing.dita' } });
+    const { document, click } = makeFakeBookDocument([link], []);
+    const script = getBookNavClickHandlerScript();
+    new Function('document', script)(document);
+
+    assert.doesNotThrow(() => click(link));
+    assert.strictEqual(link.classList.contains('active'), false, 'no anchor found, so no state change either');
+  });
+
+  it('ignores a click outside .site-nav-link entirely', () => {
+    const scrolled: string[] = [];
+    const { document, click } = makeFakeBookDocument([], [makeFakeAnchor('/book/a.dita', scrolled)]);
+    const script = getBookNavClickHandlerScript();
+    new Function('document', script)(document);
+
+    const outsideEl = makeFakeElement({});
+    assert.doesNotThrow(() => click(outsideEl));
+    assert.deepStrictEqual(scrolled, []);
+  });
+});
+
+describe('getBookScrollSyncScript (book mode sidebar, nested-fold-and-highlight-plan.md item 5)', () => {
+  it('emits a script that parses as JavaScript', () => {
+    assert.doesNotThrow(() => new Function(getBookScrollSyncScript()));
+  });
+
+  // Generic-enough fakes to model the actual nested markup
+  // renderSiteNavTreeHtml produces (an <a class="site-nav-link"> inside a
+  // <li class="site-nav-item">, itself possibly nested inside another
+  // <li class="site-nav-item collapsed">'s <ul class="site-nav-children">)
+  // rather than the flatter, closest-only fakes
+  // getBookNavClickHandlerScript's own describe block above uses -- this
+  // suite specifically needs to walk parentElement chains for
+  // expandAncestorsOf.
+  interface FakeNode {
+    parentElement: FakeNode | null;
+    classList: { contains: (c: string) => boolean; add: (c: string) => void; remove: (c: string) => void };
+    getAttribute: (name: string) => string | null;
+    setAttribute: (name: string, value: string) => void;
+    querySelector: (selector: string) => unknown;
+    closest: (selector: string) => unknown;
+  }
+
+  function makeNode(opts: { classes?: string[]; attrs?: Record<string, string> } = {}): FakeNode {
+    const classes = new Set(opts.classes || []);
+    const attrs: Record<string, string> = { ...(opts.attrs || {}) };
+    const node: FakeNode = {
+      parentElement: null,
+      classList: {
+        contains: (c: string) => classes.has(c),
+        add: (c: string) => classes.add(c),
+        remove: (c: string) => classes.delete(c),
+      },
+      getAttribute: (name: string) => (name in attrs ? attrs[name] : null),
+      setAttribute: (name: string, value: string) => {
+        attrs[name] = value;
+      },
+      querySelector: () => null, // no .site-nav-toggle in these fakes -- setSiteNavItemCollapsed tolerates that
+      closest(selector: string): unknown {
+        const required = selector.split('.').filter(Boolean);
+        let el: FakeNode | null = node;
+        while (el) {
+          if (required.every((c) => el!.classList.contains(c))) return el;
+          el = el.parentElement;
+        }
+        return null;
+      },
+    };
+    return node;
+  }
+
+  function makeFakeAnchor(id: string) {
+    return { getAttribute: (name: string) => (name === 'data-book-anchor' ? id : null) };
+  }
+
+  function makeFakeBookScrollDocument(opts: {
+    contentRoot: unknown;
+    anchors: ReturnType<typeof makeFakeAnchor>[];
+    navLinks: ReturnType<typeof makeNode>[];
+  }) {
+    return {
+      getElementById: (id: string) => (id === 'dita-content-root' ? opts.contentRoot : null),
+      querySelectorAll: (sel: string) => {
+        if (sel === '[data-book-anchor]') return opts.anchors;
+        if (sel === '.site-nav-link') return opts.navLinks;
+        return [];
+      },
+      querySelector: (sel: string) =>
+        sel === '.site-nav-link.active' ? opts.navLinks.find((l) => l.classList.contains('active')) ?? null : null,
+    };
+  }
+
+  class FakeIntersectionObserver {
+    static instances: FakeIntersectionObserver[] = [];
+    observed: unknown[] = [];
+    callback: (entries: Array<{ target: unknown; isIntersecting: boolean }>) => void;
+    options: unknown;
+    constructor(callback: (entries: Array<{ target: unknown; isIntersecting: boolean }>) => void, options: unknown) {
+      this.callback = callback;
+      this.options = options;
+      FakeIntersectionObserver.instances.push(this);
+    }
+    disconnected = false;
+    observe(el: unknown) {
+      this.observed.push(el);
+    }
+    disconnect() {
+      this.disconnected = true;
+    }
+    trigger(entries: Array<{ target: unknown; isIntersecting: boolean }>) {
+      this.callback(entries);
+    }
+  }
+
+  class FakeMutationObserver {
+    static instances: FakeMutationObserver[] = [];
+    observed: Array<{ target: unknown; options: unknown }> = [];
+    callback: () => void;
+    constructor(callback: () => void) {
+      this.callback = callback;
+      FakeMutationObserver.instances.push(this);
+    }
+    observe(target: unknown, options: unknown) {
+      this.observed.push({ target, options });
+    }
+    trigger() {
+      this.callback();
+    }
+  }
+
+  function run(document: unknown, vscode: unknown = { postMessage: () => {} }, withMutationObserver = false) {
+    FakeIntersectionObserver.instances.length = 0;
+    FakeMutationObserver.instances.length = 0;
+    const script = getSiteNavCollapseStateHelperScript({ reportCollapseMsgType: 'setNavCollapsed' }) + getBookScrollSyncScript();
+    new Function('document', 'IntersectionObserver', 'vscode', 'MutationObserver', script)(
+      document, FakeIntersectionObserver, vscode, withMutationObserver ? FakeMutationObserver : undefined,
+    );
+    return FakeIntersectionObserver.instances[0];
+  }
+
+  it('does nothing (and never constructs an observer) when there are no data-book-anchor elements', () => {
+    const document = makeFakeBookScrollDocument({ contentRoot: {}, anchors: [], navLinks: [] });
+    assert.doesNotThrow(() => run(document));
+    assert.strictEqual(FakeIntersectionObserver.instances.length, 0);
+  });
+
+  it('does nothing when #dita-content-root is missing', () => {
+    const document = makeFakeBookScrollDocument({ contentRoot: null, anchors: [makeFakeAnchor('/a.dita')], navLinks: [] });
+    assert.doesNotThrow(() => run(document));
+    assert.strictEqual(FakeIntersectionObserver.instances.length, 0);
+  });
+
+  it('observes every data-book-anchor element against #dita-content-root with a top-weighted rootMargin', () => {
+    const contentRoot = {};
+    const anchorA = makeFakeAnchor('/a.dita');
+    const anchorB = makeFakeAnchor('/b.dita');
+    const document = makeFakeBookScrollDocument({ contentRoot, anchors: [anchorA, anchorB], navLinks: [] });
+    const observer = run(document);
+    assert.strictEqual(observer.observed.length, 2);
+    assert.deepStrictEqual(observer.options, { root: contentRoot, rootMargin: '0px 0px -70% 0px', threshold: 0 });
+  });
+
+  it('marks the topmost currently-intersecting anchor active, not whichever the callback happens to report last', () => {
+    const anchorA = makeFakeAnchor('/a.dita');
+    const anchorB = makeFakeAnchor('/b.dita');
+    const anchorC = makeFakeAnchor('/c.dita');
+    const linkA = makeNode({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/a.dita' } });
+    const linkB = makeNode({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/b.dita' } });
+    const linkC = makeNode({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/c.dita' } });
+    const document = makeFakeBookScrollDocument({
+      contentRoot: {},
+      anchors: [anchorA, anchorB, anchorC], // document order
+      navLinks: [linkA, linkB, linkC],
+    });
+    const observer = run(document);
+
+    // B and C both currently visible (e.g. B is a short part just above C,
+    // both inside the top-weighted band at once) -- document order says B
+    // is topmost, so B, not C, should win even though the callback lists
+    // C's entry first.
+    observer.trigger([
+      { target: anchorC, isIntersecting: true },
+      { target: anchorB, isIntersecting: true },
+    ]);
+    assert.strictEqual(linkB.classList.contains('active'), true);
+    assert.strictEqual(linkC.classList.contains('active'), false);
+
+    // B scrolls out, leaving only C -- C becomes active and B loses it.
+    observer.trigger([{ target: anchorB, isIntersecting: false }]);
+    assert.strictEqual(linkB.classList.contains('active'), false);
+    assert.strictEqual(linkC.classList.contains('active'), true);
+  });
+
+  it('expands every collapsed ancestor of the newly-active link, in the DOM only -- scrolling must not rewrite the persisted fold state (book mode\'s sidebar is closed by default, so the reader cannot even see it happen)', () => {
+    const anchorB = makeFakeAnchor('/b.dita');
+    const outerGroup = makeNode({ classes: ['site-nav-item', 'has-children', 'collapsed'], attrs: { 'data-nav-id': 'grp:0' } });
+    const childrenUl = makeNode({ classes: ['site-nav-children'] });
+    childrenUl.parentElement = outerGroup;
+    const innerItem = makeNode({ classes: ['site-nav-item', 'has-children'] });
+    innerItem.parentElement = childrenUl;
+    const linkB = makeNode({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/b.dita' } });
+    linkB.parentElement = innerItem;
+
+    const document = makeFakeBookScrollDocument({ contentRoot: {}, anchors: [anchorB], navLinks: [linkB] });
+    const posted: Array<{ type: string; ids: string[] }> = [];
+    const observer = run(document, { postMessage: (m: { type: string; ids: string[] }) => posted.push(m) });
+
+    observer.trigger([{ target: anchorB, isIntersecting: true }]);
+
+    assert.strictEqual(linkB.classList.contains('active'), true);
+    assert.strictEqual(outerGroup.classList.contains('collapsed'), false, 'the collapsed ancestor should auto-expand');
+    assert.deepStrictEqual(posted, [], 'the auto-expand is a consequence of where the reader scrolled, not a choice about the tree, so it is not reported for persistence');
+  });
+
+  it('does not report a collapse-state change when no ancestor needed expanding', () => {
+    const anchorA = makeFakeAnchor('/a.dita');
+    const linkA = makeNode({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/a.dita' } });
+    const document = makeFakeBookScrollDocument({ contentRoot: {}, anchors: [anchorA], navLinks: [linkA] });
+    const posted: unknown[] = [];
+    const observer = run(document, { postMessage: (m: unknown) => posted.push(m) });
+
+    observer.trigger([{ target: anchorA, isIntersecting: true }]);
+
+    assert.strictEqual(linkA.classList.contains('active'), true);
+    assert.deepStrictEqual(posted, []);
+  });
+
+  it('rebinds to the new anchors when a live edit swaps the book\'s DOM out from under the observer', () => {
+    // MSG_UPDATE_CONTENT / MSG_PATCH_CONTENT replace anchor elements; an
+    // observer bound once at init keeps watching detached nodes, so the
+    // sidebar highlight silently stops following the scroll.
+    const oldAnchor = makeFakeAnchor('/a.dita');
+    const linkA = makeNode({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/a.dita' } });
+    const opts = { contentRoot: {}, anchors: [oldAnchor], navLinks: [linkA] };
+    const document = makeFakeBookScrollDocument(opts);
+    const oldObserver = run(document, undefined, true);
+    assert.strictEqual(FakeMutationObserver.instances.length, 1, 'expected a MutationObserver watching for DOM swaps');
+
+    const newAnchor = makeFakeAnchor('/a.dita');
+    opts.anchors = [newAnchor];
+    FakeMutationObserver.instances[0].trigger();
+
+    const observers = FakeIntersectionObserver.instances;
+    assert.strictEqual(observers.length, 2, 'expected a fresh IntersectionObserver after the swap');
+    assert.strictEqual(oldObserver.disconnected, true, 'the stale observer should be disconnected');
+    assert.deepStrictEqual(observers[1].observed, [newAnchor]);
+    observers[1].trigger([{ target: newAnchor, isIntersecting: true }]);
+    assert.strictEqual(linkA.classList.contains('active'), true);
+  });
+
+  it('keeps the reader\'s current highlight when the sidebar\'s own markup is replaced (MSG_UPDATE_SIDEBAR marks the first link active)', () => {
+    const anchorA = makeFakeAnchor('/a.dita');
+    const anchorB = makeFakeAnchor('/b.dita');
+    const oldLinkA = makeNode({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/a.dita' } });
+    const oldLinkB = makeNode({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/b.dita' } });
+    const opts = { contentRoot: {}, anchors: [anchorA, anchorB], navLinks: [oldLinkA, oldLinkB] };
+    const observer = run(makeFakeBookScrollDocument(opts), undefined, true);
+    observer.trigger([{ target: anchorB, isIntersecting: true }]);
+    assert.strictEqual(oldLinkB.classList.contains('active'), true);
+
+    // Host re-renders the sidebar with navigable[0] active, as collectBookParts does.
+    const newLinkA = makeNode({ classes: ['site-nav-link', 'active'], attrs: { 'data-site-target': '/a.dita' } });
+    const newLinkB = makeNode({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/b.dita' } });
+    opts.navLinks = [newLinkA, newLinkB];
+    FakeMutationObserver.instances[0].trigger();
+
+    assert.strictEqual(newLinkB.classList.contains('active'), true, 'reader is still on B');
+    assert.strictEqual(newLinkA.classList.contains('active'), false, 'the host\'s default first-link mark must not survive the swap');
+  });
+
+  it('skips a group-heading anchor (no sidebar link) instead of clearing the highlight when it is the topmost visible one', () => {
+    const groupAnchor = makeFakeAnchor('grp:0');
+    const anchorA = makeFakeAnchor('/a.dita');
+    const linkA = makeNode({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/a.dita' } });
+    const document = makeFakeBookScrollDocument({ contentRoot: {}, anchors: [groupAnchor, anchorA], navLinks: [linkA] });
+    const observer = run(document);
+
+    observer.trigger([
+      { target: groupAnchor, isIntersecting: true },
+      { target: anchorA, isIntersecting: true },
+    ]);
+    assert.strictEqual(linkA.classList.contains('active'), true, 'the first topic under the group heading should be active');
+
+    // Reader scrolls so only the (link-less) heading of the next group is in the band.
+    observer.trigger([{ target: anchorA, isIntersecting: false }]);
+    observer.trigger([{ target: groupAnchor, isIntersecting: true }]);
+    assert.strictEqual(linkA.classList.contains('active'), true, 'a heading with no link must not wipe the last-known active link');
+  });
+
+  it('does nothing when no anchor is currently visible, rather than clearing active for an unrelated reason', () => {
+    const anchorA = makeFakeAnchor('/a.dita');
+    const linkA = makeNode({ classes: ['site-nav-link', 'active'], attrs: { 'data-site-target': '/a.dita' } });
+    const document = makeFakeBookScrollDocument({ contentRoot: {}, anchors: [anchorA], navLinks: [linkA] });
+    const observer = run(document);
+
+    observer.trigger([{ target: anchorA, isIntersecting: false }]);
+
+    assert.strictEqual(linkA.classList.contains('active'), true, 'losing the only visible anchor keeps the last-known active link rather than clearing it to nothing');
+  });
+});
+
+/**
+ * getOutlineSyncScript (site-book-templates-plan.md item 4: the "on this
+ * page" outline column). Deliberately mirrors getBookScrollSyncScript's own
+ * IntersectionObserver/topmost-visible-wins/MutationObserver-rebind shape
+ * above rather than inventing a second pattern -- the only real differences
+ * are what is being tracked (h1-h3 headings inside #dita-content-root, not
+ * [data-book-anchor] parts) and that this script also BUILDS the sidebar
+ * list itself (headings carry no id from the renderer -- topic/title never
+ * emits one, see baseTypeMap.ts -- so ids are generated here, once per
+ * heading, the first time it is seen).
+ */
+describe('getOutlineSyncScript (site-book-templates-plan.md item 4, on-this-page outline)', () => {
+  it('emits a script that parses as JavaScript', () => {
+    assert.doesNotThrow(() => new Function(getOutlineSyncScript()));
+  });
+
+  interface FakeHeading { tagName: string; id: string; textContent: string }
+  function makeFakeHeading(tag: string, text: string): FakeHeading {
+    return { tagName: tag, id: '', textContent: text };
+  }
+
+  interface FakeLink {
+    classList: { add: (c: string) => void; remove: (c: string) => void; contains: (c: string) => boolean };
+    attrs: Record<string, string>;
+    href: string;
+    textContent: string;
+    setAttribute: (n: string, v: string) => void;
+    getAttribute: (n: string) => string | null;
+  }
+  function makeFakeLink(): FakeLink {
+    const classes = new Set<string>();
+    const attrs: Record<string, string> = {};
+    return {
+      classList: { add: (c) => classes.add(c), remove: (c) => classes.delete(c), contains: (c) => classes.has(c) },
+      attrs,
+      href: '',
+      textContent: '',
+      setAttribute: (n, v) => { attrs[n] = v; },
+      getAttribute: (n) => (n in attrs ? attrs[n] : null),
+    };
+  }
+
+  function makeFakeOutlineInner() {
+    const children: FakeLink[] = [];
+    return {
+      children,
+      appendChild: (el: FakeLink) => { children.push(el); },
+      set innerHTML(v: string) { if (v === '') children.length = 0; },
+      querySelector: (sel: string): FakeLink | null => {
+        if (sel === '.tpl-outline-link.active') return children.find((c) => c.classList.contains('active')) ?? null;
+        const m = /\[data-outline-target="([^"]+)"\]/.exec(sel);
+        if (m) return children.find((c) => c.getAttribute('data-outline-target') === m[1]) ?? null;
+        return null;
+      },
+    };
+  }
+
+  function makeFakeOutlineEl(inner: ReturnType<typeof makeFakeOutlineInner>) {
+    const classes = new Set<string>();
+    let clickHandler: ((e: unknown) => void) | null = null;
+    return {
+      classList: { add: (c: string) => classes.add(c), remove: (c: string) => classes.delete(c), contains: (c: string) => classes.has(c) },
+      querySelector: (sel: string) => (sel === '.tpl-outline-inner' ? inner : null),
+      addEventListener: (type: string, handler: (e: unknown) => void) => { if (type === 'click') clickHandler = handler; },
+      click(target: FakeLink, extra: Record<string, unknown> = {}) {
+        if (clickHandler) clickHandler({ target: { ...target, closest: () => target }, preventDefault: () => {}, ...extra });
+      },
+    };
+  }
+
+  function makeFakeOutlineDocument(opts: { headings: FakeHeading[]; outlineEl: ReturnType<typeof makeFakeOutlineEl> | null }) {
+    const contentRoot = { querySelectorAll: (sel: string) => (sel === 'h1,h2,h3' ? opts.headings : []) };
+    return {
+      getElementById: (id: string) => (id === 'dita-content-root' ? contentRoot : id === '__site-outline' ? opts.outlineEl : null),
+      createElement: () => makeFakeLink(),
+    };
+  }
+
+  class FakeIntersectionObserver {
+    static instances: FakeIntersectionObserver[] = [];
+    observed: unknown[] = [];
+    callback: (entries: Array<{ target: unknown; isIntersecting: boolean }>) => void;
+    options: unknown;
+    disconnected = false;
+    constructor(callback: (entries: Array<{ target: unknown; isIntersecting: boolean }>) => void, options: unknown) {
+      this.callback = callback;
+      this.options = options;
+      FakeIntersectionObserver.instances.push(this);
+    }
+    observe(el: unknown) { this.observed.push(el); }
+    disconnect() { this.disconnected = true; }
+    trigger(entries: Array<{ target: unknown; isIntersecting: boolean }>) { this.callback(entries); }
+  }
+
+  class FakeMutationObserver {
+    static instances: FakeMutationObserver[] = [];
+    callback: () => void;
+    constructor(callback: () => void) { this.callback = callback; FakeMutationObserver.instances.push(this); }
+    observe() {}
+    trigger() { this.callback(); }
+  }
+
+  function run(document: unknown, withMutationObserver = false) {
+    FakeIntersectionObserver.instances.length = 0;
+    FakeMutationObserver.instances.length = 0;
+    const script = getOutlineSyncScript();
+    new Function('document', 'IntersectionObserver', 'MutationObserver', script)(
+      document, FakeIntersectionObserver, withMutationObserver ? FakeMutationObserver : undefined,
+    );
+  }
+
+  it('does nothing when #__site-outline is missing (template did not opt in, or book mode where it is never rendered)', () => {
+    const document = makeFakeOutlineDocument({ headings: [makeFakeHeading('H1', 'A'), makeFakeHeading('H2', 'B')], outlineEl: null });
+    assert.doesNotThrow(() => run(document));
+    assert.strictEqual(FakeIntersectionObserver.instances.length, 0);
+  });
+
+  it('builds one link per h1-h3 heading, in document order, with a generated id and the heading level recorded', () => {
+    const inner = makeFakeOutlineInner();
+    const outlineEl = makeFakeOutlineEl(inner);
+    const h1 = makeFakeHeading('H1', 'Overview');
+    const h2 = makeFakeHeading('H2', 'Details');
+    const h3 = makeFakeHeading('H3', 'Fine print');
+    const document = makeFakeOutlineDocument({ headings: [h1, h2, h3], outlineEl });
+    run(document);
+
+    assert.strictEqual(inner.children.length, 3);
+    assert.deepStrictEqual(inner.children.map((c) => c.textContent), ['Overview', 'Details', 'Fine print']);
+    assert.deepStrictEqual(inner.children.map((c) => c.getAttribute('data-outline-level')), ['1', '2', '3']);
+    // Every heading got a real, distinct id -- none was left blank.
+    assert.ok(h1.id && h2.id && h3.id);
+    assert.notStrictEqual(h1.id, h2.id);
+    assert.strictEqual(inner.children[0].getAttribute('data-outline-target'), h1.id);
+  });
+
+  it('a heading that already has an id (however it got one) keeps it rather than being overwritten', () => {
+    const inner = makeFakeOutlineInner();
+    const outlineEl = makeFakeOutlineEl(inner);
+    const h1 = makeFakeHeading('H1', 'A'); h1.id = 'kept';
+    const h2 = makeFakeHeading('H2', 'B');
+    run(makeFakeOutlineDocument({ headings: [h1, h2], outlineEl }));
+    assert.strictEqual(h1.id, 'kept');
+  });
+
+  it('hides the column (and builds no observer) when fewer than two headings -- a lone title is not worth a mini table of contents', () => {
+    const inner = makeFakeOutlineInner();
+    const outlineEl = makeFakeOutlineEl(inner);
+    run(makeFakeOutlineDocument({ headings: [makeFakeHeading('H1', 'Only one')], outlineEl }));
+    assert.strictEqual(outlineEl.classList.contains('tpl-outline--empty'), true);
+    assert.strictEqual(inner.children.length, 0);
+    assert.strictEqual(FakeIntersectionObserver.instances.length, 0);
+  });
+
+  it('un-hides the column once there are two or more headings again', () => {
+    const inner = makeFakeOutlineInner();
+    const outlineEl = makeFakeOutlineEl(inner);
+    const opts = { headings: [makeFakeHeading('H1', 'Only one')], outlineEl };
+    const document = makeFakeOutlineDocument(opts);
+    run(document, true);
+    assert.strictEqual(outlineEl.classList.contains('tpl-outline--empty'), true);
+    opts.headings = [makeFakeHeading('H1', 'A'), makeFakeHeading('H2', 'B')];
+    FakeMutationObserver.instances[0].trigger();
+    assert.strictEqual(outlineEl.classList.contains('tpl-outline--empty'), false);
+    assert.strictEqual(inner.children.length, 2);
+  });
+
+  it('observes every heading against #dita-content-root with the same top-weighted rootMargin getBookScrollSyncScript uses', () => {
+    const inner = makeFakeOutlineInner();
+    const outlineEl = makeFakeOutlineEl(inner);
+    const h1 = makeFakeHeading('H1', 'A');
+    const h2 = makeFakeHeading('H2', 'B');
+    const document = makeFakeOutlineDocument({ headings: [h1, h2], outlineEl });
+    run(document);
+    const observer = FakeIntersectionObserver.instances[0];
+    assert.strictEqual(observer.observed.length, 2);
+    assert.strictEqual((observer.options as { rootMargin: string }).rootMargin, '0px 0px -70% 0px');
+  });
+
+  it('highlights the topmost currently-intersecting heading\'s link, not whichever the callback reports last', () => {
+    const inner = makeFakeOutlineInner();
+    const outlineEl = makeFakeOutlineEl(inner);
+    const h1 = makeFakeHeading('H1', 'A');
+    const h2 = makeFakeHeading('H2', 'B');
+    const h3 = makeFakeHeading('H3', 'C');
+    const document = makeFakeOutlineDocument({ headings: [h1, h2, h3], outlineEl });
+    run(document);
+    const observer = FakeIntersectionObserver.instances[0];
+
+    observer.trigger([
+      { target: h3, isIntersecting: true },
+      { target: h2, isIntersecting: true },
+    ]);
+    assert.strictEqual(inner.querySelector('.tpl-outline-link.active'), inner.children[1], 'h2, not h3, is topmost even though the callback listed h3 first');
+
+    observer.trigger([{ target: h2, isIntersecting: false }]);
+    assert.strictEqual(inner.querySelector('.tpl-outline-link.active'), inner.children[2]);
+  });
+
+  it('clicking a link scrolls its heading into view and does not follow the href', () => {
+    const inner = makeFakeOutlineInner();
+    const outlineEl = makeFakeOutlineEl(inner);
+    const h1 = makeFakeHeading('H1', 'A');
+    const h2 = makeFakeHeading('H2', 'B');
+    let scrolledTo: unknown = null;
+    let prevented = false;
+    const scrollTarget = { ...h2, scrollIntoView: (opts: unknown) => { scrolledTo = opts; } };
+    const contentRoot = { querySelectorAll: () => [h1, h2] };
+    const document = {
+      getElementById: (id: string) => (id === 'dita-content-root' ? contentRoot : id === '__site-outline' ? outlineEl : id === h2.id ? scrollTarget : null),
+      createElement: () => makeFakeLink(),
+    };
+    run(document);
+    const link = inner.children[1];
+    outlineEl.click(link, { preventDefault: () => { prevented = true; } });
+    assert.ok(prevented, 'the default hash-jump must not run alongside the smooth scroll');
+    assert.deepStrictEqual(scrolledTo, { behavior: 'smooth', block: 'start' });
+  });
+
+  it('rebinds to the new headings when a live edit or topic switch swaps #dita-content-root\'s children', () => {
+    const inner = makeFakeOutlineInner();
+    const outlineEl = makeFakeOutlineEl(inner);
+    const oldH1 = makeFakeHeading('H1', 'Old A');
+    const oldH2 = makeFakeHeading('H2', 'Old B');
+    const opts = { headings: [oldH1, oldH2], outlineEl };
+    const document = makeFakeOutlineDocument(opts);
+    run(document, true);
+    assert.strictEqual(FakeMutationObserver.instances.length, 1);
+    const oldObserver = FakeIntersectionObserver.instances[0];
+
+    const newH1 = makeFakeHeading('H1', 'New A');
+    const newH2 = makeFakeHeading('H2', 'New B');
+    opts.headings = [newH1, newH2];
+    FakeMutationObserver.instances[0].trigger();
+
+    assert.strictEqual(oldObserver.disconnected, true);
+    assert.strictEqual(FakeIntersectionObserver.instances.length, 2);
+    assert.deepStrictEqual(inner.children.map((c) => c.textContent), ['New A', 'New B']);
+  });
+});
+
+describe('getInitialSidebarBodyClass (nested-fold-and-highlight-plan.md item 6)', () => {
+  it('adds site-nav-collapsed for book mode, so the sidebar starts closed like a PDF reader\'s bookmark panel', () => {
+    assert.strictEqual(getInitialSidebarBodyClass('book'), 'mode-book site-nav-collapsed');
+  });
+
+  it('leaves site mode starting open, unchanged from before this feature', () => {
+    assert.strictEqual(getInitialSidebarBodyClass('site'), 'mode-site');
+  });
+
+  it('leaves tree mode alone -- it has no sidebar to collapse', () => {
+    assert.strictEqual(getInitialSidebarBodyClass('tree'), 'mode-tree');
+  });
 });
 
 describe('getSiteNavToggleScript (docsite mode)', () => {
   it('emits a script that parses as JavaScript', () => {
-    assert.doesNotThrow(() => new Function(getSiteNavToggleScript()));
+    assert.doesNotThrow(() => new Function(getSiteNavCollapseStateHelperScript() + getSiteNavToggleScript()));
   });
 
   // Minimal standalone fakes (deliberately not reusing
@@ -1707,6 +3341,11 @@ describe('getSiteNavToggleScript (docsite mode)', () => {
       },
       getAttribute: (name: string) => (name in attrs ? attrs[name] : null),
       setAttribute: (name: string, val: string) => { attrs[name] = val; },
+      // The shared setter (getSiteNavCollapseStateHelperScript) reaches the
+      // row's own toggle by querying down from the item rather than taking
+      // it as an argument, since expand-all has no click event to read it
+      // off. makeFakeToggle wires this up once it exists.
+      querySelector: (_sel: string): unknown => null,
       attrs,
     };
   }
@@ -1722,6 +3361,7 @@ describe('getSiteNavToggleScript (docsite mode)', () => {
         return null;
       },
     };
+    item.querySelector = (sel: string) => (sel === ':scope > .site-nav-toggle' ? toggle : null);
     return toggle;
   }
 
@@ -1743,7 +3383,7 @@ describe('getSiteNavToggleScript (docsite mode)', () => {
     item.setAttribute('aria-expanded', 'true');
     const toggle = makeFakeToggle(item, { 'aria-expanded': 'true', 'data-expand-label': 'Expand', 'data-collapse-label': 'Collapse' });
     const { document, click } = makeFakeToggleDocument();
-    new Function('document', getSiteNavToggleScript())(document);
+    new Function('document', getSiteNavCollapseStateHelperScript() + getSiteNavToggleScript())(document);
 
     click(toggle);
 
@@ -1756,7 +3396,7 @@ describe('getSiteNavToggleScript (docsite mode)', () => {
     const item = makeFakeItem();
     const toggle = makeFakeToggle(item, { 'aria-expanded': 'true', 'data-expand-label': 'Expand', 'data-collapse-label': 'Collapse' });
     const { document, click } = makeFakeToggleDocument();
-    new Function('document', getSiteNavToggleScript())(document);
+    new Function('document', getSiteNavCollapseStateHelperScript() + getSiteNavToggleScript())(document);
 
     click(toggle); // collapse
     click(toggle); // expand again
@@ -1769,7 +3409,7 @@ describe('getSiteNavToggleScript (docsite mode)', () => {
     const item = makeFakeItem();
     const toggle = makeFakeToggle(item, { 'aria-expanded': 'true', 'data-expand-label': '\u5c55\u5f00', 'data-collapse-label': '\u6298\u53e0' });
     const { document, click } = makeFakeToggleDocument();
-    new Function('document', getSiteNavToggleScript())(document);
+    new Function('document', getSiteNavCollapseStateHelperScript() + getSiteNavToggleScript())(document);
 
     click(toggle); // now collapsed -- label should offer the "expand" verb
     assert.strictEqual(toggle.getAttribute('aria-label'), '\u5c55\u5f00');
@@ -1781,7 +3421,7 @@ describe('getSiteNavToggleScript (docsite mode)', () => {
   it('a click that does not hit a .site-nav-toggle (e.g. the link itself) does nothing, rather than throwing', () => {
     const item = makeFakeItem();
     const { document, click } = makeFakeToggleDocument();
-    new Function('document', getSiteNavToggleScript())(document);
+    new Function('document', getSiteNavCollapseStateHelperScript() + getSiteNavToggleScript())(document);
 
     const link = { closest: () => null };
     assert.doesNotThrow(() => click(link));
@@ -1870,6 +3510,7 @@ describe('getModeToggleScript (docsite mode)', () => {
     modeBook: 'Book',
     modeSite: 'Site',
     switchModeMsgType: 'switchMode',
+    switchingLabel: 'Switching view…',
   };
 
   it('emits a script that parses as JavaScript', () => {
@@ -1890,32 +3531,155 @@ describe('getModeToggleScript (docsite mode)', () => {
     assert.strictEqual(run('tree').btn.textContent, 'Outline');
   });
 
-  it('still cycles tree -> book -> site -> tree on click, and posts the new mode', () => {
+  it('cycles outline (tree) -> site -> book -> outline (tree) on click, and posts the new mode', () => {
     const posted: Array<{ type: string; mode: string }> = [];
     const script = getModeToggleScript(opts);
     const listeners: Record<string, () => void> = {};
     const fakeBtn = {
       style: {},
+      disabled: false,
       setAttribute: () => {},
       addEventListener: (evt: string, fn: () => void) => { listeners[evt] = fn; },
     };
-    const fakeDocument = { createElement: () => fakeBtn };
-    const fn = new Function('currentMode', 'btnStyle', 'document', 'vscode', script + '; return modeBtn;');
-    const btn = fn('tree', '', fakeDocument, { postMessage: (m: { type: string; mode: string }) => posted.push(m) });
+    // getElementById/setTimeout are only exercised by the disabled/dimming
+    // behaviour (its own tests below); this test's own concern is the mode
+    // sequence and postMessage payloads, so they are stubbed out here just to
+    // keep the click handler from throwing (no real #dita-content-root in
+    // this fake document) and to avoid leaving a real 8s timer running past
+    // the test (each click schedules one -- see getModeToggleScript's own
+    // comment on why 8s is a safety net, not the normal path).
+    const fakeDocument = { createElement: () => fakeBtn, getElementById: () => null };
+    const fn = new Function('currentMode', 'btnStyle', 'document', 'vscode', 'setTimeout', script + '; return modeBtn;');
+    const btn = fn('tree', '', fakeDocument, { postMessage: (m: { type: string; mode: string }) => posted.push(m) }, () => {});
     assert.strictEqual(btn.textContent, 'Outline');
     listeners['click']();
-    assert.strictEqual(btn.textContent, 'Book', 'first click from tree should switch to book and relabel to the new current mode');
+    btn.disabled = false; // each real click is followed by applyModeStage re-enabling it; simulate that here so the next click isn't ignored
+    assert.strictEqual(btn.textContent, 'Site', 'first click from tree should switch to site and relabel to the new current mode');
     listeners['click']();
-    assert.strictEqual(btn.textContent, 'Site');
+    btn.disabled = false;
+    assert.strictEqual(btn.textContent, 'Book');
     listeners['click']();
     assert.strictEqual(btn.textContent, 'Outline');
-    assert.deepStrictEqual(posted.map(m => m.mode), ['book', 'site', 'tree']);
+    assert.deepStrictEqual(posted.map(m => m.mode), ['site', 'book', 'tree']);
     assert.ok(posted.every(m => m.type === 'switchMode'));
   });
 
   it('does not append the button to a toolbar itself', () => {
     const script = getModeToggleScript(opts);
     assert.ok(!script.includes('toolbar.appendChild'));
+  });
+
+  // Toolbar-persistence follow-up: the label flips the instant a click
+  // fires (optimistic, tested above), well before the host's asynchronously
+  // rendered stage can land (applyModeStage in MapViewerProvider.ts). Left
+  // alone that reads as the button and the page disagreeing for a beat, and
+  // a second click in that window could race the first switchMode reply.
+  // modeBtn.disabled is both the visible "switching" affordance (paired with
+  // the #dita-content-root.mode-switching class in media/styles.css) and the
+  // debounce -- these two tests are its unit-level guarantee that the reply
+  // MapViewerProvider.ts posts back is what clears it (applyModeStage does
+  // `modeBtn.disabled = false`), not this script itself.
+  it('disables itself and dims the content root on click, and ignores a second click while disabled', () => {
+    const posted: Array<{ type: string; mode: string }> = [];
+    const script = getModeToggleScript(opts);
+    const listeners: Record<string, () => void> = {};
+    const fakeBtn = {
+      style: {},
+      disabled: false,
+      setAttribute: () => {},
+      addEventListener: (evt: string, fn: () => void) => { listeners[evt] = fn; },
+    };
+    const contentRootClasses = new Set<string>();
+    const fakeContentRoot = { classList: { add: (c: string) => contentRootClasses.add(c) } };
+    const fakeDocument = {
+      createElement: () => fakeBtn,
+      getElementById: (id: string) => (id === 'dita-content-root' ? fakeContentRoot : null),
+    };
+    const fn = new Function('currentMode', 'btnStyle', 'document', 'vscode', 'setTimeout',
+      script + '; return modeBtn;');
+    const btn = fn('tree', '', fakeDocument, { postMessage: (m: { type: string; mode: string }) => posted.push(m) }, () => {});
+    listeners['click']();
+    assert.strictEqual(btn.disabled, true, 'button should disable itself for the duration of the switch');
+    assert.ok(contentRootClasses.has('mode-switching'), 'content root should get the dimming class');
+    assert.strictEqual(posted.length, 1);
+    listeners['click'](); // a second click while still disabled
+    assert.strictEqual(posted.length, 1, 'a click while disabled must not post a second switchMode request');
+  });
+
+  it('is a no-op when there is no #dita-content-root to dim (outline/tree mode has none)', () => {
+    const script = getModeToggleScript(opts);
+    const listeners: Record<string, () => void> = {};
+    const fakeBtn = { style: {}, disabled: false, setAttribute: () => {}, addEventListener: (evt: string, fn: () => void) => { listeners[evt] = fn; } };
+    const fakeDocument = { createElement: () => fakeBtn, getElementById: () => null };
+    const fn = new Function('currentMode', 'btnStyle', 'document', 'vscode', 'setTimeout', script + '; return modeBtn;');
+    assert.doesNotThrow(() => {
+      const btn = fn('tree', '', fakeDocument, { postMessage: () => {} }, () => {});
+      listeners['click']();
+      assert.strictEqual(btn.disabled, true);
+    });
+  });
+
+  // A book with a lot of topics can make generateHtml (host side, collectBookParts)
+  // take real time -- the dimming above already reads as "something is
+  // happening" for the common fast case, but on its own that stops being
+  // reassuring the longer it goes on. This is the delayed overlay's contract:
+  // absent past its own grace period, present (with a spinner and label)
+  // once a switch runs long -- see getModeToggleScript's own comment for why
+  // it is delayed rather than shown immediately on every switch.
+  it('does not show the "still switching" overlay immediately, but does after its delay elapses, as a child of #dita-content-root', () => {
+    const script = getModeToggleScript(opts);
+    const listeners: Record<string, () => void> = {};
+    const fakeBtn = { style: {}, disabled: false, setAttribute: () => {}, addEventListener: (evt: string, fn: () => void) => { listeners[evt] = fn; } };
+
+    // A hand-rolled fake DOM element. Modeled with a concrete (recursive)
+    // type instead of `any` so the read-backs below (children[0].className,
+    // children[1].textContent) are checked; the index signature covers the
+    // attr_* / className fields the script sets dynamically at runtime.
+    interface FakeElement {
+      style: Record<string, string>;
+      children: FakeElement[];
+      classList: { add: (c: string) => void };
+      setAttribute: (k: string, v: string) => void;
+      appendChild: (child: FakeElement) => void;
+      className?: string;
+      textContent?: string;
+      [key: string]: unknown;
+    }
+    function makeEl(): FakeElement {
+      const el: FakeElement = {
+        style: {},
+        children: [],
+        classList: { add: (c: string) => { el.className = ((el.className ?? '') + ' ' + c).trim(); } },
+        setAttribute: (k: string, v: string) => { el[`attr_${k}`] = v; },
+        appendChild: (child: FakeElement) => { el.children.push(child); },
+      };
+      return el;
+    }
+    const contentRoot = makeEl();
+
+    const timers: Array<{ fn: () => void; delay: number }> = [];
+    const fakeSetTimeout = (fn: () => void, delay: number) => { timers.push({ fn, delay }); return timers.length; };
+
+    const fakeDocument = {
+      createElement: (tag: string) => (tag === 'button' ? fakeBtn : makeEl()),
+      getElementById: (id: string) => (id === 'dita-content-root' ? contentRoot : null),
+    };
+    const fn = new Function('currentMode', 'btnStyle', 'document', 'vscode', 'setTimeout', script + '; return modeBtn;');
+    fn('tree', '', fakeDocument, { postMessage: () => {} }, fakeSetTimeout);
+
+    listeners['click']();
+    assert.strictEqual(contentRoot.children.length, 0, 'overlay must not appear synchronously on click');
+
+    const overlayTimer = timers.find(t => t.delay === 400);
+    assert.ok(overlayTimer, 'a 400ms timer for the overlay should have been scheduled');
+    overlayTimer!.fn(); // simulate the grace period elapsing
+
+    assert.strictEqual(contentRoot.children.length, 1);
+    const overlay = contentRoot.children[0];
+    assert.strictEqual(overlay.className, 'dita-mode-switch-overlay');
+    assert.strictEqual(overlay.children.length, 2, 'spinner + label');
+    assert.strictEqual(overlay.children[0].className, 'dita-loading-spinner');
+    assert.strictEqual(overlay.children[1].textContent, opts.switchingLabel);
   });
 });
 
@@ -2390,5 +4154,635 @@ describe('getImageLightboxScript', () => {
     doc.dispatch('contextmenu', { target: img, clientX: 0, clientY: 0, preventDefault() {} });
     const menu = doc.querySelector('.dita-img-ctxmenu');
     assert.strictEqual(menu!.children[0].textContent, 'Copy "the" image\\thing');
+  });
+});
+
+describe('getSiteNavExpandCollapseAllButtonsScript + getSiteNavCollapseStateHelperScript', () => {
+  // The buttons script depends on setSiteNavItemCollapsed, declared by the
+  // helper script and shared with getSiteNavToggleScript -- so these run
+  // the two (or three) emitted pieces together, the way
+  // getMapWebviewScript concatenates them, rather than in isolation.
+  const helper = getSiteNavCollapseStateHelperScript();
+  const buttons = getSiteNavExpandCollapseAllButtonsScript({
+    expandAllTitle: 'Expand all topics', collapseAllTitle: 'Collapse all topics',
+  });
+
+  interface FakeToggle { attrs: Record<string, string>; getAttribute(n: string): string | null; setAttribute(n: string, v: string): void }
+  interface FakeItem {
+    classes: Set<string>;
+    attrs: Record<string, string>;
+    toggle: FakeToggle | null;
+    classList: { add(c: string): void; remove(c: string): void; contains(c: string): boolean };
+    setAttribute(n: string, v: string): void;
+    querySelector(sel: string): FakeToggle | null;
+  }
+
+  function makeItem(hasToggle = true): FakeItem {
+    const classes = new Set<string>(['site-nav-item', 'has-children']);
+    const toggle: FakeToggle | null = hasToggle
+      ? {
+          attrs: { 'data-expand-label': 'Expand', 'data-collapse-label': 'Collapse', 'aria-expanded': 'true' },
+          getAttribute(n: string) { return n in this.attrs ? this.attrs[n] : null; },
+          setAttribute(n: string, v: string) { this.attrs[n] = v; },
+        }
+      : null;
+    return {
+      classes,
+      attrs: {},
+      toggle,
+      classList: { add: (c) => classes.add(c), remove: (c) => classes.delete(c), contains: (c) => classes.has(c) },
+      setAttribute(n: string, v: string) { this.attrs[n] = v; },
+      querySelector(sel: string) { return sel === ':scope > .site-nav-toggle' ? this.toggle : null; },
+    };
+  }
+
+  it('emits scripts that parse as JavaScript, helper and buttons together', () => {
+    assert.doesNotThrow(() => new Function('document', 'btnStyle', helper + buttons));
+  });
+
+  it('keeps the expand/collapse buttons tight against the shared toolbar padding while centering their icons', () => {
+    // The base btnStyle's own padding (1px 4px since the compact pass) is
+    // already the tightest on the bar; what these two add is only the
+    // centering, so a 14px icon in an 18px box sits mid-button without any
+    // per-button padding that could fight the shared control height.
+    assert.ok(buttons.includes("siteExpandAllBtn.style.cssText = btnStyle + 'justify-content:center;';"), 'expand-all button should stay compact without fighting the shared control height');
+    assert.ok(buttons.includes("siteCollapseAllBtn.style.cssText = btnStyle + 'justify-content:center;';"), 'collapse-all button should stay compact without fighting the shared control height');
+    assert.ok(buttons.includes('width="14" height="14"'), 'icons stay readable while being slightly tighter than the prior 16px versions');
+  });
+
+  // Oxygen's own icons (nested-fold-and-highlight-plan.md item 2 follow-up
+  // -- matched pixel-for-pixel rather than a from-scratch design, per this
+  // project's Oxygen-as-reference-standard convention), embedded as base64
+  // data URIs rather than the text glyphs every other toolbar button here
+  // uses.
+  it('sets each button\'s own icon via an inline <svg> using currentColor/theme variables, not a fixed-color image, and the two icons differ from each other', () => {
+    const expandChunk = buttons.split('__site-collapse-all-btn')[0];
+    const collapseChunk = buttons.split('__site-collapse-all-btn')[1];
+    const expandSvg = /innerHTML = '(<svg[^;]+<\/svg>)'/.exec(expandChunk);
+    const collapseSvg = /innerHTML = '(<svg[^;]+<\/svg>)'/.exec(collapseChunk);
+    assert.ok(expandSvg, 'expand-all button gets an inline <svg> icon');
+    assert.ok(collapseSvg, 'collapse-all button gets an inline <svg> icon');
+    assert.notStrictEqual(expandSvg![1], collapseSvg![1], 'the two icons must not be identical');
+    // currentColor (not a hardcoded hex) is what lets the icon repaint
+    // itself on a theme switch along with the rest of this toolbar's
+    // already-themed buttons -- a regression back to a fixed palette
+    // would not be caught by "the script parses" alone.
+    for (const svg of [expandSvg![1], collapseSvg![1]]) {
+      assert.ok(svg.includes('stroke="currentColor"'), 'outline follows the button\'s own text color');
+      // A hex color is fine as a var(...) fallback (the same pattern
+      // btnStyle's own color/background already use) but not as a
+      // standalone attribute value -- that would be a fixed color baked
+      // into the icon regardless of theme, the exact thing this redesign
+      // moved away from.
+      assert.ok(!/="#[0-9a-fA-F]{3,6}"/.test(svg), 'no color attribute is a bare hex value');
+    }
+    // No <img>/data: URI at all -- that approach cannot resolve
+    // currentColor or var(...) in the first place, since an <img>'s SVG
+    // renders in its own separate resource context.
+    assert.ok(!buttons.includes('<img'));
+    assert.ok(!buttons.includes('data:image'));
+  });
+
+  it('collapse-all sets collapsed on every has-children item, and expand-all clears it, keeping both aria-expanded attributes and the toggle aria-label in step', () => {
+    const items = [makeItem(), makeItem(), makeItem()];
+    const clicks: Record<string, () => void> = {};
+    const document = {
+      querySelectorAll: (sel: string) => (sel === '.site-nav-item.has-children' ? items : []),
+      createElement: () => {
+        const el = { id: '', style: { cssText: '' }, setAttribute: () => {}, addEventListener(_e: string, fn: () => void) { clicks[el.id] = fn; } };
+        return el;
+      },
+    };
+    new Function('document', 'btnStyle', helper + buttons)(document, '');
+
+    clicks['__site-collapse-all-btn']();
+    for (const it of items) {
+      assert.strictEqual(it.classes.has('collapsed'), true);
+      assert.strictEqual(it.attrs['aria-expanded'], 'false');
+      assert.strictEqual(it.toggle!.attrs['aria-expanded'], 'false');
+      assert.strictEqual(it.toggle!.attrs['aria-label'], 'Expand', 'a collapsed row offers to expand');
+    }
+
+    clicks['__site-expand-all-btn']();
+    for (const it of items) {
+      assert.strictEqual(it.classes.has('collapsed'), false);
+      assert.strictEqual(it.attrs['aria-expanded'], 'true');
+      assert.strictEqual(it.toggle!.attrs['aria-expanded'], 'true');
+      assert.strictEqual(it.toggle!.attrs['aria-label'], 'Collapse');
+    }
+  });
+
+  it('is idempotent: collapse-all twice leaves the same state, rather than toggling back open', () => {
+    const items = [makeItem()];
+    const clicks: Record<string, () => void> = {};
+    const document = {
+      querySelectorAll: () => items,
+      createElement: () => {
+        const el = { id: '', style: { cssText: '' }, setAttribute: () => {}, addEventListener(_e: string, fn: () => void) { clicks[el.id] = fn; } };
+        return el;
+      },
+    };
+    new Function('document', 'btnStyle', helper + buttons)(document, '');
+
+    clicks['__site-collapse-all-btn']();
+    clicks['__site-collapse-all-btn']();
+
+    assert.strictEqual(items[0].classes.has('collapsed'), true, 'a set-to-state API, not a per-item toggle');
+  });
+
+  it('does not throw on an item with no toggle element', () => {
+    const items = [makeItem(false)];
+    const clicks: Record<string, () => void> = {};
+    const document = {
+      querySelectorAll: () => items,
+      createElement: () => {
+        const el = { id: '', style: { cssText: '' }, setAttribute: () => {}, addEventListener(_e: string, fn: () => void) { clicks[el.id] = fn; } };
+        return el;
+      },
+    };
+    new Function('document', 'btnStyle', helper + buttons)(document, '');
+
+    assert.doesNotThrow(() => clicks['__site-collapse-all-btn']());
+    assert.strictEqual(items[0].classes.has('collapsed'), true, 'the class still lands even without a toggle to relabel');
+  });
+
+  it('getSiteNavToggleScript routes its own single-item flip through the same shared setter rather than declaring its own', () => {
+    const toggleScript = getSiteNavToggleScript();
+    assert.ok(toggleScript.includes('setSiteNavItemCollapsed'), 'uses the shared setter');
+    assert.ok(!/function\s+setSiteNavItemCollapsed/.test(toggleScript), 'does not declare a second copy of it');
+    assert.ok(/function\s+setSiteNavItemCollapsed/.test(helper), 'the helper script is the one declaring it');
+  });
+
+  // nested-fold-and-highlight-plan.md item 3: persisted collapse state.
+  // reportSiteNavCollapseState is only declared when a message type is
+  // supplied -- these exercise that opt-in path specifically, wiring it
+  // together with the toggle/batch scripts the same way getMapWebviewScript
+  // does, since reportSiteNavCollapseState's own correctness only matters
+  // in combination with what calls it.
+  describe('reportSiteNavCollapseState (nested-fold-and-highlight-plan.md item 3)', () => {
+    const helperWithReport = getSiteNavCollapseStateHelperScript({ reportCollapseMsgType: 'setNavCollapsed' });
+
+    function makeItemWithId(id: string | null, hasToggle = true): FakeItem & { navId: string | null } {
+      const it = makeItem(hasToggle) as FakeItem & { navId: string | null };
+      it.navId = id;
+      return it;
+    }
+
+    function makeReportDocument(items: (FakeItem & { navId: string | null })[]) {
+      const posted: unknown[] = [];
+      const vscode = { postMessage: (m: unknown) => posted.push(m) };
+      const document = {
+        querySelectorAll: (sel: string) =>
+          sel === '.site-nav-item.has-children[data-nav-id]' ? items.filter((it) => it.navId !== null) : items,
+      };
+      // getAttribute('data-nav-id') added directly on the fakes here rather
+      // than in the shared makeItem helper above -- only this describe
+      // block's tests care about it.
+      for (const it of items) {
+        const original = it.attrs;
+        (it as unknown as { getAttribute(n: string): string | null }).getAttribute = (n: string) =>
+          n === 'data-nav-id' ? it.navId : (n in original ? original[n] : null);
+      }
+      return { document, vscode, posted };
+    }
+
+    it('is not declared at all when no message type is supplied, so calling it is left to the typeof guard', () => {
+      assert.ok(!/function\s+reportSiteNavCollapseState/.test(helper));
+    });
+
+    it('reports only the collapsed ids among has-children[data-nav-id] items, omitting expanded ones and items with no id', () => {
+      const collapsedWithId = makeItemWithId('grp:0');
+      collapsedWithId.classes.add('collapsed');
+      const expandedWithId = makeItemWithId('grp:1');
+      const collapsedNoId = makeItemWithId(null);
+      collapsedNoId.classes.add('collapsed');
+      const { document, vscode, posted } = makeReportDocument([collapsedWithId, expandedWithId, collapsedNoId]);
+
+      new Function('document', 'vscode', helperWithReport + '\nreportSiteNavCollapseState();')(document, vscode);
+
+      assert.strictEqual(posted.length, 1);
+      assert.deepStrictEqual(posted[0], { type: 'setNavCollapsed', ids: ['grp:0'] });
+    });
+
+    it('a single toggle click reports the resulting full set exactly once', () => {
+      const grpA = makeItemWithId('grp:0');
+      const { document: qDoc } = makeReportDocument([grpA]);
+      const posted: unknown[] = [];
+      const vscode = { postMessage: (m: unknown) => posted.push(m) };
+      const listeners: Array<(e: unknown) => void> = [];
+      const document = {
+        addEventListener: (evt: string, fn: (e: unknown) => void) => { if (evt === 'click') listeners.push(fn); },
+        querySelectorAll: qDoc.querySelectorAll,
+      };
+      // A minimal click-capable pair: getSiteNavToggleScript's own handler
+      // walks target -> closest('.site-nav-toggle') -> closest('.site-nav-item'),
+      // which the shared FakeItem/FakeToggle above were never built for
+      // (they only support the batch scripts' querySelectorAll-based path).
+      const toggleEl = {
+        closest: (sel: string) => {
+          if (sel === '.site-nav-toggle') return toggleEl;
+          if (sel === '.site-nav-item') return grpA;
+          return null;
+        },
+      };
+      new Function('document', 'vscode', helperWithReport + getSiteNavToggleScript())(document, vscode);
+
+      for (const fn of listeners) fn({ target: toggleEl, preventDefault: () => {} });
+
+      assert.strictEqual(posted.length, 1, 'exactly one report per click, not one per DOM item scanned');
+      assert.deepStrictEqual(posted[0], { type: 'setNavCollapsed', ids: ['grp:0'] });
+    });
+
+    describe('rows auto-expanded to reveal the active page (site page switch, book scroll sync)', () => {
+      // The report is the whole DOM state, so without a marker an auto-
+      // expanded branch would be recorded as EXPANDED the next time the
+      // reader touched any chevron -- silently overwriting the fold they had
+      // saved. An auto-expanded row keeps reporting as collapsed until the
+      // reader explicitly decides otherwise.
+      function setup() {
+        const grp = makeItemWithId('grp:0');
+        grp.classes.add('collapsed');
+        const other = makeItemWithId('grp:1'); // expanded all along, not an ancestor
+        const { document, vscode, posted } = makeReportDocument([grp, other]);
+        // The row whose ancestor is `grp`.
+        const navItem = { parentElement: { closest: (sel: string) => (sel === '.site-nav-item.collapsed' && grp.classes.has('collapsed') ? grp : null) } };
+        const run = (code: string) =>
+          new Function('document', 'vscode', 'navItem', helperWithReport + '\n' + code)(document, vscode, navItem);
+        return { grp, other, posted, run };
+      }
+
+      it('opens the row in the DOM but still reports it as collapsed', () => {
+        const { grp, posted, run } = setup();
+        run('expandSiteNavAncestorsOf(navItem); reportSiteNavCollapseState();');
+        assert.strictEqual(grp.classes.has('collapsed'), false, 'visibly open');
+        assert.deepStrictEqual(posted, [{ type: 'setNavCollapsed', ids: ['grp:0'] }], 'the saved fold is untouched');
+      });
+
+      it('reports it as expanded once the reader expands it themselves', () => {
+        const { posted, grp, run } = setup();
+        run('expandSiteNavAncestorsOf(navItem); setSiteNavItemCollapsed(document.querySelectorAll("x")[0], false); reportSiteNavCollapseState();');
+        assert.deepStrictEqual(posted, [{ type: 'setNavCollapsed', ids: [] }]);
+        assert.strictEqual(grp.classes.has('collapsed'), false);
+      });
+
+      it('reports it as collapsed when the reader collapses it again, and stays that way after a later expand', () => {
+        const { posted, run } = setup();
+        run('expandSiteNavAncestorsOf(navItem); var g = document.querySelectorAll("x")[0]; setSiteNavItemCollapsed(g, true); reportSiteNavCollapseState(); setSiteNavItemCollapsed(g, false); reportSiteNavCollapseState();');
+        assert.deepStrictEqual(posted, [
+          { type: 'setNavCollapsed', ids: ['grp:0'] },
+          { type: 'setNavCollapsed', ids: [] },
+        ]);
+      });
+
+      it('does not make a row that was never collapsed report as collapsed', () => {
+        const { posted, run } = setup();
+        run('expandSiteNavAncestorsOf(navItem); reportSiteNavCollapseState();');
+        assert.ok(!(posted[0] as { ids: string[] }).ids.includes('grp:1'));
+      });
+
+      it('expand-all is an explicit choice and clears the marker', () => {
+        const { grp, other } = setup();
+        const posted: unknown[] = [];
+        const clicks: Record<string, () => void> = {};
+        const document = {
+          querySelectorAll: (sel: string) => (sel === '.site-nav-item.has-children[data-nav-id]' ? [grp, other] : [grp, other]),
+          createElement: () => {
+            const el = { id: '', innerHTML: '', title: '', style: { cssText: '' }, setAttribute: () => {}, addEventListener(_e: string, fn: () => void) { clicks[el.id] = fn; } };
+            return el;
+          },
+        };
+        for (const it of [grp, other]) (it as unknown as { getAttribute(n: string): string | null }).getAttribute = (n: string) => (n === 'data-nav-id' ? it.navId : null);
+        const navItem = { parentElement: { closest: (sel: string) => (sel === '.site-nav-item.collapsed' && grp.classes.has('collapsed') ? grp : null) } };
+        const buttons = getSiteNavExpandCollapseAllButtonsScript({ expandAllTitle: 'E', collapseAllTitle: 'C' });
+        new Function('document', 'btnStyle', 'vscode', 'navItem', helperWithReport + buttons + '\nexpandSiteNavAncestorsOf(navItem);\nreturn null;')(
+          document, '', { postMessage: (m: unknown) => posted.push(m) }, navItem,
+        );
+        clicks['__site-expand-all-btn']();
+        assert.deepStrictEqual(posted, [{ type: 'setNavCollapsed', ids: [] }]);
+      });
+    });
+
+    it('collapse-all reports the full set exactly once for the whole batch, not once per item', () => {
+      const items = [makeItemWithId('a'), makeItemWithId('b'), makeItemWithId('c')];
+      const { document: qDoc } = makeReportDocument(items);
+      const posted: unknown[] = [];
+      const vscode = { postMessage: (m: unknown) => posted.push(m) };
+      const clicks: Record<string, () => void> = {};
+      const document = {
+        querySelectorAll: qDoc.querySelectorAll,
+        createElement: () => {
+          const el = { id: '', style: { cssText: '' }, setAttribute: () => {}, addEventListener(_e: string, fn: () => void) { clicks[el.id] = fn; } };
+          return el;
+        },
+      };
+      const buttonsScript = getSiteNavExpandCollapseAllButtonsScript({
+        expandAllTitle: 'Expand all', collapseAllTitle: 'Collapse all',
+      });
+      new Function('document', 'btnStyle', 'vscode', helperWithReport + buttonsScript)(document, '', vscode);
+
+      clicks['__site-collapse-all-btn']();
+
+      assert.strictEqual(posted.length, 1, 'one message for the whole sweep, not three');
+      const ids = (posted[0] as { ids: string[] }).ids.slice().sort();
+      assert.deepStrictEqual(ids, ['a', 'b', 'c']);
+    });
+  });
+});
+
+describe('getSiteOpenSourceScript (sidebar Source button + row context menu)', () => {
+  const opts = {
+    openSourceMsgType: 'openTopicSource',
+    navContextMsgType: 'navContextAction',
+    menuLabel: 'Open source',
+    openMapLabel: 'Open Map in Editor',
+    oxygenLabel: 'Open with Oxygen',
+    revealLabel: 'Reveal in Explorer',
+    findUnreferencedLabel: 'Find Unreferenced',
+    exportLabel: 'Export as HTML',
+    copyTitleLabel: 'Copy Title',
+    copyHrefLabel: 'Copy Href',
+    expandAllLabel: 'Expand All',
+    collapseAllLabel: 'Collapse All',
+    buttonLabel: 'Source',
+    buttonTitle: "Open this topic's source",
+  };
+
+  interface El {
+    tag: string;
+    className: string;
+    textContent: string;
+    children: El[];
+    addEventListener: (evt: string, fn: (e: { stopPropagation: () => void }) => void) => void;
+    click: () => void;
+    [k: string]: unknown;
+  }
+
+  function runScript(activeTarget: string | null) {
+    const posted: Array<Record<string, unknown>> = [];
+    const collapseCalls: boolean[] = [];
+    const docListeners: Record<string, (e: unknown) => void> = {};
+    const allElements: El[] = [];
+    const makeEl = (tag: string): El => {
+      const listeners: Record<string, (e: { stopPropagation: () => void }) => void> = {};
+      const el = {
+        tag, className: '', textContent: '', id: '', title: '', style: {},
+        children: [] as El[], offsetWidth: 0, offsetHeight: 0,
+        setAttribute: () => {}, remove: () => {}, contains: () => false,
+        appendChild(c: El) { el.children.push(c); return c; },
+        addEventListener: (evt: string, fn: (e: { stopPropagation: () => void }) => void) => { listeners[evt] = fn; },
+        click: () => listeners.click && listeners.click({ stopPropagation: () => {} }),
+      } as unknown as El;
+      allElements.push(el);
+      return el;
+    };
+    const document = {
+      createElement: makeEl,
+      querySelector: (sel: string) =>
+        sel === '.site-nav-link.active[data-site-target]' && activeTarget !== null
+          ? { getAttribute: () => activeTarget }
+          : null,
+      addEventListener: (evt: string, fn: (e: unknown) => void) => { docListeners[evt] = fn; },
+      body: { appendChild: () => {} },
+    };
+    const script = getSiteOpenSourceScript(opts);
+    const fn = new Function(
+      'btnStyle', 'document', 'vscode', 'window', 'setAllSiteNavCollapsed',
+      script + '; return siteOpenSourceBtn;',
+    );
+    const btn = fn('', document, { postMessage: (m: Record<string, unknown>) => posted.push(m) }, { innerWidth: 800, innerHeight: 600 }, (v: boolean) => collapseCalls.push(v));
+    return { posted, collapseCalls, docListeners, allElements, btn };
+  }
+
+  const fireContextMenu = (r: ReturnType<typeof runScript>, target: string | null) => {
+    let prevented = false;
+    r.docListeners['contextmenu']({
+      target: { closest: () => (target === null ? null : { getAttribute: () => target }) },
+      preventDefault: () => { prevented = true; },
+      clientX: 1, clientY: 1,
+    });
+    return prevented;
+  };
+
+  it('the toolbar button posts the ACTIVE page\'s target', () => {
+    const r = runScript('/book/a.dita');
+    r.btn.click();
+    assert.deepStrictEqual(r.posted, [{ type: 'openTopicSource', target: '/book/a.dita' }]);
+  });
+
+  it('the toolbar button posts nothing when no page is active', () => {
+    const r = runScript(null);
+    r.btn.click();
+    assert.deepStrictEqual(r.posted, []);
+  });
+
+  it('right-click on a topic row is intercepted; on anything else it is left to the browser', () => {
+    const r = runScript('/book/a.dita');
+    assert.strictEqual(fireContextMenu(r, '/book/b.dita'), true);
+    assert.strictEqual(fireContextMenu(r, null), false);
+  });
+
+  it('the row menu is built grouped, with a separator between every group', () => {
+    const r = runScript('/book/a.dita');
+    fireContextMenu(r, '/book/b.dita');
+    const menu = r.allElements.find((e) => e.className === 'dita-img-ctxmenu');
+    assert.ok(menu, 'a context menu was built');
+    const items = menu!.children.filter((e) => e.tag === 'button');
+    const seps = menu!.children.filter((e) => e.className === 'dita-img-ctxmenu-sep');
+    assert.strictEqual(items.length, 10, 'one button per menu entry');
+    assert.strictEqual(seps.length, 4, 'a divider between each of the 5 groups');
+  });
+
+  it('a row-scoped entry posts navContextAction with the row\'s target', () => {
+    const r = runScript('/book/a.dita');
+    fireContextMenu(r, '/book/b.dita');
+    const copyTitle = r.allElements.find((e) => e.tag === 'button' && e.textContent === 'Copy Title');
+    assert.ok(copyTitle);
+    copyTitle!.click();
+    assert.deepStrictEqual(r.posted, [{ type: 'navContextAction', action: 'copyTitle', target: '/book/b.dita' }]);
+  });
+
+  it('Expand All / Collapse All act in-page and never post a message', () => {
+    const r = runScript('/book/a.dita');
+    fireContextMenu(r, '/book/b.dita');
+    r.allElements.find((e) => e.textContent === 'Expand All')!.click();
+    r.allElements.find((e) => e.textContent === 'Collapse All')!.click();
+    assert.deepStrictEqual(r.collapseCalls, [false, true]);
+    assert.deepStrictEqual(r.posted, []);
+  });
+});
+
+describe('getTemplateSelectScript (docsite/book template dropdown)', () => {
+  function run(selected: string) {
+    const posted: Array<{ type: string; id: string }> = [];
+    const created: Array<{ tag: string; value?: string; textContent?: string; selected?: boolean; children: unknown[]; listeners: Record<string, () => void> }> = [];
+    const make = (tag: string) => {
+      const el = {
+        tag, value: '', textContent: '', selected: false, id: '', title: '', style: {} as Record<string, unknown>,
+        children: [] as unknown[], listeners: {} as Record<string, () => void>,
+        setAttribute: () => {},
+        appendChild(c: unknown) { el.children.push(c); },
+        addEventListener(evt: string, fn: () => void) { el.listeners[evt] = fn; },
+      };
+      created.push(el);
+      return el;
+    };
+    const script = getTemplateSelectScript({ msgType: 'setTemplate', title: 'Template', noneLabel: 'Default look', options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }], selected });
+    const fn = new Function('ddStyle', 'document', 'vscode', script + '; return templateSel;');
+    const sel = fn('', { createElement: make }, { postMessage: (m: { type: string; id: string }) => posted.push(m) });
+    return { sel, posted };
+  }
+
+  it('lists "no template" first, then the templates, and marks the current one', () => {
+    const { sel } = run('b');
+    const opts = sel.children as Array<{ value: string; textContent: string; selected: boolean }>;
+    assert.deepStrictEqual(opts.map((o) => o.value), ['', 'a', 'b']);
+    assert.strictEqual(opts[0].textContent, 'Default look');
+    assert.deepStrictEqual(opts.map((o) => o.selected), [false, false, true]);
+  });
+
+  it('posts the chosen id on change, and "" for the default look', () => {
+    const { sel, posted } = run('');
+    sel.value = 'a';
+    sel.listeners['change']();
+    sel.value = '';
+    sel.listeners['change']();
+    assert.deepStrictEqual(posted, [{ type: 'setTemplate', id: 'a' }, { type: 'setTemplate', id: '' }]);
+  });
+});
+
+
+describe('site toolbar navigation buttons: compact and centered', () => {
+  const histOpts = { backLabel: 'B', backTitle: 'Back', forwardLabel: 'F', forwardTitle: 'Forward' };
+  const pnOpts = { prevLabel: '\u2039', prevTitle: 'Previous topic', nextLabel: '\u203a', nextTitle: 'Next topic' };
+
+  // Every button's inline style, keyed by variable name, as the script would assign it.
+  function styleOf(script: string, varName: string): string {
+    const m = new RegExp(varName + "\\.style\\.cssText = btnStyle \\+ '([^']*)'").exec(script);
+    assert.ok(m, 'no cssText assignment found for ' + varName);
+    return m[1];
+  }
+
+  it('gives back, forward, previous and next the same short fixed width instead of glyph-plus-padding sizing', () => {
+    const hist = getSiteHistoryButtonsScript(histOpts);
+    const pn = getSitePrevNextButtonsScript(pnOpts);
+    const widths = [
+      styleOf(hist, 'siteBackBtn'),
+      styleOf(hist, 'siteForwardBtn'),
+      styleOf(pn, 'sitePrevBtn'),
+      styleOf(pn, 'siteNextBtn'),
+    ].map((css) => /(?:^|;)width:(\d+)px/.exec(css)?.[1]);
+    assert.ok(widths.every((w) => w !== undefined), 'each button needs an explicit width: ' + widths.join(','));
+    assert.strictEqual(new Set(widths).size, 1, 'all four share one width');
+    assert.ok(Number(widths[0]) <= 24, 'and it is compact');
+  });
+
+  it('centers the content of all four buttons', () => {
+    const hist = getSiteHistoryButtonsScript(histOpts);
+    const pn = getSitePrevNextButtonsScript(pnOpts);
+    for (const css of [styleOf(hist, 'siteBackBtn'), styleOf(hist, 'siteForwardBtn'), styleOf(pn, 'sitePrevBtn'), styleOf(pn, 'siteNextBtn')]) {
+      assert.ok(css.includes('justify-content:center'), css);
+    }
+  });
+
+  it('renders the history label as markup so the arrows can be short SVG icons rather than long font glyphs', () => {
+    const hist = getSiteHistoryButtonsScript({ ...histOpts, backLabel: '<svg></svg>' });
+    assert.ok(hist.includes("siteBackBtn.innerHTML = "), 'back label goes through innerHTML');
+    assert.ok(hist.includes("siteForwardBtn.innerHTML = "), 'forward label goes through innerHTML');
+  });
+
+  it('centers the page-width dropdown text (the "Auto" option sat left-aligned)', () => {
+    const script = getToolbarFontWidthTagTooltipsButtonsScript({
+      decreaseFontSize: 'a', increaseFontSize: 'b', fontSans: 'c', fontSerif: 'd',
+      fontCurrentSans: 'e', fontCurrentSerif: 'f', fontSizeButtonExtraStyle: '', includeFontReset: false,
+      widthAuto: 'Auto', widthFull: 'Full', widthWide: 'Wide', widthDesktop: 'Desktop', widthNarrow: 'Narrow',
+      widthTooNarrow: 'Window too narrow at "{0}" width.',
+      pageWidth: 'Page width', setWidthSelectionMsgType: 'setWidthSelection',
+      tagTooltipsLabel: 'Tags', tagTooltipsOnTitle: 'on', tagTooltipsOffTitle: 'off', setTagTooltipsMsgType: 'setTagTooltips',
+    });
+    const m = /wSel\.style\.cssText = '([^']*)'/.exec(script);
+    assert.ok(m, 'wSel cssText assignment not found');
+    assert.ok(m[1].includes('text-align:center') && m[1].includes('text-align-last:center'), m[1]);
+  });
+});
+
+describe('getToolbarPlacementScript (the toolbar becomes the docsite/book top bar)', () => {
+  interface El { tag: string; id?: string; className?: string; textContent?: string; title?: string; children: El[]; classes: string[]; classList: { add: (c: string) => void }; appendChild: (c: El) => void; offsetHeight?: number }
+  function el(tag: string): El {
+    const e: El = { tag, children: [], classes: [], classList: { add: (c: string) => { e.classes.push(c); } }, appendChild: (c) => { e.children.push(c); } };
+    return e;
+  }
+  function run(opts: { shell: boolean; header: boolean; title?: unknown }) {
+    const toolbar = el('div');
+    const bodyChildren: El[] = [el('existing')];
+    const cssVars: Record<string, string> = {};
+    const body = {
+      classList: { contains: (c: string) => c === 'site-shell' && opts.shell },
+      appendChild: (c: El) => { bodyChildren.push(c); },
+      insertBefore: (c: El, ref: El) => { bodyChildren.splice(bodyChildren.indexOf(ref), 0, c); },
+      get firstChild() { return bodyChildren[0]; },
+    };
+    const createElement = (tag: string): El => { const e = el(tag); e.offsetHeight = 26; return e; };
+    const doc = {
+      body,
+      createElement,
+      querySelector: (sel: string) => (sel === '.tpl-header' && opts.header ? {} : null),
+      documentElement: { style: { setProperty: (k: string, v: string) => { cssVars[k] = v; } } },
+    };
+    new Function('toolbar', 'document', 'window', getToolbarPlacementScript())(toolbar, doc, { __mapTitle: opts.title });
+    return { toolbar, bodyChildren, cssVars };
+  }
+
+  it('outline view (no shell) also gets the bar as its FIRST body child, a full-width top row the content scrolls beneath', () => {
+    const r = run({ shell: false, header: false, title: 'T' });
+    const bar = r.bodyChildren[0];
+    assert.strictEqual(bar.id, '__topbar');
+    assert.ok(bar.classes.includes('topbar--top'));
+    assert.ok(bar.children.includes(r.toolbar));
+    assert.strictEqual(r.bodyChildren[1].tag, 'existing');
+    assert.deepStrictEqual(r.cssVars, {}, 'no fixed-bar height var: the bar is a row, not an overlay');
+  });
+
+  it('outline view shows no title in the bar: its own heading already does', () => {
+    const bar = run({ shell: false, header: false, title: 'My Book' }).bodyChildren[0];
+    assert.strictEqual(bar.children.length, 1);
+  });
+
+  it('a shell page has no fixed class and needs no body padding var', () => {
+    const r = run({ shell: true, header: false, title: 'T' });
+    assert.ok(!r.bodyChildren[0].classes.includes('topbar--top'));
+    assert.deepStrictEqual(r.cssVars, {});
+  });
+
+  it('in a shell page a top bar becomes the FIRST body child and holds the toolbar', () => {
+    const r = run({ shell: true, header: false, title: 'My Book' });
+    const bar = r.bodyChildren[0];
+    assert.strictEqual(bar.id, '__topbar');
+    assert.strictEqual(r.bodyChildren[1].tag, 'existing');
+    assert.ok(bar.children.includes(r.toolbar));
+    assert.deepStrictEqual(r.toolbar.classes, ['in-topbar']);
+  });
+
+  it('the map title leads the bar, unless a template header already shows one or there is no title', () => {
+    const withTitle = run({ shell: true, header: false, title: 'My Book' }).bodyChildren[0];
+    assert.strictEqual(withTitle.children[0].className, 'topbar-title');
+    assert.strictEqual(withTitle.children[0].textContent, 'My Book');
+    assert.strictEqual(run({ shell: true, header: true, title: 'My Book' }).bodyChildren[0].children.length, 1);
+    assert.strictEqual(run({ shell: true, header: false, title: '' }).bodyChildren[0].children.length, 1);
+    assert.strictEqual(run({ shell: true, header: false, title: undefined }).bodyChildren[0].children.length, 1);
+  });
+});
+
+describe('toolbar icons and alignment', () => {
+  it('previous/next topic buttons draw centered SVG chevrons, not font glyphs', () => {
+    const script = getSitePrevNextButtonsScript({ prevLabel: PREV_TOPIC_ICON_SVG, prevTitle: 'P', nextLabel: NEXT_TOPIC_ICON_SVG, nextTitle: 'N' });
+    assert.ok(script.includes('sitePrevBtn.innerHTML'));
+    assert.ok(script.includes('siteNextBtn.innerHTML'));
+    assert.ok(PREV_TOPIC_ICON_SVG.startsWith('<svg') && NEXT_TOPIC_ICON_SVG.startsWith('<svg'));
+    assert.notStrictEqual(PREV_TOPIC_ICON_SVG, NEXT_TOPIC_ICON_SVG);
+  });
+
+  it('the template dropdown centers its displayed value like the width dropdown', () => {
+    const script = getTemplateSelectScript({ msgType: 'setTemplate', title: 'T', noneLabel: 'None', options: [], selected: '' });
+    assert.ok(script.includes('text-align:center;text-align-last:center;'));
   });
 });

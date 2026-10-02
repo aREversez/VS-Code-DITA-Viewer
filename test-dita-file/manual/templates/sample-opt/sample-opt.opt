@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<publishing-template>
+  <name>Sample (.opt)</name>
+  <webhelp>
+    <tags>
+      <tag type="layout">sidebar</tag>
+      <tag type="color">green</tag>
+      <tag type="color">light</tag>
+    </tags>
+    <resources>
+      <css file="sample-opt.css"/>
+    </resources>
+    <parameters>
+      <parameter name="webhelp.show.main.page.toc" value="yes"/>
+    </parameters>
+  </webhelp>
+</publishing-template>

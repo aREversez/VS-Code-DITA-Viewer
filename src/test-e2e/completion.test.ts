@@ -98,6 +98,8 @@ describe('DITA completion', () => {
     // would read 'topics\db_overview.dita' and fail here.
     const expected = [
       'common/keys.ditamap',
+      'pdf-export-bookmap-test.ditamap',
+      'pdf-export-test.ditamap',
       'relative_test/relative_path_test-book.ditamap',
       'relative_test/relative_path_test.ditamap',
       'reuse/reuse.dita',
@@ -109,6 +111,7 @@ describe('DITA completion', () => {
       'topics/mathml_mfenced_test.dita',
       'topics/mathml_prefixed_test.dita',
       'topics/mathml_test.dita',
+      'topics/pdf-export-test.dita',
       'topics/profiling_test.dita',
     ];
 
@@ -124,7 +127,7 @@ describe('DITA completion', () => {
     const items = await completeAfter(path.join('fixture', 'topics', 'db_overview.dita'), 'href="', '"');
     const labels = labelsOfKind(items, vscode.CompletionItemKind.File);
 
-    // Same eight files as the case above, but bare: from inside topics/ they sit
+    // Same files as the case above (the ones under topics/), but bare: from inside topics/ they sit
     // at depth 0. Nothing may be prefixed with '..' or name test.ditamap --
     // both would mean the walk escaped the document's folder, which would make
     // the inserted href resolve against the wrong directory.
@@ -137,6 +140,7 @@ describe('DITA completion', () => {
       'mathml_mfenced_test.dita',
       'mathml_prefixed_test.dita',
       'mathml_test.dita',
+      'pdf-export-test.dita',
       'profiling_test.dita',
     ]);
     assert.ok(

@@ -14,7 +14,7 @@ import type { DitaFileEventKind } from '../editor/ditaFileWatcher';
  * True when a file event should reload the map tree.
  *
  * Everything the tree displays comes out of the map file itself: getDisplayName
- * reads topicmeta navtitle, then linktext, then shortdesc, then a keyword, and
+ * reads topicmeta navtitle, then linktext (a keydef also its keyword), and
  * falls back to the href's filename and the keys attribute -- it never opens
  * the referenced topic. So editing a .dita cannot change any label, icon or
  * description in the tree, and reloading for one would only rebuild the whole
@@ -35,7 +35,11 @@ import type { DitaFileEventKind } from '../editor/ditaFileWatcher';
  * Other watched extensions (css, images) affect a rendered preview but nothing
  * the tree shows.
  */
-export function shouldRefreshMapTree(fsPath: string, kind: DitaFileEventKind): boolean {
+export function shouldRefreshMapTree(fsPath: string, kind: DitaFileEventKind, fromEditor = false): boolean {
+  // Unsaved text is not the file the tree is built from, and reloading on
+  // every keystroke of an open map would collapse the user's expansion state
+  // each time. The save that follows arrives as a disk event.
+  if (fromEditor) return false;
   const lower = fsPath.toLowerCase();
   if (lower.endsWith('.ditamap')) return true;
   if (lower.endsWith('.dita')) return kind !== 'change';

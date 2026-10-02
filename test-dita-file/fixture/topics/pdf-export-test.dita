@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!--
+  Fixture for manually verifying media/pdf-customization/ against a real
+  `dita -f pdf` run (there is no automated check — the fix only shows up in
+  FOP's output, not in any code this repo runs). Render pdf-export-test.ditamap
+  with and without the customization in place and compare:
+
+  1. fig_overflow: db_topology.png is 2288px wide, several times the usable
+     column width on an A4 page. Uncustomized it runs off the page edge; the
+     `image` attribute-set override should shrink it to fit without cropping
+     or upscaling.
+  2. codeph_inline / long-path: ordinary inline <codeph>s check the new
+     background/padding read as intended and don't clash with adjacent text
+     or line height. <p id="long-path"> carries a deliberately pathological
+     long, space-free <codeph> string — this one is expected to still
+     overflow; it's the "how bad is the default" probe for the deferred
+     zero-width-break fix (see media/pdf-customization/fo/xsl/custom.xsl).
+-->
+<topic id="pdf-export-test" xml:lang="zh-CN">
+    <title>PDF 导出定制验证</title>
+    <shortdesc>用于手动验证 media/pdf-customization/ 的两处修复：大图片缩放、行内代码样式。</shortdesc>
+    <body>
+        <section id="section_image">
+            <title>超宽图片</title>
+            <fig id="fig_overflow">
+                <title>数据库分布式部署拓扑图（原图 2288px 宽，远超版心宽度）</title>
+                <image href="../images/db_topology.png" alt="images/db_topology.png"/>
+            </fig>
+        </section>
+        <section id="section_codeph">
+            <title>行内代码样式</title>
+            <p>普通调用：<codeph>buildDitaOtArgs()</codeph>，前后的正文文字不应被背景条或 padding 顶开、错位。</p>
+            <p>混合文本：先执行 <codeph>npm run compile</codeph>，再用 <codeph>dita -f pdf</codeph> 转换。</p>
+            <p id="long-path">超长无空格字符串（预期仍会溢出，用于评估是否需要进一步做零宽断点处理）：<codeph>com.example.verylongservicename.integration.handler.impl.DefaultAsyncRetryCachingFallbackChainInvocationHandlerFactoryBean</codeph></p>
+        </section>
+    </body>
+</topic>

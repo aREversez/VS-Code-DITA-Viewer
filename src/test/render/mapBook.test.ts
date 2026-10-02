@@ -17,6 +17,7 @@ import {
   resolveBookTopicPath,
   buildBookNavManifest,
   renderSiteNavHtml,
+  renderSiteNavTreeHtml,
 } from '../../editor/ditaRenderUtils';
 import type { BookPart } from '../../editor/bookPatch';
 
@@ -577,8 +578,16 @@ describe('renderBookEntries', () => {
 
     assert.ok(html.startsWith('<div class="ditamap-book">'), 'the wrapper styles.css and the toolbar script look for');
     assert.ok(html.endsWith('</div>'));
-    assert.strictEqual(countOf(html, '<div class="book-entry">'), 2, 'one wrapper per rendered topic');
+    assert.strictEqual((html.match(/<div class="book-entry"/g) || []).length, 2, 'one wrapper per rendered topic');
     assert.ok(html.indexOf('alpha') < html.indexOf('beta'), 'map order, not filesystem order');
+    // Each topic's own resolved path doubles as its book-mode scroll anchor
+    // (nested-fold-and-highlight-plan.md item 1) -- the exact same id
+    // buildBookNavManifest would give the same entry in its own manifest,
+    // computed from the one shared computeManifestEntryPositions helper
+    // rather than re-derived here, so the sidebar and the book content can
+    // never disagree about where a topic's anchor sits.
+    assert.ok(html.includes(`data-book-anchor="${join(dir, 'topics', 'order-a.dita')}"`));
+    assert.ok(html.includes(`data-book-anchor="${join(dir, 'topics', 'order-b.dita')}"`));
   });
 
   it('should render a book-internal cross-file xref as a clickable link even when it points FORWARD to a topic later in reading order (membership must be known for the whole book up front, not built incrementally as each topic is rendered)', () => {
@@ -643,11 +652,18 @@ describe('renderBookEntries', () => {
       topicRef('topics/dup.dita', 'Dup'),
     ]);
 
-    assert.strictEqual(countOf(html, '<div class="book-entry">'), 2, 'the repeat contributes no second copy');
+    assert.strictEqual((html.match(/<div class="book-entry"/g) || []).length, 2, 'the repeat contributes no second copy');
     assert.strictEqual(countOf(html, 'once'), 1, 'a book that repeats a topic would also repeat its ids');
     assert.ok(html.includes('class="book-skip"'), 'and it says so, rather than silently dropping the reference');
     assert.ok(html.includes('topics/dup.dita'), 'the skip message names the href it skipped');
     assert.ok(html.indexOf('between') < html.indexOf('book-skip'), 'the skip lands where the third reference was');
+    // The duplicate reference itself gets no second anchor -- there is only
+    // ever one manifest entry (and one sidebar row) for a repeated topic.
+    assert.strictEqual(
+      countOf(html, `data-book-anchor="${join(dir, 'topics', 'dup.dita')}"`),
+      1,
+      'the repeated reference does not get its own anchor',
+    );
   });
 
   it('should turn an unreadable topic into an inline error block and carry on with the rest of the book', () => {
@@ -712,9 +728,10 @@ describe('renderBookEntries', () => {
     const first = renderBook(entries);
     assert.ok(first.includes('alpha') && first.includes('beta'));
 
-    // New bytes on disk, mtime pinned where it was: only a cached answer can
+    // New bytes on disk -- the same number of them, since the stamp is
+    // mtime:size -- with mtime pinned where it was: only a cached answer can
     // reproduce the previous pass exactly.
-    writeTopic('topics/reuse-b.dita', '<p>beta rewritten</p>');
+    writeTopic('topics/reuse-b.dita', '<p>zeta</p>');
     assert.strictEqual(
       renderBook(entries),
       first,
@@ -723,7 +740,7 @@ describe('renderBookEntries', () => {
 
     bumpMtime(b);
     const third = renderBook(entries);
-    assert.ok(third.includes('beta rewritten'), 'the edited topic is re-rendered');
+    assert.ok(third.includes('zeta'), 'the edited topic is re-rendered');
     assert.ok(third.includes('alpha'), 'and the untouched one is still there');
   });
 
@@ -904,6 +921,74 @@ describe('renderBookEntries', () => {
 
       assert.strictEqual(wrapBookParts(renderParts(entries)), renderBook(entries));
     });
+
+    // nested-fold-and-highlight-plan.md item 1: book mode's own sidebar
+    // scrolls to a part by this same id, computed by the one shared helper
+    // buildBookNavManifest itself builds its ids from (computeManifestEntryPositions,
+    // not exported -- exercised here through renderBookParts' own output
+    // and cross-checked against buildBookNavManifest directly below).
+    describe('anchor ids (data-book-anchor)', () => {
+      it("should stamp a navigable topic's part with its own resolved path, matching buildBookNavManifest's id for the same entry", () => {
+        writeTopic('topics/anchor-a.dita', '<p>a</p>');
+        const entries = [topicRef('topics/anchor-a.dita', 'A')];
+
+        const parts = renderParts(entries);
+        const manifest = buildBookNavManifest(entries, dir);
+
+        const expectedId = join(dir, 'topics', 'anchor-a.dita');
+        assert.ok(parts[0].html.includes(`data-book-anchor="${expectedId}"`));
+        assert.strictEqual(manifest[0].id, expectedId, 'sidebar and book content must agree on this entry\'s id');
+      });
+
+      it('should stamp a hrefless group heading (one with real descendants) with its positional grp: id, matching buildBookNavManifest', () => {
+        const entries = [
+          topicRef(undefined, 'Chapter 1: Intro'),
+          topicRef('topics/anchor-b.dita', 'About', 1),
+        ];
+        writeTopic('topics/anchor-b.dita', '<p>b</p>');
+
+        const parts = renderParts(entries);
+        const manifest = buildBookNavManifest(entries, dir);
+
+        assert.ok(parts[0].html.includes('data-book-anchor="grp:0"'));
+        assert.strictEqual(manifest[0].id, 'grp:0');
+      });
+
+      it('should NOT stamp a childless hrefless entry (a bare key-only topicref) -- buildBookNavManifest drops it, so the sidebar never links to it', () => {
+        const entries = [topicRef(undefined, 'V1.0.0')];
+
+        const parts = renderParts(entries);
+        const manifest = buildBookNavManifest(entries, dir);
+
+        assert.ok(!parts[0].html.includes('data-book-anchor'));
+        assert.strictEqual(manifest.length, 0, 'confirms this entry really has no sidebar row to scroll to');
+      });
+
+      it('should NOT stamp the second of two references to the same topic -- there is only one manifest entry (and sidebar row) for it', () => {
+        writeTopic('topics/anchor-dup.dita', '<p>d</p>');
+        const entries = [
+          topicRef('topics/anchor-dup.dita', 'D'),
+          topicRef('topics/anchor-dup.dita', 'D again'),
+        ];
+
+        const parts = renderParts(entries);
+
+        assert.ok(parts[0].html.includes('data-book-anchor='));
+        assert.ok(!parts[1].html.includes('data-book-anchor'), 'the skip note is not a second addressable copy');
+      });
+
+      it('should NOT stamp an unreadable/.ditamap-referencing entry with no absPath of its own', () => {
+        writeFileSync(
+          join(dir, 'topics', 'anchor-sub.ditamap'),
+          '<?xml version="1.0" encoding="UTF-8"?>\n<map><title>X</title></map>',
+        );
+        const entries = [topicRef('topics/anchor-sub.ditamap', 'Sub')];
+
+        const parts = renderParts(entries);
+
+        assert.ok(!parts[0].html.includes('data-book-anchor'));
+      });
+    });
   });
 });
 
@@ -959,8 +1044,8 @@ describe('resolveBookTopicPath / buildBookNavManifest (docsite nav manifest)', (
     ];
     const manifest = buildBookNavManifest(entries, docDir);
     assert.deepStrictEqual(manifest, [
-      { absPath: join(docDir, 'topics/ch1.dita'), title: 'Chapter One', depth: 0, role: 'Chapter 1', topicType: undefined },
-      { absPath: join(docDir, 'topics/ch1-s1.dita'), title: 'Section 1.1', depth: 1, role: undefined, topicType: undefined },
+      { id: join(docDir, 'topics/ch1.dita'), absPath: join(docDir, 'topics/ch1.dita'), href: 'topics/ch1.dita', title: 'Chapter One', depth: 0, role: 'Chapter 1', topicType: undefined },
+      { id: join(docDir, 'topics/ch1-s1.dita'), absPath: join(docDir, 'topics/ch1-s1.dita'), href: 'topics/ch1-s1.dita', title: 'Section 1.1', depth: 1, role: undefined, topicType: undefined },
       // The trailing hrefless entry has nothing deeper following it, so
       // it's dropped rather than becoming an empty group header.
     ]);
@@ -974,10 +1059,25 @@ describe('resolveBookTopicPath / buildBookNavManifest (docsite nav manifest)', (
     ];
     const manifest = buildBookNavManifest(entries, docDir);
     assert.deepStrictEqual(manifest, [
-      { title: 'Chapter 1: Intro', depth: 0, role: undefined, isGroup: true },
-      { absPath: join(docDir, 'topics/about.dita'), title: 'About', depth: 1, role: undefined, topicType: undefined },
-      { absPath: join(docDir, 'topics/overview.dita'), title: 'Overview', depth: 1, role: undefined, topicType: undefined },
+      { id: 'grp:0', title: 'Chapter 1: Intro', depth: 0, role: undefined, isGroup: true },
+      { id: join(docDir, 'topics/about.dita'), absPath: join(docDir, 'topics/about.dita'), href: 'topics/about.dita', title: 'About', depth: 1, role: undefined, topicType: undefined },
+      { id: join(docDir, 'topics/overview.dita'), absPath: join(docDir, 'topics/overview.dita'), href: 'topics/overview.dita', title: 'Overview', depth: 1, role: undefined, topicType: undefined },
     ]);
+  });
+
+  it('carries the raw href on a navigable entry (for the sidebar menu\'s Copy Href) and none on a group', () => {
+    const entries: MapEntry[] = [
+      { href: undefined, displayName: 'Part I', displayNameExplicit: true, depth: 0 },
+      { href: 'topics/one.dita#frag', displayName: 'One', displayNameExplicit: true, depth: 1 },
+    ];
+    const manifest = buildBookNavManifest(entries, docDir);
+    assert.strictEqual(manifest.length, 2);
+    // Group entry: no href of its own -- the key is absent, not undefined-valued.
+    assert.ok(!('href' in manifest[0]), 'a group entry carries no href key');
+    // Navigable entry: the raw href, fragment and all (unresolved -- the
+    // host reads it back by absPath, and Copy Href wants exactly what the
+    // map wrote, not the resolved path).
+    assert.strictEqual(manifest[1].href, 'topics/one.dita#frag');
   });
 
   it('drops a hrefless entry with no descendants (a bare key-only topicref/keydef used only for keyref substitution) rather than showing an empty group', () => {
@@ -1187,6 +1287,51 @@ describe('resolveBookTopicPath / buildBookNavManifest (docsite nav manifest)', (
         join(docDir, 'topics/db_ui_test.dita'),
       ],
     );
+  });
+
+  // --- stable id (sidebar collapsed-state persistence keys off this) ---
+
+  it('gives every entry a stable, unique id -- navigable entries use their absPath, group entries a positional grp: path', () => {
+    const entries: MapEntry[] = [
+      { href: undefined, displayName: 'Chapter 1', displayNameExplicit: true, depth: 0 },
+      { href: 'topics/a.dita', displayName: 'A', displayNameExplicit: true, depth: 1 },
+      // Second top-level group shares the exact same title as the first --
+      // title can't be the id (two <topichead>s commonly share text, and
+      // the title itself is re-localized when the UI language changes),
+      // so this must not collide with the first group's id.
+      { href: undefined, displayName: 'Chapter 1', displayNameExplicit: true, depth: 0 },
+      { href: 'topics/b.dita', displayName: 'B', displayNameExplicit: true, depth: 1 },
+    ];
+    const manifest = buildBookNavManifest(entries, docDir);
+    assert.strictEqual(manifest.length, 4);
+    const ids = manifest.map((e) => e.id);
+    assert.strictEqual(new Set(ids).size, 4, 'all four ids must be unique even though two group headers share the exact same title');
+    assert.strictEqual(manifest[0].id, 'grp:0');
+    assert.strictEqual(manifest[1].id, join(docDir, 'topics/a.dita'));
+    assert.strictEqual(manifest[2].id, 'grp:1', 'the second same-titled group header gets a different positional id, not the first one\'s');
+    assert.strictEqual(manifest[3].id, join(docDir, 'topics/b.dita'));
+  });
+
+  it('id is deterministic across repeated builds of the exact same entries', () => {
+    const entries: MapEntry[] = [
+      { href: undefined, displayName: 'Group', displayNameExplicit: true, depth: 0 },
+      { href: 'topics/x.dita', displayName: 'X', displayNameExplicit: true, depth: 1 },
+    ];
+    const first = buildBookNavManifest(entries, docDir).map((e) => e.id);
+    const second = buildBookNavManifest(entries, docDir).map((e) => e.id);
+    assert.deepStrictEqual(first, second);
+  });
+
+  it('nested group ids are dot-joined by ancestor position, not just their own sibling index', () => {
+    const entries: MapEntry[] = [
+      { href: undefined, displayName: 'Outer', displayNameExplicit: true, depth: 0 },
+      { href: undefined, displayName: 'Inner', displayNameExplicit: true, depth: 1 },
+      { href: 'topics/leaf.dita', displayName: 'Leaf', displayNameExplicit: true, depth: 2 },
+    ];
+    const manifest = buildBookNavManifest(entries, docDir);
+    assert.strictEqual(manifest[0].id, 'grp:0');
+    assert.strictEqual(manifest[1].id, 'grp:0.0');
+    assert.strictEqual(manifest[2].id, join(docDir, 'topics/leaf.dita'));
   });
 });
 
@@ -1427,5 +1572,150 @@ describe('renderSiteNavHtml', () => {
     assert.ok(chapter1Li![0].includes('data-site-target="/proj/docs/topics/a.dita"'));
     assert.ok(chapter1Li![0].includes('data-site-target="/proj/docs/topics/b.dita"'));
     assert.ok(!chapter1Li![0].includes('data-site-target="/proj/docs/topics/c.dita"'), 'chapter 2\'s topic C must not leak into chapter 1\'s own subtree');
+  });
+});
+
+// nested-fold-and-highlight-plan.md item 1's side-channel sidebar refresh
+// (MapViewerProvider.ts MSG_UPDATE_SIDEBAR) replaces .site-nav's innerHTML
+// with renderSiteNavTreeHtml's output directly, leaving the <nav> element
+// itself untouched -- so composition with the <nav> wrapper has to be
+// exact, not just visually equivalent, or the refresh would leave the
+// wrapper's own content duplicated or mismatched.
+describe('renderSiteNavTreeHtml (extracted for MapViewerProvider\'s incremental sidebar refresh)', () => {
+  const manifest = [
+    { absPath: '/proj/docs/topics/a.dita', title: 'Topic A', depth: 0 },
+    { absPath: '/proj/docs/topics/b.dita', title: 'Topic B', depth: 1 },
+  ];
+
+  it('renderSiteNavHtml is exactly <nav class="site-nav" aria-label="...">renderSiteNavTreeHtml(...)</nav>, byte for byte', () => {
+    const treeHtml = renderSiteNavTreeHtml(manifest, manifest[0].absPath, { expand: 'Expand', collapse: 'Collapse' });
+    const navHtml = renderSiteNavHtml(manifest, manifest[0].absPath, 'Topics', { expand: 'Expand', collapse: 'Collapse' });
+    assert.strictEqual(navHtml, `<nav class="site-nav" aria-label="Topics">${treeHtml}</nav>`);
+  });
+
+  it('starts with <ul class="site-nav-tree" and ends with </ul>, with no <nav> wrapper of its own', () => {
+    const treeHtml = renderSiteNavTreeHtml(manifest, manifest[0].absPath, { expand: 'Expand', collapse: 'Collapse' });
+    assert.ok(treeHtml.startsWith('<ul class="site-nav-tree"'));
+    assert.ok(treeHtml.endsWith('</ul>'));
+    assert.ok(!treeHtml.includes('<nav'));
+  });
+
+  it('defaults toggleLabels the same way renderSiteNavHtml does, when called with none', () => {
+    const grouped = [
+      { title: 'Chapter 1', depth: 0, isGroup: true },
+      { absPath: '/proj/docs/topics/a.dita', title: 'A', depth: 1 },
+    ];
+    const treeHtml = renderSiteNavTreeHtml(grouped, grouped[1].absPath as string);
+    assert.ok(treeHtml.includes('data-expand-label="Expand"'));
+    assert.ok(treeHtml.includes('data-collapse-label="Collapse"'));
+  });
+
+  // nested-fold-and-highlight-plan.md item 3: persisted collapse state.
+  // Rendering the matching rows already collapsed on arrival is what makes
+  // this "persisted" rather than "collapsed then immediately expanded"
+  // (there is no script pass that walks the tree collapsing rows after
+  // load -- everything here happens in the markup renderSiteNavTreeHtml
+  // itself produces).
+  describe('data-nav-id and collapsedIds', () => {
+    const grouped = [
+      { id: 'grp:0', title: 'Chapter 1', depth: 0, isGroup: true },
+      { id: '/proj/docs/topics/a.dita', absPath: '/proj/docs/topics/a.dita', title: 'A', depth: 1 },
+    ];
+
+    it('stamps data-nav-id from DocsiteNavEntry.id on every row that has one, group and link alike', () => {
+      const treeHtml = renderSiteNavTreeHtml(grouped, grouped[1].absPath as string);
+      assert.ok(treeHtml.includes('data-nav-id="grp:0"'));
+      assert.ok(treeHtml.includes('data-nav-id="/proj/docs/topics/a.dita"'));
+    });
+
+    it('omits data-nav-id entirely for a hand-built entry with no id, rather than falling back to title or position', () => {
+      const noId = [{ title: 'Chapter 1', depth: 0, isGroup: true }];
+      const treeHtml = renderSiteNavTreeHtml(noId, '');
+      assert.ok(!treeHtml.includes('data-nav-id'));
+    });
+
+    it('a group entry whose id is in collapsedIds renders collapsed on arrival: the class, both aria-expanded attributes, and the expand-label all set together', () => {
+      // Active page is elsewhere: a group that CONTAINS the active page is
+      // deliberately never rendered collapsed (see the describe block below).
+      const treeHtml = renderSiteNavTreeHtml(
+        grouped,
+        '/proj/docs/topics/elsewhere.dita',
+        { expand: 'Expand', collapse: 'Collapse' },
+        new Set(['grp:0']),
+      );
+      const itemMatch = /<li class="site-nav-item site-nav-item--group has-children collapsed" role="treeitem" aria-expanded="false"[^>]*>/.exec(treeHtml);
+      assert.ok(itemMatch, 'the <li> itself carries both the collapsed class and aria-expanded="false"');
+      assert.ok(treeHtml.includes('aria-expanded="false" aria-label="Expand"'), 'the toggle button itself is also collapsed, offering to expand');
+      // The children <ul> is still rendered (media/styles.css hides it via
+      // the .collapsed cascade, not a server-side omission) -- so a
+      // collapsed group's contents are still in the DOM for
+      // getBookNavClickHandlerScript/full-book search to find, just
+      // visually hidden.
+      assert.ok(treeHtml.includes('data-site-target="/proj/docs/topics/a.dita"'));
+    });
+
+    it('an id in collapsedIds that does not belong to any has-children row (e.g. a leaf, or one from a map that has since changed) is silently ignored', () => {
+      const leafOnly = [{ id: '/proj/docs/topics/a.dita', absPath: '/proj/docs/topics/a.dita', title: 'A', depth: 0 }];
+      assert.doesNotThrow(() => renderSiteNavTreeHtml(leafOnly, '', undefined, new Set(['/proj/docs/topics/a.dita', 'grp:99'])));
+      const treeHtml = renderSiteNavTreeHtml(leafOnly, '', undefined, new Set(['/proj/docs/topics/a.dita']));
+      assert.ok(!treeHtml.includes('collapsed'), 'a leaf never gets a toggle or a collapsed class regardless of collapsedIds');
+    });
+
+    it('defaults to an empty set (everything expanded) when collapsedIds is omitted, unchanged from before this feature', () => {
+      const treeHtml = renderSiteNavTreeHtml(grouped, grouped[1].absPath as string);
+      assert.ok(!treeHtml.includes('collapsed'));
+      assert.ok(treeHtml.includes('aria-expanded="true"'));
+    });
+
+    it('renderSiteNavHtml threads collapsedIds through to renderSiteNavTreeHtml unchanged', () => {
+      const withHelper = renderSiteNavTreeHtml(grouped, '', { expand: 'Expand', collapse: 'Collapse' }, new Set(['grp:0']));
+      const navHtml = renderSiteNavHtml(grouped, '', 'Topics', { expand: 'Expand', collapse: 'Collapse' }, new Set(['grp:0']));
+      assert.strictEqual(navHtml, `<nav class="site-nav" aria-label="Topics">${withHelper}</nav>`);
+    });
+  });
+
+  // A persisted collapsed set is only ever applied to rows OFF the path to the
+  // page being shown. Site mode re-renders the whole page (sidebar included)
+  // on every edit and on every open, so honouring a persisted collapse on an
+  // ancestor of the active topic would hide the row that says where the
+  // reader is, with no way to tell why.
+  describe('collapsedIds never hides the path to the active page', () => {
+    const nested = [
+      { id: 'grp:0', title: 'Part', depth: 0, isGroup: true },
+      { id: 'grp:0.0', title: 'Chapter', depth: 1, isGroup: true },
+      { id: '/p/a.dita', absPath: '/p/a.dita', title: 'A', depth: 2 },
+      { id: 'grp:1', title: 'Other part', depth: 0, isGroup: true },
+      { id: '/p/b.dita', absPath: '/p/b.dita', title: 'B', depth: 1 },
+    ];
+    const collapsedAll = new Set(['grp:0', 'grp:0.0', 'grp:1']);
+    const itemClass = (html: string, id: string): string => {
+      const m = new RegExp(`<li class="([^"]*)"[^>]*data-nav-id="${id.replace(/[.:]/g, '\\$&')}"`).exec(html);
+      assert.ok(m, `row ${id} not found`);
+      return m![1];
+    };
+
+    it('renders every collapsed ancestor of the active page expanded, however deep', () => {
+      const html = renderSiteNavTreeHtml(nested, '/p/a.dita', undefined, collapsedAll, true);
+      assert.ok(!itemClass(html, 'grp:0').includes('collapsed'), 'the part containing the active page');
+      assert.ok(!itemClass(html, 'grp:0.0').includes('collapsed'), 'the chapter containing the active page');
+    });
+
+    it('still renders collapsed the branches that do not contain the active page', () => {
+      const html = renderSiteNavTreeHtml(nested, '/p/a.dita', undefined, collapsedAll, true);
+      assert.ok(itemClass(html, 'grp:1').includes('collapsed'));
+    });
+
+    it('leaves the persisted collapse alone when revealActive is off (book mode: its currentAbsPath is only the initial highlight)', () => {
+      const html = renderSiteNavTreeHtml(nested, '/p/a.dita', undefined, collapsedAll);
+      assert.ok(itemClass(html, 'grp:0').includes('collapsed'));
+      assert.ok(itemClass(html, 'grp:0.0').includes('collapsed'));
+    });
+
+    it('applies the persisted collapse again once the active page is somewhere else', () => {
+      const html = renderSiteNavTreeHtml(nested, '/p/b.dita', undefined, collapsedAll, true);
+      assert.ok(itemClass(html, 'grp:0').includes('collapsed'));
+      assert.ok(itemClass(html, 'grp:0.0').includes('collapsed'));
+      assert.ok(!itemClass(html, 'grp:1').includes('collapsed'));
+    });
   });
 });

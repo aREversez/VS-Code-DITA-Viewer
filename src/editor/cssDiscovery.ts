@@ -109,7 +109,7 @@ function resolveCssFilePath(cssPath: string, docDir: string): string | undefined
   return undefined;
 }
 
-function resolveDirectoryPath(dirPath: string, docDir: string): string | undefined {
+export function resolveDirectoryPath(dirPath: string, docDir: string): string | undefined {
   // Absolute path
   if (isAbsolute(dirPath)) {
     return existsSync(dirPath) ? dirPath : undefined;

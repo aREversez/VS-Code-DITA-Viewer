@@ -37,6 +37,17 @@
     "Visualization",
     "Other"
   ],
+  "capabilities": {
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "%capabilities.virtualWorkspaces.description%"
+    },
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "%capabilities.untrustedWorkspaces.description%",
+      "restrictedConfigurations": []
+    }
+  },
   "main": "./dist/extension.js",
   "l10n": "./l10n",
   "contributes": {
@@ -124,6 +135,105 @@
         "command": "ditaViewer.mapExplorer.refresh",
         "title": "%command.mapExplorerRefresh.title%",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "ditaViewer.mapExplorer.selectMap",
+        "title": "%command.mapExplorerSelectMap.title%",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "ditaViewer.mapExplorer.expandAll",
+        "title": "%command.mapExplorerExpandAll.title%",
+        "icon": "$(expand-all)"
+      },
+      {
+        "command": "ditaViewer.mapExplorer.collapseAll",
+        "title": "%command.mapExplorerCollapseAll.title%",
+        "icon": "$(collapse-all)"
+      },
+      {
+        "command": "ditaViewer.mapExplorer.pin",
+        "title": "%command.mapExplorerPin.title%",
+        "icon": "$(pin)"
+      },
+      {
+        "command": "ditaViewer.mapExplorer.unpin",
+        "title": "%command.mapExplorerUnpin.title%",
+        "icon": "$(pinned)"
+      },
+      {
+        "command": "ditaViewer.openWithOxygen",
+        "title": "%command.openWithOxygen.title%",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "ditaViewer.wrapSelectionWithTag",
+        "title": "%command.wrapSelectionWithTag.title%",
+        "icon": "$(symbol-tag)"
+      },
+      {
+        "command": "ditaViewer.findReferencingMaps",
+        "title": "%command.findReferencingMaps.title%",
+        "icon": "$(references)"
+      },
+      {
+        "command": "ditaViewer.selectContextMap",
+        "title": "%command.selectContextMap.title%",
+        "icon": "$(key)"
+      },
+      {
+        "command": "ditaViewer.revealInMapExplorer",
+        "title": "%command.revealInMapExplorer.title%",
+        "icon": "$(target)"
+      },
+      {
+        "command": "ditaViewer.mapExplorer.openWithOxygen",
+        "title": "%command.mapExplorerOpenWithOxygen.title%",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "ditaViewer.mapExplorer.revealInExplorer",
+        "title": "%command.mapExplorerRevealInExplorer.title%",
+        "icon": "$(files)"
+      },
+      {
+        "command": "ditaViewer.mapExplorer.exportHtml",
+        "title": "%command.mapExplorerExportHtml.title%",
+        "icon": "$(export)"
+      },
+      {
+        "command": "ditaViewer.mapExplorer.copyHref",
+        "title": "%command.mapExplorerCopyHref.title%",
+        "icon": "$(link)"
+      },
+      {
+        "command": "ditaViewer.mapExplorer.copyTitle",
+        "title": "%command.mapExplorerCopyTitle.title%",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "ditaViewer.mapExplorer.findUnreferenced",
+        "title": "%command.mapExplorerFindUnreferenced.title%",
+        "icon": "$(search)"
+      },
+      {
+        "command": "ditaViewer.findUnreferencedResources",
+        "title": "%command.findUnreferencedResources.title%",
+        "icon": "$(search)"
+      },
+      {
+        "command": "ditaViewer.validateMapCompleteness",
+        "title": "%command.validateMapCompleteness.title%",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "ditaViewer.mapExplorer.validateCompleteness",
+        "title": "%command.mapExplorerValidateCompleteness.title%",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "ditaViewer.clearMapCheckResults",
+        "title": "%command.clearMapCheckResults.title%"
       }
     ],
     "icons": {
@@ -169,6 +279,11 @@
         "command": "ditaViewer.showMapRendered",
         "key": "ctrl+k v",
         "when": "editorLangId == ditamap || resourceExtname == .ditamap"
+      },
+      {
+        "command": "ditaViewer.wrapSelectionWithTag",
+        "key": "enter",
+        "when": "editorTextFocus && editorHasSelection && !editorReadonly && !inSnippetMode && !suggestWidgetVisible && !renameInputVisible && config.dita-viewer.wrapSelectionOnEnter && (editorLangId == dita || editorLangId == ditamap || resourceExtname == .dita || resourceExtname == .ditamap)"
       }
     ],
     "snippets": [
@@ -197,12 +312,105 @@
         "contents": "%view.mapExplorer.welcome%"
       }
     ],
+    "submenus": [
+      {
+        "id": "ditaViewer.editorContext",
+        "label": "%submenu.editorContext.label%"
+      }
+    ],
     "menus": {
       "view/title": [
         {
+          "command": "ditaViewer.mapExplorer.selectMap",
+          "when": "view == ditaViewer.mapExplorer",
+          "group": "navigation@1"
+        },
+        {
+          "command": "ditaViewer.selectContextMap",
+          "when": "view == ditaViewer.mapExplorer",
+          "group": "navigation@2"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.expandAll",
+          "when": "view == ditaViewer.mapExplorer",
+          "group": "navigation@3"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.collapseAll",
+          "when": "view == ditaViewer.mapExplorer",
+          "group": "navigation@4"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.findUnreferenced",
+          "when": "view == ditaViewer.mapExplorer",
+          "group": "navigation@5"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.validateCompleteness",
+          "when": "view == ditaViewer.mapExplorer",
+          "group": "navigation@6"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.pin",
+          "when": "view == ditaViewer.mapExplorer && !ditaViewer.mapExplorer.pinned",
+          "group": "navigation@7"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.unpin",
+          "when": "view == ditaViewer.mapExplorer && ditaViewer.mapExplorer.pinned",
+          "group": "navigation@7"
+        },
+        {
           "command": "ditaViewer.mapExplorer.refresh",
           "when": "view == ditaViewer.mapExplorer",
-          "group": "navigation"
+          "group": "navigation@8"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "ditaViewer.mapExplorer.openWithOxygen",
+          "when": "view == ditaViewer.mapExplorer && viewItem =~ /\\bfileRef\\b/",
+          "group": "0_oxygen@1"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.revealInExplorer",
+          "when": "view == ditaViewer.mapExplorer && viewItem =~ /\\bfileRef\\b/",
+          "group": "1_nav@1"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.exportHtml",
+          "when": "view == ditaViewer.mapExplorer && viewItem =~ /\\bfileRef\\b/",
+          "group": "2_export@1"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.copyTitle",
+          "when": "view == ditaViewer.mapExplorer",
+          "group": "3_copy@1"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.copyHref",
+          "when": "view == ditaViewer.mapExplorer && viewItem =~ /\\bhasHref\\b/",
+          "group": "3_copy@2"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.findUnreferenced",
+          "when": "view == ditaViewer.mapExplorer && viewItem =~ /\\broot\\b/",
+          "group": "4_find@1"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.validateCompleteness",
+          "when": "view == ditaViewer.mapExplorer && viewItem =~ /\\broot\\b/",
+          "group": "4_find@2"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.expandAll",
+          "when": "view == ditaViewer.mapExplorer",
+          "group": "expandcollapse@1"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.collapseAll",
+          "when": "view == ditaViewer.mapExplorer",
+          "group": "expandcollapse@2"
         }
       ],
       "editor/title": [
@@ -236,27 +444,91 @@
         {
           "command": "ditaViewer.showRendered",
           "when": "resourceExtname == .dita",
-          "group": "navigation"
+          "group": "navigation@1"
         },
         {
           "command": "ditaViewer.showMapRendered",
           "when": "resourceExtname == .ditamap",
-          "group": "navigation"
+          "group": "navigation@1"
+        },
+        {
+          "submenu": "ditaViewer.editorContext",
+          "when": "resourceExtname == .dita || resourceExtname == .ditamap",
+          "group": "navigation@2"
+        }
+      ],
+      "ditaViewer.editorContext": [
+        {
+          "command": "ditaViewer.exportHtml",
+          "when": "resourceExtname == .dita || resourceExtname == .ditamap",
+          "group": "1_output@1"
         },
         {
           "command": "ditaViewer.transformWithDitaOt",
           "when": "resourceExtname == .ditamap",
-          "group": "navigation"
+          "group": "1_output@2"
         },
         {
-          "command": "ditaViewer.exportHtml",
+          "command": "ditaViewer.findReferencingMaps",
           "when": "resourceExtname == .dita || resourceExtname == .ditamap",
-          "group": "1_export"
+          "group": "2_nav@1"
+        },
+        {
+          "command": "ditaViewer.revealInMapExplorer",
+          "when": "resourceExtname == .dita || resourceExtname == .ditamap",
+          "group": "2_nav@2"
+        },
+        {
+          "command": "ditaViewer.openWithOxygen",
+          "when": "resourceExtname == .dita || resourceExtname == .ditamap",
+          "group": "3_external@1"
         },
         {
           "command": "ditaViewer.compareWithGit",
           "when": "resourceExtname == .dita",
-          "group": "1_export"
+          "group": "3_external@2"
+        },
+        {
+          "command": "ditaViewer.findUnreferencedResources",
+          "when": "resourceExtname == .ditamap",
+          "group": "4_check@1"
+        },
+        {
+          "command": "ditaViewer.validateMapCompleteness",
+          "when": "resourceExtname == .ditamap",
+          "group": "4_check@2"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "ditaViewer.openWithOxygen",
+          "when": "resourceExtname == .dita || resourceExtname == .ditamap",
+          "group": "0_oxygen"
+        },
+        {
+          "command": "ditaViewer.findReferencingMaps",
+          "when": "resourceExtname == .dita || resourceExtname == .ditamap",
+          "group": "1_nav"
+        },
+        {
+          "command": "ditaViewer.revealInMapExplorer",
+          "when": "resourceExtname == .dita || resourceExtname == .ditamap",
+          "group": "1_nav"
+        },
+        {
+          "command": "ditaViewer.exportHtml",
+          "when": "resourceExtname == .dita || resourceExtname == .ditamap",
+          "group": "2_export"
+        },
+        {
+          "command": "ditaViewer.findUnreferencedResources",
+          "when": "resourceExtname == .ditamap",
+          "group": "3_check@1"
+        },
+        {
+          "command": "ditaViewer.validateMapCompleteness",
+          "when": "resourceExtname == .ditamap",
+          "group": "3_check@2"
         }
       ],
       "commandPalette": [
@@ -289,7 +561,75 @@
           "when": "resourceExtname == .dita"
         },
         {
+          "command": "ditaViewer.openWithOxygen",
+          "when": "resourceExtname == .dita || resourceExtname == .ditamap || activeCustomEditorId == ditaViewer.preview || activeCustomEditorId == ditaViewer.mapPreview"
+        },
+        {
+          "command": "ditaViewer.findReferencingMaps",
+          "when": "resourceExtname == .dita || resourceExtname == .ditamap"
+        },
+        {
+          "command": "ditaViewer.revealInMapExplorer",
+          "when": "resourceExtname == .dita || resourceExtname == .ditamap"
+        },
+        {
           "command": "ditaViewer.mapExplorer.refresh",
+          "when": "false"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.selectMap",
+          "when": "false"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.expandAll",
+          "when": "false"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.collapseAll",
+          "when": "false"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.pin",
+          "when": "false"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.unpin",
+          "when": "false"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.openWithOxygen",
+          "when": "false"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.revealInExplorer",
+          "when": "false"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.exportHtml",
+          "when": "false"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.copyHref",
+          "when": "false"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.copyTitle",
+          "when": "false"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.findUnreferenced",
+          "when": "false"
+        },
+        {
+          "command": "ditaViewer.findUnreferencedResources",
+          "when": "resourceExtname == .ditamap || ditaViewer.hasMap"
+        },
+        {
+          "command": "ditaViewer.validateMapCompleteness",
+          "when": "resourceExtname == .ditamap || ditaViewer.hasMap"
+        },
+        {
+          "command": "ditaViewer.mapExplorer.validateCompleteness",
           "when": "false"
         }
       ]
@@ -297,6 +637,11 @@
     "configuration": {
       "title": "%configuration.title%",
       "properties": {
+        "dita-viewer.wrapSelectionOnEnter": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.wrapSelectionOnEnter.description%"
+        },
         "dita-viewer.customCss": {
           "type": "array",
           "items": {
@@ -313,15 +658,101 @@
           "default": [],
           "description": "%config.cssDirectory.description%"
         },
+        "dita-viewer.templatesDirectory": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "%config.templatesDirectory.description%"
+        },
         "dita-viewer.ditaOtPath": {
           "type": "string",
           "default": "",
+          "scope": "machine",
           "description": "%config.ditaOtPath.description%"
         },
         "dita-viewer.ditaOtInjectNavToolbar": {
           "type": "boolean",
           "default": true,
           "description": "%config.ditaOtInjectNavToolbar.description%"
+        },
+        "dita-viewer.oxygenPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "%config.oxygenPath.description%"
+        },
+        "dita-viewer.completenessCheck.profilingAttributes": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "description": "%config.completenessProfilingAttributes.description%"
+        },
+        "dita-viewer.completenessCheck.singleValueProfilingAttributes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "%config.completenessSingleValueProfilingAttributes.description%"
+        },
+        "dita-viewer.unreferencedResources.includeFiles": {
+          "type": "string",
+          "default": "*",
+          "description": "%config.unrefIncludeFiles.description%"
+        },
+        "dita-viewer.unreferencedResources.excludeFiles": {
+          "type": "string",
+          "default": ".DS_Store,.gitignore,.hgignore,*.ditaval,*.xpr",
+          "description": "%config.unrefExcludeFiles.description%"
+        },
+        "dita-viewer.unreferencedResources.excludeFolders": {
+          "type": "string",
+          "default": "CVS,.svn,_svn,.git,.hg,temp,out",
+          "description": "%config.unrefExcludeFolders.description%"
+        },
+        "dita-viewer.completenessCheck.enabledChecks": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "batchValidate",
+              "checkNonDita",
+              "includeRemote",
+              "useDitaval",
+              "reportOutsideMapFolder",
+              "reportUnreferencedLinks",
+              "reportMultipleRefs",
+              "checkDuplicateTopicIds",
+              "reportDuplicateKeys",
+              "reportUnreferencedKeys",
+              "reportUnreferencedReusable",
+              "reportTableProblems",
+              "identifyProfilingConflicts",
+              "reportProfilingPreferences"
+            ]
+          },
+          "default": [
+            "batchValidate",
+            "checkNonDita",
+            "reportUnreferencedLinks",
+            "reportTableProblems"
+          ],
+          "description": "%config.completenessEnabledChecks.description%"
+        },
+        "dita-viewer.completenessCheck.ditavalFiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "%config.completenessDitavalFiles.description%"
         }
       }
     }
@@ -330,16 +761,21 @@
     "build": "node esbuild.config.js",
     "build:dev": "node esbuild.config.js --dev",
     "watch": "node esbuild.config.js --watch",
-    "lint": "eslint src/",
+    "lint": "eslint src/ --max-warnings 0",
     "lint:fix": "eslint src/ --fix",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "verify": "npm run typecheck && tsc --noEmit -p tsconfig.e2e.json && npm run lint && npm run build && npm run check:l10n && npm test",
     "check:l10n": "node scripts/check-l10n.cjs",
+    "check:package": "npx --yes @vscode/vsce@4.0.0 package --no-dependencies --allow-missing-repository && node scripts/check-package.cjs",
   "bench:book-render": "node scripts/bench-book-render.js",
     "build:icons": "node scripts/build-icon-font.js",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "pretest": "tsc -p tsconfig.test.json",
     "test": "mocha --config .mocharc.json",
-    "test:e2e": "node esbuild.config.js && tsc -p tsconfig.e2e.json && node test-runner.cjs"
+    "test:e2e": "node esbuild.config.js && tsc -p tsconfig.e2e.json && node test-runner.cjs",
+    "playwright:install": "playwright install chromium",
+    "pretest:visual": "tsc -p tsconfig.visual.json",
+    "test:visual": "mocha --config .mocharc.visual.json"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
@@ -355,6 +791,7 @@
     "eslint-config-prettier": "^9.1.0",
     "mocha": "^11.8.0",
     "opentype.js": "^2.0.0",
+    "playwright": "^1.47.0",
     "pngjs": "^7.0.0",
     "prettier": "^3.4.0",
     "sax": "^1.4.1",

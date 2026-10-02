@@ -170,3 +170,68 @@ describe('styles.css .site-nav has no top padding (sticky search box gap regress
     );
   });
 });
+
+describe('styles.css site-mode toolbar buttons', () => {
+  const css = stylesCss.replace(/\/\*[\s\S]*?\*\//g, '');
+
+  it('gives previous/next-topic no width of their own: the shared inline width must apply to all four nav buttons', () => {
+    // SITE_NAV_BTN_STYLE (ditaRenderUtils.ts) sets width:20px inline on back,
+    // forward, previous and next alike. A stylesheet min-width on the last two
+    // wins over that width and made them visibly wider than the first two.
+    const rules = [...css.matchAll(/([^{}]*#__site-(?:prev|next)-btn[^{}]*)\{([^}]*)\}/g)];
+    assert.ok(rules.length > 0, 'expected the prev/next disabled-state rule to still exist');
+    for (const [, selector, body] of rules) {
+      assert.ok(!/(^|[^-])(min-|max-)?width\s*:/.test(body), `${selector.trim()} must not set a width: ${body}`);
+    }
+  });
+});
+
+/**
+ * The map webview is a superset script (getMapWebviewScript): every mode's
+ * toolbar buttons are always built and appended, and an in-place mode switch
+ * (applyModeStage) only flips the body's mode-* class -- it never rebuilds the
+ * bar. So the buttons a mode has no use for must be hidden here, keyed on that
+ * class. These are tripwires on that visibility contract: if a rule is dropped
+ * or a button id drifts, the toolbar grows stray controls after a switch (or
+ * loses ones it should keep), and the reader sees the right-hand cluster -- and
+ * the mode button -- jump, which is exactly what the work set out to prevent.
+ */
+describe('styles.css mode-based toolbar button visibility', () => {
+  const css = stylesCss.replace(/\/\*[\s\S]*?\*\//g, '');
+
+  /** True when `body.mode-<mode> #<id>` appears in the selector list of some
+   * rule whose body sets display:none. */
+  function hiddenUnderMode(mode: 'tree' | 'book' | 'site', id: string): boolean {
+    const target = `body.mode-${mode} #${id}`;
+    for (const [, selector, body] of css.matchAll(/([^{}]*)\{([^}]*)\}/g)) {
+      if (!/display:\s*none/.test(body)) continue;
+      const parts = selector.split(',').map((s) => s.replace(/\s+/g, ' ').trim());
+      if (parts.includes(target)) return true;
+    }
+    return false;
+  }
+
+  const pageNavButtons = ['__site-back-btn', '__site-forward-btn', '__site-prev-btn', '__site-next-btn', '__site-open-source-btn'];
+  const sidebarTemplateButtons = ['__site-sidebar-toggle-btn', '__site-expand-all-btn', '__site-collapse-all-btn', '__template-select'];
+
+  it('outline (tree) mode hides every sidebar, template and page-nav control', () => {
+    for (const id of [...sidebarTemplateButtons, ...pageNavButtons]) {
+      assert.ok(hiddenUnderMode('tree', id), `body.mode-tree should hide #${id}`);
+    }
+  });
+
+  it('book mode hides the docsite page-nav controls but keeps the sidebar and template', () => {
+    for (const id of pageNavButtons) {
+      assert.ok(hiddenUnderMode('book', id), `body.mode-book should hide #${id}`);
+    }
+    for (const id of sidebarTemplateButtons) {
+      assert.ok(!hiddenUnderMode('book', id), `body.mode-book should keep #${id} visible`);
+    }
+  });
+
+  it('docsite (site) mode hides none of them (it shows the full set)', () => {
+    for (const id of [...sidebarTemplateButtons, ...pageNavButtons]) {
+      assert.ok(!hiddenUnderMode('site', id), `body.mode-site should not hide #${id}`);
+    }
+  });
+});

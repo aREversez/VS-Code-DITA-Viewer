@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<map id="keys-brand-b">
+  <title>Brand b keys</title>
+  <keydef keys="demo-product">
+    <topicmeta><keywords><keyword>Beta Hub</keyword></keywords></topicmeta>
+  </keydef>
+  <keydef keys="demo-company demo-vendor">
+    <topicmeta><keywords><keyword>Beta Ltd</keyword></keywords></topicmeta>
+  </keydef>
+</map>

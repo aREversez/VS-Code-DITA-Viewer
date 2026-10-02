@@ -2,6 +2,7 @@ import sax from 'sax';
 import { DitaNode, DitaDocument, SourceRange } from './domTypes';
 import { STANDARD_TAG_TO_BASETYPE } from './standardTagMap';
 import { MAP_STANDARD_TAG_TO_BASETYPE } from './mapTagMap';
+import { lookupNamedEntity } from './namedEntities';
 
 const TOPIC_PATTERN = /^(topic|map)\//;
 
@@ -162,44 +163,68 @@ const ISO_ENTITIES: Record<string, string> = {
   larr: '←', uarr: '↑', rarr: '→', darr: '↓', harr: '↔',
 };
 
+const BUILTIN_ENTITIES = new Set(['amp', 'lt', 'gt', 'quot', 'apos']);
+
+/** Nested-entity expansion cap; also what stops a self-referential declaration. */
+const MAX_ENTITY_DEPTH = 8;
+
+/** A CDATA section or comment (left verbatim) or a named entity reference. */
+const CDATA_COMMENT_OR_ENTITY_REF = /(<!\[CDATA\[[\s\S]*?\]\]>|<!--[\s\S]*?-->)|&([a-zA-Z_][a-zA-Z0-9_.-]*);/g;
+
+const XML_ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
+
 /**
  * Preprocess XML to avoid SAX parse errors:
- * 1. Extract entity declarations from the DOCTYPE
+ * 1. Extract general entity declarations from the DOCTYPE (single- or
+ *    double-quoted; parameter entities `<!ENTITY % ...>` are ignored)
  * 2. Strip the entire DOCTYPE declaration
- * 3. Replace known entity references with their values
- * 4. Remove any remaining undeclared entity references
- *    (keeps built-in XML entities: &amp; &lt; &gt; &quot; &apos;)
+ * 3. Replace entity references outside CDATA sections and comments:
+ *    declared entities (first declaration wins; values may reference other
+ *    entities, expanded up to MAX_ENTITY_DEPTH) take precedence over the
+ *    ISO/HTML character tables; built-in XML entities are kept as-is
+ * 4. Any reference that still can't be resolved (e.g. declared in an
+ *    external DTD subset that is never loaded) is kept as the literal
+ *    text "&name;" rather than deleted -- deleting it made the text vanish
+ *    without a trace, and a bare reference would make SAX throw
+ *
+ * CDATA sections and comments are left exactly as written: inside them
+ * "&nbsp;" is just characters (e.g. a codeblock showing HTML), not a reference.
  */
 export function preprocessEntities(xml: string): string {
-  // 1. Extract simple entity declarations: <!ENTITY name "value">
-  const entityRegex = /<!ENTITY\s+(\S+)\s+"((?:[^"\\]|\\.)*)">/g;
+  // 1. Extract simple entity declarations: <!ENTITY name "value"> / 'value'.
+  //    `[^\s%]` as the first name character rejects parameter entities
+  //    (<!ENTITY % name ...>), which are not referenced as &name;.
+  const entityRegex = /<!ENTITY\s+([^\s%]\S*)\s+(?:"([^"]*)"|'([^']*)')\s*>/g;
+  const declared = new Map<string, string>();
   let match;
-  const entities: Array<[string, string]> = [];
   while ((match = entityRegex.exec(xml)) !== null) {
-    entities.push([match[1], match[2]]);
+    if (!declared.has(match[1])) declared.set(match[1], match[2] ?? match[3]);
   }
 
   // 2. Strip the entire DOCTYPE declaration
-  let result = stripDoctype(xml);
+  const stripped = stripDoctype(xml);
 
-  // 3. Replace known entity references with their values. Entity names may
-  //    contain regex metacharacters (e.g. '.'), so escape them; the value is
-  //    substituted via a callback so '$&'/'$$' sequences stay literal.
-  for (const [name, value] of entities) {
-    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    result = result.replace(new RegExp(`&${escapedName};`, 'g'), () => value);
-  }
+  // 3./4. One pass over everything that is not a CDATA section or comment.
+  //    Values are substituted via a callback so '$&'/'$$' sequences in an
+  //    entity value stay literal, and names are looked up in a Map so ones
+  //    containing regex metacharacters (e.g. '.') match exactly.
+  const expand = (text: string, depth: number): string =>
+    text.replace(CDATA_COMMENT_OR_ENTITY_REF, (full: string, verbatim: string | undefined, name: string) => {
+      if (verbatim !== undefined) return full;
+      if (BUILTIN_ENTITIES.has(name)) return full;
+      const declaredValue = declared.get(name);
+      if (declaredValue !== undefined) {
+        // Declared values are markup and are inserted as written.
+        return depth < MAX_ENTITY_DEPTH ? expand(declaredValue, depth + 1) : `&amp;${name};`;
+      }
+      const chars = ISO_ENTITIES[name] ?? lookupNamedEntity(name);
+      // Table values are plain characters: escape the markup-significant
+      // ones (e.g. the HTML5 aliases &AMP; and &LT;).
+      if (chars !== undefined) return chars.replace(/[&<>]/g, (c) => XML_ESCAPES[c]);
+      return `&amp;${name};`;
+    });
 
-  // 4. Remove any remaining undeclared entity references to prevent
-  //    SAX parse errors. Keep built-in XML entities and substitute
-  //    well-known ISO character entities with their literal characters.
-  const builtin = new Set(['amp', 'lt', 'gt', 'quot', 'apos']);
-  result = result.replace(/&([a-zA-Z_][a-zA-Z0-9_.-]*);/g, (full, name) => {
-    if (builtin.has(name)) return full;
-    return ISO_ENTITIES[name] ?? '';
-  });
-
-  return result;
+  return expand(stripped, 0);
 }
 
 /** Strips the entire <!DOCTYPE ...> declaration, including internal subset [...]. */

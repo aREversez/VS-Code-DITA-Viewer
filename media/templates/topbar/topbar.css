@@ -1,0 +1,189 @@
+/* topbar -- built-in site/book template.
+   Distinct layout, not just a recolour: a tall, visually dominant full-width
+   header (brand + tab-style links) that reads as the primary nav, paired
+   with a narrow, quiet sidebar underneath it that plays a secondary role --
+   the opposite emphasis from classic-docs/aurora, where the sidebar carries
+   the weight. Colours live in two blocks of custom properties (light, and
+   dark for when VS Code shows a dark theme); everything below only reads
+   them. Copy the folder and change the values to make a new colour scheme;
+   add entries to template.json's header.links to populate the tab bar.
+   (A template's header only carries the author's own static links, not the
+   map's live chapter list -- see site-book-templates-plan.md route A.) */
+body[data-template="topbar"] {
+  --body-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --tpl-bg: #ffffff;
+  --tpl-fg: #1e1b2e;
+  --tpl-muted: #6b6478;
+  --tpl-accent: #6d28d9;
+  --tpl-accent-fg: #ffffff;
+  --tpl-soft: #f2edfc;
+  --tpl-nav-bg: #faf9fc;
+  --tpl-border: #e4dff0;
+  --tpl-code-bg: #f5f2fa;
+  --tpl-header-bg: #211b3a;
+  --tpl-header-fg: #ffffff;
+  --tpl-footer-bg: #f2edfc;
+  --tpl-footer-fg: #6b6478;
+  --tpl-active-fg: #6d28d9;
+  --tpl-active-bg: #f2edfc;
+  --vscode-editor-background: #ffffff;
+  --vscode-editor-foreground: #1e1b2e;
+  --vscode-foreground: #1e1b2e;
+  --vscode-descriptionForeground: #6b6478;
+  --vscode-textLink-foreground: #6d28d9;
+  --vscode-textCodeBlock-background: #f5f2fa;
+  --vscode-textPreformat-background: #f5f2fa;
+  --vscode-list-hoverBackground: #f2edfc;
+  --vscode-list-activeSelectionBackground: #f2edfc;
+  --vscode-list-activeSelectionForeground: #6d28d9;
+  --vscode-focusBorder: #6d28d9;
+  --vscode-widget-border: #e4dff0;
+  --vscode-panel-border: #e4dff0;
+  --vscode-icon-foreground: #6b6478;
+  --vscode-sideBar-background: #faf9fc;
+  --vscode-dropdown-background: #faf9fc;
+  --vscode-dropdown-foreground: #1e1b2e;
+  --vscode-dropdown-border: #e4dff0;
+  --vscode-input-background: #ffffff;
+  --vscode-input-foreground: #1e1b2e;
+  --vscode-input-border: #e4dff0;
+  --vscode-button-background: #6d28d9;
+  --vscode-button-foreground: #ffffff;
+  --color-border: #e4dff0;
+  --table-border: #d8d0e8;
+  --color-link: #6d28d9;
+  --color-code-bg: #f5f2fa;
+  --color-note-bg: #eef2fb;
+  --color-note-border: #4a90d9;
+  --color-warning-bg: #faf1de;
+  --color-warning-border: #d19a3a;
+  --color-danger-bg: #fbe9e9;
+  --color-danger-border: #c94040;
+  --color-important-bg: #f2eefb;
+  --color-important-border: #8e5cc9;
+  --color-tip-bg: #e8f6ee;
+  --color-tip-border: #2e9e5b;
+  background: var(--tpl-bg);
+  color: var(--tpl-fg);
+}
+html.vscode-dark body[data-template="topbar"],
+body[data-template="topbar"].template-dark {
+  --tpl-bg: #17141f;
+  --tpl-fg: #e8e4f0;
+  --tpl-muted: #a89fb8;
+  --tpl-accent: #b794f6;
+  --tpl-accent-fg: #1c1330;
+  --tpl-soft: #2a2340;
+  --tpl-nav-bg: #1c1828;
+  --tpl-border: #322b46;
+  --tpl-code-bg: #211c30;
+  --tpl-header-bg: #120f1e;
+  --tpl-header-fg: #f0edf7;
+  --tpl-footer-bg: #1c1828;
+  --tpl-footer-fg: #a89fb8;
+  --tpl-active-fg: #b794f6;
+  --tpl-active-bg: #2a2340;
+  --vscode-editor-background: #17141f;
+  --vscode-editor-foreground: #e8e4f0;
+  --vscode-foreground: #e8e4f0;
+  --vscode-descriptionForeground: #a89fb8;
+  --vscode-textLink-foreground: #c7a9f9;
+  --vscode-textCodeBlock-background: #211c30;
+  --vscode-textPreformat-background: #211c30;
+  --vscode-list-hoverBackground: #2a2340;
+  --vscode-list-activeSelectionBackground: #2a2340;
+  --vscode-list-activeSelectionForeground: #b794f6;
+  --vscode-focusBorder: #b794f6;
+  --vscode-widget-border: #322b46;
+  --vscode-panel-border: #322b46;
+  --vscode-icon-foreground: #a89fb8;
+  --vscode-sideBar-background: #1c1828;
+  --vscode-dropdown-background: #1c1828;
+  --vscode-dropdown-foreground: #e8e4f0;
+  --vscode-dropdown-border: #322b46;
+  --vscode-input-background: #17141f;
+  --vscode-input-foreground: #e8e4f0;
+  --vscode-input-border: #322b46;
+  --vscode-button-background: #b794f6;
+  --vscode-button-foreground: #1c1330;
+  --color-border: #322b46;
+  --table-border: #3c3454;
+  --color-link: #c7a9f9;
+  --color-code-bg: #211c30;
+  --color-note-bg: #1f2438;
+  --color-note-border: #4a90d9;
+  --color-warning-bg: #332a17;
+  --color-warning-border: #d19a3a;
+  --color-danger-bg: #331b1b;
+  --color-danger-border: #d05555;
+  --color-important-bg: #2a2340;
+  --color-important-border: #a175e0;
+  --color-tip-bg: #182a20;
+  --color-tip-border: #3fb072;
+  background: var(--tpl-bg);
+  color: var(--tpl-fg);
+}
+
+/* ── Chrome: a tall header that reads as the primary nav ── */
+body[data-template="topbar"] .tpl-header {
+  background: var(--tpl-header-bg);
+  color: var(--tpl-header-fg);
+  min-height: 60px;
+  align-items: center;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+body[data-template="topbar"] .tpl-title { font-weight: 700; font-size: 1.1rem; line-height: 1.2; }
+body[data-template="topbar"] .tpl-tagline { display: none; }
+body[data-template="topbar"] .tpl-links { margin-left: auto; display: flex; gap: 0.25rem; }
+body[data-template="topbar"] .tpl-header .tpl-link {
+  color: var(--tpl-header-fg);
+  opacity: 0.82;
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+}
+body[data-template="topbar"] .tpl-header .tpl-link:hover { opacity: 1; background: rgba(255,255,255,0.12); text-decoration: none; }
+body[data-template="topbar"] .tpl-footer {
+  background: var(--tpl-footer-bg);
+  color: var(--tpl-footer-fg);
+  font-size: 0.78rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+body[data-template="topbar"] .tpl-footer .tpl-link { color: var(--tpl-footer-fg); }
+body[data-template="topbar"] .tpl-footer .tpl-link:hover { text-decoration: underline; }
+
+/* ── Sidebar -- narrow and quiet; secondary to the topbar ── */
+body[data-template="topbar"] .site-nav { background: var(--tpl-nav-bg); }
+body[data-template="topbar"] .site-nav-link { color: var(--tpl-muted); font-size: 0.9rem; }
+body[data-template="topbar"] .site-nav-link:hover { background: var(--tpl-soft); color: var(--tpl-fg); }
+body[data-template="topbar"] .site-nav-group-label { color: var(--tpl-muted); }
+body[data-template="topbar"] .site-nav-toggle { color: var(--tpl-muted); }
+body[data-template="topbar"] .site-nav-chip--type { background: var(--tpl-code-bg); color: var(--tpl-muted); opacity: 1; }
+body[data-template="topbar"] .site-nav-link.active .site-nav-chip { background: transparent; color: var(--tpl-active-fg); border: 1px solid color-mix(in srgb, var(--tpl-active-fg) 55%, transparent); opacity: 1; }
+body[data-template="topbar"] .site-nav-resizer::before { background: var(--tpl-border); }
+body[data-template="topbar"] .site-nav-link.active { background: var(--tpl-active-bg); color: var(--tpl-active-fg); font-weight: 700; }
+
+/* ── Page ── */
+body[data-template="topbar"] #dita-content-root { background: var(--tpl-bg); color: var(--tpl-fg); }
+body[data-template="topbar"] #dita-content-root a { color: var(--color-link); }
+body[data-template="topbar"] #dita-content-root h1, body[data-template="topbar"] #dita-content-root h2, body[data-template="topbar"] #dita-content-root h3, body[data-template="topbar"] #dita-content-root h4, body[data-template="topbar"] #dita-content-root h5, body[data-template="topbar"] #dita-content-root h6 { line-height: 1.25; }
+body[data-template="topbar"] #dita-content-root .shortdesc { background: var(--tpl-soft); color: var(--tpl-fg); }
+body[data-template="topbar"] #dita-content-root pre.codeblock, body[data-template="topbar"] #dita-content-root pre.preformatted { background: var(--tpl-code-bg); border-color: var(--tpl-border); }
+body[data-template="topbar"] #dita-content-root th { background: var(--tpl-nav-bg); }
+body[data-template="topbar"] ::selection { background: var(--tpl-soft); }
+
+body[data-template="topbar"] .tpl-header { box-shadow: 0 2px 8px rgba(0,0,0,0.18); }
+body[data-template="topbar"] .site-nav { border-right: 1px solid var(--tpl-border); }
+body[data-template="topbar"] .site-nav-link { border-radius: 6px; }
+body[data-template="topbar"] .site-nav-group-label { text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px; }
+body[data-template="topbar"] .tpl-footer { border-top: 1px solid var(--tpl-border); }
+body[data-template="topbar"] #dita-content-root { line-height: 1.7; }
+body[data-template="topbar"] #dita-content-root h1 { font-size: 1.9rem; padding-bottom: 0.35em; border-bottom: 2px solid var(--tpl-accent); }
+body[data-template="topbar"] #dita-content-root h2 { margin-top: 2em; padding-bottom: 0.2em; border-bottom: 1px solid var(--tpl-border); }
+body[data-template="topbar"] #dita-content-root .shortdesc { border-left: 4px solid var(--tpl-accent); border-radius: 0 6px 6px 0; }
+body[data-template="topbar"] #dita-content-root pre.codeblock, body[data-template="topbar"] #dita-content-root pre.preformatted { border: 1px solid var(--tpl-border); border-radius: 6px; }
+body[data-template="topbar"] #dita-content-root table { border-radius: 6px; }
+body[data-template="topbar"] #dita-content-root th { text-align: left; }

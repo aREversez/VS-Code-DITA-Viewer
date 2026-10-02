@@ -45,7 +45,7 @@ describe('shouldRefreshMapTree', () => {
   });
 
   it('does NOT reload when a .dita\'s contents change, since no label is read out of the topic', () => {
-    // getDisplayName reads topicmeta/navtitle, linktext, shortdesc, a keyword,
+    // getDisplayName reads topicmeta/navtitle, linktext, a keyword,
     // then falls back to the href's filename and the keys attribute -- it never
     // opens the referenced topic. Reloading for an edit here would rebuild the
     // whole tree and collapse the user's expansion state for no visible gain.
@@ -88,5 +88,16 @@ describe('shouldRefreshMapTree', () => {
     const abs = join('n:', 'AI', 'proj', 'topics', 'db_overview.dita');
     assert.strictEqual(shouldRefreshMapTree(abs, 'change'), false);
     assert.strictEqual(shouldRefreshMapTree(join('n:', 'AI', 'proj', 'test.ditamap'), 'change'), true);
+  });
+
+  it('never reloads for an event that comes from unsaved editor text, whatever the file', () => {
+    // A ditamap being typed into is the tree's entire input, but reloading it
+    // on every keystroke would throw away the user's expansion state each
+    // time; the tree already reloads on save.
+    for (const p of ['/w/m.ditamap', '/w/a.dita']) {
+      for (const kind of ['change', 'create', 'delete'] as const) {
+        assert.strictEqual(shouldRefreshMapTree(p, kind, true), false, `${p} ${kind}`);
+      }
+    }
   });
 });

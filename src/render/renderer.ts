@@ -1,5 +1,6 @@
 import { DitaNode, SourceRange } from '../parser/domTypes';
 import { BASE_TYPE_RENDERERS } from './baseTypeMap';
+import { computeKeyrefSpacing } from './cjkSpacing';
 
 export interface RenderContext {
   headingLevel: number;
@@ -13,6 +14,16 @@ export interface RenderContext {
   resolveTitle?: (id: string) => string | undefined;
   resolveKey?: (key: string) => string | undefined;
   resolveConref?: (conref: string) => DitaNode | undefined;
+  /**
+   * Resolves a @conkeyref value ("keyname[/elementid]") to the target element
+   * by first looking the key up in the map key space (to get the target
+   * topic's href) and then addressing the element inside it. The key-based
+   * analogue of resolveConref: the renderer substitutes the returned element
+   * exactly as it would a direct conref target. Undefined (or a return of
+   * undefined) means "cannot resolve", which is when a co-located @conref acts
+   * as the fallback (DITA 1.3).
+   */
+  resolveConkeyref?: (conkeyref: string) => DitaNode | undefined;
   /** conrefend range support — see renderConrefRange below */
   resolveConrefRange?: (conref: string, conrefend: string) => DitaNode[] | undefined;
   noteLabels?: Record<string, string>;
@@ -67,6 +78,7 @@ const CONTAINER_BASETYPES = new Set([
   'topic/section',
   'topic/example',
   'topic/fig',
+  'topic/imagemap',
   'topic/related-links',
 ]);
 
@@ -299,33 +311,56 @@ function injectAttributes(html: string, tagName: string, range: SourceRange): st
 
 // Shared by both a normal single-target conref and the first member of a
 // conrefend range: the referencing element's own attributes (minus
-// conref/conrefend) take precedence, and its tag/baseType is kept when the
+// conref/conrefend/conkeyref) take precedence, and its tag/baseType is kept when the
 // target is the same baseType (DITA's "same-type" conref semantics) —
 // otherwise the target's tag/baseType wins instead, since a same-shaped
 // substitution isn't possible.
+//
+// KNOWN LIMITATION: a reference chain resolves one hop only. When the target
+// carries its own conref/conkeyref (A -> B -> C), the merge takes B's literal
+// children and drops B's reference attributes (filtered out of restAttrs and
+// targetAttrs), so C is not pulled in here. Conrefs nested *inside* the
+// resolved content are still followed, since renderNode resolves each child as
+// it walks. The plain-conref path behaves the same way — existing design, not
+// spec-complete (DITA requires transitive resolution). Recorded for the README
+// "Known limitations" section; deliberately left as-is so it does not mix with
+// the P5 pure-refactor work.
 function mergeConrefTarget(node: DitaNode, target: DitaNode): DitaNode {
   const restAttrs = Object.fromEntries(
-    Object.entries(node.attributes || {}).filter(([k]) => k !== 'conref' && k !== 'conrefend')
+    Object.entries(node.attributes || {}).filter(([k]) => k !== 'conref' && k !== 'conrefend' && k !== 'conkeyref')
   );
   if (target.baseType && target.baseType === node.baseType) {
     return { ...node, children: target.children || [], attributes: restAttrs };
   }
   const targetAttrs = Object.fromEntries(
     Object.entries(target.attributes || {})
-      .filter(([k]) => k !== 'conref' && k !== 'conrefend' && k !== 'id')
+      .filter(([k]) => k !== 'conref' && k !== 'conrefend' && k !== 'conkeyref' && k !== 'id')
   );
   return { ...target, attributes: { ...targetAttrs, ...restAttrs } };
 }
 
-function resolveConrefForNode(node: DitaNode, context: RenderContext): DitaNode {
+// Resolve one content reference for a node. conkeyref (indirect, by key) takes
+// precedence over conref (direct) when it resolves — matching the DITA 1.3
+// rule and DITA-OT's behaviour, where an unresolvable conkeyref falls back to
+// the element's @conref. The returned chainKey is whichever reference actually
+// fired, so the caller adds it to conrefChain for cycle protection.
+function resolveConrefForNode(
+  node: DitaNode,
+  context: RenderContext,
+): { node: DitaNode; chainKey?: string } {
+  const conkeyref = node.attributes?.conkeyref;
+  if (conkeyref && context.resolveConkeyref && !context.conrefChain?.has(conkeyref)) {
+    const keyTarget = context.resolveConkeyref(conkeyref);
+    if (keyTarget) return { node: mergeConrefTarget(node, keyTarget), chainKey: conkeyref };
+  }
   const conref = node.attributes?.conref;
-  if (!conref || !context.resolveConref) return node;
+  if (!conref || !context.resolveConref) return { node };
   // A conref already resolved on this branch points back here — stop the
   // cycle and render the element's literal content instead of recursing.
-  if (context.conrefChain?.has(conref)) return node;
+  if (context.conrefChain?.has(conref)) return { node };
   const target = context.resolveConref(conref);
-  if (!target) return node;
-  return mergeConrefTarget(node, target);
+  if (!target) return { node };
+  return { node: mergeConrefTarget(node, target), chainKey: conref };
 }
 
 function resolveKeyrefForNode(node: DitaNode, context: RenderContext): DitaNode {
@@ -432,15 +467,22 @@ export function renderElement(node: DitaNode, context: RenderContext): string {
     }
   }
 
-  let effectiveNode = resolveConrefForNode(node, context);
-  const resolvedConref =
-    effectiveNode !== node ? node.attributes?.conref : undefined;
-  effectiveNode = resolveKeyrefForNode(effectiveNode, context);
-  return renderEffectiveNode(effectiveNode, context, resolvedConref);
+  const resolved = resolveConrefForNode(node, context);
+  const effectiveNode = resolveKeyrefForNode(resolved.node, context);
+  return renderEffectiveNode(effectiveNode, context, resolved.chainKey);
 }
 
 function renderChildren(node: DitaNode, context: RenderContext): string {
-  return (node.children || []).map((child) => renderElement(child, context)).join('');
+  const children = node.children || [];
+  // Resolved key text can leave CJK and Latin glued together (`打开` + `ABC`).
+  // Insert a display-only space outside the key element; the source is untouched.
+  const spacing = computeKeyrefSpacing(children, node.baseType, context.resolveKey);
+  return children
+    .map((child, i) => {
+      const html = renderElement(child, context);
+      return (spacing[i].before ? ' ' : '') + html + (spacing[i].after ? ' ' : '');
+    })
+    .join('');
 }
 
 export function renderDocument(

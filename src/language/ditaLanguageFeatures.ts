@@ -31,12 +31,14 @@ import {
   splitRefFragment,
 } from './ditaLanguageUtils';
 import { collectReferenceableFiles, WalkEntry } from './referenceableFiles';
-import { buildKeyMap, findDitamapFiles } from '../editor/DitaViewerProvider';
+import { buildKeyMap, getKeySourceMaps } from '../editor/DitaViewerProvider';
+import { onKeyContextChanged } from '../editor/keyContext';
 import { decodeHrefPart } from '../editor/ditaRenderUtils';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { DitaNode } from '../parser/domTypes';
 import { STANDARD_TAG_TO_BASETYPE } from '../parser/standardTagMap';
 import { MAP_STANDARD_TAG_TO_BASETYPE } from '../parser/mapTagMap';
+import { scanMarkup } from './xmlTagBalance';
 
 const DITA_SELECTOR: vscode.DocumentSelector = [
   { language: 'dita' },
@@ -54,12 +56,13 @@ function isMapDocument(document: vscode.TextDocument): boolean {
 const MAP_SCAN_LIMIT = 50;
 
 /**
- * Finds the location of the keydef that defines a key: scans ancestor-folder
- * ditamaps first, then follows ditamap references from those maps (the same
- * key space buildKeyMap uses, but yielding a source location).
+ * Finds the location of the keydef that defines a key: scans the maps the key
+ * space comes from (the context map, or the ancestor-folder ditamaps),
+ * then follows ditamap references from those maps (the same key space
+ * buildKeyMap uses, but yielding a source location).
  */
 function findKeyDefinitionLocation(docUri: vscode.Uri, key: string): vscode.Location | undefined {
-  const queue = findDitamapFiles(docUri, false);
+  const queue = getKeySourceMaps(docUri);
   const visited = new Set<string>();
   while (queue.length > 0 && visited.size < MAP_SCAN_LIMIT) {
     const mf = resolve(queue.shift()!);
@@ -589,9 +592,38 @@ function validateDocument(document: vscode.TextDocument, collection: vscode.Diag
     }
   }
 
+  diagnostics.push(...collectWellFormednessDiagnostics(document));
   diagnostics.push(...collectUnknownElementDiagnostics(document));
 
   collection.set(document.uri, diagnostics);
+}
+
+// Tag-balance errors (unclosed element, stray end tag, unterminated tag), so
+// malformed source like <b><uicontrol>x</b></uicontrol> is flagged in the
+// editor instead of only failing later in Oxygen / DITA-OT.
+function collectWellFormednessDiagnostics(document: vscode.TextDocument): vscode.Diagnostic[] {
+  return scanMarkup(document.getText()).issues.map((issue) => {
+    const range = new vscode.Range(document.positionAt(issue.start), document.positionAt(issue.end));
+    const name = issue.tagName ?? '';
+    let message: string;
+    switch (issue.kind) {
+      case 'unclosed-element':
+        message = vscode.l10n.t('The element type "{0}" must be terminated by the matching end-tag "</{0}>".', name);
+        break;
+      case 'unexpected-end-tag':
+        message = vscode.l10n.t('The end-tag "</{0}>" has no matching start-tag.', name);
+        break;
+      case 'unterminated-markup':
+        message = vscode.l10n.t('This tag is not terminated: expected ">".');
+        break;
+      default:
+        message = vscode.l10n.t('Invalid markup: "<" must start a tag, or be written as "&lt;".');
+    }
+    const d = new vscode.Diagnostic(range, message, vscode.DiagnosticSeverity.Error);
+    d.source = 'dita';
+    d.code = 'malformed-xml';
+    return d;
+  });
 }
 
 // renderEffectiveNode() in renderer.ts drops any element the parser could not
@@ -720,6 +752,11 @@ export function registerLanguageFeatures(context: vscode.ExtensionContext): void
         timers.delete(key);
       }
       collection.delete(d.uri);
+    }),
+    // "Key not defined" depends on the key space, which the context map
+    // decides: re-check everything open when it changes.
+    onKeyContextChanged(() => {
+      for (const doc of vscode.workspace.textDocuments) scheduleValidation(doc);
     }),
     { dispose: () => timers.forEach((t) => clearTimeout(t)) },
   );

@@ -1,0 +1,19 @@
+{
+  "name": {
+    "en": "Atlas",
+    "zh-cn": "全景"
+  },
+  "description": "Three-column reference layout: chapters on the left, content in the middle, an on-this-page outline on the right. Light and dark.",
+  "layout": "three-column",
+  "outline": true,
+  "css": [
+    "atlas.css"
+  ],
+  "header": {
+    "logo": "resources/logo.svg",
+    "title": "{title}"
+  },
+  "footer": {
+    "text": "{title} · {year}"
+  }
+}

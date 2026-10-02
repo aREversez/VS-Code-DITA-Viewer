@@ -1,0 +1,19 @@
+{
+  "name": {
+    "en": "Terminal",
+    "zh-cn": "终端"
+  },
+  "description": "Dark, monospaced API/tool-docs look: high-contrast green accent, thin hairline dividers, code-first typography.",
+  "layout": "terminal",
+  "defaultDark": true,
+  "css": [
+    "terminal.css"
+  ],
+  "header": {
+    "logo": "resources/logo.svg",
+    "title": "{title}"
+  },
+  "footer": {
+    "text": "{title} · {year}"
+  }
+}

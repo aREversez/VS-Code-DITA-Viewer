@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist-test-visual",
+    "rootDir": "src",
+    "declaration": false,
+    "sourceMap": true,
+    "lib": ["ES2022", "DOM"]
+  },
+  "include": [
+    "src/test-visual/**/*",
+    "src/editor/templateSnapshot.ts",
+    "src/editor/siteTemplates.ts",
+    "src/editor/templateChrome.ts",
+    "src/editor/templateStyle.ts"
+  ],
+  "exclude": ["node_modules"]
+}

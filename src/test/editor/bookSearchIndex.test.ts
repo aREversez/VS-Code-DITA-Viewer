@@ -10,6 +10,8 @@ import {
   invalidateBookSearchIndex,
   searchBookIndex,
   getBookSearchScript,
+  buildBookSearchResultsPayload,
+  MAX_BOOK_SEARCH_RESULTS,
 } from '../../editor/bookSearchIndex';
 import { getSiteNavClickHandlerScript } from '../../editor/ditaRenderUtils';
 import type { DocsiteNavEntry } from '../../editor/ditaRenderUtils';
@@ -70,6 +72,29 @@ describe('bookSearchIndex', () => {
       assert.ok(!result!.bodyText.includes('HelloWorld'), 'element boundaries need a separator, or adjacent words become one unsearchable token');
     });
 
+    it('does not put a space where an inline element interrupts running text (matters most for CJK, which has no word gaps)', () => {
+      const p = writeTopic('a.dita', '<p>点击<b>确定</b>按钮，设置<codeph>foo</codeph>bar。</p>');
+      const result = extractBookSearchEntry(p);
+      assert.ok(result);
+      assert.ok(result!.bodyText.includes('点击确定按钮'), `expected inline elements to join running text directly, got: ${result!.bodyText}`);
+      assert.ok(result!.bodyText.includes('foobar'), `expected "foobar" (codeph inside a word) to stay one token, got: ${result!.bodyText}`);
+    });
+
+    it('still separates a block element from the inline run next to it', () => {
+      const p = writeTopic('a.dita', '<p>Alpha<b>Beta</b></p><p>Gamma</p>');
+      const result = extractBookSearchEntry(p);
+      assert.ok(result);
+      assert.ok(result!.bodyText.includes('AlphaBeta'), result!.bodyText);
+      assert.ok(!result!.bodyText.includes('BetaGamma'), `block boundary must still separate words, got: ${result!.bodyText}`);
+    });
+
+    it('does not let an indexterm (excluded from bodyText) split a word around it', () => {
+      const p = writeTopic('a.dita', '<p>foo<indexterm>Unrelated</indexterm>bar</p>');
+      const result = extractBookSearchEntry(p);
+      assert.ok(result);
+      assert.ok(result!.bodyText.includes('foobar'), result!.bodyText);
+    });
+
     it('excludes an indexterm\'s own term text from bodyText, since it is already tracked via indexterms', () => {
       const p = writeTopic('a.dita', '<p>Prose here.</p><indexterm>UniqueTermXyz</indexterm>');
       const result = extractBookSearchEntry(p);
@@ -125,6 +150,16 @@ describe('bookSearchIndex', () => {
       const p = join(dir, 'broken.dita');
       writeFileSync(p, '<topic><title>Oops<body>');
       assert.doesNotThrow(() => extractBookSearchEntry(p));
+    });
+  });
+
+  describe('searchBookIndex across inline markup', () => {
+    it('finds a phrase that spans an inline element, and no longer finds one only an artificial space would create', () => {
+      const a = writeTopic('a.dita', '<p>点击<b>确定</b>按钮</p>');
+      const manifest = [entry(a, 'A')];
+      const index = buildBookSearchIndex(manifest);
+      assert.strictEqual(searchBookIndex(index, '点击确定', absPaths(manifest)).hits.length, 1);
+      assert.strictEqual(searchBookIndex(index, '点击 确定', absPaths(manifest)).hits.length, 0);
     });
   });
 
@@ -448,6 +483,7 @@ describe('bookSearchIndex', () => {
         searchLabel: 'Search this book',
         placeholder: 'Search all topics...',
         noResultsLabel: 'No matches found',
+        truncatedLabel: 'Showing the first {0} of {1} results',
         matchCaseLabel: 'Match case',
         useRegexLabel: 'Use regex',
         invalidRegexLabel: 'Invalid regex',
@@ -479,6 +515,7 @@ describe('bookSearchIndex', () => {
         searchLabel: 'Search this book',
         placeholder: 'Search all topics...',
         noResultsLabel: 'No matches found',
+        truncatedLabel: 'Showing the first {0} of {1} results',
         matchCaseLabel: 'Match case',
         useRegexLabel: 'Use regex',
         invalidRegexLabel: 'Invalid regex',
@@ -618,6 +655,31 @@ describe('bookSearchIndex', () => {
     assert.strictEqual(linksWrap.style.display, 'none');
   });
 
+  it('says so when the host capped the list, instead of silently showing only the first page of a longer result set', () => {
+    const { results, emitMessage } = runBookSearchScript([{ absPath: '/book/a.dita' }]);
+    emitMessage({
+      type: 'bookSearchResults',
+      total: 45,
+      results: [
+        { absPath: '/book/a.dita', title: 'Topic A', kind: 'body', snippet: '...one...' },
+        { absPath: '/book/a.dita', title: 'Topic A', kind: 'body', snippet: '...two...' },
+      ],
+    });
+    assert.strictEqual(results.children.length, 3, 'two results plus one trailing note');
+    assert.strictEqual(results.children[2].textContent, 'Showing the first 2 of 45 results');
+  });
+
+  it('adds no note when every result fit (total equals the number shown, or the host sent no total)', () => {
+    const one = [{ absPath: '/book/a.dita', title: 'Topic A', kind: 'body', snippet: '...one...' }];
+    // A fresh page each time: the fake DOM's innerHTML = '' does not clear children.
+    const withTotal = runBookSearchScript([{ absPath: '/book/a.dita' }]);
+    withTotal.emitMessage({ type: 'bookSearchResults', total: 1, results: one });
+    assert.strictEqual(withTotal.results.children.length, 1);
+    const withoutTotal = runBookSearchScript([{ absPath: '/book/a.dita' }]);
+    withoutTotal.emitMessage({ type: 'bookSearchResults', results: one });
+    assert.strictEqual(withoutTotal.results.children.length, 1);
+  });
+
   it('shows the empty-results label when a search comes back with nothing', () => {
     const { results, emitMessage } = runBookSearchScript();
     emitMessage({ type: 'bookSearchResults', results: [] });
@@ -637,7 +699,7 @@ describe('bookSearchIndex', () => {
   // These stub out getSearchOverlayScript's own surface (performSearch,
   // openSearchBar, caseSensitive, useRegex, searchInput, caseBtn, regexBtn,
   // updateToggleVisual) rather than including the real script: that
-  // overlay does its own document.createTreeWalker-based DOM text search,
+  // overlay does its own DOM text search,
   // already covered by its own tests elsewhere, and simulating a full text
   // tree here would test that mechanism a second time instead of what is
   // actually new -- whether a result click correctly hands off to it (or,
@@ -667,6 +729,7 @@ describe('bookSearchIndex', () => {
         searchLabel: 'Search this book',
         placeholder: 'Search all topics...',
         noResultsLabel: 'No matches found',
+        truncatedLabel: 'Showing the first {0} of {1} results',
         matchCaseLabel: 'Match case',
         useRegexLabel: 'Use regex',
         invalidRegexLabel: 'Invalid regex',
@@ -724,5 +787,45 @@ describe('bookSearchIndex', () => {
     applyPageSearch(pending);
     assert.strictEqual(overlayCalls.openSearchBar, 1);
     assert.deepStrictEqual(overlayCalls.performSearch, ['widget']);
+  });
+
+  describe('buildBookSearchResultsPayload', () => {
+    const hit = (n: number) => ({ absPath: `/book/t${n}.dita`, kind: 'body' as const, snippet: `s${n}` });
+
+    it('caps the list at the limit but reports the full count, so the UI can say the list was cut', () => {
+      const hits = Array.from({ length: 45 }, (_, i) => hit(i));
+      const payload = buildBookSearchResultsPayload(hits, new Map(), 30);
+      assert.strictEqual(payload.results.length, 30);
+      assert.strictEqual(payload.total, 45);
+    });
+
+    it('defaults the limit to MAX_BOOK_SEARCH_RESULTS', () => {
+      const hits = Array.from({ length: MAX_BOOK_SEARCH_RESULTS + 5 }, (_, i) => hit(i));
+      assert.strictEqual(buildBookSearchResultsPayload(hits, new Map()).results.length, MAX_BOOK_SEARCH_RESULTS);
+    });
+
+    it('titles each result from the manifest, falling back to the path', () => {
+      const payload = buildBookSearchResultsPayload([hit(1), hit(2)], new Map([['/book/t1.dita', 'One']]), 30);
+      assert.deepStrictEqual(payload.results.map((r) => r.title), ['One', '/book/t2.dita']);
+      assert.strictEqual(payload.total, 2);
+    });
+  });
+});
+
+describe('getBookSearchScript: the search box sits centered in its own block', () => {
+  const script = getBookSearchScript({
+    searchLabel: 'Search this book', placeholder: 'Search', noResultsLabel: 'None', truncatedLabel: '{0}/{1}',
+    matchCaseLabel: 'Case', useRegexLabel: 'Regex', invalidRegexLabel: 'Bad', refreshLabel: 'Refresh', clearLabel: 'Clear',
+    requestMsgType: 'bookSearch', responseMsgType: 'bookSearchResults',
+  });
+
+  it('gives the sticky box equal padding above and below, so the input is not pushed toward the bottom', () => {
+    const m = /position:sticky;top:0;[^']*?padding:([^;']+);/.exec(script);
+    assert.ok(m, 'sticky box style not found');
+    const parts = m[1].trim().split(/\s+/);
+    // Two-value shorthand (vertical horizontal) or four values with equal top and bottom.
+    const top = parts[0];
+    const bottom = parts.length === 2 ? parts[0] : parts.length === 4 ? parts[2] : parts.length === 3 ? parts[2] : parts[0];
+    assert.strictEqual(top, bottom, `padding "${m[1]}" is uneven`);
   });
 });

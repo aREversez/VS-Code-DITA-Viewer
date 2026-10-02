@@ -308,11 +308,28 @@ export const STANDARD_TAG_TO_BASETYPE: Record<string, string> = {
   messagepanel: 'topic/ul',
 
   // ── Utilities domain (image maps) ──
-  // Evidence: base/dtd/utilitiesDomain.mod:151-155
-  imagemap: 'topic/fig',
-  area: 'topic/figgroup',
-  shape: 'topic/keyword',
-  coords: 'topic/ph',
+  // Evidence: base/dtd/utilitiesDomain.mod:151-155 — class
+  // "+ topic/fig ut-d/imagemap ", "+ topic/figgroup ut-d/area ",
+  // "+ topic/keyword ut-d/shape ", "+ topic/ph ut-d/coords ".
+  //
+  // imagemap/area deliberately get their OWN baseTypes rather than their
+  // topic ancestors: mapping imagemap → topic/fig made the generic fig
+  // renderer dump every child (including the area groups) straight into
+  // the page, and figgroup rendered each <area>'s shape/coords/xref as
+  // visible text while never producing the HTML <map>/<area> structure
+  // that makes the image clickable at all. Dedicated baseTypes carry
+  // dedicated renderers (see baseTypeMap.ts) that build the real
+  // <img usemap> + <map><area shape coords href></map> output.
+  //
+  // shape/coords follow the index-see/index-see-also convention: their
+  // text is authoring metadata consumed directly by the parent <area>
+  // renderer (which reads the parsed nodes itself), so a standalone
+  // visit — only reachable through malformed markup — renders nothing
+  // rather than leaking "rect" / "0,0,10,10" into the page.
+  imagemap: 'topic/imagemap',
+  area: 'topic/area',
+  shape: 'topic/shape',
+  coords: 'topic/coords',
   'sort-as': 'topic/data',
 
   // ── Markup domain ──

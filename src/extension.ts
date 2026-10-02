@@ -1,40 +1,226 @@
 import * as vscode from 'vscode';
 import { spawn } from 'child_process';
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs';
-import { basename, dirname, isAbsolute, join, resolve } from 'path';
-import { DitaViewerProvider, findDitamapFiles, getLastRenderedHtmlForTesting, clearAllCaches } from './editor/DitaViewerProvider';
+import { StringDecoder } from 'string_decoder';
+import { cpSync, existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs';
+import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'path';
+import { registerSourceOverlay } from './editor/sourceOverlayFeed';
+import { stagePdfCustomization } from './editor/pdfImageSizes';
+import { registerSourceEditorTracker } from './editor/sourceEditorOpener';
+import { DitaViewerProvider, findDitamapFiles, getLastRenderedHtmlForTesting, clearAllCaches, buildKeyMap } from './editor/DitaViewerProvider';
 import { MapViewerProvider, getLastRenderedMapHtmlForTesting, clearMapCache } from './editor/MapViewerProvider';
 import {
   resolveDitaOtExecutable,
   buildDitaOtArgs,
   buildDitaOtSpawnSpec,
   buildNavManifest,
+  buildSiteChromeScript,
+  buildThemeBootstrapScript,
+  buildCollapseBootstrapScript,
   classifyLogLine,
   createLineBuffer,
+  normalizeIndexHtmlLinks,
+  isUnsafeExportClearTarget,
   CssArg,
   SiteChromeFeatures,
 } from './editor/ditaOtUtils';
+import { discoverTemplateRoots, discoverTemplates, templateDisplayName, SiteTemplate } from './editor/siteTemplates';
+import {
+  buildHeadInjectHtml,
+  buildShellPageHtml,
+  buildTemplateCssText,
+  buildTemplateDarkBootstrapScript,
+  buildTemplateNav,
+  readShellCss,
+  readTemplateChromeCss,
+  renderSidebarHtml,
+} from './editor/templateExport';
+import { mapTitleFromXml } from './editor/templateChrome';
+import { makeFileTitleResolver } from './editor/ditaRenderUtils';
+import { ditaOtHomeFromExecutable, getPluginStatus, installPlugin, CJK_SPACING_PLUGIN_ID } from './editor/ditaOtPlugin';
 import { registerLanguageFeatures } from './language/ditaLanguageFeatures';
 import { registerMapTreeView } from './language/ditaMapTreeProvider';
 import { ditaFileWatcherCounts } from './editor/ditaFileWatcher';
-import { registerExportHtmlCommand } from './editor/exportHtml';
+import { registerExportHtmlCommand, getActiveDitaUri } from './editor/exportHtml';
 import { registerCompareCommand } from './editor/ditaDiffProvider';
+import { resolveOxygenLaunch, buildOxygenSpawnArgs } from './editor/oxygenLauncher';
+import { registerWrapSelectionCommand } from './editor/wrapSelectionCommand';
+import { registerFindReferencingMapsCommand } from './editor/findDitaReferences';
+import { registerKeyContextCommand } from './editor/keyContextCommand';
+import { registerUnreferencedResourcesCommand } from './editor/unreferencedResourcesUi';
+import { registerCompletenessCommand } from './editor/completenessCheckUi';
+import { ensureCommandAllowed } from './editor/workspaceTrustGate';
 
 const TRANSFORM_CMD = 'ditaViewer.transformWithDitaOt';
 
+/** globalState key holding the transform QuickPick's last template choice
+ *  (a template id, or '' for "no template / legacy site chrome") -- the
+ *  picker highlights that entry next time, which is what makes the
+ *  template path the recommended default without forcing it. */
+const LAST_TRANSFORM_TEMPLATE_KEY = 'ditaViewer.lastTransformTemplate';
+
+/** The legacy feature-flag base every html5/xhtml run starts from (all
+ *  enhancements on -- the pre-template defaults). */
+/** globalState key prefix: DITA-OT homes where the user declined the CJK spacing plugin. */
+const CJK_PLUGIN_DECLINED_KEY = 'ditaViewer.cjkSpacingPluginDeclined:';
+
+async function offerCjkSpacingPlugin(
+  context: vscode.ExtensionContext,
+  extensionPath: string,
+  ditaExecutable: string,
+  outputChannel: vscode.OutputChannel,
+): Promise<void> {
+  const bundledDir = join(extensionPath, 'media', 'dita-ot-plugins', CJK_SPACING_PLUGIN_ID);
+  if (!existsSync(join(bundledDir, 'plugin.xml'))) return;
+  const otHome = ditaOtHomeFromExecutable(ditaExecutable);
+  const status = getPluginStatus(otHome, bundledDir);
+  if (status === 'installed') return;
+  const declinedKey = CJK_PLUGIN_DECLINED_KEY + otHome;
+  if (context.globalState.get<boolean>(declinedKey, false)) return;
+
+  const installLabel = status === 'outdated' ? vscode.l10n.t('Update') : vscode.l10n.t('Install');
+  const neverLabel = vscode.l10n.t("Don't ask again");
+  const choice = await vscode.window.showInformationMessage(
+    status === 'outdated'
+      ? vscode.l10n.t('A newer version of the CJK spacing plugin is available for your DITA-OT. It adds a space between Chinese text and English key values in the output. Update it?')
+      : vscode.l10n.t('Install the CJK spacing plugin into your DITA-OT? It adds a space between Chinese text and English key values (such as an English brand name) in the output. Source files are not changed.'),
+    installLabel,
+    neverLabel,
+  );
+  if (choice === neverLabel) {
+    await context.globalState.update(declinedKey, true);
+    return;
+  }
+  if (choice !== installLabel) return;
+
+  try {
+    const backupDir = await installPlugin(otHome, bundledDir, () => new Promise<void>((resolveRun, rejectRun) => {
+      const spec = buildDitaOtSpawnSpec(ditaExecutable, ['install'], process.platform);
+      const child = spawn(spec.command, spec.args, { windowsVerbatimArguments: spec.windowsVerbatimArguments });
+      child.stdout?.on('data', (d) => outputChannel.append(String(d)));
+      child.stderr?.on('data', (d) => outputChannel.append(String(d)));
+      child.on('error', rejectRun);
+      child.on('close', (code) => (code === 0 ? resolveRun() : rejectRun(new Error(`dita install exited with code ${code}`))));
+    }));
+    outputChannel.appendLine(`Backup of the DITA-OT files changed by the install: ${backupDir}`);
+    vscode.window.showInformationMessage(vscode.l10n.t('CJK spacing plugin installed. The DITA-OT files it changed were backed up to {0}', backupDir));
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    vscode.window.showWarningMessage(
+      vscode.l10n.t('Could not install the CJK spacing plugin: {0}. The transform will continue without it; installing may need write access to the DITA-OT folder. If the install had already started, the files it changed were backed up under the dita-viewer-backup folder in the DITA-OT directory.', message),
+    );
+  }
+}
+
+function chromeFeatureBase(): SiteChromeFeatures {
+  return {
+    navToolbar: true, sidebar: true, onPageToc: true,
+    copyCode: true, backToTop: true, darkMode: true,
+  };
+}
+
 export function activate(context: vscode.ExtensionContext) {
+  // Unsaved editor text into the sources the previews read (sourceText.ts).
+  // First, so it is in place before anything can render.
+  registerSourceOverlay(context);
+
+  // Remembers which tab group was active last, for "open source" in docsite mode.
+  registerSourceEditorTracker(context);
+
+  // Key context map (Oxygen's DITA Maps Manager "context"): restored before
+  // anything can render, so the first key resolution already follows it.
+  registerKeyContextCommand(context);
+
   // Language features: go-to-definition, completion, outline symbols,
   // broken-reference diagnostics (items shared by .dita and .ditamap)
   registerLanguageFeatures(context);
 
   // Explorer sidebar tree view of the active DITA map
-  registerMapTreeView(context);
+  const mapTree = registerMapTreeView(context);
+
+  // "Find Unreferenced Resources…" (Oxygen DITA Maps Manager style)
+  registerUnreferencedResourcesCommand(context, { currentTreeMap: () => mapTree.currentMapPath() });
+
+  // "Validate and Check for Completeness…" (Oxygen DITA Map Completeness Check style)
+  registerCompletenessCommand(context, { currentTreeMap: () => mapTree.currentMapPath() });
 
   // "Export as HTML" command (self-contained file, no DITA-OT needed)
   registerExportHtmlCommand(context);
 
   // "Compare with Git Version" — rendered diff view for .dita files
   registerCompareCommand(context);
+
+  // Oxygen-style "select text, press Enter, pick a tag to wrap it in"
+  registerWrapSelectionCommand(context);
+
+  // "Open with Oxygen" — hands the file to Oxygen XML Editor
+  context.subscriptions.push(
+    vscode.commands.registerCommand('ditaViewer.openWithOxygen', async (uri?: vscode.Uri) => {
+      // Untrusted workspaces never spawn Oxygen (mapExplorer.openWithOxygen
+      // delegates here, so both row and editor/explorer entries are covered).
+      if (!(await ensureCommandAllowed('ditaViewer.openWithOxygen'))) return;
+      const target = uri ?? getActiveDitaUri();
+      if (!target) {
+        vscode.window.showErrorMessage(vscode.l10n.t('Please open a .dita or .ditamap file first.'));
+        return;
+      }
+
+      const configPath: string | undefined = vscode.workspace.getConfiguration('dita-viewer').get('oxygenPath');
+      const configuredPath = configPath && configPath.trim() ? configPath.trim() : undefined;
+
+      const result = resolveOxygenLaunch({
+        configuredPath,
+        platform: process.platform,
+        pathEnv: process.env.PATH,
+        fileExists: (p) => existsSync(p),
+      });
+
+      if (!result.found) {
+        const openSettingsLabel = vscode.l10n.t('Open Settings');
+        const message =
+          result.reason === 'setting-invalid'
+            ? vscode.l10n.t('The configured Oxygen XML Editor path is invalid: {0}', configuredPath ?? '')
+            : vscode.l10n.t('Oxygen XML Editor was not found. Please configure its path in settings.');
+        const action = await vscode.window.showErrorMessage(message, openSettingsLabel);
+        if (action === openSettingsLabel) {
+          vscode.commands.executeCommand('workbench.action.openSettings', 'dita-viewer.oxygenPath');
+        }
+        return;
+      }
+
+      const spawnArgs = buildOxygenSpawnArgs(result.spec, target.fsPath);
+      try {
+        const child = spawn(spawnArgs.command, spawnArgs.args, { detached: true, stdio: 'ignore' });
+        child.on('error', (err) => {
+          vscode.window.showErrorMessage(vscode.l10n.t('Failed to launch Oxygen XML Editor: {0}', err.message));
+        });
+        child.unref();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        vscode.window.showErrorMessage(vscode.l10n.t('Failed to launch Oxygen XML Editor: {0}', message));
+      }
+    }),
+  );
+
+  // "Find Maps Referencing This File…" — reverse lookup of a topicref/mapref
+  registerFindReferencingMapsCommand(context);
+
+  // "Reveal in Map Navigator" — the file-Explorer-to-mapExplorer direction
+  // of the pair completed by the tree's own "Reveal in Explorer" row command.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('ditaViewer.revealInMapExplorer', async (uri?: vscode.Uri) => {
+      const target = uri ?? getActiveDitaUri();
+      if (!target) {
+        vscode.window.showErrorMessage(vscode.l10n.t('Please open a .dita or .ditamap file first.'));
+        return;
+      }
+      const revealed = await mapTree.revealPath(target.fsPath);
+      if (!revealed) {
+        vscode.window.showInformationMessage(
+          vscode.l10n.t('This file is not part of the DITA map currently shown in the navigator.'),
+        );
+      }
+    }),
+  );
 
   // DITA topic preview (.dita)
   context.subscriptions.push(
@@ -129,6 +315,9 @@ export function activate(context: vscode.ExtensionContext) {
   const transformOutputChannel = vscode.window.createOutputChannel('DITA-OT Transform');
   context.subscriptions.push(transformOutputChannel);
   const transformCommand = vscode.commands.registerCommand(TRANSFORM_CMD, async () => {
+    // The transform spawns DITA-OT and can install a plugin into its home;
+    // both are execution, so an untrusted workspace stops at the gate.
+    if (!(await ensureCommandAllowed(TRANSFORM_CMD))) return;
     const tokenSource = new vscode.CancellationTokenSource();
     const disposables: vscode.Disposable[] = [];
 
@@ -152,6 +341,13 @@ export function activate(context: vscode.ExtensionContext) {
         pathEnv: process.env.PATH,
         platform: process.platform,
         fileExists: (p: string) => existsSync(p),
+        isDirectory: (p: string) => {
+          try {
+            return statSync(p).isDirectory();
+          } catch {
+            return false;
+          }
+        },
       });
 
       if (!result.found) {
@@ -199,30 +395,104 @@ export function activate(context: vscode.ExtensionContext) {
         defaultUri: vscode.Uri.file(defaultDir),
         openLabel: vscode.l10n.t('Select Output Directory'),
       });
-      const outputDir = normalizeDriveLetter(
-        (chosenUri && chosenUri.length > 0) ? chosenUri[0].fsPath : defaultDir,
-      );
+      // Dismissing the dialog (Esc / close) cancels the export; it must not fall
+      // back to the default directory, because everything after this point may
+      // clear that directory and write into it.
+      if (!chosenUri || chosenUri.length === 0) return;
+      const outputDir = normalizeDriveLetter(chosenUri[0].fsPath);
 
-      if (existsSync(outputDir)) {
+      // 4b. Prepare the output location according to the transtype's shape.
+      let outputEntriesToClear: string[] = [];
+      if (transtype === 'pdf') {
+        // PDF emits a single file, so an existing directory is fine: prompt
+        // only when that exact target file is already present (overwrite it?).
+        const pdfPath = join(outputDir, basename(mapPath, extname(mapPath)) + '.pdf');
+        if (existsSync(pdfPath)) {
+          const overwriteLabel = vscode.l10n.t('Overwrite');
+          const overwrite = await vscode.window.showWarningMessage(
+            vscode.l10n.t('The file already exists: {0}. Overwrite it?', pdfPath),
+            { modal: true },
+            overwriteLabel,
+          );
+          if (overwrite !== overwriteLabel) return;
+        }
+      } else if (existsSync(outputDir)) {
+        // Webhelp-style transforms (html5/xhtml/markdown) emit a whole site of
+        // interlinked files, so a stale file from a previous export would linger
+        // if we only overwrote in place -- clear the directory first the way
+        // Oxygen does, so the result is exactly this run's output. Clearing is
+        // destructive, so: refuse a target that contains the map or a workspace
+        // folder (the open dialog lets the user pick any folder), warn when the
+        // directory already holds content, and defer the actual deletion to
+        // just before the transform runs (step 9) so that cancelling one of the
+        // later pickers never leaves a wiped directory behind.
+        const workspaceRoots = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
+        if (isUnsafeExportClearTarget(outputDir, mapPath, workspaceRoots)) {
+          vscode.window.showErrorMessage(
+            vscode.l10n.t('Cannot export into {0}: it contains your map or workspace folder, and its contents are cleared before exporting. Choose a dedicated output folder.', outputDir),
+          );
+          return;
+        }
         try {
-          const entries = readdirSync(outputDir);
-          if (entries.length > 0) {
-            const overwriteLabel = vscode.l10n.t('Overwrite');
-            const overwrite = await vscode.window.showWarningMessage(
-              vscode.l10n.t('The output directory already exists and is not empty: {0}. Overwrite it?', outputDir),
-              { modal: true },
-              overwriteLabel,
-            );
-            if (overwrite !== overwriteLabel) return;
-          }
+          outputEntriesToClear = readdirSync(outputDir);
         } catch (e) {
-          console.warn(`Failed to check output directory contents: ${outputDir}`, e instanceof Error ? e.message : e);
+          console.warn(`Failed to read output directory contents: ${outputDir}`, e instanceof Error ? e.message : e);
+        }
+        if (outputEntriesToClear.length > 0) {
+          const overwriteLabel = vscode.l10n.t('Overwrite');
+          const overwrite = await vscode.window.showWarningMessage(
+            vscode.l10n.t('The output directory is not empty: {0}. Its contents will be cleared before exporting. Overwrite it?', outputDir),
+            { modal: true },
+            overwriteLabel,
+          );
+          if (overwrite !== overwriteLabel) return;
         }
       }
 
-      // 5. Pick optional CSS (html5/xhtml only)
-      let cssArg: CssArg | undefined;
+      // 5. Pick the export template (html5/xhtml only). The template system
+      // (media/templates/*, shared with the Docsite preview) is the primary
+      // styling path for the static export; the last choice is highlighted,
+      // and "no template" falls back to the legacy site-chrome look.
+      let template: SiteTemplate | undefined;
       if (transtype === 'html5' || transtype === 'xhtml') {
+        const roots = discoverTemplateRoots({
+          extensionPath,
+          configuredDirs: vscode.workspace.getConfiguration('dita-viewer').get<string[]>('templatesDirectory') ?? [],
+          refDir: mapDir,
+          workspaceRoots: (vscode.workspace.workspaceFolders || []).map((f) => f.uri.fsPath),
+        });
+        const { templates } = discoverTemplates(roots);
+        const lang = vscode.env.language;
+        const legacyLabel = vscode.l10n.t('No template (legacy site enhancements)');
+        const lastId = context.globalState.get<string>(LAST_TRANSFORM_TEMPLATE_KEY, '');
+        // showQuickPick has no "preselect this item" option, so the last
+        // choice is marked with a check glyph instead -- the picker still
+        // defaults to the first row, but the remembered template is obvious.
+        const check = (id: string) => (id === lastId ? '$(check) ' : '');
+        const items: (vscode.QuickPickItem & { id: string })[] = [
+          { label: `${check('')}$(circle-large-outline) ${legacyLabel}`, id: '' },
+          ...templates.map((t) => ({
+            label: `${check(t.id)}$(symbol-color) ${templateDisplayName(t, lang)}`,
+            description: t.description,
+            detail: t.builtin ? undefined : dirname(t.dir),
+            id: t.id,
+          })),
+        ];
+        const picked = await vscode.window.showQuickPick(items, {
+          placeHolder: vscode.l10n.t('Select a site template for the export'),
+          ignoreFocusOut: false,
+        });
+        if (!picked) return; // cancelled (no default on this step)
+        void context.globalState.update(LAST_TRANSFORM_TEMPLATE_KEY, picked.id);
+        template = picked.id ? templates.find((t) => t.id === picked.id) : undefined;
+      }
+      const templateMode = template !== undefined;
+
+      // 6. Pick optional CSS (html5/xhtml only, legacy path only -- a
+      // template carries its own stylesheet, and a second one injected via
+      // --args.css would fight it with no ordering guarantee).
+      let cssArg: CssArg | undefined;
+      if ((transtype === 'html5' || transtype === 'xhtml') && !templateMode) {
         const cssFiles = scanCssFiles(mapDir);
         if (cssFiles.length > 0) {
           const items: (vscode.QuickPickItem & { css?: CssArg })[] = [
@@ -241,7 +511,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
       }
 
-      // 6. Pick optional DITAVAL filter
+      // 7. Pick optional DITAVAL filter
       let ditavalFile: string | undefined;
       const ditavalUri = await vscode.window.showOpenDialog({
         canSelectFiles: true,
@@ -254,40 +524,94 @@ export function activate(context: vscode.ExtensionContext) {
         ditavalFile = normalizeDriveLetter(ditavalUri[0].fsPath);
       }
 
-      // 7. Pick site chrome features (html5/xhtml only)
+      // 8. Pick site chrome features (html5/xhtml only). On the template
+      // path the layout toggles (navToolbar/sidebar) are the template's
+      // job and never ask -- only the four functional widgets stack on
+      // top of any template.
       let siteChromeFeatures: SiteChromeFeatures | undefined;
       if (transtype === 'html5' || transtype === 'xhtml') {
-        const featureItems: (vscode.QuickPickItem & { key: keyof SiteChromeFeatures })[] = [
-          { label: vscode.l10n.t('Navigation Toolbar'), description: vscode.l10n.t('Prev/Next page + collapsible sections'), key: 'navToolbar', picked: true },
-          { label: vscode.l10n.t('Sidebar Outline'), description: vscode.l10n.t('Fixed table of contents on the left'), key: 'sidebar', picked: true },
-          { label: vscode.l10n.t('On-This-Page'), description: vscode.l10n.t('Right-hand navigation for headings on the current page'), key: 'onPageToc', picked: true },
-          { label: vscode.l10n.t('Copy-Code Button'), description: vscode.l10n.t('Copy button on code blocks'), key: 'copyCode', picked: true },
-          { label: vscode.l10n.t('Back to Top'), description: vscode.l10n.t('Back-to-top button in the bottom-right corner'), key: 'backToTop', picked: true },
-          { label: vscode.l10n.t('Dark Mode'), description: vscode.l10n.t('Light/dark theme toggle'), key: 'darkMode', picked: true },
-        ];
+        // A template that ships its own right-hand outline column (atlas:
+        // template.json "outline": true) already IS the on-this-page nav, so
+        // the export must not stack the floating dv-page-toc widget on top of
+        // it -- the option isn't offered and the flag is forced off below.
+        const providesOutline = templateMode && !!template?.outline;
+        const featureItems: (vscode.QuickPickItem & { key: keyof SiteChromeFeatures })[] = templateMode
+          ? [
+            ...(providesOutline
+              ? []
+              : [{ label: vscode.l10n.t('On-This-Page'), description: vscode.l10n.t('Right-hand navigation for headings on the current page'), key: 'onPageToc' as const, picked: true }]),
+            { label: vscode.l10n.t('Copy-Code Button'), description: vscode.l10n.t('Copy button on code blocks'), key: 'copyCode', picked: true },
+            { label: vscode.l10n.t('Back to Top'), description: vscode.l10n.t('Back-to-top button in the bottom-right corner'), key: 'backToTop', picked: true },
+            { label: vscode.l10n.t('Dark Mode'), description: vscode.l10n.t('Light/dark theme toggle'), key: 'darkMode', picked: true },
+          ]
+          : [
+            { label: vscode.l10n.t('Navigation Toolbar'), description: vscode.l10n.t('Prev/Next page + collapsible sections'), key: 'navToolbar', picked: true },
+            { label: vscode.l10n.t('Sidebar Outline'), description: vscode.l10n.t('Fixed table of contents on the left'), key: 'sidebar', picked: true },
+            { label: vscode.l10n.t('On-This-Page'), description: vscode.l10n.t('Right-hand navigation for headings on the current page'), key: 'onPageToc', picked: true },
+            { label: vscode.l10n.t('Copy-Code Button'), description: vscode.l10n.t('Copy button on code blocks'), key: 'copyCode', picked: true },
+            { label: vscode.l10n.t('Back to Top'), description: vscode.l10n.t('Back-to-top button in the bottom-right corner'), key: 'backToTop', picked: true },
+            { label: vscode.l10n.t('Dark Mode'), description: vscode.l10n.t('Light/dark theme toggle'), key: 'darkMode', picked: true },
+          ];
         const picked = await vscode.window.showQuickPick(featureItems, {
           canPickMany: true,
-          placeHolder: vscode.l10n.t('Select the site enhancements to enable (all enabled by default)'),
+          placeHolder: templateMode
+            ? vscode.l10n.t('Select the enhancements to enable on top of the template (all enabled by default)')
+            : vscode.l10n.t('Select the site enhancements to enable (all enabled by default)'),
           ignoreFocusOut: false,
         });
         if (picked) {
-          const features: SiteChromeFeatures = {
-            navToolbar: false, sidebar: false, onPageToc: false,
-            copyCode: false, backToTop: false, darkMode: false,
-          };
+          const features = templateMode
+            ? { navToolbar: false, sidebar: false, onPageToc: false, copyCode: false, backToTop: false, darkMode: false, siteShell: true }
+            : chromeFeatureBase();
           for (const item of picked) features[(item as { key: keyof SiteChromeFeatures }).key] = true;
           siteChromeFeatures = features;
         } else {
           // User cancelled: enable all by default (keep backward compatibility)
-          siteChromeFeatures = {
-            navToolbar: true, sidebar: true, onPageToc: true,
-            copyCode: true, backToTop: true, darkMode: true,
-          };
+          siteChromeFeatures = templateMode
+            ? { navToolbar: false, sidebar: false, onPageToc: !providesOutline, copyCode: true, backToTop: true, darkMode: true, siteShell: true }
+            : chromeFeatureBase();
         }
       }
 
-      // 8. Run transformation
-      const args = buildDitaOtArgs({ mapPath, transtype, outputDir, cssArg, ditavalFile });
+      // 8b. Everything the user had to confirm is settled: now clear the
+      // output directory (webhelp-style transtypes only; the list was taken and
+      // confirmed in step 4b).
+      try {
+        for (const entry of outputEntriesToClear) {
+          rmSync(join(outputDir, entry), { recursive: true, force: true });
+        }
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        vscode.window.showErrorMessage(
+          vscode.l10n.t('Failed to clear the output directory: {0}. {1}', outputDir, message),
+        );
+        return;
+      }
+
+      // 8c. Offer the bundled CJK/Latin spacing plugin (spaces around resolved
+      // key text, e.g. 打开<ph keyref="brand"/> with an English brand name).
+      // It edits the DITA-OT installation, so it is opt-in: asked once per
+      // install unless the user picks "Don't ask again".
+      await offerCjkSpacingPlugin(context, extensionPath, result.location.executablePath, transformOutputChannel);
+
+      // 9. Run transformation. The pdf transtype gets the bundled
+      // media/pdf-customization/ folder via --args.customization.dir (see
+      // buildDitaOtArgs for why only pdf picks this up).
+      let pdfCustomizationDir = join(extensionPath, 'media', 'pdf-customization');
+      if (transtype === 'pdf') {
+        // The PDF stylesheet fits images from their measured pixel sizes, which
+        // XSLT cannot read itself: stage a temp copy of the customization folder
+        // with an image-sizes.xml beside it (see pdfImageSizes.ts). Scan the
+        // workspace folder that holds the map so images referenced via ../ are
+        // covered; fall back to the pristine folder if staging fails.
+        const imageRoot = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(mapDir))?.uri.fsPath ?? mapDir;
+        const staged = stagePdfCustomization(pdfCustomizationDir, imageRoot);
+        if (staged) {
+          pdfCustomizationDir = staged;
+          disposables.push({ dispose: () => rmSync(staged, { recursive: true, force: true }) });
+        }
+      }
+      const args = buildDitaOtArgs({ mapPath, transtype, outputDir, cssArg, ditavalFile, pdfCustomizationDir });
       const outputChannel = transformOutputChannel;
       outputChannel.clear();
 
@@ -345,13 +669,22 @@ export function activate(context: vscode.ExtensionContext) {
 
             let errorCount = 0;
             const lineBuffer = createLineBuffer();
+            // A pipe's 'data' chunks can split a multi-byte UTF-8 character
+            // across two Buffers; decoding each chunk with its own
+            // .toString() mangles that character into replacement bytes.
+            // DITA-OT's own log output (and the paths it processes)
+            // routinely contains non-ASCII text, so stdout and stderr each
+            // get one persistent StringDecoder that carries an incomplete
+            // trailing sequence over to the next chunk instead.
+            const stdoutDecoder = new StringDecoder('utf-8');
+            const stderrDecoder = new StringDecoder('utf-8');
 
             child.stdout?.on('data', (data: Buffer) => {
-              outputChannel.append(data.toString());
+              outputChannel.append(stdoutDecoder.write(data));
             });
 
             child.stderr?.on('data', (data: Buffer) => {
-              const text = data.toString();
+              const text = stderrDecoder.write(data);
               outputChannel.append(text);
               const lines = lineBuffer.processChunk(text);
               for (const line of lines) {
@@ -366,7 +699,16 @@ export function activate(context: vscode.ExtensionContext) {
 
             child.on('close', async (code) => {
               if (killTimer) clearTimeout(killTimer);
-              // Process any remaining partial line in the buffer
+              // Flush any byte sequence the decoders were still holding
+              // (a chunk boundary landing mid-character right at EOF), then
+              // process any remaining partial line in the buffer.
+              const trailingStdout = stdoutDecoder.end();
+              if (trailingStdout) outputChannel.append(trailingStdout);
+              const trailingStderr = stderrDecoder.end();
+              if (trailingStderr) {
+                outputChannel.append(trailingStderr);
+                lineBuffer.processChunk(trailingStderr);
+              }
               for (const line of lineBuffer.flush()) {
                 if (classifyLogLine(line) === 'error') errorCount++;
               }
@@ -387,10 +729,30 @@ export function activate(context: vscode.ExtensionContext) {
               // Success
               outputChannel.appendLine(vscode.l10n.t('\n[DITA-OT] Transformation complete. Output directory: {0}', outputDir));
 
-              // 9. Inject site chrome (features enabled via QuickPick during flow)
+              // 9a. Repair the map landing page's links. DITA-OT writes index.html
+              // to the site root but makes its href/src relative to the map's own
+              // sub-folder, so a map under maps/ yields ../topics/… links that
+              // climb out of the site and never resolve. Runs before chrome
+              // injection so it also normalises nothing the chrome step adds (the
+              // chrome links it injects are already root-relative).
               if (transtype === 'html5' || transtype === 'xhtml') {
                 try {
-                  if (siteChromeFeatures) {
+                  fixRootIndexLinks(outputDir, outputChannel);
+                } catch (e) {
+                  outputChannel.appendLine(vscode.l10n.t('\n[DITA-OT] Failed to fix index.html links: {0}', String(e)));
+                }
+              }
+
+              // 9b. Inject the site layer (features enabled via QuickPick during
+              // flow): the template shell rebuilds every page around the chosen
+              // template, the legacy path bolts the dv-* chrome onto DITA-OT's
+              // untouched output.
+              if (transtype === 'html5' || transtype === 'xhtml') {
+                try {
+                  if (template && siteChromeFeatures) {
+                    injectTemplateChrome(extensionPath, mapPath, outputDir, template, siteChromeFeatures);
+                    outputChannel.appendLine(vscode.l10n.t('\n[DITA-OT] Template "{0}" applied to the site.', template.id));
+                  } else if (siteChromeFeatures) {
                     injectSiteChrome(extensionPath, mapPath, outputDir, siteChromeFeatures);
                     outputChannel.appendLine(vscode.l10n.t('\n[DITA-OT] Site enhancements injected.'));
                   }
@@ -494,6 +856,22 @@ export function activate(context: vscode.ExtensionContext) {
 
 // ── Site chrome injection ──
 
+/**
+ * Rewrite the map landing page's over-escaped links in place. See
+ * normalizeIndexHtmlLinks for why DITA-OT produces them and what the fix does.
+ * A no-op (no write) when there is no index.html or nothing matched, so it is
+ * safe to run on every html5/xhtml transform.
+ */
+function fixRootIndexLinks(outputDir: string, outputChannel: vscode.OutputChannel): void {
+  const indexPath = join(outputDir, 'index.html');
+  if (!existsSync(indexPath)) return;
+  const html = readFileSync(indexPath, 'utf-8');
+  const fixed = normalizeIndexHtmlLinks(html);
+  if (fixed === html) return;
+  writeFileSync(indexPath, fixed, 'utf-8');
+  outputChannel.appendLine(vscode.l10n.t('\n[DITA-OT] Fixed root index.html topic links (removed stray ../ prefixes).'));
+}
+
 function injectSiteChrome(
   extPath: string,
   mapPath: string,
@@ -502,9 +880,7 @@ function injectSiteChrome(
 ): void {
   const manifest = buildNavManifest(mapPath);
   const jsTemplate = readFileSync(join(extPath, 'media', 'transform-assets', 'site-chrome.js'), 'utf-8');
-  const js = jsTemplate
-    .replace('/* __DV_MANIFEST__ */', JSON.stringify(manifest))
-    .replace('/* __DV_FEATURES__ */', JSON.stringify(features));
+  const js = buildSiteChromeScript(jsTemplate, manifest, features);
   writeFileSync(join(outputDir, 'dita-viewer-chrome.js'), js, 'utf-8');
 
   const css = readFileSync(join(extPath, 'media', 'transform-assets', 'site-chrome.css'), 'utf-8');
@@ -535,12 +911,163 @@ function injectSiteChrome(
       const cssLink = '<link rel="stylesheet" type="text/css" href="' + prefix + 'dita-viewer-chrome.css">';
       html = html.replace('</head>', cssLink + '</head>');
 
+      // Apply the reader's stored dark/light preference (or OS default) and
+      // chrome accent theme to <html> the moment the head parses, before any
+      // body content paints. DITA-OT's own commonltr.css is light-only, so
+      // the body would otherwise flash white/wrong-accent on every topic
+      // navigation until chrome.js deferred to </body> ran. This runs
+      // regardless of the darkMode feature toggle -- the accent theme (see
+      // the toolbar's theme <select>, gated on navToolbar) is independent of
+      // dark/light and needs the same before-paint treatment either way.
+      // This static export ships without a CSP meta, so the inline script is
+      // allowed; it reads the same 'dv-theme'/'dv-chrome-theme' localStorage
+      // keys that initDarkMode()/the theme <select> write to.
+      const themeBootstrap = '<script>' + buildThemeBootstrapScript() + '</script>';
+      html = html.replace('</head>', themeBootstrap + '</head>');
+
       if (hasDark) {
         const darkLink = '<link rel="stylesheet" type="text/css" href="' + prefix + 'dita-viewer-dark.css">';
         html = html.replace('</head>', darkLink + '</head>');
       }
 
+      if (features.navToolbar) {
+        // Same no-flash treatment for the section-collapse preference: the
+        // stored 'dv-section-collapse' key is applied during head parsing so
+        // a collapse-all reader doesn't see every topic paint expanded until
+        // the end-of-body chrome script runs. Skipped when the URL has a
+        // hash (see buildCollapseBootstrapScript). Gated on navToolbar --
+        // without the toolbar, 'dv-collapsed' is never set nor styled, so
+        // there is nothing to pre-apply.
+        const collapseBootstrap = '<script>' + buildCollapseBootstrapScript() + '</script>';
+        html = html.replace('</head>', collapseBootstrap + '</head>');
+      }
+
       html = html.replace('</body>', '<script src="' + prefix + 'dita-viewer-chrome.js"></script></body>');
+      writeFileSync(full, html, 'utf-8');
+    }
+  }
+  walk(outputDir);
+}
+
+// ── Template-shell injection ──
+
+/**
+ * Rebuild the DITA-OT html5/xhtml output as a site wearing one of the
+ * media/templates/* templates -- the same shell the Docsite preview renders
+ * in VS Code, materialised as static files. The whole template folder is
+ * copied in (`_template/<id>/`) so its css and images resolve as ordinary
+ * relative files in any browser, and every generated page is re-wrapped
+ * around its own <main role="main"> with the baked sidebar/outline/header/
+ * footer. The four stacked feature widgets (copy-code, back-to-top, dark
+ * toggle, on-this-page) run over the top via the shared site-chrome.js in
+ * its siteShell variant; the layout toggles are the template's job and never
+ * fire. The legacy injectSiteChrome path is untouched by anything here.
+ */
+function injectTemplateChrome(
+  extPath: string,
+  mapPath: string,
+  outputDir: string,
+  template: SiteTemplate,
+  features: SiteChromeFeatures,
+): void {
+  const toPosix = (p: string) => p.replace(/\\/g, '/');
+  const mapDir = dirname(mapPath);
+
+  // 1. Copy the template folder into the site. A file (not dir) already at
+  //    that name means DITA-OT produced something that clashes -- refuse
+  //    rather than clobber it.
+  const tmplDirName = '_template';
+  const clashRoot = join(outputDir, tmplDirName);
+  if (existsSync(clashRoot) && !statSync(clashRoot).isDirectory()) {
+    throw new Error(vscode.l10n.t('Cannot add the template: "{0}" already exists as a file in the output.', clashRoot));
+  }
+  const templateTarget = join(clashRoot, template.id);
+  cpSync(template.dir, templateTarget, { recursive: true, force: true });
+
+  // 2. The template's own css as one file inside the copied folder, so its
+  //    url()s point at the resource files now sitting right beside it (they
+  //    stay relative to the css file, needing no per-page depth prefix).
+  const relInTemplate = (abs: string) => toPosix(relative(template.dir, abs));
+  const templateCssName = 'dv-styles.css';
+  writeFileSync(join(templateTarget, templateCssName), buildTemplateCssText(template, relInTemplate), 'utf-8');
+
+  // 3. The static-shell assets, written once at the site root.
+  writeFileSync(join(outputDir, 'dita-viewer-site-shell.css'), readShellCss(extPath), 'utf-8');
+  writeFileSync(join(outputDir, 'dita-viewer-template-chrome.css'), readTemplateChromeCss(extPath), 'utf-8');
+
+  // 4. Nav tree + reading-order pages, then the chrome script (manifest and
+  //    the siteShell feature flags baked into its placeholders).
+  const keyMap = buildKeyMap(vscode.Uri.file(mapPath));
+  const resolveKey = (k: string) => keyMap.get(k);
+  const nav = buildTemplateNav({ mapPath, resolveKey, resolveTopicTitle: makeFileTitleResolver(mapDir, undefined, resolveKey) });
+  const pageKeys = new Set(nav.pages.map((p) => p.file));
+
+  const jsTemplate = readFileSync(join(extPath, 'media', 'transform-assets', 'site-chrome.js'), 'utf-8');
+  const js = buildSiteChromeScript(jsTemplate, nav.pages, features);
+  writeFileSync(join(outputDir, 'dita-viewer-chrome.js'), js, 'utf-8');
+
+  const mapTitle = mapTitleFromXml(readFileSync(mapPath, 'utf-8'), basename(mapPath), resolveKey);
+  const year = new Date().getFullYear();
+  const headBootstrap = buildThemeBootstrapScript();
+  const bodyBootstrap = '<script>' + buildTemplateDarkBootstrapScript(template.defaultDark) + '</script>';
+  const sidebarLabels = {
+    nav: vscode.l10n.t('Topics'),
+    expand: vscode.l10n.t('Expand'),
+    collapse: vscode.l10n.t('Collapse'),
+  };
+
+  // 5. Re-wrap every page. The '_template' copy is pruned (its own files are
+  //    assets, not pages); a page already carrying data-template is skipped
+  //    so a re-run on an untouched output is idempotent.
+  function walk(dir: string) {
+    for (const entry of readdirSync(dir)) {
+      const full = join(dir, entry);
+      let isDir = false;
+      try {
+        isDir = statSync(full).isDirectory();
+      } catch {
+        continue;
+      }
+      if (isDir) {
+        if (dir === outputDir && entry === tmplDirName) continue;
+        walk(full);
+        continue;
+      }
+      if (!entry.toLowerCase().endsWith('.html')) continue;
+      let html = readFileSync(full, 'utf-8');
+      if (html.includes('data-template=')) continue;
+
+      const rel = toPosix(relative(outputDir, full));
+      const depth = rel.split('/').length - 1;
+      const prefix = depth > 0 ? '../'.repeat(depth) : '';
+      const assetBase = prefix + tmplDirName + '/' + template.id + '/';
+
+      const sidebarHtml = renderSidebarHtml(
+        nav.manifest,
+        pageKeys.has(rel) ? '_root_/' + rel : '',
+        sidebarLabels,
+      );
+      const headInjectHtml = buildHeadInjectHtml(
+        {
+          templateCss: assetBase + templateCssName,
+          shellCss: prefix + 'dita-viewer-site-shell.css',
+          chromeCss: prefix + 'dita-viewer-template-chrome.css',
+          chromeJs: prefix + 'dita-viewer-chrome.js',
+        },
+        headBootstrap,
+      );
+
+      html = buildShellPageHtml({
+        html,
+        template,
+        sidebarHtml,
+        outline: template.outline,
+        mapTitle,
+        year,
+        toRelative: (abs) => assetBase + relInTemplate(abs),
+        bodyBootstrapHtml: bodyBootstrap,
+        headInjectHtml,
+      });
       writeFileSync(full, html, 'utf-8');
     }
   }

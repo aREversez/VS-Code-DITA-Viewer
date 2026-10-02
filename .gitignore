@@ -1,6 +1,8 @@
 node_modules/
 dist/
 dist-test/
+dist-test-visual/
+test-visual/__screenshots__/
 .vscode-test/
 output/
 *.vsix

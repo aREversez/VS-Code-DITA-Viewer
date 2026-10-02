@@ -1,14 +1,19 @@
 import * as assert from 'assert';
-import { join } from 'path';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'fs';
-import { tmpdir } from 'os';
+import { join, resolve } from 'path';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, symlinkSync } from 'fs';
+import { homedir, tmpdir } from 'os';
 import {
   resolveDitaOtExecutable,
   buildDitaOtArgs,
   buildDitaOtSpawnSpec,
   buildNavManifest,
+  buildSiteChromeScript,
+  buildThemeBootstrapScript,
+  buildCollapseBootstrapScript,
   classifyLogLine,
   createLineBuffer,
+  normalizeIndexHtmlLinks,
+  isUnsafeExportClearTarget,
 } from '../../editor/ditaOtUtils';
 
 describe('resolveDitaOtExecutable', () => {
@@ -61,6 +66,33 @@ describe('resolveDitaOtExecutable', () => {
     assert.strictEqual(r.found, false);
     if (!r.found) {
       assert.strictEqual(r.reason, 'setting-invalid');
+    }
+  });
+
+  it('falls through to bin/dita when the configured path is a directory, given an isDirectory predicate (KILL: fs.existsSync() is true for directories too, so with only fileExists -- e.g. a bare existsSync -- resolveDitaOtExecutable would hand spawn() a directory instead of appending bin/dita, for exactly the setup the ditaOtPath setting\'s own description tells users to use)', () => {
+    const r = resolveDitaOtExecutable({
+      configuredPath: '/opt/dita-ot',
+      platform: 'linux',
+      // Mirrors a plain fs.existsSync(): true for both the directory and
+      // bin/dita.
+      fileExists: (p) => p === '/opt/dita-ot' || p === '/opt/dita-ot/bin/dita',
+      isDirectory: (p) => p === '/opt/dita-ot',
+    });
+    assert.ok(r.found);
+    if (r.found) {
+      assert.strictEqual(r.location.executablePath, '/opt/dita-ot/bin/dita');
+    }
+  });
+
+  it('without an isDirectory predicate, still treats an existing configured path as the executable itself (documents the pre-fix behavior callers opt out of by omitting isDirectory)', () => {
+    const r = resolveDitaOtExecutable({
+      configuredPath: '/opt/dita-ot',
+      platform: 'linux',
+      fileExists: (p) => p === '/opt/dita-ot',
+    });
+    assert.ok(r.found);
+    if (r.found) {
+      assert.strictEqual(r.location.executablePath, '/opt/dita-ot');
     }
   });
 
@@ -277,10 +309,41 @@ describe('buildDitaOtArgs', () => {
       '--filter', '/filter.ditaval',
     ]);
   });
+
+  it('should include customization.dir (no args. prefix) for the pdf transtype', () => {
+    const args = buildDitaOtArgs({
+      mapPath: '/map.ditamap',
+      transtype: 'pdf',
+      outputDir: '/out',
+      pdfCustomizationDir: '/ext/media/pdf-customization',
+    });
+    assert.deepStrictEqual(args, [
+      '-i', '/map.ditamap',
+      '-f', 'pdf',
+      '-o', '/out',
+      '--nav-toc=full',
+      '--customization.dir', '/ext/media/pdf-customization',
+    ]);
+  });
+
+  it('should not include customization.dir for a non-pdf transtype', () => {
+    const args = buildDitaOtArgs({
+      mapPath: '/map.ditamap',
+      transtype: 'html5',
+      outputDir: '/out',
+      pdfCustomizationDir: '/ext/media/pdf-customization',
+    });
+    assert.ok(!args.includes('--customization.dir'));
+  });
+
+  it('should not include customization.dir for pdf when none is given', () => {
+    const args = buildDitaOtArgs({ mapPath: '/map.ditamap', transtype: 'pdf', outputDir: '/out' });
+    assert.ok(!args.includes('--customization.dir'));
+  });
 });
 
 describe('buildNavManifest', () => {
-  it('should build manifest from test ditamap', () => {
+  it('should build manifest from test ditamap, with each file path mirroring DITA-OT\'s own directory-preserving output layout (not a flattened basename)', () => {
     const manifest = buildNavManifest(join(__dirname, '..', '..', '..', 'test-dita-file', 'fixture', 'test.ditamap'));
     assert.ok(Array.isArray(manifest));
     assert.ok(manifest.length > 0);
@@ -289,11 +352,70 @@ describe('buildNavManifest', () => {
       assert.ok(entry.file.endsWith('.html'), entry.file + ' should end with .html');
       assert.ok(typeof entry.title === 'string');
     }
-    // Should include the three topic pages
+    // Should include the three topic pages, under the topics/ folder DITA-OT
+    // actually mirrors them into -- a flattened 'db_overview.html' would be
+    // the WRONG path (see the basename-collision test below for why).
     const files = manifest.map(e => e.file);
-    assert.ok(files.includes('db_overview.html'));
-    assert.ok(files.includes('db_config.html'));
-    assert.ok(files.includes('db_ui_test.html'));
+    assert.ok(files.includes('topics/db_overview.html'));
+    assert.ok(files.includes('topics/db_config.html'));
+    assert.ok(files.includes('topics/db_ui_test.html'));
+  });
+
+  it('does not collide two different topics that share a basename in different folders (KILL: pre-fix flattened every entry to basename(href)+".html")', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'dita-ot-navmanifest-collision-'));
+    try {
+      mkdirSync(join(tmpDir, 'topics', 'a'), { recursive: true });
+      mkdirSync(join(tmpDir, 'topics', 'b'), { recursive: true });
+      writeFileSync(
+        join(tmpDir, 'topics', 'a', 'intro.dita'),
+        '<?xml version="1.0" encoding="UTF-8"?>\n<topic id="a"><title>A Intro</title><body/></topic>',
+      );
+      writeFileSync(
+        join(tmpDir, 'topics', 'b', 'intro.dita'),
+        '<?xml version="1.0" encoding="UTF-8"?>\n<topic id="b"><title>B Intro</title><body/></topic>',
+      );
+      writeFileSync(
+        join(tmpDir, 'main.ditamap'),
+        `<?xml version="1.0" encoding="UTF-8"?>
+<map>
+  <title>T</title>
+  <topicref href="topics/a/intro.dita"/>
+  <topicref href="topics/b/intro.dita"/>
+</map>`,
+      );
+      const manifest = buildNavManifest(join(tmpDir, 'main.ditamap'));
+      const files = manifest.map((e) => e.file);
+      assert.deepStrictEqual(
+        new Set(files),
+        new Set(['topics/a/intro.html', 'topics/b/intro.html']),
+        `expected two distinct, directory-qualified files, got: ${files.join(', ')}`,
+      );
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('includes topics reached only through a nested submap (KILL: pre-fix never called expandDitamapRefs, so a .ditamap topicref never expanded and its topics never reached the manifest)', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'dita-ot-navmanifest-submap-'));
+    try {
+      mkdirSync(join(tmpDir, 'sub'), { recursive: true });
+      writeFileSync(
+        join(tmpDir, 'sub', 's1.dita'),
+        '<?xml version="1.0" encoding="UTF-8"?>\n<topic id="s1"><title>Sub One</title><body/></topic>',
+      );
+      writeFileSync(
+        join(tmpDir, 'sub', 'sub.ditamap'),
+        '<?xml version="1.0" encoding="UTF-8"?>\n<map><title>Sub</title><topicref href="s1.dita"/></map>',
+      );
+      writeFileSync(
+        join(tmpDir, 'main.ditamap'),
+        '<?xml version="1.0" encoding="UTF-8"?>\n<map><title>T</title><topicref href="sub/sub.ditamap" format="ditamap"/></map>',
+      );
+      const manifest = buildNavManifest(join(tmpDir, 'main.ditamap'));
+      assert.deepStrictEqual(manifest.map((e) => e.file), ['sub/s1.html']);
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 
   it('should skip ditamap references', () => {
@@ -329,7 +451,7 @@ describe('buildNavManifest', () => {
       );
       const manifest = buildNavManifest(join(tmpDir, 'main.ditamap'));
       assert.strictEqual(manifest.length, 1, 'only the real, non-resource-only topic should reach the nav manifest');
-      assert.strictEqual(manifest[0].file, 'real.html');
+      assert.strictEqual(manifest[0].file, 'topics/real.html');
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });
     }
@@ -363,6 +485,26 @@ describe('classifyLogLine', () => {
 
   it('should classify lines with leading text before [ERROR]', () => {
     assert.strictEqual(classifyLogLine('   [ERROR]  fatal'), 'error');
+  });
+
+  it('classifies a [FATAL] marker as error, not just [ERROR]', () => {
+    assert.strictEqual(classifyLogLine('[DOTJ012F][FATAL] Failed to parse map'), 'error');
+  });
+
+  it('classifies Ant\'s "BUILD FAILED" banner as error', () => {
+    assert.strictEqual(classifyLogLine('BUILD FAILED'), 'error');
+  });
+
+  it('does not mistake unrelated "Build ..." text for the BUILD FAILED banner', () => {
+    assert.strictEqual(classifyLogLine('  Build ended at 12:00'), 'info');
+  });
+
+  it('classifies a bare JVM launch failure ("Error: ...", no [ERROR] marker) as error', () => {
+    assert.strictEqual(classifyLogLine('Error: Could not find or load main class org.dita.dost.invoker.Main'), 'error');
+  });
+
+  it('classifies an Ant-task-prefixed "Error" line (FOP\'s own convention, not [ERROR]) as error', () => {
+    assert.strictEqual(classifyLogLine('[fop] Error: image not found'), 'error');
   });
 });
 
@@ -426,6 +568,18 @@ describe('createLineBuffer', () => {
     assert.deepStrictEqual(lines, ['hello world']);
     assert.deepStrictEqual(buf.flush(), []);
   });
+
+  it('strips a trailing \\r from CRLF-terminated lines (DITA-OT/Java on Windows)', () => {
+    const buf = createLineBuffer();
+    const lines = buf.processChunk('[ERROR] a\r\n[WARN] b\r\n');
+    assert.deepStrictEqual(lines, ['[ERROR] a', '[WARN] b']);
+  });
+
+  it('strips a trailing \\r from a flushed partial line too', () => {
+    const buf = createLineBuffer();
+    buf.processChunk('partial line\r');
+    assert.deepStrictEqual(buf.flush(), ['partial line']);
+  });
 });
 
 describe('buildDitaOtSpawnSpec', () => {
@@ -488,5 +642,308 @@ describe('buildDitaOtSpawnSpec', () => {
       'win32',
     );
     assert.ok(spec.args[3].includes('"--filter=some""value"'), `expected doubled quote, got: ${spec.args[3]}`);
+  });
+});
+
+describe('buildSiteChromeScript', () => {
+  const template = 'var MANIFEST = /* __DV_MANIFEST__ */;\nvar FEATURES = /* __DV_FEATURES__ */;\n';
+
+  it('splices the manifest and features JSON into the placeholders', () => {
+    const js = buildSiteChromeScript(template, [{ file: 'a.html', title: 'A' }], { darkMode: true });
+    assert.strictEqual(
+      js,
+      'var MANIFEST = [{"file":"a.html","title":"A"}];\nvar FEATURES = {"darkMode":true};\n',
+    );
+  });
+
+  it('does not corrupt output when a title contains $-pattern text (KILL: a plain-string String.replace interprets $&, $$, backtick-quote, and $1-$99 in the REPLACEMENT even when the search value is a literal string, not a regex)', () => {
+    const js = buildSiteChromeScript(template, [{ file: 'a.html', title: 'Cost $& tax $$' }], {});
+    assert.ok(js.includes('"title":"Cost $& tax $$"'), `expected the literal title text preserved, got: ${js}`);
+    assert.doesNotThrow(() => new Function(js), `output must still be syntactically valid JS, got: ${js}`);
+  });
+
+  it('does not corrupt output when a title contains a $1-style backreference pattern', () => {
+    const js = buildSiteChromeScript(template, [{ file: 'a.html', title: 'See section $1 for details' }], {});
+    assert.ok(js.includes('"title":"See section $1 for details"'), `got: ${js}`);
+  });
+});
+
+describe('normalizeIndexHtmlLinks', () => {
+  it('strips the stray ../ prefix DITA-OT leaves on root index.html topic links', () => {
+    const html = '<li><a href="../topics/about_manual.html">About</a></li>';
+    assert.strictEqual(
+      normalizeIndexHtmlLinks(html),
+      '<li><a href="topics/about_manual.html">About</a></li>',
+    );
+  });
+
+  it('strips multiple leading ../ segments (map nested several folders deep)', () => {
+    const html = '<a href="../../topics/foo.html">x</a>';
+    assert.strictEqual(normalizeIndexHtmlLinks(html), '<a href="topics/foo.html">x</a>');
+  });
+
+  it('fixes stylesheet and script references too', () => {
+    const html = '<link href="../commonltr.css"><script src="../chrome.js"></script>';
+    assert.strictEqual(
+      normalizeIndexHtmlLinks(html),
+      '<link href="commonltr.css"><script src="chrome.js"></script>',
+    );
+  });
+
+  it('leaves already-correct root-relative links untouched (idempotent)', () => {
+    const html = '<a href="topics/foo.html">x</a>';
+    assert.strictEqual(normalizeIndexHtmlLinks(html), html);
+    // Running twice changes nothing further.
+    assert.strictEqual(normalizeIndexHtmlLinks(normalizeIndexHtmlLinks(html)), html);
+  });
+
+  it('does not touch external URLs, mailto, protocol-relative or bare anchors', () => {
+    const html =
+      '<a href="https://example.com/a">e</a>' +
+      '<a href="mailto:x@y.z">m</a>' +
+      '<a href="//cdn.example.com/x.js">p</a>' +
+      '<a href="#sec">a</a>';
+    assert.strictEqual(normalizeIndexHtmlLinks(html), html);
+  });
+
+  it('only strips LEADING ../ and leaves mid-path traversal intact', () => {
+    const html = '<a href="topics/../images/x.svg">i</a>';
+    assert.strictEqual(normalizeIndexHtmlLinks(html), '<a href="topics/../images/x.svg">i</a>');
+  });
+
+  it('is case-insensitive on the attribute name', () => {
+    const html = '<A HREF="../topics/x.html">t</A>';
+    assert.strictEqual(normalizeIndexHtmlLinks(html), '<A HREF="topics/x.html">t</A>');
+  });
+
+  it('only strips one leading ../ segment when a non-../ path component follows, leaving the rest resolvable by the browser', () => {
+    const html = '<a href="../maps/../topics/x.html">t</a>';
+    assert.strictEqual(normalizeIndexHtmlLinks(html), '<a href="maps/../topics/x.html">t</a>');
+  });
+
+  it('does not touch data-href/data-src (KILL: pre-fix regex\'s \\b matches after the hyphen)', () => {
+    const html = '<a data-href="../topics/x.html" data-src="../images/y.png">t</a>';
+    assert.strictEqual(normalizeIndexHtmlLinks(html), html);
+  });
+
+  it('strips the prefix on single-quoted attributes too (KILL: pre-fix regex only handled "? )', () => {
+    const html = "<a href='../topics/x.html'>t</a>";
+    assert.strictEqual(normalizeIndexHtmlLinks(html), "<a href='topics/x.html'>t</a>");
+  });
+});
+
+describe('buildThemeBootstrapScript', () => {
+  // Simulate the <head> bootstrap in a fake DOM (jsdom is not a dependency
+  // of this project) the same way getSearchOverlayScript et al. are tested
+  // in ditaRenderUtils.test.ts, since tsc/eslint/npm test never execute
+  // template-string webview JS otherwise.
+  function run(opts: { stored: string | null; throwsOnGet?: boolean; matches?: boolean; hasMatchMedia?: boolean; storedTheme?: string | null; storedLayout?: string | null }) {
+    const added: string[] = [];
+    const attrs: Record<string, string> = {};
+    const fakeDocument = {
+      documentElement: {
+        classList: { add: (c: string) => added.push(c) },
+        setAttribute: (k: string, v: string) => { attrs[k] = v; },
+      },
+    };
+    const fakeLocalStorage = {
+      getItem: (key: string) => {
+        if (opts.throwsOnGet) {
+          throw new Error('SecurityError: storage disabled');
+        }
+        if (key === 'dv-chrome-theme') return opts.storedTheme ?? null;
+        if (key === 'dv-index-layout') return opts.storedLayout ?? null;
+        return opts.stored;
+      },
+    };
+    const fakeWindow = opts.hasMatchMedia === false
+      ? {}
+      : { matchMedia: () => ({ matches: !!opts.matches }) };
+    const fn = new Function('document', 'window', 'localStorage', buildThemeBootstrapScript());
+    fn(fakeDocument, fakeWindow, fakeLocalStorage);
+    return { added, attrs };
+  }
+
+  it('returns raw JS, not wrapped in <script></script> (caller assembles the tag)', () => {
+    assert.doesNotThrow(() => new Function(buildThemeBootstrapScript()));
+    assert.ok(!buildThemeBootstrapScript().includes('<script'));
+  });
+
+  it('adds the dark class when the stored preference is "dark", regardless of OS preference', () => {
+    assert.deepStrictEqual(run({ stored: 'dark', matches: false }).added, ['dark']);
+  });
+
+  it('does not add the dark class when the stored preference is "light", even if the OS prefers dark', () => {
+    assert.deepStrictEqual(run({ stored: 'light', matches: true }).added, []);
+  });
+
+  it('falls back to the OS preference when nothing is stored', () => {
+    assert.deepStrictEqual(run({ stored: null, matches: true }).added, ['dark']);
+    assert.deepStrictEqual(run({ stored: null, matches: false }).added, []);
+  });
+
+  it('treats a missing matchMedia (no window.matchMedia) as light when nothing is stored', () => {
+    assert.deepStrictEqual(run({ stored: null, hasMatchMedia: false }).added, []);
+  });
+
+  it('fails silently (adds nothing, does not throw) when localStorage access throws, e.g. private browsing', () => {
+    assert.doesNotThrow(() => run({ stored: null, throwsOnGet: true, matches: true }));
+    assert.deepStrictEqual(run({ stored: null, throwsOnGet: true, matches: true }).added, []);
+  });
+
+  it('applies a stored chrome theme (data-dv-theme) before paint, independent of dark/light', () => {
+    assert.deepStrictEqual(run({ stored: 'light', storedTheme: 'aurora' }).attrs, { 'data-dv-theme': 'aurora' });
+  });
+
+  it('sets no data-dv-theme attribute at all when nothing is stored (classic default needs no attribute)', () => {
+    assert.deepStrictEqual(run({ stored: 'light', storedTheme: null }).attrs, {});
+  });
+
+  it('fails silently on both the dark class and the theme attribute when localStorage throws, not just the first read', () => {
+    const result = run({ stored: 'dark', throwsOnGet: true, matches: false });
+    assert.deepStrictEqual(result.added, []);
+    assert.deepStrictEqual(result.attrs, {});
+  });
+
+  it('applies a stored index-page layout (data-dv-index-layout) before paint, independent of dark/light and the accent theme', () => {
+    assert.deepStrictEqual(
+      run({ stored: 'light', storedLayout: 'tile' }).attrs,
+      { 'data-dv-index-layout': 'tile' },
+    );
+  });
+
+  it('sets no data-dv-index-layout attribute at all when nothing is stored (tree default needs no attribute)', () => {
+    assert.deepStrictEqual(run({ stored: 'light', storedLayout: null }).attrs, {});
+  });
+
+  it('applies the theme attribute and the layout attribute together without either clobbering the other', () => {
+    assert.deepStrictEqual(
+      run({ stored: 'light', storedTheme: 'aurora', storedLayout: 'tile' }).attrs,
+      { 'data-dv-theme': 'aurora', 'data-dv-index-layout': 'tile' },
+    );
+  });
+
+  it('fails silently on the layout attribute too when localStorage throws', () => {
+    const result = run({ stored: 'dark', throwsOnGet: true, matches: false, storedLayout: 'tile' });
+    assert.deepStrictEqual(result.attrs, {});
+  });
+});
+
+describe('buildCollapseBootstrapScript', () => {
+  // Same fake-DOM treatment as buildThemeBootstrapScript above: this JS only
+  // ever runs inside an exported static site, so a unit test is the only
+  // place anything executes it.
+  interface FakeEl {
+    tag: string;
+    className: string;
+    parentNode: FakeEl | null;
+    nodeType: number;
+  }
+  function section(className: string, parent: FakeEl | null): FakeEl {
+    return { tag: 'section', className, parentNode: parent, nodeType: 1 };
+  }
+  function run(opts: { stored: string | null; hash?: string; throws?: boolean; sections: FakeEl[] }) {
+    const fakeDocument = {
+      getElementsByTagName: (t: string) => (t === 'section' ? opts.sections : []),
+    };
+    const fakeLocalStorage = {
+      getItem: () => {
+        if (opts.throws) throw new Error('SecurityError: storage disabled');
+        return opts.stored;
+      },
+    };
+    const fn = new Function('document', 'location', 'localStorage', buildCollapseBootstrapScript());
+    fn(fakeDocument, { hash: opts.hash ?? '' }, fakeLocalStorage);
+    return opts.sections.map((s) => s.className.includes('dv-collapsed'));
+  }
+
+  it('returns raw JS, not wrapped in <script></script> (caller assembles the tag)', () => {
+    assert.doesNotThrow(() => new Function(buildCollapseBootstrapScript()));
+    assert.ok(!buildCollapseBootstrapScript().includes('<script'));
+  });
+
+  it('marks only TOP-LEVEL section.section elements when the stored preference is collapse-all', () => {
+    const inner = section('section inner', null);
+    const outer = section('section outer', null);
+    inner.parentNode = outer;
+    const sibling = section('section sibling', null);
+    const notASection = section('other-class', null);
+    const result = run({ stored: '1', sections: [outer, inner, sibling, notASection] });
+    assert.deepStrictEqual(result, [true, false, true, false], 'top-level sections marked, nested and non-.section elements left alone');
+  });
+
+  it('does nothing when the preference is absent or explicitly expanded', () => {
+    const mk = () => [section('section a', null), section('section b', null)];
+    assert.deepStrictEqual(run({ stored: null, sections: mk() }), [false, false]);
+    assert.deepStrictEqual(run({ stored: '0', sections: mk() }), [false, false]);
+  });
+
+  it('skips entirely when the URL carries a hash -- a deep link outranks the stored preference', () => {
+    assert.deepStrictEqual(run({ stored: '1', hash: '#sec-2', sections: [section('section a', null)] }), [false]);
+  });
+
+  it('fails silently when localStorage access throws, e.g. private browsing', () => {
+    const el = section('section a', null);
+    assert.doesNotThrow(() => run({ stored: null, throws: true, sections: [el] }));
+    assert.ok(!el.className.includes('dv-collapsed'));
+  });
+});
+
+describe('isUnsafeExportClearTarget', () => {
+  const map = join(tmpdir(), 'ws', 'docs', 'guide', 'main.ditamap');
+  const ws = join(tmpdir(), 'ws');
+
+  it('refuses the map\'s own folder and its ancestors', () => {
+    assert.strictEqual(isUnsafeExportClearTarget(join(tmpdir(), 'ws', 'docs', 'guide'), map), true);
+    assert.strictEqual(isUnsafeExportClearTarget(join(tmpdir(), 'ws', 'docs'), map), true);
+    assert.strictEqual(isUnsafeExportClearTarget(ws, map), true);
+  });
+
+  it('refuses a workspace folder root even when the map lives elsewhere', () => {
+    const otherMap = join(tmpdir(), 'elsewhere', 'a.ditamap');
+    assert.strictEqual(isUnsafeExportClearTarget(ws, otherMap, [ws]), true);
+    assert.strictEqual(isUnsafeExportClearTarget(tmpdir(), otherMap, [ws]), true);
+  });
+
+  it('refuses a filesystem root', () => {
+    assert.strictEqual(isUnsafeExportClearTarget(resolve('/'), map), true);
+  });
+
+  it('allows a dedicated output folder beside or below the map', () => {
+    assert.strictEqual(isUnsafeExportClearTarget(join(tmpdir(), 'ws', 'docs', 'guide', 'out', 'html5'), map, [ws]), false);
+    assert.strictEqual(isUnsafeExportClearTarget(join(tmpdir(), 'ws', 'build', 'site'), map, [ws]), false);
+  });
+
+  it('does not treat a sibling with a shared name prefix as an ancestor', () => {
+    assert.strictEqual(isUnsafeExportClearTarget(join(tmpdir(), 'ws', 'docs', 'guide-out'), map, [ws]), false);
+  });
+
+  it('still refuses an ancestor when the map sits in a folder whose name starts with ".."', () => {
+    const dotted = join(tmpdir(), 'ws2', '..hidden', 'main.ditamap');
+    assert.strictEqual(isUnsafeExportClearTarget(join(tmpdir(), 'ws2'), dotted), true);
+    assert.strictEqual(isUnsafeExportClearTarget(join(tmpdir(), 'ws2', '..hidden'), dotted), true);
+  });
+
+  it('refuses a symlink that points at the map folder', function () {
+    const base = mkdtempSync(join(tmpdir(), 'dv-clear-'));
+    try {
+      const real = join(base, 'real');
+      mkdirSync(real);
+      const mapFile = join(real, 'main.ditamap');
+      writeFileSync(mapFile, '<map/>');
+      const link = join(base, 'link');
+      try {
+        symlinkSync(real, link, 'dir');
+      } catch {
+        this.skip(); // no symlink permission (Windows without developer mode)
+      }
+      assert.strictEqual(isUnsafeExportClearTarget(link, mapFile), true);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses the user home directory', () => {
+    assert.strictEqual(isUnsafeExportClearTarget(homedir(), join(tmpdir(), 'elsewhere', 'a.ditamap')), true);
   });
 });

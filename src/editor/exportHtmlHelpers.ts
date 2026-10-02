@@ -18,6 +18,14 @@ export function buildStandaloneHtml(opts: { title: string; bodyHtml: string; css
 <title>${safeTitle}</title>
 <style>
 ${css}
+/* Image maps render at their natural size in exports: browsers hit-test
+<area> coordinates against the image's natural pixel space regardless of
+CSS resizing (the same engine behavior the preview's rescale script works
+around), so max-width clamping would point every hotspot at the wrong
+region. Natural size keeps the coordinates honest in every browser; the
+figure scrolls horizontally instead of shrinking. */
+.dita-export figure.imagemap { overflow-x: auto; }
+.dita-export figure.imagemap img { max-width: none; }
 </style>
 </head>
 <body>
@@ -35,6 +43,13 @@ const IMAGE_MIME: Record<string, string> = {
   gif: 'image/gif',
   svg: 'image/svg+xml',
   webp: 'image/webp',
+  bmp: 'image/bmp',
+  // Browsers don't render TIFF either, but the mislabeled fallback below
+  // (application/octet-stream) is strictly worse: at least this MIME type
+  // matches the actual bytes, and some browser extensions/PDF-export paths
+  // that consume the exported HTML do understand it.
+  tif: 'image/tiff',
+  tiff: 'image/tiff',
 };
 
 /** Returns a callback that inlines images as data URIs. */

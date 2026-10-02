@@ -1,0 +1,224 @@
+<?xml version='1.0'?>
+<!--
+  Attribute-set overrides for the default org.dita.pdf2 (FOP) PDF pipeline.
+  Loaded via media/pdf-customization/catalog.xml when the extension passes
+  the `customization.dir` option for the `pdf` transtype (buildDitaOtArgs).
+
+  Overriding an attribute-set here replaces the default one wholesale, so any
+  attribute the default already sets has to be repeated, not just the new ones
+  (see the notes on each block below).
+
+  Stylesheet shell / attribute-set naming matches org.dita.pdf2's own
+  cfg/fo/attrs/custom.xsl placeholder (XSLT 3.0, fo: namespace bound but unused
+  here since attribute-set members are all plain FO properties).
+-->
+<xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+    xmlns:fo="http://www.w3.org/1999/XSL/Format"
+    xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    xmlns:vdv="urn:dita-viewer:pdf-customization"
+    exclude-result-prefixes="xs vdv"
+    version="3.0">
+
+  <!--
+    Fix: a large image was drawn at its intrinsic pixel size and ran off the
+    page. org.dita.pdf2's own `image` attribute-set (cfg/fo/attrs/topic-attr.xsl)
+    ships empty, so this is a plain fill-in rather than a merge with anything
+    the default already set.
+
+    `width` sets the reference rectangle to the full available column width;
+    FOP's `content-width`/`content-height` = "scale-down-to-fit" then shrink the
+    image proportionally to fit inside it, and never scale a small image up
+    ("uniform" keeps the aspect ratio while doing so). This is Apache FOP
+    syntax, not core XSL-FO — other FO processors (e.g. RenderX) ignore it.
+  -->
+  <xsl:attribute-set name="image">
+    <xsl:attribute name="width">100%</xsl:attribute>
+    <xsl:attribute name="content-width">scale-down-to-fit</xsl:attribute>
+    <xsl:attribute name="content-height">scale-down-to-fit</xsl:attribute>
+    <xsl:attribute name="scaling">uniform</xsl:attribute>
+  </xsl:attribute-set>
+
+  <!--
+    Fix: Latin text alternated between serif and sans-serif, which looked
+    messy next to the (serif) CJK glyphs.
+
+    org.dita.pdf2 sets the page root (__fo__root) to `serif`, but two of its
+    attribute-sets hard-code `sans-serif`, and font-family inherits, so
+    everything under them switches typeface:
+      - `common.title` (cfg/fo/attrs/commons-attr.xsl): the base of every
+        title (topic, section, example, table, figure, front-matter, running
+        head/foot ...). Its only member is the font-family, so the override is
+        just that one attribute.
+      - `__toc__mini` (cfg/fo/attrs/toc-attr.xsl): the in-topic "mini TOC"
+        (a heading block and its link list). Only font-family is actually
+        changed; font-size and end-indent are repeated for explicitness (the
+        toolkit merges an override with the default per-attribute, so they would
+        carry over anyway - see the __toc__mini__table note further down).
+    Both now say `serif`, the same logical font as the root, so the whole
+    document resolves through the one Serif entry of font-mappings.xml.
+    codeph and the other code/UI/markup sets stay monospace on purpose.
+  -->
+  <xsl:attribute-set name="common.title">
+    <xsl:attribute name="font-family">serif</xsl:attribute>
+  </xsl:attribute-set>
+
+  <xsl:attribute-set name="__toc__mini">
+    <xsl:attribute name="font-size">10.5pt</xsl:attribute>
+    <xsl:attribute name="font-family">serif</xsl:attribute>
+    <xsl:attribute name="end-indent">5pt</xsl:attribute>
+  </xsl:attribute-set>
+
+  <!--
+    Fix: <codeph> was plain monospace with no visual separation from the
+    surrounding sentence. The default (org.dita.pdf2/cfg/fo/attrs/pr-domain-attr.xsl)
+    sets only font-family: monospace, repeated here for explicitness (an
+    override merges with the default per-attribute, so it would persist anyway).
+
+    Deliberately not addressed here: a very long, space-free <codeph> string
+    (e.g. a long API path or hash) can still push past the column edge —
+    XSL-FO line breaking only happens at existing break opportunities
+    (spaces, hyphenation points), and code identifiers aren't in any language
+    dictionary, so `hyphenate` doesn't help. That needs a text-level fix (e.g.
+    injecting zero-width break opportunities from a template override in
+    fo/xsl/custom.xsl), which is out of scope for this pass — see
+    fo/xsl/custom.xsl for the placeholder left for it.
+  -->
+  <xsl:attribute-set name="codeph">
+    <xsl:attribute name="font-family">monospace</xsl:attribute>
+    <xsl:attribute name="background-color">#f0f0f0</xsl:attribute>
+    <xsl:attribute name="padding-start">2pt</xsl:attribute>
+    <xsl:attribute name="padding-end">2pt</xsl:attribute>
+  </xsl:attribute-set>
+
+  <!--
+    Fix: no blank pages after chapters (and after the cover / table of contents).
+
+    org.dita.pdf2 gives every page sequence force-page-count="even" in a
+    bookmap: a sequence with an odd number of pages is padded with one blank
+    page so the next sequence starts on a right-hand (recto) page. Because each
+    chapter, appendix and part is its own page sequence, a book whose chapters
+    run 5, 3, 3 ... pages gets a blank page after nearly every one of them (seen
+    on DITA-OT 4.4.1: chapters 1, 2, 4 ... each followed by an empty page), and
+    the cover and the table of contents get one as well. That is a print-shop
+    convention for duplex books; for a manual read on screen or printed
+    single-sided it is just wasted pages, and the printed page numbers then jump
+    over them.
+
+    The set is now "no-force" for every map type. The cost is that a chapter may
+    open on a left-hand (verso) page in a duplex printout. The same value also
+    keeps the restarted body numbering (fo/xsl/custom.xsl, initial-page-number)
+    from padding the table of contents to an even length.
+
+    Override replaces the whole set; it is composed by every page-sequence
+    attribute set that uses __force__page__count, so this one value covers them.
+  -->
+  <xsl:attribute-set name="__force__page__count">
+    <xsl:attribute name="force-page-count">no-force</xsl:attribute>
+  </xsl:attribute-set>
+
+  <!--
+    Fix: number the cover/title page with a lowercase roman numeral too.
+
+    The front cover is its own page-sequence (org.dita.pdf2's createFrontMatter,
+    master-reference "front-matter") using the page-sequence.cover attribute-set,
+    which ships with no `format`, so FOP defaults it to arabic: the reader showed
+    the cover as "1" while the TOC right after it was already lowercase roman
+    (ii, iii). Adding format="i" makes the cover "i", so the front matter reads
+    i, ii, iii ... before the body restarts at 1. Override replaces the set
+    wholesale, so the inherited __force__page__count is repeated to keep parity
+    handling identical to the default.
+  -->
+  <xsl:attribute-set name="page-sequence.cover" use-attribute-sets="__force__page__count">
+    <xsl:attribute name="format">i</xsl:attribute>
+  </xsl:attribute-set>
+
+  <!--
+    Fix: a table-of-contents / list-of-figures / list-of-tables page that sits
+    in <backmatter> was numbered in lowercase roman, and the roman numeral
+    carried on from the body (a 895-page book listed its "List of Figures" at
+    page "dcccxcv").
+
+    org.dita.pdf2 gives page-sequence.toc (and lot / lof, which inherit it)
+    the frontmatter attribute-set, whose only member is format="i". That is
+    right for a booklist in <frontmatter>, where the pages really do come
+    before the arabic body. In <backmatter> the same pages come AFTER the body,
+    so their counter keeps running from it, and a roman format prints - and
+    cites, in the TOC's page-number-citation - that running count in roman.
+
+    The sequence's context node is the ot-placeholder:* element; its @id is the
+    id of the booklist entry in the merged map (the same pairing
+    processTopicNotices uses for backmatter notices). Whether the pages come
+    before or after the body is decided by vdv:follows-body below: inside
+    <backmatter>, OR after any chapter/part/appendix that renders a topic (a
+    list written after the chapters, outside <backmatter>, is tolerated by
+    DITA-OT with only a validation error and used to fall back to roman).
+    Follows body -> arabic ("1"),
+    everything else keeps "i". The condition lives inside the attribute value
+    because an attribute-set may contain only xsl:attribute. Own members
+    override used sets, so this wins over the inherited
+    page-sequence.frontmatter format; force-page-count is repeated from
+    __force__page__count exactly as the default composes it.
+  -->
+  <xsl:function name="vdv:follows-body" as="xs:boolean">
+    <xsl:param name="placeholder" as="element()"/>
+    <xsl:variable name="entry" as="element()?"
+        select="if (exists($placeholder/@id)) then key('map-id', $placeholder/@id, root($placeholder))[1] else ()"/>
+    <xsl:sequence select="exists($entry) and (
+        exists($entry/ancestor::*[contains(@class, ' bookmap/backmatter ')])
+        or exists($entry/preceding::*[contains(@class, ' bookmap/chapter ') or contains(@class, ' bookmap/part ')
+                                      or contains(@class, ' bookmap/appendix ')]
+                                     [exists(@id) and exists(key('topic-id', @id, root($entry)))]))"/>
+  </xsl:function>
+
+  <xsl:attribute-set name="page-sequence.toc" use-attribute-sets="__force__page__count page-sequence.frontmatter">
+    <xsl:attribute name="format"
+        select="if (vdv:follows-body(.)) then '1' else 'i'"/>
+  </xsl:attribute-set>
+
+  <!--
+    Fix: drop the "in this chapter" mini-TOC from bookmap chapter openers.
+
+    The default layout (cfg/fo/attrs/basic-settings.xsl, $chapterLayout =
+    'MINITOC') opens every chapter/appendix/part with a two-column createMiniToc
+    table: a "Contents:" list of the chapter's child topics on the left, the
+    chapter's own shortdesc/body on the right. That list is noise for a short
+    manual, and the table (with its page-break-after) was also what stranded the
+    title on its own page. DITA-OT already has a supported switch: with
+    $chapterLayout = 'BASIC', processChapter renders the chapter's own body
+    directly (shortdesc included, via topic.xsl's shortdesc path) and skips
+    createMiniToc entirely, so the child topics simply follow the title.
+
+    chapterLayout is a global xsl:variable (derived from the antArgsChapterLayout
+    param, which the CLI feeds from args.chapter.layout). Redeclaring it here
+    wins by import precedence - this file is imported last - so BASIC is FIXED
+    for exports through this extension: an args.chapter.layout passed to DITA-OT
+    is ignored, because this variable no longer reads antArgsChapterLayout. The
+    extension builds the DITA-OT command line itself and offers no way to set
+    that argument, so nothing is lost in practice; anyone running this
+    customization folder by hand should know the parameter has no effect.
+    appendix/part/notices layouts inherit from it, so every opener loses the
+    mini-TOC, not just chapters.
+
+    This supersedes the earlier __toc__mini__table page-break-after override,
+    which is removed here: createMiniToc is no longer called, so that set is
+    unused. (The general lesson from it still holds: an attribute-set override
+    merges with the default per-attribute, so a value must be set explicitly to
+    change it - omitting an attribute does not drop the default's.)
+  -->
+  <xsl:variable name="chapterLayout" select="'BASIC'"/>
+
+  <!--
+    Single-line "Chapter N" / "第 N 章" label above a chapter, appendix or part
+    title (emitted by insertChapterFirstpageStaticContent in fo/xsl/custom.xsl,
+    only when the title does not already carry the label). Plain bold text, no
+    band: the stock band's 40pt block-level number is what split the Chinese
+    label over three lines.
+  -->
+  <xsl:attribute-set name="__vdv__opener__label">
+    <xsl:attribute name="font-size">12pt</xsl:attribute>
+    <xsl:attribute name="font-weight">bold</xsl:attribute>
+    <xsl:attribute name="space-after">4pt</xsl:attribute>
+    <xsl:attribute name="keep-with-next.within-page">always</xsl:attribute>
+  </xsl:attribute-set>
+
+</xsl:stylesheet>

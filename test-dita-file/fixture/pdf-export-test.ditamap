@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!--
+  Minimal map for manually verifying media/pdf-customization/ against a real
+  `dita -f pdf` run (route A: default org.dita.pdf2 / FOP pipeline). Kept
+  separate from test.ditamap so this check renders in seconds instead of
+  pulling in every unrelated fixture topic.
+-->
+<map>
+    <title>PDF Export Customization Check</title>
+    <topicref href="topics/pdf-export-test.dita"/>
+</map>

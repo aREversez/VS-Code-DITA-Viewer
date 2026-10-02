@@ -107,13 +107,13 @@ describe('DITA/DITAMAP preview rendering', () => {
     await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
 
-  it('ships the search overlay with its injected decision function inlined, not referenced', async () => {
+  it('ships the search overlay with its injected match-finding function inlined, not referenced', async () => {
     // getSearchOverlayScript interpolates a TypeScript function's .toString()
     // into the overlay script so the webview runs the very algorithm the unit
     // tests cover. The unit tests can only verify that against the unminified
     // build; the shipped bundle is minified, and that is where the arrangement
     // has a failure mode no unit test can see. A bundler that constant-folded
-    // the .toString() call would emit `var planCurrentMarkMoveCore = Tr;` --
+    // the .toString() call would emit `var findTextMatchesCore = Tr;` --
     // naming a binding that exists in the bundle and not in the webview, so the
     // overlay would throw on first use and the search bar would simply be dead.
     //
@@ -130,7 +130,7 @@ describe('DITA/DITAMAP preview rendering', () => {
 
     const page = getHtml();
     assert.ok(
-      /var planCurrentMarkMoveCore = (?:function\b|\()/.test(page),
+      /var findTextMatchesCore = (?:function\b|\()/.test(page),
       'expected the shipped overlay to inline the function body, not a reference to it',
     );
 

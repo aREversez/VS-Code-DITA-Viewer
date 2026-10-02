@@ -144,13 +144,19 @@ export function createBookRoleLabeler(
 /**
  * Plain-text map title. For bookmaps, <booktitle> groups <mainbooktitle>
  * with optional <booktitlealt>/<subtitle> — prefer the main title instead
- * of concatenating all inner text.
+ * of concatenating all inner text. A bookmap may also carry a plain
+ * <title> (the short form) alongside <booktitle>; the main book title is
+ * the one a tree row or a site header should answer to.
  */
 export function getMapTitleText(root: DitaNode, resolveKey?: ResolveKey): string | undefined {
-  const titleEl = (root.children || []).find(
+  const titleEls = (root.children || []).filter(
     (c) => c.type === 'element' && c.baseType === 'map/map-title',
   );
-  if (!titleEl) return undefined;
+  if (titleEls.length === 0) return undefined;
+  const titleEl =
+    titleEls.find((c) => c.tagName === 'booktitle') ||
+    titleEls.find((c) => c.tagName === 'mainbooktitle') ||
+    titleEls[0];
   const inner = (titleEl.children || []).filter(
     (c) => c.type === 'element' && c.baseType === 'map/map-title',
   );
@@ -159,7 +165,15 @@ export function getMapTitleText(root: DitaNode, resolveKey?: ResolveKey): string
   return text || undefined;
 }
 
-function extractText(node: DitaNode, resolveKey?: ResolveKey): string {
+/**
+ * Text content of an element, substituting a keyref whose element carries
+ * no content of its own (an empty <ph keyref="version"/>): the pattern a
+ * manual's own title uses for product names and version numbers, so every
+ * title-extraction path (map titles, navtitles, topic titles read off
+ * disk) goes through here to render it. Element content wins over the
+ * keyref when both exist, per DITA keyref fallback semantics.
+ */
+export function extractText(node: DitaNode, resolveKey?: ResolveKey): string {
   if (node.type === 'text') return node.text || '';
   const own = (node.children || []).map((c) => extractText(c, resolveKey)).join('');
   // Empty element carrying a keyref (e.g. <ph keyref="product"/>): substitute
@@ -191,16 +205,28 @@ export function getDisplayName(node: DitaNode, resolveKey?: ResolveKey): string 
   return getDisplayNameInfo(node, resolveKey).text;
 }
 
+export interface DisplayNameOptions {
+  /**
+   * Whether topicmeta > keywords > keyword may name the entry (default true).
+   * A keydef is named by its keyword, but on an ordinary topicref a keyword
+   * is metadata, not a title -- the Explorer map tree turns this off there.
+   */
+  keywords?: boolean;
+}
+
 /**
  * Same resolution as getDisplayName, but also reports whether the map
- * itself actually named this entry (an explicit navtitle/linktext/
- * shortdesc/keyword) versus a fallback that isn't really a title at all
- * (the href's own filename, or the raw `keys` value) -- docsite mode's
+ * itself actually named this entry (an explicit navtitle/linktext/keyword)
+ * versus a fallback that isn't really a title at all (the href's own filename, or the raw `keys` value) -- docsite mode's
  * sidebar (buildBookNavManifest/MapViewerProvider.ts) uses `explicit` to
  * decide when it's worth reading the target topic's own <title> off disk
  * instead of showing something that was never meant to be read as a title.
  */
-export function getDisplayNameInfo(node: DitaNode, resolveKey?: ResolveKey): { text: string; explicit: boolean } {
+export function getDisplayNameInfo(
+  node: DitaNode,
+  resolveKey?: ResolveKey,
+  opts: DisplayNameOptions = {},
+): { text: string; explicit: boolean } {
   const keys = getAttr(node, 'keys');
   const href = getAttr(node, 'href');
 
@@ -210,10 +236,12 @@ export function getDisplayNameInfo(node: DitaNode, resolveKey?: ResolveKey): { t
     (c) => c.type === 'element' && (c.baseType === 'map/topicmeta'),
   );
   if (topicmeta) {
-    const metaText = getNodeText(topicmeta, ['map/navtitle', 'map/linktext', 'map/shortdesc'], resolveKey);
+    // A <shortdesc> next to the navtitle is a description, never a name:
+    // using it as a fallback made chapters show a paragraph instead of a title.
+    const metaText = getNodeText(topicmeta, ['map/navtitle', 'map/linktext'], resolveKey);
     if (metaText) return { text: metaText, explicit: true };
     // keyword within topicmeta > keywords > keyword
-    const keywords = topicmeta.children.find(
+    const keywords = opts.keywords === false ? undefined : topicmeta.children.find(
       (c) => c.type === 'element' && c.baseType === 'map/keywords',
     );
     if (keywords) {

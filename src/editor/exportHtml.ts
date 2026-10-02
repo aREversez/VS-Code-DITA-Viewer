@@ -97,47 +97,59 @@ export function getActiveDitaUri(): vscode.Uri | undefined {
   return undefined;
 }
 
+/**
+ * The export flow itself, independent of how the target file was chosen --
+ * shared by the command below (active editor, or an explorer/editor
+ * context-menu click) and by the DITA Map navigator's own per-row "Export
+ * as HTML" (ditaMapTreeProvider.ts), which resolves a row to a file path
+ * and hands it here rather than going through the active editor at all.
+ */
+export async function exportFsPathToHtml(context: vscode.ExtensionContext, fsPath: string): Promise<void> {
+  try {
+    const isMap = fsPath.toLowerCase().endsWith('.ditamap');
+    const built = isMap ? buildMapExport(fsPath) : buildTopicExport(fsPath);
+    if (built.error) {
+      vscode.window.showErrorMessage(vscode.l10n.t('Export failed: {0}', built.error));
+      return;
+    }
+
+    const css = readFileSync(join(context.extensionPath, 'media', 'styles.css'), 'utf-8');
+    const html = buildStandaloneHtml({ title: built.title, bodyHtml: built.bodyHtml, css });
+
+    const base = basename(fsPath).replace(/\.(dita|ditamap)$/i, '');
+    const target = await vscode.window.showSaveDialog({
+      defaultUri: vscode.Uri.file(join(dirname(fsPath), `${base}.html`)),
+      filters: { HTML: ['html'] },
+    });
+    if (!target) return;
+
+    writeFileSync(target.fsPath, html, 'utf-8');
+    const openLabel = vscode.l10n.t('Open in Browser');
+    const action = await vscode.window.showInformationMessage(
+      vscode.l10n.t('Exported HTML: {0}', target.fsPath),
+      openLabel,
+    );
+    if (action === openLabel) {
+      vscode.env.openExternal(target);
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    vscode.window.showErrorMessage(vscode.l10n.t('Export failed: {0}', message));
+  }
+}
+
 export function registerExportHtmlCommand(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
-    vscode.commands.registerCommand('ditaViewer.exportHtml', async () => {
-      const uri = getActiveDitaUri();
-      if (!uri) {
+    // uri arrives when invoked from an explorer/editor context-menu click;
+    // undefined from the command palette or an editor-title button, where
+    // the active editor is the only sensible target.
+    vscode.commands.registerCommand('ditaViewer.exportHtml', async (uri?: vscode.Uri) => {
+      const target = uri ?? getActiveDitaUri();
+      if (!target) {
         vscode.window.showErrorMessage(vscode.l10n.t('Please open a .dita or .ditamap file first.'));
         return;
       }
-
-      try {
-        const fsPath = uri.fsPath;
-        const isMap = fsPath.toLowerCase().endsWith('.ditamap');
-        const built = isMap ? buildMapExport(fsPath) : buildTopicExport(fsPath);
-        if (built.error) {
-          vscode.window.showErrorMessage(vscode.l10n.t('Export failed: {0}', built.error));
-          return;
-        }
-
-        const css = readFileSync(join(context.extensionPath, 'media', 'styles.css'), 'utf-8');
-        const html = buildStandaloneHtml({ title: built.title, bodyHtml: built.bodyHtml, css });
-
-        const base = basename(fsPath).replace(/\.(dita|ditamap)$/i, '');
-        const target = await vscode.window.showSaveDialog({
-          defaultUri: vscode.Uri.file(join(dirname(fsPath), `${base}.html`)),
-          filters: { HTML: ['html'] },
-        });
-        if (!target) return;
-
-        writeFileSync(target.fsPath, html, 'utf-8');
-        const openLabel = vscode.l10n.t('Open in Browser');
-        const action = await vscode.window.showInformationMessage(
-          vscode.l10n.t('Exported HTML: {0}', target.fsPath),
-          openLabel,
-        );
-        if (action === openLabel) {
-          vscode.env.openExternal(target);
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        vscode.window.showErrorMessage(vscode.l10n.t('Export failed: {0}', message));
-      }
+      await exportFsPathToHtml(context, target.fsPath);
     }),
   );
 }

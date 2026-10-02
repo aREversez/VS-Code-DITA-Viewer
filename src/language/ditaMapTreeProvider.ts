@@ -1,24 +1,64 @@
 // Explorer sidebar tree view of the DITA map associated with the active
 // editor: keeps the map structure visible while editing any .dita file,
 // with click-to-open navigation on every referenced topic.
+//
+// The tree's shape mirrors Oxygen's DITA Maps Manager: the main map itself
+// is the single root row (its title, not a bare list of its children),
+// branches start collapsed -- including frontmatter and keydef entries,
+// which are listed again now that nothing auto-expands them -- and
+// expand-all/collapse-all act on the selected node, with expand-all opening
+// its whole subtree and collapse-all folding that subtree together with the
+// selected row (the main map row excepted, so collapsing from the root keeps
+// the one-level outline); the resulting expansion state is persisted per map.
+//
+// Each row's context menu (also Oxygen-DITA-Maps-Manager-flavored) offers
+// Open with Oxygen, Reveal in Explorer, Export as HTML, and Copy
+// Title/Href for rows with the right shape (see getTreeItem's
+// contextValue), plus Find Unreferenced Resources on the root row. All of
+// it hangs off resolveNodeFsPath, the one place a row's file gets
+// resolved.
 
 import * as vscode from 'vscode';
 import { existsSync, readFileSync } from 'fs';
-import { dirname, resolve } from 'path';
+import { basename, dirname, resolve } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
-import { expandDitamapRefs, decodeHrefPart } from '../editor/ditaRenderUtils';
+import { expandDitamapRefs, decodeHrefPart, makeFileTitleResolver, makeFileTopicTypeResolver } from '../editor/ditaRenderUtils';
 import { acquireDitaFileWatcher, ditaWatchBase } from '../editor/ditaFileWatcher';
+import { onKeyContextChanged } from '../editor/keyContext';
 import { buildKeyMap, findDitamapFiles } from '../editor/DitaViewerProvider';
-import { createBookRoleLabeler, getDisplayName } from '../render/mapTypeMap';
+import { createBookRoleLabeler } from '../render/mapTypeMap';
+import { isDitamapRef } from '../render/mapTypeMap';
 import { formatLocalizedRole } from './bookRoleL10n';
 import { shouldRefreshMapTree } from './mapTreeRefresh';
+import { decideMapFollow } from './mapTreeFollow';
+import { mapTreeLabel, mapTreeIconId } from './mapTreePresentation';
+import {
+  ROOT_NODE_ID,
+  ExpansionDeviations,
+  collapseAllIds,
+  expansionFor,
+  markExpanded,
+  markCollapsed,
+  nodeIdFor,
+  nodeSegment,
+  parseExpansionDeviations,
+  pruneExpansionDeviations,
+  treeItemId,
+} from './mapExpansionState';
 
 interface MapTreeNode {
   node: DitaNode;
   mapDir: string;
 }
 
+// What shows as a row. keydef is back in the list: it was dropped when the
+// tree expanded everything by default, where a bookmap's worth of
+// key-defining rows swamped the topic outline. Now that every branch below
+// the root map starts collapsed and expand-all is scoped to the selection,
+// a keydef row costs one collapsed line until the user asks for it, and
+// keydefs (a software manual's product names and version numbers, and the
+// maps that define them) are real, navigable content in their own right.
 const SHOWN_BASE_TYPES = new Set([
   'map/topicref',
   'map/topichead',
@@ -44,42 +84,155 @@ function visibleChildren(node: DitaNode): DitaNode[] {
   return result;
 }
 
+/** workspaceState-backed persistence for the tree's expansion state. */
+export interface MapExpansionStorage {
+  get(): unknown;
+  update(value: unknown): Thenable<void>;
+}
+
+const EXPANSION_STORAGE_KEY = 'ditaViewer.mapExplorer.expansionByMap';
+
 export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private mapPath: string | undefined;
+  /** Normalized mapPath -- the key expansion state is persisted under. */
+  private mapKey: string | undefined;
   private mapRoot: DitaNode | undefined;
   private resolveKey: ((key: string) => string | undefined) | undefined;
+  /** Reads a referenced topic's own <title> off disk -- only ever consulted
+   *  for entries the map itself never named (see getTreeItem). Rebuilt each
+   *  reload so a rename/edit of a topic file is picked up, not stale-cached
+   *  across the tree's whole lifetime. */
+  private titleResolver: ((href: string) => string | undefined) | undefined;
+  /** Root tag of a referenced topic's file ("task", "concept", ...) for the
+   *  row's type icon; bounded-read and cached per file, same policy as the
+   *  docsite sidebar's type chips. */
+  private topicTypeResolver: ((href: string) => string | undefined) | undefined;
   /** Numbered book-division labels ("Chapter 1", …) keyed by node, in document order */
   private roleLabels = new WeakMap<DitaNode, string>();
+  /** Parent pointers over the visible tree structure -- see getParent. */
+  private parentOf = new WeakMap<DitaNode, DitaNode>();
+  /** Structural ids over the same visible structure -- see mapExpansionState.ts. */
+  private nodeIds = new WeakMap<DitaNode, string>();
+  /** Every id the current tree contains, to prune persisted state against. */
+  private knownIds = new Set<string>();
+  /** One-off id counter for stale pre-reload rows the view may still render. */
+  private staleIdSeq = 0;
+  /** Expansion deviations per map, loaded once from storage and written back
+   *  debounced -- the slice for the map currently shown is what getTreeItem,
+   *  the expand/collapse commands and the chevron event handlers all touch. */
+  private deviationsByMap: Record<string, ExpansionDeviations> | undefined;
+  private storage: MapExpansionStorage | undefined;
+  private persistTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Set by attachTreeView once registerMapTreeView creates it -- see expandAll. */
+  private treeView: vscode.TreeView<MapTreeNode> | undefined;
   /** Pending coalesced reload -- see requestRefresh. */
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
   /** This tree's share of the folder watcher, and the folder it is on. */
   private watcherSubscription: vscode.Disposable | undefined;
   private watchedBase: string | undefined;
+  /**
+   * When true, setActiveDocument is a no-op: the user picked a map by hand
+   * (selectMap) or asked to keep the current one (pin), so opening other
+   * topics -- however deeply cross-referenced the map's own structure is --
+   * must not second-guess that choice. Cleared by unpin, which immediately
+   * resyncs to whatever's active.
+   */
+  private pinned = false;
 
-  /** Re-evaluates which map to show based on the active editor's document. */
+  get isPinned(): boolean {
+    return this.pinned;
+  }
+
+  attachStorage(storage: MapExpansionStorage): void {
+    this.storage = storage;
+  }
+
+  /**
+   * Re-evaluates which map to show based on the active editor's document.
+   * A .ditamap always wins -- the tree shows the map the user is looking at,
+   * whether in its source editor or its preview. A .dita topic only switches
+   * the tree across a *workspace-folder* boundary (the common layout where
+   * each product/book lives isolated in its own folder, each with its own
+   * map); inside the map's own folder, DITA's nested map/topic references
+   * make \"the\" owning map ambiguous (a topic can be reachable from several
+   * maps), so focusing a topic never swaps the map out from under a manual
+   * choice. See decideMapFollow for the exact rule.
+   */
   setActiveDocument(uri: vscode.Uri | undefined): void {
     if (!uri) return; // Keep the last map when focus moves to non-file views
+    if (this.pinned) return; // Manual choice in force: editor activity never overrides it
     const fsPath = uri.fsPath;
-    let nextMap: string | undefined;
-    if (fsPath.toLowerCase().endsWith('.ditamap')) {
-      nextMap = fsPath;
-    } else if (fsPath.toLowerCase().endsWith('.dita')) {
-      nextMap = findDitamapFiles(uri)[0];
-    } else {
-      return; // Unrelated file type: keep showing the current map
-    }
+
+    const folder = vscode.workspace.getWorkspaceFolder(uri);
+    const currentFolder = this.mapPath
+      ? vscode.workspace.getWorkspaceFolder(vscode.Uri.file(this.mapPath))
+      : undefined;
+    const decision = decideMapFollow(fsPath, {
+      inWorkspaceFolder: !!folder,
+      sameFolderAsCurrentMap: !!folder && !!currentFolder && folder.uri.fsPath === currentFolder.uri.fsPath,
+    });
+    if (decision === 'ignore') return;
+
+    const nextMap = decision === 'map' ? fsPath : findDitamapFiles(uri)[0];
+    if (!nextMap) return;
+
     // Keep the sidebar view visible even when the user moves on to other files
     vscode.commands.executeCommand('setContext', 'ditaViewer.hasMap', true);
-    if (nextMap && resolve(nextMap) !== (this.mapPath ? resolve(this.mapPath) : undefined)) {
-      this.mapPath = nextMap;
-      this.reload();
-    } else if (!this.mapRoot && nextMap) {
+    if (resolve(nextMap) !== (this.mapPath ? resolve(this.mapPath) : undefined)) {
       this.mapPath = nextMap;
       this.reload();
     }
+  }
+
+  /** Pins the map currently shown, so further editor activity can't change it. */
+  pin(): void {
+    if (!this.mapPath) return;
+    this.pinned = true;
+    vscode.commands.executeCommand('setContext', 'ditaViewer.mapExplorer.pinned', true);
+  }
+
+  /** Releases the pin and immediately resyncs to whatever editor is active. */
+  unpin(): void {
+    this.pinned = false;
+    vscode.commands.executeCommand('setContext', 'ditaViewer.mapExplorer.pinned', false);
+    this.setActiveDocument(activeDocumentUri());
+  }
+
+  /**
+   * Lets the user hand-pick which map the sidebar shows, independent of
+   * whatever's active in the editor -- the escape hatch for a map made of
+   * layered/nested references, where no single "owning" map for a given
+   * topic is obviously correct. Scoped to the map's own workspace folder
+   * when one is already showing (or the active editor's, on first use);
+   * falls back to the whole workspace if neither is available. Picking a
+   * map pins it, same as pin(), so the choice sticks through further topic
+   * navigation.
+   */
+  async selectMap(): Promise<void> {
+    const scopeUri = this.mapPath
+      ? vscode.Uri.file(this.mapPath)
+      : activeDocumentUri();
+    const folder = scopeUri ? vscode.workspace.getWorkspaceFolder(scopeUri) : undefined;
+    const pattern = folder ? new vscode.RelativePattern(folder, '**/*.ditamap') : '**/*.ditamap';
+    const found = await vscode.workspace.findFiles(pattern, '**/node_modules/**', 200);
+    if (found.length === 0) {
+      vscode.window.showInformationMessage(vscode.l10n.t('No .ditamap files found in this workspace folder.'));
+      return;
+    }
+    const items = found
+      .map((u) => ({ label: basename(u.fsPath), description: vscode.workspace.asRelativePath(u), uri: u }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    const picked = await vscode.window.showQuickPick(items, {
+      placeHolder: vscode.l10n.t('Select a DITA map to show'),
+    });
+    if (!picked) return;
+    this.mapPath = picked.uri.fsPath;
+    this.pin();
+    vscode.commands.executeCommand('setContext', 'ditaViewer.hasMap', true);
+    this.reload();
   }
 
   refresh(): void {
@@ -89,8 +242,9 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
   /**
    * Coalesced reload for file events. Saving a .ditamap in the editor both
    * fires onDidSaveTextDocument and writes the file where the watcher sees it,
-   * and a reload rebuilds the whole tree -- discarding which nodes the user had
-   * expanded -- so two reports of one edit must not become two reloads.
+   * and a reload rebuilds the whole tree, so two reports of one edit must not
+   * become two reloads. Which branches were expanded survives the rebuild:
+   * rows are re-created with the state recorded per node id, not reset.
    */
   requestRefresh(): void {
     if (this.refreshTimer) clearTimeout(this.refreshTimer);
@@ -101,9 +255,15 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
   }
 
   private reload(): void {
+    this.mapKey = this.mapPath ? resolve(this.mapPath) : undefined;
     this.mapRoot = undefined;
     this.resolveKey = undefined;
+    this.titleResolver = undefined;
+    this.topicTypeResolver = undefined;
     this.roleLabels = new WeakMap();
+    this.parentOf = new WeakMap();
+    this.nodeIds = new WeakMap();
+    this.knownIds = new Set();
     if (this.mapPath && existsSync(this.mapPath)) {
       try {
         const content = readFileSync(this.mapPath, 'utf-8');
@@ -112,6 +272,8 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
         this.mapRoot = doc.root;
         const keyMap = buildKeyMap(vscode.Uri.file(this.mapPath));
         this.resolveKey = (k: string) => keyMap.get(k);
+        this.titleResolver = makeFileTitleResolver(dirname(this.mapPath), undefined, this.resolveKey);
+        this.topicTypeResolver = makeFileTopicTypeResolver(dirname(this.mapPath));
         // Assign numbered division labels per nesting depth
         const roleLabel = createBookRoleLabeler(formatLocalizedRole);
         const labelWalk = (node: DitaNode, depth: number): void => {
@@ -126,6 +288,27 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
           }
         };
         labelWalk(doc.root, -1);
+        // Parent pointers and structural ids over the same *visible*
+        // structure getChildren exposes (visibleChildren, not raw
+        // node.children -- a topicgroup's children point through it to its
+        // own parent, since the topicgroup itself never appears as a tree
+        // row). Needed for TreeView.reveal, which requires getParent to
+        // walk anything below the top level, and to key expansion state by
+        // something that survives a reload.
+        const parentWalk = (node: DitaNode): void => {
+          const seen = new Map<string, number>();
+          for (const child of visibleChildren(node)) {
+            const id = nodeIdFor(this.nodeIds.get(node) || ROOT_NODE_ID, child, seen);
+            seen.set(nodeSegment(child), (seen.get(nodeSegment(child)) || 0) + 1);
+            this.nodeIds.set(child, id);
+            this.knownIds.add(id);
+            this.parentOf.set(child, node);
+            parentWalk(child);
+          }
+        };
+        this.nodeIds.set(doc.root, ROOT_NODE_ID);
+        this.knownIds.add(ROOT_NODE_ID);
+        parentWalk(doc.root);
       } catch {
         this.mapRoot = undefined;
       }
@@ -134,57 +317,409 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
     this._onDidChangeTreeData.fire();
   }
 
+  getParent(element: MapTreeNode): MapTreeNode | null {
+    const parentNode = this.parentOf.get(element.node);
+    // No parent pointer: the main map's own row (the root), or a stale
+    // element from before a reload. Either way there is no row above it.
+    if (!parentNode || !this.mapPath) return null;
+    return { node: parentNode, mapDir: element.mapDir };
+  }
+
+  /** Set once by registerMapTreeView, after the TreeView itself exists. */
+  attachTreeView(view: vscode.TreeView<MapTreeNode>): void {
+    this.treeView = view;
+  }
+
+  /**
+   * The node an expand-all/collapse-all acts on, matching Oxygen's DITA
+   * Maps Manager: the invoked row when the command comes from its context
+   * menu, else the current selection, else the main map -- expanding a
+   * whole ditamap in one go is rarely what anyone wants, so with nothing
+   * selected the root (one collapsed outline of top-level divisions) is
+   * the most useful target, not a reason to refuse.
+   */
+  private expansionTarget(element: MapTreeNode | undefined): MapTreeNode | undefined {
+    if (element && this.nodeIds.get(element.node) !== undefined) return element;
+    const selection = this.treeView?.selection || [];
+    for (const sel of selection) {
+      if (this.nodeIds.get(sel.node) !== undefined) return sel;
+    }
+    return this.getChildren(undefined)[0];
+  }
+
+  private collectBranchIds(node: DitaNode, includeSelf: boolean): string[] {
+    const ids: string[] = [];
+    const walk = (n: DitaNode, self: boolean): void => {
+      const children = visibleChildren(n);
+      if (children.length === 0) return;
+      if (self) {
+        const id = this.nodeIds.get(n);
+        if (id !== undefined) ids.push(id);
+      }
+      for (const child of children) walk(child, true);
+    };
+    walk(node, includeSelf);
+    return ids;
+  }
+
+  /**
+   * Expands every branch under the target (the target included). The
+   * recorded state is what the rows render from -- getTreeItem -- so
+   * expanding is: record, fire one data change, and re-anchor the view on
+   * the target. That single refresh replaces every row whose state changed
+   * (its TreeItem id encodes the state, see mapExpansionState.ts) and
+   * leaves every other row untouched, so nothing scrolls: rows above the
+   * target never change, and the reveal also restores the selection the
+   * row replacement drops. The old implementation walked the subtree
+   * calling reveal() on every branch, each reveal scrolling it into view,
+   * which is why the view used to end up slid to the end of the map.
+   */
+  async expandAll(element?: MapTreeNode): Promise<void> {
+    const target = this.expansionTarget(element);
+    if (!target) return;
+    const deviations = this.currentDeviations();
+    for (const id of this.collectBranchIds(target.node, true)) markExpanded(deviations, id);
+    this.schedulePersist();
+    this._onDidChangeTreeData.fire();
+    await this.revealTarget(target);
+  }
+
+  /**
+   * Collapses the target's whole subtree, the target row included --
+   * "Collapse All" closes the row it was invoked on, like the same command
+   * in every other tree. That inclusion is what makes the command work at
+   * all on the standard chapter shape: a topichead over leaf topicrefs has
+   * no descendant branch to fold, so a descendants-only collapse-all marked
+   * nothing and read as dead on it. The root map row is the one row left
+   * open -- see collapseAllIds.
+   */
+  async collapseAll(element?: MapTreeNode): Promise<void> {
+    const target = this.expansionTarget(element);
+    if (!target) return;
+    const branches = this.collectBranchIds(target.node, false);
+    const ids = collapseAllIds(this.nodeIds.get(target.node), branches);
+    // Nothing to mark: a row from before a reload re-parsed the map (it
+    // carries no id, and neither does anything below it), or a target with
+    // no fold left -- the root of a map whose top level is all leaf rows.
+    // Skip the persist, refresh and re-anchor instead of pretending to act.
+    if (ids.length === 0) return;
+    const deviations = this.currentDeviations();
+    for (const id of ids) markCollapsed(deviations, id);
+    this.schedulePersist();
+    this._onDidChangeTreeData.fire();
+    await this.revealTarget(target);
+  }
+
+  /** Re-anchor the view on the node an expand/collapse-all acted on. */
+  private async revealTarget(target: MapTreeNode): Promise<void> {
+    if (!this.treeView) return;
+    try {
+      await this.treeView.reveal(target, { select: true, focus: false });
+    } catch {
+      // A concurrent data refresh can make the resolve race; the rows
+      // themselves are already in their recorded state, so losing the
+      // re-anchor is cosmetic and not worth surfacing.
+    }
+  }
+
+  /** Chevron event: record the row's new state so it outlives reloads. */
+  noteExpanded(element: MapTreeNode): void {
+    this.noteExpansion(element, markExpanded);
+  }
+
+  noteCollapsed(element: MapTreeNode): void {
+    this.noteExpansion(element, markCollapsed);
+  }
+
+  private noteExpansion(
+    element: MapTreeNode,
+    mark: (deviations: ExpansionDeviations, nodeId: string) => void,
+  ): void {
+    // Events also arrive for elements of a previous tree generation (a
+    // reload re-parses the map); those carry no id and record nothing.
+    const id = this.nodeIds.get(element.node);
+    if (id === undefined) return;
+    const deviations = this.currentDeviations();
+    const before = deviations[id];
+    mark(deviations, id);
+    // Rows are also re-created expanded by the refreshes expand-all
+    // triggers; the event that follows confirms the recorded state rather
+    // than changing it, and needs no workspaceState write.
+    if (deviations[id] === before) return;
+    this.schedulePersist();
+  }
+
+  private ensureDeviationsRecord(): Record<string, ExpansionDeviations> {
+    if (!this.deviationsByMap) {
+      const record: Record<string, ExpansionDeviations> = {};
+      const raw = this.storage?.get();
+      if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+        for (const [map, deviations] of Object.entries(raw as Record<string, unknown>)) {
+          record[map] = parseExpansionDeviations(deviations);
+        }
+      }
+      this.deviationsByMap = record;
+    }
+    return this.deviationsByMap;
+  }
+
+  /** The recorded expansion deviations of the map currently shown. */
+  private currentDeviations(): ExpansionDeviations {
+    const record = this.ensureDeviationsRecord();
+    const key = this.mapKey || '';
+    let slice = record[key];
+    if (!slice) {
+      slice = {};
+      record[key] = slice;
+    }
+    return slice;
+  }
+
+  private schedulePersist(): void {
+    if (!this.storage || !this.mapKey) return;
+    if (this.persistTimer) clearTimeout(this.persistTimer);
+    // Debounced: expanding a subtree records one id per branch, and a
+    // chevron-click burst must not become one workspaceState write each.
+    this.persistTimer = setTimeout(() => {
+      this.persistTimer = undefined;
+      this.persistNow();
+    }, 400);
+  }
+
+  private persistNow(): void {
+    if (!this.storage || !this.mapKey) return;
+    const record = this.ensureDeviationsRecord();
+    record[this.mapKey] = pruneExpansionDeviations(this.currentDeviations(), this.knownIds);
+    void this.storage.update({ ...record });
+  }
+
   getChildren(element?: MapTreeNode): MapTreeNode[] {
     if (!element) {
+      // The main map itself is the single root row: its title (not just
+      // its children), the file behind it one click away, and one thing to
+      // expand/collapse-all on when nothing is selected.
       if (!this.mapRoot || !this.mapPath) return [];
       const mapDir = dirname(this.mapPath);
-      return visibleChildren(this.mapRoot).map((node) => ({ node, mapDir }));
+      return [{ node: this.mapRoot, mapDir }];
     }
     return visibleChildren(element.node).map((node) => ({ node, mapDir: element.mapDir }));
   }
 
   getTreeItem(element: MapTreeNode): vscode.TreeItem {
-    const { node, mapDir } = element;
+    const { node } = element;
+    const isRoot = node === this.mapRoot;
+    // A row the view still holds from before a reload re-parses the map:
+    // it carries no structural id. Rare (the refresh replaces rows from
+    // the top down), transient, and renderable -- but its id must still be
+    // unique per row, so it gets a one-off sequence instead of a shared
+    // empty string two stale rows would collide on.
+    const nodeId = this.nodeIds.get(node) ?? (isRoot ? ROOT_NODE_ID : `stale-${this.staleIdSeq++}`);
     const baseType = node.baseType;
-    const label =
-      baseType === 'map/bookmap-structural'
-        ? node.tagName || '(container)'
-        : getDisplayName(node, this.resolveKey);
+    const href = node.attributes?.href;
+    const label = this.labelFor(element);
+
     const hasChildren = visibleChildren(node).length > 0;
+    const mark = hasChildren ? expansionFor(this.currentDeviations(), nodeId) : undefined;
     const item = new vscode.TreeItem(
       label,
-      hasChildren ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.None,
+      mark === 'e'
+        ? vscode.TreeItemCollapsibleState.Expanded
+        : mark === 'c'
+          ? vscode.TreeItemCollapsibleState.Collapsed
+          : vscode.TreeItemCollapsibleState.None,
     );
+    // The id makes expansion survive reloads (VS Code matches rows by id)
+    // and makes a recorded state change re-create the row in that state
+    // (the id encodes the state; see mapExpansionState.ts). mapKey in the
+    // prefix keeps rows of different maps from ever matching each other.
+    item.id = treeItemId(this.mapKey ?? '', nodeId, mark);
 
     const role = this.roleLabels.get(node);
-    const href = node.attributes?.href;
     const keys = node.attributes?.keys;
-    item.description = role || (baseType === 'map/keydef' ? keys : href) || undefined;
-    item.tooltip = href || keys || label;
+    // The main map's row carries the file name next to the title -- which
+    // map is showing is the one thing the title itself never says. Below
+    // it, only the book-division role label (Chapter 1, Appendix A, ...)
+    // earns a permanent spot next to the title, since it's information the
+    // title itself never carries; the raw href/keys reference is one hover
+    // away via the tooltip.
+    item.description = isRoot
+      ? this.mapPath
+        ? basename(this.mapPath)
+        : undefined
+      : role || undefined;
+    item.tooltip = isRoot ? this.mapPath : href || keys || label;
 
-    if (baseType === 'map/keydef') {
-      item.iconPath = new vscode.ThemeIcon('key');
-    } else if (baseType === 'map/bookmap-structural' || baseType === 'map/topichead') {
-      item.iconPath = new vscode.ThemeIcon('folder');
-    } else if (role) {
-      item.iconPath = new vscode.ThemeIcon('book');
-    } else {
-      item.iconPath = new vscode.ThemeIcon('file');
+    const isMapRef = isDitamapRef(node);
+    let topicType: string | undefined;
+    if (!isRoot && !isMapRef && baseType === 'map/topicref' && href) {
+      topicType = this.topicTypeResolver?.(href);
     }
+    item.iconPath = new vscode.ThemeIcon(
+      mapTreeIconId({ isRoot, isMapRef, baseType, topicType, hasRole: !!role }),
+    );
+
+    // Drives which context-menu items a row offers (package.json's
+    // view/item/context "viewItem =~ /…/" clauses): "fileRef" rows have a
+    // real file on disk behind them -- Oxygen, reveal-in-Explorer and
+    // export all need one -- while "hasHref" is broader and also covers a
+    // href/keys reference that *didn't* resolve, since copying the raw
+    // text is most useful exactly when a link is broken.
+    const fsPath = this.resolveNodeFsPath(element);
+    item.contextValue = [
+      isRoot ? 'root' : 'child',
+      fsPath ? 'fileRef' : 'noFile',
+      !isRoot && (href || keys) ? 'hasHref' : 'noHref',
+    ].join(' ');
 
     // Click opens the referenced local file
-    if (href && !/^[a-z][a-z0-9+.-]*:/i.test(href) && node.attributes?.scope !== 'external') {
-      const filePart = decodeHrefPart(href.split('#')[0]);
-      const abs = resolve(mapDir, filePart);
-      if (existsSync(abs)) {
-        item.command = {
-          command: 'vscode.open',
-          title: vscode.l10n.t('Open File'),
-          arguments: [vscode.Uri.file(abs)],
-        };
-      }
+    if (fsPath) {
+      item.command = {
+        command: 'vscode.open',
+        title: vscode.l10n.t('Open File'),
+        arguments: [vscode.Uri.file(fsPath)],
+      };
     }
     return item;
+  }
+
+  /**
+   * The absolute on-disk path a row represents: the map file itself for the
+   * root row, else the href it resolves to -- or undefined for a row with
+   * no href, an external/out-of-scope href, or a href that resolves to a
+   * file no longer on disk. Shared by the click-to-open command above and
+   * every "act on this row's file" context-menu command below (Oxygen,
+   * reveal in Explorer, export, and revealPath's reverse lookup).
+   */
+  private resolveNodeFsPath(element: MapTreeNode): string | undefined {
+    const { node, mapDir } = element;
+    if (node === this.mapRoot) {
+      return this.mapPath && existsSync(this.mapPath) ? this.mapPath : undefined;
+    }
+    const href = node.attributes?.href;
+    if (!href || /^[a-z][a-z0-9+.-]*:/i.test(href) || node.attributes?.scope === 'external') return undefined;
+    const filePart = decodeHrefPart(href.split('#')[0]);
+    const abs = resolve(mapDir, filePart);
+    return existsSync(abs) ? abs : undefined;
+  }
+
+  /** The row's rendered title -- same computation getTreeItem's label uses,
+   *  factored out so "Copy Title" copies exactly what the row shows. */
+  private labelFor(element: MapTreeNode): string {
+    const isRoot = element.node === this.mapRoot;
+    return mapTreeLabel(element.node, {
+      isRoot,
+      resolveKey: this.resolveKey,
+      readTitle: this.titleResolver ?? (() => undefined),
+      rootFallback: this.mapPath ? basename(this.mapPath).replace(/\.ditamap$/i, '') : '',
+    });
+  }
+
+  /** Row backing this.mapRoot's own href/keys attributes are meaningless
+   *  (the root shows the *map*, not one of its own topicrefs), so "Copy
+   *  Href" and its "hasHref" contextValue both stay off the root row. */
+  private hrefOrKeysFor(element: MapTreeNode): string | undefined {
+    if (element.node === this.mapRoot) return undefined;
+    return element.node.attributes?.href || element.node.attributes?.keys;
+  }
+
+  /** "Open with Oxygen" from a row's context menu: resolve the row to a
+   *  file and delegate to the shared command (same one the Explorer and
+   *  editor context menus use), so detection/error-handling lives in one
+   *  place (oxygenLauncher.ts). */
+  async openWithOxygen(element?: MapTreeNode): Promise<void> {
+    const fsPath = element && this.resolveNodeFsPath(element);
+    if (!fsPath) return;
+    await vscode.commands.executeCommand('ditaViewer.openWithOxygen', vscode.Uri.file(fsPath));
+  }
+
+  /** "Reveal in Explorer": the mapExplorer-to-file-Explorer direction of
+   *  the pair completed by revealPath below (file-Explorer-to-mapExplorer). */
+  async revealInExplorer(element?: MapTreeNode): Promise<void> {
+    const fsPath = element && this.resolveNodeFsPath(element);
+    if (!fsPath) return;
+    await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(fsPath));
+  }
+
+  /** "Export as HTML" for one row: delegates to the same command the
+   *  Explorer/editor context menus use, with the row's own file as the
+   *  export root -- the whole map for the root row, or just that
+   *  topic/submap for anything else (see resolveNodeFsPath). */
+  async exportHtml(element?: MapTreeNode): Promise<void> {
+    const fsPath = element && this.resolveNodeFsPath(element);
+    if (!fsPath) return;
+    await vscode.commands.executeCommand('ditaViewer.exportHtml', vscode.Uri.file(fsPath));
+  }
+
+  async copyHref(element?: MapTreeNode): Promise<void> {
+    const value = element && this.hrefOrKeysFor(element);
+    if (!value) return;
+    await vscode.env.clipboard.writeText(value);
+  }
+
+  async copyTitle(element?: MapTreeNode): Promise<void> {
+    if (!element) return;
+    await vscode.env.clipboard.writeText(this.labelFor(element));
+  }
+
+  /**
+   * "Find Unreferenced Resources": opens the dialog (unreferencedResourcesUi.ts)
+   * with the current map preselected -- the dialog itself lets the user add
+   * other maps and choose which folders to check.
+   */
+  async findUnreferencedResources(): Promise<void> {
+    if (!this.mapPath) return;
+    await vscode.commands.executeCommand('ditaViewer.findUnreferencedResources', vscode.Uri.file(this.mapPath));
+  }
+
+  /** "Validate and Check for Completeness" for the current map. */
+  async validateCompleteness(): Promise<void> {
+    if (!this.mapPath) return;
+    await vscode.commands.executeCommand('ditaViewer.validateMapCompleteness', vscode.Uri.file(this.mapPath));
+  }
+
+  get currentMapPath(): string | undefined {
+    return this.mapPath;
+  }
+
+  /**
+   * The file-Explorer-to-mapExplorer direction: reveals and selects the row
+   * whose file is fsPath, if the currently shown map has one. Returns
+   * false (rather than switching maps or searching the rest of the
+   * workspace) when it doesn't -- the caller's job, not this one, to decide
+   * what "not part of the current map" should tell the user.
+   */
+  async revealPath(fsPath: string): Promise<boolean> {
+    if (!this.mapRoot || !this.mapPath || !this.treeView) return false;
+    const targetAbs = resolve(fsPath);
+    const mapDir = dirname(this.mapPath);
+
+    const target =
+      resolve(this.mapPath) === targetAbs
+        ? { node: this.mapRoot, mapDir }
+        : this.findNodeForPath(this.mapRoot, mapDir, targetAbs);
+    if (!target) return false;
+
+    try {
+      await this.treeView.reveal(target, { select: true, focus: true, expand: true });
+    } catch {
+      return false; // A concurrent reload raced the reveal; nothing to surface to the user.
+    }
+    return true;
+  }
+
+  /** Depth-first search over the *visible* tree (visibleChildren, matching
+   *  everything else keyed by nodeIds/parentOf) for the first row whose
+   *  resolveNodeFsPath equals targetAbs. First occurrence in document order
+   *  wins when a conref'd topic is reachable through more than one row. */
+  private findNodeForPath(node: DitaNode, mapDir: string, targetAbs: string): MapTreeNode | undefined {
+    for (const child of visibleChildren(node)) {
+      const element = { node: child, mapDir };
+      const abs = this.resolveNodeFsPath(element);
+      if (abs && resolve(abs) === targetAbs) return element;
+      const nested = this.findNodeForPath(child, mapDir, targetAbs);
+      if (nested) return nested;
+    }
+    return undefined;
   }
 
   /**
@@ -210,18 +745,20 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
       // Not every watched file is this tree's business: a topic's contents
       // change nothing the tree displays, and reloading for it would throw
       // away the user's expansion state. See shouldRefreshMapTree.
-      if (!shouldRefreshMapTree(event.uri.fsPath, event.kind)) return;
+      if (!shouldRefreshMapTree(event.uri.fsPath, event.kind, event.fromEditor === true)) return;
       this.requestRefresh();
     });
   }
 
   /**
-   * Releases the pending reload and this tree's share of the folder watcher.
-   * Wired into context.subscriptions, so it runs on deactivation.
+   * Releases the pending reload, the pending persist and this tree's share
+   * of the folder watcher. Wired into context.subscriptions, so it runs on
+   * deactivation.
    *
-   * The timer has to be cleared, not just the watcher released: a reload firing
-   * after deactivation would rebuild a tree nobody is listening to, and would
-   * keep reading the map off disk in a session that is supposed to be over.
+   * The timers have to be cleared, not just the watcher released: a reload
+   * or a workspaceState write firing after deactivation would rebuild a
+   * tree nobody is listening to, and would keep reading the map off disk
+   * in a session that is supposed to be over.
    *
    * _onDidChangeTreeData is deliberately NOT disposed. Disposing it would make
    * this depend on how it is ordered against the teardown of
@@ -237,20 +774,109 @@ export class DitaMapTreeProvider implements vscode.TreeDataProvider<MapTreeNode>
   dispose(): void {
     if (this.refreshTimer) clearTimeout(this.refreshTimer);
     this.refreshTimer = undefined;
+    if (this.persistTimer) clearTimeout(this.persistTimer);
+    this.persistTimer = undefined;
+    this.persistNow();
     this.watcherSubscription?.dispose();
     this.watcherSubscription = undefined;
     this.watchedBase = undefined;
   }
 }
 
-export function registerMapTreeView(context: vscode.ExtensionContext): void {
+/**
+ * The file behind whatever editor tab is focused: a source editor's file, or
+ * the file a custom editor (the map/topic preview) was opened on. Falls back
+ * to activeTextEditor for hosts where the tab model has no answer, and to
+ * undefined for tabs with no single file (diffs, settings, terminals), which
+ * setActiveDocument treats as \"keep the current map\".
+ */
+function activeDocumentUri(): vscode.Uri | undefined {
+  const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+  if (input instanceof vscode.TabInputText || input instanceof vscode.TabInputCustom) return input.uri;
+  return vscode.window.activeTextEditor?.document.uri;
+}
+
+/** What registerMapTreeView hands back to extension.ts -- just enough to
+ *  wire the Explorer-side "Reveal in Map Navigator" command
+ *  (ditaViewer.revealInMapExplorer) without exposing the provider itself. */
+export interface MapTreeViewHandle {
+  revealPath(fsPath: string): Promise<boolean>;
+  /** The map the navigator is currently showing, if any. */
+  currentMapPath(): string | undefined;
+}
+
+export function registerMapTreeView(context: vscode.ExtensionContext): MapTreeViewHandle {
   const provider = new DitaMapTreeProvider();
+  vscode.commands.executeCommand('setContext', 'ditaViewer.mapExplorer.pinned', false);
+  // createTreeView (rather than the plain registerTreeDataProvider) because
+  // the returned TreeView is what expand/collapse-all and the chevron event
+  // handlers need. showCollapseAll is deliberately off: the native button
+  // collapses the whole tree from a fixed slot at the far end of the title
+  // bar -- it can't sit next to Expand All, and it can't act on the
+  // selection like the rest of the pair.
+  const treeView = vscode.window.createTreeView('ditaViewer.mapExplorer', {
+    treeDataProvider: provider,
+  });
+  provider.attachTreeView(treeView);
+  provider.attachStorage({
+    get: () => context.workspaceState.get(EXPANSION_STORAGE_KEY),
+    update: (value) => context.workspaceState.update(EXPANSION_STORAGE_KEY, value),
+  });
   context.subscriptions.push(
-    vscode.window.registerTreeDataProvider('ditaViewer.mapExplorer', provider),
+    treeView,
+    // Row titles resolve keyrefs, and the key context map decides what those
+    // resolve to; no file changed, so the file watcher would never reload it.
+    onKeyContextChanged(() => provider.requestRefresh()),
     vscode.commands.registerCommand('ditaViewer.mapExplorer.refresh', () => provider.refresh()),
-    vscode.window.onDidChangeActiveTextEditor((editor) =>
-      provider.setActiveDocument(editor?.document.uri),
+    vscode.commands.registerCommand('ditaViewer.mapExplorer.selectMap', () => provider.selectMap()),
+    vscode.commands.registerCommand('ditaViewer.mapExplorer.pin', () => provider.pin()),
+    vscode.commands.registerCommand('ditaViewer.mapExplorer.unpin', () => provider.unpin()),
+    // The element argument arrives when the command is invoked from a row's
+    // context menu; from the title bar buttons it is undefined and the
+    // provider falls back to the selection, then the main map.
+    vscode.commands.registerCommand('ditaViewer.mapExplorer.expandAll', (node?: MapTreeNode) =>
+      provider.expandAll(node),
     ),
+    vscode.commands.registerCommand('ditaViewer.mapExplorer.collapseAll', (node?: MapTreeNode) =>
+      provider.collapseAll(node),
+    ),
+    // Row context-menu commands. Each takes the row's element (passed by
+    // VS Code from view/item/context) and delegates to the provider method
+    // of the same name.
+    vscode.commands.registerCommand('ditaViewer.mapExplorer.openWithOxygen', (node?: MapTreeNode) =>
+      provider.openWithOxygen(node),
+    ),
+    vscode.commands.registerCommand('ditaViewer.mapExplorer.revealInExplorer', (node?: MapTreeNode) =>
+      provider.revealInExplorer(node),
+    ),
+    vscode.commands.registerCommand('ditaViewer.mapExplorer.exportHtml', (node?: MapTreeNode) =>
+      provider.exportHtml(node),
+    ),
+    vscode.commands.registerCommand('ditaViewer.mapExplorer.copyHref', (node?: MapTreeNode) =>
+      provider.copyHref(node),
+    ),
+    vscode.commands.registerCommand('ditaViewer.mapExplorer.copyTitle', (node?: MapTreeNode) =>
+      provider.copyTitle(node),
+    ),
+    vscode.commands.registerCommand('ditaViewer.mapExplorer.findUnreferenced', () =>
+      provider.findUnreferencedResources(),
+    ),
+    vscode.commands.registerCommand('ditaViewer.mapExplorer.validateCompleteness', () =>
+      provider.validateCompleteness(),
+    ),
+    // Chevron clicks (and the row replacements a data change performs)
+    // report their element; recording the resulting state is what makes it
+    // survive the next reload and the next session.
+    treeView.onDidExpandElement((e) => provider.noteExpanded(e.element)),
+    treeView.onDidCollapseElement((e) => provider.noteCollapsed(e.element)),
+    vscode.window.onDidChangeActiveTextEditor(() => provider.setActiveDocument(activeDocumentUri())),
+    // A map's preview is a custom editor, which never becomes
+    // activeTextEditor (that goes undefined while one has focus), so the
+    // listener above alone never sees a switch to a preview tab -- or from
+    // one preview tab to another. The tab model reports both source and
+    // preview tabs.
+    vscode.window.tabGroups.onDidChangeTabs(() => provider.setActiveDocument(activeDocumentUri())),
+    vscode.window.tabGroups.onDidChangeTabGroups(() => provider.setActiveDocument(activeDocumentUri())),
     // Kept alongside the provider's own watcher rather than replaced by it:
     // this still covers a map saved in an editor when that map lives outside
     // every workspace folder, where the watcher's base is the map's own
@@ -261,5 +887,6 @@ export function registerMapTreeView(context: vscode.ExtensionContext): void {
     }),
     new vscode.Disposable(() => provider.dispose()),
   );
-  provider.setActiveDocument(vscode.window.activeTextEditor?.document.uri);
+  provider.setActiveDocument(activeDocumentUri());
+  return { revealPath: (fsPath: string) => provider.revealPath(fsPath), currentMapPath: () => provider.currentMapPath };
 }

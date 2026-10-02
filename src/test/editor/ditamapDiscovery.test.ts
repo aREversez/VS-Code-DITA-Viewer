@@ -32,9 +32,10 @@ describe('collectDitamapFilesUpward', () => {
   });
 
   it('finds a .ditamap kept in a maps/ folder that is a *sibling* of topics/, not an ancestor', () => {
-    // test-dita-file/manual/{maps/main.ditamap, topics/about_manual.dita}:
-    // starting the walk from topics/, main.ditamap is one directory *below*
-    // the ancestor level (manual/) being scanned, not inside it directly.
+    // The shape this discovery has to handle: a manual/{maps/main.ditamap,
+    // topics/about_manual.dita} layout — starting the walk from topics/,
+    // main.ditamap is one directory *below* the ancestor level (manual/) being
+    // scanned, not inside it directly.
     const maps = join(root, 'manual', 'maps');
     const topics = join(root, 'manual', 'topics');
     mkdirSync(maps, { recursive: true });

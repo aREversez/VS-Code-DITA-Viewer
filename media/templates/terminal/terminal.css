@@ -1,0 +1,182 @@
+/* terminal -- built-in site/book template.
+   Distinct layout, not just a recolour: monospaced type throughout (headings
+   included), hairline 1px dividers instead of panels/shadows, a high-contrast
+   accent reserved for links/active state, and code blocks given the visual
+   weight normally spent on chrome. Dark by default (defaultDark in
+   template.json); still declares a light palette because a viewer can force
+   light regardless. Colours live in two blocks of custom properties;
+   everything below only reads them. Copy the folder and change the values to
+   make a new colour scheme. */
+body[data-template="terminal"] {
+  --body-font: 'SF Mono', 'Cascadia Code', Consolas, 'Liberation Mono', monospace;
+  --tpl-bg: #f4f6f2;
+  --tpl-fg: #1b1f1a;
+  --tpl-muted: #556052;
+  --tpl-accent: #146b36;
+  --tpl-accent-fg: #ffffff;
+  --tpl-soft: #dfeee2;
+  --tpl-nav-bg: #e9ece5;
+  --tpl-border: #cfd6cb;
+  --tpl-code-bg: #e5e8e0;
+  --tpl-header-bg: #e9ece5;
+  --tpl-header-fg: #1b1f1a;
+  --tpl-footer-bg: #e9ece5;
+  --tpl-footer-fg: #556052;
+  --tpl-active-fg: #146b36;
+  --tpl-active-bg: #dfeee2;
+  --vscode-editor-background: #f4f6f2;
+  --vscode-editor-foreground: #1b1f1a;
+  --vscode-foreground: #1b1f1a;
+  --vscode-descriptionForeground: #556052;
+  --vscode-textLink-foreground: #146b36;
+  --vscode-textCodeBlock-background: #e5e8e0;
+  --vscode-textPreformat-background: #e5e8e0;
+  --vscode-list-hoverBackground: #dfeee2;
+  --vscode-list-activeSelectionBackground: #dfeee2;
+  --vscode-list-activeSelectionForeground: #146b36;
+  --vscode-focusBorder: #146b36;
+  --vscode-widget-border: #cfd6cb;
+  --vscode-panel-border: #cfd6cb;
+  --vscode-icon-foreground: #556052;
+  --vscode-sideBar-background: #e9ece5;
+  --vscode-dropdown-background: #e9ece5;
+  --vscode-dropdown-foreground: #1b1f1a;
+  --vscode-dropdown-border: #cfd6cb;
+  --vscode-input-background: #f4f6f2;
+  --vscode-input-foreground: #1b1f1a;
+  --vscode-input-border: #cfd6cb;
+  --vscode-button-background: #146b36;
+  --vscode-button-foreground: #ffffff;
+  --color-border: #cfd6cb;
+  --table-border: #c2c9be;
+  --color-link: #146b36;
+  --color-code-bg: #e5e8e0;
+  --color-note-bg: #e2eee6;
+  --color-note-border: #4a90d9;
+  --color-warning-bg: #f2ecda;
+  --color-warning-border: #d19a3a;
+  --color-danger-bg: #f6e4e2;
+  --color-danger-border: #c94040;
+  --color-important-bg: #eee4f4;
+  --color-important-border: #8e5cc9;
+  --color-tip-bg: #dcf0e2;
+  --color-tip-border: #2e9e5b;
+  background: var(--tpl-bg);
+  color: var(--tpl-fg);
+}
+html.vscode-dark body[data-template="terminal"],
+body[data-template="terminal"].template-dark {
+  --tpl-bg: #0e0f0d;
+  --tpl-fg: #d6d6d0;
+  --tpl-muted: #8a9086;
+  --tpl-accent: #5fd97a;
+  --tpl-accent-fg: #08110a;
+  --tpl-soft: #16261c;
+  --tpl-nav-bg: #131412;
+  --tpl-border: #262924;
+  --tpl-code-bg: #181a16;
+  --tpl-header-bg: #131412;
+  --tpl-header-fg: #d6d6d0;
+  --tpl-footer-bg: #131412;
+  --tpl-footer-fg: #8a9086;
+  --tpl-active-fg: #5fd97a;
+  --tpl-active-bg: #16261c;
+  --vscode-editor-background: #0e0f0d;
+  --vscode-editor-foreground: #d6d6d0;
+  --vscode-foreground: #d6d6d0;
+  --vscode-descriptionForeground: #8a9086;
+  --vscode-textLink-foreground: #5fd97a;
+  --vscode-textCodeBlock-background: #181a16;
+  --vscode-textPreformat-background: #181a16;
+  --vscode-list-hoverBackground: #16261c;
+  --vscode-list-activeSelectionBackground: #16261c;
+  --vscode-list-activeSelectionForeground: #5fd97a;
+  --vscode-focusBorder: #5fd97a;
+  --vscode-widget-border: #262924;
+  --vscode-panel-border: #262924;
+  --vscode-icon-foreground: #8a9086;
+  --vscode-sideBar-background: #131412;
+  --vscode-dropdown-background: #131412;
+  --vscode-dropdown-foreground: #d6d6d0;
+  --vscode-dropdown-border: #262924;
+  --vscode-input-background: #0e0f0d;
+  --vscode-input-foreground: #d6d6d0;
+  --vscode-input-border: #262924;
+  --vscode-button-background: #5fd97a;
+  --vscode-button-foreground: #08110a;
+  --color-border: #262924;
+  --table-border: #30342d;
+  --color-link: #5fd97a;
+  --color-code-bg: #181a16;
+  --color-note-bg: #12211a;
+  --color-note-border: #4a90d9;
+  --color-warning-bg: #241f10;
+  --color-warning-border: #d19a3a;
+  --color-danger-bg: #241212;
+  --color-danger-border: #d05555;
+  --color-important-bg: #1c1526;
+  --color-important-border: #a175e0;
+  --color-tip-bg: #16261c;
+  --color-tip-border: #3fb072;
+  background: var(--tpl-bg);
+  color: var(--tpl-fg);
+}
+
+/* ── Chrome: header and footer -- flat, hairline-divided ── */
+body[data-template="terminal"] .tpl-header {
+  background: var(--tpl-header-bg);
+  color: var(--tpl-header-fg);
+  min-height: 56px;
+  align-items: center;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+body[data-template="terminal"] .tpl-title { font-weight: 700; font-size: 0.95rem; line-height: 1.2; }
+body[data-template="terminal"] .tpl-title::before { content: '$ '; color: var(--tpl-accent); }
+body[data-template="terminal"] .tpl-tagline { font-size: 0.75rem; opacity: 0.75; line-height: 1.3; }
+body[data-template="terminal"] .tpl-links { margin-left: auto; }
+body[data-template="terminal"] .tpl-header .tpl-link { color: var(--tpl-muted); font-size: 0.8rem; }
+body[data-template="terminal"] .tpl-header .tpl-link:hover { color: var(--tpl-accent); }
+body[data-template="terminal"] .tpl-footer {
+  background: var(--tpl-footer-bg);
+  color: var(--tpl-footer-fg);
+  font-size: 0.75rem;
+  padding-top: 0.45rem;
+  padding-bottom: 0.45rem;
+}
+body[data-template="terminal"] .tpl-footer .tpl-link { color: var(--tpl-footer-fg); }
+body[data-template="terminal"] .tpl-footer .tpl-link:hover { color: var(--tpl-accent); }
+
+/* ── Sidebar -- flat panel, hairline divider, no pill shapes ── */
+body[data-template="terminal"] .site-nav { background: var(--tpl-nav-bg); }
+body[data-template="terminal"] .site-nav-link { color: var(--tpl-fg); border-radius: 0; }
+body[data-template="terminal"] .site-nav-link:hover { background: var(--tpl-soft); }
+body[data-template="terminal"] .site-nav-group-label { color: var(--tpl-muted); }
+body[data-template="terminal"] .site-nav-group-label::before { content: '# '; opacity: 0.6; }
+body[data-template="terminal"] .site-nav-toggle { color: var(--tpl-muted); }
+body[data-template="terminal"] .site-nav-chip--type { background: var(--tpl-code-bg); color: var(--tpl-muted); opacity: 1; }
+body[data-template="terminal"] .site-nav-link.active .site-nav-chip { background: transparent; color: var(--tpl-active-fg); border: 1px solid color-mix(in srgb, var(--tpl-active-fg) 55%, transparent); opacity: 1; }
+body[data-template="terminal"] .site-nav-resizer::before { background: var(--tpl-border); }
+body[data-template="terminal"] .site-nav-link.active { background: var(--tpl-active-bg); color: var(--tpl-active-fg); font-weight: 700; box-shadow: inset 2px 0 0 var(--tpl-accent); }
+
+/* ── Page: code-first typography ── */
+body[data-template="terminal"] #dita-content-root { background: var(--tpl-bg); color: var(--tpl-fg); }
+body[data-template="terminal"] #dita-content-root a { color: var(--color-link); text-decoration: underline; text-underline-offset: 2px; }
+body[data-template="terminal"] #dita-content-root h1, body[data-template="terminal"] #dita-content-root h2, body[data-template="terminal"] #dita-content-root h3, body[data-template="terminal"] #dita-content-root h4, body[data-template="terminal"] #dita-content-root h5, body[data-template="terminal"] #dita-content-root h6 { line-height: 1.25; font-weight: 700; }
+body[data-template="terminal"] #dita-content-root .shortdesc { background: var(--tpl-soft); color: var(--tpl-fg); }
+body[data-template="terminal"] #dita-content-root pre.codeblock, body[data-template="terminal"] #dita-content-root pre.preformatted { background: var(--tpl-code-bg); border-color: var(--tpl-border); }
+body[data-template="terminal"] #dita-content-root th { background: var(--tpl-nav-bg); }
+body[data-template="terminal"] ::selection { background: var(--tpl-soft); }
+
+body[data-template="terminal"] .tpl-header { border-bottom: 1px solid var(--tpl-border); }
+body[data-template="terminal"] .site-nav { border-right: 1px solid var(--tpl-border); }
+body[data-template="terminal"] .site-nav-group-label { text-transform: none; letter-spacing: 0; font-size: 11px; }
+body[data-template="terminal"] .tpl-footer { border-top: 1px solid var(--tpl-border); }
+body[data-template="terminal"] #dita-content-root { line-height: 1.65; }
+body[data-template="terminal"] #dita-content-root h1 { font-size: 1.6rem; padding-bottom: 0.3em; border-bottom: 1px solid var(--tpl-border); }
+body[data-template="terminal"] #dita-content-root h1::before { content: '## '; color: var(--tpl-accent); font-weight: 400; }
+body[data-template="terminal"] #dita-content-root h2 { margin-top: 2em; padding-bottom: 0.2em; border-bottom: 1px dashed var(--tpl-border); }
+body[data-template="terminal"] #dita-content-root .shortdesc { border-left: 3px solid var(--tpl-accent); border-radius: 0; }
+body[data-template="terminal"] #dita-content-root pre.codeblock, body[data-template="terminal"] #dita-content-root pre.preformatted { border: 1px solid var(--tpl-border); border-radius: 3px; }
+body[data-template="terminal"] #dita-content-root table { border-radius: 0; }
+body[data-template="terminal"] #dita-content-root th { text-align: left; font-family: var(--body-font); }

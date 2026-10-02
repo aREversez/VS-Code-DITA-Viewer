@@ -10,11 +10,11 @@
 // file for the byte-for-byte diff against the code's previous location.
 
 import * as vscode from 'vscode';
-import { readFileSync } from 'fs';
+import { readSourceText, noteSourceDependencies } from './sourceText';
 import { dirname } from 'path';
-import { DitaNode } from '../parser/domTypes';
-import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
-import { expandDitamapRefs, stampFiles, collectDitamapFilesUpward, FileReader } from './ditaRenderUtils';
+import { stampFiles, collectDitamapFilesUpward } from './ditaRenderUtils';
+import { buildKeySpace, keySourceMaps, isKeyContextAvailable } from './keySpace';
+import { getKeyContextMap, reportKeyContextMissing } from './keyContext';
 import { parseDocRoot } from './docPaths';
 
 export function findDitamapFiles(docUri: vscode.Uri, stopAtFirstMatch = true): string[] {
@@ -23,56 +23,13 @@ export function findDitamapFiles(docUri: vscode.Uri, stopAtFirstMatch = true): s
   return collectDitamapFilesUpward(docDir, root, stopAtFirstMatch);
 }
 
-function extractTextFromNode(node: DitaNode): string {
-  if (node.type === 'text') return node.text || '';
-  return (node.children || []).map(extractTextFromNode).join('');
-}
-
-function getNodeValue(node: DitaNode, childBaseTypes: string[]): string | undefined {
-  for (const bt of childBaseTypes) {
-    const child = (node.children || []).find(
-      (c) => c.type === 'element' && c.baseType === bt,
-    );
-    if (child) {
-      const text = extractTextFromNode(child).trim();
-      if (text) return text;
-    }
-    // DITA wraps <keyword> inside <keywords>; also search inside known wrappers
-    const wrapper = (node.children || []).find(
-      (c) => c.type === 'element' && (c.baseType === 'map/keywords'),
-    );
-    if (wrapper) {
-      const inner = (wrapper.children || []).find(
-        (c) => c.type === 'element' && c.baseType === bt,
-      );
-      if (inner) {
-        const text = extractTextFromNode(inner).trim();
-        if (text) return text;
-      }
-    }
-  }
-  return undefined;
-}
-
-function getKeyValueFromRef(node: DitaNode): string | undefined {
-  // Priority: keyword > linktext > navtitle > shortdesc > indexterm
-  const topicmeta = (node.children || []).find(
-    (c) => c.type === 'element' && (c.baseType === 'map/topicmeta'),
-  );
-  if (!topicmeta) return undefined; // No topicmeta, no value
-  return getNodeValue(topicmeta, [
-    'map/keyword',
-    'map/linktext',
-    'map/navtitle',
-    'map/shortdesc',
-  ]);
-}
-
 // buildKeyMap sits on hot paths (preview re-render, completion, diagnostics,
 // map tree) and used to re-read and re-parse every ancestor ditamap each
 // call. Cache per document directory; invalidated when the set of ancestor
-// maps changes or any involved file's mtime changes (including maps pulled
-// in via expandDitamapRefs, tracked through the recording reader).
+// maps changes or any involved file's stamp changes (sourceStamp in
+// sourceText.ts: mtime and size on disk, the unsaved text for an open dirty
+// document; including maps pulled in via expandDitamapRefs, tracked through
+// the recording reader).
 interface KeyMapCacheEntry {
   mapFilesKey: string;
   stamps: string;
@@ -84,8 +41,8 @@ const keyMapCache = new Map<string, KeyMapCacheEntry>();
 // folders cannot grow the cache without limit (evicts oldest-inserted first).
 const KEY_MAP_CACHE_MAX = 50;
 // stampFiles is imported from ditaRenderUtils.ts rather than defined here:
-// book-mode topic caching needs the identical mtime fingerprint, and two
-// copies of an invalidation rule drift apart silently.
+// book-mode topic caching needs the identical fingerprint, and two copies
+// of an invalidation rule drift apart silently.
 
 /** Part of clearAllCaches() in DitaViewerProvider.ts -- kept here alongside
  *  the cache it clears rather than exporting the Map itself. */
@@ -93,54 +50,49 @@ export function clearKeyMapCache(): void {
   keyMapCache.clear();
 }
 
+/**
+ * The ditamaps key definitions come from for a document: the workspace's
+ * context map when one is set (and still exists), otherwise the ancestor
+ * maps. Go-to-definition on a keyref uses this so it lands in the same map
+ * the preview's values came from.
+ */
+export function getKeySourceMaps(docUri: vscode.Uri): string[] {
+  return keySourceMaps(getKeyContextMap(), () => findDitamapFiles(docUri, false));
+}
+
 export function buildKeyMap(docUri: vscode.Uri): Map<string, string> {
   const docDir = dirname(docUri.fsPath);
+  const context = getKeyContextMap();
   // Scan all ancestor folders (not just the nearest one with a map) so keydef
   // maps living in outer folders are still picked up; maps referenced from any
   // scanned map are followed via expandDitamapRefs regardless of location.
-  const mapFiles = findDitamapFiles(docUri, false);
-  const mapFilesKey = mapFiles.join('|');
+  // With a context map the ancestors are not consulted at all (see
+  // buildKeySpace), so the directory walk is skipped too.
+  const mapFiles = getKeySourceMaps(docUri);
+  // A context's key space does not depend on which document asks, so it gets
+  // one entry; the ancestor scan is per document directory.
+  const cacheKey = isKeyContextAvailable(context) ? `context:${context}` : docDir;
+  const mapFilesKey = `${context ?? ''}#${mapFiles.join('|')}`;
 
-  const cached = keyMapCache.get(docDir);
+  const cached = keyMapCache.get(cacheKey);
   if (cached && cached.mapFilesKey === mapFilesKey && stampFiles(cached.files) === cached.stamps) {
+    // A hit reads nothing, but every render using this map depends on these files.
+    noteSourceDependencies(cached.files);
     return cached.map;
   }
 
-  const map = new Map<string, string>();
-  const involvedFiles = [...mapFiles];
-  const recordingRead: FileReader = (path, encoding) => {
-    involvedFiles.push(path);
-    return readFileSync(path, encoding);
-  };
-  for (const mf of mapFiles) {
-    try {
-      const content = readFileSync(mf, 'utf-8');
-      const doc = parseDitamap(preprocessEntities(content));
-      const mapRoot = doc.root;
-      // Expand referenced ditamaps so keydefs from included maps are visible
-      expandDitamapRefs(mapRoot, dirname(mf), recordingRead);
-      function walk(node: DitaNode) {
-        if (node.type !== 'element') return;
-        const baseType = node.baseType;
-        if ((baseType === 'map/topicref' || baseType === 'map/keydef') && node.attributes?.keys) {
-          const keys = node.attributes.keys;
-          const value = getKeyValueFromRef(node);
-          // First definition wins (DITA precedence; nearest map scanned first)
-          if (!map.has(keys)) map.set(keys, value || keys);
-        }
-        for (const child of node.children || []) walk(child);
-      }
-      for (const child of mapRoot.children || []) walk(child);
-    } catch (e) {
-      console.warn(`Failed to parse keymap from ${mf}:`, e instanceof Error ? e.message : e);
-    }
-  }
+  const space = buildKeySpace(context, mapFiles, readSourceText, (mf, e) => {
+    console.warn(`Failed to parse keymap from ${mf}:`, e instanceof Error ? e.message : e);
+  });
+  if (space.status === 'missing' && context !== undefined) reportKeyContextMissing(context);
+  const map = space.keys;
+  const involvedFiles = [...new Set([...mapFiles, ...space.files])];
 
-  if (keyMapCache.size >= KEY_MAP_CACHE_MAX && !keyMapCache.has(docDir)) {
+  if (keyMapCache.size >= KEY_MAP_CACHE_MAX && !keyMapCache.has(cacheKey)) {
     const oldest = keyMapCache.keys().next().value;
     if (oldest !== undefined) keyMapCache.delete(oldest);
   }
-  keyMapCache.set(docDir, {
+  keyMapCache.set(cacheKey, {
     mapFilesKey,
     stamps: stampFiles(involvedFiles),
     files: involvedFiles,

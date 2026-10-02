@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { dirname } from 'path';
 import { createRefCountedPool } from './refCountedPool';
+import { onDidChangeSourceText } from './sourceOverlayFeed';
+import { isPathUnder } from './sourceOverlaySync';
 
 /**
  * Everything a DITA render can pull in from outside the document being
@@ -17,13 +19,23 @@ export type DitaFileEventKind = 'change' | 'create' | 'delete';
 export interface DitaFileEvent {
   uri: vscode.Uri;
   /**
-   * Which watcher event fired. Both preview providers treat the three alike,
-   * since any of them can invalidate a render. Consumers that care about the
-   * difference need it though -- see shouldRefreshMapTree, where a .dita being
-   * created or deleted changes whether a tree entry can be opened, while its
-   * contents changing alters nothing the tree displays.
+   * Which watcher event fired. It matters to both kinds of consumer: the
+   * previews drop a 'change' to a source file their last render never read
+   * (affectsPanel) but always act on a create or delete, which may be what a
+   * dangling reference was waiting for; and the map tree cares whether a .dita
+   * was created or deleted (whether a tree entry can be opened) rather than
+   * changed (which alters nothing the tree displays) -- see
+   * shouldRefreshMapTree.
    */
   kind: DitaFileEventKind;
+  /**
+   * True when the source changed in an editor rather than on disk: text typed
+   * but not saved, or that text reverted or discarded (see
+   * sourceOverlayFeed.ts). The file on disk is untouched, so consumers whose
+   * input is the disk (the map tree) have nothing to react to, while the
+   * previews, which render unsaved text, do.
+   */
+  fromEditor?: true;
 }
 
 /**
@@ -46,6 +58,12 @@ const pool = createRefCountedPool<string, DitaFileEvent>((key, broadcast) => {
     watcher.onDidChange((uri) => broadcast({ uri, kind: 'change' })),
     watcher.onDidCreate((uri) => broadcast({ uri, kind: 'create' })),
     watcher.onDidDelete((uri) => broadcast({ uri, kind: 'delete' })),
+    // The disk watcher cannot see unsaved edits. The pool's folder scoping
+    // applies to these too: a panel hears only about documents under the
+    // folder it watches.
+    onDidChangeSourceText((uri) => {
+      if (isPathUnder(base.fsPath, uri.fsPath)) broadcast({ uri, kind: 'change', fromEditor: true });
+    }),
   ];
   return () => {
     for (const s of subscriptions) s.dispose();

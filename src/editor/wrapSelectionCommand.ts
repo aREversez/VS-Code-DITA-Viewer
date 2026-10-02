@@ -1,0 +1,136 @@
+// "Surround selection with DITA tag" -- Oxygen-style: select text in a .dita
+// or .ditamap source editor, press Enter, pick a tag (with search) from a
+// QuickPick, and the selection is wrapped in <tag>...</tag>. Only known DITA
+// tags are offered (no custom names); typing filters by tag-name PREFIX.
+// Selections whose tags are unpaired, or whose edges cut through a tag, are
+// refused so the result is always well-formed XML.
+
+import * as vscode from 'vscode';
+import {
+  filterWrapCandidates,
+  getWrapTagCandidates,
+  innerRangesAfterWrap,
+  orderCandidatesWithMru,
+  pushMruTag,
+  wrapTextWithTag,
+  WrapTagCandidate,
+} from './wrapSelectionTags';
+import { scanMarkup, validateWrapSelection } from '../language/xmlTagBalance';
+
+const MRU_KEY_TOPIC = 'ditaViewer.wrapTagMru.topic';
+const MRU_KEY_MAP = 'ditaViewer.wrapTagMru.map';
+
+function isMapDocument(document: vscode.TextDocument): boolean {
+  return document.languageId === 'ditamap' || document.uri.fsPath.toLowerCase().endsWith('.ditamap');
+}
+
+interface WrapQuickPickItem extends vscode.QuickPickItem {
+  tag: string;
+}
+
+function toQuickPickItem(c: WrapTagCandidate): WrapQuickPickItem {
+  // alwaysShow: we filter ourselves (prefix match); VS Code's own fuzzy
+  // substring filter would re-admit tags that merely contain the letters.
+  return { tag: c.tag, label: `<${c.tag}>`, description: c.basetype, alwaysShow: true };
+}
+
+/** Shows the searchable tag picker and resolves to the chosen tag name, or
+ * undefined if the user dismissed it without picking anything. */
+async function pickTag(candidates: WrapTagCandidate[]): Promise<string | undefined> {
+  const qp = vscode.window.createQuickPick<WrapQuickPickItem>();
+  qp.placeholder = vscode.l10n.t('Select a tag to wrap the selection (type to search)');
+  qp.matchOnDescription = false;
+  qp.items = candidates.map(toQuickPickItem);
+
+  return new Promise<string | undefined>((resolve) => {
+    qp.onDidChangeValue((value) => {
+      qp.items = filterWrapCandidates(candidates, value).map(toQuickPickItem);
+    });
+    qp.onDidAccept(() => {
+      const picked = qp.selectedItems[0];
+      if (!picked) return; // nothing matches: keep the picker open
+      // Resolve first: hide() raises onDidHide, whose handler resolves
+      // undefined, and the first resolve wins.
+      resolve(picked.tag);
+      qp.hide();
+    });
+    qp.onDidHide(() => {
+      qp.dispose();
+      resolve(undefined);
+    });
+    qp.show();
+  });
+}
+
+export function registerWrapSelectionCommand(context: vscode.ExtensionContext): void {
+  context.subscriptions.push(
+    vscode.commands.registerTextEditorCommand(
+      'ditaViewer.wrapSelectionWithTag',
+      async (editor) => {
+        const selections = editor.selections.filter((s) => !s.isEmpty);
+        if (selections.length === 0) {
+          vscode.window.showInformationMessage(
+            vscode.l10n.t('Select some text in a DITA topic or map to wrap it with a tag.'),
+          );
+          return;
+        }
+
+        const fullText = editor.document.getText();
+        const scan = scanMarkup(fullText);
+        for (const selection of selections) {
+          const check = validateWrapSelection(
+            fullText,
+            editor.document.offsetAt(selection.start),
+            editor.document.offsetAt(selection.end),
+            scan,
+          );
+          if (check.ok) continue;
+          const message = check.reason === 'cuts-markup'
+            ? vscode.l10n.t('Cannot wrap: the selection starts or ends inside a tag or comment. Select whole text or whole elements.')
+            : check.tagName
+              ? vscode.l10n.t('Cannot wrap: the selection contains an unpaired tag <{0}>. Select the whole element, including its end tag.', check.tagName)
+              : vscode.l10n.t('Cannot wrap: the selection contains unpaired tags. Select whole elements.');
+          vscode.window.showWarningMessage(message);
+          return;
+        }
+
+        const isMap = isMapDocument(editor.document);
+        const mruKey = isMap ? MRU_KEY_MAP : MRU_KEY_TOPIC;
+        const mru = context.globalState.get<string[]>(mruKey, []);
+        const candidates = orderCandidatesWithMru(getWrapTagCandidates(isMap), mru);
+
+        const versionBeforePick = editor.document.version;
+        const tag = await pickTag(candidates);
+        if (!tag) return;
+        // The selections (and the validation above) describe the text as it
+        // was when the picker opened; if it changed meanwhile, wrapping those
+        // ranges would wrap the wrong text.
+        if (editor.document.version !== versionBeforePick) return;
+
+        // Offsets are taken from the pre-edit document; the payload ranges
+        // are then converted back to positions in the post-edit one.
+        const before = selections.map((s) => ({
+          start: editor.document.offsetAt(s.start),
+          end: editor.document.offsetAt(s.end),
+        }));
+
+        const applied = await editor.edit((editBuilder) => {
+          for (const selection of selections) {
+            const text = editor.document.getText(selection);
+            editBuilder.replace(selection, wrapTextWithTag(text, tag));
+          }
+        });
+        if (!applied) return; // rejected (e.g. the editor closed): no re-select, no MRU bump
+
+        const doc = editor.document;
+        editor.selections = innerRangesAfterWrap(before, tag).map((r, i) => {
+          const start = doc.positionAt(r.start);
+          const end = doc.positionAt(r.end);
+          return selections[i].isReversed ? new vscode.Selection(end, start) : new vscode.Selection(start, end);
+        });
+
+        await context.globalState.update(mruKey, pushMruTag(mru, tag));
+      },
+    ),
+  );
+}

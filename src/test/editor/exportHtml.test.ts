@@ -9,7 +9,14 @@ describe('buildStandaloneHtml', () => {
     const html = buildStandaloneHtml({ title: 'Test', bodyHtml: '<p>Hello</p>', css: 'body{color:red}' });
     assert.ok(html.startsWith('<!DOCTYPE html>'));
     assert.ok(html.includes('<title>Test</title>'));
-    assert.ok(html.includes('<style>\nbody{color:red}\n</style>'));
+    // The user CSS lands first, then the export's own imagemap override
+    // (natural-size image maps, horizontally scrollable figure) appended
+    // after it so it wins the cascade.
+    assert.ok(html.includes('<style>\nbody{color:red}\n'));
+    assert.ok(
+      html.includes('.dita-export figure.imagemap { overflow-x: auto; }') &&
+        html.includes('.dita-export figure.imagemap img { max-width: none; }'),
+    );
     assert.ok(html.includes('<main class="dita-export">'));
     assert.ok(html.includes('<p>Hello</p>'));
   });
@@ -79,6 +86,22 @@ describe('makeDataUriInliner', () => {
     const inliner = makeDataUriInliner(tmpDir);
     const result = inliner('images/logo.gif');
     assert.ok(result.startsWith('data:image/gif;base64,'));
+  });
+
+  it('should inline a BMP file with the correct MIME type, not fall back to octet-stream (KILL: pre-fix IMAGE_MIME had no bmp entry, so a valid image rendered as a broken-image icon in the exported HTML)', () => {
+    const bmpPath = join(tmpDir, 'scan.bmp');
+    writeFileSync(bmpPath, Buffer.from([0x42, 0x4d])); // 'BM' header
+    const inliner = makeDataUriInliner(tmpDir);
+    const result = inliner('scan.bmp');
+    assert.ok(result.startsWith('data:image/bmp;base64,'), `got: ${result}`);
+  });
+
+  it('should inline TIF/TIFF files with the correct MIME type', () => {
+    writeFileSync(join(tmpDir, 'a.tif'), Buffer.from([0x49, 0x49, 0x2a, 0x00]));
+    writeFileSync(join(tmpDir, 'b.tiff'), Buffer.from([0x49, 0x49, 0x2a, 0x00]));
+    const inliner = makeDataUriInliner(tmpDir);
+    assert.ok(inliner('a.tif').startsWith('data:image/tiff;base64,'));
+    assert.ok(inliner('b.tiff').startsWith('data:image/tiff;base64,'));
   });
 });
 

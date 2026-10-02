@@ -3,13 +3,18 @@ import { parseDita, preprocessEntities } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
 import { dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
-import { buildTitleMap, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, decodeHrefPart, detectNoteLabels, detectIndexLabel, readImageDimensions, clearImageDimensionsCache, clearTopicRenderCache, clearBookMembersCache } from './ditaRenderUtils';
+import { buildTitleMap, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getImageMapSupportScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getRefreshButtonScript, decodeHrefPart, openHrefTarget, clearImageDimensionsCache, clearTopicRenderCache, clearBookMembersCache } from './ditaRenderUtils';
+import { buildRenderContext } from './renderContext';
 import { clearBookSearchIndexCache } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
-import { foldPendingRender, PendingRender } from './pendingRender';
+import { foldPendingRender, escalateAfterFailure, PendingRender } from './pendingRender';
 import { sharedWebviewStrings } from './webviewL10n';
 import { discoverCssFiles } from './cssDiscovery';
-import { findDitamapFiles, buildKeyMap, clearKeyMapCache } from './keyMap';
+import { findDitamapFiles, buildKeyMap, getKeySourceMaps, clearKeyMapCache } from './keyMap';
+import { onKeyContextChanged } from './keyContext';
+import { readForDocument, writeForDocument } from './perDocumentState';
+import { trackSourceReads } from './sourceText';
+import { affectsPanel } from './sourceOverlaySync';
 
 // Test-only hook: @vscode/test-electron integration tests can't read a
 // webview's rendered HTML directly (VS Code doesn't expose the WebviewPanel
@@ -253,6 +258,15 @@ function getWebviewScript(): string {
     copyToastFailed: L.imgCopyToastFailed,
   })}
 
+  // Image-map hotspots: keeps <area> hit regions aligned with the rendered
+  // image size (Chromium hit-tests coords against the natural pixel space,
+  // so any max-width clamping or zoom-toolbar resize would otherwise point
+  // every hotspot at the wrong region) and routes non-fragment hotspot
+  // clicks to the extension host instead of letting the webview navigate
+  // itself to a vscode-webview:// 404 (the white page). Shared with the
+  // map viewer; see getImageMapSupportScript in ditaRenderUtils.ts.
+  ${getImageMapSupportScript({ openMsgType: 'openImagemapLink' })}
+
   // Per-image zoom controls: a small hover toolbar pinned to each image's
   // own top-right corner (−, +, maximize), replacing the old page-wide
   // toolbar zoom control — each image now scales independently instead of
@@ -492,12 +506,24 @@ function getWebviewScript(): string {
   }
 
   window.addEventListener('click', function(e) {
-    var a = e.target.closest ? e.target.closest('a.xref') : null;
+    // 'area[href]' covers image-map hotspots (topic/imagemap in
+    // baseTypeMap.ts): a click on a mapped region targets the <area>
+    // element itself, so the same in-page anchor smooth-scroll that
+    // a.xref gets applies to clicking a hotspot that points at an
+    // element in this same topic (the spec's href="#inline" case).
+    // Non-fragment hrefs are left to the browser: book-internal
+    // cross-topic areas carry data-dita-book-xref and are handled by
+    // the site/book click scripts, external http(s) links go through
+    // the webview's own link handling.
+    var a = e.target.closest ? e.target.closest('a.xref, area[href]') : null;
     if (!a) return;
     var href = a.getAttribute('href');
     if (!href || href.charAt(0) !== '#') return;
     e.preventDefault();
     var id = href.slice(1);
+    // href="#" alone (book-xref placeholder) has no id to scroll to;
+    // the data-dita-book-xref listener owns that click.
+    if (!id) return;
     var el = document.getElementById(id);
     if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   });
@@ -578,9 +604,7 @@ function getWebviewScript(): string {
           pfPanel = pfBuildPanel();
           document.body.appendChild(pfPanel);
         }
-        if (typeof sb !== 'undefined' && sb.style.display !== 'none' && searchInput.value) { // search was active -- old marks were just wiped out along with the content that contained them
-          performSearch(searchInput.value);
-        }
+        if (typeof refreshSearchAfterDomChange === 'function') refreshSearchAfterDomChange(); // search was active -- the old ranges pointed into content that was just replaced
         if (lastHighlightLine !== null) {
           // Re-target the still-current cursor position against the new
           // DOM. If the earlier scroll had already settled and the spot
@@ -638,6 +662,7 @@ function getWebviewScript(): string {
     widthWide: L.widthWide,
     widthDesktop: L.widthDesktop,
     widthNarrow: L.widthNarrow,
+    widthTooNarrow: L.widthTooNarrow,
     pageWidth: L.pageWidth,
     setWidthSelectionMsgType: 'setWidthSelection',
     tagTooltipsLabel: L.tagTooltipsLabel,
@@ -663,7 +688,7 @@ function getWebviewScript(): string {
   var profilingOn = true;
   var profilingBtn = document.createElement('button');
   profilingBtn.textContent = ${L.profilingLabel};
-  profilingBtn.style.cssText = btnStyle + 'font-size:11px;';
+  profilingBtn.style.cssText = btnStyle;
   function applyProfilingToggle() {
     document.body.classList.toggle('hide-profiling', !profilingOn);
     profilingBtn.style.background = profilingOn ? 'var(--color-profiling-label-bg)' : '';
@@ -702,13 +727,7 @@ function getWebviewScript(): string {
 
   toolbar.appendChild(wSel);
 
-  // Refresh button
-  var refreshBtn = document.createElement('button');
-  refreshBtn.innerHTML = '&#x21bb;';
-  refreshBtn.title = ${L.reloadContent};
-  refreshBtn.setAttribute('aria-label', ${L.reloadContent});
-  refreshBtn.style.cssText = btnStyle;
-  refreshBtn.addEventListener('click', function() { vscode.postMessage({ type: 'refresh' }); });
+  ${getRefreshButtonScript({ title: L.reloadContent })}
   toolbar.appendChild(refreshBtn);
 
   document.body.appendChild(toolbar);
@@ -821,6 +840,14 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
           const character = Math.min(col, lineLength);
           editor.selection = new vscode.Selection(new vscode.Position(line, character), new vscode.Position(line, character));
         }
+      } else if (message.type === 'openImagemapLink') {
+        // Image-map hotspot click (getImageMapSupportScript): the webview
+        // guard preventDefaults the navigation and hands over the raw
+        // href; resolve it against THIS topic's folder and open it in the
+        // right place (preview editor for DITA sources, system handler
+        // for html/pdf/external URLs).
+        const href = typeof message.href === 'string' ? message.href : '';
+        if (href) openHrefTarget(vscode, href, dirname(document.uri.fsPath));
       } else if (message.type === 'setFontPrefs') {
         // Persist across webview reopens/reloads — same size/family applies
         // to every DITA file the user previews, not per-document.
@@ -835,15 +862,11 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
         // otherwise silently reset this back to discoverCssFiles()'s own
         // always-recomputed default) picks the same file back up.
         if (typeof message.value === 'string') {
-          const map = this.context.globalState.get<Record<string, string>>(CSS_SELECTION_KEY, {});
-          map[document.uri.toString()] = message.value;
-          this.context.globalState.update(CSS_SELECTION_KEY, map);
+          writeForDocument(this.context.globalState, CSS_SELECTION_KEY, document.uri, message.value);
         }
       } else if (message.type === 'setWidthSelection') {
         if (typeof message.value === 'string') {
-          const map = this.context.globalState.get<Record<string, string>>(WIDTH_SELECTION_KEY, {});
-          map[document.uri.toString()] = message.value;
-          this.context.globalState.update(WIDTH_SELECTION_KEY, map);
+          writeForDocument(this.context.globalState, WIDTH_SELECTION_KEY, document.uri, message.value);
         }
       }
     });
@@ -898,6 +921,16 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     // lives in pendingRender.ts -- see foldPendingRender -- so the rule is
     // pinned by a unit test rather than only by this comment.
     let pendingUpdate: PendingRender = 'none';
+    // The source files the last successful render read (its own, conref
+    // targets, key maps, ...). Decides which unsaved edits elsewhere are worth
+    // a refresh -- see affectsPanel. Kept across a failed render (malformed
+    // XML mid-edit reads less than a working one would).
+    let dependencies: ReadonlySet<string> | undefined;
+    const rememberDependencies = (files: ReadonlySet<string>) => { dependencies = files; };
+    // Whether the page on screen is the error document a failed render
+    // produces. It has no script, so a content message posted to it goes
+    // nowhere: recovery has to replace the document (escalateAfterFailure).
+    let pageIsError = false;
     const changeSubscription = vscode.workspace.onDidChangeTextDocument((e) => {
       if (e.document.uri.toString() !== document.uri.toString()) return;
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
@@ -930,6 +963,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     const referencedFilesWatcher = acquireDitaFileWatcher(ditaWatchBase(document.uri), (event) => {
       if (disposed) return;
       if (event.uri.toString() === document.uri.toString()) return; // already handled above
+      if (!affectsPanel(event, event.uri.fsPath, dependencies)) return;
       if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
       renderDebounceTimer = setTimeout(() => {
         requestUpdate('content');
@@ -959,7 +993,8 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       // case of a regular source edit, which no longer reloads at all.
       const editor = findSourceEditor();
       const initialScrollLine = editor?.visibleRanges[0]?.start.line;
-      const html = this.generateHtml(document, webviewPanel.webview, initialScrollLine);
+      const { html, failed } = this.generateHtml(document, webviewPanel.webview, initialScrollLine, rememberDependencies);
+      pageIsError = failed;
       webviewPanel.webview.html = html;
       lastRenderedHtmlByUri.set(document.uri.toString(), html);
     };
@@ -977,10 +1012,16 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     // else"), since there is no longer a reload for anything to race
     // against. Falls back to a full reload only if rendering itself
     // failed (malformed XML mid-edit, etc.), to show the error page --
-    // an error has no "content" to patch in.
+    // an error has no "content" to patch in -- or if the page on screen
+    // already is that error page, which has no script to receive a patch
+    // (escalateAfterFailure).
     const postContentUpdate = () => {
       if (disposed) return;
-      const result = this.renderTopicContent(document, webviewPanel.webview);
+      if (escalateAfterFailure(pageIsError, 'content') === 'full') {
+        updateWebview();
+        return;
+      }
+      const result = this.renderTopicContent(document, webviewPanel.webview, rememberDependencies);
       if (result.error !== undefined) {
         updateWebview();
         return;
@@ -1021,6 +1062,11 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       else postContentUpdate();
     });
 
+    // Choosing another key context map changes what every keyref in this
+    // topic resolves to, though no file it reads changed, so the file watcher
+    // above never hears of it.
+    const keyContextSubscription = onKeyContextChanged(() => requestUpdate('content'));
+
     updateWebview();
 
     webviewPanel.onDidDispose(() => {
@@ -1033,6 +1079,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       selectionSub.dispose();
       themeSubscription.dispose();
       viewStateSubscription.dispose();
+      keyContextSubscription.dispose();
       lastRenderedHtmlByUri.delete(document.uri.toString());
     });
   }
@@ -1045,12 +1092,26 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
    * longer needs webview.html reassigned wholesale (a full page reload)
    * just to get fresh content onto the page -- see postContentUpdate.
    */
+  /**
+   * Renders the topic's content div, reporting (on success) which source
+   * files the render read -- see the `dependencies` note in
+   * resolveCustomTextEditor.
+   */
   private renderTopicContent(
+    document: vscode.TextDocument,
+    webview: vscode.Webview,
+    onDependencies?: (files: ReadonlySet<string>) => void,
+  ): { html: string; error?: undefined } | { html?: undefined; error: string } {
+    const { result, files } = trackSourceReads(() => this.renderTopicContentUntracked(document, webview));
+    if (result.error === undefined) onDependencies?.(files);
+    return result;
+  }
+
+  private renderTopicContentUntracked(
     document: vscode.TextDocument,
     webview: vscode.Webview,
   ): { html: string; error?: undefined } | { html?: undefined; error: string } {
     const docRootDir = dirname(document.uri.fsPath);
-    const docRoot = vscode.Uri.file(docRootDir);
     const asWebviewUri = (relPath: string): string => {
       try {
         const resolvedPath = resolve(docRootDir, decodeHrefPart(relPath));
@@ -1070,51 +1131,26 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       const ditaDoc = parseDita(preprocessedXml);
       const titleMap = buildTitleMap(ditaDoc.root);
 
-      // Note-type labels (Warning/Attention/...): prefer the topic's own
-      // xml:lang, but most individual topic files don't repeat it on every
-      // file (commonly set once at the map/bookmap level and left implicit
-      // on topics), so fall back to the editor's own display language
-      // rather than leaving those topics stuck in English regardless of
-      // locale. Uses the shared, complete (all 13 DITA note/@type values)
-      // implementation from ditaRenderUtils.ts instead of the separate,
-      // partial (7 of 13 types) local copy this used to carry.
-      const noteLabels = detectNoteLabels(ditaDoc.root, vscode.env.language);
-      const indexLabel = detectIndexLabel(ditaDoc.root, vscode.env.language);
-
       // Build key map from DITAMAP
       const keyMap = buildKeyMap(document.uri);
 
-      // Build conref resolver
-      const conrefResolver = makeConrefResolver(docRootDir, ditaDoc.root);
-      const conrefRangeResolver = makeConrefRangeResolver(docRootDir, ditaDoc.root);
-      const fileTitleResolver = makeFileTitleResolver(docRootDir);
-
-      const resolveTitle = (id: string): string | undefined => {
-        // Local id match first
-        const local = titleMap.get(id);
-        if (local) return local;
-        // Cross-file: id may be "file.dita#topicId" or just "file.dita"
-        return fileTitleResolver(id);
-      };
-
-      const content = renderDocument(ditaDoc.root, {
-        headingLevel: 1,
+      // Note/index labels, conref/title resolvers and image dimensions all
+      // come from the shared buildRenderContext factory (renderContext.ts) --
+      // the same wiring the book/site path and the diff panel use, so a
+      // resolver change lands once. uiLanguage keeps the previous fallback:
+      // the topic's own xml:lang wins, else the editor display language.
+      const { ctx } = buildRenderContext({
+        docDir: docRootDir,
+        ownRoot: ditaDoc.root,
+        titleMap,
+        keyMap,
         asWebviewUri,
-        documentDir: docRoot.fsPath,
-        resolveTitle,
-        resolveKey: (key: string) => keyMap.get(key),
-        resolveConref: (conref: string) => conrefResolver(conref),
-        resolveConrefRange: (conref: string, conrefend: string) => conrefRangeResolver(conref, conrefend),
-        noteLabels,
-        indexLabel,
-        getImageDimensions: (relPath: string) => {
-          try {
-            return readImageDimensions(resolve(docRootDir, decodeHrefPart(relPath)));
-          } catch {
-            return undefined;
-          }
-        },
+        headingLevel: 1,
+        uiLanguage: vscode.env.language,
+        includeIndexLabel: true,
       });
+
+      const content = renderDocument(ditaDoc.root, ctx);
 
       return { html: content };
     } catch (err) {
@@ -1127,15 +1163,16 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     document: vscode.TextDocument,
     webview: vscode.Webview,
     initialScrollLine?: number,
-  ): string {
+    onDependencies?: (files: ReadonlySet<string>) => void,
+  ): { html: string; failed: boolean } {
     const stylesUri = webview.asWebviewUri(
       vscode.Uri.file(join(this.context.extensionPath, 'media', 'styles.css')),
     );
 
-    const result = this.renderTopicContent(document, webview);
+    const result = this.renderTopicContent(document, webview, onDependencies);
     if (result.error !== undefined) {
       const message = result.error;
-      return `<!DOCTYPE html>
+      return { failed: true, html: `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><title>Error</title></head>
 <body>
@@ -1144,7 +1181,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
 <pre>${escapeHtml(message)}</pre>
 </div>
 </body>
-</html>`;
+</html>` };
     }
     const content = result.html;
 
@@ -1156,10 +1193,10 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       // in this document's discovered set -- it may not (e.g. the file
       // was deleted, or this is actually a different document that
       // happens to reuse a stale uri-keyed entry).
-      const persistedCssSelection = this.context.globalState.get<Record<string, string>>(CSS_SELECTION_KEY, {})[document.uri.toString()];
+      const persistedCssSelection = readForDocument<string>(this.context.globalState, CSS_SELECTION_KEY, document.uri);
       const defaultName = persistedCssSelection && files[persistedCssSelection] ? persistedCssSelection : discoveredDefaultName;
       const defaultContent = files[defaultName] || '';
-      const widthSelection = this.context.globalState.get<Record<string, string>>(WIDTH_SELECTION_KEY, {})[document.uri.toString()] || '';
+      const widthSelection = readForDocument<string>(this.context.globalState, WIDTH_SELECTION_KEY, document.uri) || '';
 
       const theme = vscode.window.activeColorTheme;
       const isDark = theme.kind === vscode.ColorThemeKind.Dark || theme.kind === vscode.ColorThemeKind.HighContrast;
@@ -1179,7 +1216,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       // CSP nonce for defense-in-depth against XSS
       const nonce = randomBytes(16).toString('base64');
 
-      return `<!DOCTYPE html>
+      return { failed: false, html: `<!DOCTYPE html>
 <html lang="en"${isDark ? ' class="vscode-dark"' : ''}>
 <head>
 <meta charset="UTF-8">
@@ -1194,10 +1231,10 @@ ${defaultContent ? `<style>\n${defaultContent}\n</style>` : ''}
 <div id="dita-content-root">${content}</div>
 <script nonce="${nonce}">${script}</script>
 </body>
-</html>`;
+</html>` };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      return `<!DOCTYPE html>
+      return { failed: true, html: `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><title>Error</title></head>
 <body>
@@ -1206,7 +1243,7 @@ ${defaultContent ? `<style>\n${defaultContent}\n</style>` : ''}
 <pre>${escapeHtml(message)}</pre>
 </div>
 </body>
-</html>`;
+</html>` };
     }
   }
 }
@@ -1235,4 +1272,4 @@ export function escapeJson(text: string): string {
 // so MapViewerProvider.ts, ditaDiffProvider.ts, exportHtml.ts,
 // extension.ts, ditaLanguageFeatures.ts and ditaMapTreeProvider.ts don't
 // need their import paths touched.
-export { findDitamapFiles, buildKeyMap };
+export { findDitamapFiles, buildKeyMap, getKeySourceMaps };

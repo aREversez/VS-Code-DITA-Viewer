@@ -196,8 +196,8 @@ describe('tag completion (DTD-derived baseType mappings)', () => {
 
   // ── Second deferred batch: remaining 75 topic-side entries ──────────────
 
-  // ── Utilities domain: image maps (visible body content) ──
-  it('imagemap/area/shape/coords/sort-as resolve to their topic ancestors', () => {
+  // ── Utilities domain: image maps (dedicated baseTypes + renderers) ──
+  it('imagemap/area/shape/coords resolve to dedicated baseTypes and render a real image map', () => {
     const xml = `<topic id="t"><body>
       <imagemap>
         <image href="diagram.png"/>
@@ -210,11 +210,28 @@ describe('tag completion (DTD-derived baseType mappings)', () => {
       <p><term sort-as="apple">Apple</term></p>
     </body></topic>`;
     const { root, html } = parseTopic(xml);
-    assert.strictEqual(findEl(root, 'imagemap')!.baseType, 'topic/fig');
-    assert.strictEqual(findEl(root, 'area')!.baseType, 'topic/figgroup');
-    assert.strictEqual(findEl(root, 'shape')!.baseType, 'topic/keyword');
-    assert.strictEqual(findEl(root, 'coords')!.baseType, 'topic/ph');
-    assert.ok(html.includes('class="figgroup"'), 'area should render via the new figgroup wrapper');
+    // imagemap/area deliberately deviate from their topic ancestors
+    // (topic/fig / topic/figgroup): the generic fig/figgroup renderers
+    // dumped the area's region data onto the page and produced nothing
+    // clickable. Dedicated baseTypes carry the dedicated <img usemap> +
+    // <map><area></map> renderers (see baseTypeMap.ts).
+    assert.strictEqual(findEl(root, 'imagemap')!.baseType, 'topic/imagemap');
+    assert.strictEqual(findEl(root, 'area')!.baseType, 'topic/area');
+    assert.strictEqual(findEl(root, 'shape')!.baseType, 'topic/shape');
+    assert.strictEqual(findEl(root, 'coords')!.baseType, 'topic/coords');
+    // The image map structure is real: usemap binding + map + area attrs.
+    // The map id comes from a shared counter, so read it back off the
+    // usemap attribute instead of assuming a fixed value.
+    const mapId = /usemap="#([^"]+)"/.exec(html)![1];
+    assert.ok(html.includes(`<map name="${mapId}" id="${mapId}">`), `got: ${html}`);
+    assert.ok(
+      /<area shape="rect" coords="0,0,10,10" href="detail\.dita" alt="Detail" title="Detail">/.test(html),
+      `got: ${html}`,
+    );
+    // And none of the region metadata leaks as visible page text.
+    assert.ok(!html.includes('class="figgroup"'), 'area must not render as a figgroup wrapper');
+    assert.ok(!html.includes('>rect<'), 'shape text must not appear as page text');
+    assert.ok(!html.includes('>0,0,10,10<'), 'coords text must not appear as page text');
   });
 
   // ── Programming domain: grouping alternatives (visible body content) ──

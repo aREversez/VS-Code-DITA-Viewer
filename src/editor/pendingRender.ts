@@ -35,3 +35,31 @@ export function foldPendingRender(current: PendingRender, requested: 'content' |
   if (current === 'none' || requested === 'full') return requested;
   return current;
 }
+
+/**
+ * What a site-mode panel owes after edits it has not yet acted on: nothing,
+ * a refresh of the page it is showing ('page' -- an unsaved edit to a file
+ * only that page reads, which cannot change the sidebar), or a full re-render
+ * ('full' -- anything that can). Same escalate-only rule as foldPendingRender
+ * and for the same reason: a 'full' request must never be narrowed by a
+ * 'page' one that arrives after it inside the debounce window, or the
+ * sidebar edit it stands for is silently dropped.
+ */
+export type SiteRefresh = 'none' | 'page' | 'full';
+
+export function foldSiteRefresh(current: SiteRefresh, requested: 'page' | 'full'): SiteRefresh {
+  if (current === 'none' || requested === 'full') return requested;
+  return current;
+}
+
+/**
+ * A render failure replaces the page with a bare error document -- no
+ * script, so nothing that could receive the content message a later,
+ * successful render would post. While that page is on screen the only way
+ * back is to replace the document again, whatever the trigger was: a source
+ * edit that fixed the problem is a 'content' request and would otherwise
+ * leave the error showing until the person refreshed by hand.
+ */
+export function escalateAfterFailure(pageIsError: boolean, requested: 'content' | 'full'): 'content' | 'full' {
+  return pageIsError ? 'full' : requested;
+}

@@ -2,16 +2,20 @@
 .vscode-test/**
 test-dita-file/**
 test/**
+test-visual/**
 src/**
 dist/test/**
 dist/**/*.map
 dist-test/**
+dist-test-visual/**
 scripts/**
 .github/**
 tsconfig.json
 tsconfig.e2e.json
 tsconfig.test.json
+tsconfig.visual.json
 .mocharc.json
+.mocharc.visual.json
 test-runner.cjs
 esbuild.config.js
 eslint.config.js
@@ -20,5 +24,4 @@ node_modules/
 .gitignore
 REQUIREMENTS.md
 ROADMAP.md
-bugs.md
 output/

@@ -1,0 +1,197 @@
+/* atlas -- built-in site/book template.
+   The three-column reference layout (site-book-templates-plan.md item 4):
+   chapters on the left (.site-nav, same as every other template), content
+   in the middle, and -- unlike every other built-in template -- an
+   on-this-page outline on the right (.tpl-outline, only present because
+   template.json sets "outline": true; site mode only, see
+   MapViewerProvider.ts and getOutlineSyncScript). Colours live in two
+   blocks of custom properties (light, and dark for when VS Code shows a
+   dark theme); everything below only reads them. Copy the folder and
+   change the values to make a new colour scheme -- and drop "outline"
+   from template.json if the copy shouldn't have the third column. */
+body[data-template="atlas"] {
+  --body-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --tpl-bg: #ffffff;
+  --tpl-fg: #1a2b2e;
+  --tpl-muted: #5c6b6e;
+  --tpl-accent: #0a7a70;
+  --tpl-accent-fg: #ffffff;
+  --tpl-soft: #e3f5f2;
+  --tpl-nav-bg: #f7fafa;
+  --tpl-border: #dfe6e6;
+  --tpl-code-bg: #f0f4f4;
+  --tpl-header-bg: #ffffff;
+  --tpl-header-fg: #1a2b2e;
+  --tpl-footer-bg: #f7fafa;
+  --tpl-footer-fg: #5c6b6e;
+  --tpl-active-fg: #0a7a70;
+  --tpl-active-bg: #e3f5f2;
+  --vscode-editor-background: #ffffff;
+  --vscode-editor-foreground: #1a2b2e;
+  --vscode-foreground: #1a2b2e;
+  --vscode-descriptionForeground: #5c6b6e;
+  --vscode-textLink-foreground: #0a7a70;
+  --vscode-textCodeBlock-background: #f0f4f4;
+  --vscode-textPreformat-background: #f0f4f4;
+  --vscode-list-hoverBackground: #e3f5f2;
+  --vscode-list-activeSelectionBackground: #e3f5f2;
+  --vscode-list-activeSelectionForeground: #0a7a70;
+  --vscode-focusBorder: #0a7a70;
+  --vscode-widget-border: #dfe6e6;
+  --vscode-panel-border: #dfe6e6;
+  --vscode-icon-foreground: #5c6b6e;
+  --vscode-sideBar-background: #f7fafa;
+  --vscode-dropdown-background: #f7fafa;
+  --vscode-dropdown-foreground: #1a2b2e;
+  --vscode-dropdown-border: #dfe6e6;
+  --vscode-input-background: #ffffff;
+  --vscode-input-foreground: #1a2b2e;
+  --vscode-input-border: #dfe6e6;
+  --vscode-button-background: #0a7a70;
+  --vscode-button-foreground: #ffffff;
+  --color-border: #dfe6e6;
+  --table-border: #d3dcdc;
+  --color-link: #0a7a70;
+  --color-code-bg: #f0f4f4;
+  --color-note-bg: #eaf4fb;
+  --color-note-border: #4a90d9;
+  --color-warning-bg: #faf1de;
+  --color-warning-border: #d19a3a;
+  --color-danger-bg: #fbe9e9;
+  --color-danger-border: #c94040;
+  --color-important-bg: #f2eefb;
+  --color-important-border: #8e5cc9;
+  --color-tip-bg: #e3f5f2;
+  --color-tip-border: #0a7a70;
+  background: var(--tpl-bg);
+  color: var(--tpl-fg);
+}
+html.vscode-dark body[data-template="atlas"],
+body[data-template="atlas"].template-dark {
+  --tpl-bg: #12191a;
+  --tpl-fg: #dce7e6;
+  --tpl-muted: #8fa19f;
+  --tpl-accent: #2dd4bf;
+  --tpl-accent-fg: #06201d;
+  --tpl-soft: #17302c;
+  --tpl-nav-bg: #182120;
+  --tpl-border: #253433;
+  --tpl-code-bg: #1b2524;
+  --tpl-header-bg: #182120;
+  --tpl-header-fg: #dce7e6;
+  --tpl-footer-bg: #182120;
+  --tpl-footer-fg: #8fa19f;
+  --tpl-active-fg: #2dd4bf;
+  --tpl-active-bg: #17302c;
+  --vscode-editor-background: #12191a;
+  --vscode-editor-foreground: #dce7e6;
+  --vscode-foreground: #dce7e6;
+  --vscode-descriptionForeground: #8fa19f;
+  --vscode-textLink-foreground: #2dd4bf;
+  --vscode-textCodeBlock-background: #1b2524;
+  --vscode-textPreformat-background: #1b2524;
+  --vscode-list-hoverBackground: #17302c;
+  --vscode-list-activeSelectionBackground: #17302c;
+  --vscode-list-activeSelectionForeground: #2dd4bf;
+  --vscode-focusBorder: #2dd4bf;
+  --vscode-widget-border: #253433;
+  --vscode-panel-border: #253433;
+  --vscode-icon-foreground: #8fa19f;
+  --vscode-sideBar-background: #182120;
+  --vscode-dropdown-background: #182120;
+  --vscode-dropdown-foreground: #dce7e6;
+  --vscode-dropdown-border: #253433;
+  --vscode-input-background: #12191a;
+  --vscode-input-foreground: #dce7e6;
+  --vscode-input-border: #253433;
+  --vscode-button-background: #2dd4bf;
+  --vscode-button-foreground: #06201d;
+  --color-border: #253433;
+  --table-border: #2c3d3c;
+  --color-link: #2dd4bf;
+  --color-code-bg: #1b2524;
+  --color-note-bg: #17242f;
+  --color-note-border: #4a90d9;
+  --color-warning-bg: #2e2716;
+  --color-warning-border: #d19a3a;
+  --color-danger-bg: #2e1a1a;
+  --color-danger-border: #d05555;
+  --color-important-bg: #241c33;
+  --color-important-border: #a175e0;
+  --color-tip-bg: #17302c;
+  --color-tip-border: #2dd4bf;
+  background: var(--tpl-bg);
+  color: var(--tpl-fg);
+}
+
+/* ── Chrome: header and footer ── */
+body[data-template="atlas"] .tpl-header {
+  background: var(--tpl-header-bg);
+  color: var(--tpl-header-fg);
+  min-height: 56px;
+  align-items: center;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+body[data-template="atlas"] .tpl-title { font-weight: 700; font-size: 1rem; line-height: 1.2; }
+body[data-template="atlas"] .tpl-tagline { font-size: 0.78rem; opacity: 0.7; line-height: 1.3; }
+body[data-template="atlas"] .tpl-links { margin-left: auto; }
+body[data-template="atlas"] .tpl-header .tpl-link { color: var(--tpl-muted); font-size: 0.85rem; }
+body[data-template="atlas"] .tpl-header .tpl-link:hover { color: var(--tpl-accent); }
+body[data-template="atlas"] .tpl-footer {
+  background: var(--tpl-footer-bg);
+  color: var(--tpl-footer-fg);
+  font-size: 0.78rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+body[data-template="atlas"] .tpl-footer .tpl-link { color: var(--tpl-footer-fg); }
+body[data-template="atlas"] .tpl-footer .tpl-link:hover { color: var(--tpl-accent); }
+
+/* ── Left column: chapters ── */
+body[data-template="atlas"] .site-nav { background: var(--tpl-nav-bg); }
+body[data-template="atlas"] .site-nav-link { color: var(--tpl-fg); }
+body[data-template="atlas"] .site-nav-link:hover { background: var(--tpl-soft); }
+body[data-template="atlas"] .site-nav-group-label { color: var(--tpl-muted); }
+body[data-template="atlas"] .site-nav-toggle { color: var(--tpl-muted); }
+body[data-template="atlas"] .site-nav-chip--type { background: var(--tpl-code-bg); color: var(--tpl-muted); opacity: 1; }
+body[data-template="atlas"] .site-nav-link.active .site-nav-chip { background: transparent; color: var(--tpl-active-fg); border: 1px solid color-mix(in srgb, var(--tpl-active-fg) 55%, transparent); opacity: 1; }
+body[data-template="atlas"] .site-nav-resizer::before { background: var(--tpl-border); }
+body[data-template="atlas"] .site-nav-link.active { background: var(--tpl-active-bg); color: var(--tpl-active-fg); font-weight: 600; }
+
+/* ── Middle column: content ── */
+body[data-template="atlas"] #dita-content-root { background: var(--tpl-bg); color: var(--tpl-fg); }
+body[data-template="atlas"] #dita-content-root a { color: var(--color-link); }
+body[data-template="atlas"] #dita-content-root h1, body[data-template="atlas"] #dita-content-root h2, body[data-template="atlas"] #dita-content-root h3, body[data-template="atlas"] #dita-content-root h4, body[data-template="atlas"] #dita-content-root h5, body[data-template="atlas"] #dita-content-root h6 { line-height: 1.25; }
+body[data-template="atlas"] #dita-content-root .shortdesc { background: var(--tpl-soft); color: var(--tpl-fg); }
+body[data-template="atlas"] #dita-content-root pre.codeblock, body[data-template="atlas"] #dita-content-root pre.preformatted { background: var(--tpl-code-bg); border-color: var(--tpl-border); }
+body[data-template="atlas"] #dita-content-root th { background: var(--tpl-nav-bg); }
+body[data-template="atlas"] ::selection { background: var(--tpl-soft); }
+
+/* ── Right column: on-this-page outline (this template's distinguishing feature) ── */
+body[data-template="atlas"] .tpl-outline { border-left: 1px solid var(--tpl-border); background: var(--tpl-bg); }
+body[data-template="atlas"] .tpl-outline-inner::before {
+  content: 'On this page';
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tpl-muted);
+  padding: 0 0.5rem 0.5rem;
+}
+body[data-template="atlas"] .tpl-outline-link { color: var(--tpl-muted); border-left: 2px solid transparent; border-radius: 0; }
+body[data-template="atlas"] .tpl-outline-link:hover { color: var(--tpl-fg); background: transparent; }
+body[data-template="atlas"] .tpl-outline-link.active { color: var(--tpl-accent); border-left-color: var(--tpl-accent); background: transparent; }
+
+body[data-template="atlas"] .tpl-header { border-bottom: 1px solid var(--tpl-border); }
+body[data-template="atlas"] .site-nav { border-right: 1px solid var(--tpl-border); }
+body[data-template="atlas"] .site-nav-group-label { text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; }
+body[data-template="atlas"] .tpl-footer { border-top: 1px solid var(--tpl-border); }
+body[data-template="atlas"] #dita-content-root { line-height: 1.7; }
+body[data-template="atlas"] #dita-content-root h1 { font-size: 1.7rem; padding-bottom: 0.3em; border-bottom: 1px solid var(--tpl-border); }
+body[data-template="atlas"] #dita-content-root h2 { margin-top: 2em; padding-bottom: 0.2em; border-bottom: 1px solid var(--tpl-border); }
+body[data-template="atlas"] #dita-content-root .shortdesc { border-left: 3px solid var(--tpl-accent); border-radius: 0 6px 6px 0; }
+body[data-template="atlas"] #dita-content-root pre.codeblock, body[data-template="atlas"] #dita-content-root pre.preformatted { border: 1px solid var(--tpl-border); border-radius: 6px; }
+body[data-template="atlas"] #dita-content-root table { border-radius: 6px; }
+body[data-template="atlas"] #dita-content-root th { text-align: left; }

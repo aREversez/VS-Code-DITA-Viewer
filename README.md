@@ -16,7 +16,9 @@ A VS Code extension that renders **`.dita`** and **`.ditamap`** files as a forma
 - **Key and map-reference resolution** — `keyref` values resolve across folders by following the map's own references (`topicref`/`keydef`/`mapref` to other `.ditamap` files); nested and "all-in-one" maps are merged recursively with hrefs rebased onto the root map
 - **BookMap semantics** — chapter/part/appendix entries carry numbered role badges in document order (Chapter 1, Part I, Appendix A …, localized in zh-CN as 第 1 章 / 第 I 部分 / 附录 A); `<booktitle>` renders as a title page with the main title elevated and alternate titles as subtitles
 - **Writing assistance** — Go to Definition for `keyref`/`conref`/`href` (Ctrl+Click), Find All References for the reverse direction (right-click an `id`, a keydef's `keys`, or any reference itself → Find All References / Shift+F12, to see everywhere a topic, element id, or key is used across the workspace), context-aware IntelliSense (tags, attributes, defined keys, workspace files, target ids), HTML-style auto-closing tags, broken-reference diagnostics in the Problems panel, document outline/breadcrumbs, and ready-made DITA snippets
-- **DITA Map Explorer** — persistent sidebar tree of the map associated with the active editor, with click-to-open navigation and numbered book divisions
+- **Find Unreferenced Resources** — like Oxygen's DITA Maps Manager check: pick the folders to check (the folders your map's images live in are ticked for you, with per-folder counts) and the file types, and the files no map, or topic reachable from it, references are listed in the Problems panel and marked in the Explorer. In the Map Navigator toolbar, the `.ditamap` context menu and the Command Palette
+- **Validate and Check for Completeness** — Oxygen's DITA Map Completeness Check over a map and everything it references: missing topics, images and other resources, references outside the map folder, links to topics not in any map, multiple references, duplicate topic IDs and keys, unreferenced keys and reusable elements, table layout, profiling conflicts, optional DITAVAL filtering. Pick the checks in a quick pick; the findings, labelled by category, go to the Problems panel
+- **DITA Map Explorer** — sidebar tree of the map associated with the active editor, laid out like Oxygen's DITA Maps Manager: the main map is the root row (its own `<title>`/`<mainbooktitle>`, keyrefs resolved — version numbers in titles show the key's value), submaps are named by the referenced map's title rather than its file name, and rows carry type icons (map, submap, key definition, topic group, task, concept, reference, troubleshooting, glossary). Every branch starts collapsed (frontmatter and keydef entries are listed again — one collapsed line each), **Expand All** / **Collapse All** sit next to each other in the title bar and act on the selected node — expanding its subtree, or folding that subtree together with the selected row itself (the main map row stays open, so collapsing from the root leaves the one-level outline; a chapter `topichead` over leaf topics has nothing below it to fold, which is why the row itself is part of the collapse) — also from a row's context menu, with the main map as the target when nothing is selected; and what you expand survives map edits, reloads and VS Code restarts, per map.
 - **Export as HTML** — render any topic or full map to a single self-contained `.html` file (styles inlined, images embedded) without DITA-OT
 - **Full DITA element coverage** — topic, sections, notes (all types), lists, tables, figures, code blocks with language labels, images, cross-references (with title resolution), quotes, related links, inline formatting, keydef/keyword display; specialization modules (task/concept/reference, troubleshooting, glossary, taskreq, highlight/programming/software/UI domains) are audited against the DITA-OT 1.3 DTDs and render correctly even without explicit `@class` attributes in the source
 - **Index term visibility** — `<indexterm>` (including nested primary/secondary/… levels, sibling sub-entries, and `index-see`/`index-see-also` cross-references) and `<indextermref>` render as small inline chips right where they're authored, in both topic preview and book mode. This is intentionally not a compiled, alphabetically-sorted back-of-book index page — sort order only makes sense for scripts with a stable alphabetic/stroke ordering, so a generated index would be meaningless for e.g. Chinese content; seeing each term inline works the same way regardless of language.
@@ -25,6 +27,7 @@ A VS Code extension that renders **`.dita`** and **`.ditamap`** files as a forma
 - **Compare with Git Version** — a rendered diff (not a raw text diff) between the working copy and any git revision (HEAD/HEAD~1 shortcuts or a picked revision), with word-level highlighting across paragraphs, lists, and full tables
 - **MathML rendering** — `<mathml>`/`<foreign>` formulas render natively in the preview, including an `<mfenced>` compatibility shim so bracket/absolute-value notation from Oxygen's equation editor displays correctly
 - **`conref`/`conrefend` range references** — the full run of elements from a `conref` target through its `conrefend` target resolves and renders, matching Oxygen's "reference to range end" behavior
+- **Content reuse by key (`conkeyref`)** — `conkeyref="key/elementid"` (or a bare `conkeyref="key"` for a whole topic) looks the key up in the map's key space, follows it to the target topic, and pulls in the referenced element exactly like a direct `conref`; it follows the selected key context, and a `conkeyref` that can't be resolved falls back to a `conref` written on the same element
 - **Accessibility** — ARIA roles and labels on toolbar controls and the outline tree
 - **Theme-aware** — automatically adapts background and border colors to the current VS Code theme
 - **Custom CSS support** — override or extend the default styling with an in-preview theme switcher
@@ -73,16 +76,20 @@ The preview opens in a new column beside your source editor.
 
 #### Outline Mode vs Book Mode vs Docsite Mode
 
-The map preview opens in **Outline (tree) mode** by default, showing the map's hierarchical structure. A single toolbar toggle cycles Outline → Book → Docsite → Outline; its label always names the mode you're currently in. A **reload button** (↻) in the toolbar re-renders the preview from the files on disk.
+The map preview opens in **Outline (tree) mode** by default, showing the map's hierarchical structure. A single toolbar toggle cycles Outline → Docsite → Book → Outline; its label always names the mode you're currently in. Reopening a map brings back the view it was left in and, in Docsite mode, the topic that was open. A **reload button** (↻) in the toolbar re-renders the preview from scratch. Edits show up in the preview as you type, without saving: that includes referenced files (conref targets, key-definition maps, mapref'd maps, the topics of the book) that are open and modified in another tab.
 
 - **Book mode** renders all referenced topics inline as one continuous document.
-- **Docsite mode** renders one topic per page behind a collapsible, resizable sidebar tree — click a sidebar entry (or use the Previous/Next buttons) to switch pages, and use the sidebar's search box to search every topic in the book at once (case-sensitive/regex toggles, jump-to-match with highlight).
+- **Docsite mode** renders one topic per page behind a collapsible, resizable sidebar tree — click a sidebar entry (or use the Previous/Next buttons) to switch pages, and use the sidebar's search box to search every topic in the book at once (case-sensitive/regex toggles, jump-to-match with highlight). The `←` / `→` arrow keys turn to the previous / next topic (same as the ‹ › toolbar buttons), except while typing in a box or inside the sidebar tree. The **←/→** toolbar buttons (also the mouse's back/forward buttons) walk back and forward through the topics you visited, restoring your scroll position; `Alt+←` / `Alt+→` are left to VS Code. To edit a topic, right-click it in the sidebar and choose **Open source**, or use the toolbar's **Source** button for the topic being shown; the source opens in a different editor group than the preview. Editing the map or a topic updates the sidebar and page in place, keeping your scroll position and search state.
+- **Sidebar keyboard navigation** (Book and Docsite modes) — the topic tree is a single Tab stop: `↑` `↓` move between rows, `→` expands a branch or steps into it, `←` collapses it or steps out to the parent, `Home` / `End` jump to the first / last row, `Enter` / `Space` open a topic or fold a group.
 
 Duplicate topics (same file referenced multiple times) are shown with a skip message rather than being re-rendered.
 
 #### Keys and map references
 
 - `keyref` elements display the value from the matching `keydef`. The keydef map does **not** need to sit next to the root map or be named `keys.ditamap` — any local `.ditamap` referenced via `topicref`, `keydef`, or `mapref` (or found in an ancestor directory) is scanned, and the nearest definition wins.
+- **Key context map** (like the *context* in Oxygen's DITA Maps Manager) — when several keydef maps define the same keys with different values (one per brand or product), run **DITA: Select Key Context Map…** (or the key button in the Map Navigator toolbar, next to Select Map, or the `Keys:` item in the status bar) and pick the map every `keyref` should resolve against. The choice applies to all open topics and maps, is remembered per workspace, and replaces the surrounding-maps lookup entirely: only the chosen map's keys (and those of the maps it references) exist, so a key defined only in another brand's map reads as undefined. Each keydef map still shows its own content when opened on its own. Choose *No context* to go back to the default lookup. Go to Definition, the Map Navigator, diagnostics, export and both previews all follow it. A sample lives in `test-dita-file/manual-context/`.
+- A `keys` attribute may list several names (`keys="brand company"`); each is defined.
+- **`conkeyref`** (content reuse by key) resolves the leading key the same way a `keyref` does — through the effective key space, so the selected key context and "nearest definition wins" apply — then pulls in the addressed element (`key/elementid`), or the whole topic (`key`) when no element id is given, from the key's target file. Per the DITA rule, a `conkeyref` that cannot be resolved (undefined key, key with no target, or addressed element missing) falls back to a `conref` written on the same element, and otherwise keeps its own content; a `conkeyref` cycle between topics is detected and stops. *Known limitation:* a key written **inside** content that a `conref` or `conkeyref` pulls in is not yet resolved.
 - Maps that reference other maps (including “all-in-one” maps whose children live in nested sub-folders) are merged recursively; relative hrefs inside referenced maps are rebased automatically so topics and images resolve correctly.
 
 ### Profiling / Conditional Content
@@ -93,6 +100,45 @@ Content carrying DITA's `select-atts` group (`props`, `platform`, `product`, `au
 - **Filter** — opens a panel listing every attribute/value combination found in the document as checkboxes; unchecking one actually hides the matching content, for previewing what a given build/audience would see.
 
 In map/book view, a `topicref`'s own profiling attributes (set directly in the ditamap source) cascade down to every descendant `topicref` that doesn't set its own value for the same attribute — a child's own value replaces, rather than merges with, an inherited one. This is a separate scope from a topic's own inline profiling: opening a `.dita` file directly only ever reads that file's own markup, regardless of what any ditamap referencing it says.
+
+### Context Menus
+
+Right-click entries the extension adds or powers, by where you right-click.
+
+**In a `.dita` / `.ditamap` source editor**
+
+| Entry | Applies to | Notes |
+| --- | --- | --- |
+| Open DITA Reading View | `.dita` | Top level, `Ctrl+K V` |
+| Open DITA Map Reading View | `.ditamap` | Top level, `Ctrl+K V` |
+| **DITA** submenu → Export as HTML… | both | |
+| **DITA** submenu → DITA-OT: Transform Map… | `.ditamap` | |
+| **DITA** submenu → Find Maps Referencing This File… | both | |
+| **DITA** submenu → Reveal in Map Navigator | both | |
+| **DITA** submenu → Open with Oxygen XML Editor | both | |
+| **DITA** submenu → Compare with Git Version… | `.dita` | |
+
+The editor menu also shows **Go to Definition**, **Go to References**, **Peek** and **Find All References**. These are VS Code's own entries; the extension supplies their results for `keyref`, `conref`, `href` and element ids (see [Features](#features)), so they appear wherever VS Code puts them rather than in the DITA submenu.
+
+**In VS Code's file Explorer** (right-click a `.dita` / `.ditamap` file)
+
+- Open with Oxygen XML Editor
+- Find Maps Referencing This File…
+- Reveal in Map Navigator
+- Export as HTML…
+
+**In the DITA Map sidebar tree** (right-click a row)
+
+- Open with Oxygen XML Editor, Reveal in Explorer, Export as HTML… — rows that point to a file on disk
+- Copy Title
+- Copy Href — rows with an `href` or `keys` (not the root row)
+- Find Unreferenced Resources… — root row only
+- Expand All / Collapse All
+
+**In the reading views (webview)**
+
+- Right-click a topic in the Book/Docsite sidebar: Open Map in Editor, Open source, Open with Oxygen XML Editor, Reveal in File Explorer, Find Unreferenced Resources…, Export as HTML…, Copy Title, Copy Href, Expand All, Collapse All.
+- Right-click an image (inline or in the enlarged view), in either the topic or the map reading view: Copy Image.
 
 ## Custom CSS
 
@@ -213,6 +259,46 @@ Create a full documentation-style theme by overriding most elements. See the exa
 
 Open a DITA preview, then use the **Theme dropdown** to cycle through these and see how they look.
 
+#### Templates for Docsite and Book view
+
+The **Template** dropdown in the toolbar (Docsite and Book view) restyles the sidebar and the page of a map and can add a header and a footer around it. The choice is remembered per map, separately for each view. Three templates are built in: **Classic Docs**, **Aurora** (banner header) and **Reader** (serif, book-like); each has a light and a dark palette and follows VS Code's colour theme.
+
+To add your own, list one or more folders in `dita-viewer.templatesDirectory`; every sub-folder is a template:
+
+```
+my-templates/
+  green/
+    template.json
+    green.css
+    resources/        logo, banner, fonts and images the css refers to
+```
+
+`template.json`:
+
+```json
+{
+  "name": { "en": "Green", "zh-cn": "绿色" },
+  "css": ["green.css"],
+  "header": {
+    "logo": "resources/logo.svg",
+    "banner": "resources/banner.svg",
+    "title": "{title}",
+    "tagline": "Product documentation",
+    "links": [{ "label": "Support", "href": "https://example.com/support" }]
+  },
+  "footer": { "text": "© {year} {title}", "links": [{ "label": "Privacy", "href": "https://example.com/privacy" }] }
+}
+```
+
+- `header` and `footer` are optional and are **data, not HTML**: the extension renders them, so a template cannot add elements or scripts. Text may use `{title}` (the map's title) and `{year}`; links must be `http(s)` or `mailto` (at most 8 each). The header's `banner` becomes its background image.
+- A folder with a `<publishing-template>` `.opt` file instead of `template.json` also works for the name, the colour tag, the preview image and the css list; its `webhelp.*` parameters are ignored, and it has no header or footer.
+- The toolbar is not part of the header: in Docsite and Book view it is the page's top bar (`#__topbar`), above the header, so the header can use its whole width.
+- Everything a template names must stay inside its own folder.
+- Scope your css with `body[data-template="<folder name>"]`. Use `html.vscode-dark body[data-template="…"]` for the dark palette, or mark a dark-only template by using `body[data-template="…"].template-dark` (the class is added when `template.json` sets `"defaultDark": true`). The page structure to target is the extension's own — `.site-nav`, `.site-nav-link`, `#dita-content-root`, `.tpl-header`, `.tpl-footer` — and re-pointing the `--vscode-*` and `--color-*` custom properties on `body` recolours the toolbar, sidebar, notes and code blocks in one go. `media/templates/classic-docs/classic-docs.css` is a complete example. Do not override `content-visibility` rules: Book view relies on them for large maps.
+- Changing `dita-viewer.templatesDirectory` needs the preview reopened before a template's fonts and images load.
+
+Sample templates for manual testing are in `test-dita-file/manual/templates/`.
+
 #### Dark mode overrides
 
 Your CSS can also provide `.vscode-dark` overrides that activate when VS Code's color theme is dark:
@@ -239,14 +325,31 @@ Transform your DITA maps to HTML5 (or other formats) using a local DITA-OT insta
 
 ### Prerequisites
 
-- Install [DITA-OT](https://www.dita-ot.org/documentation/installing) (requires Java Runtime Environment)
-- The extension does **not** bundle DITA-OT — it detects your existing installation
+- Install [DITA-OT](https://www.dita-ot.org/documentation/installing). The extension does **not** bundle DITA-OT — it detects and runs your existing installation.
+- **A Java runtime (JRE/JDK) is required for every transform** — `html5`, `pdf`, `xhtml`, and `markdown` alike, PDF included — because DITA-OT itself is a Java program. The extension neither bundles Java nor starts it directly: it launches `dita`, which then invokes `java`. Two independent things must both hold:
+  - **Right version.** DITA-OT 4.x needs **Java 17**. If an older runtime wins the lookup (a common case: a Java 8 JRE on `PATH` and no `JAVA_HOME`), the transform dies with `java.lang.UnsupportedClassVersionError: org/dita/dost/invoker/Main has been compiled by a more recent version of the Java Runtime (class file version 61.0), this version ... only recognizes class file versions up to 52.0` — `61.0` is Java 17, `52.0` is Java 8. Point `JAVA_HOME` at a Java 17 home to fix it (`JAVA_HOME` takes priority over `PATH`, so it overrides a stale Java 8 even if that stays on `PATH`).
+  - **Reachable.** Java has to be found via `JAVA_HOME` (i.e. `%JAVA_HOME%\bin\java.exe` exists) or, failing that, `java.exe` on `PATH`. Having Java installed but neither wired up fails up front with `'"java.exe"' is not recognized…` (Windows exit code 9009). If you set `JAVA_HOME` or edit `PATH`, **restart VS Code** afterward — the transform's child process inherits the environment VS Code was launched with.
+
+> Note: this is about the **DITA-OT Transform** command only. The built-in **Export as HTML** (self-contained `.html`, rendered by the extension itself) needs neither DITA-OT nor Java.
 
 ### Detection priority
 
 1. **Setting** — `dita-viewer.ditaOtPath` configured in VS Code settings (absolute path to DITA-OT directory)
 2. **Environment** — `DITA_HOME` environment variable pointing to the DITA-OT root
 3. **PATH** — `dita` (or `dita.bat` on Windows) found in system PATH
+
+### Troubleshooting
+
+The transform runs `dita.bat`, which locates Java the same way every time: `%JAVA_HOME%\bin\java.exe` first, else `java.exe` on `PATH`. Almost every failure is one of these two — and both are about your machine's Java, not this extension:
+
+| Log shows | Cause | Fix |
+|---|---|---|
+| `'"java.exe"' is not recognized …` / `Process exited with code: 9009` | No Java reachable via `JAVA_HOME` **or** `PATH` | Install a Java 17 runtime, then set `JAVA_HOME` to it (or put its `bin` on `PATH`) |
+| `UnsupportedClassVersionError … class file version 61.0 … only recognizes … 52.0` | An older Java (8/11) is being picked up instead of 17 | Set `JAVA_HOME` to a Java 17 home — it beats the `PATH` entry |
+
+After changing `JAVA_HOME` or `PATH`, **quit VS Code completely and relaunch it** (closing the window / *Reload Window* is not enough). The transform spawns `dita.bat` as a child of the VS Code process, so it inherits whatever environment VS Code had when it started — the new value is invisible to it until VS Code is restarted from a context that has the change. Verify the version you're actually handing to DITA-OT with `"%JAVA_HOME%\bin\java.exe" -version` (should print `17.x`).
+
+> A Java 17 that ships inside another app (e.g. an IDE's bundled `jre`) works as a `JAVA_HOME` target, but depending on it is fragile — that app can move or drop it on update. A standalone JDK/JRE 17 is the durable choice.
 
 ### Usage
 
@@ -278,9 +381,104 @@ When transforming to `html5` or `xhtml`, you can select a CSS file that gets pas
 
 You can optionally select a `.ditaval` filter file during the transform flow. When chosen, it's passed to DITA-OT via `--filter`, enabling conditional content filtering (profiling) during the formal publish.
 
+#### PDF output customization
+
+The `pdf` transtype runs through DITA-OT's default `org.dita.pdf2` pipeline (Apache FOP + XSL-FO). The extension passes a bundled customization folder via `customization.dir` (`media/pdf-customization/`) so a few default behaviors get fixed without touching your local DITA-OT installation or installing a plug-in:
+
+- **Images fit the page.** `scale` is applied first (then an explicit `width` / `height`); a tall portrait image without either is narrowed to 60% of the column so a phone-shaped screenshot does not fill a page; anything still wider than the column or taller than 80% of the body height is shrunk proportionally. Images are never enlarged beyond what the author asked for. The extension reads the image sizes itself before the transform (XSLT cannot); images in table cells, or ones it could not measure, are scaled down to the column width only.
+- **Inline `<codeph>`** gets a light background so it reads differently from surrounding prose.
+- **Body page numbering restarts at 1.** By default the body's arabic page counter keeps running from the roman front matter, so the first body page is numbered `4` (or whatever) instead of `1`. The customization resets the first body page sequence to start at 1, so the footer page number, the cross-references that cite it ("see page N"), and the PDF reader's page label all read `1` on the first body page. The front matter (cover, TOC) is numbered in lowercase roman (`i`, `ii`, `iii`, …) — the cover included, which DITA-OT otherwise leaves as arabic `1` — and for a bookmap only the first chapter resets (later chapters keep counting). No blank page is added (see "No blank pages between chapters" below).
+- **Chapter opener pages are clean (bookmaps).** DITA-OT paints a large bordered "Chapter N" band above each chapter title, then opens the chapter with a two-column "in this chapter" mini-TOC (a bulleted list of the chapter's child topics) that also forces a page break. The band wraps badly for CJK (the number sits in a block that splits `第 N 章` across three lines), so it is replaced by the same label on a single plain line (`Chapter 1`, `第 1 章`, `Appendix A`); the mini-TOC is switched off entirely (`chapterLayout` is fixed to `BASIC`, so an `args.chapter.layout` passed to DITA-OT has no effect), so a chapter opens with its title and its own intro and first topic flowing on the same page — no child-topic list. Appendices, parts and notices follow the same layout.
+- **No repeated chapter label.** If a chapter title (or `@navtitle`) already starts with the label DITA-OT would add — for example `<chapter navtitle="第 1 章 产品简介">`, typed so the HTML outputs show a number — the label is not printed again above the title or as the table-of-contents prefix (it would read `第 1 章 第 1 章 产品简介`). Matching ignores spaces (`第1章` = `第 1 章`) and does not confuse `Chapter 1` with `Chapter 10`.
+- **No blank pages between chapters.** DITA-OT pads every bookmap page sequence to an even page count (`force-page-count="even"`), which leaves an empty page after each chapter with an odd number of pages, and after the cover and the table of contents. The customization uses `no-force` instead, so pages run on without gaps. A chapter may therefore open on a left-hand page in a duplex printout.
+- **Backmatter lists use arabic page numbers.** A table of contents, list of figures or list of tables in `<backmatter>` comes after the body, so it is numbered in arabic (`11`, `13`, …) and continues the body's count; DITA-OT's default would print it in lowercase roman (page 895 as `dcccxcv`). Lists in `<frontmatter>` stay roman. The rule is positional: a list placed after any chapter/part/appendix is arabic even if it was written outside `<backmatter>`.
+- **English next to Chinese punctuation stays serif.** For `zh-CN` documents the customization also ships its own character-set config, so the English inside `正交性（Orthogonality）` is set in Times New Roman like the rest of the Latin text instead of the CJK font's Latin glyphs.
+
+A very long, space-free `<codeph>` string (e.g. a long package path) can still overflow the column — that's a known, deliberate gap pending a real-world check of how often it matters.
+
 #### Site-chrome enhancements
 
 For `html5` / `xhtml` output, the extension automatically injects a **navigation toolbar**, **sidebar TOC**, **on-page heading navigation**, **code language labels with click-to-copy**, **back-to-top button**, and a **dark mode toggle**. All features are opt-out — deselect any you don't need during the QuickPick step, or re-enable them on subsequent transforms. The enhancements are written directly into the DITA-OT output directory as `dita-viewer-chrome.js`, `dita-viewer-chrome.css`, and (if dark mode is enabled) `dita-viewer-dark.css`, then linked into every HTML file.
+
+## Known limitations
+
+These are deliberate gaps in the preview's DITA support or known behavioural
+edges, recorded here so you know what to expect. Each entry cites the source
+location for verification.
+
+### Content reuse
+
+- **conref / conkeyref chains resolve one hop only.** When the target of a
+  `conref` (or `conkeyref`) carries its own `conref`/`conkeyref` (A → B → C),
+  the merge pulls in B's literal children but does not follow B's reference to
+  C. Conrefs nested *inside* the resolved content are still walked normally.
+  The DITA specification requires transitive resolution; this extension does
+  one hop as a design choice.
+  (`src/render/renderer.ts:318`, `mergeConrefTarget`)
+
+- **A keyref inside conref-pulled content gets no CJK spacing.** The bundled
+  DITA-OT plugin (`com.dita-viewer.cjk-spacing`) runs at
+  `depend.preprocess.conrefpush.pre` — before conref content is pushed in —
+  so a keyref boundary that only becomes visible after conref resolution is
+  not detected. This applies to the DITA-OT transform path; the preview
+  resolves keys in child nodes normally.
+  (CHANGELOG 1.0.9 feature note, `media/dita-ot-plugins/com.dita-viewer.cjk-spacing/plugin.xml:17`)
+
+### Key scope
+
+- **`keyscope` reads only the first token.** A DITA `keyscope="a b c"` means
+  the element belongs to all three scopes; the crawler currently takes the
+  first whitespace-delimited value only (`scopeChain.concat(...split(/\s+/)[0])`).
+  (`src/editor/mapCrawl.ts:363`)
+
+### Custom DTDs and specialization
+
+- **External DTDs are not loaded.** The parser strips the `<!DOCTYPE>`
+  declaration after resolving only the internal entity subset (`&name;` →
+  declared value); external parameter entities and DTD element declarations
+  are not fetched. Tags outside the built-in `standardTagMap` / `baseTypeMap`
+  fall through with an empty `baseType`, so a custom domain element is rendered
+  as a generic wrapper rather than a specialization of a known type.
+  (`src/parser/ditaParser.ts:204`)
+
+- **`subjectScheme` classification is not used for rendering.** The preview
+  resolves `baseType` from the `class` attribute against a fixed hierarchy
+  table; custom `SubjectScheme` vocabularies that would map a class to a
+  domain-specific renderer are ignored.
+
+### Diff / compare view
+
+- **Both sides render with the current key map and conref targets.** The
+  Git-compare resolves `@keyref` / `@conref` using the workspace's *present*
+  `keyMap` and target files, not a historical snapshot. A topic whose text is
+  unchanged but whose resolved content shifted (because a keydef map or a
+  conref target was edited) appears without a diff marker; a changed target
+  makes the referencing topic's "old" side look different from what it
+  actually looked like at that commit.
+  (`src/editor/ditaDiffProvider.ts:212`, `buildKeyMap(docUri)`)
+
+### Workspace trust and virtual workspaces
+
+- **Three commands need a trusted workspace:** *Transform with DITA-OT…*,
+  *Open in Oxygen*, and *Compare with Git Version* — they spawn external
+  programs. In an untrusted workspace they show a warning with a
+  **Manage Workspace Trust** button instead of running. Reading views,
+  the Map Navigator, previews, and the checks remain available.
+  (`src/editor/workspaceTrust.ts:23`, `EXECUTION_GATED_COMMANDS`)
+
+- **Virtual workspaces are not supported.** The extension reads maps, topics,
+  and media from the local file system (fs/path APIs); previews, navigation,
+  and checks cannot function without it. Declared in the manifest:
+  `"virtualWorkspaces": { "supported": false }`.
+  (`package.json` → `capabilities`)
+
+### Templates
+
+- **Template CSS targets the extension's own DOM, not Oxygen WebHelp.** The
+  page structure the extension emits (`.site-nav`, `.site-nav-link`,
+  `#dita-content-root`, `body[data-template="…"]`, …) is not Oxygen's
+  WebHelp markup. A template written for WebHelp selectors will not apply.
+  (see Custom CSS → Quick start above, and `package.json` templatesDirectory docs)
 
 ## Localization
 
@@ -350,7 +548,7 @@ src/
 ├── extension.ts              # Extension entry point, command registration, DITA-OT transform flow
 ├── editor/
 │   ├── DitaViewerProvider.ts # CustomTextEditorProvider for .dita files (scroll sync, key map)
-│   ├── MapViewerProvider.ts  # CustomTextEditorProvider for .ditamap files (outline + book mode)
+│   ├── MapViewerProvider.ts  # CustomTextEditorProvider for .ditamap files (outline, book and docsite mode)
 │   ├── ditaRenderUtils.ts    # Shared pure rendering utilities (no vscode dependency)
 │   └── ditaOtUtils.ts        # DITA-OT detection, argument building, log classification
 ├── parser/
