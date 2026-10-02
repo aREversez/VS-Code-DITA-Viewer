@@ -400,6 +400,86 @@ A very long, space-free `<codeph>` string (e.g. a long package path) can still o
 
 For `html5` / `xhtml` output, the extension automatically injects a **navigation toolbar**, **sidebar TOC**, **on-page heading navigation**, **code language labels with click-to-copy**, **back-to-top button**, and a **dark mode toggle**. All features are opt-out — deselect any you don't need during the QuickPick step, or re-enable them on subsequent transforms. The enhancements are written directly into the DITA-OT output directory as `dita-viewer-chrome.js`, `dita-viewer-chrome.css`, and (if dark mode is enabled) `dita-viewer-dark.css`, then linked into every HTML file.
 
+## Known limitations
+
+These are deliberate gaps in the preview's DITA support or known behavioural
+edges, recorded here so you know what to expect. Each entry cites the source
+location for verification.
+
+### Content reuse
+
+- **conref / conkeyref chains resolve one hop only.** When the target of a
+  `conref` (or `conkeyref`) carries its own `conref`/`conkeyref` (A → B → C),
+  the merge pulls in B's literal children but does not follow B's reference to
+  C. Conrefs nested *inside* the resolved content are still walked normally.
+  The DITA specification requires transitive resolution; this extension does
+  one hop as a design choice.
+  (`src/render/renderer.ts:318`, `mergeConrefTarget`)
+
+- **A keyref inside conref-pulled content gets no CJK spacing.** The bundled
+  DITA-OT plugin (`com.dita-viewer.cjk-spacing`) runs at
+  `depend.preprocess.conrefpush.pre` — before conref content is pushed in —
+  so a keyref boundary that only becomes visible after conref resolution is
+  not detected. This applies to the DITA-OT transform path; the preview
+  resolves keys in child nodes normally.
+  (CHANGELOG 1.0.9 feature note, `media/dita-ot-plugins/com.dita-viewer.cjk-spacing/plugin.xml:17`)
+
+### Key scope
+
+- **`keyscope` reads only the first token.** A DITA `keyscope="a b c"` means
+  the element belongs to all three scopes; the crawler currently takes the
+  first whitespace-delimited value only (`scopeChain.concat(...split(/\s+/)[0])`).
+  (`src/editor/mapCrawl.ts:363`)
+
+### Custom DTDs and specialization
+
+- **External DTDs are not loaded.** The parser strips the `<!DOCTYPE>`
+  declaration after resolving only the internal entity subset (`&name;` →
+  declared value); external parameter entities and DTD element declarations
+  are not fetched. Tags outside the built-in `standardTagMap` / `baseTypeMap`
+  fall through with an empty `baseType`, so a custom domain element is rendered
+  as a generic wrapper rather than a specialization of a known type.
+  (`src/parser/ditaParser.ts:204`)
+
+- **`subjectScheme` classification is not used for rendering.** The preview
+  resolves `baseType` from the `class` attribute against a fixed hierarchy
+  table; custom `SubjectScheme` vocabularies that would map a class to a
+  domain-specific renderer are ignored.
+
+### Diff / compare view
+
+- **Both sides render with the current key map and conref targets.** The
+  Git-compare resolves `@keyref` / `@conref` using the workspace's *present*
+  `keyMap` and target files, not a historical snapshot. A topic whose text is
+  unchanged but whose resolved content shifted (because a keydef map or a
+  conref target was edited) appears without a diff marker; a changed target
+  makes the referencing topic's "old" side look different from what it
+  actually looked like at that commit.
+  (`src/editor/ditaDiffProvider.ts:212`, `buildKeyMap(docUri)`)
+
+### Workspace trust and virtual workspaces
+
+- **Three commands need a trusted workspace:** *Transform with DITA-OT…*,
+  *Open in Oxygen*, and *Compare with Git Version* — they spawn external
+  programs. In an untrusted workspace they show a warning with a
+  **Manage Workspace Trust** button instead of running. Reading views,
+  the Map Navigator, previews, and the checks remain available.
+  (`src/editor/workspaceTrust.ts:23`, `EXECUTION_GATED_COMMANDS`)
+
+- **Virtual workspaces are not supported.** The extension reads maps, topics,
+  and media from the local file system (fs/path APIs); previews, navigation,
+  and checks cannot function without it. Declared in the manifest:
+  `"virtualWorkspaces": { "supported": false }`.
+  (`package.json` → `capabilities`)
+
+### Templates
+
+- **Template CSS targets the extension's own DOM, not Oxygen WebHelp.** The
+  page structure the extension emits (`.site-nav`, `.site-nav-link`,
+  `#dita-content-root`, `body[data-template="…"]`, …) is not Oxygen's
+  WebHelp markup. A template written for WebHelp selectors will not apply.
+  (see Custom CSS → Quick start above, and `package.json` templatesDirectory docs)
+
 ## Localization
 
 The extension ships in **English** and **Simplified Chinese** (zh-cn). There is no language setting — the UI language automatically follows your VS Code display language (which itself defaults to your system language). If VS Code runs in a language this extension doesn't ship, everything falls back to English.
