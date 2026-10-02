@@ -14,6 +14,11 @@ import { sourceStamp, readSourceText, noteSourceDependencies } from './sourceTex
 // buildRenderContext at render time (renderTopicXml).
 import { buildRenderContext } from './renderContext';
 import { decodeHrefPart, URL_SCHEME_RE } from './refResolvers';
+// Search match engine now lives in the searchText leaf. Imported here for the
+// findTextMatches.toString() embed in getSearchOverlayScript, and re-exported so
+// bookSearchIndex and the preview tests keep resolving it from this module.
+import { findTextMatches } from './searchText';
+export { findTextMatches };
 // Re-exported so existing importers keep resolving these from this module;
 // they are now defined in refResolvers.ts.
 export {
@@ -214,42 +219,6 @@ export function makeFileTopicTypeResolver(
     return tagName === undefined ? undefined : labeler(tagName);
   };
 }
-
-// ── Search text matching ──
-// Pure match engine shared between unit tests and the webview search overlay
-// (injected there via findTextMatches.toString(), so it must stay fully
-// self-contained — no references to other module-level bindings).
-export function findTextMatches(
-  text: string,
-  term: string,
-  useRegex: boolean,
-  caseSensitive: boolean,
-): { start: number; end: number }[] | null {
-  const matches: { start: number; end: number }[] = [];
-  // Plain-text terms are regex-escaped and run through the same regex path:
-  // the 'i' flag handles case-insensitivity without toLowerCase(), whose
-  // length-changing Unicode folds (İ, ẞ, …) would skew match offsets.
-  const pattern = useRegex ? term : term.replace(/[.*+?^$\{\}()|[\]\\]/g, '\\$&');
-  let regex: RegExp;
-  try {
-    regex = new RegExp(pattern, caseSensitive ? 'g' : 'gi');
-  } catch {
-    return null;
-  }
-  let m: RegExpExecArray | null;
-  while ((m = regex.exec(text)) !== null) {
-    if (m[0].length > 0) {
-      matches.push({ start: m.index, end: m.index + m[0].length });
-      // Cap per-node matches so degenerate patterns cannot flood the DOM
-      if (matches.length >= 1000) break;
-    } else {
-      regex.lastIndex++;
-    }
-  }
-  return matches;
-}
-
-
 
 // ── Escaping (single source of truth for non-renderer code) ──
 
