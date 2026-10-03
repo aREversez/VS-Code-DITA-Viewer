@@ -48,6 +48,7 @@ import { registerFindReferencingMapsCommand } from './editor/findDitaReferences'
 import { registerKeyContextCommand } from './editor/keyContextCommand';
 import { registerUnreferencedResourcesCommand } from './editor/unreferencedResourcesUi';
 import { registerCompletenessCommand } from './editor/completenessCheckUi';
+import { registerRefRenameParticipant } from './editor/refRenameParticipant';
 import { ensureCommandAllowed } from './editor/workspaceTrustGate';
 
 const TRANSFORM_CMD = 'ditaViewer.transformWithDitaOt';
@@ -133,6 +134,9 @@ export function activate(context: vscode.ExtensionContext) {
   // Language features: go-to-definition, completion, outline symbols,
   // broken-reference diagnostics (items shared by .dita and .ditamap)
   registerLanguageFeatures(context);
+
+  // Update href/conref references when DITA files are renamed or moved
+  registerRefRenameParticipant(context);
 
   // Explorer sidebar tree view of the active DITA map
   const mapTree = registerMapTreeView(context);

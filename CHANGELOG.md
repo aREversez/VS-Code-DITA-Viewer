@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+- Update `href` and `conref` references automatically when DITA files are renamed or moved within VS Code
+
 ## 1.0.9 (2026-10-02)
 
 ### Features

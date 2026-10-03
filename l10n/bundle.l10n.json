@@ -321,5 +321,10 @@
   "CJK spacing plugin installed. The DITA-OT files it changed were backed up to {0}": "CJK spacing plugin installed. The DITA-OT files it changed were backed up to {0}",
   "Could not install the CJK spacing plugin: {0}. The transform will continue without it; installing may need write access to the DITA-OT folder. If the install had already started, the files it changed were backed up under the dita-viewer-backup folder in the DITA-OT directory.": "Could not install the CJK spacing plugin: {0}. The transform will continue without it; installing may need write access to the DITA-OT folder. If the install had already started, the files it changed were backed up under the dita-viewer-backup folder in the DITA-OT directory.",
   "Manage Workspace Trust": "Manage Workspace Trust",
-  "This command starts an external program and is disabled in untrusted workspaces. Trust this workspace to enable it.": "This command starts an external program and is disabled in untrusted workspaces. Trust this workspace to enable it."
+  "This command starts an external program and is disabled in untrusted workspaces. Trust this workspace to enable it.": "This command starts an external program and is disabled in untrusted workspaces. Trust this workspace to enable it.",
+  "Updated {0} references in {1} files": "Updated {0} references in {1} files",
+  "Update {0} references in {1} files?": "Update {0} references in {1} files?",
+  "Yes": "Yes",
+  "No": "No",
+  "Rename reference update exceeded file limit of {0}": "Rename reference update exceeded file limit of {0}"
 }

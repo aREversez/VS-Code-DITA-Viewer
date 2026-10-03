@@ -480,6 +480,10 @@ location for verification.
   WebHelp markup. A template written for WebHelp selectors will not apply.
   (see Custom CSS → Quick start above, and `package.json` templatesDirectory docs)
 
+### Rename / reference updates
+
+- **Reference updates on rename only work for renames initiated within VS Code.** External renames (e.g. `git mv`, terminal `mv`) are not detected.
+
 ## Localization
 
 The extension ships in **English** and **Simplified Chinese** (zh-cn). There is no language setting — the UI language automatically follows your VS Code display language (which itself defaults to your system language). If VS Code runs in a language this extension doesn't ship, everything falls back to English.

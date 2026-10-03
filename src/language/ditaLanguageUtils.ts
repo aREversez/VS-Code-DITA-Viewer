@@ -29,7 +29,7 @@ export interface RefEntry {
 }
 
 const TAG_RE = /<([A-Za-z][\w.-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
-const ATTR_RE = /([\w:.-]+)\s*=\s*"([^"]*)"/g;
+const ATTR_RE = /([\w:.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
 
 /** Collects every reference-bearing attribute in the document text. */
 export function collectRefEntries(text: string): RefEntry[] {
@@ -48,20 +48,22 @@ export function collectRefEntries(text: string): RefEntry[] {
     ATTR_RE.lastIndex = 0;
     let am: RegExpExecArray | null;
     while ((am = ATTR_RE.exec(attrSegment)) !== null) {
-      if (am[1] === 'scope') scope = am[2];
-      else if (am[1] === 'format') format = am[2];
+      const val = am[2] ?? am[3];
+      if (am[1] === 'scope') scope = val;
+      else if (am[1] === 'format') format = val;
     }
 
     ATTR_RE.lastIndex = 0;
     while ((am = ATTR_RE.exec(attrSegment)) !== null) {
       if (!REF_ATTRS.has(am[1])) continue;
-      const eqAndQuote = am[0].indexOf('"');
+      const eqAndQuote = am[0].indexOf('=') + 1 + (am[0].slice(am[0].indexOf('=') + 1).match(/["']/)?.index ?? 0);
       const valueStart = segmentOffset + am.index + eqAndQuote + 1;
+      const val = am[2] ?? am[3];
       entries.push({
         attr: am[1],
-        value: am[2],
+        value: val,
         valueStart,
-        valueEnd: valueStart + am[2].length,
+        valueEnd: valueStart + val.length,
         tagName,
         scope,
         format,

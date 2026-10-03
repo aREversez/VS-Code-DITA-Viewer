@@ -50,5 +50,9 @@
   "config.unrefExcludeFolders.description": "Folder names to skip, along with everything under them, when looking for unreferenced resources (comma-separated).",
   "config.completenessEnabledChecks.description": "Checks that \"Validate and Check for Completeness\" runs. Updated when you accept the check picker; edit here to share the choice with a team.",
   "config.completenessDitavalFiles.description": "DITAVAL files for the completeness check (paths relative to the map's folder, or absolute). Used while \"useDitaval\" is in enabledChecks; the check runs once per file.",
-  "command.clearMapCheckResults.title": "DITA: Clear Map Check Results"
+  "command.clearMapCheckResults.title": "DITA: Clear Map Check Results",
+  "config.updateReferencesOnRename.description": "Control whether href and conref references are automatically updated when DITA files are renamed or moved.",
+  "config.updateReferencesOnRename.always": "Always update references automatically",
+  "config.updateReferencesOnRename.prompt": "Ask before updating references",
+  "config.updateReferencesOnRename.never": "Never update references"
 }

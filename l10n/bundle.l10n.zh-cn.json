@@ -321,5 +321,10 @@
   "CJK spacing plugin installed. The DITA-OT files it changed were backed up to {0}": "中英文间距插件已安装。被它改动的 DITA-OT 文件已备份到 {0}",
   "Could not install the CJK spacing plugin: {0}. The transform will continue without it; installing may need write access to the DITA-OT folder. If the install had already started, the files it changed were backed up under the dita-viewer-backup folder in the DITA-OT directory.": "无法安装中英文间距插件：{0}。转换将不带该插件继续；安装可能需要对 DITA-OT 目录的写权限。若安装已开始，被改动的文件已备份在 DITA-OT 目录下的 dita-viewer-backup 文件夹中。",
   "Manage Workspace Trust": "管理工作区信任",
-  "This command starts an external program and is disabled in untrusted workspaces. Trust this workspace to enable it.": "此命令会启动外部程序，在不受信任的工作区中已被禁用。信任此工作区后即可使用。"
+  "This command starts an external program and is disabled in untrusted workspaces. Trust this workspace to enable it.": "此命令会启动外部程序，在不受信任的工作区中已被禁用。信任此工作区后即可使用。",
+  "Updated {0} references in {1} files": "已更新 {1} 个文件中的 {0} 处引用",
+  "Update {0} references in {1} files?": "是否更新 {1} 个文件中的 {0} 处引用？",
+  "Yes": "是",
+  "No": "否",
+  "Rename reference update exceeded file limit of {0}": "重命名引用更新超出 {0} 个文件的限制"
 }

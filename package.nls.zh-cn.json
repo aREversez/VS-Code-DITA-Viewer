@@ -50,5 +50,9 @@
   "config.unrefExcludeFolders.description": "查找未引用资源时要跳过的文件夹名称，其下的所有内容一并跳过（以逗号分隔）。",
   "config.completenessEnabledChecks.description": "“验证并检查完整性”要运行的检查项。在检查项选择器中确认后会自动更新；也可以在此编辑，以便与团队共享。",
   "config.completenessDitavalFiles.description": "完整性检查使用的 DITAVAL 文件（相对于 Map 所在文件夹的路径，或绝对路径）。当 enabledChecks 包含 \"useDitaval\" 时生效；每个文件各运行一次检查。",
-  "command.clearMapCheckResults.title": "DITA：清除 Map 检查结果"
+  "command.clearMapCheckResults.title": "DITA：清除 Map 检查结果",
+  "config.updateReferencesOnRename.description": "控制在重命名或移动 DITA 文件时是否自动更新 href 和 conref 引用。",
+  "config.updateReferencesOnRename.always": "始终自动更新引用",
+  "config.updateReferencesOnRename.prompt": "更新引用前询问",
+  "config.updateReferencesOnRename.never": "从不更新引用"
 }
