@@ -48,7 +48,7 @@ import { registerFindReferencingMapsCommand } from './editor/findDitaReferences'
 import { registerKeyContextCommand } from './editor/keyContextCommand';
 import { registerUnreferencedResourcesCommand } from './editor/unreferencedResourcesUi';
 import { registerCompletenessCommand } from './editor/completenessCheckUi';
-import { registerRefRenameParticipant } from './editor/refRenameParticipant';
+import { registerRefRenameParticipant, computeRenameEditsForTesting } from './editor/refRenameParticipant';
 import { ensureCommandAllowed } from './editor/workspaceTrustGate';
 
 const TRANSFORM_CMD = 'ditaViewer.transformWithDitaOt';
@@ -854,6 +854,14 @@ export function activate(context: vscode.ExtensionContext) {
       // preview to check the bootstrap script it renders, rather than only
       // being able to assert the default.
       globalState: context.globalState,
+      // The rename participant's edits are only ever applied by VS Code for a
+      // user-initiated Explorer rename (fs.rename fires no participant event and
+      // applyEdit drops its returned edits), so the integration suite cannot
+      // drive the full apply path headlessly. This seam runs the participant's
+      // real candidate gathering (findFiles + disk) and edit computation for a
+      // given rename and returns each affected file's post-edit content, which
+      // is what the suite asserts against.
+      computeRenameEdits: computeRenameEditsForTesting,
     },
   };
 }

@@ -71,6 +71,7 @@ function getOpenDocs(): Map<string, vscode.TextDocument> {
 }
 
 const READ_CONCURRENCY = 32;
+const MAX_FILES = 5000;
 
 async function handleRename(
   event: vscode.FileWillRenameEvent,
@@ -106,46 +107,9 @@ async function handleRename(
     newPath: f.newUri.fsPath,
   }));
 
-  // Find candidate files that might contain references. The exclude glob must
-  // start with ** — a bare `node_modules/**` only matches the workspace root.
-  const candidateUris = await vscode.workspace.findFiles(
-    '**/*.{dita,ditamap}',
-    '**/{node_modules,.git}/**',
-  );
-
-  const MAX_FILES = 5000;
-  let truncated = false;
-  let workingUris = candidateUris;
-  if (candidateUris.length > MAX_FILES) {
-    truncated = true;
-    workingUris = candidateUris.slice(0, MAX_FILES);
-  }
-
-  // Renamed files stay candidates: a moved file's own relative references may
-  // need rewriting (the edit is applied to its current location, before the move).
-  const openDocs = getOpenDocs();
-  const files: FileInput[] = [];
-  const readOne = async (uri: vscode.Uri): Promise<FileInput | undefined> => {
-    const normPath = normalizePathForCompare(uri.fsPath, process.platform);
-    // Prefer unsaved editor content (VS Code's text has no BOM), else disk.
-    const openDoc = openDocs.get(normPath);
-    let text: string;
-    if (openDoc) {
-      text = openDoc.getText();
-    } else {
-      try {
-        text = stripBom(await readFile(uri.fsPath, 'utf8'));
-      } catch {
-        return undefined;
-      }
-    }
-    if (!mayReferenceRenamed(uri.fsPath, text, renames, process.platform)) return undefined;
-    return { path: uri.fsPath, text };
-  };
-  for (let i = 0; i < workingUris.length; i += READ_CONCURRENCY) {
-    const batch = await Promise.all(workingUris.slice(i, i + READ_CONCURRENCY).map(readOne));
-    for (const fi of batch) if (fi) files.push(fi);
-  }
+  // Gather candidate files (real findFiles, honouring the exclude glob and the
+  // truncation cap) and compute the reference edits against them.
+  const { files, truncated } = await collectCandidates(renames);
 
   if (files.length === 0) {
     if (truncated) {
@@ -157,6 +121,7 @@ async function handleRename(
   }
 
   // Compute edits via the pure function
+  const openDocs = getOpenDocs();
   const fileEdits = computeRefEdits({ renames, files, platform: process.platform });
 
   if (truncated) {
@@ -218,6 +183,84 @@ async function handleRename(
   );
 
   return workspaceEdit;
+}
+
+// Collect the .dita/.ditamap files that might reference the renamed targets,
+// reading each (preferring an open document's unsaved text, else disk with the
+// BOM stripped) and pre-filtering with mayReferenceRenamed. Used both by the
+// live participant and by the test seam so the two never drift.
+async function collectCandidates(
+  renames: RenameEntry[],
+): Promise<{ files: FileInput[]; truncated: boolean }> {
+  // The exclude glob must start with ** — a bare `node_modules/**` only matches
+  // the workspace root, leaving nested node_modules unexcluded.
+  const candidateUris = await vscode.workspace.findFiles(
+    '**/*.{dita,ditamap}',
+    '**/{node_modules,.git}/**',
+  );
+
+  let truncated = false;
+  let workingUris = candidateUris;
+  if (candidateUris.length > MAX_FILES) {
+    truncated = true;
+    workingUris = candidateUris.slice(0, MAX_FILES);
+  }
+
+  // Renamed files stay candidates: a moved file's own relative references may
+  // need rewriting (the edit is applied to its current location, before the move).
+  const openDocs = getOpenDocs();
+  const files: FileInput[] = [];
+  const readOne = async (uri: vscode.Uri): Promise<FileInput | undefined> => {
+    const normPath = normalizePathForCompare(uri.fsPath, process.platform);
+    // Prefer unsaved editor content (VS Code's text has no BOM), else disk.
+    const openDoc = openDocs.get(normPath);
+    let text: string;
+    if (openDoc) {
+      text = openDoc.getText();
+    } else {
+      try {
+        text = stripBom(await readFile(uri.fsPath, 'utf8'));
+      } catch {
+        return undefined;
+      }
+    }
+    if (!mayReferenceRenamed(uri.fsPath, text, renames, process.platform)) return undefined;
+    return { path: uri.fsPath, text };
+  };
+  for (let i = 0; i < workingUris.length; i += READ_CONCURRENCY) {
+    const batch = await Promise.all(workingUris.slice(i, i + READ_CONCURRENCY).map(readOne));
+    for (const fi of batch) if (fi) files.push(fi);
+  }
+
+  return { files, truncated };
+}
+
+// Test seam: run the participant's real candidate gathering (vscode.workspace
+// .findFiles + disk reads) and edit computation for a rename, and return each
+// affected file's content after its edits are applied. This exercises exactly
+// what the participant decides to change -- folder-prefix matches, a moved
+// file's own outbound references, UTF-8 href encoding, BOM handling, the
+// node_modules exclusion -- against a real workspace, without needing VS Code
+// to apply a user-initiated rename (which is not reachable from the extension
+// API: fs.rename never fires the participant, and applyEdit fires it but drops
+// the returned edits).
+export async function computeRenameEditsForTesting(
+  renames: RenameEntry[],
+): Promise<Array<{ sourcePath: string; path: string; newText: string }>> {
+  const { files } = await collectCandidates(renames);
+  const fileEdits = computeRefEdits({ renames, files, platform: process.platform });
+  const textBySource = new Map<string, string>();
+  for (const fi of files) {
+    textBySource.set(normalizePathForCompare(fi.path, process.platform), fi.text);
+  }
+  return fileEdits.map((fe) => {
+    const src = textBySource.get(normalizePathForCompare(fe.sourcePath, process.platform)) ?? '';
+    let out = src;
+    for (const edit of [...fe.edits].sort((a, b) => b.start - a.start)) {
+      out = out.slice(0, edit.start) + edit.newText + out.slice(edit.end);
+    }
+    return { sourcePath: fe.sourcePath, path: fe.path, newText: out };
+  });
 }
 
 function offsetToPosition(text: string, offset: number): vscode.Position {
