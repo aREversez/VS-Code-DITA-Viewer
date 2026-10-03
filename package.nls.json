@@ -53,6 +53,5 @@
   "command.clearMapCheckResults.title": "DITA: Clear Map Check Results",
   "config.updateReferencesOnRename.description": "Control whether href and conref references are automatically updated when DITA files are renamed or moved.",
   "config.updateReferencesOnRename.always": "Always update references automatically",
-  "config.updateReferencesOnRename.prompt": "Ask before updating references",
   "config.updateReferencesOnRename.never": "Never update references"
 }

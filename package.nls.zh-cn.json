@@ -53,6 +53,5 @@
   "command.clearMapCheckResults.title": "DITA：清除 Map 检查结果",
   "config.updateReferencesOnRename.description": "控制在重命名或移动 DITA 文件时是否自动更新 href 和 conref 引用。",
   "config.updateReferencesOnRename.always": "始终自动更新引用",
-  "config.updateReferencesOnRename.prompt": "更新引用前询问",
   "config.updateReferencesOnRename.never": "从不更新引用"
 }

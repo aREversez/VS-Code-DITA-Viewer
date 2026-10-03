@@ -756,12 +756,11 @@
         },
         "dita-viewer.updateReferencesOnRename": {
           "type": "string",
-          "enum": ["always", "prompt", "never"],
+          "enum": ["always", "never"],
           "default": "always",
           "description": "%config.updateReferencesOnRename.description%",
           "enumDescriptions": [
             "%config.updateReferencesOnRename.always%",
-            "%config.updateReferencesOnRename.prompt%",
             "%config.updateReferencesOnRename.never%"
           ]
         }

@@ -175,21 +175,6 @@ async function handleRename(
     return emptyEdit;
   }
 
-  // For 'prompt' mode, ask the user before applying
-  if (setting === 'prompt') {
-    const affectedFiles = fileEdits.length;
-    const yesLabel = vscode.l10n.t('Yes');
-    const noLabel = vscode.l10n.t('No');
-    const choice = await vscode.window.showInformationMessage(
-      vscode.l10n.t('Update {0} references in {1} files?', String(totalEdits), String(affectedFiles)),
-      yesLabel,
-      noLabel,
-    );
-    if (choice !== yesLabel) {
-      return emptyEdit;
-    }
-  }
-
   // Build ONE WorkspaceEdit covering every affected file, open or closed. This
   // is what lets VS Code bundle the edits with the rename so Skip/undo revert
   // all of them and "Show Preview" displays all of them.
@@ -226,14 +211,11 @@ async function handleRename(
     }
   }
 
-  // Show status bar message for 'always' mode
-  if (setting === 'always') {
-    const affectedFiles = fileEdits.length;
-    vscode.window.setStatusBarMessage(
-      vscode.l10n.t('Updated {0} references in {1} files', String(totalEdits), String(affectedFiles)),
-      5000,
-    );
-  }
+  // Status bar notice (the setting is only 'always' or 'never'; 'never' returned early)
+  vscode.window.setStatusBarMessage(
+    vscode.l10n.t('Updated {0} references in {1} files', String(totalEdits), String(fileEdits.length)),
+    5000,
+  );
 
   return workspaceEdit;
 }
