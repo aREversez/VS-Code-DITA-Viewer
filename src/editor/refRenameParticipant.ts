@@ -18,8 +18,13 @@
 
 import * as vscode from 'vscode';
 import { readFile } from 'fs/promises';
-import { basename } from 'path';
-import { computeRefEdits, type RenameEntry, type FileInput } from './refRenameEdits';
+import {
+  computeRefEdits,
+  mayReferenceRenamed,
+  stripBom,
+  type RenameEntry,
+  type FileInput,
+} from './refRenameEdits';
 import { normalizePathForCompare } from './mapReferenceTools';
 
 export function registerRefRenameParticipant(context: vscode.ExtensionContext): void {
@@ -54,22 +59,28 @@ export function registerRefRenameParticipant(context: vscode.ExtensionContext): 
   );
 }
 
-// Set of normalized paths for documents currently open in the editor
-function getOpenDocPaths(): Set<string> {
-  const open = new Set<string>();
+// Open file-scheme documents keyed by normalized path
+function getOpenDocs(): Map<string, vscode.TextDocument> {
+  const open = new Map<string, vscode.TextDocument>();
   for (const doc of vscode.workspace.textDocuments) {
     if (doc.uri.scheme === 'file') {
-      open.add(normalizePathForCompare(doc.uri.fsPath, process.platform));
+      open.set(normalizePathForCompare(doc.uri.fsPath, process.platform), doc);
     }
   }
   return open;
 }
+
+const READ_CONCURRENCY = 32;
 
 async function handleRename(
   event: vscode.FileWillRenameEvent,
   pendingSaveDocs: vscode.TextDocument[],
 ): Promise<vscode.WorkspaceEdit> {
   const emptyEdit = new vscode.WorkspaceEdit();
+
+  // A previous rename that was skipped or failed never reached onDidRenameFiles
+  // for its documents; never carry them over into this one.
+  pendingSaveDocs.length = 0;
 
   // Read setting — default to 'always'
   const setting = vscode.workspace
@@ -88,16 +99,18 @@ async function handleRename(
     return emptyEdit;
   }
 
-  // Build RenameEntry[]
+  // Raw fsPaths on purpose: computeRefEdits normalizes for comparison itself,
+  // and the new path is written into hrefs, so its casing must be preserved.
   const renames: RenameEntry[] = fileRenames.map((f) => ({
-    oldPath: normalizePathForCompare(f.oldUri.fsPath, process.platform),
-    newPath: normalizePathForCompare(f.newUri.fsPath, process.platform),
+    oldPath: f.oldUri.fsPath,
+    newPath: f.newUri.fsPath,
   }));
 
-  // Find candidate files that might contain references
+  // Find candidate files that might contain references. The exclude glob must
+  // start with ** — a bare `node_modules/**` only matches the workspace root.
   const candidateUris = await vscode.workspace.findFiles(
     '**/*.{dita,ditamap}',
-    '{node_modules,.git}/**',
+    '**/{node_modules,.git}/**',
   );
 
   const MAX_FILES = 5000;
@@ -108,48 +121,30 @@ async function handleRename(
     workingUris = candidateUris.slice(0, MAX_FILES);
   }
 
-  // Build a set of normalized renamed paths for quick lookup
-  const renamedPaths = new Set<string>();
-  for (const r of renames) {
-    renamedPaths.add(normalizePathForCompare(r.oldPath, process.platform));
-    renamedPaths.add(normalizePathForCompare(r.newPath, process.platform));
-  }
-
-  // Pre-compute old basenames and their encoded forms for quick pre-filter
-  const oldNames: Array<{ plain: string; encoded: string }> = renames.map((r) => {
-    const name = basename(r.oldPath);
-    return { plain: name, encoded: encodeURIComponent(name) };
-  });
-
-  // Collect FileInput[] — skip renamed files themselves, pre-filter by name
+  // Renamed files stay candidates: a moved file's own relative references may
+  // need rewriting (the edit is applied to its current location, before the move).
+  const openDocs = getOpenDocs();
   const files: FileInput[] = [];
-  for (const uri of workingUris) {
+  const readOne = async (uri: vscode.Uri): Promise<FileInput | undefined> => {
     const normPath = normalizePathForCompare(uri.fsPath, process.platform);
-    if (renamedPaths.has(normPath)) continue;
-
-    // Get text: prefer unsaved editor content, fall back to disk
-    let text: string | undefined;
-    for (const doc of vscode.workspace.textDocuments) {
-      if (doc.uri.scheme === 'file' && normalizePathForCompare(doc.uri.fsPath, process.platform) === normPath) {
-        text = doc.getText();
-        break;
-      }
-    }
-    if (text === undefined) {
+    // Prefer unsaved editor content (VS Code's text has no BOM), else disk.
+    const openDoc = openDocs.get(normPath);
+    let text: string;
+    if (openDoc) {
+      text = openDoc.getText();
+    } else {
       try {
-        text = await readFile(uri.fsPath, 'utf8');
+        text = stripBom(await readFile(uri.fsPath, 'utf8'));
       } catch {
-        continue;
+        return undefined;
       }
     }
-
-    // Quick pre-filter: at least one old name must appear in the text
-    const hasMatch = oldNames.some(
-      (n) => text!.includes(n.plain) || text!.includes(n.encoded),
-    );
-    if (!hasMatch) continue;
-
-    files.push({ path: uri.fsPath, text });
+    if (!mayReferenceRenamed(uri.fsPath, text, renames, process.platform)) return undefined;
+    return { path: uri.fsPath, text };
+  };
+  for (let i = 0; i < workingUris.length; i += READ_CONCURRENCY) {
+    const batch = await Promise.all(workingUris.slice(i, i + READ_CONCURRENCY).map(readOne));
+    for (const fi of batch) if (fi) files.push(fi);
   }
 
   if (files.length === 0) {
@@ -195,55 +190,39 @@ async function handleRename(
     }
   }
 
-  // Which files are open in the editor — their documents are left dirty by
-  // VS Code once the refactor is accepted and are saved in onDidRenameFiles.
-  const openDocPaths = getOpenDocPaths();
-  pendingSaveDocs.length = 0;
-
   // Build ONE WorkspaceEdit covering every affected file, open or closed. This
   // is what lets VS Code bundle the edits with the rename so Skip/undo revert
   // all of them and "Show Preview" displays all of them.
   const workspaceEdit = new vscode.WorkspaceEdit();
 
-  // We need file text to convert offsets to positions. Reuse the content we
-  // already read (keyed by the pre-rename path computeRefEdits was given).
-  const textCache = new Map<string, string>();
+  // Offsets were computed against the text we read above, keyed by the file's
+  // current (pre-rename) path.
+  const textBySource = new Map<string, string>();
   for (const fi of files) {
-    textCache.set(normalizePathForCompare(fi.path, process.platform), fi.text);
+    textBySource.set(normalizePathForCompare(fi.path, process.platform), fi.text);
   }
 
   for (const fe of fileEdits) {
-    const normPath = normalizePathForCompare(fe.path, process.platform);
+    const srcNorm = normalizePathForCompare(fe.sourcePath, process.platform);
+    const fileText = textBySource.get(srcNorm);
+    if (fileText === undefined) continue;
 
-    // Get text for offset-to-position conversion
-    let fileText = textCache.get(normPath);
-    if (fileText === undefined) {
-      // The file may have been renamed — read from the new path
-      try {
-        fileText = await readFile(fe.path, 'utf8');
-      } catch {
-        continue;
-      }
-    }
-
-    const targetUri = vscode.Uri.file(fe.path);
+    // The WorkspaceEdit runs before the rename, so it targets the OLD location
+    // even for files that are being moved themselves.
+    const targetUri = vscode.Uri.file(fe.sourcePath);
+    const openDoc = openDocs.get(srcNorm);
     for (const edit of fe.edits) {
-      const startPos = offsetToPosition(fileText, edit.start);
-      const endPos = offsetToPosition(fileText, edit.end);
-      const range = new vscode.Range(startPos, endPos);
+      const range = openDoc
+        ? new vscode.Range(openDoc.positionAt(edit.start), openDoc.positionAt(edit.end))
+        : new vscode.Range(offsetToPosition(fileText, edit.start), offsetToPosition(fileText, edit.end));
       workspaceEdit.replace(targetUri, range, edit.newText);
     }
 
-    // Track open documents so onDidRenameFiles can save them after the
-    // rename. Store the TextDocument (not the URI) — VS Code rewrites the
-    // document's URI when the file moves, so a URI lookup later would miss it.
-    if (openDocPaths.has(normPath)) {
-      const doc = vscode.workspace.textDocuments.find(
-        (d) => d.uri.scheme === 'file' && normalizePathForCompare(d.uri.fsPath, process.platform) === normPath,
-      );
-      if (doc) {
-        pendingSaveDocs.push(doc);
-      }
+    // Auto-save later only documents that were clean before our edit — never
+    // flush a user's own unsaved changes as a side effect of a rename. Store
+    // the TextDocument (not the URI): VS Code rewrites the URI on rename.
+    if (openDoc && !openDoc.isDirty) {
+      pendingSaveDocs.push(openDoc);
     }
   }
 

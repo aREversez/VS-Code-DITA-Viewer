@@ -5,7 +5,7 @@
 //
 // No vscode dependency — only Node path + project utilities.
 
-import { dirname, relative, resolve, sep } from 'path';
+import * as pathWin32 from 'path/win32';
 import * as pathPosix from 'path/posix';
 import { collectRefEntries, isExternalRef } from '../language/ditaLanguageUtils';
 import { decodeHrefPart } from './refResolvers';
@@ -22,7 +22,14 @@ export interface FileInput {
 }
 
 export interface FileEdit {
+  /** Where the file will live once the rename has happened. */
   path: string;
+  /**
+   * Where the file lives right now (before the rename). Edits computed for a
+   * file that is itself being moved must be applied to this location, because
+   * a WorkspaceEdit returned from onWillRenameFiles runs before the move.
+   */
+  sourcePath: string;
   edits: Array<{ start: number; end: number; newText: string }>;
 }
 
@@ -31,14 +38,43 @@ export interface FileEdit {
  * (RFC 3986 §2.3), preserving `/` so multi-segment relative paths stay valid.
  */
 export function encodeHrefPart(part: string): string {
-  return part.replace(/[^a-zA-Z0-9._~\-/]/g, (c) =>
-    '%' +
-    c
-      .charCodeAt(0)
-      .toString(16)
-      .toUpperCase()
-      .padStart(2, '0'),
-  );
+  // encodeURIComponent yields UTF-8 percent-encoding (a per-UTF-16-unit hex
+  // dump would corrupt every non-ASCII file name); `/` is kept as separator.
+  return part.split('/').map(encodeURIComponent).join('/');
+}
+
+/** Drops a leading UTF-8 BOM so offsets match VS Code's TextDocument text. */
+export function stripBom(text: string): string {
+  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+}
+
+/**
+ * Cheap pre-filter for candidate files. A file can need edits when it mentions
+ * a renamed file's name (plain or percent-encoded), OR when it is itself being
+ * moved (its relative outbound references may break even though they never
+ * mention the renamed name), i.e. it is a renamed file or sits inside a
+ * renamed folder.
+ */
+export function mayReferenceRenamed(
+  filePath: string,
+  text: string,
+  renames: RenameEntry[],
+  platform: NodeJS.Platform,
+): boolean {
+  const fileNorm = normalizePathForCompare(filePath, platform);
+  for (const r of renames) {
+    const oldNorm = normalizePathForCompare(r.oldPath, platform);
+    if (fileNorm === oldNorm || fileNorm.startsWith(oldNorm.endsWith('/') ? oldNorm : oldNorm + '/')) {
+      return true;
+    }
+    const slashed = r.oldPath.replace(/\\/g, '/');
+    const plain = slashed.slice(slashed.lastIndexOf('/') + 1);
+    // Paths are case-insensitive on win32, so compare lower-cased there.
+    const hay = platform === 'win32' ? text.toLowerCase() : text;
+    const fold = (x: string): string => (platform === 'win32' ? x.toLowerCase() : x);
+    if (hay.includes(fold(plain)) || hay.includes(fold(encodeURIComponent(plain)))) return true;
+  }
+  return false;
 }
 
 const HANDLED_ATTRS = new Set(['href', 'conref']);
@@ -58,12 +94,9 @@ export function computeRefEdits(opts: {
     oldPath: r.oldPath,
   }));
 
-  // Use path module matching the target platform so that POSIX absolute
-  // paths (e.g. `/project`) don't get a drive letter on Windows hosts.
-  const pImpl =
-    platform === 'win32'
-      ? ({ dirname, relative, resolve, sep } as typeof import('path'))
-      : (pathPosix as unknown as typeof import('path'));
+  // Pick the path flavour by the target platform, not the host, so the result
+  // is deterministic (and testable) on any machine.
+  const pImpl = (platform === 'win32' ? pathWin32 : pathPosix) as typeof import('path');
 
   const results: FileEdit[] = [];
 
@@ -174,7 +207,7 @@ export function computeRefEdits(opts: {
     }
 
     if (edits.length > 0) {
-      results.push({ path: nF, edits });
+      results.push({ path: nF, sourcePath: pF, edits });
     }
   }
 

@@ -2,6 +2,8 @@ import * as assert from 'assert';
 import {
   computeRefEdits,
   encodeHrefPart,
+  mayReferenceRenamed,
+  stripBom,
   FileInput,
   RenameEntry,
   FileEdit,
@@ -281,6 +283,69 @@ describe('refRenameEdits', () => {
         platform: 'linux',
       });
       assert.strictEqual(edits.length, 0);
+    });
+  });
+
+  describe('review fixes — kill tests', () => {
+    it('encodeHrefPart emits UTF-8 percent-encoding for non-ASCII', () => {
+      assert.strictEqual(encodeHrefPart('中文 a.dita'), '%E4%B8%AD%E6%96%87%20a.dita');
+      assert.strictEqual(encodeHrefPart('a/é.dita'), 'a/%C3%A9.dita');
+    });
+
+    it('re-encodes a CJK target when the original href used %20', () => {
+      const text = '<topicref href="old%20x.dita"/>';
+      const edits = computeRefEdits({
+        renames: [makeRename('/p/old x.dita', '/p/新 x.dita')],
+        files: [makeFile('/p/map.ditamap', text)],
+        platform: 'linux',
+      });
+      assert.strictEqual(
+        applyEdits(text, edits[0].edits),
+        '<topicref href="%E6%96%B0%20x.dita"/>',
+      );
+    });
+
+    it('reports the pre-rename path as sourcePath for files inside a renamed folder', () => {
+      const text = '<xref href="../outside.dita"/>';
+      const edits = computeRefEdits({
+        renames: [makeRename('/p/dir', '/p/sub/dir')],
+        files: [makeFile('/p/dir/a.dita', text)],
+        platform: 'linux',
+      });
+      assert.strictEqual(edits.length, 1);
+      assert.strictEqual(edits[0].sourcePath, '/p/dir/a.dita');
+      assert.strictEqual(edits[0].path, '/p/sub/dir/a.dita');
+      assert.strictEqual(applyEdits(text, edits[0].edits), '<xref href="../../outside.dita"/>');
+    });
+
+    it('keeps the casing of the new name on win32', () => {
+      const text = '<topicref href="old.dita"/>';
+      const edits = computeRefEdits({
+        renames: [makeRename('C:\\Proj\\old.dita', 'C:\\Proj\\MyTopic.dita')],
+        files: [makeFile('C:\\Proj\\map.ditamap', text)],
+        platform: 'win32',
+      });
+      assert.strictEqual(applyEdits(text, edits[0].edits), '<topicref href="MyTopic.dita"/>');
+    });
+
+    it('mayReferenceRenamed: name mention (plain or encoded) passes', () => {
+      const r = [makeRename('/p/old name.dita', '/p/new.dita')];
+      assert.strictEqual(mayReferenceRenamed('/p/m.ditamap', 'href="old name.dita"', r, 'linux'), true);
+      assert.strictEqual(mayReferenceRenamed('/p/m.ditamap', 'href="old%20name.dita"', r, 'linux'), true);
+      assert.strictEqual(mayReferenceRenamed('/p/m.ditamap', 'href="other.dita"', r, 'linux'), false);
+    });
+
+    it('mayReferenceRenamed: files inside a renamed path always pass', () => {
+      const r = [makeRename('/p/dir', '/p/sub/dir')];
+      assert.strictEqual(mayReferenceRenamed('/p/dir/a.dita', 'href="../x.dita"', r, 'linux'), true);
+      assert.strictEqual(mayReferenceRenamed('/p/dir2/a.dita', 'href="../x.dita"', r, 'linux'), false);
+      const f = [makeRename('/p/a.dita', '/q/a.dita')];
+      assert.strictEqual(mayReferenceRenamed('/p/a.dita', 'href="../x.dita"', f, 'linux'), true);
+    });
+
+    it('stripBom removes a leading BOM only', () => {
+      assert.strictEqual(stripBom('\uFEFF<a/>'), '<a/>');
+      assert.strictEqual(stripBom('<a/>\uFEFF'), '<a/>\uFEFF');
     });
   });
 });
