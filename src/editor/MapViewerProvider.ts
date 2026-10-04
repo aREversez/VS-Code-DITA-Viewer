@@ -13,6 +13,7 @@ import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRe
 import { getBookSearchIndex, searchBookIndex, buildBookSearchResultsPayload, invalidateBookSearchIndex } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { diffBookParts, BookPart } from './bookPatch';
+import { RenderedMapContent, GeneratedMapHtml, SiteManifestCache } from './mapRenderTypes';
 import { foldPendingRender, foldSiteRefresh, escalateAfterFailure, PendingRender, SiteRefresh } from './pendingRender';
 import { onKeyContextChanged } from './keyContext';
 import { buildKeyMap, FONT_PREFS_KEY, DEFAULT_FONT_PREFS, WIDTH_SELECTION_KEY, TAG_TOOLTIPS_KEY, DEFAULT_TAG_TOOLTIPS, escapeJson } from './DitaViewerProvider';
@@ -88,48 +89,6 @@ function localizeTopicTypeLabel(tagName: string): string | undefined {
   return tagName.charAt(0).toUpperCase() + tagName.slice(1);
 }
 
-/**
- * The parts of a rendered mode that an in-place switch swaps into the live
- * webview, instead of reassigning webview.html -- which is how the toolbar
- * stays on the page across a mode change (toolbar-persistence work). Sent to
- * the webview's applyModeStage (see getMapWebviewScript's MSG_SWITCH_MODE
- * handler) alongside the host's own state commit.
- */
-interface MapRenderStage {
-  mode: 'tree' | 'book' | 'site';
-  /** Full <body> class list (mode-*, template, shell); no hide-profiling. */
-  bodyClass: string;
-  /** The template's css text (no <style> wrapper); '' when there is none. */
-  templateCss: string;
-  /** The body's data-template hook value; '' when there is no template. */
-  templateDataAttr: string;
-  /** The template dropdown's selected id; '' for the default look. */
-  selectedTemplate: string;
-  /** The <body> content that follows the persistent #__topbar element. */
-  shellHtml: string;
-  /** Whether this stage is a docsite/book shell (drives topbar--top). */
-  isShell: boolean;
-}
-
-/** What renderMapContent produces: the content for a mode, or the error that replaces it. */
-type RenderedMapContent =
-  | {
-      html: string;
-      parts?: BookPart[];
-      sidebarHtml?: string;
-      sidebarTreeHtml?: string;
-      resolvedSitePage?: string;
-      siteManifest?: DocsiteNavEntry[];
-      siteKeyMap?: Map<string, string>;
-      siteBookMembers?: ReadonlySet<string>;
-      /** Every source file the render read. */
-      files?: ReadonlySet<string>;
-      /** Site mode only: the files the topic page alone read. */
-      pageFiles?: ReadonlySet<string>;
-      error?: undefined;
-    }
-  | { html?: undefined; error: string };
-
 export class MapViewerProvider implements vscode.CustomTextEditorProvider {
   constructor(private readonly context: vscode.ExtensionContext) {}
 
@@ -190,7 +149,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     // edit re-renders the whole map through one of those two and so
     // repopulates this; there is no separate invalidation path to keep in
     // sync by hand.
-    let siteManifestCache: { manifest: DocsiteNavEntry[]; keyMap: Map<string, string>; bookMembers: ReadonlySet<string> } | undefined;
+    let siteManifestCache: SiteManifestCache | undefined;
 
     webviewPanel.webview.options = {
       enableScripts: true,
@@ -520,7 +479,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     // rendered document (rendered.html) in front of the reader -- an in-place
     // switch leaves the toolbar up but the content/baselines it commits are
     // identical to what a reload of that mode would have.
-    const commitRenderedState = (rendered: ReturnType<MapViewerProvider['generateHtml']>) => {
+    const commitRenderedState = (rendered: GeneratedMapHtml) => {
       pageIsError = rendered.failed === true;
       lastSiteRender = rendered.siteRender;
       // A full render answers everything owed, and replaces what was read.
@@ -1067,7 +1026,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     webview: vscode.Webview,
     mode: 'tree' | 'book' | 'site',
     sitePageHint?: string,
-  ): { html: string; failed?: true; parts?: BookPart[]; sidebarTreeHtml?: string; resolvedSitePage?: string; siteManifest?: DocsiteNavEntry[]; siteKeyMap?: Map<string, string>; siteBookMembers?: ReadonlySet<string>; files?: ReadonlySet<string>; pageFiles?: ReadonlySet<string>; siteRender?: { sidebarTreeHtml: string; pageHtml: string }; stage?: MapRenderStage } {
+  ): GeneratedMapHtml {
     const stylesUri = webview.asWebviewUri(
       vscode.Uri.file(join(this.context.extensionPath, 'media', 'styles.css')),
     );
