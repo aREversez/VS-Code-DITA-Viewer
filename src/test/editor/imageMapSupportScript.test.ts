@@ -242,8 +242,10 @@ describe('image map support script', () => {
 });
 
 describe('image map support wiring', () => {
-  const preview = read('src/editor/DitaViewerProvider.ts');
-  const mapViewer = read('src/editor/MapViewerProvider.ts');
+  // The injection lives in each preview's webview script; the host-side
+  // message handling lives in the provider -- so each preview is both files.
+  const preview = read('src/editor/webview/topicScript.ts') + read('src/editor/DitaViewerProvider.ts');
+  const mapViewer = read('src/editor/webview/mapScript.ts') + read('src/editor/MapViewerProvider.ts');
 
   // Both webviews render imagemaps (baseTypeMap renderers are shared), so
   // both need the script -- dropping it from either re-exposes that

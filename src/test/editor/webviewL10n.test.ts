@@ -8,8 +8,8 @@ const read = (rel: string): string => readFileSync(join(repoRoot, rel), 'utf8');
 
 const sharedSource = read('src/editor/webviewL10n.ts');
 const providerSources = [
-  ['single-topic preview', 'src/editor/DitaViewerProvider.ts'],
-  ['map preview', 'src/editor/MapViewerProvider.ts'],
+  ['single-topic preview', 'src/editor/webview/topicScript.ts'],
+  ['map preview', 'src/editor/webview/mapScript.ts'],
 ] as const;
 
 /**
@@ -70,7 +70,7 @@ describe('webview toolbar string table', () => {
     for (const [key, value] of sharedEntries) {
       assert.doesNotMatch(value, /^JSON\.stringify\(/, `${key} is pre-quoted in the shared table`);
     }
-    const topicLocal = entries(blockAfter(read('src/editor/DitaViewerProvider.ts'), 'const L = {'));
+    const topicLocal = entries(blockAfter(read('src/editor/webview/topicScript.ts'), 'const L = {'));
     assert.match(topicLocal.get('selectThemeCss') ?? '', /^JSON\.stringify\(/);
   });
 

@@ -27,11 +27,11 @@ import { join } from 'path';
  * shell chrome like #__topbar, reused across switches, not rebuilt by it).
  */
 describe('MapViewerProvider applyModeStage (in-place mode-switch source tripwires)', () => {
-  const source = readFileSync(join(process.cwd(), 'src', 'editor', 'MapViewerProvider.ts'), 'utf8');
+  const source = readFileSync(join(process.cwd(), 'src', 'editor', 'webview', 'mapScript.ts'), 'utf8');
 
   function applyModeStageBody(): string {
     const start = source.indexOf('function applyModeStage(stage)');
-    assert.ok(start >= 0, 'applyModeStage not found in MapViewerProvider.ts');
+    assert.ok(start >= 0, 'applyModeStage not found in webview/mapScript.ts');
     // afterContentSwap() is the last statement in applyModeStage before the
     // ditamap:stage dispatch that ends it; slicing up to its call is enough
     // to cover the whole function body for these checks without needing a

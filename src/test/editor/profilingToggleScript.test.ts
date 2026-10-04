@@ -103,7 +103,7 @@ describe('getProfilingToggleScript', () => {
 });
 
 describe('Flags toggle is shared, not copied', () => {
-  for (const file of ['src/editor/DitaViewerProvider.ts', 'src/editor/MapViewerProvider.ts']) {
+  for (const file of ['src/editor/webview/topicScript.ts', 'src/editor/webview/mapScript.ts']) {
     it(`${file} uses getProfilingToggleScript and defines no toggle of its own`, () => {
       const source = read(file);
       assert.ok(source.includes('${getProfilingToggleScript('), 'expected the shared script to be interpolated');

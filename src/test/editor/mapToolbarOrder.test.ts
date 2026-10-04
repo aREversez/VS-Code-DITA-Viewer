@@ -3,10 +3,10 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 
 // dist-test/test/editor -> repo root is three levels up. The toolbar is
-// assembled inside a template string in MapViewerProvider.ts, which needs the
+// assembled inside a template string in webview/mapScript.ts, which needs the
 // `vscode` module to import, so the order is asserted on the source text --
 // the order of the appendChild calls IS the behaviour under test.
-const source = readFileSync(join(__dirname, '..', '..', '..', 'src', 'editor', 'MapViewerProvider.ts'), 'utf8');
+const source = readFileSync(join(__dirname, '..', '..', '..', 'src', 'editor', 'webview', 'mapScript.ts'), 'utf8');
 
 describe('map toolbar button order', () => {
   function at(needle: string): number {
