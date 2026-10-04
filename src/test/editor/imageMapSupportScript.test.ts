@@ -260,7 +260,8 @@ describe('image map support wiring', () => {
         `${name} must inject the image-map support script`,
       );
       assert.ok(
-        src.includes("message.type === 'openImagemapLink'"),
+        // An if-chain in the topic provider, a switch case in the map's router.
+        /message\.type === 'openImagemapLink'|case 'openImagemapLink':/.test(src),
         `${name} must handle the openImagemapLink message host-side`,
       );
       assert.ok(src.includes('openHrefTarget('), `${name} must route the href through openHrefTarget`);
