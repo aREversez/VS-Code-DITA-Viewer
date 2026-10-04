@@ -7,6 +7,7 @@ import { buildTemplateStyleText, templateBodyAttrs, templateDataAttr } from './t
 import { mapTitleFromXml, renderChrome, wrapShell } from './templateChrome';
 import { TEMPLATE_SELECTION_KEY, parseTemplateSelection, withTemplate, pickTemplate } from './templateSelection';
 import { readFileSync } from 'fs';
+import { getProfilingToggleScript } from './webview/profilingToggleScript';
 import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getImageMapSupportScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getRefreshButtonScript, decodeHrefPart, openHrefTarget, buildBookNavManifest, siteNavigableEntries, renderSiteNavTreeHtml, wrapSiteNavTreeHtml, getSiteNavClickHandlerScript, getSidebarUpdateScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getOutlineSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavKeyboardScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteOpenSourceScript, getTemplateSelectScript, getToolbarPlacementScript, PREV_TOPIC_ICON_SVG, NEXT_TOPIC_ICON_SVG, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, HISTORY_BACK_ICON_SVG, HISTORY_FORWARD_ICON_SVG, DocsiteNavEntry, SITE_HOME_TARGET, buildSiteHomeTiles, renderSiteHomeHtml, getSiteHomeButtonScript } from './ditaRenderUtils';
 import { getBookSearchIndex, searchBookIndex, buildBookSearchResultsPayload, getBookSearchScript, invalidateBookSearchIndex } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
@@ -439,28 +440,7 @@ function getMapWebviewScript(
   // that was missing.
   toolbar.appendChild(tagTooltipsBtn);
 
-  // Profiling / conditional-attribute highlight toggle, same as the topic
-  // viewer's Flags button -- purely a CSS class flip (body.hide-profiling),
-  // no re-render needed. Defaults on for the same reason: the point is
-  // surfacing what's flagged without the person having to discover the
-  // toggle first.
-  var profilingOn = true;
-  var profilingBtn = document.createElement('button');
-  profilingBtn.textContent = ${L.profilingLabel};
-  profilingBtn.style.cssText = btnStyle;
-  function applyProfilingToggle() {
-    document.body.classList.toggle('hide-profiling', !profilingOn);
-    profilingBtn.style.background = profilingOn ? 'var(--color-profiling-label-bg)' : '';
-    profilingBtn.style.color = profilingOn ? 'var(--color-profiling-label-text)' : '';
-    profilingBtn.title = profilingOn ? ${L.profilingOnTitle} : ${L.profilingOffTitle};
-    profilingBtn.setAttribute('aria-label', profilingOn ? ${L.profilingOnTitle} : ${L.profilingOffTitle});
-  }
-  profilingBtn.addEventListener('click', function() {
-    profilingOn = !profilingOn;
-    applyProfilingToggle();
-  });
-  applyProfilingToggle();
-  toolbar.appendChild(profilingBtn);
+  ${getProfilingToggleScript({ label: L.profilingLabel, onTitle: L.profilingOnTitle, offTitle: L.profilingOffTitle })}
 
   // Filter button goes immediately next to Flags, same pairing as the
   // topic viewer -- in Outline mode this hides whole map entries by their

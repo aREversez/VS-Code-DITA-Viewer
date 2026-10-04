@@ -3,6 +3,7 @@ import { parseDita, preprocessEntities } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
 import { dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
+import { getProfilingToggleScript } from './webview/profilingToggleScript';
 import { buildTitleMap, getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getImageMapSupportScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getRefreshButtonScript, decodeHrefPart, openHrefTarget, clearImageDimensionsCache, clearTopicRenderCache, clearBookMembersCache } from './ditaRenderUtils';
 import { buildRenderContext } from './renderContext';
 import { clearBookSearchIndexCache } from './bookSearchIndex';
@@ -679,29 +680,7 @@ function getWebviewScript(): string {
   // enhanceImages()/setImgZoom() above, which attach a per-image hover
   // toolbar (−/+/maximize) directly to each <img> instead.
 
-  // Profiling / conditional-attribute highlight toggle. Purely a CSS class
-  // flip (body.hide-profiling, see styles.css) -- the highlight markup is
-  // always present in the rendered HTML, so toggling is instant and needs
-  // no message round-trip to the extension or re-render. Defaults on: the
-  // point of this feature is surfacing profiled content, so it should be
-  // visible without the user having to discover the toggle first.
-  var profilingOn = true;
-  var profilingBtn = document.createElement('button');
-  profilingBtn.textContent = ${L.profilingLabel};
-  profilingBtn.style.cssText = btnStyle;
-  function applyProfilingToggle() {
-    document.body.classList.toggle('hide-profiling', !profilingOn);
-    profilingBtn.style.background = profilingOn ? 'var(--color-profiling-label-bg)' : '';
-    profilingBtn.style.color = profilingOn ? 'var(--color-profiling-label-text)' : '';
-    profilingBtn.title = profilingOn ? ${L.profilingOnTitle} : ${L.profilingOffTitle};
-    profilingBtn.setAttribute('aria-label', profilingOn ? ${L.profilingOnTitle} : ${L.profilingOffTitle});
-  }
-  profilingBtn.addEventListener('click', function() {
-    profilingOn = !profilingOn;
-    applyProfilingToggle();
-  });
-  applyProfilingToggle();
-  toolbar.appendChild(profilingBtn);
+  ${getProfilingToggleScript({ label: L.profilingLabel, onTitle: L.profilingOnTitle, offTitle: L.profilingOffTitle })}
 
   // Tag-name tooltip toggle. injectAttributes() in renderer.ts already puts
   // the tag name on every element without a more specific title of its own

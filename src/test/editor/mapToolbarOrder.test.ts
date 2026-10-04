@@ -25,7 +25,7 @@ describe('map toolbar button order', () => {
       'toolbar.appendChild(templateSel)',
       'toolbar.appendChild(modeBtn)',
       'toolbar.appendChild(tagTooltipsBtn)',
-      'toolbar.appendChild(profilingBtn)',
+      '${getProfilingToggleScript(',
       '${getProfilingFilterScript(',
       'toolbar.appendChild(refreshBtn)',
     ].map(at);

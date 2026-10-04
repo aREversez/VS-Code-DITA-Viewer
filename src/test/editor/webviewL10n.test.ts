@@ -54,25 +54,24 @@ function entries(block: string): Map<string, string> {
 const sharedEntries = entries(blockAfter(sharedSource, 'export function sharedWebviewStrings()'));
 
 describe('webview toolbar string table', () => {
-  it('holds both value shapes, so neither group can be flattened into the other', () => {
+  it('keeps both value shapes apart: the shared table is all raw, pre-quoted strings are provider-local', () => {
     // Named keys rather than a count: a count would still pass on a table that
     // had been gutted and padded back out, and would say nothing about shape.
-    // previewToolbar/pageWidth used to canary the pre-quoted group here, but
-    // both moved to the raw group when getToolbarScaffoldScript/
-    // getToolbarFontWidthTagTooltipsButtonsScript started taking them as
-    // function arguments instead of the providers interpolating them
-    // directly; reloadContent followed when getRefreshButtonScript took it
-    // over from the providers' inline refresh-button code. profilingOnTitle
-    // still interpolates straight into each provider's profiling toggle, so
-    // it remains the pre-quoted group's canary.
-    for (const key of ['profilingOnTitle']) {
-      assert.ok(sharedEntries.has(key), `shared table lost ${key}`);
-      assert.match(sharedEntries.get(key)!, /^JSON\.stringify\(/);
-    }
-    for (const key of ['searchPlaceholder', 'filterTitle', 'reloadContent']) {
+    // Everything the shared table holds is handed to a helper that quotes it
+    // itself -- the last pre-quoted entries (the Flags toggle's three strings)
+    // moved to the raw group when getProfilingToggleScript replaced the two
+    // inline copies. The pre-quoted shape now only exists for strings a
+    // provider interpolates into its own script, so selectThemeCss, which only
+    // the single-topic preview has, is its canary.
+    for (const key of ['profilingOnTitle', 'searchPlaceholder', 'filterTitle', 'reloadContent']) {
       assert.ok(sharedEntries.has(key), `shared table lost ${key}`);
       assert.match(sharedEntries.get(key)!, /^vscode\.l10n\.t\(/);
     }
+    for (const [key, value] of sharedEntries) {
+      assert.doesNotMatch(value, /^JSON\.stringify\(/, `${key} is pre-quoted in the shared table`);
+    }
+    const topicLocal = entries(blockAfter(read('src/editor/DitaViewerProvider.ts'), 'const L = {'));
+    assert.match(topicLocal.get('selectThemeCss') ?? '', /^JSON\.stringify\(/);
   });
 
   for (const [label, file] of providerSources) {
