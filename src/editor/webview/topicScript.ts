@@ -7,6 +7,7 @@
 // the other files in this folder and in sharedWebviewStrings().
 
 import * as vscode from 'vscode';
+import { getContentSwapRefreshScript } from './contentSwapScript';
 import { getProfilingToggleScript } from './profilingToggleScript';
 import { getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getImageMapSupportScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getRefreshButtonScript } from '../ditaRenderUtils';
 import { sharedWebviewStrings } from '../webviewL10n';
@@ -495,6 +496,8 @@ export function getWebviewScript(): string {
     }
   }
 
+  ${getContentSwapRefreshScript()}
+
   window.addEventListener('message', function(e) {
     if (e.data.type === 'revealLine') scrollToLine(e.data.line);
     if (e.data.type === 'highlightLine') {
@@ -512,19 +515,7 @@ export function getWebviewScript(): string {
         // to pick up the new one, though:
         contentRoot.innerHTML = e.data.html;
         enhanceImages(); // per-image zoom toolbars -- idempotent, only wraps images not already wrapped
-        // Off (the default) needs no walk here: fresh HTML only ever carries
-        // data-dita-tagname, never a stray title= from this feature, so
-        // there is nothing to remove. On is the one case a walk is needed,
-        // to promote the new content's data attributes the same way the
-        // old content's already were.
-        if (tagTooltipsOn) applyTagTooltips();
-        if (typeof pfApplyFilter === 'function') pfApplyFilter(); // re-apply the current filter selection to the new content's [data-profile-keys] elements
-        if (typeof pfPanel !== 'undefined' && pfPanel) { // filter panel was open -- refresh its checkbox list against the new content rather than leaving it showing stale attribute/value options
-          pfPanel.remove();
-          pfPanel = pfBuildPanel();
-          document.body.appendChild(pfPanel);
-        }
-        if (typeof refreshSearchAfterDomChange === 'function') refreshSearchAfterDomChange(); // search was active -- the old ranges pointed into content that was just replaced
+        refreshAfterContentSwap(); // profiling filter, its open panel, page search and tag tooltips all point at the DOM that was just replaced
         if (lastHighlightLine !== null) {
           // Re-target the still-current cursor position against the new
           // DOM. If the earlier scroll had already settled and the spot

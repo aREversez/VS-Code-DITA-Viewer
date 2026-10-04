@@ -12,6 +12,7 @@ import { getProfilingToggleScript } from './profilingToggleScript';
 import { getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getImageMapSupportScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getRefreshButtonScript, getSiteNavClickHandlerScript, getSidebarUpdateScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getOutlineSyncScript, getSiteNavToggleScript, getSiteNavKeyboardScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteOpenSourceScript, getTemplateSelectScript, getToolbarPlacementScript, PREV_TOPIC_ICON_SVG, NEXT_TOPIC_ICON_SVG, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, HISTORY_BACK_ICON_SVG, HISTORY_FORWARD_ICON_SVG, getSiteHomeButtonScript } from '../ditaRenderUtils';
 import { getBookSearchScript } from '../bookSearchIndex';
 import { sharedWebviewStrings } from '../webviewL10n';
+import { getContentSwapRefreshScript } from './contentSwapScript';
 import { MSG_BOOK_SEARCH, MSG_BOOK_SEARCH_RESULTS, MSG_NAV_CONTEXT, MSG_OPEN_TOPIC_SOURCE, MSG_PATCH_CONTENT, MSG_REQUEST_FULL_RENDER, MSG_SET_FONT_PREFS, MSG_SET_NAV_COLLAPSED, MSG_SET_TAG_TOOLTIPS, MSG_SET_TEMPLATE, MSG_SET_WIDTH_SELECTION, MSG_SWITCH_MODE, MSG_SWITCH_SITE_PAGE, MSG_UPDATE_CONTENT, MSG_UPDATE_SIDEBAR } from '../mapMessages';
 
 export function getMapWebviewScript(
@@ -369,18 +370,9 @@ export function getMapWebviewScript(
   // same kind of stale state behind as replacing all of them: profiling
   // decisions computed over DOM that has since been swapped, and search
   // highlights holding references to nodes that are no longer attached.
+  ${getContentSwapRefreshScript()}
   function afterContentSwap() {
-    if (typeof pfApplyFilter === 'function') pfApplyFilter();
-    if (typeof pfPanel !== 'undefined' && pfPanel) {
-      pfPanel.remove();
-      pfPanel = pfBuildPanel();
-      document.body.appendChild(pfPanel);
-    }
-    if (typeof refreshSearchAfterDomChange === 'function') refreshSearchAfterDomChange();
-    // Off (the default) needs no walk: fresh HTML, whether this is a full
-    // replace or bookPatch.ts's per-entry patch, only ever carries
-    // data-dita-tagname, never a stray title= from this feature.
-    if (tagTooltipsOn) applyTagTooltips();
+    refreshAfterContentSwap();
   }
 
   // site:true is now unconditional: updatePrevNextButtons is declared by the
