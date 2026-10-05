@@ -590,8 +590,6 @@ export function getWebviewScript(): string {
   // enhanceImages()/setImgZoom() above, which attach a per-image hover
   // toolbar (−/+/maximize) directly to each <img> instead.
 
-  ${getProfilingToggleScript({ label: L.profilingLabel, onTitle: L.profilingOnTitle, offTitle: L.profilingOffTitle })}
-
   // Tag-name tooltip toggle. injectAttributes() in renderer.ts already puts
   // the tag name on every element without a more specific title of its own
   // as data-dita-tagname -- see the constant's own comment in
@@ -602,6 +600,12 @@ export function getWebviewScript(): string {
   // preference -- how the reader wants to read, not something tied to
   // this one file.
   toolbar.appendChild(tagTooltipsBtn);
+
+  // Flags (profiling highlight) toggle. Appended after Tags so the trio reads
+  // Tags, Flags, Filter -- the same relative order the map toolbar uses (see
+  // mapToolbarOrder.test.ts), which keeps the two previews' toolbars alike and
+  // lets the Filter button sit directly against Flags below.
+  ${getProfilingToggleScript({ label: L.profilingLabel, onTitle: L.profilingOnTitle, offTitle: L.profilingOffTitle })}
 
   // Filter button goes immediately next to Flags -- "show me what's
   // flagged" and "actually hide what's flagged" are closely related
