@@ -122,17 +122,20 @@ describe('providers end to end (topic preview, map preview, diff)', () => {
     const original = win.showQuickPick;
     let call = 0;
     win.showQuickPick = async (items: unknown[]) => (call++ === 0 ? items[1] : items[0]);
+    let html: string | undefined;
     try {
       await vscode.commands.executeCommand('ditaViewer.compareWithGit');
       await waitFor(() => !!api().getLastDiffHtml(uri.toString()), 15000);
+      // Read it before the panel closes: disposing the panel drops the recorded
+      // HTML (the hook's own cleanup), so a later read returns undefined.
+      html = api().getLastDiffHtml(uri.toString());
     } finally {
       win.showQuickPick = original;
+      // Close the diff panel whatever happens: on Windows an open panel keeps
+      // the nested .git locked and the after() cleanup fails with EBUSY.
       await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     }
-    const html = api().getLastDiffHtml(uri.toString())!;
-    // Close the diff panel first, whatever the assertions say: on Windows an
-    // open panel keeps the nested .git locked and the after() cleanup fails.
-    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    assert.ok(html, 'the diff panel recorded its HTML');
     assert.ok(html.includes('ORIGINALTEXT'), 'the committed text appears on the base side');
     assert.ok(html.includes('REVISEDTEXT'), 'the working-copy text appears on the other side');
   });
