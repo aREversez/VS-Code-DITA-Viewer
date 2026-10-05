@@ -408,13 +408,12 @@ location for verification.
 
 ### Content reuse
 
-- **conref / conkeyref chains resolve one hop only.** When the target of a
-  `conref` (or `conkeyref`) carries its own `conref`/`conkeyref` (A → B → C),
-  the merge pulls in B's literal children but does not follow B's reference to
-  C. Conrefs nested *inside* the resolved content are still walked normally.
-  The DITA specification requires transitive resolution; this extension does
-  one hop as a design choice.
-  (`src/render/renderer.ts:318`, `mergeConrefTarget`)
+- **conref / conkeyref chains stop at 10 hops.** A `conref` or `conkeyref` whose
+  target carries its own reference (A → B → C) is followed to the end, across
+  files, each hop resolved relative to the file that holds it. A chain deeper
+  than 10 hops, or one that loops back on itself, falls back to the first hop;
+  a hop that cannot be resolved ends the chain at the last element that could.
+  (`src/render/renderer.ts`, `followConrefChain`)
 
 - **A keyref inside conref-pulled content gets no CJK spacing.** The bundled
   DITA-OT plugin (`com.dita-viewer.cjk-spacing`) runs at
@@ -426,10 +425,12 @@ location for verification.
 
 ### Key scope
 
-- **`keyscope` reads only the first token.** A DITA `keyscope="a b c"` means
-  the element belongs to all three scopes; the crawler currently takes the
-  first whitespace-delimited value only (`scopeChain.concat(...split(/\s+/)[0])`).
-  (`src/editor/mapCrawl.ts:363`)
+- **A qualified key reference (`a.k`) is not resolved when rendering.** A
+  `keyscope="a b"` element and its keys belong to every listed scope, and the
+  completeness checks (duplicate and unreferenced keys) know `a.k` and `b.k`,
+  but the preview's key lookup still uses bare key names only, so a
+  `keyref="a.k"` is not substituted.
+  (`src/editor/keySpace.ts`)
 
 ### Custom DTDs and specialization
 
@@ -440,6 +441,13 @@ location for verification.
   fall through with an empty `baseType`, so a custom domain element is rendered
   as a generic wrapper rather than a specialization of a known type.
   (`src/parser/ditaParser.ts:204`)
+
+- **A specialized element needs `@class` in the source.** Without a DTD the
+  preview has nothing but the element's own `@class` to learn its ancestry
+  from. When `@class` is there (`class="- topic/ph hi-d/b my-d/mybold "`), the
+  element renders like the most specific standard element it names; a
+  specialization that omits `@class` (relying on a DTD to supply it) is not
+  supported and renders as a generic wrapper.
 
 - **`subjectScheme` classification is not used for rendering.** The preview
   resolves `baseType` from the `class` attribute against a fixed hierarchy

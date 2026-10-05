@@ -6,6 +6,12 @@
 
 - Update `href` and `conref` references automatically when DITA files are renamed or moved within VS Code
 
+### Fixes
+
+- **`keyscope` accepts several names.** `keyscope="a b"` puts the element and its keys in both scopes (`a.k` and `b.k` both exist), nested scopes with several names are crossed, and the duplicate-key and unreferenced-key checks follow. Resolving a qualified `keyref` such as `a.k` in the preview is still not done.
+- **`conref` / `conkeyref` chains resolve transitively.** A target that itself carries a `conref` or `conkeyref` (A → B → C) is followed to the end, across files, each hop relative to the file that holds it; a chain deeper than 10 hops or a cycle falls back to the first hop.
+- **A specialized element with `@class` but no DTD renders as the most specific standard element it names** (for example `class="- topic/ph hi-d/b my-d/mybold "` renders like `<b>`), instead of as its most general ancestor. A specialization without `@class` is still not supported (see README, Known limitations).
+
 ## 1.0.9 (2026-10-02)
 
 ### Features
