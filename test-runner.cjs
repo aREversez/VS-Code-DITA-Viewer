@@ -10,7 +10,10 @@ async function main() {
     await runTests({
       extensionDevelopmentPath,
       extensionTestsPath,
-      launchArgs: [testWorkspace, '--disable-extensions'],
+      // Trust is off by default for a fresh profile; commands that shell out
+      // (Compare with Git) stop at the trust gate, which would fail a suite
+      // that has nothing to do with trust.
+      launchArgs: [testWorkspace, '--disable-extensions', '--disable-workspace-trust'],
     });
   } catch (err) {
     console.error('Test run failed:', err);

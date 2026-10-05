@@ -42,7 +42,8 @@ describe('providers end to end (topic preview, map preview, diff)', () => {
 
   after(async () => {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-    await fsp.rm(scratch, { recursive: true, force: true });
+    // Retries ride out a lock the OS holds for a moment after a panel closes.
+    await fsp.rm(scratch, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   });
 
   it('topic preview follows a conref chain across three files', async () => {
@@ -102,10 +103,14 @@ describe('providers end to end (topic preview, map preview, diff)', () => {
       this.skip(); // no git on PATH: the diff command cannot run at all
     }
     const file = path.join(dir, 'doc.dita');
-    await fsp.writeFile(file, topic('d', '<p>OLD-SENTENCE</p>'));
+    // One whole word each, no punctuation: the diff splits a changed paragraph
+    // into word tokens and marks the changed ones, so a hyphenated value
+    // ("OLD-SENTENCE") would be cut into separately marked pieces and never
+    // appear as one contiguous string in the HTML.
+    await fsp.writeFile(file, topic('d', '<p>ORIGINALTEXT</p>'));
     await git('add', 'doc.dita');
     await git('commit', '-q', '-m', 'first');
-    await fsp.writeFile(file, topic('d', '<p>NEW-SENTENCE</p>'));
+    await fsp.writeFile(file, topic('d', '<p>REVISEDTEXT</p>'));
 
     const uri = vscode.Uri.file(file);
     await vscode.window.showTextDocument(uri);
@@ -122,9 +127,13 @@ describe('providers end to end (topic preview, map preview, diff)', () => {
       await waitFor(() => !!api().getLastDiffHtml(uri.toString()), 15000);
     } finally {
       win.showQuickPick = original;
+      await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     }
     const html = api().getLastDiffHtml(uri.toString())!;
-    assert.ok(html.includes('OLD-SENTENCE'), 'the committed text appears on the base side');
-    assert.ok(html.includes('NEW-SENTENCE'), 'the working-copy text appears on the other side');
+    // Close the diff panel first, whatever the assertions say: on Windows an
+    // open panel keeps the nested .git locked and the after() cleanup fails.
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    assert.ok(html.includes('ORIGINALTEXT'), 'the committed text appears on the base side');
+    assert.ok(html.includes('REVISEDTEXT'), 'the working-copy text appears on the other side');
   });
 });
