@@ -12,3 +12,4 @@ test-dita-file/out/
 # Scratch tree created under the workspace by the rename e2e suite (removed on
 # exit; ignored so a crashed run can never leave it staged).
 test-dita-file/__rename-e2e/
+test-dita-file/__providers-e2e/

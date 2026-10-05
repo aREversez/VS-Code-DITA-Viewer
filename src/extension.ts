@@ -41,7 +41,7 @@ import { registerLanguageFeatures } from './language/ditaLanguageFeatures';
 import { registerMapTreeView } from './language/ditaMapTreeProvider';
 import { ditaFileWatcherCounts } from './editor/ditaFileWatcher';
 import { registerExportHtmlCommand, getActiveDitaUri } from './editor/exportHtml';
-import { registerCompareCommand } from './editor/ditaDiffProvider';
+import { registerCompareCommand, getLastDiffHtmlForTesting } from './editor/ditaDiffProvider';
 import { resolveOxygenLaunch, buildOxygenSpawnArgs } from './editor/oxygenLauncher';
 import { registerWrapSelectionCommand } from './editor/wrapSelectionCommand';
 import { registerFindReferencingMapsCommand } from './editor/findDitaReferences';
@@ -844,6 +844,7 @@ export function activate(context: vscode.ExtensionContext) {
     _test: {
       getLastRenderedHtml: getLastRenderedHtmlForTesting,
       getLastRenderedMapHtml: getLastRenderedMapHtmlForTesting,
+      getLastDiffHtml: getLastDiffHtmlForTesting,
       ditaFileWatcherCounts,
       // Font-size/typeface and page-width preferences are read from
       // globalState at render time (FONT_PREFS_KEY, WIDTH_SELECTION_KEY in

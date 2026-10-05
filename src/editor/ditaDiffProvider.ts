@@ -37,6 +37,19 @@ import { ensureCommandAllowed } from './workspaceTrustGate';
 
 const DIFF_PANELS = new Map<string, vscode.WebviewPanel>();
 
+// Test hook, same idea as getLastRenderedHtmlForTesting in DitaViewerProvider:
+// VS Code gives a test no handle on a webview panel's HTML, so each diff render
+// records its output here, keyed by the compared document's URI.
+const lastDiffHtmlByUri = new Map<string, string>();
+
+export function getLastDiffHtmlForTesting(uriString: string): string | undefined {
+  return lastDiffHtmlByUri.get(uriString);
+}
+
+function recordDiffHtml(panel: vscode.WebviewPanel, html: string): void {
+  for (const [key, p] of DIFF_PANELS) if (p === panel) lastDiffHtmlByUri.set(key, html);
+}
+
 // Holds whatever the panel should currently render. A single message
 // listener (registered once per panel, in getOrCreateDiffPanel) reads
 // from this on every 'swapSides' message, instead of each render call
@@ -296,6 +309,7 @@ function getOrCreateDiffPanel(
   panel.onDidDispose(() => {
     DIFF_PANELS.delete(key);
     DIFF_STATE.delete(panel);
+    lastDiffHtmlByUri.delete(key);
   });
 
   panel.webview.onDidReceiveMessage((msg) => {
@@ -307,6 +321,7 @@ function getOrCreateDiffPanel(
       const swappedLabels = { leftLabel: state.rightLabel, rightLabel: state.leftLabel };
       DIFF_STATE.set(panel, { result: swappedResult, ...swappedLabels });
       panel.webview.html = buildDiffHtml(context, panel.webview, swappedResult, swappedLabels.leftLabel, swappedLabels.rightLabel);
+      recordDiffHtml(panel, panel.webview.html);
     }
   });
 
@@ -322,6 +337,7 @@ function renderDiffPanel(
 ): void {
   DIFF_STATE.set(panel, { result, leftLabel, rightLabel });
   panel.webview.html = buildDiffHtml(context, panel.webview, result, leftLabel, rightLabel);
+  recordDiffHtml(panel, panel.webview.html);
 }
 
 function buildDiffHtml(
