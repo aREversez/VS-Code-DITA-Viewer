@@ -65,8 +65,13 @@ export interface KeyDef extends Location {
   key: string; // bare key name
   /** Fully-qualified names this definition answers to (scope prefixes). */
   qualified: string[];
-  /** The key scope chain this definition lives in ('' = root scope). */
+  /** The key scope chain this definition lives in ('' = root scope); the first of `scopeIds`. */
   scopeId: string;
+  /**
+   * Every scope chain this definition lives in. More than one when a `keyscope`
+   * lists several names ("a b") on it or an ancestor: the key then belongs to all of them.
+   */
+  scopeIds: string[];
   href?: string;
   target?: string;
 }
@@ -339,13 +344,14 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
         msg: msg('val.notMap', root.tag), structural: true,
       });
     }
-    const ctx: MapCtx = { file: mapPath, scopeChain: [], resourceOnly: false, inReltable: false, profile: new Map() };
+    const ctx: MapCtx = { file: mapPath, scopeChains: [[]], resourceOnly: false, inReltable: false, profile: new Map() };
     for (const c of root.children) await walkMapNode(c, ctx, chain.concat(key));
   }
 
   interface MapCtx {
     file: string;
-    scopeChain: string[]; // key scope names, outermost first
+    /** Key scope chains (names outermost first); several when keyscope lists several names. */
+    scopeChains: string[][];
     resourceOnly: boolean;
     inReltable: boolean;
     /** Cascaded profiling values from topicref ancestors: attribute -> allowed value set. */
@@ -358,10 +364,13 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     if (opts.filter && opts.filter.excludes(n.attrs)) return;
 
     // Key scopes
-    let scopeChain = ctx.scopeChain;
+    let scopeChains = ctx.scopeChains;
     const keyscope = n.attrs['keyscope'];
-    if (keyscope) scopeChain = scopeChain.concat(keyscope.trim().split(/\s+/)[0]);
-    const localCtx: MapCtx = { ...ctx, scopeChain };
+    if (keyscope) {
+      const names = keyscope.trim().split(/\s+/).filter(Boolean);
+      if (names.length) scopeChains = scopeChains.flatMap((chain) => names.map((nm) => chain.concat(nm)));
+    }
+    const localCtx: MapCtx = { ...ctx, scopeChains };
 
     const tag = n.tag;
     if (tag === 'reltable') localCtx.inReltable = true;
@@ -402,11 +411,11 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
 
     if (keys) {
       const names = keys.trim().split(/\s+/).filter(Boolean);
-      const scopeId = scopeChain.join('/');
+      const scopeIds = [...new Set(scopeChains.map((c) => c.join('/')))];
       for (const name of names) {
-        const qualified = qualifiedNames(name, scopeChain);
+        const qualified = qualifiedNamesMulti(name, scopeChains);
         const def: KeyDef = {
-          file: ctx.file, line: n.line, key: name, qualified, scopeId, href,
+          file: ctx.file, line: n.line, key: name, qualified, scopeId: scopeIds[0], scopeIds, href,
         };
         if (href && !URL_RE.test(href) && n.attrs['scope'] !== 'external') {
           const p = href.split('#')[0];
@@ -751,4 +760,11 @@ export function qualifiedNames(name: string, scopeChain: string[]): string[] {
     out.push(scopeChain.slice(i).join('.') + '.' + name);
   }
   return out;
+}
+
+/** Like qualifiedNames, for a definition that lives in several scope chains at once. */
+export function qualifiedNamesMulti(name: string, scopeChains: string[][]): string[] {
+  const out = new Set<string>([name]);
+  for (const chain of scopeChains) for (const q of qualifiedNames(name, chain)) out.add(q);
+  return [...out];
 }

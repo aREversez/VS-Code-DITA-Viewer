@@ -284,16 +284,22 @@ export async function runChecks(
 
   // 7. Duplicate key definitions (same key, same key scope; the first wins).
   if (opts.reportDuplicateKeys) {
+    // A key listed under several scope names ("a b") occupies every one of them.
     const byKey = new Map<string, typeof crawl.keyDefs>();
     for (const k of crawl.keyDefs) {
-      const id = `${k.scopeId}\u0000${k.key}`;
-      const list = byKey.get(id);
-      if (list) list.push(k);
-      else byKey.set(id, [k]);
+      for (const scopeId of k.scopeIds) {
+        const id = `${scopeId}\u0000${k.key}`;
+        const list = byKey.get(id);
+        if (list) list.push(k);
+        else byKey.set(id, [k]);
+      }
     }
+    const reported = new Set<(typeof crawl.keyDefs)[number]>();
     for (const list of byKey.values()) {
       if (list.length < 2) continue;
       for (const dup of list.slice(1)) {
+        if (reported.has(dup)) continue;
+        reported.add(dup);
         issues.push({
           category: 'duplicate-key', severity: 'warning', file: dup.file, line: dup.line,
           msg: msg('key.duplicate', dup.key),
