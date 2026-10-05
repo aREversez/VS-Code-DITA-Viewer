@@ -6,7 +6,20 @@ import { lookupNamedEntity } from './namedEntities';
 
 const TOPIC_PATTERN = /^(topic|map)\//;
 
+// Modules whose elements the standard tag tables cover. A class token from one of
+// these ("hi-d/b", "task/step") names a standard element, so its local name can
+// be looked up in the tag table; a token from any other module is a custom
+// specialization and must not be matched by name (my-d/b is not hi-d/b).
+const STANDARD_MODULES = new Set([
+  'topic', 'task', 'concept', 'reference', 'glossentry', 'glossgroup', 'troubleshooting',
+  'hi-d', 'pr-d', 'sw-d', 'ui-d', 'ut-d', 'abbrev-d', 'xml-d', 'markup-d', 'delay-d',
+  'equation-d', 'hazard-d', 'taskreq-d', 'svg-d', 'mathml-d',
+  'map', 'mapgroup-d', 'bookmap', 'glossref-d', 'ditavalref-d',
+]);
+
 function makeParseBaseType(tagMap: Record<string, string>) {
+  const known = new Set(Object.values(tagMap));
+
   return function parseBaseType(tagName: string, classAttr: string | undefined): string | undefined {
     const fromTag = tagMap[tagName];
     if (fromTag) {
@@ -15,6 +28,21 @@ function makeParseBaseType(tagMap: Record<string, string>) {
 
     if (classAttr) {
       const tokens = classAttr.trim().split(/\s+/);
+      // A @class lists ancestors from the most general to the most specific
+      // ("- topic/ph hi-d/b my-d/mybold "). Without a DTD the best answer is the
+      // most specific token that is a standard element or a known base type.
+      for (let i = tokens.length - 1; i >= 0; i--) {
+        const token = tokens[i];
+        const slash = token.indexOf('/');
+        if (slash > 0) {
+          if (STANDARD_MODULES.has(token.slice(0, slash))) {
+            const viaName = tagMap[token.slice(slash + 1)];
+            if (viaName) return viaName;
+          }
+          if (known.has(token)) return token;
+        }
+      }
+      // Nothing recognisable: keep the first topic/map token, as before.
       for (const token of tokens) {
         if (TOPIC_PATTERN.test(token)) {
           return token;
