@@ -205,8 +205,27 @@ export function readImageDimensions(filePath: string): { width: number; height: 
 
 // ── Cross-file helpers (conref + title resolver share file cache) ──
 
+/** Where a resolved reference target lives: the parsed file it came from. */
+export interface NodeOrigin {
+  /** Absolute path of the file; undefined for the document being rendered. */
+  file?: string;
+  root: DitaNode;
+}
+
 export function makeFileCache(docDir: string) {
   const cache = new Map<string, DitaNode | undefined>();
+  // Which file each resolved target element came from. A reference chain
+  // (A -> B -> C) needs it: B's own conref is relative to B's file, and a
+  // same-file "#id" in B points into B, not into the document being rendered.
+  const origins = new WeakMap<DitaNode, NodeOrigin>();
+
+  function noteOrigin(el: DitaNode, origin: NodeOrigin): void {
+    origins.set(el, origin);
+  }
+
+  function originOf(el: DitaNode): NodeOrigin | undefined {
+    return origins.get(el);
+  }
 
   function loadFile(filePath: string): DitaNode | undefined {
     return loadAbsPath(resolve(docDir, decodeHrefPart(filePath)));
@@ -274,17 +293,22 @@ export function makeFileCache(docDir: string) {
     return [...cache.keys()];
   }
 
-  return { loadFile, loadAbsPath, findElementById, findTitleOfElement, touchedFiles };
+  return { loadFile, loadAbsPath, findElementById, findTitleOfElement, touchedFiles, noteOrigin, originOf };
 }
 
 export function makeConrefResolver(
   docDir: string,
   ownRoot?: DitaNode,
   sharedCache?: ReturnType<typeof makeFileCache>,
-): (conref: string) => DitaNode | undefined {
+): (conref: string, from?: DitaNode) => DitaNode | undefined {
   const cache = sharedCache ?? makeFileCache(docDir);
 
-  return (conref: string): DitaNode | undefined => {
+  /**
+   * `from` is the element that carries the conref when it is a hop inside a
+   * chain: its origin decides what a relative path or a same-file "#id" is
+   * relative to. Without it the reference belongs to the document being rendered.
+   */
+  return (conref: string, from?: DitaNode): DitaNode | undefined => {
     const hashIdx = conref.indexOf('#');
     if (hashIdx < 0) return undefined;
     const filePath = conref.substring(0, hashIdx);
@@ -292,6 +316,11 @@ export function makeConrefResolver(
     const parts = idPart.split('/');
     const elementId = parts.length > 1 ? parts[1] : parts[0];
     if (!elementId) return undefined;
+
+    const origin = from ? cache.originOf(from) : undefined;
+    if (from && !origin) return undefined; // cannot place the hop: stop the chain here
+    const selfRoot = origin ? origin.root : ownRoot;
+    const selfFile = origin?.file;
 
     // No file path before "#" -- a same-document reference, e.g.
     // conref="#noteId" or the "#./noteId" shorthand some authors use
@@ -302,13 +331,19 @@ export function makeConrefResolver(
     // got silently cached as "not found". Search the document already
     // being rendered instead of touching the filesystem at all.
     if (!filePath) {
-      return ownRoot ? cache.findElementById(ownRoot, elementId) : undefined;
+      if (!selfRoot) return undefined;
+      const el = cache.findElementById(selfRoot, elementId);
+      if (el) cache.noteOrigin(el, { file: selfFile, root: selfRoot });
+      return el;
     }
 
-    const root = cache.loadFile(filePath);
+    const baseDir = selfFile ? dirname(selfFile) : docDir;
+    const abs = resolve(baseDir, decodeHrefPart(filePath));
+    const root = cache.loadAbsPath(abs);
     if (!root) return undefined;
     const el = cache.findElementById(root, elementId);
     if (!el) return undefined;
+    cache.noteOrigin(el, { file: abs, root });
     // Return the entire target element so its tag/baseType is preserved.
     // resolveConrefForNode in the renderer decides whether to replace just
     // the children (same-type conref) or the entire element (cross-type).

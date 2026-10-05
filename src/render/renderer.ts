@@ -24,6 +24,13 @@ export interface RenderContext {
    * as the fallback (DITA 1.3).
    */
   resolveConkeyref?: (conkeyref: string) => DitaNode | undefined;
+  /**
+   * The next hop of a reference chain: given a resolved target element that
+   * itself carries a conref/conkeyref, returns what that reference points at,
+   * resolved relative to the file the element lives in. Undefined means "cannot
+   * resolve" (the chain stops at `from`). Absent: chains resolve one hop only.
+   */
+  resolveChainHop?: (from: DitaNode) => DitaNode | undefined;
   /** conrefend range support — see renderConrefRange below */
   resolveConrefRange?: (conref: string, conrefend: string) => DitaNode[] | undefined;
   noteLabels?: Record<string, string>;
@@ -316,15 +323,10 @@ function injectAttributes(html: string, tagName: string, range: SourceRange): st
 // otherwise the target's tag/baseType wins instead, since a same-shaped
 // substitution isn't possible.
 //
-// KNOWN LIMITATION: a reference chain resolves one hop only. When the target
-// carries its own conref/conkeyref (A -> B -> C), the merge takes B's literal
-// children and drops B's reference attributes (filtered out of restAttrs and
-// targetAttrs), so C is not pulled in here. Conrefs nested *inside* the
-// resolved content are still followed, since renderNode resolves each child as
-// it walks. The plain-conref path behaves the same way — existing design, not
-// spec-complete (DITA requires transitive resolution). Recorded for the README
-// "Known limitations" section; deliberately left as-is so it does not mix with
-// the P5 pure-refactor work.
+// Chains (A -> B -> C) are followed by followConrefChain before the merge, so
+// `target` here is already the end of the chain. Conrefs nested *inside* the
+// resolved content are followed as well, since renderNode resolves each child
+// as it walks.
 function mergeConrefTarget(node: DitaNode, target: DitaNode): DitaNode {
   const restAttrs = Object.fromEntries(
     Object.entries(node.attributes || {}).filter(([k]) => k !== 'conref' && k !== 'conrefend' && k !== 'conkeyref')
@@ -339,6 +341,28 @@ function mergeConrefTarget(node: DitaNode, target: DitaNode): DitaNode {
   return { ...target, attributes: { ...targetAttrs, ...restAttrs } };
 }
 
+/** Most hops a reference chain may take; a deeper chain degrades to one hop. */
+export const MAX_CONREF_CHAIN_DEPTH = 10;
+
+// Follow A -> B -> C transitively from the first resolved target. The first
+// target counts as hop 1. An unresolvable later hop ends the chain at the last
+// element that did resolve; a cycle or a chain deeper than the cap falls back
+// to the first hop, which is what the renderer did before chains were followed.
+function followConrefChain(first: DitaNode, context: RenderContext): DitaNode {
+  const hop = context.resolveChainHop;
+  if (!hop) return first;
+  const seen = new Set<DitaNode>([first]);
+  let current = first;
+  for (let depth = 1; ; depth++) {
+    if (!current.attributes?.conref && !current.attributes?.conkeyref) return current;
+    const next = hop(current);
+    if (!next) return current;
+    if (seen.has(next) || depth >= MAX_CONREF_CHAIN_DEPTH) return first;
+    seen.add(next);
+    current = next;
+  }
+}
+
 // Resolve one content reference for a node. conkeyref (indirect, by key) takes
 // precedence over conref (direct) when it resolves — matching the DITA 1.3
 // rule and DITA-OT's behaviour, where an unresolvable conkeyref falls back to
@@ -351,7 +375,7 @@ function resolveConrefForNode(
   const conkeyref = node.attributes?.conkeyref;
   if (conkeyref && context.resolveConkeyref && !context.conrefChain?.has(conkeyref)) {
     const keyTarget = context.resolveConkeyref(conkeyref);
-    if (keyTarget) return { node: mergeConrefTarget(node, keyTarget), chainKey: conkeyref };
+    if (keyTarget) return { node: mergeConrefTarget(node, followConrefChain(keyTarget, context)), chainKey: conkeyref };
   }
   const conref = node.attributes?.conref;
   if (!conref || !context.resolveConref) return { node };
@@ -360,7 +384,7 @@ function resolveConrefForNode(
   if (context.conrefChain?.has(conref)) return { node };
   const target = context.resolveConref(conref);
   if (!target) return { node };
-  return { node: mergeConrefTarget(node, target), chainKey: conref };
+  return { node: mergeConrefTarget(node, followConrefChain(target, context)), chainKey: conref };
 }
 
 function resolveKeyrefForNode(node: DitaNode, context: RenderContext): DitaNode {

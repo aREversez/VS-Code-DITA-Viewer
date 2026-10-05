@@ -119,6 +119,7 @@ export function buildRenderContext(input: BuildRenderContextInput): BuiltRenderC
   // map that defined it (baseDir), not the topic being rendered, so it needs
   // the absolute-path loader rather than the docDir-relative conref resolver.
   // Discovered from keyMap by identity unless the caller passed defs directly.
+  let lastLoaded: { file?: string; root: DitaNode } | undefined;
   const keyDefs = input.keyDefs ?? getKeyDefs(keyMap);
   if (keyDefs && keyDefs.size > 0) {
     const loadTopic = (baseDir: string, href: string): DitaNode | undefined => {
@@ -128,8 +129,31 @@ export function buildRenderContext(input: BuildRenderContextInput): BuiltRenderC
       input.collectDependencies?.add(absPath);
       return fileCache.loadAbsPath(absPath);
     };
-    ctx.resolveConkeyref = (conkeyref: string) => resolveConkeyref(conkeyref, keyDefs, loadTopic);
+    ctx.resolveConkeyref = (conkeyref: string) => {
+      const el = resolveConkeyref(conkeyref, keyDefs, (baseDir, href) => {
+        const absPath = resolve(baseDir, decodeHrefPart(href.split('#')[0]));
+        const root = loadTopic(baseDir, href);
+        if (root) lastLoaded = { file: absPath, root };
+        return root;
+      });
+      if (el && lastLoaded) fileCache.noteOrigin(el, lastLoaded);
+      return el;
+    };
   }
+
+  // One hop further along a reference chain, resolved relative to the file
+  // that holds `from`. conkeyref wins over conref when it resolves, the same
+  // rule as the first hop (an unresolvable conkeyref falls back to conref).
+  ctx.resolveChainHop = (from: DitaNode): DitaNode | undefined => {
+    const conkeyref = from.attributes?.conkeyref;
+    if (conkeyref && ctx.resolveConkeyref) {
+      lastLoaded = undefined;
+      const viaKey = ctx.resolveConkeyref(conkeyref);
+      if (viaKey) return viaKey;
+    }
+    const conref = from.attributes?.conref;
+    return conref ? conrefResolver(conref, from) : undefined;
+  };
 
   return { ctx, touchedFiles: () => fileCache.touchedFiles() };
 }
