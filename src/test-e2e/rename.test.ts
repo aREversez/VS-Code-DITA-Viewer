@@ -66,7 +66,8 @@ describe('rename reference updates', () => {
     const ext = vscode.extensions.getExtension(EXTENSION_ID);
     await ext?.activate();
 
-    await fsp.rm(e2eDir, { recursive: true, force: true });
+    // Retries ride out a lock a previous run's host may still hold on this folder.
+    await fsp.rm(e2eDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
     await write('map.ditamap', '<map>\n  <topicref href="a/t1.dita"/>\n  <topicref href="b/t2.dita"/>\n  <topicref href="b/new%20x.dita"/>\n</map>\n');
     await write(path.join('a', 't1.dita'), '<topic id="t1"><title>t1</title><body><p><xref href="../b/t2.dita"/> <xref href="../outside.dita"/></p></body></topic>\n');
     await write(path.join('b', 't2.dita'), '<topic id="t2"><title>t2</title></topic>\n');
@@ -91,7 +92,7 @@ describe('rename reference updates', () => {
   });
 
   after(async () => {
-    await fsp.rm(e2eDir, { recursive: true, force: true });
+    await fsp.rm(e2eDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   });
 
   it('updates referencing files and skips nested node_modules on a file rename (cases 1/7)', async () => {

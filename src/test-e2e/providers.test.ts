@@ -36,7 +36,10 @@ const topic = (id: string, body: string) =>
 describe('providers end to end (topic preview, map preview, diff)', () => {
   before(async () => {
     await vscode.extensions.getExtension(EXTENSION_ID)?.activate();
-    await fsp.rm(scratch, { recursive: true, force: true });
+    // Retry like the after() hook: a previous run's extension host can still be
+    // holding a lock on this folder when the next run starts, which surfaces as a
+    // transient ENOTEMPTY/EBUSY out of the before() hook rather than a real failure.
+    await fsp.rm(scratch, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
     for (const d of ['topics', 'lib1', 'lib2', 'diff']) await fsp.mkdir(path.join(scratch, d), { recursive: true });
   });
 
