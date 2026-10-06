@@ -1,0 +1,157 @@
+/*
+ * Temporary smoke-test stylesheet for the route B webhelp shell (M1-3 / M1-4),
+ * written BEFORE webhelp-compat.css (M1-5) exists. Its only job is to make the
+ * six shell regions visibly distinct and lay the three columns out, so a human
+ * can confirm the webhelp DOM in the F5 development host. This is NOT the real
+ * compatibility layer -- it lives under test-dita-file/manual/templates so it
+ * is never bundled into the shipped extension.
+ *
+ * The base styles.css assumes its own shell (body is a flex ROW, and it only
+ * becomes a column when the `site-shell` body class is present). The webhelp
+ * body has no `site-shell`, so this sheet re-points the layout itself. Template
+ * css is emitted after styles.css, so these rules win.
+ */
+
+/* body children: header / #wh_topic_container / footer / #go2top -> a column. */
+body.mode-site.wh_topic_page,
+body.mode-book.wh_topic_page {
+  flex-direction: column;
+}
+
+/* 1. Top bar (masthead). */
+.wh_header {
+  flex: 0 0 auto;
+  display: block;
+  background: #2b6cb0;
+  color: #fff;
+  padding: 0.5rem 1rem;
+}
+.wh_header_flex_container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.wh_publication_title {
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+.wh_top_menu {
+  display: flex;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 2. Content wrapper holds toolbar + three columns. */
+#wh_topic_container {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* 3. Toolbar row. */
+.wh_tools {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  background: #edf2f7;
+  color: #2d3748;
+  padding: 0.35rem 1rem;
+  border-bottom: 1px solid #cbd5e0;
+}
+.wh_breadcrumb {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  opacity: 0.8;
+}
+.wh_right_tools {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.wh_navigation_links {
+  display: inline-flex;
+  gap: 0.5rem;
+}
+.wh_navigation_links a {
+  color: #2b6cb0;
+  text-decoration: none;
+}
+
+/* 4. The three columns. */
+.wh_content_area {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+}
+
+/* 4a. Left: publication TOC (the double-classed tree lives inside here). */
+#wh_publication_toc {
+  flex: 0 0 280px;
+  display: block;
+  overflow-y: auto;
+  background: #f7fafc;
+  border-right: 1px solid #cbd5e0;
+  padding: 0.5rem;
+  box-sizing: border-box;
+}
+/* styles.css sizes .site-nav as a body-level flex sibling; here it is a plain
+   block inside the TOC column, so reset that assumption. */
+#wh_publication_toc .site-nav {
+  flex: none;
+  width: 100%;
+}
+
+/* 4b. Middle: the topic itself (owns #dita-content-root via .wh_topic_content). */
+#wh_topic_body {
+  flex: 1 1 auto;
+  display: block;
+  overflow-y: auto;
+  min-width: 0;
+}
+.wh_topic_content {
+  padding: 1rem 1.5rem;
+  background: #ffffff;
+  color: #1a202c;
+}
+
+/* 4c. Right: the on-this-page outline. */
+#wh_topic_toc {
+  flex: 0 0 200px;
+  display: block;
+  overflow-y: auto;
+  background: #fffaf0;
+  border-left: 2px solid #ed8936;
+  padding: 0.5rem;
+  box-sizing: border-box;
+}
+
+/* 5. Footer. */
+.wh_footer {
+  flex: 0 0 auto;
+  display: block;
+  background: #2d3748;
+  color: #e2e8f0;
+  padding: 0.75rem 1rem;
+}
+
+/* #go2top is a structural hook only in this skeleton. */
+#go2top {
+  display: none;
+}
+
+/* Make the sidebar state classes obvious while testing M1-4: the active row is
+   bold/blue, an expanded group's toggle points down, a collapsed one points
+   right (styles.css already hides .collapsed > .site-nav-children). */
+li.topicref.active > .site-nav-link {
+  font-weight: 700;
+  color: #2b6cb0;
+}

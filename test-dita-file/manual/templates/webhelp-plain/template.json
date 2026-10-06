@@ -1,0 +1,7 @@
+{
+  "name": "WebHelp Plain (compat base)",
+  "description": "Temporary route B aid: a webhelp-DOM template with no styling of its own, so webhelp-compat.css (@layer wh-compat) alone governs the layout. Used to eyeball the compat base sheet in F5. Not shipped.",
+  "dom": "webhelp",
+  "outline": true,
+  "css": ["webhelp-plain.css"]
+}

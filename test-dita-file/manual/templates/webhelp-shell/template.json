@@ -1,0 +1,7 @@
+{
+  "name": "WebHelp Shell (smoke test)",
+  "description": "Temporary route B aid: renders the webhelp DOM skeleton with each region tinted so the shell and the topicref/active/expanded classes can be eyeballed in F5 before webhelp-compat.css (M1-5) exists. Not shipped.",
+  "dom": "webhelp",
+  "outline": true,
+  "css": ["webhelp-shell.css"]
+}

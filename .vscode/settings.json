@@ -1,5 +1,8 @@
 {
   "dita-viewer.customCss": [
     "test-dita-file/fixture/custom.css"
+  ],
+  "dita-viewer.templatesDirectory": [
+    "test-dita-file/manual/templates"
   ]
 }
