@@ -235,3 +235,40 @@ describe('styles.css mode-based toolbar button visibility', () => {
     }
   });
 });
+
+/**
+ * Route B milestone 1 step 5 (webhelp-compat-plan.md §2.3): the whole base
+ * stylesheet now lives in @layer dv-base, so a template's UNLAYERED css beats
+ * it without !important, and webhelp-compat.css (@layer wh-compat, declared
+ * after dv-base) beats it on a webhelp page. The order statement is the piece
+ * that fixes dv-base < wh-compat regardless of which file the browser happens
+ * to parse first, so it is pinned here alongside the wrap.
+ *
+ * The four describes above scan rules by text and are unaffected by the wrap
+ * (they never assert the file's outermost structure); this one is the tripwire
+ * that the wrap and the order statement actually exist.
+ */
+describe('styles.css is wrapped in @layer dv-base with an explicit layer order', () => {
+  const css = stylesCss.replace(/\/\*[\s\S]*?\*\//g, '').trim();
+
+  it('opens with the "@layer dv-base, wh-compat;" order statement', () => {
+    assert.ok(
+      /^@layer\s+dv-base\s*,\s*wh-compat\s*;/.test(css),
+      `expected the file to begin with the layer-order statement, got: ${css.slice(0, 48)}`,
+    );
+  });
+
+  it('then wraps the rest of the rules in a single @layer dv-base block', () => {
+    const open = css.indexOf('@layer dv-base {');
+    assert.ok(open > 0, 'expected "@layer dv-base {" after the order statement');
+    assert.ok(css.endsWith('}'), 'the @layer dv-base block must be the last thing in the file');
+  });
+
+  it('keeps the shell and sidebar rules inside that layer (so template css can override them)', () => {
+    const open = css.indexOf('@layer dv-base {');
+    for (const needle of ['.site-nav {', 'body.mode-site', '.site-shell']) {
+      const at = css.indexOf(needle);
+      assert.ok(at > open, `rule "${needle}" must sit after the @layer dv-base opener, not before it`);
+    }
+  });
+});

@@ -717,6 +717,15 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     const stylesUri = webview.asWebviewUri(
       vscode.Uri.file(join(this.context.extensionPath, 'media', 'styles.css')),
     );
+    // Route B step 5: the WebHelp-compat base sheet. It is loaded on EVERY map
+    // preview rather than only for a webhelp template, because an in-place mode
+    // switch swaps the stage's shellHtml/bodyClass without rebuilding <head>
+    // (see the `stage` object below) -- a conditionally-emitted <link> would go
+    // stale across a site<->book switch. That is safe because every rule in it
+    // is scoped under body.wh_topic_page, which own-mode pages never carry.
+    const compatUri = webview.asWebviewUri(
+      vscode.Uri.file(join(this.context.extensionPath, 'media', 'webhelp-compat.css')),
+    );
 
     // Resolve the template before the content: its `dom` decides whether the
     // sidebar rows carry the WebHelp tree classes (route B step 4), and the
@@ -832,6 +841,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; font-src ${webview.cspSource}; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; base-uri 'none';">
 <link rel="stylesheet" href="${stylesUri}">
+<link rel="stylesheet" href="${compatUri}">
 ${templateStyle}
 <title>${escapeHtml(document.fileName)}</title>
 </head>

@@ -89,6 +89,7 @@ describe('site/book template visual check (real Chromium)', function () {
     const badTemplate: SiteTemplate = {
       id: 'kill-test-bad',
       names: { '': 'Kill Test' },
+      dom: 'own',
       defaultDark: false,
       outline: false,
       css: ['/virtual/bad.css'],
