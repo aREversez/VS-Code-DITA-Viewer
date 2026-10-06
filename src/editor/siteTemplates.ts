@@ -12,6 +12,15 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { isAbsolute, join, relative, resolve, sep } from 'path';
 
+/**
+ * Which DOM a template's css was written for. 'own' is this extension's
+ * markup (.site-nav, #dita-content-root, ...); 'webhelp' is the WebHelp-style
+ * class contract (wh_* hooks, see webhelp-compat-plan.md). An .opt descriptor
+ * is by definition written for the latter, so it defaults to 'webhelp'; our
+ * own template.json defaults to 'own'.
+ */
+export type TemplateDom = 'own' | 'webhelp';
+
 export interface SiteTemplate {
   /** The template folder's name, unique within one discovery result. */
   id: string;
@@ -20,6 +29,8 @@ export interface SiteTemplate {
   description?: string;
   /** Raw layout keyword (validated against the built-in layouts later). */
   layout?: string;
+  /** The DOM the template's css targets. */
+  dom: TemplateDom;
   defaultDark: boolean;
   /** Whether this template supplies the on-this-page outline column (site mode only -- see templateChrome.ts wrapShell). */
   outline: boolean;
@@ -32,6 +43,10 @@ export interface SiteTemplate {
    */
   pdfCss?: string[];
   thumbnail?: string;
+  /** Absolute path of the brand logo an .opt names (the webhelp DOM's header logo). */
+  logo?: string;
+  /** Absolute path of the favicon an .opt names. */
+  favicon?: string;
   /** The page header (brand bar / banner), when the template has one. */
   header?: TemplateHeader;
   /** The page footer, when the template has one. */
@@ -77,6 +92,7 @@ export interface TemplateDescriptor {
   names: Record<string, string>;
   description?: string;
   layout?: string;
+  dom: TemplateDom;
   defaultDark: boolean;
   outline: boolean;
   /** Relative paths, as written in the descriptor (webhelp section for .opt). */
@@ -84,6 +100,9 @@ export interface TemplateDescriptor {
   /** Relative paths from the <pdf> section of an .opt; absent when none. */
   pdfCss?: string[];
   thumbnail?: string;
+  /** Relative paths of an .opt's <logo> / <favicon> (webhelp section). */
+  logo?: string;
+  favicon?: string;
   header?: TemplateHeader;
   footer?: TemplateFooter;
 }
@@ -201,6 +220,11 @@ export function parseTemplateJson(text: string): ParseResult {
   if (css.length === 0) return { ok: false, error: 'template.json needs a non-empty "css" list' };
 
   const warnings: string[] = [];
+  let dom: TemplateDom = 'own';
+  if (o.dom !== undefined) {
+    if (o.dom === 'own' || o.dom === 'webhelp') dom = o.dom;
+    else warnings.push('dom must be "own" or "webhelp"; using "own"');
+  }
   return {
     ok: true,
     warnings,
@@ -208,6 +232,7 @@ export function parseTemplateJson(text: string): ParseResult {
       names,
       description: asString(o.description),
       layout: asString(o.layout),
+      dom,
       defaultDark: o.defaultDark === true,
       outline: o.outline === true,
       css,
@@ -275,7 +300,17 @@ export function parseTemplateOpt(text: string): ParseResult {
   const pdfSection = sectionOf('pdf');
   const pdfCss = pdfSection ? [...new Set(attr('css', pdfSection))] : undefined;
   const thumbnail = attr('preview-image', scanXml)[0];
-  return { ok: true, warnings: [], descriptor: { names, layout, defaultDark, outline: false, css, pdfCss, thumbnail } };
+  const logo = attr('logo', scanXml)[0];
+  const favicon = attr('favicon', scanXml)[0];
+  // <description> sits at the root, outside the <webhelp> section.
+  const descMatch = /<description>([\s\S]*?)<\/description>/.exec(xml);
+  const description = descMatch ? decodeXmlText(descMatch[1]) || undefined : undefined;
+  return {
+    ok: true,
+    warnings: [],
+    // A publishing template's css is written for the WebHelp DOM.
+    descriptor: { names, description, layout, dom: 'webhelp', defaultDark, outline: false, css, pdfCss, thumbnail, logo, favicon },
+  };
 }
 
 export interface TemplateRoot {
@@ -346,11 +381,14 @@ function loadTemplateDir(dir: string, id: string, builtin: boolean, diagnostics:
     names: d.names,
     description: d.description,
     layout: d.layout,
+    dom: d.dom,
     defaultDark: d.defaultDark,
     outline: d.outline,
     css,
     pdfCss: pdfCss && pdfCss.length > 0 ? pdfCss : undefined,
     thumbnail: d.thumbnail ? resolveFile(d.thumbnail, 'thumbnail') : undefined,
+    logo: d.logo ? resolveFile(d.logo, 'logo') : undefined,
+    favicon: d.favicon ? resolveFile(d.favicon, 'favicon') : undefined,
     header: d.header
       ? { ...d.header, logo: d.header.logo ? resolveFile(d.header.logo, 'header logo') : undefined, banner: d.header.banner ? resolveFile(d.header.banner, 'header banner') : undefined }
       : undefined,

@@ -22,6 +22,7 @@ function fakeTemplate(over: Partial<SiteTemplate> & Pick<SiteTemplate, 'dir'>): 
   return {
     id: 'test',
     names: { '': 'Test' },
+    dom: 'own',
     defaultDark: false,
     outline: false,
     css: [],
