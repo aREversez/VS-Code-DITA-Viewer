@@ -1059,6 +1059,8 @@ function injectTemplateChrome(
         nav.manifest,
         pageKeys.has(rel) ? '_root_/' + rel : '',
         sidebarLabels,
+        new Set(),
+        template.dom === 'webhelp',
       );
       const headInjectHtml = buildHeadInjectHtml(
         {

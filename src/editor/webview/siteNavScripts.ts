@@ -497,7 +497,11 @@ export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: stri
     var target = link.getAttribute('data-site-target');
     if (!target) return;
     var prevActive = document.querySelector('.site-nav-link.active');
-    if (prevActive) prevActive.classList.remove('active');
+    if (prevActive) {
+      prevActive.classList.remove('active');
+      var prevItem = prevActive.closest ? prevActive.closest('.site-nav-item') : null;
+      if (prevItem && prevItem.classList.contains('topicref')) prevItem.classList.remove('active');
+    }
     link.classList.add('active');
     // Reveal the row: prev/next and xref jumps can land inside a collapsed
     // branch, leaving the active highlight on an invisible row. DOM-only, not
@@ -505,6 +509,7 @@ export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: stri
     // to unfold those branches, and the next render keeps the path to the
     // active page open by itself (renderSiteNavTreeHtml's revealActive).
     var navItem = link.closest ? link.closest('.site-nav-item') : null;
+    if (navItem && navItem.classList.contains('topicref')) navItem.classList.add('active');
     if (navItem && typeof expandSiteNavAncestorsOf === 'function') expandSiteNavAncestorsOf(navItem);
     if (link.scrollIntoView) link.scrollIntoView({ block: 'nearest' });
     updatePrevNextButtons();
@@ -726,8 +731,14 @@ export function getBookNavClickHandlerScript(): string {
     var el = findBookAnchor(target);
     if (!el) return;
     var prevActive = document.querySelector('.site-nav-link.active');
-    if (prevActive) prevActive.classList.remove('active');
+    if (prevActive) {
+      prevActive.classList.remove('active');
+      var prevItem = prevActive.closest ? prevActive.closest('.site-nav-item') : null;
+      if (prevItem && prevItem.classList.contains('topicref')) prevItem.classList.remove('active');
+    }
     link.classList.add('active');
+    var clickedItem = link.closest ? link.closest('.site-nav-item') : null;
+    if (clickedItem && clickedItem.classList.contains('topicref')) clickedItem.classList.add('active');
     if (el.scrollIntoView) el.scrollIntoView();
   });
 `;
@@ -869,9 +880,14 @@ export function getBookScrollSyncScript(): string {
       if (!navLink) return;
       currentActiveId = id;
       var prevActive = document.querySelector('.site-nav-link.active');
-      if (prevActive) prevActive.classList.remove('active');
+      if (prevActive) {
+        prevActive.classList.remove('active');
+        var prevItem = prevActive.closest ? prevActive.closest('.site-nav-item') : null;
+        if (prevItem && prevItem.classList.contains('topicref')) prevItem.classList.remove('active');
+      }
       navLink.classList.add('active');
       var navItem = navLink.closest ? navLink.closest('.site-nav-item') : null;
+      if (navItem && navItem.classList.contains('topicref')) navItem.classList.add('active');
       // DOM-only: see this function's doc comment (getBookScrollSyncScript).
       if (navItem) expandSiteNavAncestorsOf(navItem);
     }
@@ -1264,6 +1280,14 @@ export function getSiteNavCollapseStateHelperScript(opts: { reportCollapseMsgTyp
     else item.classList.remove('collapsed');
     if (autoExpanded && !collapsed) item.classList.add('nav-auto-expanded');
     else item.classList.remove('nav-auto-expanded');
+    // Webhelp mode: mirror the fold state onto the tree class a template's css
+    // reads. topicref is only ever present on a webhelp-rendered row, so in
+    // own mode this is a no-op -- our collapse still rides on .collapsed and
+    // aria-expanded. (webhelp-compat-plan.md §2.2: one node, one JS.)
+    if (item.classList.contains('topicref')) {
+      if (collapsed) item.classList.remove('expanded');
+      else item.classList.add('expanded');
+    }
     item.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
     var toggle = item.querySelector(':scope > .site-nav-toggle');
     if (!toggle) return;

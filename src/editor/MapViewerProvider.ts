@@ -555,9 +555,33 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     webview: vscode.Webview,
     mode: 'tree' | 'book' | 'site',
     sitePageHint?: string,
+    webhelp?: boolean,
   ): RenderedMapContent {
-    const { result, files } = trackSourceReads(() => this.renderMapContentUntracked(document, webview, mode, sitePageHint));
+    // generateHtml passes the dom it already resolved; the incremental refresh
+    // paths (mapPanelController) do not, so resolve it here -- one scan on
+    // those paths, matching the one scan the full path does.
+    const wh = webhelp ?? this.pickCurrentTemplate(document, mode).template?.dom === 'webhelp';
+    const { result, files } = trackSourceReads(() => this.renderMapContentUntracked(document, webview, mode, sitePageHint, wh));
     return result.error === undefined ? { ...result, files } : result;
+  }
+
+  /**
+   * The template the reader has picked for this document + mode, and the full
+   * discovery list the template menu needs. Shared by generateHtml (chrome,
+   * css, shell dom) and renderMapContent (sidebar double classes) so a single
+   * render resolves the template once.
+   */
+  private pickCurrentTemplate(
+    document: vscode.TextDocument,
+    mode: 'tree' | 'book' | 'site',
+  ): { template: SiteTemplate | undefined; templates: SiteTemplate[] } {
+    const templates = this.loadTemplates(document);
+    const template = pickTemplate(
+      parseTemplateSelection(readForDocument(this.context.globalState, TEMPLATE_SELECTION_KEY, document.uri)),
+      mode,
+      templates,
+    );
+    return { template, templates };
   }
 
   private renderMapContentUntracked(
@@ -565,6 +589,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     webview: vscode.Webview,
     mode: 'tree' | 'book' | 'site',
     sitePageHint?: string,
+    webhelp = false,
   ): RenderedMapContent {
     const docDir = dirname(document.uri.fsPath);
     try {
@@ -609,7 +634,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         const sidebarTreeHtml = renderSiteNavTreeHtml(manifest, resolvedSitePage, {
           expand: vscode.l10n.t('Expand'),
           collapse: vscode.l10n.t('Collapse'),
-        }, this.getCollapsedNavIds(document), true);
+        }, this.getCollapsedNavIds(document), true, webhelp);
         const sidebarHtml = wrapSiteNavTreeHtml(sidebarTreeHtml, vscode.l10n.t('Topics'));
         if (resolvedSitePage === SITE_HOME_TARGET) {
           const homeHtml = this.renderSiteHomeContent(document, manifest);
@@ -639,7 +664,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       let sidebarHtml: string | undefined;
       let sidebarTreeHtml: string | undefined;
       if (mode === 'book') {
-        const book = this.collectBookParts(mapDoc.root, document, webview, docDir);
+        const book = this.collectBookParts(mapDoc.root, document, webview, docDir, webhelp);
         parts = book.parts;
         sidebarHtml = book.sidebarHtml;
         sidebarTreeHtml = book.sidebarTreeHtml;
@@ -693,7 +718,12 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       vscode.Uri.file(join(this.context.extensionPath, 'media', 'styles.css')),
     );
 
-    const result = this.renderMapContent(document, webview, mode, sitePageHint);
+    // Resolve the template before the content: its `dom` decides whether the
+    // sidebar rows carry the WebHelp tree classes (route B step 4), and the
+    // same picked template drives the chrome/css below -- one resolution, not
+    // two disk scans per render.
+    const { template, templates } = this.pickCurrentTemplate(document, mode);
+    const result = this.renderMapContent(document, webview, mode, sitePageHint, template?.dom === 'webhelp');
     if (result.error !== undefined) {
       const message = result.error;
       // No parts on the error page: it is not a book, so there is nothing a
@@ -714,12 +744,6 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       };
     }
 
-    const templates = this.loadTemplates(document);
-    const template = pickTemplate(
-      parseTemplateSelection(readForDocument(this.context.globalState, TEMPLATE_SELECTION_KEY, document.uri)),
-      mode,
-      templates,
-    );
     const script = getMapWebviewScript(
       templates.map((t) => ({ value: t.id, label: templateDisplayName(t, vscode.env.language) })),
       template?.id ?? '',
@@ -882,6 +906,7 @@ ${shell.html}
     document: vscode.TextDocument,
     webview: vscode.Webview,
     docDir: string,
+    webhelp = false,
   ): { parts: BookPart[]; sidebarHtml: string; sidebarTreeHtml: string } {
     // Build key map once for all entries. renderTopicCached compares it by
     // identity, so one instance for the whole pass is what makes reuse work.
@@ -940,7 +965,7 @@ ${shell.html}
     // sidebar" design (nested-fold-and-highlight-plan.md item 1, option C)
     // would quietly blow away item 3's persisted state on every keystroke.
     const collapsedIds = this.getCollapsedNavIds(document);
-    const sidebarTreeHtml = navigable.length > 0 ? renderSiteNavTreeHtml(manifest, navigable[0].absPath, toggleLabels, collapsedIds) : '';
+    const sidebarTreeHtml = navigable.length > 0 ? renderSiteNavTreeHtml(manifest, navigable[0].absPath, toggleLabels, collapsedIds, false, webhelp) : '';
     const sidebarHtml = navigable.length > 0 ? wrapSiteNavTreeHtml(sidebarTreeHtml, vscode.l10n.t('Topics')) : '';
 
     return { parts, sidebarHtml, sidebarTreeHtml };

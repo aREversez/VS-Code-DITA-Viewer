@@ -854,6 +854,7 @@ export function renderSiteNavTreeHtml(
   toggleLabels: { expand: string; collapse: string } = { expand: 'Expand', collapse: 'Collapse' },
   collapsedIds: ReadonlySet<string> = new Set(),
   revealActive = false,
+  webhelp = false,
 ): string {
   const expandLabel = escapeAttr(toggleLabels.expand);
   const collapseLabel = escapeAttr(toggleLabels.collapse);
@@ -940,6 +941,13 @@ export function renderSiteNavTreeHtml(
       ? `<ul class="site-nav-children" role="group">${node.children.map(renderNode).join('')}</ul>`
       : '';
     const itemClass = hasChildren ? (isCollapsed ? ' has-children collapsed' : ' has-children') : '';
+    // Webhelp mode (route B, step 4) doubles the tree classes onto the same
+    // node: the WebHelp names a template's css reads (topicref / expanded /
+    // active) sit alongside our own site-nav-* classes, which our behaviour JS
+    // keeps driving. has-children is already ours; expanded is added only for
+    // an open parent, active only for the row that is the current page. In own
+    // mode this is the empty string, so the markup is byte-for-byte unchanged.
+    const whClass = webhelp ? ` topicref${hasChildren && !isCollapsed ? ' expanded' : ''}` : '';
     const itemAriaExpanded = hasChildren ? ` aria-expanded="${isCollapsed ? 'false' : 'true'}"` : '';
     // A group entry (DocsiteNavEntry.isGroup -- a <topichead> or a bare
     // key-only topicref, see that field's own comment) has no topic file
@@ -953,12 +961,12 @@ export function renderSiteNavTreeHtml(
     // plain section heading (renderBookParts's own `struct:` branch).
     if (entry.isGroup) {
       const label = `<span class="site-nav-group-label" tabindex="${rowTabindex}" style="padding-left:${indent}px" title="${escapeAttr(entry.title)}">${roleChip}<span class="site-nav-link-text">${escapeHtml(entry.title)}</span></span>`;
-      return `<li class="site-nav-item site-nav-item--group${itemClass}" role="treeitem"${itemAriaExpanded}${navIdAttr}>${toggleHtml}${label}${childrenHtml}</li>`;
+      return `<li class="site-nav-item site-nav-item--group${itemClass}${whClass}" role="treeitem"${itemAriaExpanded}${navIdAttr}>${toggleHtml}${label}${childrenHtml}</li>`;
     }
     const activeClass = entry.absPath === currentAbsPath ? ' active' : '';
     const currentAttr = activeClass ? ' aria-current="page"' : '';
     const link = `<a href="#" class="site-nav-link${activeClass}"${currentAttr} tabindex="${rowTabindex}" data-site-target="${escapeAttr(entry.absPath as string)}" style="padding-left:${indent}px" title="${escapeAttr(entry.title)}">${roleChip}${typeChip}<span class="site-nav-link-text">${escapeHtml(entry.title)}</span></a>`;
-    return `<li class="site-nav-item${itemClass}" role="treeitem"${itemAriaExpanded}${navIdAttr}>${toggleHtml}${link}${childrenHtml}</li>`;
+    return `<li class="site-nav-item${itemClass}${whClass}${webhelp && activeClass ? ' active' : ''}" role="treeitem"${itemAriaExpanded}${navIdAttr}>${toggleHtml}${link}${childrenHtml}</li>`;
   };
 
   const items = tree.map(renderNode).join('');
@@ -972,8 +980,9 @@ export function renderSiteNavHtml(
   toggleLabels: { expand: string; collapse: string } = { expand: 'Expand', collapse: 'Collapse' },
   collapsedIds: ReadonlySet<string> = new Set(),
   revealActive = false,
+  webhelp = false,
 ): string {
-  return wrapSiteNavTreeHtml(renderSiteNavTreeHtml(manifest, currentAbsPath, toggleLabels, collapsedIds, revealActive), navLabel);
+  return wrapSiteNavTreeHtml(renderSiteNavTreeHtml(manifest, currentAbsPath, toggleLabels, collapsedIds, revealActive, webhelp), navLabel);
 }
 
 /**

@@ -111,6 +111,7 @@ export function renderSidebarHtml(
   currentAbsPath: string,
   labels: { nav: string; expand: string; collapse: string },
   collapsedIds: ReadonlySet<string> = new Set(),
+  webhelp = false,
 ): string {
   if (manifest.length === 0) return '';
   const tree = renderSiteNavTreeHtml(
@@ -119,6 +120,7 @@ export function renderSidebarHtml(
     { expand: labels.expand, collapse: labels.collapse },
     collapsedIds,
     true,
+    webhelp,
   );
   return wrapSiteNavTreeHtml(tree, labels.nav);
 }
