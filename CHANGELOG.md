@@ -8,7 +8,8 @@
 
 ### Fixes
 
-- **`keyscope` accepts several names.** `keyscope="a b"` puts the element and its keys in both scopes (`a.k` and `b.k` both exist), nested scopes with several names are crossed, and the duplicate-key and unreferenced-key checks follow. Resolving a qualified `keyref` such as `a.k` in the preview is still not done.
+- **A qualified `keyref` (`a.k`) resolves in the preview.** A key defined inside a `keyscope` now also answers to its qualified names (`a.k`; nested scopes `x.a.k` and `a.k`; every listed name of a multi-name `keyscope`; a `keyscope` on a `mapref` scopes the referenced map's keys), in the topic and map previews, the Git compare and `conkeyref`. The qualified-name rule is now shared with the completeness checks. A bare `keyref="k"` still takes the first definition in document order, whatever scope it sits in.
+- **`keyscope` accepts several names.** `keyscope="a b"` puts the element and its keys in both scopes (`a.k` and `b.k` both exist), nested scopes with several names are crossed, and the duplicate-key and unreferenced-key checks follow.
 - **`conref` / `conkeyref` chains resolve transitively.** A target that itself carries a `conref` or `conkeyref` (A → B → C) is followed to the end, across files, each hop relative to the file that holds it; a chain deeper than 10 hops or a cycle falls back to the first hop.
 - **A specialized element with `@class` but no DTD renders as the most specific standard element it names** (for example `class="- topic/ph hi-d/b my-d/mybold "` renders like `<b>`), instead of as its most general ancestor. A specialization without `@class` is still not supported (see README, Known limitations).
 

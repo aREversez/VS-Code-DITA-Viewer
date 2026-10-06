@@ -425,12 +425,14 @@ location for verification.
 
 ### Key scope
 
-- **A qualified key reference (`a.k`) is not resolved when rendering.** A
-  `keyscope="a b"` element and its keys belong to every listed scope, and the
-  completeness checks (duplicate and unreferenced keys) know `a.k` and `b.k`,
-  but the preview's key lookup still uses bare key names only, so a
-  `keyref="a.k"` is not substituted.
-  (`src/editor/keySpace.ts`)
+- **A bare key name ignores which scope the reference sits in.** A key defined
+  inside `keyscope="a"` answers to `a.k` (and, nested, `x.a.k` and `a.k`) as
+  well as `k`, so a qualified `keyref="a.k"` is substituted in the preview. But
+  the preview looks keys up in one flat table and does not know where the
+  referencing element sits, so a bare `keyref="k"` finds the first definition of
+  `k` in document order, not the one in the reference's own scope. Write the
+  qualified name where two scopes define the same key.
+  (`src/editor/keySpace.ts`, `collectMapKeys`)
 
 ### Custom DTDs and specialization
 

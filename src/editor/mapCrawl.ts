@@ -17,6 +17,7 @@ import { decodeHrefPart } from './ditaRenderUtils';
 import { normalizePathForCompare } from './mapReferenceTools';
 import { DitavalFilter } from './ditaval';
 import { Msg, msg } from './mapCheckMessages';
+import { qualifiedNamesMulti } from './keySpace';
 
 export interface CrawlHost {
   /** Text of a file (unsaved editor text if any). Rejects when unreadable. */
@@ -753,18 +754,6 @@ function splitValues(v: string): string[] {
   return out;
 }
 
-/** All names a key defined under the given scope chain answers to: bare plus each qualified form. */
-export function qualifiedNames(name: string, scopeChain: string[]): string[] {
-  const out = [name];
-  for (let i = 0; i < scopeChain.length; i++) {
-    out.push(scopeChain.slice(i).join('.') + '.' + name);
-  }
-  return out;
-}
-
-/** Like qualifiedNames, for a definition that lives in several scope chains at once. */
-export function qualifiedNamesMulti(name: string, scopeChains: string[][]): string[] {
-  const out = new Set<string>([name]);
-  for (const chain of scopeChains) for (const q of qualifiedNames(name, chain)) out.add(q);
-  return [...out];
-}
+// qualifiedNames / qualifiedNamesMulti live in keySpace.ts (the preview's key
+// lookup uses the same rule); re-exported so existing importers keep working.
+export { qualifiedNames, qualifiedNamesMulti } from './keySpace';

@@ -61,6 +61,22 @@ export function splitKeyNames(keys: string): string[] {
   return keys.split(/\s+/).filter(Boolean);
 }
 
+/** All names a key defined under the given scope chain answers to: bare plus each qualified form. */
+export function qualifiedNames(name: string, scopeChain: string[]): string[] {
+  const out = [name];
+  for (let i = 0; i < scopeChain.length; i++) {
+    out.push(scopeChain.slice(i).join('.') + '.' + name);
+  }
+  return out;
+}
+
+/** Like qualifiedNames, for a definition that lives in several scope chains at once. */
+export function qualifiedNamesMulti(name: string, scopeChains: string[][]): string[] {
+  const out = new Set<string>([name]);
+  for (const chain of scopeChains) for (const q of qualifiedNames(name, chain)) out.add(q);
+  return [...out];
+}
+
 /**
  * A key's resource target, captured alongside its text value so conkeyref can
  * resolve `keyname/elementid` to a file. `href` is relative to `baseDir` (the
@@ -95,24 +111,38 @@ export function collectMapKeys(
   const mapDir = dirname(mapPath);
   // Expand referenced ditamaps so keydefs from included maps are visible
   expandDitamapRefs(mapRoot, mapDir, read);
-  function walk(node: DitaNode) {
+  // scopeChains: the keyscope names enclosing `node`, outermost first; several
+  // chains when a keyscope lists several names. A key answers to its bare name
+  // and to every qualified form (`a.k`, `x.a.k`), so a keyref written either
+  // way finds it. The bare name is still defined unscoped -- the lookup does
+  // not know where the referencing element sits, so it cannot tell which
+  // scope's `k` is meant; the qualified names are what tell scopes apart.
+  function walk(node: DitaNode, scopeChains: string[][]) {
     if (node.type !== 'element') return;
     const baseType = node.baseType;
+    let chains = scopeChains;
+    const keyscope = node.attributes?.keyscope;
+    if (keyscope) {
+      const scopes = splitKeyNames(keyscope);
+      if (scopes.length) chains = chains.flatMap((chain) => scopes.map((s) => chain.concat(s)));
+    }
     if ((baseType === 'map/topicref' || baseType === 'map/keydef') && node.attributes?.keys) {
       const value = getKeyValueFromRef(node);
       // keys is a space-separated list: one keydef defines every name in it
       // with the same resource. First definition of each name wins (DITA
       // precedence; nearest map scanned first).
-      for (const name of splitKeyNames(node.attributes.keys)) {
-        if (!into.has(name)) {
-          into.set(name, value || name);
-          hrefs?.set(name, { href: node.attributes?.href, baseDir: mapDir });
+      for (const keyName of splitKeyNames(node.attributes.keys)) {
+        for (const name of qualifiedNamesMulti(keyName, chains)) {
+          if (!into.has(name)) {
+            into.set(name, value || keyName);
+            hrefs?.set(name, { href: node.attributes?.href, baseDir: mapDir });
+          }
         }
       }
     }
-    for (const child of node.children || []) walk(child);
+    for (const child of node.children || []) walk(child, chains);
   }
-  for (const child of mapRoot.children || []) walk(child);
+  for (const child of mapRoot.children || []) walk(child, [[]]);
 }
 
 // ── key space: context map vs. ancestor scan ──
