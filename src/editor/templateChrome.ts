@@ -7,15 +7,11 @@
  */
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { getMapTitleText } from '../render/mapTypeMap';
-import type { SiteTemplate, TemplateFooter, TemplateHeader, TemplateLink } from './siteTemplates';
+import type { SiteTemplate, TemplateDom, TemplateFooter, TemplateHeader, TemplateLink } from './siteTemplates';
+import { buildWebhelpShell, escapeAttribute, escapeText } from './webhelpShell';
 
-export function escapeText(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-export function escapeAttribute(s: string): string {
-  return escapeText(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+// escapeText / escapeAttribute live in webhelpShell.ts (the webhelp shell
+// needs them too, and webhelpShell must not depend back on this module).
 
 /** {title} and {year} only; anything else in braces is left as written. */
 export function fillPlaceholders(text: string, ctx: { title: string; year: number }): string {
@@ -94,6 +90,17 @@ export interface ShellParts {
   outlineHtml?: string;
   headerHtml?: string;
   footerHtml?: string;
+  /**
+   * Which DOM the shell lays out. 'own' (default) is route A's markup
+   * (.site-frame, headerHtml/footerHtml from the template); 'webhelp' hands
+   * the parts to webhelpShell.ts, which emits the WebHelp-style hook skeleton
+   * and ignores headerHtml/footerHtml (see webhelp-compat-plan.md §2.1).
+   */
+  dom?: TemplateDom;
+  /** webhelp mode only: the publication title text (.wh_publication_title). */
+  publicationTitle?: string;
+  /** webhelp mode only: resolved webview URI of the brand logo (.wh_logo), when the template has one. */
+  logoUri?: string;
 }
 
 /**
@@ -106,6 +113,16 @@ export interface ShellParts {
  * are: a shell-less page has nowhere to put a fourth column either.
  */
 export function wrapShell(p: ShellParts): { bodyClass: string; html: string } {
+  if (p.dom === 'webhelp') {
+    return buildWebhelpShell({
+      sidebarHtml: p.sidebarHtml,
+      resizerHtml: p.resizerHtml,
+      contentRootHtml: p.contentRootHtml,
+      outlineHtml: p.outlineHtml,
+      publicationTitle: p.publicationTitle,
+      logoUri: p.logoUri,
+    });
+  }
   const core = `${p.sidebarHtml}\n${p.resizerHtml}\n${p.contentRootHtml}${p.outlineHtml ? `\n${p.outlineHtml}` : ''}`;
   if (p.sidebarHtml === '') return { bodyClass: '', html: core };
   return {

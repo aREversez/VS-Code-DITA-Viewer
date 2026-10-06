@@ -758,6 +758,13 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         : undefined,
       headerHtml: chrome.headerHtml,
       footerHtml: chrome.footerHtml,
+      // Route B: a template whose descriptor says dom "webhelp" gets the
+      // WebHelp-style hook skeleton instead of the own shell (webhelpShell.ts).
+      // Built-in templates stay "own", so this is a no-op for them. Header
+      // content (top menu, breadcrumb) and the logo image land in later steps.
+      dom: template?.dom,
+      publicationTitle: mapTitle,
+      logoUri: template?.logo ? webview.asWebviewUri(vscode.Uri.file(template.logo)).toString() : undefined,
     });
     const nonce = randomBytes(16).toString('base64');
     const theme = vscode.window.activeColorTheme;
@@ -834,7 +841,7 @@ ${shell.html}
         templateDataAttr: template ? templateDataAttr(template.id) : '',
         selectedTemplate: template?.id ?? '',
         shellHtml: shell.html,
-        isShell: shell.bodyClass.includes('site-shell'),
+        isShell: shell.bodyClass.includes('site-shell') || shell.bodyClass.includes('wh_topic_page'),
       },
     };
   }

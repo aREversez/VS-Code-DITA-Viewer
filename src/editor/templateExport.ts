@@ -280,6 +280,11 @@ export function buildShellPageHtml(input: ShellPageInput): string {
     outlineHtml: outline || undefined,
     headerHtml: chrome.headerHtml,
     footerHtml: chrome.footerHtml,
+    // Route B: same dom branch as the live preview, so an exported webhelp
+    // template page carries the same hooks (webhelpShell.ts).
+    dom: input.template.dom,
+    publicationTitle: input.mapTitle,
+    logoUri: input.template.logo ? input.toRelative(input.template.logo) : undefined,
   });
 
   let bodyAttrs = mergeClass(bodyMatch[1], `mode-site${shell.bodyClass}`);
