@@ -98,11 +98,20 @@ export function getWebhelpChromeScript(opts: WebhelpChromeScriptOptions): string
   // ---- webhelp chrome: DOM glue -----------------------------------------
   (function() {
     var opts = ${o};
-    if (!document.body || !document.body.classList || !document.body.classList.contains('wh_topic_page')) return;
-
     var links = [];
     var tocObserver = null;
     var pending = false;
+
+    // The chrome is inert until the WebHelp shell is on the page. The shell can
+    // arrive AFTER this first runs -- a Site<->Book mode swap overlays it by
+    // toggling the body class, and a cold-start restore builds the webview on a
+    // non-shell page first -- so every entry point checks the class instead of
+    // bailing out at load time. Bailing early would also skip installing the
+    // observer that notices the shell appearing, leaving the menu and breadcrumb
+    // empty forever (with no error, exactly the frozen chrome the smoke test hit).
+    function isWhPage() {
+      return !!document.body && !!document.body.classList && document.body.classList.contains('wh_topic_page');
+    }
 
     function ownLink(item) {
       for (var i = 0; i < item.children.length; i++) {
@@ -139,6 +148,7 @@ export function getWebhelpChromeScript(opts: WebhelpChromeScriptOptions): string
 
     function update() {
       pending = false;
+      if (!isWhPage()) return;
       var model = webhelpChromeModel(collectRows());
       var html = webhelpChromeHtml(model);
       var menu = document.querySelector('.wh_top_menu');
@@ -162,20 +172,22 @@ export function getWebhelpChromeScript(opts: WebhelpChromeScriptOptions): string
     }
 
     function schedule() {
-      if (pending) return;
+      if (!isWhPage() || pending) return;
       pending = true;
       setTimeout(update, 0);
     }
 
     function watch() {
       if (tocObserver) { tocObserver.disconnect(); tocObserver = null; }
+      if (!isWhPage() || typeof MutationObserver === 'undefined') return;
       var toc = document.getElementById('wh_publication_toc_content');
-      if (!toc || typeof MutationObserver === 'undefined') return;
+      if (!toc) return;
       tocObserver = new MutationObserver(schedule);
       tocObserver.observe(toc, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
     }
 
     document.addEventListener('click', function(e) {
+      if (!isWhPage()) return;
       var t = e.target && e.target.closest ? e.target : null;
       if (!t) return;
       var rowEl = t.closest('[data-wh-row]');
@@ -193,9 +205,10 @@ export function getWebhelpChromeScript(opts: WebhelpChromeScriptOptions): string
       }
     });
 
-    // A mode switch swaps the shell's nodes in place: watch the body's own
-    // children and re-bind when they change.
-    if (typeof MutationObserver !== 'undefined') {
+    // Whether or not the shell is on yet, watch the body's own children: a mode
+    // switch or a late shell build swaps them in place, and this re-binds (the
+    // handlers above stay inert until isWhPage() is true).
+    if (document.body && typeof MutationObserver !== 'undefined') {
       new MutationObserver(function() { watch(); schedule(); }).observe(document.body, { childList: true });
     }
     watch();

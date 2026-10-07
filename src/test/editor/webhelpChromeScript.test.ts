@@ -148,6 +148,49 @@ describe('webhelp chrome: the click proxy', () => {
   });
 });
 
+describe('webhelp chrome: binds before the shell is on (late shell init)', () => {
+  // Regression guard for the DOM glue. It used to bail out at load whenever the
+  // body lacked wh_topic_page, so it never installed the observer that notices
+  // the shell arriving later -- a Site<->Book mode swap that overlays the shell
+  // by toggling the body class, or a cold-start restore that first builds the
+  // webview on a non-shell page -- leaving the menu and breadcrumb empty forever
+  // (and with no error, exactly the "frozen chrome" seen in the smoke test). Now
+  // the glue always watches the body and stays inert until wh_topic_page is set.
+  function glueRun(shellOnAtLoad: boolean): { observingBody: boolean } {
+    const observed: unknown[] = [];
+    class MutationObserverStub {
+      constructor(_cb: unknown) {}
+      observe(target: unknown) {
+        observed.push(target);
+      }
+      disconnect() {}
+    }
+    const body = { classList: { contains: (c: string) => c === 'wh_topic_page' && shellOnAtLoad } };
+    const doc = {
+      body,
+      addEventListener: () => {},
+      getElementById: () => null,
+      querySelector: () => null,
+      querySelectorAll: () => [],
+    };
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    const factory = new Function('document', 'MutationObserver', getWebhelpChromeScript({ crumbLabel: 'x' })) as (
+      d: unknown,
+      m: unknown,
+    ) => void;
+    factory(doc, MutationObserverStub);
+    return { observingBody: observed.includes(body) };
+  }
+
+  it('installs the body observer when the shell is NOT on yet, so a later swap initialises the chrome', () => {
+    assert.ok(glueRun(false).observingBody, 'the glue must still watch the body when wh_topic_page is absent at load');
+  });
+
+  it('and installs it when the shell is already on', () => {
+    assert.ok(glueRun(true).observingBody);
+  });
+});
+
 describe('webhelp chrome: wiring', () => {
   // mapScript.ts imports vscode, so, like the other wiring tests, read the source.
   const root = join(__dirname, '..', '..', '..');
