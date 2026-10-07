@@ -10,6 +10,7 @@
 import * as vscode from 'vscode';
 import { getProfilingToggleScript } from './profilingToggleScript';
 import { getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getImageMapSupportScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getRefreshButtonScript, getSiteNavClickHandlerScript, getSidebarUpdateScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getOutlineSyncScript, getSiteNavToggleScript, getSiteNavKeyboardScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteOpenSourceScript, getTemplateSelectScript, getToolbarPlacementScript, PREV_TOPIC_ICON_SVG, NEXT_TOPIC_ICON_SVG, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, HISTORY_BACK_ICON_SVG, HISTORY_FORWARD_ICON_SVG, getSiteHomeButtonScript } from '../ditaRenderUtils';
+import { getWebhelpChromeScript } from './webhelpChromeScript';
 import { getBookSearchScript } from '../bookSearchIndex';
 import { sharedWebviewStrings } from '../webviewL10n';
 import { getContentSwapRefreshScript } from './contentSwapScript';
@@ -59,6 +60,7 @@ export function getMapWebviewScript(
     templateTitle: vscode.l10n.t('Template'),
     templateNone: vscode.l10n.t('Default look'),
     sitePrevTopic: vscode.l10n.t('Previous topic'),
+    siteBreadcrumb: vscode.l10n.t('Breadcrumb'),
     siteNextTopic: vscode.l10n.t('Next topic'),
     siteToggleSidebar: vscode.l10n.t('Show/hide topic list'),
     siteExpandAll: vscode.l10n.t('Expand all topics'),
@@ -99,6 +101,13 @@ export function getMapWebviewScript(
   ${getSiteNavToggleScript()}
   ${getSiteNavKeyboardScript()}
   ${getSiteSidebarResizerScript()}
+  ${getWebhelpChromeScript({
+    crumbLabel: L.siteBreadcrumb,
+    prevLabel: PREV_TOPIC_ICON_SVG,
+    nextLabel: NEXT_TOPIC_ICON_SVG,
+    prevTitle: L.sitePrevTopic,
+    nextTitle: L.siteNextTopic,
+  })}
 
   // Click on navigable tree node → post message to extension
   document.addEventListener('click', function(e) {

@@ -164,6 +164,20 @@
     text-overflow: ellipsis;
     opacity: 0.85;
   }
+  body.wh_topic_page .wh_breadcrumb a.wh_breadcrumb_item {
+    color: var(--link-color);
+    text-decoration: none;
+  }
+  body.wh_topic_page .wh_breadcrumb a.wh_breadcrumb_item:hover {
+    text-decoration: underline;
+  }
+  body.wh_topic_page .wh_breadcrumb .wh_breadcrumb_sep {
+    margin: 0 0.4rem;
+    opacity: 0.6;
+  }
+  body.wh_topic_page .wh_breadcrumb .wh_breadcrumb_item[aria-current="page"] {
+    font-weight: 600;
+  }
   body.wh_topic_page .wh_right_tools {
     flex: 0 0 auto;
     display: inline-flex;
@@ -185,6 +199,18 @@
     background: var(--button-bg-color);
     color: var(--button-color);
     border-radius: 3px;
+  }
+  body.wh_topic_page .wh_navigation_links a.navprev svg,
+  body.wh_topic_page .wh_navigation_links a.navnext svg {
+    width: 1em;
+    height: 1em;
+    vertical-align: -0.125em;
+  }
+  body.wh_topic_page .wh_navigation_links a[aria-disabled="true"] {
+    background: var(--button-disabled-bg-color);
+    color: var(--button-disabled-color);
+    cursor: default;
+    pointer-events: none;
   }
 
   /* --- 4. The three columns. ---------------------------------------------- */
