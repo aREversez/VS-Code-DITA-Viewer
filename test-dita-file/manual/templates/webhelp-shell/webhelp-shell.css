@@ -111,10 +111,11 @@ body.mode-book.wh_topic_page {
 }
 
 /* 4b. Middle: the topic itself (owns #dita-content-root via .wh_topic_content). */
+/* Not a scroller: #dita-content-root inside it is (a template must not make
+   this column scroll, or book-mode scroll tracking stops). */
 #wh_topic_body {
   flex: 1 1 auto;
   display: block;
-  overflow-y: auto;
   min-width: 0;
 }
 .wh_topic_content {

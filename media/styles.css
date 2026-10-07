@@ -1581,4 +1581,11 @@ body.mode-book #__site-next-btn,
 body.mode-book #__site-open-source-btn {
   display: none !important;
 }
+
+/* The webhelp shell's body column must never be the scrolling element:
+   #dita-content-root is (see webhelp-compat.css), because the scroll-sync,
+   outline, history and search scripts all treat it as the scroller. !important
+   so a template's own css (unlayered, so it would otherwise win) cannot turn
+   this column into a scroller and freeze them. */
+body.wh_topic_page #wh_topic_body { overflow: hidden !important; }
 } /* @layer dv-base */
