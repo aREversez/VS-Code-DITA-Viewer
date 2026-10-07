@@ -885,12 +885,37 @@ ${shell.html}
   // earlier ones with the same id, so a user template can replace a built-in).
   // The lookup itself is shared with the DITA-OT transform's picker
   // (discoverTemplateRoots in siteTemplates.ts).
+  // templateRoots runs on every full render; say each problem once.
+  private readonly warnedTemplateDirs = new Set<string>();
+  private warnTemplateDirsOnce(message: string): void {
+    if (this.warnedTemplateDirs.has(message)) return;
+    this.warnedTemplateDirs.add(message);
+    console.warn(message);
+  }
+
   private templateRoots(document: vscode.TextDocument): TemplateRoot[] {
+    const config = vscode.workspace.getConfiguration('dita-viewer');
+    const configuredDirs = config.get<string[]>('templatesDirectory') ?? [];
+    // The setting is window-scoped, so a value that lives only in one
+    // workspace folder's .vscode/settings.json is not part of get() in a
+    // multi-root window. Say so, rather than leaving "nothing happened".
+    const folderOnly = config.inspect<string[]>('templatesDirectory')?.workspaceFolderValue;
+    if (configuredDirs.length === 0 && folderOnly && folderOnly.length > 0) {
+      this.warnTemplateDirsOnce(
+        '[DITA Viewer] templatesDirectory is set only at workspace-folder level (' +
+          JSON.stringify(folderOnly) +
+          ') and is not read here; put it in the user or workspace settings.',
+      );
+    }
     return discoverTemplateRoots({
       extensionPath: this.context.extensionPath,
-      configuredDirs: vscode.workspace.getConfiguration('dita-viewer').get<string[]>('templatesDirectory') ?? [],
+      configuredDirs,
       refDir: dirname(document.uri.fsPath),
       workspaceRoots: (vscode.workspace.workspaceFolders || []).map((f) => f.uri.fsPath),
+      onMissing: (dir, tried) =>
+        this.warnTemplateDirsOnce(
+          `[DITA Viewer] templatesDirectory entry ${JSON.stringify(dir)} is not a folder; looked in: ${tried.join(', ')}`,
+        ),
     });
   }
 

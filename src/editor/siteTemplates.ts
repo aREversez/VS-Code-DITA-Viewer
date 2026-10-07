@@ -449,6 +449,8 @@ export function discoverTemplateRoots(input: {
   configuredDirs: readonly string[];
   refDir: string;
   workspaceRoots?: readonly string[];
+  /** Told about each configured entry that resolves to no folder, with every path tried. */
+  onMissing?: (dir: string, tried: string[]) => void;
 }): TemplateRoot[] {
   const roots: TemplateRoot[] = [{ dir: join(input.extensionPath, 'media', 'templates'), builtin: true }];
   for (const dir of input.configuredDirs) {
@@ -457,6 +459,7 @@ export function discoverTemplateRoots(input: {
       : [resolve(input.refDir, dir), ...(input.workspaceRoots ?? []).map((w) => resolve(w, dir))];
     const found = candidates.find((c) => existsSync(c));
     if (found) roots.push({ dir: found, builtin: false });
+    else input.onMissing?.(dir, candidates);
   }
   return roots;
 }
