@@ -58,17 +58,24 @@ describe('templateBodyAttrs', () => {
 });
 
 describe('template selection', () => {
-  it('parses only known modes with non-empty string ids', () => {
+  it('parses only known modes; a non-empty id is a choice, null is an explicit "default look"', () => {
     assert.deepStrictEqual(parseTemplateSelection({ site: 'a', book: '', tree: 'x', extra: 1 }), { site: 'a' });
+    assert.deepStrictEqual(parseTemplateSelection({ site: null, book: 'b' }), { site: null, book: 'b' });
+    assert.deepStrictEqual(parseTemplateSelection({ site: 3, book: false }), {});
     assert.deepStrictEqual(parseTemplateSelection(null), {});
     assert.deepStrictEqual(parseTemplateSelection([]), {});
   });
 
-  it('sets and clears one mode without touching the other or the input', () => {
+  it('sets one mode, records "default look" as null, and touches neither the other mode nor the input', () => {
     const before = { site: 'a', book: 'b' };
     assert.deepStrictEqual(withTemplate(before, 'site', 'c'), { site: 'c', book: 'b' });
-    assert.deepStrictEqual(withTemplate(before, 'book', ''), { site: 'a' });
+    assert.deepStrictEqual(withTemplate(before, 'book', ''), { site: 'a', book: null });
     assert.deepStrictEqual(before, { site: 'a', book: 'b' });
+  });
+
+  it('survives the JSON round trip the store applies', () => {
+    const sel = withTemplate({ site: 'a' }, 'book', '');
+    assert.deepStrictEqual(parseTemplateSelection(JSON.parse(JSON.stringify(sel))), { site: 'a', book: null });
   });
 
   it('picks per mode, never in tree mode, and ignores a template that has gone', () => {
@@ -78,5 +85,31 @@ describe('template selection', () => {
     assert.strictEqual(pickTemplate({ site: 'a' }, 'tree', ts), undefined);
     assert.strictEqual(pickTemplate({ site: 'zzz' }, 'site', ts), undefined);
     assert.strictEqual(pickTemplate({}, 'site', ts), undefined);
+  });
+
+  it('a mode with no choice of its own follows the other mode (smoke defect 4)', () => {
+    const ts = [tpl({ id: 'a' }), tpl({ id: 'b' })];
+    assert.strictEqual(pickTemplate({ site: 'a' }, 'book', ts)?.id, 'a');
+    assert.strictEqual(pickTemplate({ book: 'b' }, 'site', ts)?.id, 'b');
+  });
+
+  it('an explicit "default look" is a choice and stops the following, in both directions', () => {
+    const ts = [tpl({ id: 'a' }), tpl({ id: 'b' })];
+    assert.strictEqual(pickTemplate({ site: 'a', book: null }, 'book', ts), undefined);
+    assert.strictEqual(pickTemplate({ site: null, book: 'b' }, 'site', ts), undefined);
+    assert.strictEqual(pickTemplate({ site: null }, 'book', ts), undefined, 'the other mode chose the default look');
+  });
+
+  it('a choice of its own that has gone does not fall through to the other mode', () => {
+    const ts = [tpl({ id: 'a' })];
+    assert.strictEqual(pickTemplate({ site: 'a', book: 'zzz' }, 'book', ts), undefined);
+  });
+
+  it('following the other mode never resurrects a template that has gone', () => {
+    assert.strictEqual(pickTemplate({ site: 'zzz' }, 'book', [tpl({ id: 'a' })]), undefined);
+  });
+
+  it('data stored before this rule (a site choice, nothing for book) now shows in book too', () => {
+    assert.strictEqual(pickTemplate(parseTemplateSelection({ site: 'a' }), 'book', [tpl({ id: 'a' })])?.id, 'a');
   });
 });

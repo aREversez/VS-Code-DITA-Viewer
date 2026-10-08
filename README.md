@@ -261,7 +261,7 @@ Open a DITA preview, then use the **Theme dropdown** to cycle through these and 
 
 #### Templates for Docsite and Book view
 
-The **Template** dropdown in the toolbar (Docsite and Book view) restyles the sidebar and the page of a map and can add a header and a footer around it. The choice is remembered per map, separately for each view. Three templates are built in: **Classic Docs**, **Aurora** (banner header) and **Reader** (serif, book-like); each has a light and a dark palette and follows VS Code's colour theme.
+The **Template** dropdown in the toolbar (Docsite and Book view) restyles the sidebar and the page of a map and can add a header and a footer around it. The choice is remembered per map. Docsite and Book view can each have their own; until you choose in a view, it follows the other one, and choosing **Default look** in a view keeps that view without a template. Three templates are built in: **Classic Docs**, **Aurora** (banner header) and **Reader** (serif, book-like); each has a light and a dark palette and follows VS Code's colour theme.
 
 To add your own, list one or more folders in `dita-viewer.templatesDirectory`; every sub-folder is a template:
 
