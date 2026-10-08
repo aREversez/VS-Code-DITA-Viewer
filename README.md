@@ -204,6 +204,8 @@ Press `Ctrl+Shift+P` → search **"DITA Viewer"** to find all settings including
 }
 ```
 
+`dita-viewer.cssDirectory` and `dita-viewer.customCss` are **resource-scoped**: a value in a workspace folder's `settings.json` applies to the documents inside that folder, which is what you want in a multi-root window where each product keeps its own themes. Set them at the user or workspace level to cover the whole window; a document outside every workspace folder has no folder value to pick up and falls back to those.
+
 ### What you can override
 
 Custom CSS is injected **after** the default `media/styles.css` and can override any rule. The default stylesheet defines these CSS variables for easy theming:
@@ -296,6 +298,7 @@ my-templates/
 - Everything a template names must stay inside its own folder.
 - Scope your css with `body[data-template="<folder name>"]`. Use `html.vscode-dark body[data-template="…"]` for the dark palette, or mark a dark-only template by using `body[data-template="…"].template-dark` (the class is added when `template.json` sets `"defaultDark": true`). The page structure to target is the extension's own — `.site-nav`, `.site-nav-link`, `#dita-content-root`, `.tpl-header`, `.tpl-footer` — and re-pointing the `--vscode-*` and `--color-*` custom properties on `body` recolours the toolbar, sidebar, notes and code blocks in one go. `media/templates/classic-docs/classic-docs.css` is a complete example. Do not override `content-visibility` rules: Book view relies on them for large maps.
 - Changing `dita-viewer.templatesDirectory` needs the preview reopened before a template's fonts and images load.
+- `dita-viewer.templatesDirectory` is resource-scoped like the CSS settings above: a folder's `settings.json` lists templates for the maps inside that folder, so in a multi-root window a folder can carry its own templates without affecting the others.
 
 Sample templates for manual testing are in `test-dita-file/manual/templates/`.
 
@@ -546,6 +549,12 @@ npm run lint           # Lint source
 npm run format         # Format with Prettier
 npm run check:l10n     # Verify i18n catalogs match strings used in source
 ```
+
+### Manual testing in the development host
+
+Press `F5` (**Run Extension**) and the development host opens on the repository folder, because `.vscode/launch.json` passes `${workspaceFolder}`. That is what makes the repository's own `.vscode/settings.json` apply: it points `dita-viewer.templatesDirectory` at `test-dita-file/manual/templates` and `dita-viewer.customCss` at `test-dita-file/fixture/custom.css`, so the smoke-test templates and themes show up in the preview toolbars.
+
+Both are workspace-folder-level values, so a host opened on a subfolder (say `test-dita-file/manual`) reads them as empty — and then the Template dropdown lists only the built-ins, silently. Nothing is logged in that case: the diagnostic for a template folder reports an entry that resolves to no folder, and there is no entry at all. If templates or CSS you configured do not appear, check the host is opened on the repository root, or move the value to your user settings as an absolute path.
 
 ### Packaging
 
