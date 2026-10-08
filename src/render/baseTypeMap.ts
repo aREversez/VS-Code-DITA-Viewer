@@ -464,7 +464,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
   'topic/section': (node, ctx, renderChildren) => {
     const id = getAttr(node, 'id');
-    return `<section${safeAttr('id', id)}>${renderChildren(node, ctx)}</section>`;
+    return `<section${safeAttr('id', id)} class="section">${renderChildren(node, ctx)}</section>`;
   },
 
   'topic/example': (node, ctx, renderChildren) => {
@@ -506,11 +506,11 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     return `<div class="note note--${escapeAttr(type)} ${escapeAttr(type)} note_${escapeAttr(type)}"><span class="note__label note__title">${escapeAttr(label)}:</span> <div class="note__body">${renderChildren(node, ctx)}</div></div>`;
   },
 
-  'topic/ul': (_node, ctx, renderChildren) => `<ul>${renderChildren(_node, ctx)}</ul>`,
-  'topic/ol': (_node, ctx, renderChildren) => `<ol>${renderChildren(_node, ctx)}</ol>`,
-  'topic/li': (_node, ctx, renderChildren) => `<li>${renderChildren(_node, ctx)}</li>`,
+  'topic/ul': (_node, ctx, renderChildren) => `<ul class="ul">${renderChildren(_node, ctx)}</ul>`,
+  'topic/ol': (_node, ctx, renderChildren) => `<ol class="ol">${renderChildren(_node, ctx)}</ol>`,
+  'topic/li': (_node, ctx, renderChildren) => `<li class="li">${renderChildren(_node, ctx)}</li>`,
   'topic/sl': (_node, ctx, renderChildren) => `<ul class="simple-list">${renderChildren(_node, ctx)}</ul>`,
-  'topic/sli': (_node, ctx, renderChildren) => `<li>${renderChildren(_node, ctx)}</li>`,
+  'topic/sli': (_node, ctx, renderChildren) => `<li class="li">${renderChildren(_node, ctx)}</li>`,
 
   'topic/dl': (_node, ctx, renderChildren) => `<dl>${renderChildren(_node, ctx)}</dl>`,
   'topic/dlentry': (_node, ctx, renderChildren) => `<div class="dlentry">${renderChildren(_node, ctx)}</div>`,
@@ -541,7 +541,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
           (c) => c.type === 'element' && c.baseType === 'topic/colspec' && !!c.attributes?.colwidth,
         ),
     );
-    const cls = hasColspec ? 'cals-table cals-table--fixed-layout' : 'cals-table';
+    const cls = hasColspec ? 'table cals-table cals-table--fixed-layout' : 'table cals-table';
     return `<table${safeAttr('id', id)} class="${cls}">${renderChildren(node, ctx)}</table>`;
   },
 
@@ -684,10 +684,10 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   'topic/colspec': () => '',
 
   'topic/thead': (_node, ctx, renderChildren) =>
-    `<thead>${renderChildren(_node, { ...ctx, inTableHeader: true })}</thead>`,
+    `<thead class="thead">${renderChildren(_node, { ...ctx, inTableHeader: true })}</thead>`,
   'topic/tbody': (_node, ctx, renderChildren) =>
-    `<tbody>${renderChildren(_node, { ...ctx, inTableHeader: false })}</tbody>`,
-  'topic/row': (_node, ctx, renderChildren) => `<tr>${renderChildren(_node, ctx)}</tr>`,
+    `<tbody class="tbody">${renderChildren(_node, { ...ctx, inTableHeader: false })}</tbody>`,
+  'topic/row': (_node, ctx, renderChildren) => `<tr class="row">${renderChildren(_node, ctx)}</tr>`,
   'topic/entry': (node, ctx, renderChildren) => {
     const tag = isInTableHeader(ctx) ? 'th' : 'td';
     const colspan = getAttr(node, 'colspan');
@@ -696,7 +696,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     // @align, see 'topic/tgroup' above) for just this cell, same as CALS
     // precedence: entry > colspec > tgroup.
     const align = mapCalsAlign(getAttr(node, 'align'));
-    const attrs = `${safeAttr('colspan', colspan)}${safeAttr('rowspan', rowspan)}${align ? ` style="text-align: ${align}"` : ''}`;
+    const attrs = ` class="entry"${safeAttr('colspan', colspan)}${safeAttr('rowspan', rowspan)}${align ? ` style="text-align: ${align}"` : ''}`;
     return `<${tag}${attrs}>${renderChildren(node, ctx)}</${tag}>`;
   },
 
@@ -757,7 +757,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
     const extra = `${safeAttr('width', width)}${safeAttr('height', height)}`;
     const imgSrc = href ? ctx.asWebviewUri(href) : '';
-    const cls = placement === 'break' ? ' class="image-break"' : '';
+    const cls = placement === 'break' ? ' class="image image-break"' : ' class="image"';
 
     // @scale sizes the image relative to its OWN natural dimensions, not
     // the container — expressed via the CSS custom property --dita-scale,
@@ -868,7 +868,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   'topic/codeblock': (node, ctx, renderChildren) => {
     const outputClass = getAttr(node, 'outputclass') || '';
     const lang = outputClass.replace(/^language-/, '');
-    const pre = `<pre class="codeblock ${escapeAttr(outputClass)}"><code>${renderChildren(node, ctx)}</code></pre>`;
+    const pre = `<pre class="pre codeblock ${escapeAttr(outputClass)}"><code>${renderChildren(node, ctx)}</code></pre>`;
     if (!lang) return pre;
     // The label used to live *inside* <pre>, which has overflow-x:auto for
     // wide code -- an absolutely-positioned child of a scrolling element
@@ -882,7 +882,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   },
 
   'topic/pre': (_node, ctx, renderChildren) =>
-    `<pre class="preformatted">${renderChildren(_node, ctx)}</pre>`,
+    `<pre class="pre preformatted">${renderChildren(_node, ctx)}</pre>`,
 
   'topic/xref': (node, ctx, renderChildren) => {
     const href = getAttr(node, 'href') || '';
@@ -1052,7 +1052,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
   // Software domain
   'topic/screen': (_node, ctx, renderChildren) =>
-    `<pre class="screen">${renderChildren(_node, ctx)}</pre>`,
+    `<pre class="pre screen">${renderChildren(_node, ctx)}</pre>`,
   'topic/msgph': (_node, ctx, renderChildren) =>
     `<span class="msgph">${renderChildren(_node, ctx)}</span>`,
   'topic/msgblock': (_node, ctx, renderChildren) =>
@@ -1060,7 +1060,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
   // Common body elements
   'topic/lines': (_node, ctx, renderChildren) =>
-    `<pre class="lines">${renderChildren(_node, ctx)}</pre>`,
+    `<pre class="pre lines">${renderChildren(_node, ctx)}</pre>`,
   'topic/fn': (node, ctx, renderChildren) => {
     const id = getAttr(node, 'id');
     const cls = id ? ` fn-call-${escapeAttr(id)}` : '';

@@ -35,7 +35,8 @@ describe('body content carries org.dita.html5 class names (additive)', () => {
       `<topic id="t1"><title>Root</title><body><section id="s"><title>Sec</title><p>x</p></section></body></topic>`,
     );
     assert.ok(html.includes('class="title sectiontitle"'), html);
-    assert.ok(!/sectiontitle[\s\S]*topictitle/.test(''), 'sanity');
+    assert.ok(html.includes('<section'), html);
+    assert.ok(html.includes('class="section"'), html);
   });
 
   it('example title carries title + sectiontitle', () => {
@@ -75,5 +76,26 @@ describe('body content carries org.dita.html5 class names (additive)', () => {
       `<topic id="t1"><title>R</title><body><fig id="f"><title>FT</title><p>x</p></fig></body></topic>`,
     );
     assert.ok(html.includes('class="fig"'), html);
+  });
+
+  it('list, image, table and code content carry the org.dita.html5 region classes', () => {
+    const html = render(
+      `<topic id="t1"><title>R</title><body>` +
+        `<ul><li>a</li></ul><ol><li>b</li></ol>` +
+        `<image href="a.png" placement="break"/>` +
+        `<table><tgroup><thead><row><entry>h</entry></row></thead><tbody><row><entry>c</entry></row></tbody></tgroup></table>` +
+        `<codeblock>x=1</codeblock>` +
+        `</body></topic>`,
+    );
+    assert.ok(html.includes('class="ul"'), html);
+    assert.ok(html.includes('class="li"'), html);
+    assert.ok(html.includes('class="ol"'), html);
+    assert.ok(/<img[^>]*class="image\b/.test(html), 'image class');
+    assert.ok(html.includes('class="table cals-table'), html);
+    assert.ok(html.includes('class="thead"'), html);
+    assert.ok(html.includes('class="tbody"'), html);
+    assert.ok(html.includes('class="row"'), html);
+    assert.ok(/<t[hd][^>]*class="entry"/.test(html), 'entry class');
+    assert.ok(html.includes('class="pre codeblock'), html);
   });
 });

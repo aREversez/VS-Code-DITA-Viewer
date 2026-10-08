@@ -192,7 +192,7 @@ describe('renderer', () => {
       ]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('class="cals-table"'));
+    assert.ok(html.includes('class="table cals-table"'));
     assert.ok(/<th\b[^>]*>Header<\/th>/.test(html), `header entry should render as th, got: ${html}`);
     assert.ok(/<td\b[^>]*>Data<\/td>/.test(html), `body entry should render as td, got: ${html}`);
   });
@@ -214,7 +214,7 @@ describe('renderer', () => {
     ]);
     const html = renderDocument(doc, defaultCtx);
     assert.ok(
-      html.includes('class="cals-table cals-table--fixed-layout"'),
+      html.includes('class="table cals-table cals-table--fixed-layout"'),
       `expected the table to carry the fixed-layout class when colspecs declare colwidth, got: ${html}`,
     );
   });
@@ -1009,7 +1009,7 @@ describe('renderer', () => {
     const html = renderDocument(doc, defaultCtx);
     assert.ok(html.includes('class="codeblock-lang"'));
     assert.ok(html.includes('cpp'));
-    assert.ok(html.includes('class="codeblock language-cpp"'));
+    assert.ok(html.includes('class="pre codeblock language-cpp"'));
   });
 
   it('should escape id attribute to prevent XSS', () => {
@@ -1345,7 +1345,7 @@ describe('renderer', () => {
     assert.ok(!/<span class="profiled"[^>]*><li/.test(html), 'the li must not be nested inside a wrapping span');
     const liMatch = html.match(/<li\b[^>]*>profiled/);
     assert.ok(liMatch, 'the li\'s own opening tag should be immediately followed by its text content, not a wrapping element');
-    assert.ok(liMatch![0].includes('class="profiled"'), 'class="profiled" must be an attribute on the li\'s own opening tag');
+    assert.ok(/ class="[^"]*\bprofiled\b/.test(liMatch![0]), 'class="profiled" must be an attribute on the li\'s own opening tag');
     assert.ok(liMatch![0].includes('data-profile-keys="audience:expert"'), 'data-profile-keys must be an attribute on the li\'s own opening tag');
   });
 
@@ -1428,7 +1428,7 @@ describe('renderer', () => {
     assert.ok(!/<tr[^>]*>(?:(?!<td|<th)[\s\S])*?<span/.test(html), 'no <span> should appear as a direct child of <tr> before its first <td>/<th> -- that is invalid HTML');
     const trMatch = html.match(/<tr\b[^>]*>/);
     assert.ok(trMatch, 'profiled row should still render as <tr>');
-    assert.ok(trMatch![0].includes('class="profiled"'), 'class="profiled" must be an attribute on the tr\'s own opening tag');
+    assert.ok(/ class="[^"]*\bprofiled\b/.test(trMatch![0]), 'class="profiled" must be an attribute on the tr\'s own opening tag');
     assert.ok(trMatch![0].includes('data-profile-keys="audience:internal"'), 'data-profile-keys must be an attribute on the tr\'s own opening tag');
     const lastCellMatch = html.match(/<td\b[^>]*>B1[\s\S]*?<\/td>/);
     assert.ok(lastCellMatch, 'row\'s last cell should be found');
@@ -1457,7 +1457,7 @@ describe('renderer', () => {
     const html = renderDocument(doc, defaultCtx);
     const cellMatch = html.match(/<td\b[^>]*>A1[\s\S]*?<\/td>/);
     assert.ok(cellMatch, 'profiled entry should render as <td>');
-    assert.ok(cellMatch![0].includes('class="profiled"'), 'class="profiled" must be an attribute on the td\'s own opening tag');
+    assert.ok(/ class="[^"]*\bprofiled\b/.test(cellMatch![0]), 'class="profiled" must be an attribute on the td\'s own opening tag');
     assert.ok(cellMatch![0].includes('data-profile-keys="platform:windows"'));
     assert.ok(cellMatch![0].includes('class="profiling-label"'), 'the profiling label must actually be inserted for a profiled cell');
   });
