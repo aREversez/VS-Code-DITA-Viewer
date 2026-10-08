@@ -93,7 +93,9 @@ describe('renderer', () => {
       makeEl('topic/note', [makeText('Watch out!')], { type: 'warning' }),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('class="note note--warning"'));
+    assert.ok(html.includes('class="note note--warning warning note_warning"'));
+    assert.ok(html.includes('note__title'), 'html5 note label class');
+    assert.ok(html.includes('<div class="note__body">'), 'html5 note body wrapper');
     assert.ok(html.includes('Warning:'));
   });
 
@@ -1251,7 +1253,7 @@ describe('renderer', () => {
       ]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('class="profiled"'), 'should wrap in the highlight box');
+    assert.ok(/ class="[^"]*\bprofiled\b/.test(html), 'should wrap in the highlight box');
     assert.ok(html.includes('Flagged content'), 'original content should still render');
     assert.ok(html.includes('profiling-chip'), 'should include a chip');
     assert.ok(html.includes('Other'), 'otherprops should display as "Other", matching Oxygen\'s convention');
@@ -1316,7 +1318,7 @@ describe('renderer', () => {
       ]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('class="profiled"'));
+    assert.ok(/ class="[^"]*\bprofiled\b/.test(html));
     assert.ok(!html.includes('profiled--inline'));
   });
 
@@ -1469,7 +1471,7 @@ describe('renderer', () => {
       ]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.strictEqual((html.match(/class="profiled/g) || []).length, 2, 'both the section and the inner p should each get their own highlight wrapper');
+    assert.strictEqual((html.match(/ class="[^"]*\bprofiled\b/g) || []).length, 2, 'both the section and the inner p should each get their own highlight wrapper');
   });
 
   it('should recognize all nine select-atts profiling attributes from the DITA 1.3 spec', () => {
@@ -1481,7 +1483,7 @@ describe('renderer', () => {
         ]),
       ]);
       const html = renderDocument(doc, defaultCtx);
-      assert.ok(html.includes('class="profiled"'), `${attr} should trigger highlighting`);
+      assert.ok(/ class="[^"]*\bprofiled\b/.test(html), `${attr} should trigger highlighting`);
     }
   });
 

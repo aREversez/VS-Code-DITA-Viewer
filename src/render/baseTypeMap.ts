@@ -441,7 +441,17 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
   'topic/title': (node, ctx, renderChildren) => {
     const level = Math.min(Math.max(ctx.headingLevel, 1), 6);
-    return `<h${level}>${renderChildren(node, ctx)}</h${level}>`;
+    // org.dita.html5 gives every title a `title` class plus a context marker:
+    // `topictitle{N}` for a topic's own title, `sectiontitle` for a title that
+    // heads a section/example. WebHelp template css keys on those, so add them
+    // (plan §2.4: only add, never remove). Branch on the real parent -- the
+    // overloaded ctx.parentBaseType would read back as 'topic/title' here.
+    const owner = ctx.ownerBaseType;
+    const titleClass =
+      owner === 'topic/section' || owner === 'topic/example'
+        ? 'title sectiontitle'
+        : `title topictitle${level}`;
+    return `<h${level} class="${titleClass}">${renderChildren(node, ctx)}</h${level}>`;
   },
 
   'topic/shortdesc': (node, ctx, renderChildren) => {
@@ -463,7 +473,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   },
 
   'topic/p': (_node, ctx, renderChildren) => {
-    return `<p>${renderChildren(_node, ctx)}</p>`;
+    return `<p class="p">${renderChildren(_node, ctx)}</p>`;
   },
 
   'topic/itemgroup': (node, ctx, renderChildren) => {
@@ -488,7 +498,12 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     } else {
       label = labels[type] || type;
     }
-    return `<div class="note note--${escapeAttr(type)}"><span class="note__label">${escapeAttr(label)}:</span> ${renderChildren(node, ctx)}</div>`;
+    // Additive dual-classing (plan §2.2/§2.4): keep the own-mode `note--<type>`
+    // and `note__label` the built-in templates style, and add the org.dita.html5
+    // names WebHelp css expects -- the bare `{type}` token + `note_<type>` on the
+    // wrapper, `note__title` on the label, and a `note__body` wrapper around the
+    // content (the only structural addition, approved in the M2-8 audit).
+    return `<div class="note note--${escapeAttr(type)} ${escapeAttr(type)} note_${escapeAttr(type)}"><span class="note__label note__title">${escapeAttr(label)}:</span> <div class="note__body">${renderChildren(node, ctx)}</div></div>`;
   },
 
   'topic/ul': (_node, ctx, renderChildren) => `<ul>${renderChildren(_node, ctx)}</ul>`,
@@ -796,7 +811,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     const figCaption = titleNode
       ? `<figcaption>${renderChildren(titleNode, { ...ctx, headingLevel: ctx.headingLevel + 1 })}</figcaption>`
       : '';
-    return `<figure${safeAttr('id', id)}>${figContent}${figCaption}</figure>`;
+    return `<figure${safeAttr('id', id)} class="fig">${figContent}${figCaption}</figure>`;
   },
 
   // ── Utilities domain: image maps ── renderers below; the shared helpers
@@ -834,7 +849,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     const figCaption = titleNode
       ? `<figcaption>${renderChildren(titleNode, { ...ctx, headingLevel: ctx.headingLevel + 1 })}</figcaption>`
       : '';
-    return `<figure${safeAttr('id', id)} class="imagemap">${imgHtml}${mapHtml}${figCaption}</figure>`;
+    return `<figure${safeAttr('id', id)} class="fig imagemap">${imgHtml}${mapHtml}${figCaption}</figure>`;
   },
 
   // Standalone <area> (not inside an <imagemap>) has no image to attach

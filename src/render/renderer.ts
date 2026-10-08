@@ -7,6 +7,16 @@ export interface RenderContext {
   asWebviewUri: (path: string) => string;
   documentDir: string;
   parentBaseType?: string;
+  /**
+   * The baseType of the element that directly contains the node currently
+   * being rendered (its real parent). `parentBaseType` is overloaded -- it is
+   * repurposed as the context handed to children, so inside a renderer it
+   * reads back as the node's *own* baseType. Renderers that must branch on the
+   * actual parent (topic/title chooses topictitleN vs sectiontitle) read this
+   * field instead. Set in renderEffectiveNode from the incoming context's
+   * parentBaseType, which is the parent's own baseType at that point.
+   */
+  ownerBaseType?: string;
   /** True while rendering descendants of thead/sthead (entry/stentry → th) */
   inTableHeader?: boolean;
   /** Conref targets already resolved on this branch (cycle protection) */
@@ -426,6 +436,7 @@ function renderEffectiveNode(effectiveNode: DitaNode, context: RenderContext, re
     ...context,
     headingLevel: nextHeadingLevel,
     parentBaseType: baseType,
+    ownerBaseType: context.parentBaseType,
     conrefChain: resolvedConref
       ? new Set([...(context.conrefChain || []), resolvedConref])
       : context.conrefChain,

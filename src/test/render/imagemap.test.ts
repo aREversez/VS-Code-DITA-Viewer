@@ -52,7 +52,7 @@ describe('imagemap rendering (utilities domain)', () => {
   it('builds a native image map: img[usemap] + <map> + one <area> per hotspot', () => {
     const { html } = parseAndRender(SPEC_IMAGEMAP);
     assert.ok(
-      /<figure\b[^>]*class="imagemap"/.test(html),
+      /<figure\b[^>]*class="[^"]*\bimagemap\b/.test(html),
       `imagemap should render as figure.imagemap, got: ${html}`,
     );
     const [mapId] = mapIds(html);
@@ -216,7 +216,7 @@ describe('imagemap rendering (utilities domain)', () => {
     const { html } = parseAndRender(xml);
     // injectAttributes stamps its data-* attributes before the authored
     // ones, so match id/class anywhere within the opening tag.
-    assert.ok(/<figure\b[^>]*\bid="world-map"[^>]*class="imagemap"/.test(html), `got: ${html}`);
+    assert.ok(/<figure\b[^>]*\bid="world-map"[^>]*class="[^"]*\bimagemap\b/.test(html), `got: ${html}`);
   });
 
   it('tolerates an area without an xref (dead hotspot) and an imagemap without areas', () => {
