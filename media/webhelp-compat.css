@@ -323,7 +323,9 @@
     margin-right: auto;
     margin-left: auto;
   }
-  body.wh_topic_page .row {
+  /* :not(tr) -- the content carries `<tr class="row">` (the class DITA-OT's
+     html5 gives table rows), which must stay a table row. */
+  body.wh_topic_page .row:not(tr) {
     display: flex;
     flex-wrap: wrap;
     margin-right: -0.75rem;
