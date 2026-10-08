@@ -1588,4 +1588,12 @@ body.mode-book #__site-open-source-btn {
    so a template's own css (unlayered, so it would otherwise win) cannot turn
    this column into a scroller and freeze them. */
 body.wh_topic_page #wh_topic_body { overflow: hidden !important; }
+
+/* The webhelp shell's on-this-page column is hidden whenever it holds no
+   visible outline: book mode (no outline there by design) and pages with
+   fewer than two headings (getOutlineSyncScript marks those
+   tpl-outline--empty). !important for the same reason as above: a template
+   styles #wh_topic_toc itself, with a `display` that would otherwise keep an
+   empty column on screen. */
+body.wh_topic_page nav#wh_topic_toc:not(:has(#__site-outline:not(.tpl-outline--empty))) { display: none !important; }
 } /* @layer dv-base */

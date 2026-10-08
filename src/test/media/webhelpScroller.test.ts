@@ -1,6 +1,5 @@
 import * as assert from 'assert';
-import { readFileSync } from 'fs';
-import { join } from 'path';
+import { blocksFor, readRepo as read, stripComments as strip } from './cssBlocks';
 
 // Smoke-test defect 1: in book mode the breadcrumb, the top menu and the
 // sidebar highlight froze while the reader scrolled.
@@ -16,22 +15,6 @@ import { join } from 'path';
 // Neither jsdom nor this sandbox can run a layout, so these tripwires pin the
 // invariant in the stylesheets: the content root scrolls, its parent does not,
 // and a template cannot flip that back.
-
-const root = join(__dirname, '..', '..', '..');
-const read = (rel: string): string => readFileSync(join(root, rel), 'utf8');
-const strip = (css: string): string => css.replace(/\/\*[\s\S]*?\*\//g, '');
-
-/** The declaration block of every rule whose selector list contains `selector` exactly. */
-function blocksFor(css: string, selector: string): string[] {
-  const out: string[] = [];
-  const re = /([^{}]+)\{([^{}]*)\}/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(css))) {
-    const selectors = m[1].split(',').map((s) => s.replace(/\s+/g, ' ').trim());
-    if (selectors.includes(selector)) out.push(m[2]);
-  }
-  return out;
-}
 
 describe('webhelp shell: #dita-content-root is the scroller', () => {
   const compat = strip(read('media/webhelp-compat.css'));

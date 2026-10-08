@@ -13,6 +13,18 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { isAbsolute, join, relative, resolve, sep } from 'path';
 
 /**
+ * Whether a view carries the on-this-page outline column. Site mode only
+ * (book and tree never do, an earlier decision). An own-DOM template opts in
+ * with `"outline": true`; a template built for the webhelp DOM always has the
+ * column, because it is part of that DOM's contract and an .opt descriptor
+ * has no field to ask for it.
+ */
+export function templateWantsOutline(mode: 'tree' | 'site' | 'book', t: Pick<SiteTemplate, 'outline' | 'dom'> | undefined): boolean {
+  if (mode !== 'site' || !t) return false;
+  return t.outline || t.dom === 'webhelp';
+}
+
+/**
  * Which DOM a template's css was written for. 'own' is this extension's
  * markup (.site-nav, #dita-content-root, ...); 'webhelp' is the WebHelp-style
  * class contract (wh_* hooks, see webhelp-compat-plan.md). An .opt descriptor

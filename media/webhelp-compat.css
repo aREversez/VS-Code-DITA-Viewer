@@ -268,7 +268,12 @@
     margin: 0;
   }
 
-  /* 4c. Right: the on-this-page outline. */
+  /* 4c. Right: the on-this-page outline. The list itself is built
+     client-side into #__site-outline (getOutlineSyncScript). The column
+     scrolls once, here. Hiding it when there is no visible outline in it
+     (book mode, or a page with fewer than two headings) is pinned in
+     styles.css, because a template's own `display` would win over a rule
+     in this layer. */
   body.wh_topic_page nav#wh_topic_toc {
     flex: 0 0 200px;
     display: block;
@@ -276,6 +281,21 @@
     background: var(--content-bg-color);
     border-left: 1px solid var(--border-color);
     padding: 0.75rem 0.5rem;
+  }
+  body.wh_topic_page #wh_topic_toc_content .tpl-outline {
+    flex: none;
+    overflow: visible;
+    padding: 0;
+  }
+  body.wh_topic_page #wh_topic_toc_content .tpl-outline-link {
+    color: var(--toc-color);
+  }
+  body.wh_topic_page #wh_topic_toc_content .tpl-outline-link:hover {
+    background: var(--menu-active-bg-color);
+  }
+  body.wh_topic_page #wh_topic_toc_content .tpl-outline-link.active {
+    color: var(--primary-color);
+    opacity: 1;
   }
 
   /* --- 5. Footer. --------------------------------------------------------- */

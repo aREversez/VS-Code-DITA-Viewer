@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
 import { openSourceBesidePreview } from './sourceEditorOpener';
-import { discoverTemplates, discoverTemplateRoots, templateDisplayName, SiteTemplate, TemplateRoot } from './siteTemplates';
+import { discoverTemplates, discoverTemplateRoots, templateDisplayName, templateWantsOutline, SiteTemplate, TemplateRoot } from './siteTemplates';
 import { buildTemplateStyleText, templateBodyAttrs, templateDataAttr } from './templateStyle';
 import { mapTitleFromXml, renderChrome, wrapShell } from './templateChrome';
 import { TEMPLATE_SELECTION_KEY, parseTemplateSelection, withTemplate, pickTemplate } from './templateSelection';
@@ -781,12 +781,13 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       contentRootHtml: `<div id="dita-content-root"${result.sidebarHtml ? ' class="site-main"' : ''}>${result.html}</div>`,
       // On-this-page outline column (site-book-templates-plan.md item 4):
       // site mode only, and only for a template that opted in via
-      // template.json's "outline" field -- book mode never gets one,
-      // regardless of the template, matching Adeline's call. The markup
+      // template.json's "outline" field or is built for the webhelp DOM
+      // (templateWantsOutline) -- book mode never gets one, regardless of
+      // the template, matching Adeline's call. The markup
       // itself is just the empty shell; getOutlineSyncScript builds and
       // maintains its content entirely client-side (see that function's
       // own doc comment for why).
-      outlineHtml: mode === 'site' && template?.outline
+      outlineHtml: templateWantsOutline(mode, template)
         ? '<aside id="__site-outline" class="tpl-outline"><div class="tpl-outline-inner"></div></aside>'
         : undefined,
       headerHtml: chrome.headerHtml,
