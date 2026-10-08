@@ -895,19 +895,14 @@ ${shell.html}
   }
 
   private templateRoots(document: vscode.TextDocument): TemplateRoot[] {
-    const config = vscode.workspace.getConfiguration('dita-viewer');
+    // Read resource-scoped. templatesDirectory is a "scope": "resource" setting,
+    // so a value that lives only in one workspace folder's .vscode/settings.json
+    // reaches get() only when this document's own uri is the scope; an unscoped
+    // read silently misses it in a multi-root window (the "nothing happened" the
+    // defect used to look like). The folder-only entry still has to resolve to a
+    // real folder -- the onMissing hook below reports it if it does not.
+    const config = vscode.workspace.getConfiguration('dita-viewer', document.uri);
     const configuredDirs = config.get<string[]>('templatesDirectory') ?? [];
-    // The setting is window-scoped, so a value that lives only in one
-    // workspace folder's .vscode/settings.json is not part of get() in a
-    // multi-root window. Say so, rather than leaving "nothing happened".
-    const folderOnly = config.inspect<string[]>('templatesDirectory')?.workspaceFolderValue;
-    if (configuredDirs.length === 0 && folderOnly && folderOnly.length > 0) {
-      this.warnTemplateDirsOnce(
-        '[DITA Viewer] templatesDirectory is set only at workspace-folder level (' +
-          JSON.stringify(folderOnly) +
-          ') and is not read here; put it in the user or workspace settings.',
-      );
-    }
     return discoverTemplateRoots({
       extensionPath: this.context.extensionPath,
       configuredDirs,

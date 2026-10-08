@@ -39,7 +39,7 @@ export function discoverCssFiles(docUri: vscode.Uri): { files: Record<string, st
   if (root !== cssDir) scanDirs.add(root);
   // Add configured CSS directories
   try {
-    const config = vscode.workspace.getConfiguration('dita-viewer');
+    const config = vscode.workspace.getConfiguration('dita-viewer', docUri);
     const cssDirConfigs: string[] | undefined = config.get('cssDirectory');
     if (cssDirConfigs) {
       for (const dir of cssDirConfigs) {
@@ -65,7 +65,7 @@ export function discoverCssFiles(docUri: vscode.Uri): { files: Record<string, st
 
   // Add explicitly configured CSS files
   try {
-    const config = vscode.workspace.getConfiguration('dita-viewer');
+    const config = vscode.workspace.getConfiguration('dita-viewer', docUri);
     const paths: string[] | undefined = config.get('customCss');
     if (paths) {
       for (const p of paths) {

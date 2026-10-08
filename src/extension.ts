@@ -461,7 +461,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (transtype === 'html5' || transtype === 'xhtml') {
         const roots = discoverTemplateRoots({
           extensionPath,
-          configuredDirs: vscode.workspace.getConfiguration('dita-viewer').get<string[]>('templatesDirectory') ?? [],
+          configuredDirs: vscode.workspace.getConfiguration('dita-viewer', mapUri).get<string[]>('templatesDirectory') ?? [],
           refDir: mapDir,
           workspaceRoots: (vscode.workspace.workspaceFolders || []).map((f) => f.uri.fsPath),
         });
@@ -1104,7 +1104,7 @@ function scanCssFiles(mapDir: string): string[] {
 
   try {
     const cfgDirs: string[] | undefined =
-      vscode.workspace.getConfiguration('dita-viewer').get('cssDirectory');
+      vscode.workspace.getConfiguration('dita-viewer', vscode.Uri.file(mapDir)).get('cssDirectory');
     if (cfgDirs) {
       for (const d of cfgDirs) {
         const abs = isAbsolute(d) ? d : resolve(mapDir, d);
@@ -1129,7 +1129,7 @@ function scanCssFiles(mapDir: string): string[] {
 
   try {
     const customPaths: string[] | undefined =
-      vscode.workspace.getConfiguration('dita-viewer').get('customCss');
+      vscode.workspace.getConfiguration('dita-viewer', vscode.Uri.file(mapDir)).get('customCss');
     if (customPaths) {
       for (const p of customPaths) {
         const abs = isAbsolute(p) ? p : resolve(mapDir, p);

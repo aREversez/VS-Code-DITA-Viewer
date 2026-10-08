@@ -648,6 +648,7 @@
             "type": "string"
           },
           "default": [],
+          "scope": "resource",
           "description": "%config.customCss.description%"
         },
         "dita-viewer.cssDirectory": {
@@ -656,6 +657,7 @@
             "type": "string"
           },
           "default": [],
+          "scope": "resource",
           "description": "%config.cssDirectory.description%"
         },
         "dita-viewer.templatesDirectory": {
@@ -664,6 +666,7 @@
             "type": "string"
           },
           "default": [],
+          "scope": "resource",
           "description": "%config.templatesDirectory.description%"
         },
         "dita-viewer.ditaOtPath": {
