@@ -153,12 +153,15 @@ export function getWebviewScript(): string {
 
   ${getFontPrefsScript({ setFontPrefsMsgType: 'setFontPrefs' })}
 
-  // Highlight box, with a fade-out transition -- highlightElement() above
+  // Highlight box, with a fade-out transition -- highlightElements() below
   // adds '__hl-fade' shortly before removing '__hl' entirely, so the box
   // eases out instead of just vanishing or (the actual bug) never going
-  // away at all.
+  // away at all. '__hl-run' is the merged-conref variant: a conref/conkeyref/
+  // conrefend run spans several sibling boxes (a <p> can't hold a <dl>/table,
+  // so the parser hoists the pulled-in content out beside it), so it paints a
+  // flat tint over the whole region instead of a nested outline per box.
   var hlStyle = document.createElement('style');
-  hlStyle.textContent = '.__hl{outline:2px solid var(--vscode-textLink-foreground,#4a90d9);outline-offset:2px;border-radius:3px;background:color-mix(in srgb,var(--vscode-textLink-foreground,#4a90d9) 12%,transparent);transition:outline-color 0.6s ease,background-color 0.6s ease;}.__hl.__hl-fade{outline-color:transparent;background-color:transparent;}';
+  hlStyle.textContent = '.__hl{outline:2px solid var(--vscode-textLink-foreground,#4a90d9);outline-offset:2px;border-radius:3px;background:color-mix(in srgb,var(--vscode-textLink-foreground,#4a90d9) 12%,transparent);transition:outline-color 0.6s ease,background-color 0.6s ease;}.__hl.__hl-run{outline:none;border-radius:0;}.__hl.__hl-fade{outline-color:transparent;background-color:transparent;}';
   document.head.appendChild(hlStyle);
 
   // Image error handling, click-to-enlarge lightbox, clipboard copy and the
@@ -392,19 +395,67 @@ export function getWebviewScript(): string {
   var HL_FADE_MS = 600;
   var hlFadeTimer = null;
   var hlClearTimer = null;
-  function highlightElement(el) {
-    if (!el) return;
+  // The elements currently highlighted, so a later highlight can clear them
+  // all (a merged run is more than one box) rather than only the single
+  // element a querySelector('.__hl') would find.
+  var hlActive = [];
+
+  // The full source range an element was stamped with. A conref/conkeyref/
+  // conrefend merge re-stamps every transplanted node with the referencing
+  // element's own range (see renderer.ts stampSourceRange), so a whole merged
+  // run shares one identical key -- which is what lets us regroup them here.
+  function rangeKey(el) {
+    return el.getAttribute('data-line') + ':' + el.getAttribute('data-end-line') + ':' +
+      el.getAttribute('data-start-col') + ':' + el.getAttribute('data-end-col');
+  }
+
+  // Every [data-line] element sharing best's exact range, reduced to the
+  // outermost box of each contiguous group: a member whose parent is itself a
+  // member is left out, so the tint paints each top-level box once instead of
+  // stacking a translucent layer per nested child (which would darken the
+  // overlaps and re-create the many-boxes look). For a normal element -- whose
+  // children carry their own narrower ranges -- this is just that element.
+  function findRunElements(best) {
+    var all = document.querySelectorAll('[data-line]');
+    var key = rangeKey(best);
+    var members = [];
+    for (var i = 0; i < all.length; i++) {
+      if (rangeKey(all[i]) === key) members.push(all[i]);
+    }
+    var roots = members.filter(function (el) {
+      return !el.parentElement || members.indexOf(el.parentElement) === -1;
+    });
+    return { isRun: members.length > 1, els: roots };
+  }
+
+  function clearHighlight() {
     if (hlFadeTimer) { clearTimeout(hlFadeTimer); hlFadeTimer = null; }
     if (hlClearTimer) { clearTimeout(hlClearTimer); hlClearTimer = null; }
-    var prev = document.querySelector('.__hl');
-    if (prev) { prev.classList.remove('__hl'); prev.classList.remove('__hl-fade'); }
-    el.classList.remove('__hl-fade');
-    el.classList.add('__hl');
+    for (var i = 0; i < hlActive.length; i++) {
+      hlActive[i].classList.remove('__hl');
+      hlActive[i].classList.remove('__hl-run');
+      hlActive[i].classList.remove('__hl-fade');
+    }
+    hlActive = [];
+  }
+
+  function highlightElements(els, isRun) {
+    clearHighlight();
+    if (!els || !els.length) return;
+    for (var i = 0; i < els.length; i++) {
+      els[i].classList.add('__hl');
+      if (isRun) els[i].classList.add('__hl-run');
+    }
+    hlActive = els.slice();
     hlFadeTimer = setTimeout(function() {
-      el.classList.add('__hl-fade');
+      for (var j = 0; j < els.length; j++) els[j].classList.add('__hl-fade');
       hlClearTimer = setTimeout(function() {
-        el.classList.remove('__hl');
-        el.classList.remove('__hl-fade');
+        for (var k = 0; k < els.length; k++) {
+          els[k].classList.remove('__hl');
+          els[k].classList.remove('__hl-run');
+          els[k].classList.remove('__hl-fade');
+        }
+        hlActive = [];
       }, HL_FADE_MS);
     }, HL_VISIBLE_MS);
   }
@@ -488,10 +539,16 @@ export function getWebviewScript(): string {
   function applyHighlightLine(line, col) {
     var best = findContaining(line, col || 0);
     if (best) {
-      highlightElement(best);
-      if (!isElementVisible(best)) {
+      // A merged conref run shares one range across several boxes; tint the
+      // whole run so the pulled-in content lights up too, not just the
+      // referencing tag -- the sibling boxes an HTML <p> can't contain would
+      // otherwise sit outside the single outline.
+      var run = findRunElements(best);
+      highlightElements(run.els, run.isRun);
+      var anchor = (run.els && run.els.length) ? run.els[0] : best;
+      if (!isElementVisible(anchor)) {
         beginProgrammaticScroll();
-        best.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        anchor.scrollIntoView({ block: 'center', behavior: 'smooth' });
       }
     }
   }
