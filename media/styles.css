@@ -5,10 +5,9 @@
  * dv-base`, so a template's UNLAYERED css -- and `webhelp-compat.css` in
  * `@layer wh-compat` -- outrank it without any `!important`. The order
  * statement below fixes dv-base < wh-compat no matter which file the browser
- * parses first. Note this also places the book-mode content-visibility rules
- * inside the layer; that is acceptable for the site-mode milestone (a template
- * would have to explicitly target `.ditamap-book > .book-entry` to disturb
- * them, and book-mode webhelp is deferred -- see §7.3).
+ * parses first. The book-mode content-visibility rules are the exception:
+ * they are `!important` and sit OUTSIDE the layer (see the `end @layer` note
+ * at the rule), so template css cannot switch the optimisation off.
  */
 @layer dv-base, wh-compat;
 @layer dv-base {
@@ -999,8 +998,14 @@ section, .example { margin: 1.5rem 0; }
    entry's last child's bottom margin from collapsing out of the entry, so
    the gap between two topics can grow by that margin. Bounded, and confined
    to entry boundaries. */
+} /* end @layer dv-base: the two book-entry rules below stay UNLAYERED and !important.
+     A template's css is unlayered, and an unlayered rule beats a layered normal
+     declaration at any specificity, so a template's `.book-entry { content-visibility:
+     visible }` would otherwise switch the optimisation off on a large map. Layered
+     or unlayered, !important is decided by specificity (and layer order) the old way:
+     this selector's four classes are not casually out-ranked. */
 .ditamap-book > .book-entry:not(.book-entry--placeholder):not(.book-entry--error) {
-  content-visibility: auto;
+  content-visibility: auto !important;
   contain-intrinsic-size: 600px;
   contain-intrinsic-size: auto 600px;
 }
@@ -1016,10 +1021,11 @@ section, .example { margin: 1.5rem 0; }
    source order the decider, and this comes last. */
 @media print {
   .ditamap-book > .book-entry:not(.book-entry--placeholder):not(.book-entry--error) {
-    content-visibility: visible;
+    content-visibility: visible !important;
   }
 }
 
+@layer dv-base { /* re-enter the layer for the rest of the sheet */
 /* Responsive */
 @media (max-width: 600px) { body { padding: 1rem; } }
 
