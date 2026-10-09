@@ -48,11 +48,12 @@ export function getHighlightRunScript(): string {
     var all = document.querySelectorAll('[data-line]');
     var key = rangeKey(best);
     var members = [];
+    var memberSet = new Set();
     for (var i = 0; i < all.length; i++) {
-      if (rangeKey(all[i]) === key) members.push(all[i]);
+      if (rangeKey(all[i]) === key) { members.push(all[i]); memberSet.add(all[i]); }
     }
     var roots = members.filter(function (el) {
-      return !el.parentElement || members.indexOf(el.parentElement) === -1;
+      return !el.parentElement || !memberSet.has(el.parentElement);
     });
     return { isRun: members.length > 1, els: roots };
   }

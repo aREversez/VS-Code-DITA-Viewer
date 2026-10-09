@@ -105,6 +105,32 @@ describe('topic preview highlight: merged conref runs', () => {
     assert.ok(!run.els.includes(dt));
   });
 
+  it('finds the roots of a large run without a linear membership scan per member', () => {
+    // A conref can pull in a whole section: thousands of elements share one
+    // range. Asking `members.indexOf(parent)` for each of them is quadratic
+    // (every click on such a tag stalled the webview), so the membership test
+    // must be a hash lookup. Counted rather than timed, to stay deterministic.
+    const h = harness();
+    const section = h.el('1:50:0:9');
+    const N = 3000;
+    const members: FakeEl[] = [];
+    for (let i = 0; i < N; i++) members.push(h.el('5:5:0:30', section));
+    const realIndexOf = Array.prototype.indexOf;
+    let bigScans = 0;
+    Array.prototype.indexOf = function (this: unknown[], ...args: [unknown, number?]) {
+      if (this.length >= 1000) bigScans++;
+      return realIndexOf.apply(this, args);
+    } as typeof Array.prototype.indexOf;
+    let run: { isRun: boolean; els: FakeEl[] };
+    try {
+      run = h.api.findRunElements(members[0]);
+    } finally {
+      Array.prototype.indexOf = realIndexOf;
+    }
+    assert.strictEqual(run.els.length, N);
+    assert.strictEqual(bigScans, 0, `${bigScans} linear scans of a ${N}-member run`);
+  });
+
   it('a range that differs in any one of line, end line, start col or end col is not part of the run', () => {
     const h = harness();
     const a = h.el('5:5:0:30');
