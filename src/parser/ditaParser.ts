@@ -58,6 +58,92 @@ function makeRange(): SourceRange {
   return { startLine: 0, startCol: 0, endLine: 0, endCol: 0 };
 }
 
+/** One `<tag …>` / `</tag>` occurrence found by the source scanner below. */
+interface TagEvent {
+  name: string;
+  selfClosing: boolean;
+  isClose: boolean;
+  /** Offset of the tag's '<'. */
+  start: number;
+  /** Offset just past the tag's '>'. */
+  end: number;
+}
+
+/**
+ * Walks the raw source and lists every element tag with its exact offsets.
+ * sax's parser.line/column only update on newlines and at onopentag describe
+ * the position AFTER the tag's '>', and parser.position is unreliable once
+ * text has been reported — so tag ranges come from this scan instead. SAX
+ * consumes tags in source order, so the parser's onopentag/onclosetag
+ * handlers shift this queue one event at a time; `>` inside quoted attribute
+ * values (conref="a>b.dita#t/id") is skipped like a real XML parser does,
+ * `<` inside them is rejected by strict-mode sax outright.
+ */
+function scanTagEvents(xml: string): TagEvent[] {
+  const events: TagEvent[] = [];
+  let i = 0;
+  while (i < xml.length) {
+    const lt = xml.indexOf('<', i);
+    if (lt < 0) break;
+    if (xml.startsWith('<!--', lt)) {
+      const end = xml.indexOf('-->', lt + 4);
+      i = end < 0 ? xml.length : end + 3;
+      continue;
+    }
+    if (xml.startsWith('<![CDATA[', lt)) {
+      const end = xml.indexOf(']]>', lt + 9);
+      i = end < 0 ? xml.length : end + 3;
+      continue;
+    }
+    if (xml.startsWith('<?', lt) || xml.startsWith('<!', lt)) {
+      // processing instruction / DOCTYPE: find the terminating '>' outside quotes
+      let j = lt + 2;
+      while (j < xml.length) {
+        const ch = xml[j];
+        if (ch === '"' || ch === "'") {
+          const close = xml.indexOf(ch, j + 1);
+          if (close < 0) break;
+          j = close + 1;
+          continue;
+        }
+        if (ch === '>') break;
+        j++;
+      }
+      i = j + 1;
+      continue;
+    }
+    const m = /^([A-Za-z_:][\w.:-]*)/.exec(xml.slice(lt + 1));
+    if (!m) {
+      i = lt + 1;
+      continue;
+    }
+    const name = m[1];
+    let j = lt + 1 + name.length;
+    let selfClosing = false;
+    let gt = -1;
+    while (j < xml.length) {
+      const ch = xml[j];
+      if (ch === '"' || ch === "'") {
+        const close = xml.indexOf(ch, j + 1);
+        if (close < 0) break;
+        j = close + 1;
+        continue;
+      }
+      if (ch === '>') {
+        selfClosing = xml[j - 1] === '/';
+        gt = j;
+        break;
+      }
+      j++;
+    }
+    if (gt < 0) break; // unterminated tag: leave the rest to sax's error handling
+    const isClose = xml[lt + 1] === '/';
+    events.push({ name, selfClosing, isClose, start: lt, end: gt + 1 });
+    i = gt + 1;
+  }
+  return events;
+}
+
 function makeParser(tagMap: Record<string, string>) {
   const parseBaseType = makeParseBaseType(tagMap);
 
@@ -74,6 +160,54 @@ function makeParser(tagMap: Record<string, string>) {
     let currentText = '';
     let currentTextStartLine = 0;
     let currentTextStartCol = 0;
+    // Range end stashed by onopentag for a self-closing tag, consumed by the
+    // onclosetag sax fires immediately after for it.
+    let selfClosingEnd: { line: number; col: number } | undefined;
+
+    // The source scan feeding exact tag offsets to the handlers below.
+    const tagEvents = scanTagEvents(xml);
+    let q = 0;
+    // (line, col) of a raw offset, via an ever-forward line-start cursor.
+    // Tag offsets are consumed in document order, so it never rewinds.
+    let lastLineStart = 0;
+    let currentLine = 0;
+    function locAt(pos: number): { line: number; col: number } {
+      let i = lastLineStart;
+      let line = currentLine;
+      let nl = xml.indexOf('\n', i);
+      while (nl !== -1 && nl < pos) {
+        i = nl + 1;
+        line++;
+        nl = xml.indexOf('\n', i);
+      }
+      lastLineStart = i;
+      currentLine = line;
+      return { line, col: pos - i };
+    }
+    /**
+     * Pops the queue's next tag of the given kind, trusting sax as the
+     * authority on order but the scan as the authority on position. sax
+     * lower-cases names by default, so the scan's raw spelling is compared
+     * the same way. A head mismatch means the two disagree on something
+     * exotic (a comment form neither skips identically); re-sync within a
+     * small window and otherwise fall back to sax's own line/column, so
+     * parsing never fails over a bookkeeping disagreement.
+     */
+    function nextTag(name: string, isClose: boolean): TagEvent | undefined {
+      const want = name.toLowerCase();
+      for (let k = q; k < Math.min(q + 8, tagEvents.length); k++) {
+        const e = tagEvents[k];
+        if (e.isClose !== isClose || e.name.toLowerCase() !== want) continue;
+        // Skip the entries between q and k: whatever they were, sax has not
+        // reported them, so they don't correspond to this parser's stream.
+        q = k + 1;
+        return e;
+      }
+      return undefined;
+    }
+    function saxFallbackEnd(): { line: number; col: number } {
+      return { line: parser.line, col: parser.column };
+    }
 
     function flushText() {
       if (currentText.length > 0) {
@@ -106,6 +240,23 @@ function makeParser(tagMap: Record<string, string>) {
         ? classAttr.trim().split(/\s+/).filter(Boolean)
         : undefined;
 
+      // The range spans the tag's own source text, from its '<' to just past
+      // its '>' — not sax's after-'>' position — so cursor positions
+      // anywhere inside the tag's text (the common case of clicking a line
+      // to locate it in the preview) resolve to this element, and a
+      // self-closing element no longer records a zero-width range sitting
+      // beyond its own end.
+      const open = nextTag(tagName, false);
+      const start = open ? locAt(open.start) : { line: parser.line, col: Math.max(0, parser.column - 1) };
+      if (open?.selfClosing) {
+        // sax fires onclosetag for self-closing tags too, immediately after
+        // onopentag, with the parser position unmoved: consume that queue
+        // entry here and let the close carry the range end below.
+        selfClosingEnd = open ? locAt(open.end) : saxFallbackEnd();
+      } else {
+        selfClosingEnd = undefined;
+      }
+
       const element: DitaNode = {
         type: 'element',
         tagName,
@@ -114,8 +265,8 @@ function makeParser(tagMap: Record<string, string>) {
         attributes: node.attributes as Record<string, string>,
         children: [],
         sourceRange: {
-          startLine: parser.line,
-          startCol: parser.column,
+          startLine: start.line,
+          startCol: start.col,
           endLine: 0,
           endCol: 0,
         },
@@ -132,8 +283,18 @@ function makeParser(tagMap: Record<string, string>) {
       flushText();
       const element = stack.pop();
       if (element) {
-        element.sourceRange.endLine = parser.line;
-        element.sourceRange.endCol = parser.column;
+        // Self-closing: onopentag already consumed the scan entry and stashed
+        // the end. Real close tag: its '>' ends the element's range.
+        let end: { line: number; col: number };
+        if (selfClosingEnd) {
+          end = selfClosingEnd;
+          selfClosingEnd = undefined;
+        } else {
+          const close = nextTag(element.tagName || '', true);
+          end = close && close.end >= 0 ? locAt(close.end) : saxFallbackEnd();
+        }
+        element.sourceRange.endLine = end.line;
+        element.sourceRange.endCol = end.col;
       }
     };
 

@@ -84,6 +84,56 @@ describe('ditaParser', () => {
     assert.ok(title.sourceRange.endLine >= title.sourceRange.startLine);
   });
 
+  // The preview's click-to-highlight matches the editor cursor against
+  // [startLine,startCol]..[endLine,endCol], and the cursor sits inside the
+  // tag's source text whenever a line is clicked to locate it. sax's
+  // line/column only update on newlines and at onopentag point just PAST
+  // the tag's '>', so ranges used to start there: a self-closing element
+  // (<p conref/>) got a zero-width range beyond its own text and matched no
+  // click on its own line at all.
+  it('should span a self-closing element over its whole tag text', () => {
+    const xml = `<topic id="t"><body><p conref="c.dita#cid/p_xyc_g22_pgc"/></body></topic>`;
+    const doc = parseDita(xml);
+    const p = doc.root.children[0].children[0];
+    assert.strictEqual(p.sourceRange.startLine, 0);
+    assert.strictEqual(p.sourceRange.startCol, xml.indexOf('<p'));
+    assert.strictEqual(p.sourceRange.endLine, 0);
+    // endCol is half-open: one past the tag's own '>'. So every cursor column
+    // inside the tag's text (col < endCol) resolves to this element, and a
+    // click on the '>' itself is included by the < comparison too.
+    assert.strictEqual(p.sourceRange.endCol, xml.indexOf('/>') + 2, 'end col is one past the tag >');
+  });
+
+  it('should start an element range at its \'<\' even when the cursor is mid-tag', () => {
+    const xml = `<topic id="t">
+  <body>
+    <p id="x">text</p>
+  </body>
+</topic>`;
+    const doc = parseDita(xml);
+    // Whitespace between tags is preserved as text nodes — find <p> by id.
+    const body = doc.root.children.find((c) => c.tagName === 'body')!;
+    const p = body.children.find((c) => c.tagName === 'p')!;
+    assert.strictEqual(p.sourceRange.startLine, 2);
+    assert.strictEqual(p.sourceRange.startCol, 4, 'start col points at the < of <p id="x">');
+    // endCol is a line-relative column, half-open past the </p> '>'. The
+    // </p> sits on the same line as <p>, whose line starts at this offset.
+    const lineStart = xml.lastIndexOf('\n', xml.indexOf('<p')) + 1;
+    const closeGt = xml.lastIndexOf('</p>') + 3; // global offset of </p>'s '>'
+    assert.strictEqual(p.sourceRange.endLine, 2);
+    assert.strictEqual(p.sourceRange.endCol, closeGt + 1 - lineStart, 'end col is one past the </p> >');
+  });
+
+  it('should keep a multi-line open tag\'s range on the line its \'<\' sits on', () => {
+    const xml = `<topic id="t"><p
+  conref="c.dita#cid/x"
+  props="hint">text</p></topic>`;
+    const doc = parseDita(xml);
+    const p = doc.root.children[0];
+    assert.strictEqual(p.sourceRange.startLine, 0);
+    assert.strictEqual(p.sourceRange.startCol, xml.indexOf('<p'));
+  });
+
   it('should handle inline formatting elements', () => {
     const xml = `<topic id="t"><body><p><b>bold</b> and <i>italic</i></p></body></topic>`;
     const doc = parseDita(xml);

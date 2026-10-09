@@ -326,6 +326,27 @@ function injectAttributes(html: string, tagName: string, range: SourceRange): st
   );
 }
 
+// Content pulled in by a conref/conkeyref/conrefend merge is authored in the
+// *target* file, but data-line highlighting and scroll-sync resolve against
+// the referencing document's editor. Left with the target's own line numbers,
+// the merged subtree is a field of foreign ranges inside this document:
+// findContaining matches the click position against them (highlighting an
+// arbitrary entry of a block the cursor never touched, or the whole coarse
+// ancestor when nothing matches), and findClosest falls back to whichever
+// foreign start-line is numerically nearest. So every transplanted node is
+// re-stamped with the referencing element's range — the only position in
+// this file that content legitimately has. All elements of one merged run
+// then share one range: clicking anywhere on the referencing tag picks that
+// tag, which is exactly what "go to my source" means for content that has
+// no per-entry source line here.
+function stampSourceRange(node: DitaNode, range: SourceRange): DitaNode {
+  return {
+    ...node,
+    sourceRange: range,
+    children: node.children?.map((child) => stampSourceRange(child, range)),
+  };
+}
+
 // Shared by both a normal single-target conref and the first member of a
 // conrefend range: the referencing element's own attributes (minus
 // conref/conrefend/conkeyref) take precedence, and its tag/baseType is kept when the
@@ -342,13 +363,17 @@ function mergeConrefTarget(node: DitaNode, target: DitaNode): DitaNode {
     Object.entries(node.attributes || {}).filter(([k]) => k !== 'conref' && k !== 'conrefend' && k !== 'conkeyref')
   );
   if (target.baseType && target.baseType === node.baseType) {
-    return { ...node, children: target.children || [], attributes: restAttrs };
+    return { ...node, children: (target.children || []).map((c) => stampSourceRange(c, node.sourceRange)), attributes: restAttrs };
   }
+  // Cross-type merge: the target's element shape wins, but never its source
+  // position — the target and all of its descendants sit at the referencing
+  // element's range.
+  const stamped = stampSourceRange(target, node.sourceRange);
   const targetAttrs = Object.fromEntries(
-    Object.entries(target.attributes || {})
+    Object.entries(stamped.attributes || {})
       .filter(([k]) => k !== 'conref' && k !== 'conrefend' && k !== 'conkeyref' && k !== 'id')
   );
-  return { ...target, attributes: { ...targetAttrs, ...restAttrs } };
+  return { ...stamped, attributes: { ...targetAttrs, ...restAttrs } };
 }
 
 /** Most hops a reference chain may take; a deeper chain degrades to one hop. */
@@ -465,13 +490,11 @@ function renderEffectiveNode(effectiveNode: DitaNode, context: RenderContext, re
 // rest render as themselves, straight from the target document, since
 // there's no second referencing element for them to inherit from.
 //
-// Known limitation: range members after the first carry the target
-// document's own sourceRange (line numbers in *that* file), not the
-// referencing document's — so data-line-based scroll-sync/highlighting
-// for those elements will point at the wrong file. Flagging rather than
-// working around, since a real fix (rewriting sourceRange to something
-// meaningful in a file those lines don't belong to) would be inventing
-// numbers, not fixing a bug.
+// Every member is re-stamped with the referencing element's sourceRange
+// (see stampSourceRange): the whole run highlights as the referencing tag,
+// and no member leaks target-document line numbers into this file's
+// data-line map — the bug that used to make range members after the first
+// steal highlights and scroll-sync for unrelated lines.
 function renderConrefRange(node: DitaNode, range: DitaNode[], context: RenderContext, conref: string): string {
   return range
     .map((rangeNode, i) => {
@@ -479,7 +502,7 @@ function renderConrefRange(node: DitaNode, range: DitaNode[], context: RenderCon
         const merged = mergeConrefTarget(node, rangeNode);
         return renderEffectiveNode(merged, context, conref);
       }
-      return renderElement(rangeNode, context);
+      return renderElement(stampSourceRange(rangeNode, node.sourceRange), context);
     })
     .join('');
 }

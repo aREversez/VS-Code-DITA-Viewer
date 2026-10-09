@@ -3,7 +3,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { renderDocument, RenderContext } from '../../render/renderer';
 import { parseDita } from '../../parser/ditaParser';
-import { DitaNode } from '../../parser/domTypes';
+import { DitaNode, SourceRange } from '../../parser/domTypes';
 
 function makeText(text: string): DitaNode {
   return {
@@ -19,6 +19,7 @@ function makeEl(
   children: DitaNode[],
   attrs?: Record<string, string>,
   tagName?: string,
+  sourceRange?: SourceRange,
 ): DitaNode {
   return {
     type: 'element',
@@ -26,7 +27,7 @@ function makeEl(
     baseType,
     attributes: attrs,
     children,
-    sourceRange: { startLine: 0, startCol: 0, endLine: 0, endCol: 0 },
+    sourceRange: sourceRange || { startLine: 0, startCol: 0, endLine: 0, endCol: 0 },
   };
 }
 
@@ -1148,6 +1149,85 @@ describe('renderer', () => {
     assert.ok(html.includes('Parameter A'), 'pt text should be preserved');
     assert.ok(html.includes('class="pd"'), 'pd element should be rendered as dd');
     assert.ok(html.includes('Value A'), 'pd text should be preserved');
+  });
+
+  // Merged conref content is authored in the target file, but data-line is
+  // the CURRENT document's editor position: every transplanted element must
+  // carry the referencing element's range. Left with the target's own line
+  // numbers, the merged subtree becomes a field of foreign ranges that
+  // findContaining/findClosest match against click positions in this file --
+  // the reported "clicking the <p conref> highlights only the first
+  // plentry" / "clicking one plentry highlights the whole run" bugs.
+  it('should stamp the referencing element\'s range onto same-type conref children instead of leaking target-file lines', () => {
+    const refRange: SourceRange = { startLine: 5, startCol: 4, endLine: 5, endCol: 60 };
+    const foreign: SourceRange = { startLine: 14, startCol: 34, endLine: 14, endCol: 81 };
+    const target = makeEl('topic/plentry', [
+      makeEl('topic/pt', [makeText('A')], undefined, undefined, foreign),
+      makeEl('topic/pd', [makeText('Va')], undefined, undefined, foreign),
+    ], { id: 'plentry_1' }, undefined, foreign);
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveConref: (_conref: string) => target,
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/parml', [
+          makeEl('topic/plentry', [], { conref: 'reuse.dita#r/plentry_1' }, undefined, refRange),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('data-line="5"'), 'merged plentry should carry the referencing line');
+    assert.ok(!html.includes('data-line="14"'), `target-file line numbers must not leak into data-line: ${html}`);
+  });
+
+  it('should stamp the referencing element\'s range onto cross-type conref targets and their descendants', () => {
+    const refRange: SourceRange = { startLine: 5, startCol: 4, endLine: 5, endCol: 60 };
+    const foreign: SourceRange = { startLine: 121, startCol: 6, endLine: 130, endCol: 14 };
+    const target = makeEl('topic/parml', [
+      makeEl('topic/plentry', [
+        makeEl('topic/pt', [makeText('A')], undefined, undefined, foreign),
+      ], undefined, undefined, foreign),
+    ], { id: 'parml_1' }, undefined, foreign);
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveConref: (_conref: string) => target,
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/p', [], { conref: 'reuse.dita#r/parml_1' }, undefined, refRange),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('class="parml"'), 'target element shape should be rendered');
+    assert.ok(!html.includes('data-line="121"'), `target-file lines must not leak (cross-type merge): ${html}`);
+    // Everything from the merged <dl> down (its wrapper carries the parml's
+    // attrs; the topic/body ancestors before it keep their own ranges):
+    const fromDl = html.slice(html.indexOf('<dl'));
+    const dl = fromDl.match(/data-line="(\d+)"/g) || [];
+    assert.ok(dl.length >= 3, `expected the dl, plentry and pt to carry data-line, got ${dl.length}`);
+    assert.ok(dl.every((m) => m === 'data-line="5"'), `every merged element should sit at the referencing range: ${dl.join(' ')}`);
+  });
+
+  it('should stamp the referencing element\'s range onto every conrefend range member', () => {
+    const refRange: SourceRange = { startLine: 3, startCol: 6, endLine: 3, endCol: 70 };
+    const foreign: SourceRange = { startLine: 40, startCol: 6, endLine: 40, endCol: 60 };
+    const first = makeEl('topic/li', [makeText('one')], { id: 'li1' }, undefined, foreign);
+    const second = makeEl('topic/li', [makeText('two')], { id: 'li2' }, undefined, foreign);
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveConrefRange: (_conref: string, _conrefend: string) => [first, second],
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/body', [
+        makeEl('topic/ul', [
+          makeEl('topic/li', [], { conref: 'reuse.dita#r/li1', conrefend: 'reuse.dita#r/li2' }, undefined, refRange),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('one') && html.includes('two'), 'both range members should render');
+    assert.ok(!html.includes('data-line="40"'), `conrefend members after the first must not leak target-file lines: ${html}`);
   });
 
   it('should leave node unchanged when conref is unresolved (undefined)', () => {
