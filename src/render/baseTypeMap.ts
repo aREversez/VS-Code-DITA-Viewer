@@ -939,12 +939,12 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   'topic/related-links': (_node, ctx, renderChildren) =>
     `<aside class="related-links"><h2>Related links</h2>${renderChildren(_node, ctx)}</aside>`,
 
-  'topic/b': (_node, ctx, renderChildren) => `<strong>${renderChildren(_node, ctx)}</strong>`,
-  'topic/i': (_node, ctx, renderChildren) => `<em>${renderChildren(_node, ctx)}</em>`,
-  'topic/u': (_node, ctx, renderChildren) => `<u>${renderChildren(_node, ctx)}</u>`,
-  'topic/tt': (_node, ctx, renderChildren) => `<code>${renderChildren(_node, ctx)}</code>`,
-  'topic/sup': (_node, ctx, renderChildren) => `<sup>${renderChildren(_node, ctx)}</sup>`,
-  'topic/sub': (_node, ctx, renderChildren) => `<sub>${renderChildren(_node, ctx)}</sub>`,
+  'topic/b': (_node, ctx, renderChildren) => `<strong class="ph b">${renderChildren(_node, ctx)}</strong>`,
+  'topic/i': (_node, ctx, renderChildren) => `<em class="ph i">${renderChildren(_node, ctx)}</em>`,
+  'topic/u': (_node, ctx, renderChildren) => `<u class="ph u">${renderChildren(_node, ctx)}</u>`,
+  'topic/tt': (_node, ctx, renderChildren) => `<code class="ph tt">${renderChildren(_node, ctx)}</code>`,
+  'topic/sup': (_node, ctx, renderChildren) => `<sup class="ph sup">${renderChildren(_node, ctx)}</sup>`,
+  'topic/sub': (_node, ctx, renderChildren) => `<sub class="ph sub">${renderChildren(_node, ctx)}</sub>`,
 
   // Highlight domain additions (specialize topic/ph; given element-specific
   // baseTypes + renderers so the visual styling survives even when the class
@@ -953,7 +953,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   // overline has no semantic HTML element, so it uses a .overline CSS class
   // (defined in styles.css) instead of an inline style so themes can override it.
   'topic/line-through': (_node, ctx, renderChildren) =>
-    `<s>${renderChildren(_node, ctx)}</s>`,
+    `<s class="ph line-through">${renderChildren(_node, ctx)}</s>`,
   'topic/overline': (_node, ctx, renderChildren) =>
     `<span class="overline">${renderChildren(_node, ctx)}</span>`,
 

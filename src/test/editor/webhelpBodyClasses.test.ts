@@ -99,3 +99,32 @@ describe('body content carries org.dita.html5 class names (additive)', () => {
     assert.ok(html.includes('class="pre codeblock'), html);
   });
 });
+
+// Body-class table (scripts/webhelp-body-class-diff.md, corrected against the
+// org.dita.html5 XSLT): with args.html5.classattr=yes the class is the DITA @class
+// ancestor chain (module prefix dropped) plus a few hard-coded default tokens.
+// Still additive: our own tokens (simple-list, body-div, ...) stay.
+describe('body content carries the html5 ancestor-chain tokens (additive)', () => {
+  const body = (inner: string): string => render(`<topic id="t1"><title>R</title><body>${inner}</body></topic>`);
+  const tokens = (html: string, tag: string): string[] => {
+    const m = new RegExp(`<${tag}\\b[^>]*\\bclass="([^"]*)"`).exec(html);
+    return m ? m[1].split(/\s+/) : [];
+  };
+
+  it('highlight-domain elements are ph specialisations: ph + their own name', () => {
+    const cases: Array<[string, string, string]> = [
+      ['b', 'strong', 'b'], ['i', 'em', 'i'], ['u', 'u', 'u'], ['tt', 'code', 'tt'],
+      ['sup', 'sup', 'sup'], ['sub', 'sub', 'sub'], ['line-through', 's', 'line-through'],
+    ];
+    for (const [el, tag, name] of cases) {
+      const html = body(`<p><${el}>x</${el}></p>`);
+      const t = tokens(html, tag);
+      assert.ok(t.includes('ph') && t.includes(name), `${el}: ${html}`);
+    }
+  });
+
+  it('the span.ph from a real <ph> is unchanged', () => {
+    const html = body(`<p><ph>x</ph></p>`);
+    assert.ok(/<span[^>]*class="ph"[^>]*>x<\/span>/.test(html), html);
+  });
+});
