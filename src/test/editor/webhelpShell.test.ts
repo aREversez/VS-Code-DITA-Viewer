@@ -109,6 +109,26 @@ describe('buildWebhelpShell', () => {
   it('the body class marks a webhelp topic page', () => {
     assert.strictEqual(shell().bodyClass, ' wh_topic_page');
   });
+
+  it('the landing page adds wh_main_page on TOP of wh_topic_page (M3-10, additive)', () => {
+    // The contract names body.wh_main_page as the home-page hook. Real Oxygen
+    // output makes the two mutually exclusive; we deliberately do not, so the
+    // one shell keeps working without forking all 61 webhelp-compat.css rules
+    // onto a second body selector (see webhelpShell.ts's mainPage comment).
+    const home = buildWebhelpShell({ sidebarHtml: SIDEBAR, resizerHtml: RESIZER, contentRootHtml: CONTENT, publicationTitle: 'The Book', mainPage: true });
+    assert.strictEqual(home.bodyClass, ' wh_topic_page wh_main_page');
+    assert.ok(hasIn(home)('body.wh_main_page'), 'the landing page satisfies the contract hook');
+    // wh_topic_page still there: the whole compat sheet keys on it.
+    assert.ok(hasIn(home)('body.wh_topic_page'), 'the additive token must not drop wh_topic_page');
+  });
+
+  it('kill test: an ordinary topic page must NOT carry wh_main_page', () => {
+    // Without this half, "the landing page adds the token" would pass even if
+    // the shell started emitting it unconditionally -- every topic page would
+    // then look like a landing page to a template's home rules.
+    assert.ok(!hasIn(shell())('body.wh_main_page'), 'mainPage absent means the token absent');
+    assert.strictEqual(shell().bodyClass.includes('wh_main_page'), false);
+  });
 });
 
 describe('wrapShell dom branch', () => {

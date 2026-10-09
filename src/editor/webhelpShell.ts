@@ -38,6 +38,20 @@ export interface WebhelpShellParts {
   publicationTitle?: string;
   /** Resolved webview URI of the brand logo; the .wh_logo hook appears only when given. */
   logoUri?: string;
+  /**
+   * Site mode's landing page (the SITE_HOME_TARGET stop). Adds the contract's
+   * `wh_main_page` body token the way M3-10 decided it: ADDITIVE, next to
+   * `wh_topic_page`, rather than exclusive the way Oxygen's own output names
+   * them. Exclusivity would mean every one of webhelp-compat.css's rules
+   * (all 61 of them scoped under body.wh_topic_page) needed a second home
+   * page copy -- the base-css rewrite §5 ranks as the riskiest item of the
+   * route, and the whole point of the shared shell is not to fork it. A real
+   * Oxygen template that tests the two apart (`body:not(.wh_topic_page)`,
+   * say) misreads our home page; the compat sheet's own home rules are
+   * scoped `body.wh_topic_page.wh_main_page`, so they stay correct here and
+   * a user template that needs strict exclusivity can still override.
+   */
+  mainPage?: boolean;
 }
 
 /**
@@ -71,5 +85,5 @@ export function buildWebhelpShell(p: WebhelpShellParts): { bodyClass: string; ht
     `</div>`;
   const footer = `<footer class="wh_footer"></footer>`;
   const html = `${header}\n<div id="wh_topic_container">\n${tools}\n${columns}\n</div>\n${footer}\n<button id="go2top" type="button" aria-label="Back to top"></button>`;
-  return { bodyClass: ' wh_topic_page', html };
+  return { bodyClass: p.mainPage ? ' wh_topic_page wh_main_page' : ' wh_topic_page', html };
 }

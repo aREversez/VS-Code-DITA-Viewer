@@ -100,6 +100,7 @@ export function getWebhelpChromeScript(opts: WebhelpChromeScriptOptions): string
     var opts = ${o};
     var links = [];
     var tocObserver = null;
+    var contentObserver = null;
     var pending = false;
 
     // The chrome is inert until the WebHelp shell is on the page. The shell can
@@ -111,6 +112,28 @@ export function getWebhelpChromeScript(opts: WebhelpChromeScriptOptions): string
     // empty forever (with no error, exactly the frozen chrome the smoke test hit).
     function isWhPage() {
       return !!document.body && !!document.body.classList && document.body.classList.contains('wh_topic_page');
+    }
+
+    // The landing page carries the contract's extra wh_main_page body token
+    // (M3-10, additive next to wh_topic_page -- see webhelpShell.ts's mainPage
+    // comment for why the two are not mutually exclusive here). A cold render
+    // gets it from the host, because the provider builds the body class from
+    // the shell; a page SWITCH does not, because switching only replaces
+    // #dita-content-root's innerHTML and the body class is host-owned at
+    // document level. So re-derive it from the content after every swap:
+    // renderSiteHomeHtml's .site-home root is the one signal that is always
+    // present on the landing page and on nothing else, and reading it here
+    // means no MSG_UPDATE_CONTENT call site has to remember to send a flag
+    // (there are already five of them, and a sixth that forgets would fail
+    // silently as a home page styled as a topic page).
+    //
+    // Guarded by isWhPage: an own-DOM template's landing page never grows the
+    // token, exactly the way webhelp-compat.css's rules stay off own-mode
+    // pages.
+    function syncMainPageToken() {
+      if (typeof document === 'undefined' || !isWhPage()) return;
+      var isHome = !!document.querySelector('#dita-content-root .site-home');
+      document.body.classList.toggle('wh_main_page', isHome);
     }
 
     function ownLink(item) {
@@ -149,6 +172,7 @@ export function getWebhelpChromeScript(opts: WebhelpChromeScriptOptions): string
     function update() {
       pending = false;
       if (!isWhPage()) return;
+      syncMainPageToken();
       var model = webhelpChromeModel(collectRows());
       var html = webhelpChromeHtml(model);
       var menu = document.querySelector('.wh_top_menu');
@@ -179,11 +203,24 @@ export function getWebhelpChromeScript(opts: WebhelpChromeScriptOptions): string
 
     function watch() {
       if (tocObserver) { tocObserver.disconnect(); tocObserver = null; }
+      if (contentObserver) { contentObserver.disconnect(); contentObserver = null; }
       if (!isWhPage() || typeof MutationObserver === 'undefined') return;
       var toc = document.getElementById('wh_publication_toc_content');
-      if (!toc) return;
-      tocObserver = new MutationObserver(schedule);
-      tocObserver.observe(toc, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
+      if (toc) {
+        tocObserver = new MutationObserver(schedule);
+        tocObserver.observe(toc, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
+      }
+      // The landing-page token is a property of the CONTENT, so a page switch
+      // (which only replaces #dita-content-root's children) has to re-derive
+      // it. Re-bound with every watch() because an in-place mode switch
+      // rebuilds the content root as a fresh node.
+      var content = document.getElementById('dita-content-root');
+      if (content) {
+        contentObserver = new MutationObserver(function () {
+          syncMainPageToken();
+        });
+        contentObserver.observe(content, { childList: true });
+      }
     }
 
     document.addEventListener('click', function(e) {

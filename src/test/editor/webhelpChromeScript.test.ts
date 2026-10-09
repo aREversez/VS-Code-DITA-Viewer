@@ -165,7 +165,16 @@ describe('webhelp chrome: binds before the shell is on (late shell init)', () =>
       }
       disconnect() {}
     }
-    const body = { classList: { contains: (c: string) => c === 'wh_topic_page' && shellOnAtLoad } };
+    // classList carries toggle as well as contains: the landing-page token
+    // sync (M3-10) writes wh_main_page through it, and a fake without toggle
+    // would throw out of the scheduled update() instead of proving the glue
+    // stays inert off a webhelp page.
+    const body = {
+      classList: {
+        contains: (c: string) => c === 'wh_topic_page' && shellOnAtLoad,
+        toggle: () => false,
+      },
+    };
     const doc = {
       body,
       addEventListener: () => {},
@@ -188,6 +197,96 @@ describe('webhelp chrome: binds before the shell is on (late shell init)', () =>
 
   it('and installs it when the shell is already on', () => {
     assert.ok(glueRun(true).observingBody);
+  });
+});
+
+describe('webhelp chrome: landing-page body token follows the content (M3-10)', () => {
+  // A page switch replaces only #dita-content-root's children, and the body
+  // class is document-level, so wh_main_page cannot come from the host on that
+  // path -- the glue re-derives it from the content on every update. These run
+  // the real script against a fake DOM and let the scheduled update() land.
+  interface WhDomOpts { home: boolean; shellOn: boolean }
+
+  function runTokenSync(o: WhDomOpts): { toggled: Array<[string, boolean]> } {
+    const toggled: Array<[string, boolean]> = [];
+    const body = {
+      classList: {
+        contains: (c: string) => c === 'wh_topic_page' && o.shellOn,
+        toggle: (name: string, on: boolean) => {
+          toggled.push([name, on]);
+          return on;
+        },
+      },
+    };
+    const el = () => ({ innerHTML: '', setAttribute: () => {}, getAttribute: () => null });
+    const doc = {
+      body,
+      addEventListener: () => {},
+      getElementById: () => null,
+      querySelector: (sel: string) => (sel === '.wh_top_menu' || sel === '.wh_breadcrumb' ? el() : sel === '#dita-content-root .site-home' && o.home ? el() : null),
+      querySelectorAll: () => [],
+    };
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    const factory = new Function('document', 'MutationObserver', getWebhelpChromeScript({ crumbLabel: 'x' })) as (
+      d: unknown,
+      m: unknown,
+    ) => void;
+    factory(doc, undefined);
+    return { toggled };
+  }
+
+  const tick = () => new Promise((r) => setTimeout(r, 5));
+
+  it('a webhelp landing page gets the token', async () => {
+    const r = runTokenSync({ home: true, shellOn: true });
+    await tick();
+    assert.ok(r.toggled.some(([n, on]) => n === 'wh_main_page' && on === true), JSON.stringify(r.toggled));
+  });
+
+  it('kill test: an ordinary webhelp topic page gets it REMOVED, not left on', () => {
+    // Without the `off` half, coming back to a topic from the home page would
+    // leave the whole site looking like a landing page to a template's home
+    // rules -- the toggle must be two-way.
+    const r = runTokenSync({ home: false, shellOn: true });
+    return tick().then(() => {
+      assert.ok(r.toggled.some(([n, on]) => n === 'wh_main_page' && on === false), JSON.stringify(r.toggled));
+    });
+  });
+
+  it('an own-DOM (route A) landing page never grows the token', async () => {
+    // The home page of a non-webhelp template is the same .site-home markup;
+    // syncing there would put a contract class on a page that promises route
+    // A's DOM unchanged.
+    const r = runTokenSync({ home: true, shellOn: false });
+    await tick();
+    assert.deepStrictEqual(r.toggled, []);
+  });
+
+  it('the content root is observed, so a swap re-derives the token', () => {
+    const observed: unknown[] = [];
+    class Observer {
+      constructor(_cb: unknown) {}
+      observe(target: unknown) {
+        observed.push(target);
+      }
+      disconnect() {}
+    }
+    const content = { id: 'dita-content-root' };
+    const body = { classList: { contains: () => true, toggle: () => false } };
+    const doc = {
+      body,
+      addEventListener: () => {},
+      getElementById: (id: string) => (id === 'dita-content-root' ? content : null),
+      querySelector: () => null,
+      querySelectorAll: () => [],
+    };
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    const factory = new Function('document', 'MutationObserver', getWebhelpChromeScript({ crumbLabel: 'x' })) as (
+      d: unknown,
+      m: unknown,
+    ) => void;
+    factory(doc, Observer);
+    assert.ok(observed.includes(content), 'the glue must watch the content root, not only the toc');
   });
 });
 

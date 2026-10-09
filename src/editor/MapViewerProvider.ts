@@ -528,6 +528,17 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
   }
 
   /**
+   * The webhelp dom flag for the template a render should use. `known` is what
+   * the caller already resolved -- generateHtml and renderMapContent pick the
+   * template once per render and pass it on rather than paying a second
+   * discovery scan; the paths that never pick one (the controller's incremental
+   * home render, threaded through the host callback) resolve here.
+   */
+  private webhelpDomFor(document: vscode.TextDocument, mode: 'tree' | 'book' | 'site', known?: boolean): boolean {
+    return known ?? this.pickCurrentTemplate(document, mode).template?.dom === 'webhelp';
+  }
+
+  /**
    * Docsite mode's home page (renderMapContentUntracked's and
    * postSitePageUpdate's shared SITE_HOME_TARGET branch): the map/book's own
    * title (mapTitleFromXml -- the same source generateHtml's `<h1>`-less
@@ -536,12 +547,21 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
    * trackSourceReads wrapping of its own -- callers hand it pageFiles: new
    * Set() rather than a tracked result.
    */
-  private renderSiteHomeContent(document: vscode.TextDocument, manifest: DocsiteNavEntry[]): string {
+  private renderSiteHomeContent(document: vscode.TextDocument, manifest: DocsiteNavEntry[], webhelp?: boolean): string {
     const titleKeys = buildKeyMap(document.uri);
     const mapTitle = mapTitleFromXml(document.getText(), basename(document.fileName), (k) => titleKeys.get(k));
     const topicCountLabel = (count: number): string =>
       count === 1 ? vscode.l10n.t('1 topic') : vscode.l10n.t('{0} topics', count);
-    return renderSiteHomeHtml(buildSiteHomeTiles(manifest, localizeTopicTypeLabel('topic')), { heading: mapTitle, topicCountLabel });
+    // M3-10: a webhelp-DOM template's landing page puts the contract's wh_*
+    // tile names on the same nodes (see renderSiteHomeHtml). The host callback
+    // for the controller's incremental page switch passes no flag, so the
+    // default resolves it -- one scan on that path, the same convention
+    // renderMapContent follows for its sidebar classes.
+    return renderSiteHomeHtml(buildSiteHomeTiles(manifest, localizeTopicTypeLabel('topic')), {
+      heading: mapTitle,
+      topicCountLabel,
+      webhelp: this.webhelpDomFor(document, 'site', webhelp),
+    });
   }
 
   /**
@@ -637,7 +657,9 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         }, this.getCollapsedNavIds(document), true, webhelp);
         const sidebarHtml = wrapSiteNavTreeHtml(sidebarTreeHtml, vscode.l10n.t('Topics'));
         if (resolvedSitePage === SITE_HOME_TARGET) {
-          const homeHtml = this.renderSiteHomeContent(document, manifest);
+          // generateHtml and renderMapContent have the template resolved
+          // already; hand the flag down instead of a second discovery scan.
+          const homeHtml = this.renderSiteHomeContent(document, manifest, webhelp);
           // manifest/keyMap/bookMembers go back to the caller too (see the
           // non-home return below for why); pageFiles is empty rather than
           // tracked -- the home page reads no topic file of its own.
@@ -797,6 +819,13 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       // Built-in templates stay "own", so this is a no-op for them. Header
       // content (top menu, breadcrumb) and the logo image land in later steps.
       dom: template?.dom,
+      // M3-10: the landing page adds the contract's wh_main_page body token on
+      // top of wh_topic_page (additive -- see webhelpShell.ts's mainPage
+      // comment). Only the cold render reads it from here; a page switch
+      // re-derives it client-side, because switching only replaces
+      // #dita-content-root's children and the body class is document-level
+      // (see syncMainPageToken in webhelpChromeScript.ts).
+      mainPage: mode === 'site' && result.resolvedSitePage === SITE_HOME_TARGET,
       publicationTitle: mapTitle,
       logoUri: template?.logo ? webview.asWebviewUri(vscode.Uri.file(template.logo)).toString() : undefined,
     });

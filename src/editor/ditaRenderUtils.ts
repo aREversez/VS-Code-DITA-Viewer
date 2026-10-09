@@ -717,8 +717,20 @@ const SITE_HOME_TILE_ICON_SVG =
  */
 export function renderSiteHomeHtml(
   tiles: SiteHomeTile[],
-  opts: { heading: string; topicCountLabel: (count: number) => string },
+  opts: { heading: string; topicCountLabel: (count: number) => string; webhelp?: boolean },
 ): string {
+  // Route B M3-10, §2.2: a webhelp-DOM page puts the same nodes under the
+  // wh_* landing-page names of the contract (webhelpContract.ts, the 'home'
+  // region) -- tile container/tile/title/text get a second class token, the
+  // site-home-* classes every dv-base rule and the tile click delegation key
+  // on stay exactly as they are. Purely additive, like the body-class and
+  // sidebar-tree alignments before it. wh_welcome (a template's welcome text,
+  // which no .opt-derived map data supplies yet) and wh_tile_shortdesc (needs
+  // each topic file read for its shortdesc -- deferred with its own note
+  // below) are optional contract hooks and simply not emitted until there is
+  // something to put in them.
+  const wh = (own: string, webhelpName: string): string =>
+    opts.webhelp ? `${own} ${webhelpName}` : own;
   const heading = `<h1 class="site-home-title">${escapeHtml(opts.heading)}</h1>`;
   if (tiles.length === 0) return `<div class="site-home">${heading}</div>`;
   const cards = tiles
@@ -726,17 +738,17 @@ export function renderSiteHomeHtml(
       const roleChip = tile.role ? `<span class="site-nav-chip site-nav-chip--role">${escapeHtml(tile.role)}</span>` : '';
       const typeChip = tile.topicType ? `<span class="site-nav-chip site-nav-chip--type">${escapeHtml(tile.topicType)}</span>` : '';
       return (
-        `<a href="#" class="site-home-tile" data-site-target="${escapeAttr(tile.target)}" title="${escapeAttr(tile.title)}">` +
+        `<a href="#" class="${wh('site-home-tile', 'wh_tile')}" data-site-target="${escapeAttr(tile.target)}" title="${escapeAttr(tile.title)}">` +
         `<span class="site-home-tile-icon">${SITE_HOME_TILE_ICON_SVG}</span>` +
         `<span class="site-home-tile-body">` +
         `<span class="site-home-tile-chips">${roleChip}${typeChip}</span>` +
-        `<span class="site-home-tile-title">${escapeHtml(tile.title)}</span>` +
-        `<span class="site-home-tile-meta">${escapeHtml(opts.topicCountLabel(tile.topicCount))}</span>` +
+        `<span class="${wh('site-home-tile-title', 'wh_tile_title')}">${escapeHtml(tile.title)}</span>` +
+        `<span class="${wh('site-home-tile-meta', 'wh_tile_text')}">${escapeHtml(opts.topicCountLabel(tile.topicCount))}</span>` +
         `</span></a>`
       );
     })
     .join('');
-  return `<div class="site-home">${heading}<div class="site-home-grid" role="list">${cards}</div></div>`;
+  return `<div class="site-home">${heading}<div class="${wh('site-home-grid', 'wh_tiles')}" role="list">${cards}</div></div>`;
 }
 
 /** One manifest entry plus the direct children nested under it, built by

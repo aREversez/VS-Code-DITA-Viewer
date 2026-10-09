@@ -101,6 +101,8 @@ export interface ShellParts {
   publicationTitle?: string;
   /** webhelp mode only: resolved webview URI of the brand logo (.wh_logo), when the template has one. */
   logoUri?: string;
+  /** webhelp mode only: site mode's landing page, for the `wh_main_page` body token (webhelpShell.ts). */
+  mainPage?: boolean;
 }
 
 /**
@@ -121,6 +123,7 @@ export function wrapShell(p: ShellParts): { bodyClass: string; html: string } {
       outlineHtml: p.outlineHtml,
       publicationTitle: p.publicationTitle,
       logoUri: p.logoUri,
+      mainPage: p.mainPage,
     });
   }
   const core = `${p.sidebarHtml}\n${p.resizerHtml}\n${p.contentRootHtml}${p.outlineHtml ? `\n${p.outlineHtml}` : ''}`;
