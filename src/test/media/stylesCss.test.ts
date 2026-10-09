@@ -274,9 +274,9 @@ describe('styles.css is wrapped in @layer dv-base with an explicit layer order',
 });
 
 describe('.ph dimming only targets the phrase span', () => {
-  // The renderer now puts `ph` on <strong>/<em>/<u>/<code>/<sup>/<sub>/<s>
-  // (highlight domain = ph specialisations, html5 `ph b` etc.). A bare `.ph`
-  // opacity rule would dim all of them to 0.8.
+  // The renderer now puts `ph` on <strong>/<em>/<u>/<code>/<sup>/<sub>/<s>/<span
+  // .overline> (highlight domain = ph specialisations, html5 `ph b` etc.). A bare
+  // `.ph` opacity rule would dim all of them to 0.8.
   const css = stylesCss.replace(/\/\*[\s\S]*?\*\//g, '');
 
   it('no rule dims a bare .ph', () => {
@@ -288,7 +288,10 @@ describe('.ph dimming only targets the phrase span', () => {
     }
   });
 
-  it('span.ph keeps the dimming, but not on an unresolved keyref (which sets opacity: 1 at lower specificity)', () => {
-    assert.ok(/span\.ph:not\(\.unresolved-keyref\)\s*\{[^}]*opacity:\s*0\.8/.test(css));
+  it('span.ph keeps the dimming, but not on an unresolved keyref or the overline span (both keep their own look)', () => {
+    // :not(.unresolved-keyref): the keyref chip sets opacity: 1 and span.ph would
+    // otherwise out-specify it. :not(.overline): overline is the one hi-d member
+    // rendered as a <span>, so the span.ph dimming must exclude it.
+    assert.ok(/span\.ph:not\(\.unresolved-keyref\):not\(\.overline\)\s*\{[^}]*opacity:\s*0\.8/.test(css));
   });
 });

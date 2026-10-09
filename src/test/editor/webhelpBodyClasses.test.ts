@@ -115,6 +115,7 @@ describe('body content carries the html5 ancestor-chain tokens (additive)', () =
     const cases: Array<[string, string, string]> = [
       ['b', 'strong', 'b'], ['i', 'em', 'i'], ['u', 'u', 'u'], ['tt', 'code', 'tt'],
       ['sup', 'sup', 'sup'], ['sub', 'sub', 'sub'], ['line-through', 's', 'line-through'],
+      ['overline', 'span', 'overline'],
     ];
     for (const [el, tag, name] of cases) {
       const html = body(`<p><${el}>x</${el}></p>`);

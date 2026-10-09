@@ -51,8 +51,10 @@ describe('tag completion (DTD-derived baseType mappings)', () => {
     const ov = findEl(root, 'overline');
     assert.strictEqual(ov!.baseType, 'topic/overline');
     // Class-only span (no inline style) so themes can override the decoration
-    // via the .overline rule in styles.css.
-    assert.ok(/<span\b[^>]*class="overline"[^>]*>over<\/span>/.test(html), `got: ${html}`);
+    // via the .overline rule in styles.css. It is a hi-d specialisation of ph, so
+    // it also carries the html5 `ph` token (styles.css excludes it from the
+    // span.ph dimming with :not(.overline), so the ph token stays cosmetic here).
+    assert.ok(/<span\b[^>]*class="ph overline"[^>]*>over<\/span>/.test(html), `got: ${html}`);
     assert.ok(!html.includes('text-decoration'), 'overline must not use an inline style');
   });
 

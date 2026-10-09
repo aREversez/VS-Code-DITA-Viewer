@@ -74,9 +74,10 @@ fixture 里那几个「看起来像 legacy」的 token 正是这两部分：`bod
 | sup | `+ topic/ph hi-d/sup` | **`ph sup`** | `sup` | 无类 | ⚠️ |
 | sub | `+ topic/ph hi-d/sub` | **`ph sub`** | `sub` | 无类 | ⚠️ |
 | line-through | `+ topic/ph hi-d/line-through` | **`ph line-through`** | `line-through` | 无类 | ⚠️ |
+| overline | `+ topic/ph hi-d/overline` | **`ph overline`** | 未列（漏数） | `overline` | ⚠️ hi-d 第 8 个成员，review/表/commit/测试一致漏掉；渲染为 `<span>`，须额外 `:not(.overline)` 防调暗 |
 | synblk | **`+ topic/figgroup pr-d/synblk`** | **`figgroup synblk`** | `pre synblk` | `synblk` | ⚠️ 原表方向错：synblk 是 figgroup 特化，**不是** pre 族，不该加 `pre` |
 
-七个高亮域元素（b/i/u/tt/sup/sub/line-through）的祖先链都含 `ph`，所以应是 `ph b` 而不是 `b`。
+八个高亮域元素（b/i/u/tt/sup/sub/line-through/overline）的祖先链都含 `ph`，所以应是 `ph b` 而不是 `b`。
 按原表只加 `b` 会既不等于 html5，也命不中模板里写成 `.ph` 的规则。
 
 ### 1.4 类名分歧（原 D 级）——现在可直接核定，不必先抓输出
@@ -103,10 +104,10 @@ fixture 里那几个「看起来像 legacy」的 token 正是这两部分：`bod
 
 | token | 命中 | 影响 |
 |---|---|---|
-| **`ph`** | `styles.css:665` `.ph { opacity: 0.8; }` | **会命中**。给 `<strong>`/`<em>`/`<u>`/`<code>`/`<sup>`/`<sub>`/`<s>` 加 `ph` 后，粗体、斜体、行内代码等会被调暗到 0.8。须先把该规则收窄为 `span.ph`（该规则的本意是短语 `<span class="ph">`），再加 token。 |
+| **`ph`** | `styles.css:665` `.ph { opacity: 0.8; }` | **会命中**。给 `<strong>`/`<em>`/`<u>`/`<code>`/`<sup>`/`<sub>`/`<s>` 加 `ph` 后，粗体、斜体、行内代码等会被调暗到 0.8。须先把该规则收窄为 `span.ph`（该规则的本意是短语 `<span class="ph">`），再加 token。`overline` 是 hi-d 里唯一渲染成 `<span>` 的成员，`span.ph` 仍会命中它，故再加 `:not(.overline)`。 |
 | `figgroup` | `styles.css:715` `.figgroup { margin: 0.75rem 0; }` | synblk 加 `figgroup` 会多出这个外边距；多半合理，但是视觉变化，需 F5 看。 |
 | `lines` / `screen` / `msgblock` | 各有自有规则 | 是渲染器已有的同名自有类，原本就是这些元素的类，无新增影响。 |
-| 其余（`dl`/`dt`/`dd`/`dlterm`/`q`/`lq`/`cite`/`b`/`i`/`u`/`tt`/`sup`/`sub`/`line-through`/`sl`/`sli`/`simpletable`/`sthead`/`strow`/`stentry`/`div`/`bodydiv`/`sectiondiv`/`object`） | 无 | 纯附加。 |
+| 其余（`dl`/`dt`/`dd`/`dlterm`/`q`/`lq`/`cite`/`b`/`i`/`u`/`tt`/`sup`/`sub`/`line-through`/`overline`/`sl`/`sli`/`simpletable`/`sthead`/`strow`/`stentry`/`div`/`bodydiv`/`sectiondiv`/`object`） | 无 | 纯附加。 |
 
 `transform-assets/site-chrome.css` 与 `dark-mode.css` 只注入 DITA-OT 输出，不作用于渲染器 DOM（`src/extension.ts:760`），
 不在碰撞面内。
@@ -120,7 +121,7 @@ fixture 里那几个「看起来像 legacy」的 token 正是这两部分：`bod
 
 ## 4. 处置顺序与进度
 
-1. ✅ `.ph { opacity }` 收窄为 `span.ph:not(.unresolved-keyref)`，加七个高亮域 token（`5546d37`）。
+1. ✅ `.ph { opacity }` 收窄为 `span.ph:not(.unresolved-keyref):not(.overline)`，加八个高亮域 token（`5546d37`；`overline` 为后续补齐——它是 hi-d 里唯一渲染成 `<span>` 的成员，故用 `:not(.overline)` 排除调暗）。
    `:not(.unresolved-keyref)` 是必要的：`span.ph` 的优先级高于 `.unresolved-keyref`，否则未解析 keyref 的 `opacity: 1` 会被盖掉。
 2. ✅ `dl` `dt dlterm` `dd` `q` `lq` `cite` `pre msgblock`。`dt` 只输出 `dlterm`，**不**实现 `dltermexpand`
    （取决于 `compact="no"`，渲染器没有 compact 概念）。

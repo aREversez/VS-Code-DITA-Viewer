@@ -952,10 +952,13 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   // line-through maps to the semantic <s> element (zero CSS, like b→<strong>);
   // overline has no semantic HTML element, so it uses a .overline CSS class
   // (defined in styles.css) instead of an inline style so themes can override it.
+  // Both are hi-d specialisations of ph, so (like b/i/u/tt/sup/sub) they carry the
+  // html5 `ph` token. overline is the one hi-d member rendered as a <span>, so
+  // styles.css excludes it from the span.ph dimming rule with :not(.overline).
   'topic/line-through': (_node, ctx, renderChildren) =>
     `<s class="ph line-through">${renderChildren(_node, ctx)}</s>`,
   'topic/overline': (_node, ctx, renderChildren) =>
-    `<span class="overline">${renderChildren(_node, ctx)}</span>`,
+    `<span class="ph overline">${renderChildren(_node, ctx)}</span>`,
 
   'topic/q': (_node, ctx, renderChildren) => `<q class="q">${renderChildren(_node, ctx)}</q>`,
   'topic/lq': (_node, ctx, renderChildren) => `<blockquote class="lq">${renderChildren(_node, ctx)}</blockquote>`,
