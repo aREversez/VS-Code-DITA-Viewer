@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Route B milestone 3 step 11 (webhelp-compat-plan.md §3): the "WebHelp-style
+  test template" the plan asks for as the repository's automated acceptance
+  surface, since a real Oxygen template's css cannot be shipped here.
+
+  Its one job is to reach for the DOM contract BY NAME, so the contract cannot
+  regress silently. Every selector in webhelp-contract.css is either a hook
+  listed in src/editor/webhelpContract.ts or a body-content class the renderer
+  actually emits today (scripts/webhelp-body-class-diff.md, the A/B-level rows).
+  Nothing here is copied from any third-party output -- it is written against
+  the name list only.
+
+  An .opt rather than a template.json for two reasons: it is the shape a real
+  publishing template has, and it is the only descriptor that carries a <logo>,
+  which is what makes the contract's optional .wh_logo hook appear on the page
+  (MapViewerProvider passes template.logo to the shell as logoUri). dom is
+  therefore 'webhelp' by rule (siteTemplates.parseTemplateOpt), and outline
+  stays false -- templateWantsOutline turns it on for the webhelp DOM anyway.
+
+  Lives under test-dita-file so it is never bundled into the extension; the
+  dev host sees it through .vscode/settings.json's dita-viewer.templatesDirectory.
+-->
+<publishing-template>
+  <name>WebHelp Contract (acceptance template)</name>
+  <description>Route B acceptance template: a webhelp-DOM stylesheet that styles the DOM contract by name only, for the automated selector and screenshot checks.</description>
+  <webhelp>
+    <resources>
+      <css file="webhelp-contract.css"/>
+      <logo file="contract-logo.svg"/>
+    </resources>
+  </webhelp>
+</publishing-template>

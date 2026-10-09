@@ -5,3 +5,13 @@ body[data-template="sample-opt"] .site-nav { background: #eef3e8; border-right: 
 body[data-template="sample-opt"] .site-nav-link.active { background: #cfe0c3; color: #1f4d1f; font-weight: 600; }
 body[data-template="sample-opt"] #dita-content-root { background: #fbfaf5; color: #2b3a2b; }
 body[data-template="sample-opt"] #dita-content-root h1 { color: #1f4d1f; }
+
+/* Since route B step 1 an .opt descriptor selects the WebHelp-style DOM (see
+   README, "WebHelp-style templates"), so this sample -- written for route A's
+   markup on purpose -- now renders on the webhelp shell. That combination is
+   itself the manual test: the own-mode names its rules key on (.site-nav,
+   #dita-content-root) are still emitted inside the new shell (route B §2.2
+   double-class, §2.4 add-only), so the palette below still applies and nothing
+   here needs rewriting. To see the same sheet on route A's markup instead, add
+   a template.json in this folder saying { "dom": "own" } -- it wins over the
+   .opt, which is how a real pre-route-B template keeps its old look. */
