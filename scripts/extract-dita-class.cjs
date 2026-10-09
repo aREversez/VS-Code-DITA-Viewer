@@ -15,14 +15,69 @@
 //   - dita-class-extracted.json   (full table with source file:line evidence)
 //   - dita-class-diff.md          (new entries + conflicts + missing renderers)
 //
-// The DTD root can be overridden via the DITA_DTD_ROOT env var; it defaults to
-// the local DITA-OT v1.3 install.
+// The DTD root is resolved in this order (no machine-specific path is baked in):
+//   1. --dita-root <dir>  (DITA-OT install root; the v1.3 plugin lives under <dir>/plugins)
+//   2. DITA_DTD_ROOT env var (points directly at the dtd directory)
+//   3. auto-discovery: the `dita` launcher found on PATH, walked up to its
+//      install root (Windows resolves the .bat shim; symlinked bins resolve too)
+// If none works, the script fails with instructions rather than guessing.
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('child_process');
 
-const DITA_DTD_ROOT =
-  process.env.DITA_DTD_ROOT ||
-  String.raw`E:\Software\dita-ot\plugins\org.oasis-open.dita.v1_3\dtd`;
+const DITA13_PLUGIN = path.join('org.oasis-open.dita.v1_3', 'dtd');
+// Machine-independent identity written into the committed artifacts instead of
+// the resolved absolute root, so the file doesn't churn per developer machine.
+const DITA13_PLUGIN_ID = 'org.oasis-open.dita.v1_3/dtd';
+
+function resolveDtdRoot() {
+  // 1. --dita-root flag
+  const flagIndex = process.argv.indexOf('--dita-root');
+  if (flagIndex !== -1) {
+    const root = process.argv[flagIndex + 1];
+    if (!root) fail('--dita-root requires a directory argument');
+    return path.join(root, 'plugins', DITA13_PLUGIN);
+  }
+  // 2. DITA_DTD_ROOT env var
+  if (process.env.DITA_DTD_ROOT) return process.env.DITA_DTD_ROOT;
+  // 3. discover the `dita` launcher on PATH
+  const launcher = whichLauncher();
+  if (launcher) {
+    // <install>/bin/dita[.bat] -> two levels up is the install root
+    const binDir = path.dirname(launcher);
+    const installRoot = path.dirname(binDir);
+    const candidate = path.join(installRoot, 'plugins', DITA13_PLUGIN);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  fail(
+    'Cannot locate the DITA 1.3 DTDs. Pass --dita-root <DITA-OT install dir>,\n' +
+      'set DITA_DTD_ROOT to the dtd directory, or put the `dita` launcher on PATH.\n' +
+      '(Running without the DTDs? Use --diff-only to recompute against the cached extraction.)'
+  );
+}
+
+function whichLauncher() {
+  try {
+    const out =
+      process.platform === 'win32'
+        ? execFileSync('where.exe', ['dita'], { encoding: 'utf8' })
+        : execFileSync('which', ['dita'], { encoding: 'utf8' });
+    const first = out.split(/\r?\n/).find((l) => l.trim());
+    if (!first) return null;
+    return fs.realpathSync(first.trim());
+  } catch {
+    return null;
+  }
+}
+
+function fail(message) {
+  console.error(message);
+  process.exit(1);
+}
+
+// Resolved lazily in main(): --diff-only never touches the DTDs and must work
+// on a machine without a DITA-OT install.
+let DITA_DTD_ROOT = null;
 
 // Specialization modules to scan. learning/ and machineryIndustry/ are skipped
 // for now (cold modules); they can be added later without code changes.
@@ -207,7 +262,7 @@ function loadCachedCandidates() {
     mapCandidates: cached.mapEntries || {},
     dupConflicts: cached.duplicateConflicts || [],
     cachedGeneratedAt: cached.generatedAt,
-    cachedDtdRoot: cached.ditaDtdRoot,
+    cachedDtdRoot: cached.ditaDtdPlugin || cached.ditaDtdRoot,
   };
 }
 
@@ -222,6 +277,7 @@ function main() {
     dupConflicts = cached.dupConflicts;
     cachedProvenance = { generatedAt: cached.cachedGeneratedAt, dtdRoot: cached.cachedDtdRoot };
   } else {
+    DITA_DTD_ROOT = resolveDtdRoot();
     const files = listDtdFiles(DITA_DTD_ROOT);
     if (files.length === 0) {
       console.error(`No DTD files under ${DITA_DTD_ROOT}. Set DITA_DTD_ROOT.`);
@@ -312,7 +368,7 @@ function main() {
   if (!DIFF_ONLY) {
     const jsonPayload = {
       generatedAt: new Date().toISOString(),
-      ditaDtdRoot: DITA_DTD_ROOT,
+      ditaDtdPlugin: DITA13_PLUGIN_ID,
       scannedDirs: SCAN_DIRS,
       topicEntries: sortObj(topicCandidates),
       mapEntries: sortObj(mapCandidates),
@@ -329,7 +385,7 @@ function main() {
     md.push(`Candidates from cached extraction: ${cachedProvenance.generatedAt} (\`${cachedProvenance.dtdRoot}\`)\n`);
   } else {
     md.push(`Generated: ${new Date().toISOString()}`);
-    md.push(`DTD root: \`${DITA_DTD_ROOT}\`\n`);
+    md.push(`DTD source: \`${DITA13_PLUGIN_ID}\` (resolved at runtime via --dita-root / DITA_DTD_ROOT / PATH; recorded as the plugin id, not a machine path)\n`);
   }
   md.push('## Topic-side (`STANDARD_TAG_TO_BASETYPE`)\n');
   writeDiffSection(md, diff, 'topic');

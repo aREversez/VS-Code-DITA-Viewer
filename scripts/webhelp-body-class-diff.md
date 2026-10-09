@@ -33,6 +33,8 @@ fixture 里那几个「看起来像 legacy」的 token 正是这两部分：`bod
 
 标记：✅ 与 html5 一致；➕ 缺 token，可纯附加；⚠️ 原表期望值有误（已更正）。
 
+> 下表「现状」列记的是**审计当时的快照**；这些 ➕/⚠️ 项是否已落地，以 §4「处置顺序与进度」为准（步 1–4 已提交）。
+
 ### 1.1 已对齐（A 级，fixture 背书）
 
 | 元素 | html5 类（祖先 + 默认） | 渲染器现状 | |
@@ -50,8 +52,8 @@ fixture 里那几个「看起来像 legacy」的 token 正是这两部分：`bod
 |---|---|---|---|---|
 | ol | `- topic/ol` | `ol`（`compact="yes"` 时 + `compact`） | `ol` | ✅ |
 | screen | `+ topic/pre ui-d/screen` | `pre screen` | `pre screen` | ✅ 祖先链即如此 |
-| msgblock | `+ topic/pre sw-d/msgblock` | `pre msgblock` | `pre msgblock`（原表归 C 级待加） | ✅ 期望正确，仍待加 |
-| lines | **`- topic/lines`** | **`lines`**（元素是 `<p>`） | `pre lines` | ⚠️ 原表期望 `pre lines` 有误：`lines` 不在 pre 族。现状多一个 `pre` token |
+| msgblock | `+ topic/pre sw-d/msgblock` | `pre msgblock` | `pre msgblock` | ✅ 期望正确，已加（见 §4 步 2） |
+| lines | **`- topic/lines`** | **`lines`**（元素是 `<p>`） | `pre lines` | ⚠️ 原表期望 `pre lines` 有误：`lines` 不在 pre 族。现状多一个 `pre` token（实跑 4.4.1 确认 html5 = `<p class="lines">`，class 仅 `lines`，见 §5） |
 | pre（原表称 `preformatted`） | `- topic/pre` | `pre` | `pre preformatted` | ✅ 超集可保留；注意 DITA 没有 `preformatted` 元素，这是 `topic/pre` 的自有 token |
 
 ⚠️ `lines` 的 `pre` token 来自 `da5c795` 的「pre 家族」规则，但按祖先链 `lines` 不属于该家族。
@@ -121,7 +123,7 @@ fixture 里那几个「看起来像 legacy」的 token 正是这两部分：`bod
 
 ## 4. 处置顺序与进度
 
-1. ✅ `.ph { opacity }` 收窄为 `span.ph:not(.unresolved-keyref):not(.overline)`，加八个高亮域 token（`5546d37`；`overline` 为后续补齐——它是 hi-d 里唯一渲染成 `<span>` 的成员，故用 `:not(.overline)` 排除调暗）。
+1. ✅ `.ph { opacity }` 收窄为 `span.ph:not(.unresolved-keyref):not(.overline)`，加八个高亮域 token（`25f6802` 收窄 + 七 token；`3436bb1` 补 overline——它是 hi-d 里唯一渲染成 `<span>` 的成员，故用 `:not(.overline)` 排除调暗）。
    `:not(.unresolved-keyref)` 是必要的：`span.ph` 的优先级高于 `.unresolved-keyref`，否则未解析 keyref 的 `opacity: 1` 会被盖掉。
 2. ✅ `dl` `dt dlterm` `dd` `q` `lq` `cite` `pre msgblock`。`dt` 只输出 `dlterm`，**不**实现 `dltermexpand`
    （取决于 `compact="no"`，渲染器没有 compact 概念）。
@@ -130,5 +132,31 @@ fixture 里那几个「看起来像 legacy」的 token 正是这两部分：`bod
 4. ✅ D 级：`sl`、`sli`、`simpletable`、`sthead`、`strow`、`stentry`、`div`、`bodydiv`、`sectiondiv`、`object`，自有 token 保留。
    `simpletable.xsl`（`2feba49`）已核：类只来自 `@frame/@expanse/@scale` 属性，没有写死的默认类，只加 `simpletable`。
    `sli` 的 `sliexpand`（取决于父 `compact`）与 `dltermexpand` 同理，不实现。
-5. ⏳ `lines` 的多余 `pre` 去不去：未动，等你决定（对已提交行为的回退）。
-6. ⏳ 真实 html5 fixture（`ol`、`pre screen`、`lines`、`dl/dt/dd`、高亮域、simpletable 系）：未做，需要真实 DITA-OT 输出。
+5. ✅ 决定：保留 `lines` 的多余 `pre`（代码未动）。理由：预览里 `.lines`（`styles.css:709`）已直接给代码块式样式，去不去 `pre` 视觉不变；元素本就是 `<pre>`（为保换行），token 与之自洽；`site-chrome.css:220` 的 `pre.pre` 命中也与成块意图一致，无害。去掉=回退 `da5c795` 已提交行为且违反 §2.4「只加不减」。取舍已定，不再作待办。
+6. ✅ 真实 html5 输出核对（DITA-OT 4.4.1 本机 `dita -f html5` 实跑，详见 §5）：更正后的期望值全部坐实——高亮域八个都是 `ph X`；`dt dlterm`、`q`、`lq`、`cite`、`ol`、`pre codeblock/screen/msgblock`、`figgroup synblk`、simpletable 系全部一致。残差均在既定策略内，见 §5.2。
+
+## 5. 真实输出核对（DITA-OT 4.4.1，2026-10-09 本机 `dita -f html5`）
+
+一次性 concept fixture（写在 `output/audit-html5/`，gitignore 的临时件，**非**仓库回归件）。body 里出现的类 token 全集：
+
+`b body caution cite codeblock compact conbody dd div dl dlterm dt fig fig--title-label figgroup fignone i image li line-through lines lq msgblock note note__body note__title note_caution note_note ol overline p ph pre q screen section sectiondiv sectiontitle shortdesc simple simpletable sl sli stentry sthead strow sub sup synblk syntaxdiagram title tt u ul`
+
+### 5.1 与更正后的表完全一致
+
+- hi-d 八个 → `ph X`：`b/i/tt/line-through/overline` 在 html5 里塌成 `<span class="ph X">`；`u/sup/sub` 保留原生 `<u>/<sup>/<sub>` 但仍带 `ph X`。我们保留语义标签（`<strong>/<em>/<code>/<s>/<span>`）+ `ph X`，**类侧一致**，标签侧是有意的差异（§2.4 只加不减）。
+- `dt dlterm`、`dd`、`q`、`cite`、`lq`（→`<blockquote class="lq">`）、`ol`、`div`、`sectiondiv`。
+- `pre codeblock`、`pre screen`、`pre msgblock`；`figgroup synblk`（html5 元素是 `<span>`，我们是 `<pre>` 保空白，类一致）。
+- simpletable 系：`simpletable`/`sthead`/`strow`/`stentry`，除 `@frame/@expanse/@scale` 外**确无**写死默认类——坐实 §4 步 4。
+
+### 5.2 有意的残差（都是默认 output-class / 元素选择，非祖先链）
+
+| 元素 | 真实 html5 | 我们 | 说明 |
+|---|---|---|---|
+| `dl[compact=yes]` | `dl compact` | `dl` | 不合成 `compact` 默认类（无 compact 概念），属 §3 延后类 |
+| `sl`（容器） | `sl simple` | `sl simple-list` | html5 默认类是 `simple`，我们保留自有 `simple-list`；祖先 token `sl` 已对齐 |
+| `sli` | `sli` | `sli li` | html5 不带 `li`；我们「只加不减」保留了 `li`，纯超集 |
+| `lines` | `<p class="lines">` | `<pre class="pre lines">` | 选 `<pre>` 保换行，多带 `pre` token，已定保留（步 5） |
+| `object` | `<object>`（**无 class**） | `... object` | html5 根本没给 object 发类；我们的 `object` 是额外超集，无害 |
+| `fig`/caption | `fig ... fignone` + `fig--title-label`、note 有 `note__title`/`note__body` | 仅 `note__body`（M2-8 批准） | `fignone`/`fig--title-label`/`table--title-label` 属结构默认类，维持 §3 延后 |
+
+残差全部落在两类既定策略内：(a) 不合成 html5 的 `default-output-class`（compact/simple/fignone/dltermexpand/…）；(b) 元素标签为保功能而有意不同于 html5，类 token 侧仍尽量对齐。无一例是祖先链推错。

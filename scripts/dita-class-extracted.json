@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-07-30T02:06:37.921Z",
-  "ditaDtdRoot": "E:\\Software\\dita-ot\\plugins\\org.oasis-open.dita.v1_3\\dtd",
+  "generatedAt": "2026-10-09T07:01:24.035Z",
+  "ditaDtdPlugin": "org.oasis-open.dita.v1_3/dtd",
   "scannedDirs": [
     "base",
     "technicalContent",
