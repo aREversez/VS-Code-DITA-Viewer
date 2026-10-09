@@ -333,7 +333,7 @@ describe('renderer', () => {
       ]),
     ]);
     const html = renderDocument(doc, defaultCtx);
-    assert.ok(html.includes('class="simple-table"'));
+    assert.ok(html.includes('class="simple-table simpletable"'));
     assert.ok(html.includes('data-dita-tagname="stentry"'));
     assert.ok(html.includes('>OS<'));
     assert.ok(html.includes('>Linux<'));

@@ -509,13 +509,13 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   'topic/ul': (_node, ctx, renderChildren) => `<ul class="ul">${renderChildren(_node, ctx)}</ul>`,
   'topic/ol': (_node, ctx, renderChildren) => `<ol class="ol">${renderChildren(_node, ctx)}</ol>`,
   'topic/li': (_node, ctx, renderChildren) => `<li class="li">${renderChildren(_node, ctx)}</li>`,
-  'topic/sl': (_node, ctx, renderChildren) => `<ul class="simple-list">${renderChildren(_node, ctx)}</ul>`,
-  'topic/sli': (_node, ctx, renderChildren) => `<li class="li">${renderChildren(_node, ctx)}</li>`,
+  'topic/sl': (_node, ctx, renderChildren) => `<ul class="simple-list sl">${renderChildren(_node, ctx)}</ul>`,
+  'topic/sli': (_node, ctx, renderChildren) => `<li class="li sli">${renderChildren(_node, ctx)}</li>`,
 
-  'topic/dl': (_node, ctx, renderChildren) => `<dl>${renderChildren(_node, ctx)}</dl>`,
+  'topic/dl': (_node, ctx, renderChildren) => `<dl class="dl">${renderChildren(_node, ctx)}</dl>`,
   'topic/dlentry': (_node, ctx, renderChildren) => `<div class="dlentry">${renderChildren(_node, ctx)}</div>`,
-  'topic/dt': (_node, ctx, renderChildren) => `<dt>${renderChildren(_node, ctx)}</dt>`,
-  'topic/dd': (_node, ctx, renderChildren) => `<dd>${renderChildren(_node, ctx)}</dd>`,
+  'topic/dt': (_node, ctx, renderChildren) => `<dt class="dt dlterm">${renderChildren(_node, ctx)}</dt>`,
+  'topic/dd': (_node, ctx, renderChildren) => `<dd class="dd">${renderChildren(_node, ctx)}</dd>`,
 
   'topic/table': (node, ctx, renderChildren) => {
     const id = getAttr(node, 'id');
@@ -702,16 +702,16 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
   'topic/simpletable': (node, ctx, renderChildren) => {
     const id = getAttr(node, 'id');
-    return `<table${safeAttr('id', id)} class="simple-table">${renderChildren(node, ctx)}</table>`;
+    return `<table${safeAttr('id', id)} class="simple-table simpletable">${renderChildren(node, ctx)}</table>`;
   },
 
   'topic/sthead': (_node, ctx, renderChildren) =>
-    `<thead>${renderChildren(_node, { ...ctx, inTableHeader: true })}</thead>`,
+    `<thead class="sthead">${renderChildren(_node, { ...ctx, inTableHeader: true })}</thead>`,
   'topic/strow': (_node, ctx, renderChildren) =>
-    `<tr>${renderChildren(_node, { ...ctx, inTableHeader: false })}</tr>`,
+    `<tr class="strow">${renderChildren(_node, { ...ctx, inTableHeader: false })}</tr>`,
   'topic/stentry': (node, ctx, renderChildren) => {
     const tag = isInTableHeader(ctx) ? 'th' : 'td';
-    return `<${tag}>${renderChildren(node, ctx)}</${tag}>`;
+    return `<${tag} class="stentry">${renderChildren(node, ctx)}</${tag}>`;
   },
 
   'topic/image': (node, ctx) => {
@@ -957,8 +957,8 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   'topic/overline': (_node, ctx, renderChildren) =>
     `<span class="overline">${renderChildren(_node, ctx)}</span>`,
 
-  'topic/q': (_node, ctx, renderChildren) => `<q>${renderChildren(_node, ctx)}</q>`,
-  'topic/lq': (_node, ctx, renderChildren) => `<blockquote>${renderChildren(_node, ctx)}</blockquote>`,
+  'topic/q': (_node, ctx, renderChildren) => `<q class="q">${renderChildren(_node, ctx)}</q>`,
+  'topic/lq': (_node, ctx, renderChildren) => `<blockquote class="lq">${renderChildren(_node, ctx)}</blockquote>`,
 
   'topic/keyword': (_node, ctx, renderChildren) =>
     `<span class="keyword">${renderChildren(_node, ctx)}</span>`,
@@ -1041,8 +1041,10 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     `<span class="fragment">${renderChildren(_node, ctx)}</span>`,
   'topic/fragref': (_node, ctx, renderChildren) =>
     `<span class="fragref">${renderChildren(_node, ctx)}</span>`,
+  // synblk specialises figgroup (not pre): class is `figgroup synblk`. The <pre>
+  // element stays so the syntax text keeps its whitespace.
   'topic/synblk': (_node, ctx, renderChildren) =>
-    `<pre class="synblk">${renderChildren(_node, ctx)}</pre>`,
+    `<pre class="figgroup synblk">${renderChildren(_node, ctx)}</pre>`,
   'topic/synnote': (_node, ctx, renderChildren) =>
     `<div class="synnote">${renderChildren(_node, ctx)}</div>`,
   'topic/synnoteref': (_node, ctx, renderChildren) =>
@@ -1056,7 +1058,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   'topic/msgph': (_node, ctx, renderChildren) =>
     `<span class="msgph">${renderChildren(_node, ctx)}</span>`,
   'topic/msgblock': (_node, ctx, renderChildren) =>
-    `<pre class="msgblock">${renderChildren(_node, ctx)}</pre>`,
+    `<pre class="pre msgblock">${renderChildren(_node, ctx)}</pre>`,
 
   // Common body elements
   'topic/lines': (_node, ctx, renderChildren) =>
@@ -1067,7 +1069,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     return `<sup class="fn${cls}">${renderChildren(node, ctx)}</sup>`;
   },
   'topic/cite': (_node, ctx, renderChildren) =>
-    `<cite>${renderChildren(_node, ctx)}</cite>`,
+    `<cite class="cite">${renderChildren(_node, ctx)}</cite>`,
   'topic/boolean': (node, ctx, renderChildren) => {
     const val = getAttr(node, 'value') || '';
     return `<span class="boolean" data-value="${escapeAttr(val)}">${escapeAttr(val) || renderChildren(node, ctx)}</span>`;
@@ -1109,11 +1111,11 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
   'topic/index-sort-as': () => '',
   'topic/index-base': () => '',
   'topic/div': (_node, ctx, renderChildren) =>
-    `<div class="body-div">${renderChildren(_node, ctx)}</div>`,
+    `<div class="body-div div">${renderChildren(_node, ctx)}</div>`,
   'topic/sectiondiv': (_node, ctx, renderChildren) =>
-    `<div class="section-div">${renderChildren(_node, ctx)}</div>`,
+    `<div class="section-div sectiondiv">${renderChildren(_node, ctx)}</div>`,
   'topic/bodydiv': (_node, ctx, renderChildren) =>
-    `<div class="body-div">${renderChildren(_node, ctx)}</div>`,
+    `<div class="body-div bodydiv">${renderChildren(_node, ctx)}</div>`,
   // Generic grouping container (programming domain
   // groupchoice/groupcomp/groupseq alternatives). Same block treatment as
   // bodydiv/sectiondiv — no distinct visual semantics of its own.
@@ -1166,7 +1168,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
   // Multimedia
   'topic/object': (_node, ctx, renderChildren) =>
-    `<object class="dita-object">${renderChildren(_node, ctx)}</object>`,
+    `<object class="dita-object object">${renderChildren(_node, ctx)}</object>`,
   'topic/param': () => '',
 
   // Anchors

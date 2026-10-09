@@ -65,7 +65,7 @@ describe('tag completion (DTD-derived baseType mappings)', () => {
     const { root, html } = parseTopic(xml);
     assert.strictEqual(findEl(root, 'equation-block')!.baseType, 'topic/div');
     assert.strictEqual(findEl(root, 'equation-figure')!.baseType, 'topic/fig');
-    assert.ok(html.includes('class="body-div"'), 'equation-block should render via topic/div');
+    assert.ok(html.includes('class="body-div div"'), 'equation-block should render via topic/div');
     assert.ok(html.includes('<figure'), 'equation-figure should render via topic/fig');
   });
 

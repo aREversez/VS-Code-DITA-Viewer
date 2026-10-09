@@ -118,15 +118,16 @@ fixture 里那几个「看起来像 legacy」的 token 正是这两部分：`bod
 | `conbody`（body 上的特化类） | 祖先链 `body conbody` 跟随 concept/task/reference 特化；我们把 body 统一映射成 `topic/body`，无条件输出会错 |
 | `fig--title-label` / `table--title-label` 编号 caption span + `fignone` | 结构性改动，M2-8 只批准了 `note__body` 一个结构新增 |
 
-## 4. 处置顺序建议
+## 4. 处置顺序与进度
 
-1. **先收窄 `.ph { opacity }` 为 `span.ph`**（独立小改，先写「`<strong class="ph b">` 不被调暗」的静态 tripwire），
-   再加七个高亮域 token `ph b|i|u|tt|sup|sub|line-through`。
-2. 加 `dl` `dt dlterm` `dd` `q` `lq` `cite` 与 `msgblock`（`pre msgblock`）。
-   `dt` 的 `dltermexpand` 取决于 `compact="no"`，要么一并实现，要么明确只输出 `dlterm`。
-3. `synblk` 改为 `figgroup synblk`（不要加 `pre`），F5 看外边距变化。
-4. D 级各项按 §1.4 加 token，自有 token 保留；`simpletable` 的 frame/rules 默认 token 实现前先读
-   `simpletable.xsl` 核对。
-5. `lines` 的多余 `pre` 去不去：去掉更贴 html5，但这是对已提交行为的回退，需你决定。
-6. 补一份真实 html5 fixture（`ol`、`pre screen`、`lines`、`dl/dt/dd`、高亮域、simpletable 系），
-   作为回归，不再是前置条件。可走 `dita-viewer.ditaOtPath` 的真实 transform。
+1. ✅ `.ph { opacity }` 收窄为 `span.ph:not(.unresolved-keyref)`，加七个高亮域 token（`5546d37`）。
+   `:not(.unresolved-keyref)` 是必要的：`span.ph` 的优先级高于 `.unresolved-keyref`，否则未解析 keyref 的 `opacity: 1` 会被盖掉。
+2. ✅ `dl` `dt dlterm` `dd` `q` `lq` `cite` `pre msgblock`。`dt` 只输出 `dlterm`，**不**实现 `dltermexpand`
+   （取决于 `compact="no"`，渲染器没有 compact 概念）。
+3. ✅ `synblk` → `figgroup synblk`（保留 `<pre>` 元素以保住空白；不带 `pre` token）。F5 需看一眼外边距：
+   `.figgroup`（`styles.css` 715 行，0.75rem）排在 `.synblk`（698 行，0.5rem）之后，现在会胜出。
+4. ✅ D 级：`sl`、`sli`、`simpletable`、`sthead`、`strow`、`stentry`、`div`、`bodydiv`、`sectiondiv`、`object`，自有 token 保留。
+   `simpletable.xsl`（`2feba49`）已核：类只来自 `@frame/@expanse/@scale` 属性，没有写死的默认类，只加 `simpletable`。
+   `sli` 的 `sliexpand`（取决于父 `compact`）与 `dltermexpand` 同理，不实现。
+5. ⏳ `lines` 的多余 `pre` 去不去：未动，等你决定（对已提交行为的回退）。
+6. ⏳ 真实 html5 fixture（`ol`、`pre screen`、`lines`、`dl/dt/dd`、高亮域、simpletable 系）：未做，需要真实 DITA-OT 输出。

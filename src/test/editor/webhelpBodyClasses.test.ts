@@ -123,6 +123,60 @@ describe('body content carries the html5 ancestor-chain tokens (additive)', () =
     }
   });
 
+  it('dl family: dl, dt dlterm, dd, plus the existing dlentry', () => {
+    const html = body(`<dl><dlentry><dt>t</dt><dd>d</dd></dlentry></dl>`);
+    assert.deepStrictEqual(tokens(html, 'dl'), ['dl']);
+    assert.deepStrictEqual(tokens(html, 'dt'), ['dt', 'dlterm']);
+    assert.deepStrictEqual(tokens(html, 'dd'), ['dd']);
+    assert.ok(html.includes('class="dlentry"'), html);
+  });
+
+  it('q, lq and cite carry their own name', () => {
+    const html = body(`<p><q>a</q><cite>c</cite></p><lq>b</lq>`);
+    assert.deepStrictEqual(tokens(html, 'q'), ['q']);
+    assert.deepStrictEqual(tokens(html, 'cite'), ['cite']);
+    assert.deepStrictEqual(tokens(html, 'blockquote'), ['lq']);
+  });
+
+  it('msgblock is a pre specialisation: pre msgblock', () => {
+    assert.deepStrictEqual(tokens(body(`<msgblock>m</msgblock>`), 'pre'), ['pre', 'msgblock']);
+  });
+
+  it('synblk is a figgroup specialisation, not a pre one', () => {
+    const html = body(`<synblk>s</synblk>`);
+    // element stays <pre> to keep whitespace; the class must not claim the pre family
+    const t = tokens(html, 'pre');
+    assert.deepStrictEqual(t, ['figgroup', 'synblk'], html);
+  });
+
+  it('sl / sli / simpletable family keep own tokens and gain the html5 ones', () => {
+    const html = body(
+      `<sl><sli>a</sli></sl>` +
+        `<simpletable><sthead><stentry>h</stentry></sthead><strow><stentry>c</stentry></strow></simpletable>`,
+    );
+    const ul = tokens(html, 'ul');
+    assert.ok(ul.includes('simple-list') && ul.includes('sl'), html);
+    const li = tokens(html, 'li');
+    assert.ok(li.includes('li') && li.includes('sli'), html);
+    const table = tokens(html, 'table');
+    assert.ok(table.includes('simple-table') && table.includes('simpletable'), html);
+    assert.ok(/<thead[^>]*class="[^"]*\bsthead\b/.test(html), html);
+    assert.ok(/<tr[^>]*class="[^"]*\bstrow\b/.test(html), html);
+    assert.ok(/<th[^>]*class="[^"]*\bstentry\b/.test(html), html);
+    assert.ok(/<td[^>]*class="[^"]*\bstentry\b/.test(html), html);
+  });
+
+  it('div / bodydiv / sectiondiv / object keep own tokens and gain the html5 one', () => {
+    const html = body(
+      `<div>a</div><section><sectiondiv>b</sectiondiv></section><bodydiv>c</bodydiv>` +
+        `<object data="x.swf"><param name="n" value="v"/></object>`,
+    );
+    assert.ok(/class="body-div div"/.test(html), html);
+    assert.ok(/class="section-div sectiondiv"/.test(html), html);
+    assert.ok(/class="body-div bodydiv"/.test(html), html);
+    assert.ok(/<object[^>]*class="dita-object object"/.test(html), html);
+  });
+
   it('the span.ph from a real <ph> is unchanged', () => {
     const html = body(`<p><ph>x</ph></p>`);
     assert.ok(/<span[^>]*class="ph"[^>]*>x<\/span>/.test(html), html);
