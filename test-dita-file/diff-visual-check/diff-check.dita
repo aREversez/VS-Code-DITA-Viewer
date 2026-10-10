@@ -12,17 +12,17 @@
 
         <section id="sec-modified-para">
             <title>1. Modified paragraph (word-level)</title>
-            <p>The report aggregates telemetry from every connected sensor, computes rolling averages over a five minute window, and raises an alert when a reading crosses the configured threshold for three consecutive samples.</p>
+            <p>The report aggregates telemetry from every connected sensor, computes rolling averages over a ten minute window, and raises an alert when a reading crosses the configured threshold for two consecutive samples.</p>
         </section>
 
         <section id="sec-removed">
             <title>2. Removed block</title>
-            <p>This whole paragraph exists only in the older version, so in the diff it should appear on the left with a struck-through tint and an empty placeholder on the right.</p>
         </section>
 
         <section id="sec-added">
             <title>3. Added section</title>
             <p>The paragraph that the newer version introduces below this heading should surface as a fully tinted added block, with an empty placeholder on the base side.</p>
+            <p>Rotate the signing key every ninety days to satisfy the updated security policy.</p>
         </section>
 
         <section id="sec-list">
@@ -30,7 +30,7 @@
             <ul>
                 <li>Wipe the contact surface with a dry cloth.</li>
                 <li>Do not use alcohol or abrasive cleaners.</li>
-                <li>Power the device off before cleaning.</li>
+                <li>Power the device off and unplug it before cleaning.</li>
                 <li>Reattach the cover once it is fully dry.</li>
             </ul>
         </section>
@@ -48,7 +48,7 @@
                 </strow>
                 <strow>
                     <stentry>timeout_ms</stentry>
-                    <stentry>5000</stentry>
+                    <stentry>8000</stentry>
                 </strow>
                 <strow>
                     <stentry>batch_size</stentry>
@@ -59,13 +59,13 @@
 
         <section id="sec-cjk">
             <title>6. 中文段落（词级修改）</title>
-            <p>系统在检测到异常时会自动记录日志，并将诊断信息上传到云端服务器。</p>
+            <p>系统在检测到异常时会自动记录日志，并将诊断信息上传到日志服务器。</p>
         </section>
 
         <section id="sec-note">
             <title>7. Note with changed text</title>
             <note type="warning">
-                <p>Failing to ground the chassis before opening the panel may damage the board.</p>
+                <p>Failing to ground the chassis before opening the panel may permanently damage the board.</p>
             </note>
         </section>
 
