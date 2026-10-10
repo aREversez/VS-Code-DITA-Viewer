@@ -389,6 +389,41 @@ function diceSimilarity(a: string, b: string): number {
   return (2 * intersection) / (tokensA.length + tokensB.length);
 }
 
+// Character-level bigram Dice similarity -- a fallback for the token-based
+// diceSimilarity above. That function scores two short single-token values that
+// share no whole word ("5000" vs "8000", a version bump, a one-letter code)
+// as 0%, which split a one-number edit into a delete plus an insert. They ARE a
+// modification: the strings overlap heavily at the character level even though
+// not one whitespace-delimited token is common. Bigrams recover that overlap
+// ("000" is shared by "5000"/"8000") without the false positives a lowered
+// token threshold would cause, since two genuinely different sentences share
+// too few character bigrams to clear the same bar.
+function charBigrams(s: string): string[] {
+  const norm = normalizeText(s).toLowerCase();
+  const grams: string[] = [];
+  for (let i = 0; i + 1 < norm.length; i++) {
+    grams.push(norm.slice(i, i + 2));
+  }
+  return grams;
+}
+
+function charDiceSimilarity(a: string, b: string): number {
+  const gramsA = charBigrams(a);
+  const gramsB = charBigrams(b);
+  if (gramsA.length === 0 || gramsB.length === 0) return 0;
+  const bag = new Map<string, number>();
+  for (const g of gramsA) bag.set(g, (bag.get(g) || 0) + 1);
+  let intersection = 0;
+  for (const g of gramsB) {
+    const count = bag.get(g) || 0;
+    if (count > 0) {
+      intersection++;
+      bag.set(g, count - 1);
+    }
+  }
+  return (2 * intersection) / (gramsA.length + gramsB.length);
+}
+
 const SIMILARITY_THRESHOLD = 0.45;
 
 // ── Pairing adjacent removed+added as "modified" ──
@@ -422,10 +457,27 @@ function pairAdjacentChanges<T extends RenderedBlock>(ops: LcsOp<T>[]): AlignedR
       for (let p = 0; p < pairCount; p++) {
         const left = removedRun[p];
         const right = addedRun[p];
-        if (
-          left.baseType === right.baseType &&
-          diceSimilarity(left.text, right.text) >= SIMILARITY_THRESHOLD
-        ) {
+        // Same explicit id => the same logical element, so pair it as one
+        // 'modified' row and let recursion pinpoint what changed inside,
+        // even when the overall text moved too much for the similarity score
+        // (deleting most of a section drops diceSimilarity below the
+        // threshold). Without this, a section whose bulk was removed split
+        // into a full-height 'removed' block plus a separate 'added' block,
+        // which not only painted a huge red-then-green slab but pushed every
+        // following section out of left/right alignment.
+        // Only id-based keys qualify: an fp: key embeds a hash of the text,
+        // so two fp: blocks with equal keys already have equal text and would
+        // have matched as 'same' in the LCS pass, never reaching here.
+        const sameIdentity = left.key === right.key && left.key.startsWith('id:');
+        // Token dice first (cheap, and it short-circuits the character pass for
+        // the common mostly-unchanged block); char-bigram dice as a fallback so
+        // a single-token value edit -- "5000" -> "8000" -- still reads as
+        // modified instead of a delete + insert.
+        const similar =
+          sameIdentity ||
+          diceSimilarity(left.text, right.text) >= SIMILARITY_THRESHOLD ||
+          charDiceSimilarity(left.text, right.text) >= SIMILARITY_THRESHOLD;
+        if (left.baseType === right.baseType && similar) {
           rows.push({ left, right, changeType: 'modified' });
         } else {
           rows.push({ left, changeType: 'removed' });
@@ -459,13 +511,29 @@ function alignSectionChildren(
   rightOpts: BlockExtractOptions,
   headingLevel: number,
 ): AlignedRow[] {
+  const rows: AlignedRow[] = [];
+
+  // A section/example's own <title> is in SKIP_BASETYPES, so extractChildBlocks
+  // below never turns it into a block: a recursed (modified) section rendered
+  // its changed children but silently lost its heading, which read as orphaned
+  // body text with no context. Emit the title as the first row so every
+  // recursed section keeps its heading. Gated to section/example on purpose --
+  // a <table> also has a <title>, but that belongs rendered as a caption inside
+  // the whole-table block, and lifting it out as a standalone heading here
+  // would look wrong, so tables/lists keep their current behavior.
+  const parentType = leftParent.baseType || rightParent.baseType || '';
+  if (parentType === 'topic/section' || parentType === 'topic/example') {
+    const titleRow = alignTitleRow(leftParent, rightParent, leftOpts, rightOpts, parentType, headingLevel);
+    if (titleRow) rows.push(titleRow);
+  }
+
   const leftBlocks = extractChildBlocks(leftParent, leftOpts, 'topic/section', headingLevel);
   const rightBlocks = extractChildBlocks(rightParent, rightOpts, 'topic/section', headingLevel);
 
   const ops = lcsAlign(leftBlocks, rightBlocks, (a, b) => a.key === b.key && a.text === b.text, (item) => item.key);
-  const rows = pairAdjacentChanges(ops);
+  const childRows = pairAdjacentChanges(ops);
 
-  for (const row of rows) {
+  for (const row of childRows) {
     if (row.changeType === 'modified' && row.left && row.right) {
       row.inlineDiff = diffTokens(tokenizeForDiff(row.left.text), tokenizeForDiff(row.right.text));
 
@@ -483,7 +551,50 @@ function alignSectionChildren(
     }
   }
 
-  return rows;
+  return rows.concat(childRows);
+}
+
+// The section/example heading, surfaced as its own row when the section
+// recurses (see alignSectionChildren). Pairs unchanged unless the heading text
+// itself was edited; a one-sided title (section gained/lost its heading) shows
+// as added/removed. `headingLevel` is the level the section node was rendered
+// at; its own container renderer bumps it by one before the title, so add that
+// one back to land on the same h-level the title has inside the whole-section
+// block.
+function alignTitleRow(
+  leftParent: DitaNode,
+  rightParent: DitaNode,
+  leftOpts: BlockExtractOptions,
+  rightOpts: BlockExtractOptions,
+  parentType: string,
+  headingLevel: number,
+): AlignedRow | undefined {
+  const findTitle = (parent: DitaNode): DitaNode | undefined =>
+    (parent.children || []).find((c) => c.type === 'element' && c.baseType === 'topic/title');
+  const leftTitle = findTitle(leftParent);
+  const rightTitle = findTitle(rightParent);
+  const level = headingLevel + 1;
+
+  if (leftTitle && rightTitle) {
+    const left = makeBlock(leftTitle, leftOpts, parentType, level);
+    const right = makeBlock(rightTitle, rightOpts, parentType, level);
+    if (left.key === right.key && left.text === right.text) {
+      return { left, right, changeType: 'unchanged' };
+    }
+    return {
+      left,
+      right,
+      changeType: 'modified',
+      inlineDiff: diffTokens(tokenizeForDiff(left.text), tokenizeForDiff(right.text)),
+    };
+  }
+  if (leftTitle) {
+    return { left: makeBlock(leftTitle, leftOpts, parentType, level), changeType: 'removed' };
+  }
+  if (rightTitle) {
+    return { right: makeBlock(rightTitle, rightOpts, parentType, level), changeType: 'added' };
+  }
+  return undefined;
 }
 
 // ── Inline word-level diff ──

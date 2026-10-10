@@ -10,6 +10,7 @@ import {
   swapAlignedRows,
   buildQuickCommitChoices,
   arrangeByRecency,
+  AlignedRow,
   DiffTopicsInput,
 } from '../../editor/ditaDiffEngine';
 
@@ -288,6 +289,81 @@ describe('ditaDiffEngine', () => {
       assert.ok(parmlRow, `expected a recursed parml row among section children: ${JSON.stringify(sectionRow!.children?.map((r) => r.changeType))}`);
       const plentryTypes = (parmlRow!.children || []).map((r) => r.changeType);
       assert.deepStrictEqual(plentryTypes, ['unchanged', 'modified', 'unchanged'], `expected only the middle plentry to be modified, got: ${plentryTypes.join(',')}`);
+    });
+
+    it('pairs a same-id section whose bulk was deleted as one modified row that recurses, not a removed+added pair (regression: deleting most of a section dropped its dice similarity below the threshold, so the whole section split into a full-height removed block plus a separate added block -- a huge red-then-green slab that also pushed the following sections out of left/right alignment)', () => {
+      const left = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
+        <section id="sec-a"><title>Alpha</title><p>A long paragraph of body text that carries the majority of this section's content and similarity weight, describing several things at some length.</p></section>
+        <section id="sec-b"><title>Beta</title><p>An unchanged section that must stay aligned on both sides.</p></section>
+      </body></topic>`;
+      const right = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
+        <section id="sec-a"><title>Alpha</title></section>
+        <section id="sec-b"><title>Beta</title><p>An unchanged section that must stay aligned on both sides.</p></section>
+      </body></topic>`;
+
+      const result = runDiff(left, right);
+      const secARow = result.rows.find((r) => r.left?.key === 'id:sec-a' || r.right?.key === 'id:sec-a');
+      assert.ok(secARow, 'expected sec-a to remain a single paired row');
+      assert.strictEqual(secARow!.changeType, 'modified', 'same-id section must pair as modified even when its text moved past the similarity threshold');
+      assert.ok(secARow!.left && secARow!.right, 'the modified sec-a row must carry both sides');
+      const childTypes = (secARow!.children || []).map((r) => r.changeType);
+      assert.ok(childTypes.includes('removed'), `expected the deleted paragraph to surface as a removed child, got: ${childTypes.join(',')}`);
+      // Alignment: sec-b must stay a single unchanged row, not be pushed
+      // beside one half of a split sec-a.
+      const secBRow = result.rows.find((r) => r.left?.key === 'id:sec-b' || r.right?.key === 'id:sec-b');
+      assert.strictEqual(secBRow!.changeType, 'unchanged');
+    });
+
+    it('pairs a single-token value change (5000 -> 8000) inside a table cell as modified, not a delete + insert (regression: token-based dice similarity scores two short values sharing no whole word as 0%, splitting a one-number edit into a removed block plus an added block)', () => {
+      const left = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
+        <simpletable><strow><stentry>timeout_ms</stentry><stentry>5000</stentry></strow></simpletable>
+      </body></topic>`;
+      const right = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
+        <simpletable><strow><stentry>timeout_ms</stentry><stentry>8000</stentry></strow></simpletable>
+      </body></topic>`;
+
+      const flatten = (rows: AlignedRow[]): AlignedRow[] => {
+        const out: AlignedRow[] = [];
+        for (const r of rows) {
+          out.push(r);
+          if (r.children) out.push(...flatten(r.children));
+        }
+        return out;
+      };
+
+      const result = runDiff(left, right);
+      const all = flatten(result.rows);
+      const valueCell = all.find((r) => r.changeType === 'modified' && (r.left?.text === '5000' || r.right?.text === '5000'));
+      assert.ok(
+        valueCell,
+        `expected the 5000/8000 cell to pair as modified, got types: ${JSON.stringify(all.map((r) => [r.changeType, r.left?.text || r.right?.text]))}`,
+      );
+      assert.strictEqual(result.stats.removed, 0, 'a one-number edit must not surface as a removal');
+      assert.strictEqual(result.stats.added, 0, 'a one-number edit must not surface as an insertion');
+    });
+
+    it('surfaces a recursed section\'s own <title> as an unchanged child row so a changed section keeps its heading (regression: SKIP_BASETYPES drops topic/title from extractChildBlocks, so a modified section rendered its changed body but silently lost its heading, reading as orphaned content)', () => {
+      const left = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
+        <section id="sec-h"><title>Widget Setup</title><p>Turn the widget dial to the left before use.</p></section>
+      </body></topic>`;
+      const right = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
+        <section id="sec-h"><title>Widget Setup</title><p>Turn the widget dial to the right before use.</p></section>
+      </body></topic>`;
+
+      const result = runDiff(left, right);
+      const secRow = result.rows.find((r) => r.left?.key === 'id:sec-h' || r.right?.key === 'id:sec-h');
+      assert.ok(secRow, 'expected the section row');
+      assert.strictEqual(secRow!.changeType, 'modified');
+      const titleRow = (secRow!.children || []).find(
+        (r) => r.left?.baseType === 'topic/title' || r.right?.baseType === 'topic/title',
+      );
+      assert.ok(
+        titleRow,
+        `expected the recursed section to carry its title as a child row, got: ${JSON.stringify(
+          (secRow!.children || []).map((r) => r.left?.baseType || r.right?.baseType),
+        )}`,
+      );
+      assert.strictEqual(titleRow!.changeType, 'unchanged', 'an identical heading should pair unchanged, not modified');
     });
 
     it('recurses into matched sections with their own per-side render calls (regression: alignSectionChildren used to share one side\'s renderBlock for both sides)', () => {
