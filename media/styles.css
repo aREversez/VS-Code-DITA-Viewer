@@ -182,6 +182,62 @@ body:not(.wh_topic_page) .note__body { display: inline; }
 .note--important { border-left-color: var(--color-important-border); background: var(--color-important-bg); }
 .note--tip { border-left-color: var(--color-tip-border); background: var(--color-tip-bg); }
 
+/* Conref'd content: anything pulled in by conref / conkeyref / conrefend.
+   Oxygen's Author mode paints it with a gray background and puts a jump
+   button in the top-left corner; a flat opaque gray fights VS Code's themes
+   (and the note/section tints underneath), so this is a translucent neutral
+   that composes with whatever is behind it, plus a thin leading bar that
+   stays visible on dark themes where a faint tint nearly vanishes.
+   All of it is drawn as background layers on the element itself -- no
+   ::before/::after (profiling already owns those on li/ul/ol and the
+   non-inline elements) and no wrapper element. The renderer only emits
+   data-conref when the preview opts in, so "Export as HTML" and the diff
+   view never carry it. The jump icon is a background too, so it has no DOM
+   of its own: the click zone is recomputed from the same numbers in
+   conrefJumpScript.ts (keep the two in step: block icon 16px at 3px/3px,
+   inline icon 12px at the right edge, cell icon 14px at 2px/2px).
+   The doubled attribute selector outranks `.note--tip { background: ... }`
+   and friends, whose shorthand would otherwise reset background-image. */
+:root {
+  --color-conref-bg: rgba(128, 128, 128, 0.13);
+  --color-conref-bar: rgba(128, 128, 128, 0.55);
+  --conref-jump-icon: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2016%2016'%3E%3Cpath%20d='M3.5%201.5h6l3%203v10h-9z'%20fill='white'%20fill-opacity='.85'%20stroke='%234a8fd8'%20stroke-width='1.2'%20stroke-linejoin='round'/%3E%3Cpath%20d='M9.5%201.5v3h3'%20fill='none'%20stroke='%234a8fd8'%20stroke-width='1.2'%20stroke-linejoin='round'/%3E%3Cpath%20d='M5.5%209.5h4M8%207.3l2.2%202.2L8%2011.7'%20fill='none'%20stroke='%234a8fd8'%20stroke-width='1.3'%20stroke-linecap='round'%20stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+[data-conref][data-conref] {
+  background-repeat: no-repeat;
+}
+[data-conref="block"][data-conref] {
+  padding-top: 22px;
+  background-image:
+    var(--conref-jump-icon),
+    linear-gradient(var(--color-conref-bar), var(--color-conref-bar)),
+    linear-gradient(var(--color-conref-bg), var(--color-conref-bg));
+  background-position: 3px 3px, left top, 0 0;
+  background-size: 16px 16px, 3px 100%, auto;
+}
+[data-conref="inline"][data-conref] {
+  padding-right: 15px;
+  border-radius: 2px;
+  background-image:
+    var(--conref-jump-icon),
+    linear-gradient(var(--color-conref-bg), var(--color-conref-bg));
+  background-position: right 1px center, 0 0;
+  background-size: 12px 12px, auto;
+}
+[data-conref="cell"][data-conref] {
+  background-image:
+    var(--conref-jump-icon),
+    linear-gradient(var(--color-conref-bg), var(--color-conref-bg));
+  background-position: 2px 2px, 0 0;
+  background-size: 14px 14px, auto;
+}
+/* Set by the hover hit-test in conrefJumpScript.ts while the pointer is over
+   the icon (a background cannot take its own cursor). */
+html.dv-conref-hot [data-conref],
+html.dv-conref-hot [data-conref] * {
+  cursor: pointer;
+}
+
 /* Profiling / conditional-processing attribute highlighting (props,
    otherprops, audience, platform, product, base, importance, rev, status).
    Mirrors Oxygen's default "show profiling" style: a tinted box around the

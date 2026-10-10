@@ -41,6 +41,16 @@ export interface RenderContext {
    * resolve" (the chain stops at `from`). Absent: chains resolve one hop only.
    */
   resolveChainHop?: (from: DitaNode) => DitaNode | undefined;
+  /**
+   * Opt-in: marks conref/conkeyref/conrefend content so the preview can tell
+   * it from the element's own content and offer a jump to where it comes
+   * from. Given a resolved target element, returns the absolute path of the
+   * file that holds it (undefined = cannot place it, which leaves the content
+   * unmarked). Absent for every path that must emit plain markup -- "Export
+   * as HTML" and the diff view -- so those never see the data-conref-*
+   * attributes. See markConrefContent below for what is emitted.
+   */
+  conrefSource?: (target: DitaNode) => string | undefined;
   /** conrefend range support — see renderConrefRange below */
   resolveConrefRange?: (conref: string, conrefend: string) => DitaNode[] | undefined;
   noteLabels?: Record<string, string>;
@@ -376,6 +386,55 @@ function mergeConrefTarget(node: DitaNode, target: DitaNode): DitaNode {
   return { ...stamped, attributes: { ...targetAttrs, ...restAttrs } };
 }
 
+/** Where a piece of conref'd content really lives: the file and 0-based position of its target. */
+interface ConrefMark {
+  file: string;
+  line: number;
+  col: number;
+}
+
+// The target's own sourceRange is read here, BEFORE mergeConrefTarget
+// re-stamps it with the referencing element's range (see stampSourceRange):
+// the stamped copy points into this document, which is exactly the position
+// the jump must NOT land on.
+function conrefMarkFor(target: DitaNode, context: RenderContext): ConrefMark | undefined {
+  const file = context.conrefSource?.(target);
+  if (!file) return undefined;
+  return { file, line: target.sourceRange.startLine, col: target.sourceRange.startCol };
+}
+
+// How the jump icon is laid out, chosen from the tag that actually rendered
+// (not the DITA name: <row> renders as <tr>, <entry> as <td>/<th>).
+//   inline -- a phrase inside running text: a small icon after it.
+//   cell   -- table structure, which cannot take an in-flow block before its
+//             first child: the icon floats over the top-left corner instead.
+//   block  -- everything else: the icon sits on its own line above the content.
+const CONREF_CELL_TAGS = new Set(['table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th', 'colgroup', 'caption']);
+
+function conrefKind(html: string, baseType: string | undefined): 'inline' | 'cell' | 'block' {
+  const tag = (/^<([a-zA-Z][a-zA-Z0-9]*)/.exec(html)?.[1] ?? '').toLowerCase();
+  if (CONREF_CELL_TAGS.has(tag)) return 'cell';
+  if (baseType && INLINE_PROFILING_BASETYPES.has(baseType)) return 'inline';
+  return 'block';
+}
+
+/**
+ * Stamps conref'd content onto its own opening tag, in place (no wrapper
+ * element: a wrapper would change the DOM shape under li/tr/table the same
+ * way profiling's wrapper did, see injectBlockProfiling).
+ *   data-conref="block|inline|cell"  -- the styling hook and icon layout
+ *   data-conref-file / -line / -col  -- the target, for the jump button
+ * The webview treats the file as untrusted input and the host re-validates
+ * it before opening anything.
+ */
+function markConrefContent(html: string, mark: ConrefMark, baseType: string | undefined): string {
+  const kind = conrefKind(html, baseType);
+  const attrs = `data-conref="${kind}" data-conref-file="${escapeHtml(mark.file)}" data-conref-line="${mark.line}" data-conref-col="${mark.col}"`;
+  // A function replacement: the path is arbitrary text and must not be read
+  // for $-patterns.
+  return html.replace(/^<([a-zA-Z][a-zA-Z0-9]*)/, (_m, tag: string) => `<${tag} ${attrs}`);
+}
+
 /** Most hops a reference chain may take; a deeper chain degrades to one hop. */
 export const MAX_CONREF_CHAIN_DEPTH = 10;
 
@@ -406,11 +465,14 @@ function followConrefChain(first: DitaNode, context: RenderContext): DitaNode {
 function resolveConrefForNode(
   node: DitaNode,
   context: RenderContext,
-): { node: DitaNode; chainKey?: string } {
+): { node: DitaNode; chainKey?: string; mark?: ConrefMark } {
   const conkeyref = node.attributes?.conkeyref;
   if (conkeyref && context.resolveConkeyref && !context.conrefChain?.has(conkeyref)) {
     const keyTarget = context.resolveConkeyref(conkeyref);
-    if (keyTarget) return { node: mergeConrefTarget(node, followConrefChain(keyTarget, context)), chainKey: conkeyref };
+    if (keyTarget) {
+      const end = followConrefChain(keyTarget, context);
+      return { node: mergeConrefTarget(node, end), chainKey: conkeyref, mark: conrefMarkFor(end, context) };
+    }
   }
   const conref = node.attributes?.conref;
   if (!conref || !context.resolveConref) return { node };
@@ -419,7 +481,8 @@ function resolveConrefForNode(
   if (context.conrefChain?.has(conref)) return { node };
   const target = context.resolveConref(conref);
   if (!target) return { node };
-  return { node: mergeConrefTarget(node, followConrefChain(target, context)), chainKey: conref };
+  const end = followConrefChain(target, context);
+  return { node: mergeConrefTarget(node, end), chainKey: conref, mark: conrefMarkFor(end, context) };
 }
 
 function resolveKeyrefForNode(node: DitaNode, context: RenderContext): DitaNode {
@@ -448,7 +511,12 @@ function resolveKeyrefForNode(node: DitaNode, context: RenderContext): DitaNode 
 // renderElement — factored out so the conrefend range path below can reuse
 // it for the merged first range member without re-running conref/keyref
 // resolution on something that's already resolved.
-function renderEffectiveNode(effectiveNode: DitaNode, context: RenderContext, resolvedConref: string | undefined): string {
+function renderEffectiveNode(
+  effectiveNode: DitaNode,
+  context: RenderContext,
+  resolvedConref: string | undefined,
+  mark?: ConrefMark,
+): string {
   const baseType = effectiveNode.baseType;
   const renderer = baseType ? BASE_TYPE_RENDERERS[baseType] : undefined;
 
@@ -472,6 +540,9 @@ function renderEffectiveNode(effectiveNode: DitaNode, context: RenderContext, re
     if (baseType && !PASS_THROUGH_BASETYPES.has(baseType)) {
       const tagName = effectiveNode.tagName || baseType.split('/').pop() || baseType;
       html = injectAttributes(html, tagName, effectiveNode.sourceRange);
+      // Before the profiling wrapper: an inline element's wrapper span would
+      // otherwise become the "first tag" the mark lands on.
+      if (mark) html = markConrefContent(html, mark, baseType);
       html = wrapProfilingHighlight(html, effectiveNode, tagName);
     }
     return html;
@@ -498,16 +569,19 @@ function renderEffectiveNode(effectiveNode: DitaNode, context: RenderContext, re
 function renderConrefRange(node: DitaNode, range: DitaNode[], context: RenderContext, conref: string): string {
   return range
     .map((rangeNode, i) => {
+      // Each member is its own target in the source file, so each carries its
+      // own jump position (the first one's merge keeps the referencing tag).
+      const mark = conrefMarkFor(rangeNode, context);
       if (i === 0) {
         const merged = mergeConrefTarget(node, rangeNode);
-        return renderEffectiveNode(merged, context, conref);
+        return renderEffectiveNode(merged, context, conref, mark);
       }
-      return renderElement(stampSourceRange(rangeNode, node.sourceRange), context);
+      return renderElement(stampSourceRange(rangeNode, node.sourceRange), context, mark);
     })
     .join('');
 }
 
-export function renderElement(node: DitaNode, context: RenderContext): string {
+export function renderElement(node: DitaNode, context: RenderContext, conrefMark?: ConrefMark): string {
   if (node.type === 'text') {
     return escapeHtml(node.text || '');
   }
@@ -527,7 +601,8 @@ export function renderElement(node: DitaNode, context: RenderContext): string {
 
   const resolved = resolveConrefForNode(node, context);
   const effectiveNode = resolveKeyrefForNode(resolved.node, context);
-  return renderEffectiveNode(effectiveNode, context, resolved.chainKey);
+  // The element's own conref wins over a mark handed down by a range.
+  return renderEffectiveNode(effectiveNode, context, resolved.chainKey, resolved.mark ?? conrefMark);
 }
 
 function renderChildren(node: DitaNode, context: RenderContext): string {

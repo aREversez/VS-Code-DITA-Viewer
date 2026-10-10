@@ -73,6 +73,12 @@ export interface TopicRenderInput {
   collectDependencies?: Set<string>;
   /** See TopicXmlRenderInput.bookMembers below; passed through untouched. */
   bookMembers?: ReadonlySet<string>;
+  /**
+   * Mark conref'd content for the preview's tint and jump button (see
+   * RenderContext.conrefSource). Off for "Export as HTML"; renderTopicCached,
+   * which only ever serves previews, turns it on.
+   */
+  markConrefs?: boolean;
 }
 
 export interface TopicRenderResult {
@@ -108,6 +114,13 @@ export interface TopicXmlRenderInput {
    * whole point here.
    */
   bookMembers?: ReadonlySet<string>;
+  /**
+   * Absolute path of the topic being rendered, and the opt-in that uses it:
+   * together they let the renderer mark conref'd content (same-file targets
+   * included). See RenderContext.conrefSource.
+   */
+  docFile?: string;
+  markConrefs?: boolean;
 }
 
 export interface ParsedTopicResult {
@@ -161,7 +174,7 @@ export function openHrefTarget(
 
 
 export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
-  const { xml, docDir, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, collectDependencies, bookMembers } = input;
+  const { xml, docDir, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, collectDependencies, bookMembers, docFile, markConrefs } = input;
   try {
     const preprocessedXml = preprocessEntities(xml);
     const ditaDoc = parseDita(preprocessedXml);
@@ -183,6 +196,8 @@ export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
       suppressIndexterm,
       bookMembers,
       collectDependencies,
+      docFile,
+      markConrefs,
     });
 
     const html = renderDocument(ditaDoc.root, ctx);
@@ -203,7 +218,7 @@ export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
 }
 
 export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
-  const { filePath, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, collectDependencies, bookMembers } = input;
+  const { filePath, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, collectDependencies, bookMembers, markConrefs } = input;
   try {
     if (!existsSync(filePath)) {
       return { html: '', error: `File not found: ${filePath}` };
@@ -222,6 +237,8 @@ export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
       suppressIndexterm,
       collectDependencies,
       bookMembers,
+      docFile: filePath,
+      markConrefs,
     });
     return { html: result.html, title: result.title, error: result.error };
   } catch (err) {
@@ -448,7 +465,8 @@ export function renderTopicCached(input: TopicRenderInput): TopicRenderResult {
   // Honour a caller-supplied sink as well, so anyone who passed one still
   // sees the dependency set instead of having it silently replaced.
   const dependencies = input.collectDependencies ?? new Set<string>();
-  const result = renderTopicToHtml({ ...input, collectDependencies: dependencies });
+  // Previews only (see above), so conref'd content is always marked here.
+  const result = renderTopicToHtml({ ...input, markConrefs: true, collectDependencies: dependencies });
   if (result.error) {
     // Never cache a failure. A malformed mid-edit save is exactly the
     // transient case this path sees, and pinning it would keep serving the

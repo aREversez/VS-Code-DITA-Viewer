@@ -55,6 +55,18 @@ export interface BuildRenderContextInput {
    * explicitly only to drive conkeyref with a hand-built keyMap (tests).
    */
   keyDefs?: ReadonlyMap<string, KeyHrefDef>;
+  /**
+   * Absolute path of the document being rendered. Together with `markConrefs`
+   * it lets same-file conrefs be marked too (their target file is this one).
+   */
+  docFile?: string;
+  /**
+   * Opt-in: have the renderer mark conref'd content (data-conref-* attributes)
+   * for the preview's gray tint and jump button. Left off by every path that
+   * must emit plain markup -- "Export as HTML" and the diff view. Needs
+   * `docFile`; without it nothing is marked.
+   */
+  markConrefs?: boolean;
   /** Per-path URI function; the callers keep their vscode-dependent versions. */
   asWebviewUri: (relPath: string) => string;
   headingLevel: number;
@@ -111,6 +123,13 @@ export function buildRenderContext(input: BuildRenderContextInput): BuiltRenderC
       }
     },
   };
+
+  if (input.markConrefs && input.docFile) {
+    const docFile = input.docFile;
+    // origins only holds elements resolved from another file or through a
+    // chain; a same-document target has none, and lives in docFile.
+    ctx.conrefSource = (target: DitaNode) => fileCache.originOf(target)?.file ?? docFile;
+  }
 
   if (input.includeIndexLabel) ctx.indexLabel = detectIndexLabel(ownRoot, uiLanguage);
   if (input.bookMembers) ctx.isInCurrentBook = makeIsInCurrentBook(docDir, input.bookMembers);

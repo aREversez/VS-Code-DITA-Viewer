@@ -4,6 +4,8 @@ import { renderDocument } from '../render/renderer';
 import { dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
 import { getWebviewScript } from './webview/topicScript';
+import { MSG_OPEN_CONREF_TARGET, parseConrefJumpMessage } from './conrefJump';
+import { openConrefTarget } from './conrefJumpCommand';
 import { buildTitleMap, decodeHrefPart, openHrefTarget, clearImageDimensionsCache, clearTopicRenderCache, clearBookMembersCache } from './ditaRenderUtils';
 import { buildRenderContext } from './renderContext';
 import { clearBookSearchIndexCache } from './bookSearchIndex';
@@ -173,6 +175,11 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
           const character = Math.min(col, lineLength);
           editor.selection = new vscode.Selection(new vscode.Position(line, character), new vscode.Position(line, character));
         }
+      } else if (message.type === MSG_OPEN_CONREF_TARGET) {
+        // Jump button on conref'd content (conrefJumpScript.ts): open the
+        // referenced element's source beside this preview.
+        const target = parseConrefJumpMessage(message);
+        if (target) void openConrefTarget(target, webviewPanel.viewColumn);
       } else if (message.type === 'openImagemapLink') {
         // Image-map hotspot click (getImageMapSupportScript): the webview
         // guard preventDefaults the navigation and hands over the raw
@@ -481,6 +488,8 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
         headingLevel: 1,
         uiLanguage: vscode.env.language,
         includeIndexLabel: true,
+        docFile: document.uri.fsPath,
+        markConrefs: true,
       });
 
       const content = renderDocument(ditaDoc.root, ctx);

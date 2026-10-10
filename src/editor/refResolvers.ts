@@ -366,7 +366,7 @@ export function makeConrefRangeResolver(
 ): (conref: string, conrefend: string) => DitaNode[] | undefined {
   const cache = sharedCache ?? makeFileCache(docDir);
 
-  function resolveRef(ref: string): { root: DitaNode; id: string } | undefined {
+  function resolveRef(ref: string): { root: DitaNode; id: string; file?: string } | undefined {
     const hashIdx = ref.indexOf('#');
     if (hashIdx < 0) return undefined;
     const filePath = ref.substring(0, hashIdx);
@@ -393,7 +393,7 @@ export function makeConrefRangeResolver(
 
     const root = cache.loadFile(filePath);
     if (!root) return undefined;
-    return { root, id };
+    return { root, id, file: resolve(docDir, decodeHrefPart(filePath)) };
   }
 
   function findWithParent(node: DitaNode, targetId: string, parent: DitaNode | undefined): { el: DitaNode; parent: DitaNode } | undefined {
@@ -426,7 +426,11 @@ export function makeConrefRangeResolver(
     const endIdx = siblings.indexOf(endFound.el);
     if (startIdx < 0 || endIdx < 0 || endIdx < startIdx) return undefined;
 
-    return siblings.slice(startIdx, endIdx + 1);
+    const run = siblings.slice(startIdx, endIdx + 1);
+    // Record where the run lives, so the preview can offer a jump to it. The
+    // run sits under one parent (checked above), hence in one file.
+    for (const el of run) cache.noteOrigin(el, { file: start.file, root: start.root });
+    return run;
   };
 }
 

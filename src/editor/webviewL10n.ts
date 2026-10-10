@@ -60,6 +60,8 @@ export function sharedWebviewStrings() {
     widthNarrow: vscode.l10n.t('Narrow'),
     widthTooNarrow: vscode.l10n.t('Too narrow for "{0}" width -- try widening the window.'),
     reloadContent: vscode.l10n.t('Reload DITA content'),
+    // ── conref jump button, passed to getConrefJumpScript as a value ──
+    conrefJumpTitle: vscode.l10n.t('Open the referenced content in its source file'),
     // ── Flags toggle, passed to getProfilingToggleScript as values ──
     profilingLabel: vscode.l10n.t('Flags'),
     profilingOnTitle: vscode.l10n.t('Profiling attributes (props/otherprops/audience/...) are highlighted. Click to hide the highlighting.'),

@@ -9,6 +9,8 @@
 import * as vscode from 'vscode';
 import { getContentSwapRefreshScript } from './contentSwapScript';
 import { getHighlightRunScript } from './highlightRunScript';
+import { getConrefJumpScript } from './conrefJumpScript';
+import { MSG_OPEN_CONREF_TARGET } from '../mapMessages';
 import { getProfilingToggleScript } from './profilingToggleScript';
 import { getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getImageMapSupportScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getRefreshButtonScript } from '../ditaRenderUtils';
 import { sharedWebviewStrings } from '../webviewL10n';
@@ -191,6 +193,9 @@ export function getWebviewScript(): string {
   // itself to a vscode-webview:// 404 (the white page). Shared with the
   // map viewer; see getImageMapSupportScript in ditaRenderUtils.ts.
   ${getImageMapSupportScript({ openMsgType: 'openImagemapLink' })}
+
+  // Jump button on conref'd content: see conrefJumpScript.ts.
+  ${getConrefJumpScript({ openMsgType: MSG_OPEN_CONREF_TARGET, title: L.conrefJumpTitle })}
 
   // Per-image zoom controls: a small hover toolbar pinned to each image's
   // own top-right corner (−, +, maximize), replacing the old page-wide

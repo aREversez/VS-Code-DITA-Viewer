@@ -75,3 +75,8 @@ export const MSG_BOOK_SEARCH_RESULTS = 'bookSearchResults';
 // the reply and leave the stale mode on screen while the host believes it
 // already switched.
 export const MSG_SWITCH_MODE = 'applyModeStage';
+// webview -> host, shared by both previews (conrefJumpScript.ts posts it; the
+// topic and map providers each route it). In this file because the message
+// parity check (scripts/check-map-message-parity.cjs) resolves MSG_ constants
+// from here only.
+export const MSG_OPEN_CONREF_TARGET = 'openConrefTarget';

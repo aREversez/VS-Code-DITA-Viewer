@@ -9,6 +9,8 @@ import { TEMPLATE_SELECTION_KEY, parseTemplateSelection, withTemplate, pickTempl
 import { readFileSync } from 'fs';
 import { getMapWebviewScript } from './webview/mapScript';
 import { MSG_BOOK_SEARCH, MSG_BOOK_SEARCH_RESULTS, MSG_NAV_CONTEXT, MSG_OPEN_TOPIC_SOURCE, MSG_REQUEST_FULL_RENDER, MSG_SET_FONT_PREFS, MSG_SET_NAV_COLLAPSED, MSG_SET_TAG_TOOLTIPS, MSG_SET_TEMPLATE, MSG_SET_WIDTH_SELECTION, MSG_SWITCH_SITE_PAGE } from './mapMessages';
+import { MSG_OPEN_CONREF_TARGET, parseConrefJumpMessage } from './conrefJump';
+import { openConrefTarget } from './conrefJumpCommand';
 import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, decodeHrefPart, openHrefTarget, buildBookNavManifest, siteNavigableEntries, renderSiteNavTreeHtml, wrapSiteNavTreeHtml, getInitialSidebarBodyClass, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry, SITE_HOME_TARGET, buildSiteHomeTiles, renderSiteHomeHtml } from './ditaRenderUtils';
 import { getBookSearchIndex, searchBookIndex, buildBookSearchResultsPayload, invalidateBookSearchIndex } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
@@ -209,6 +211,14 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       case 'openImagemapLink':
         this.handleOpenImagemapLink(message, document);
         return;
+      case MSG_OPEN_CONREF_TARGET: {
+        // Jump button on conref'd content (conrefJumpScript.ts), in book and
+        // site views alike: the target file travels in the message, so no
+        // lookup against the manifest is needed -- it is validated instead.
+        const target = parseConrefJumpMessage(message);
+        if (target) void openConrefTarget(target, webviewPanel.viewColumn);
+        return;
+      }
       case 'switchMode': {
         const newMode = message.mode as 'tree' | 'book' | 'site';
         if (newMode !== 'tree' && newMode !== 'book' && newMode !== 'site') return;

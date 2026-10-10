@@ -13,8 +13,9 @@ import { getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScrip
 import { getWebhelpChromeScript } from './webhelpChromeScript';
 import { getBookSearchScript } from '../bookSearchIndex';
 import { sharedWebviewStrings } from '../webviewL10n';
+import { getConrefJumpScript } from './conrefJumpScript';
 import { getContentSwapRefreshScript } from './contentSwapScript';
-import { MSG_BOOK_SEARCH, MSG_BOOK_SEARCH_RESULTS, MSG_NAV_CONTEXT, MSG_OPEN_TOPIC_SOURCE, MSG_PATCH_CONTENT, MSG_REQUEST_FULL_RENDER, MSG_SET_FONT_PREFS, MSG_SET_NAV_COLLAPSED, MSG_SET_TAG_TOOLTIPS, MSG_SET_TEMPLATE, MSG_SET_WIDTH_SELECTION, MSG_SWITCH_MODE, MSG_SWITCH_SITE_PAGE, MSG_UPDATE_CONTENT, MSG_UPDATE_SIDEBAR } from '../mapMessages';
+import { MSG_BOOK_SEARCH, MSG_BOOK_SEARCH_RESULTS, MSG_NAV_CONTEXT, MSG_OPEN_CONREF_TARGET, MSG_OPEN_TOPIC_SOURCE, MSG_PATCH_CONTENT, MSG_REQUEST_FULL_RENDER, MSG_SET_FONT_PREFS, MSG_SET_NAV_COLLAPSED, MSG_SET_TAG_TOOLTIPS, MSG_SET_TEMPLATE, MSG_SET_WIDTH_SELECTION, MSG_SWITCH_MODE, MSG_SWITCH_SITE_PAGE, MSG_UPDATE_CONTENT, MSG_UPDATE_SIDEBAR } from '../mapMessages';
 
 export function getMapWebviewScript(
   templateOptions: ReadonlyArray<{ value: string; label: string }>,
@@ -362,6 +363,9 @@ export function getMapWebviewScript(
   // data-dita-book-xref attribute is handled by the site/book click
   // handlers that already run on the same event.
   ${getImageMapSupportScript({ openMsgType: 'openImagemapLink' })}
+
+  // Jump button on conref'd content (book and site views): see conrefJumpScript.ts.
+  ${getConrefJumpScript({ openMsgType: MSG_OPEN_CONREF_TARGET, title: L.conrefJumpTitle })}
 
   // Every source edit (a topicref's profiling attributes, reordering
   // entries, ...) sends just the freshly rendered content as a message
