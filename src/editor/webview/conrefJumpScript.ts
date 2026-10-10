@@ -20,16 +20,31 @@
 // element. Delegated from `document`, so it survives the content swaps both
 // previews do. Dependency-free: reads only `document`, `getComputedStyle` and
 // `vscode`, defines functions and listeners, runs nothing else.
-export function getConrefJumpScript(opts: { openMsgType: string; title: string }): string {
+//
+// Keyboard / screen-reader access: the badge is a background, so the marked
+// element itself is the affordance. renderer.ts stamps every mark with
+// tabindex="0" and aria-describedby naming CONREF_JUMP_HINT_ID; this script
+// injects the one hidden hint node that id points at (so the element's own text
+// stays its accessible name and the instruction rides as a description), and
+// turns Enter on a focused mark into the same postMessage a click on the icon
+// sends. The id is exported so the renderer's literal can be checked against it
+// in a test; at runtime it is only interpolated into the snippet below.
+export const CONREF_JUMP_HINT_ID = 'dv-conref-jump-hint';
+
+export function getConrefJumpScript(opts: { openMsgType: string; title: string; hint: string }): string {
   const openMsgType = JSON.stringify(opts.openMsgType);
-  // The caller hands over the already-localized string as a value (same
-  // convention as getImageMapSupportScript's message type); quote it here.
+  // The caller hands over the already-localized strings as values (same
+  // convention as getImageMapSupportScript's message type); quote them here.
   const title = JSON.stringify(opts.title);
+  const hint = JSON.stringify(opts.hint);
+  const hintId = JSON.stringify(CONREF_JUMP_HINT_ID);
   return `
   (function() {
     if (typeof vscode === 'undefined' || !vscode) return;
     var openMsgType = ${openMsgType};
     var jumpTitle = ${title};
+    var jumpHint = ${hint};
+    var hintId = ${hintId};
     var root = document.documentElement;
     var titledEl = null;
     var titledPrev = null;
@@ -96,6 +111,34 @@ export function getConrefJumpScript(opts: { openMsgType: string; title: string }
       titledPrev = null;
     }
 
+    // Activate the jump for a marked element: shared by a click on the icon
+    // and by Enter on the keyboard-focused element.
+    function jump(el) {
+      var file = el.getAttribute('data-conref-file');
+      var line = parseInt(el.getAttribute('data-conref-line'), 10);
+      var col = parseInt(el.getAttribute('data-conref-col'), 10);
+      if (!file || isNaN(line)) return false;
+      vscode.postMessage({ type: openMsgType, file: file, line: line, col: isNaN(col) ? 0 : col });
+      return true;
+    }
+
+    // One hidden node backs every aria-describedby on the page: the marked
+    // elements are content (p/td/span) whose own text must stay their
+    // accessible name, so the instruction lives in a separate description they
+    // all point at. Appended to <body>, which the content swaps leave intact
+    // (they replace only the content root); re-created if a swap ever removes
+    // it. dv-visually-hidden clips it without display:none, which would drop
+    // it from the accessibility tree too.
+    function ensureHint() {
+      if (document.getElementById(hintId)) return;
+      var n = document.createElement('span');
+      n.id = hintId;
+      n.className = 'dv-visually-hidden';
+      n.textContent = jumpHint;
+      (document.body || root).appendChild(n);
+    }
+    ensureHint();
+
     document.addEventListener('mousemove', function(e) {
       var hit = findHit(e.target, e.clientX, e.clientY);
       root.classList.toggle('dv-conref-hot', !!hit);
@@ -118,15 +161,22 @@ export function getConrefJumpScript(opts: { openMsgType: string; title: string }
     document.addEventListener('click', function(e) {
       if (e.button !== 0) return;
       var hit = findHit(e.target, e.clientX, e.clientY);
-      if (!hit) return;
-      var file = hit.getAttribute('data-conref-file');
-      var line = parseInt(hit.getAttribute('data-conref-line'), 10);
-      var col = parseInt(hit.getAttribute('data-conref-col'), 10);
-      if (!file || isNaN(line)) return;
+      if (!hit || !jump(hit)) return;
       e.preventDefault();
       e.stopPropagation();
-      vscode.postMessage({ type: openMsgType, file: file, line: line, col: isNaN(col) ? 0 : col });
     }, true);
+
+    // Enter on a focused mark jumps, mirroring the icon click for keyboard and
+    // screen-reader users: once the element has focus the whole thing is the
+    // target, so there is no 16px background to aim at. Space is deliberately
+    // left alone so it still scrolls the preview.
+    document.addEventListener('keydown', function(e) {
+      if (e.key !== 'Enter' || e.altKey || e.ctrlKey || e.metaKey) return;
+      var el = e.target && e.target.closest ? e.target.closest('[data-conref]') : null;
+      if (!el || !jump(el)) return;
+      e.preventDefault();
+      e.stopPropagation();
+    });
   })();
 `;
 }

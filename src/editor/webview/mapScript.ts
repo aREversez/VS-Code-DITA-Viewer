@@ -365,7 +365,7 @@ export function getMapWebviewScript(
   ${getImageMapSupportScript({ openMsgType: 'openImagemapLink' })}
 
   // Jump button on conref'd content (book and site views): see conrefJumpScript.ts.
-  ${getConrefJumpScript({ openMsgType: MSG_OPEN_CONREF_TARGET, title: L.conrefJumpTitle })}
+  ${getConrefJumpScript({ openMsgType: MSG_OPEN_CONREF_TARGET, title: L.conrefJumpTitle, hint: L.conrefJumpHint })}
 
   // Every source edit (a topicref's profiling attributes, reordering
   // entries, ...) sends just the freshly rendered content as a message

@@ -195,7 +195,7 @@ export function getWebviewScript(): string {
   ${getImageMapSupportScript({ openMsgType: 'openImagemapLink' })}
 
   // Jump button on conref'd content: see conrefJumpScript.ts.
-  ${getConrefJumpScript({ openMsgType: MSG_OPEN_CONREF_TARGET, title: L.conrefJumpTitle })}
+  ${getConrefJumpScript({ openMsgType: MSG_OPEN_CONREF_TARGET, title: L.conrefJumpTitle, hint: L.conrefJumpHint })}
 
   // Per-image zoom controls: a small hover toolbar pinned to each image's
   // own top-right corner (−, +, maximize), replacing the old page-wide

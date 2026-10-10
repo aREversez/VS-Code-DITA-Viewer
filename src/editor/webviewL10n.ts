@@ -62,6 +62,9 @@ export function sharedWebviewStrings() {
     reloadContent: vscode.l10n.t('Reload DITA content'),
     // ── conref jump button, passed to getConrefJumpScript as a value ──
     conrefJumpTitle: vscode.l10n.t('Open the referenced content in its source file'),
+    // The hidden description every reused element's aria-describedby points at,
+    // read aloud when it takes keyboard focus (passed to getConrefJumpScript too).
+    conrefJumpHint: vscode.l10n.t('Reusable content. Press Enter to open the referenced content in its source file.'),
     // ── Flags toggle, passed to getProfilingToggleScript as values ──
     profilingLabel: vscode.l10n.t('Flags'),
     profilingOnTitle: vscode.l10n.t('Profiling attributes (props/otherprops/audience/...) are highlighted. Click to hide the highlighting.'),

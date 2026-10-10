@@ -296,6 +296,33 @@ html.dv-conref-hot [data-conref],
 html.dv-conref-hot [data-conref] * {
   cursor: pointer;
 }
+/* Keyboard / screen-reader focus for the jump badge (see conrefJumpScript.ts:
+   renderer.ts makes every mark focusable). The badge is a background, so the
+   ring is drawn on the element that carries it. :focus-visible, not :focus, so
+   a pointer click that lands on the element doesn't ring it -- matching the
+   site-nav treatment. Negative offset keeps the ring inside the tint box so it
+   never spills onto a neighbouring block. */
+[data-conref][data-conref]:focus-visible {
+  outline: 2px solid var(--vscode-focusBorder, #007fd4);
+  outline-offset: -2px;
+}
+/* The single hidden node every reused element's aria-describedby points at
+   (injected by conrefJumpScript.ts). It must be gone from the layout yet still
+   present in the accessibility tree, so it is clipped rather than display:none
+   -- display:none would remove the description screen readers announce on
+   focus, defeating the whole affordance. */
+.dv-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
 
 /* Profiling / conditional-processing attribute highlighting (props,
    otherprops, audience, platform, product, base, importance, rev, status).

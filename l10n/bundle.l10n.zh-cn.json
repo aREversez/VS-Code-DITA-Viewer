@@ -325,5 +325,6 @@
   "This command starts an external program and is disabled in untrusted workspaces. Trust this workspace to enable it.": "此命令会启动外部程序，在不受信任的工作区中已被禁用。信任此工作区后即可使用。",
   "Updated {0} references in {1} files": "已更新 {1} 个文件中的 {0} 处引用",
   "Rename reference update exceeded file limit of {0}": "重命名引用更新超出 {0} 个文件的限制",
-  "Open the referenced content in its source file": "在源文件中打开被引用的内容"
+  "Open the referenced content in its source file": "在源文件中打开被引用的内容",
+  "Reusable content. Press Enter to open the referenced content in its source file.": "可复用内容。按 Enter 键可在源文件中打开被引用的内容。"
 }

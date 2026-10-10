@@ -325,5 +325,6 @@
   "This command starts an external program and is disabled in untrusted workspaces. Trust this workspace to enable it.": "This command starts an external program and is disabled in untrusted workspaces. Trust this workspace to enable it.",
   "Updated {0} references in {1} files": "Updated {0} references in {1} files",
   "Rename reference update exceeded file limit of {0}": "Rename reference update exceeded file limit of {0}",
-  "Open the referenced content in its source file": "Open the referenced content in its source file"
+  "Open the referenced content in its source file": "Open the referenced content in its source file",
+  "Reusable content. Press Enter to open the referenced content in its source file.": "Reusable content. Press Enter to open the referenced content in its source file."
 }

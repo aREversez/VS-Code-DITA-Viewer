@@ -424,12 +424,18 @@ function conrefKind(html: string, baseType: string | undefined): 'inline' | 'cel
  * way profiling's wrapper did, see injectBlockProfiling).
  *   data-conref="block|inline|cell"  -- the styling hook and icon layout
  *   data-conref-file / -line / -col  -- the target, for the jump button
+ *   tabindex + aria-describedby      -- the badge is a background with no DOM,
+ *     so the marked element itself is made focusable and points its accessible
+ *     description at the one hidden hint node the webview script injects. The
+ *     id literal must stay equal to CONREF_JUMP_HINT_ID in
+ *     editor/webview/conrefJumpScript.ts (renderer cannot import from editor,
+ *     so it is duplicated here; conrefJump.test asserts they match).
  * The webview treats the file as untrusted input and the host re-validates
  * it before opening anything.
  */
 function markConrefContent(html: string, mark: ConrefMark, baseType: string | undefined): string {
   const kind = conrefKind(html, baseType);
-  const attrs = `data-conref="${kind}" data-conref-file="${escapeHtml(mark.file)}" data-conref-line="${mark.line}" data-conref-col="${mark.col}"`;
+  const attrs = `data-conref="${kind}" data-conref-file="${escapeHtml(mark.file)}" data-conref-line="${mark.line}" data-conref-col="${mark.col}" tabindex="0" aria-describedby="dv-conref-jump-hint"`;
   // A function replacement: the path is arbitrary text and must not be read
   // for $-patterns.
   return html.replace(/^<([a-zA-Z][a-zA-Z0-9]*)/, (_m, tag: string) => `<${tag} ${attrs}`);

@@ -4,7 +4,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { parseConrefJumpMessage, MSG_OPEN_CONREF_TARGET } from '../../editor/conrefJump';
 import { renderTopicToHtml } from '../../editor/topicRender';
-import { getConrefJumpScript } from '../../editor/webview/conrefJumpScript';
+import { getConrefJumpScript, CONREF_JUMP_HINT_ID } from '../../editor/webview/conrefJumpScript';
 
 // The conref jump button, end to end below the webview: the renderer marks
 // conref'd content (only when the preview opts in), and the host validates
@@ -96,7 +96,9 @@ describe('conref marking in a real render', () => {
     }));
 
   it('emits no data-conref at all unless the caller opts in (export and diff stay plain)', () => {
-    assert.ok(!render(false).includes('data-conref'));
+    const plain = render(false);
+    assert.ok(!plain.includes('data-conref'));
+    assert.ok(!plain.includes(`aria-describedby="${CONREF_JUMP_HINT_ID}"`), 'no dangling description reference either');
   });
 
   it('marks each kind of conref with the TARGET\'s file and position, not the referencing tag\'s', () => {
@@ -127,6 +129,17 @@ describe('conref marking in a real render', () => {
     const html = render(true);
     const plain = /<p[^>]*>Plain, not conref'd/.exec(html);
     assert.ok(plain && !plain[0].includes('data-conref'));
+  });
+
+  it('makes every mark focusable and points it at the shared jump hint (accessibility)', () => {
+    const html = render(true);
+    for (const kind of ['block', 'inline']) {
+      const re = new RegExp(`data-conref="${kind}"[^>]*tabindex="0" aria-describedby="${CONREF_JUMP_HINT_ID}"`);
+      assert.ok(re.test(html), `${kind} mark carries tabindex + aria-describedby`);
+    }
+    // the id the renderer emits is the exact id the webview script injects
+    assert.ok(html.includes(`aria-describedby="${CONREF_JUMP_HINT_ID}"`), 'renderer id === CONREF_JUMP_HINT_ID');
+    assert.ok(!/tabindex="0"/.test(render(false)), 'the export path stays free of the a11y attrs');
   });
 });
 
@@ -174,8 +187,17 @@ function runScript() {
     return e;
   }
 
-  const fakeDocument = { documentElement: docEl, addEventListener: (t: string, h: (e: unknown) => void) => void (handlers[t] = h) };
-  const src = getConrefJumpScript({ openMsgType: MSG_OPEN_CONREF_TARGET, title: 'Open it' });
+  // A body the script can append its shared aria-describedby hint node to.
+  type HintNode = { id: string; className: string; textContent: string };
+  const body = { children: [] as HintNode[], appendChild(n: HintNode) { body.children.push(n); } };
+  const fakeDocument = {
+    documentElement: docEl,
+    body,
+    addEventListener: (t: string, h: (e: unknown) => void) => void (handlers[t] = h),
+    getElementById: (id: string) => body.children.find((c) => c.id === id) || null,
+    createElement: () => ({ id: '', className: '', textContent: '' }),
+  };
+  const src = getConrefJumpScript({ openMsgType: MSG_OPEN_CONREF_TARGET, title: 'Open it', hint: 'Reusable content. Press Enter to jump.' });
   // eslint-disable-next-line @typescript-eslint/no-implied-eval
   new Function('document', 'vscode', 'getComputedStyle', src)(
     fakeDocument,
@@ -189,7 +211,12 @@ function runScript() {
     return prevented;
   };
   const move = (target: FakeEl, x: number, y: number) => handlers.mousemove({ target, clientX: x, clientY: y });
-  return { el, click, move, posted, hot };
+  const press = (target: FakeEl, key: string, mods: { alt?: boolean; ctrl?: boolean; meta?: boolean } = {}) => {
+    let prevented = false;
+    handlers.keydown({ target, key, altKey: !!mods.alt, ctrlKey: !!mods.ctrl, metaKey: !!mods.meta, preventDefault: () => { prevented = true; }, stopPropagation: () => undefined });
+    return prevented;
+  };
+  return { el, click, move, press, posted, hot, body };
 }
 
 describe('conrefJumpScript (webview hit-testing)', () => {
@@ -240,5 +267,36 @@ describe('conrefJumpScript (webview hit-testing)', () => {
     t.move(block, 300, 240);
     assert.ok(!t.hot.has('dv-conref-hot'));
     assert.strictEqual(block.attrs.title, 'tag-name', 'the Tags toggle\'s title is given back');
+  });
+
+  it('injects the one hidden hint node every aria-describedby names', () => {
+    const t = runScript();
+    assert.strictEqual(t.body.children.length, 1, 'exactly one hint node appended to <body>');
+    const hint = t.body.children[0];
+    assert.strictEqual(hint.id, CONREF_JUMP_HINT_ID, 'its id is the one the renderer points at');
+    assert.strictEqual(hint.className, 'dv-visually-hidden');
+    assert.strictEqual(hint.textContent, 'Reusable content. Press Enter to jump.', 'carries the localized hint');
+  });
+
+  it('Enter on a focused mark posts the jump, mirroring the icon click', () => {
+    const t = runScript();
+    const block = t.el(attrs('block', 5), [{ left: 100, top: 200, right: 700, bottom: 260 }]);
+    assert.strictEqual(t.press(block, 'Enter'), true);
+    assert.deepStrictEqual(t.posted, [{ type: MSG_OPEN_CONREF_TARGET, file: '/p/reuse.dita', line: 5, col: 4 }]);
+  });
+
+  it('leaves Space and a modified Enter to the page', () => {
+    const t = runScript();
+    const block = t.el(attrs('block'), [{ left: 100, top: 200, right: 700, bottom: 260 }]);
+    assert.strictEqual(t.press(block, ' '), false, 'Space must not jump (it still scrolls)');
+    assert.strictEqual(t.press(block, 'Enter', { ctrl: true }), false, 'Ctrl+Enter is left alone');
+    assert.deepStrictEqual(t.posted, []);
+  });
+
+  it('ignores Enter when the focused element is not reused content', () => {
+    const t = runScript();
+    const plain = t.el({}, [{ left: 0, top: 0, right: 10, bottom: 10 }]);
+    assert.strictEqual(t.press(plain, 'Enter'), false);
+    assert.deepStrictEqual(t.posted, []);
   });
 });
