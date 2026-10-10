@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="conref-visual-check" xml:lang="en-US">
+    <title>Conref Visual Check</title>
+    <shortdesc>A visual checklist for this round of conref-highlight tweaks: symmetric horizontal padding and extra bottom air on block tints, a leading bar that clears the first character, the jump-icon sizes (16 for block, 15 for cell), a smaller inline icon (11), and the 3px gap on the inline's left. Every section heading doubles as a checkpoint.</shortdesc>
+    <body>
+
+        <section id="sec-baseline">
+            <title>0. Baseline (no conref, for comparison)</title>
+            <p>This is plain body text with no conref marking, so it gets no gray tint, no leading bar, and no jump icon. It's here for one reason: use it as a straight edge to judge what a highlighted block adds around itself -- roughly 10px on each side, 22px above, and 6px below.</p>
+            <p>A second baseline paragraph, to eyeball the spacing between the three conrefend blocks in section 7.</p>
+        </section>
+
+        <section id="sec-block-single">
+            <title>1. A single block conref (the main case)</title>
+            <p conref="reuse-library.dita#reuse-library/block-short"/>
+        </section>
+
+        <section id="sec-block-long">
+            <title>2. A long block that wraps</title>
+            <p conref="reuse-library.dita#reuse-library/block-long"/>
+        </section>
+
+        <section id="sec-cjk">
+            <title>3. Another block wrap</title>
+            <p conref="reuse-library.dita#reuse-library/cjk-block"/>
+        </section>
+
+        <section id="sec-inline">
+            <title>4. Inline phrase conref</title>
+            <p>Some leading text -- <ph conref="reuse-library.dita#reuse-library/inline-phrase"/> -- some trailing text. Check that the 3px left padding keeps the tint off the dash on the line before, and that the 13px slot on the right fits the 11x11 icon sitting 1px in from the edge.</p>
+        </section>
+
+        <section id="sec-inline-wrap">
+            <title>5. Inline that wraps across lines (slice behaviour)</title>
+            <p>The filler below is there to force the phrase onto more than one line: alpha bravo charlie delta echo foxtrot golf hotel india juliett -- <ph conref="reuse-library.dita#reuse-library/inline-long-phrase"/> -- and a closing line. With <codeph>box-decoration-break</codeph> left at its default of <codeph>slice</codeph>, the 3px gap shows only at the start of the phrase's first line, and the 13px slot plus icon only at the end of its last line; the middle fragment carries neither.</p>
+        </section>
+
+        <section id="sec-cell">
+            <title>6. Reused table cells</title>
+            <table>
+                <tgroup cols="3">
+                    <thead>
+                        <row>
+                            <entry>A</entry>
+                            <entry>B</entry>
+                            <entry>C</entry>
+                        </row>
+                    </thead>
+                    <tbody>
+                        <row>
+                            <entry conref="reuse-library.dita#reuse-library/cell-a"/>
+                            <entry conref="reuse-library.dita#reuse-library/cell-b"/>
+                            <entry conref="reuse-library.dita#reuse-library/cell-c"/>
+                        </row>
+                    </tbody>
+                </tgroup>
+            </table>
+            <p>Check that the jump icon in the top-left of each reused cell is now neutral gray rather than bright, and that the roughly 19px left gutter keeps it clear of the first character of "Cell A". Row heights should still line up with the non-reused cells beside them.</p>
+        </section>
+
+        <section id="sec-conrefend">
+            <title>7. conrefend: three blocks in a row</title>
+            <p conref="reuse-library.dita#reuse-library/block-run-a" conrefend="reuse-library.dita#reuse-library/block-run-c"/>
+            <p>When the blocks sit back to back, one block's 6px bottom plus the next block's 22px top should read as an even gray rhythm. Without that 6px of bottom air, each block looks clipped along its bottom edge.</p>
+        </section>
+
+        <section id="sec-same-file">
+            <title>8. Same-file conref (the other path, not cross-file)</title>
+            <p id="local-source">This is a local source paragraph in the same file; it gets pulled in again below by an in-topic <codeph>conref="#.../local-source"</codeph>.</p>
+            <p conref="#conref-visual-check/local-source"/>
+            <p>Clicking the icon should jump to the source line in this same file rather than opening a new editor.</p>
+        </section>
+
+        <section id="sec-composes">
+            <title>9. Highlight layered over another tint (note)</title>
+            <note type="tip">
+                <p conref="reuse-library.dita#reuse-library/block-short"/>
+            </note>
+            <p>The translucent conref gray sits on top of the note's own cyan background. If the tint were fully opaque, it would punch a hole in the note's left color bar. The bar, the tint, and the icon should all still render correctly inside the note.</p>
+        </section>
+
+        <section id="sec-clickzone">
+            <title>10. Click hotspot and hover tip (slop 2 to 3)</title>
+            <p conref="reuse-library.dita#reuse-library/block-short"/>
+            <p>Hover near the top-left icon of the block above. The live click area is now the icon widened by 3px (it used to be 2px). Around 3-4px outside the icon should still register and raise the <codeph>Open the referenced content in its source file</codeph> tooltip; past about 5px the cursor should drop back to normal.</p>
+        </section>
+
+        <section id="sec-keyboard">
+            <title>11. Keyboard and screen-reader access</title>
+            <p conref="reuse-library.dita#reuse-library/block-short"/>
+            <p>The block above is followed by an inline reused fragment: <ph conref="reuse-library.dita#reuse-library/inline-phrase"/>.</p>
+            <p>Tab through the page: each reused block -- inline fragments included -- should take focus in turn, drawn as a 2px ring around the whole tint (<codeph>:focus-visible</codeph>, so a mouse click won't trigger it). On focus, a screen reader should read the block's own text and then add "Reusable content. Press Enter to open the referenced content in its source file." That line comes from a hidden hint node the script injects, so it never shows on screen. Enter on a focused block jumps to the source line exactly like clicking the icon, while Space only scrolls. Test the announcement with a screen reader such as Narrator, and the jump with the keyboard alone.</p>
+        </section>
+
+    </body>
+</topic>
