@@ -172,7 +172,10 @@ export function getConrefJumpScript(opts: { openMsgType: string; title: string; 
     // left alone so it still scrolls the preview.
     document.addEventListener('keydown', function(e) {
       if (e.key !== 'Enter' || e.altKey || e.ctrlKey || e.metaKey) return;
-      var el = e.target && e.target.closest ? e.target.closest('[data-conref]') : null;
+      // Only when the mark ITSELF has focus. A link or button inside reused
+      // content (an xref, an image control) is the target of its own Enter, so
+      // matching an ancestor mark here would swallow it.
+      var el = e.target && e.target.getAttribute && e.target.getAttribute('data-conref') !== null ? e.target : null;
       if (!el || !jump(el)) return;
       e.preventDefault();
       e.stopPropagation();

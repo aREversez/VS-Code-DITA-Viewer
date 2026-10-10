@@ -241,7 +241,10 @@ body:not(.wh_topic_page) .note__body { display: inline; }
      the tokens above); left/right symmetric so the leading bar sits at
      the same distance from the first glyph as the right padding does
      from the last; bottom gives the tint some air under the text. */
-  padding: 22px 10px 6px 10px;
+  padding-top: 22px;
+  padding-right: 10px;
+  padding-bottom: 6px;
+  padding-left: 10px;
   background-image:
     var(--conref-jump-icon),
     linear-gradient(var(--color-conref-bar), var(--color-conref-bar)),
@@ -254,6 +257,14 @@ body:not(.wh_topic_page) .note__body { display: inline; }
     var(--conref-icon-block-size) var(--conref-icon-block-size),
     var(--conref-bar-width) 100%,
     auto;
+}
+/* A list's indent IS its padding-left (ul, ol { padding-left: 1.5em }); the
+   longhand above would flatten it to 10px and push the markers out under the
+   bar. Keep the indent and add the same 10px of air on top. */
+ul[data-conref="block"][data-conref],
+ol[data-conref="block"][data-conref],
+.simple-list[data-conref="block"][data-conref] {
+  padding-left: calc(1.5em + 10px);
 }
 [data-conref="inline"][data-conref] {
   /* left padding mirrors the block treatment on a smaller scale; slice

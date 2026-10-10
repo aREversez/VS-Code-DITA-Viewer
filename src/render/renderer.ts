@@ -21,6 +21,13 @@ export interface RenderContext {
   inTableHeader?: boolean;
   /** Conref targets already resolved on this branch (cycle protection) */
   conrefChain?: ReadonlySet<string>;
+  /**
+   * True while rendering inside content that carries a conref mark. Only
+   * affects the keyboard stop of a nested mark (tabindex -1 rather than 0:
+   * still focusable by click or script, but not one more Tab stop per reuse
+   * inside reuse); see markConrefContent.
+   */
+  insideConref?: boolean;
   resolveTitle?: (id: string) => string | undefined;
   resolveKey?: (key: string) => string | undefined;
   resolveConref?: (conref: string) => DitaNode | undefined;
@@ -424,7 +431,8 @@ function conrefKind(html: string, baseType: string | undefined): 'inline' | 'cel
  * way profiling's wrapper did, see injectBlockProfiling).
  *   data-conref="block|inline|cell"  -- the styling hook and icon layout
  *   data-conref-file / -line / -col  -- the target, for the jump button
- *   tabindex + aria-describedby      -- the badge is a background with no DOM,
+ *   tabindex + aria-describedby      -- (tabindex 0 on the outermost mark, -1 on
+ *     a mark nested inside another, so reuse-in-reuse is not a Tab stop each) the badge is a background with no DOM,
  *     so the marked element itself is made focusable and points its accessible
  *     description at the one hidden hint node the webview script injects. The
  *     id literal must stay equal to CONREF_JUMP_HINT_ID in
@@ -433,9 +441,9 @@ function conrefKind(html: string, baseType: string | undefined): 'inline' | 'cel
  * The webview treats the file as untrusted input and the host re-validates
  * it before opening anything.
  */
-function markConrefContent(html: string, mark: ConrefMark, baseType: string | undefined): string {
+function markConrefContent(html: string, mark: ConrefMark, baseType: string | undefined, nested: boolean): string {
   const kind = conrefKind(html, baseType);
-  const attrs = `data-conref="${kind}" data-conref-file="${escapeHtml(mark.file)}" data-conref-line="${mark.line}" data-conref-col="${mark.col}" tabindex="0" aria-describedby="dv-conref-jump-hint"`;
+  const attrs = `data-conref="${kind}" data-conref-file="${escapeHtml(mark.file)}" data-conref-line="${mark.line}" data-conref-col="${mark.col}" tabindex="${nested ? -1 : 0}" aria-describedby="dv-conref-jump-hint"`;
   // A function replacement: the path is arbitrary text and must not be read
   // for $-patterns.
   return html.replace(/^<([a-zA-Z][a-zA-Z0-9]*)/, (_m, tag: string) => `<${tag} ${attrs}`);
@@ -539,6 +547,7 @@ function renderEffectiveNode(
     conrefChain: resolvedConref
       ? new Set([...(context.conrefChain || []), resolvedConref])
       : context.conrefChain,
+    insideConref: context.insideConref || !!mark,
   };
 
   if (renderer) {
@@ -548,7 +557,7 @@ function renderEffectiveNode(
       html = injectAttributes(html, tagName, effectiveNode.sourceRange);
       // Before the profiling wrapper: an inline element's wrapper span would
       // otherwise become the "first tag" the mark lands on.
-      if (mark) html = markConrefContent(html, mark, baseType);
+      if (mark) html = markConrefContent(html, mark, baseType, !!context.insideConref);
       html = wrapProfilingHighlight(html, effectiveNode, tagName);
     }
     return html;

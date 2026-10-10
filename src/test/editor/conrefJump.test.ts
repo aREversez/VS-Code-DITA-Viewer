@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'fs';
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { parseConrefJumpMessage, MSG_OPEN_CONREF_TARGET } from '../../editor/conrefJump';
@@ -293,10 +293,65 @@ describe('conrefJumpScript (webview hit-testing)', () => {
     assert.deepStrictEqual(t.posted, []);
   });
 
+  it('leaves Enter on a link INSIDE reused content to the link', () => {
+    const t = runScript();
+    const block = t.el(attrs('block', 5), [{ left: 100, top: 200, right: 700, bottom: 260 }]);
+    const link = t.el({}, [{ left: 120, top: 230, right: 180, bottom: 250 }], block);
+    assert.strictEqual(t.press(link, 'Enter'), false, 'the link keeps its own Enter');
+    assert.deepStrictEqual(t.posted, []);
+  });
+
   it('ignores Enter when the focused element is not reused content', () => {
     const t = runScript();
     const plain = t.el({}, [{ left: 0, top: 0, right: 10, bottom: 10 }]);
     assert.strictEqual(t.press(plain, 'Enter'), false);
     assert.deepStrictEqual(t.posted, []);
+  });
+});
+
+describe('conref marks: keyboard stops and list indent', () => {
+  let dir: string;
+  before(() => {
+    dir = mkdtempSync(join(tmpdir(), 'conref-nest-'));
+    writeFileSync(join(dir, 'lib.dita'), [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<topic id="l"><title>L</title><body>',
+      // refs inside reused content resolve against the rendering document's
+      // directory, so the nested target lives in its own file there
+      '<p id="outer">Outer <ph conref="lib2.dita#l2/inner"/></p>',
+      '<ul id="list"><li>one</li></ul>',
+      '</body></topic>',
+    ].join('\n'));
+    writeFileSync(join(dir, 'lib2.dita'), '<?xml version="1.0" encoding="UTF-8"?>\n<topic id="l2"><title>L2</title><body><ph id="inner">Inner</ph></body></topic>');
+    writeFileSync(join(dir, 'main.dita'), [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<topic id="m"><title>M</title><body>',
+      '<p conref="lib.dita#l/outer"/>',
+      '<ul conref="lib.dita#l/list"/>',
+      '</body></topic>',
+    ].join('\n'));
+  });
+  after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const html = () => {
+    const r = renderTopicToHtml({ filePath: join(dir, 'main.dita'), keyMap: new Map(), asWebviewUri: (p) => p, headingLevel: 1, markConrefs: true });
+    assert.strictEqual(r.error, undefined);
+    return r.html;
+  };
+
+  it('only the outermost mark is a Tab stop; a mark nested inside reused content is tabindex -1', () => {
+    const tags = [...html().matchAll(/<[a-z]+ [^>]*data-conref="[^"]+"[^>]*>/g)].map((m) => m[0]);
+    const outer = tags.find((t) => t.includes('data-conref="block"') && !t.includes('<ul'));
+    const nested = tags.find((t) => t.includes('data-conref="inline"'));
+    assert.ok(outer && nested, tags.join('\n'));
+    assert.ok(/tabindex="0"/.test(outer), outer);
+    assert.ok(/tabindex="-1"/.test(nested), nested);
+  });
+
+  it('a reused list is marked as a block <ul>, which the stylesheet gives its indent back', () => {
+    assert.ok(/<ul [^>]*data-conref="block"/.test(html()));
+    const css = readFileSync(join(__dirname, '../../../media/styles.css'), 'utf8');
+    assert.ok(/ul\[data-conref="block"\]\[data-conref\][^{]*\{[^}]*padding-left:\s*calc\(1\.5em \+ 10px\)/.test(css));
+    assert.ok(!/\[data-conref="block"\]\[data-conref\] \{[^}]*padding:\s*22px/.test(css), 'no padding shorthand that would flatten a list or note');
   });
 });
