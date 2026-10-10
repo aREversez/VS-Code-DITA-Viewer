@@ -7,7 +7,13 @@
 // child: profiling already owns the pseudos on some of the same elements, and
 // a real child under li/tr/table is invalid markup). A background has no
 // events of its own, so the click and the hover are hit-tested here against
-// the same geometry the stylesheet draws -- keep the two in step.
+// the same geometry the stylesheet draws.
+//
+// The geometry lives in CSS custom properties on :root (--conref-icon-*),
+// read back here via getComputedStyle().getPropertyValue(). Do NOT re-hardcode
+// the pixel numbers on this side; if a var is missing, the fallback matches
+// the current styles.css value so a broken stylesheet degrades to today's
+// behaviour rather than to a dead click zone.
 //
 // Clicking posts `${openMsgType}` {file, line, col} to the extension host,
 // which opens that file's source beside the preview at the referenced
@@ -29,28 +35,42 @@ export function getConrefJumpScript(opts: { openMsgType: string; title: string }
     var titledPrev = null;
 
     function px(v) { var n = parseFloat(v); return isNaN(n) ? 0 : n; }
+    // Read a --conref-icon-* token off the element's computed style, falling
+    // back to the current styles.css default if the var is missing (e.g. the
+    // stylesheet failed to load, or a slim test fake doesn't seed it).
+    function num(cs, name, fallback) {
+      if (!cs || !cs.getPropertyValue) return fallback;
+      var raw = cs.getPropertyValue(name);
+      if (!raw) return fallback;
+      var n = parseFloat(raw);
+      return isNaN(n) ? fallback : n;
+    }
 
     // Is the point inside this element's jump icon? The numbers mirror the
     // background-position/size rules in styles.css, measured from the padding
     // box (background-origin's default), i.e. inside the border.
+    // slop is hit tolerance, not a paint number, so it lives here only.
     function inIconZone(el, x, y) {
       var kind = el.getAttribute('data-conref');
       var rects = el.getClientRects();
       if (!rects.length) return false;
       var cs = getComputedStyle(el);
-      var slop = 2;
+      var slop = 3;
       if (kind === 'inline') {
         // Icon sits at the right edge of the LAST line box: for text that
-        // wraps, that is where the element visually ends.
+        // wraps, that is where the element visually ends. The slot is the
+        // inline padding-right in styles.css (--conref-icon-inline-slot).
+        var slot = num(cs, '--conref-icon-inline-slot', 13);
         var last = rects[rects.length - 1];
-        return x >= last.right - 15 - slop && x <= last.right + slop &&
+        return x >= last.right - slot - slop && x <= last.right + slop &&
                y >= last.top - slop && y <= last.bottom + slop;
       }
       var r = rects[0];
       var left = r.left + px(cs.borderLeftWidth);
       var top = r.top + px(cs.borderTopWidth);
-      var off = kind === 'cell' ? 2 : 3;
-      var size = kind === 'cell' ? 14 : 16;
+      var isCell = kind === 'cell';
+      var off = num(cs, isCell ? '--conref-icon-cell-offset' : '--conref-icon-block-offset', isCell ? 2 : 3);
+      var size = num(cs, isCell ? '--conref-icon-cell-size' : '--conref-icon-block-size', isCell ? 15 : 16);
       return x >= left + off - slop && x <= left + off + size + slop &&
              y >= top + off - slop && y <= top + off + size + slop;
     }

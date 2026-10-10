@@ -193,43 +193,102 @@ body:not(.wh_topic_page) .note__body { display: inline; }
    non-inline elements) and no wrapper element. The renderer only emits
    data-conref when the preview opts in, so "Export as HTML" and the diff
    view never carry it. The jump icon is a background too, so it has no DOM
-   of its own: the click zone is recomputed from the same numbers in
-   conrefJumpScript.ts (keep the two in step: block icon 16px at 3px/3px,
-   inline icon 12px at the right edge, cell icon 14px at 2px/2px).
-   The doubled attribute selector outranks `.note--tip { background: ... }`
-   and friends, whose shorthand would otherwise reset background-image. */
+   of its own: the click zone is recomputed from the SAME custom properties
+   below in conrefJumpScript.ts (getComputedStyle().getPropertyValue())
+   -- the vars are the single source of truth, do not re-hardcode the
+   numbers on either side. Padding on the block/inline variants gives the
+   tint some air on both sides (so it reads as a chunk around the content
+   rather than a tight underline) and keeps the leading bar (flush with
+   the inner-border edge) clear of the first glyph. */
 :root {
   --color-conref-bg: rgba(128, 128, 128, 0.13);
   --color-conref-bar: rgba(128, 128, 128, 0.55);
-  --conref-jump-icon: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2016%2016'%3E%3Cpath%20d='M3.5%201.5h6l3%203v10h-9z'%20fill='white'%20fill-opacity='.85'%20stroke='%234a8fd8'%20stroke-width='1.2'%20stroke-linejoin='round'/%3E%3Cpath%20d='M9.5%201.5v3h3'%20fill='none'%20stroke='%234a8fd8'%20stroke-width='1.2'%20stroke-linejoin='round'/%3E%3Cpath%20d='M5.5%209.5h4M8%207.3l2.2%202.2L8%2011.7'%20fill='none'%20stroke='%234a8fd8'%20stroke-width='1.3'%20stroke-linecap='round'%20stroke-linejoin='round'/%3E%3C/svg%3E");
+  /* Oxygen paints the reuse badge as a few OPEN horizontal strokes (lines of
+     text), not a filled/closed page rectangle -- strokes read as airy chrome on
+     the translucent tint, whereas a solid glyph competes with content and, on
+     dark themes, a white fill glowed. Three lines (not four) keep it lighter;
+     the last runs a touch longer and gets a small right arrowhead so the same
+     gesture means "jump to source". Light-mode grays below; .vscode-dark
+     (after this block) lifts them so the strokes stay legible on dark. */
+  --conref-jump-icon: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2016%2016'%3E%3Cg%20fill='none'%20stroke='%239c9c9c'%20stroke-width='1'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M2%204h7M2%208h7M2%2012h9'/%3E%3Cpath%20d='M9.5%2010.5l1.8%201.5-1.8%201.5'%20stroke='%23808080'/%3E%3C/g%3E%3C/svg%3E");
+  /* Geometry read by both the paint rules below and the webview hit-test
+     in conrefJumpScript.ts. Change here, both sides move together. */
+  --conref-bar-width: 3px;
+  --conref-icon-block-size: 16px;
+  --conref-icon-block-offset: 3px;
+  --conref-icon-cell-size: 15px;
+  --conref-icon-cell-offset: 2px;
+  --conref-icon-inline-size: 11px;
+  --conref-icon-inline-offset: 1px;
+  /* Inline slot: the padding-right reserved on the element so the icon
+     sits clear of the trailing glyph. Derives as
+     offset + size + 1px visual gap, but kept as a flat token so the
+     script's hit-test reads the exact same number. */
+  --conref-icon-inline-slot: 13px;
+}
+/* Dark-mode badge: same open-line glyph, lifted to light grays so the strokes
+   stay legible over a dark canvas without glowing. Must sit AFTER the :root
+   block -- .vscode-dark is on <html>, the same element :root targets, so it
+   wins on source order, not specificity. */
+.vscode-dark {
+  --conref-jump-icon: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2016%2016'%3E%3Cg%20fill='none'%20stroke='%238a8a8a'%20stroke-width='1'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M2%204h7M2%208h7M2%2012h9'/%3E%3Cpath%20d='M9.5%2010.5l1.8%201.5-1.8%201.5'%20stroke='%23a0a0a0'/%3E%3C/g%3E%3C/svg%3E");
 }
 [data-conref][data-conref] {
   background-repeat: no-repeat;
 }
 [data-conref="block"][data-conref] {
-  padding-top: 22px;
+  /* top clears the icon (offset 3 + size 16 + a small gap, hardcoded to match
+     the tokens above); left/right symmetric so the leading bar sits at
+     the same distance from the first glyph as the right padding does
+     from the last; bottom gives the tint some air under the text. */
+  padding: 22px 10px 6px 10px;
   background-image:
     var(--conref-jump-icon),
     linear-gradient(var(--color-conref-bar), var(--color-conref-bar)),
     linear-gradient(var(--color-conref-bg), var(--color-conref-bg));
-  background-position: 3px 3px, left top, 0 0;
-  background-size: 16px 16px, 3px 100%, auto;
+  background-position:
+    var(--conref-icon-block-offset) var(--conref-icon-block-offset),
+    left top,
+    0 0;
+  background-size:
+    var(--conref-icon-block-size) var(--conref-icon-block-size),
+    var(--conref-bar-width) 100%,
+    auto;
 }
 [data-conref="inline"][data-conref] {
-  padding-right: 15px;
+  /* left padding mirrors the block treatment on a smaller scale; slice
+     (the default box-decoration-break) means only the very first line of
+     a wrapped run gets the leading gap, which is what Oxygen shows too.
+     padding-right is the slot; the icon hugs the right edge inside it. */
+  padding: 0 var(--conref-icon-inline-slot) 0 3px;
   border-radius: 2px;
   background-image:
     var(--conref-jump-icon),
     linear-gradient(var(--color-conref-bg), var(--color-conref-bg));
-  background-position: right 1px center, 0 0;
-  background-size: 12px 12px, auto;
+  background-position:
+    right var(--conref-icon-inline-offset) center,
+    0 0;
+  background-size:
+    var(--conref-icon-inline-size) var(--conref-icon-inline-size),
+    auto;
 }
 [data-conref="cell"][data-conref] {
+  /* Reserve a left gutter so the top-left badge never sits on the first
+     glyph -- a <td>'s default 0.75rem left padding is shorter than the
+     16px icon, which is why the cell badge was overlapping "Cell A".
+     Only padding-left is overridden; top/right/bottom keep the table's
+     own 0.5rem/0.75rem so rows stay the same height and text tops stay
+     aligned with non-reused sibling cells. */
+  padding-left: calc(var(--conref-icon-cell-offset) + var(--conref-icon-cell-size) + 2px);
   background-image:
     var(--conref-jump-icon),
     linear-gradient(var(--color-conref-bg), var(--color-conref-bg));
-  background-position: 2px 2px, 0 0;
-  background-size: 14px 14px, auto;
+  background-position:
+    var(--conref-icon-cell-offset) var(--conref-icon-cell-offset),
+    0 0;
+  background-size:
+    var(--conref-icon-cell-size) var(--conref-icon-cell-size),
+    auto;
 }
 /* Set by the hover hit-test in conrefJumpScript.ts while the pointer is over
    the icon (a background cannot take its own cursor). */
