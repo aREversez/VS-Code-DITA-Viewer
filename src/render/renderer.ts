@@ -418,8 +418,19 @@ function conrefMarkFor(target: DitaNode, context: RenderContext): ConrefMark | u
 //   block  -- everything else: the icon sits on its own line above the content.
 const CONREF_CELL_TAGS = new Set(['table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th', 'colgroup', 'caption']);
 
+// Of the cell kind, only these are a sensible keyboard stop. table, thead,
+// tbody, tfoot, tr, colgroup and caption keep the mouse icon but get no
+// tabindex: colgroup has no box to draw a focus ring on, an outline on a tr
+// is not reliable across browsers, and a Tab stop on every structural wrapper
+// of a reused table is noise. Jumping from a reused table is a cell-level act.
+const CONREF_FOCUSABLE_CELL_TAGS = new Set(['td', 'th']);
+
+function openingTag(html: string): string {
+  return (/^<([a-zA-Z][a-zA-Z0-9]*)/.exec(html)?.[1] ?? '').toLowerCase();
+}
+
 function conrefKind(html: string, baseType: string | undefined): 'inline' | 'cell' | 'block' {
-  const tag = (/^<([a-zA-Z][a-zA-Z0-9]*)/.exec(html)?.[1] ?? '').toLowerCase();
+  const tag = openingTag(html);
   if (CONREF_CELL_TAGS.has(tag)) return 'cell';
   if (baseType && INLINE_PROFILING_BASETYPES.has(baseType)) return 'inline';
   return 'block';
@@ -432,7 +443,9 @@ function conrefKind(html: string, baseType: string | undefined): 'inline' | 'cel
  *   data-conref="block|inline|cell"  -- the styling hook and icon layout
  *   data-conref-file / -line / -col  -- the target, for the jump button
  *   tabindex + aria-describedby      -- (tabindex 0 on the outermost mark, -1 on
- *     a mark nested inside another, so reuse-in-reuse is not a Tab stop each) the badge is a background with no DOM,
+ *     a mark nested inside another, so reuse-in-reuse is not a Tab stop each;
+ *     omitted on table/thead/tbody/tfoot/tr/colgroup/caption, see
+ *     CONREF_FOCUSABLE_CELL_TAGS) the badge is a background with no DOM,
  *     so the marked element itself is made focusable and points its accessible
  *     description at the one hidden hint node the webview script injects. The
  *     id literal must stay equal to CONREF_JUMP_HINT_ID in
@@ -443,7 +456,9 @@ function conrefKind(html: string, baseType: string | undefined): 'inline' | 'cel
  */
 function markConrefContent(html: string, mark: ConrefMark, baseType: string | undefined, nested: boolean): string {
   const kind = conrefKind(html, baseType);
-  const attrs = `data-conref="${kind}" data-conref-file="${escapeHtml(mark.file)}" data-conref-line="${mark.line}" data-conref-col="${mark.col}" tabindex="${nested ? -1 : 0}" aria-describedby="dv-conref-jump-hint"`;
+  const focusable = kind !== 'cell' || CONREF_FOCUSABLE_CELL_TAGS.has(openingTag(html));
+  const a11y = focusable ? ` tabindex="${nested ? -1 : 0}" aria-describedby="dv-conref-jump-hint"` : '';
+  const attrs = `data-conref="${kind}" data-conref-file="${escapeHtml(mark.file)}" data-conref-line="${mark.line}" data-conref-col="${mark.col}"${a11y}`;
   // A function replacement: the path is arbitrary text and must not be read
   // for $-patterns.
   return html.replace(/^<([a-zA-Z][a-zA-Z0-9]*)/, (_m, tag: string) => `<${tag} ${attrs}`);

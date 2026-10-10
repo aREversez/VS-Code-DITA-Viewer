@@ -352,6 +352,58 @@ describe('conref marks: keyboard stops and list indent', () => {
     assert.ok(/<ul [^>]*data-conref="block"/.test(html()));
     const css = readFileSync(join(__dirname, '../../../media/styles.css'), 'utf8');
     assert.ok(/ul\[data-conref="block"\]\[data-conref\][^{]*\{[^}]*padding-left:\s*calc\(1\.5em \+ 10px\)/.test(css));
-    assert.ok(!/\[data-conref="block"\]\[data-conref\] \{[^}]*padding:\s*22px/.test(css), 'no padding shorthand that would flatten a list or note');
+    // anchored to a line start, so the dedicated .note rule (which keeps the
+    // note's own padding) is not what this matches
+    assert.ok(!/^\[data-conref="block"\]\[data-conref\] \{[^}]*padding:\s*22px/m.test(css), 'no padding shorthand on the generic block rule that would flatten a list');
+  });
+});
+
+describe('conref marks: whole notes and table structure', () => {
+  let dir: string;
+  before(() => {
+    dir = mkdtempSync(join(tmpdir(), 'conref-struct-'));
+    writeFileSync(join(dir, 'lib.dita'), [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<topic id="l"><title>L</title><body>',
+      '<note id="n">Careful</note>',
+      '<table id="t"><tgroup cols="1"><colspec colname="c"/><thead><row><entry>H</entry></row></thead>',
+      '<tbody><row id="r"><entry id="e">Cell</entry></row></tbody></tgroup></table>',
+      '</body></topic>',
+    ].join('\n'));
+    writeFileSync(join(dir, 'main.dita'), [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<topic id="m"><title>M</title><body>',
+      '<note conref="lib.dita#l/n"/>',
+      '<table conref="lib.dita#l/t"/>',
+      '<table><tgroup cols="1"><tbody><row conref="lib.dita#l/r"/></tbody></tgroup></table>',
+      '<table><tgroup cols="1"><tbody><row><entry conref="lib.dita#l/e"/></row></tbody></tgroup></table>',
+      '</body></topic>',
+    ].join('\n'));
+  });
+  after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const tags = () => {
+    const r = renderTopicToHtml({ filePath: join(dir, 'main.dita'), keyMap: new Map(), asWebviewUri: (p) => p, headingLevel: 1, markConrefs: true });
+    assert.strictEqual(r.error, undefined);
+    return [...r.html.matchAll(/<([a-z]+) [^>]*data-conref="[^"]+"[^>]*>/g)].map((m) => ({ tag: m[1], open: m[0] }));
+  };
+
+  it('table structure keeps the icon but is not a keyboard stop; cells are', () => {
+    const marked = tags();
+    const structural = marked.filter((m) => ['table', 'tr', 'thead', 'tbody', 'colgroup'].includes(m.tag));
+    assert.ok(structural.length >= 2, JSON.stringify(marked.map((m) => m.tag)));
+    for (const m of structural) {
+      assert.ok(m.open.includes('data-conref="cell"'), m.open);
+      assert.ok(!/tabindex|aria-describedby/.test(m.open), `${m.tag} must not be a Tab stop: ${m.open}`);
+    }
+    const cells = marked.filter((m) => m.tag === 'td' || m.tag === 'th');
+    assert.ok(cells.length >= 1, 'a reused entry is marked');
+    for (const m of cells) assert.ok(/tabindex="0"/.test(m.open) && /aria-describedby=/.test(m.open), m.open);
+  });
+
+  it('a reused <note> keeps its own horizontal padding; only the top yields to the icon', () => {
+    const css = readFileSync(join(__dirname, '../../../media/styles.css'), 'utf8');
+    assert.ok(/\.note\[data-conref="block"\]\[data-conref\]\s*\{[^}]*padding:\s*22px 1rem 0\.75rem 1rem/.test(css));
+    assert.ok(tags().some((m) => /class="note/.test(m.open) && m.open.includes('data-conref="block"')), 'the note is marked as a block');
   });
 });

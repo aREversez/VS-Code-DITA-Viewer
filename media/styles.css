@@ -266,6 +266,12 @@ ol[data-conref="block"][data-conref],
 .simple-list[data-conref="block"][data-conref] {
   padding-left: calc(1.5em + 10px);
 }
+/* A whole <note> reused: the generic block padding would replace .note's own
+   0.75rem 1rem. Keep its horizontal padding (1rem already clears the 3px bar
+   and the icon) and bottom; only the top yields, to the icon line. */
+.note[data-conref="block"][data-conref] {
+  padding: 22px 1rem 0.75rem 1rem;
+}
 [data-conref="inline"][data-conref] {
   /* left padding mirrors the block treatment on a smaller scale; slice
      (the default box-decoration-break) means only the very first line of
