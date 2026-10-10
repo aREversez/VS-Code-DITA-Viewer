@@ -107,28 +107,57 @@ describe('topic preview highlight: merged conref runs', () => {
 
   it('finds the roots of a large run without a linear membership scan per member', () => {
     // A conref can pull in a whole section: thousands of elements share one
-    // range. Asking `members.indexOf(parent)` for each of them is quadratic
-    // (every click on such a tag stalled the webview), so the membership test
-    // must be a hash lookup. Counted rather than timed, to stay deterministic.
+    // range. Asking whether each member's parent is in the member list is
+    // quadratic however it is spelled -- indexOf, includes, some or find all
+    // scan (every click on such a tag stalled the webview), so all four are
+    // counted on run-sized arrays, not just the spelling the first version
+    // of this test happened to hook. Counted rather than timed, to stay
+    // deterministic on any machine; the threshold is the run's own length,
+    // so an unrelated mid-size array cannot trip it.
     const h = harness();
     const section = h.el('1:50:0:9');
     const N = 3000;
     const members: FakeEl[] = [];
     for (let i = 0; i < N; i++) members.push(h.el('5:5:0:30', section));
-    const realIndexOf = Array.prototype.indexOf;
+    const real = {
+      indexOf: Array.prototype.indexOf,
+      includes: Array.prototype.includes,
+      some: Array.prototype.some,
+      find: Array.prototype.find,
+    };
     let bigScans = 0;
+    const note = (arr: readonly unknown[]): void => {
+      if (arr.length >= N) bigScans++;
+    };
+    // Each hook forwards every argument (thisArg included) and only tallies
+    // when the receiver is run-sized, so the call's result is untouched.
     Array.prototype.indexOf = function (this: unknown[], ...args: [unknown, number?]) {
-      if (this.length >= 1000) bigScans++;
-      return realIndexOf.apply(this, args);
+      note(this);
+      return real.indexOf.apply(this, args);
     } as typeof Array.prototype.indexOf;
+    Array.prototype.includes = function (this: unknown[], ...args: [unknown, number?]) {
+      note(this);
+      return real.includes.apply(this, args);
+    } as typeof Array.prototype.includes;
+    Array.prototype.some = function (this: unknown[], ...args: [never]) {
+      note(this);
+      return real.some.apply(this, args);
+    } as typeof Array.prototype.some;
+    Array.prototype.find = function (this: unknown[], ...args: [never]) {
+      note(this);
+      return real.find.apply(this, args);
+    } as typeof Array.prototype.find;
     let run: { isRun: boolean; els: FakeEl[] };
     try {
       run = h.api.findRunElements(members[0]);
     } finally {
-      Array.prototype.indexOf = realIndexOf;
+      Array.prototype.indexOf = real.indexOf;
+      Array.prototype.includes = real.includes;
+      Array.prototype.some = real.some;
+      Array.prototype.find = real.find;
     }
     assert.strictEqual(run.els.length, N);
-    assert.strictEqual(bigScans, 0, `${bigScans} linear scans of a ${N}-member run`);
+    assert.strictEqual(bigScans, 0, `${bigScans} linear membership scans (indexOf/includes/some/find) of a ${N}-member run`);
   });
 
   it('a range that differs in any one of line, end line, start col or end col is not part of the run', () => {
