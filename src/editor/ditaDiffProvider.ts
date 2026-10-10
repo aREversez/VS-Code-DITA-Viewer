@@ -369,7 +369,7 @@ function buildDiffHtml(
   const theme = vscode.window.activeColorTheme;
   const isDark = theme.kind === vscode.ColorThemeKind.Dark || theme.kind === vscode.ColorThemeKind.HighContrast;
 
-  const rowsHtml = renderRows(result.rows);
+  const cols = renderColumns(result.rows);
   const statsHtml = renderStats(result.stats);
 
   const labels = {
@@ -404,43 +404,64 @@ function buildDiffHtml(
 <div id="diff-scroll">
 ${result.errorLeft ? `<div class="diff-error">${escapeHtml(result.errorLeft)}</div>` : ''}
 ${result.errorRight ? `<div class="diff-error">${escapeHtml(result.errorRight)}</div>` : ''}
-${rowsHtml}
+<div class="diff-columns">
+  <div class="diff-col diff-col--left">${cols.left}</div>
+  <div class="diff-gutter" id="diff-gutter"><svg id="align-svg" class="align-svg" xmlns="http://www.w3.org/2000/svg"></svg></div>
+  <div class="diff-col diff-col--right">${cols.right}</div>
+</div>
 </div>
 <script nonce="${nonce}" src="${diffScriptUri}"></script>
 </body>
 </html>`;
 }
 
-function renderRows(rows: AlignedRow[]): string {
-  return rows.map((row) => renderRow(row)).join('\n');
+// Independent two-column layout: each side flows as its own continuous
+// document. A block present on only one side (added / removed) is emitted into
+// that column alone -- no full-height empty placeholder stretches the other
+// column to match, which is what broke the reading flow in the old aligned-row
+// model. Change type is carried by a thin edge marker (see .dv-block--* in
+// diff-styles.css) plus word-level inline marks. Both sides of one change share
+// a data-diff-idx so the webview's next/prev navigation can highlight the pair
+// together even though the columns are no longer row-for-row aligned.
+interface ColumnSink {
+  left: string[];
+  right: string[];
+  changeCount: number;
 }
 
-function renderRow(row: AlignedRow): string {
-  const cls = `diff-row diff-row--${row.changeType}`;
-  const leftHtml = row.left ? applyInlineDiff(row.left.html, row, 'left') : emptyCell();
-  const rightHtml = row.right ? applyInlineDiff(row.right.html, row, 'right') : emptyCell();
+function renderColumns(rows: AlignedRow[]): { left: string; right: string; changeCount: number } {
+  const sink: ColumnSink = { left: [], right: [], changeCount: 0 };
+  collectColumns(rows, sink);
+  return { left: sink.left.join('\n'), right: sink.right.join('\n'), changeCount: sink.changeCount };
+}
 
-  const hasSectionChildren = row.children && row.children.length > 0;
-  if (hasSectionChildren) {
-    const nestedRows = row.children!.map((child) => renderRow(child)).join('\n');
-    return `<div class="${cls} diff-row--section">
-  <div class="diff-rows-nested">${nestedRows}</div>
-</div>`;
+function collectColumns(rows: AlignedRow[], sink: ColumnSink): void {
+  for (const row of rows) {
+    // A modified container (section / list / table) recurses into its children;
+    // the container itself contributes no block of its own, matching the
+    // aligned-row renderer, which only ever showed the recursed children.
+    if (row.children && row.children.length > 0) {
+      collectColumns(row.children, sink);
+      continue;
+    }
+
+    const idxAttr = row.changeType !== 'unchanged' ? ` data-diff-idx="${sink.changeCount++}"` : '';
+    if (row.left) {
+      sink.left.push(
+        `<div class="dv-block dv-block--${row.changeType}"${idxAttr}>${applyInlineDiff(row.left.html, row, 'left')}</div>`,
+      );
+    }
+    if (row.right) {
+      sink.right.push(
+        `<div class="dv-block dv-block--${row.changeType}"${idxAttr}>${applyInlineDiff(row.right.html, row, 'right')}</div>`,
+      );
+    }
   }
-
-  return `<div class="${cls}">
-  <div class="diff-cell diff-cell--left">${leftHtml}</div>
-  <div class="diff-cell diff-cell--right">${rightHtml}</div>
-</div>`;
 }
 
 function applyInlineDiff(html: string, row: AlignedRow, side: 'left' | 'right'): string {
   if (row.changeType !== 'modified' || !row.inlineDiff) return html;
   return applyInlineMarksToHtml(html, row.inlineDiff, side);
-}
-
-function emptyCell(): string {
-  return `<div class="diff-cell diff-cell--empty">—</div>`;
 }
 
 function renderStats(stats: { added: number; removed: number; modified: number }): string {

@@ -1,34 +1,18 @@
 /* Diff/Compare view styles — side-by-side rendered DITA comparison */
 
 :root {
-  --diff-add-bg: rgba(46, 160, 67, 0.15);
   --diff-add-border: #2ea043;
-  --diff-del-bg: rgba(248, 81, 73, 0.12);
   --diff-del-border: #f85149;
-  --diff-mod-bg: rgba(130, 80, 223, 0.10);
   --diff-mod-border: #8250df;
-  --diff-empty-bg: repeating-linear-gradient(
-    45deg,
-    transparent 0 6px,
-    rgba(128, 128, 128, 0.07) 6px 12px
-  );
   --diff-gutter: #e1e4e8;
   --diff-toolbar-bg: var(--vscode-editor-background);
   --diff-toolbar-border: var(--vscode-widget-border, #ccc);
 }
 
 .vscode-dark {
-  --diff-add-bg: rgba(46, 160, 67, 0.2);
   --diff-add-border: #3fb950;
-  --diff-del-bg: rgba(248, 81, 73, 0.18);
   --diff-del-border: #f85149;
-  --diff-mod-bg: rgba(163, 113, 247, 0.18);
   --diff-mod-border: #a371f7;
-  --diff-empty-bg: repeating-linear-gradient(
-    45deg,
-    transparent 0 6px,
-    rgba(128, 128, 128, 0.12) 6px 12px
-  );
   --diff-gutter: #30363d;
 }
 
@@ -113,72 +97,134 @@ body {
   overflow-y: auto;
 }
 
-/* ── Row layout: one flex row per aligned pair ── */
+/* ── Independent two-column layout ──
+ *
+ * Each side flows as its own continuous document. A block present on only one
+ * side (added / removed) is emitted into that column alone -- no full-height
+ * empty placeholder stretches the other column to match, which is what broke
+ * the reading flow in the old aligned-row model. The columns are deliberately
+ * NOT row-for-row aligned: a rendered-document diff cares about content
+ * organization and layout, not the exhaustive line-by-line correspondence a
+ * source diff needs.
+ */
 
-.diff-row {
+.diff-columns {
   display: flex;
-  border-bottom: 1px solid var(--diff-gutter);
-  min-height: 1.5em;
+  /* stretch (not flex-start) so the center gutter is as tall as the taller
+     column, giving the alignment SVG a full-height canvas to draw on. */
+  align-items: stretch;
 }
 
-.diff-row:last-child {
-  border-bottom: none;
-}
-
-.diff-cell {
+.diff-col {
   flex: 1;
+  min-width: 0;
+}
+
+/* Center gutter: the empty channel the two documents are joined by, echoing
+   Trados Studio's alignment view. The SVG overlay draws one connector per
+   change across it. */
+.diff-gutter {
+  flex: 0 0 56px;
+  position: relative;
+}
+
+.align-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.align-line {
+  fill: none;
+  stroke-width: 1.5;
+  opacity: 0.75;
+}
+
+.align-dot {
+  stroke: none;
+}
+
+.align-line--modified,
+.align-dot--modified {
+  stroke: var(--diff-mod-border);
+  fill: var(--diff-mod-border);
+}
+
+.align-line--added,
+.align-dot--added {
+  stroke: var(--diff-add-border);
+  fill: var(--diff-add-border);
+}
+
+.align-line--removed,
+.align-dot--removed {
+  stroke: var(--diff-del-border);
+  fill: var(--diff-del-border);
+}
+
+/* Emphasized while hovering the paired block (see diff-webview.js). */
+.align-line.__align_active {
+  stroke-width: 2.5;
+  opacity: 1;
+}
+
+/* Added / removed blocks have no counterpart to join, so they get a short
+   "stub" line ending in a dot instead of a curve. Drawn a touch heavier than
+   the curves so a lone deletion still reads clearly across the gutter. */
+.align-line--stub {
+  stroke-width: 2;
+  opacity: 1;
+}
+
+/* ── Block: one rendered DITA block on one side ── */
+
+.dv-block {
   padding: 8px 16px;
-  overflow: hidden;
-  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
-.diff-cell:first-child {
-  border-right: 1px solid var(--diff-gutter);
+/* ── Change type marker ──
+ *
+ * No background fills anywhere. A rendered paragraph is a whole "line", so the
+ * source-diff convention of tinting every changed line buries a block of
+ * still-valid prose under a big colored slab that is hard to read. Change type
+ * is carried instead by a thin edge marker plus the word-level inline
+ * highlights below. Added / removed blocks need no fill to read clearly: they
+ * simply appear on one side and not the other.
+ *
+ * The marker hugs the gutter on both sides -- the left document marks on its
+ * right edge, the right document on its left edge -- so the bar and the
+ * connector read as one change channel down the middle. Marking everything
+ * border-left instead (as this used to) put a removed block's bar at the far
+ * left of the screen while an added block's bar sat by the gutter, which made
+ * green look like it had a vertical line and red did not.
+ */
+
+.diff-col--left .dv-block--removed {
+  border-right: 3px solid var(--diff-del-border);
 }
 
-/* ── Change type coloring ── */
-
-.diff-row--unchanged .diff-cell {
-  background: transparent;
+.diff-col--left .dv-block--modified {
+  border-right: 3px solid var(--diff-mod-border);
 }
 
-.diff-row--added .diff-cell {
-  background: var(--diff-add-bg);
+.diff-col--right .dv-block--added {
   border-left: 3px solid var(--diff-add-border);
 }
 
-.diff-row--added .diff-cell:first-child {
-  border-left: none;
-}
-
-.diff-row--removed .diff-cell {
-  background: var(--diff-del-bg);
-  border-left: 3px solid var(--diff-del-border);
-}
-
-.diff-row--removed .diff-cell:first-child {
-  border-left: none;
-}
-
-.diff-row--modified .diff-cell {
-  background: var(--diff-mod-bg);
+.diff-col--right .dv-block--modified {
   border-left: 3px solid var(--diff-mod-border);
 }
 
-.diff-row--modified .diff-cell:first-child {
-  border-left: none;
-}
-
-/* ── Empty placeholder cell ── */
-
-.diff-cell--empty {
-  background: var(--diff-empty-bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--vscode-descriptionForeground, #888);
-  font-style: italic;
-  font-size: 12px;
+/* Transient counterpart emphasis while hovering the other side of a change.
+   A hardcoded neutral tint, not --vscode-list-hoverBackground: that variable
+   resolves to a color near-identical to the editor background in common dark
+   themes, so the highlight was invisible exactly when it was most wanted. */
+.dv-block--linked {
+  background: rgba(127, 127, 127, 0.22);
 }
 
 /* ── Inline diff marks ── */
@@ -202,73 +248,64 @@ body:not(.show-inline) .diff-inline-add {
   text-decoration: none;
 }
 
-/* ── Current change highlight (navigation) ── */
+/* ── Current change highlight (navigation) ──
+ *
+ * Both sides of one change share a data-diff-idx; the script highlights every
+ * block carrying the current index so the two columns stay in sync while
+ * jumping between changes.
+ */
 
-.diff-row.__diff_current {
+.dv-block.__diff_current {
   outline: 2px solid var(--vscode-focusBorder, #007acc);
   outline-offset: -2px;
-}
-
-/* ── Section children (nested diff rows) ── */
-
-.diff-row--section .diff-cell {
-  padding: 0;
-}
-
-.diff-rows-nested {
-  width: 100%;
-}
-
-.diff-rows-nested .diff-row {
-  border-bottom: 1px solid var(--diff-gutter);
-}
-
-.diff-rows-nested .diff-row:last-child {
-  border-bottom: none;
-}
-
-.diff-rows-nested .diff-cell {
-  padding: 8px 16px;
 }
 
 /* ── Error banner ── */
 
 .diff-error {
   padding: 12px 16px;
-  background: var(--diff-del-bg);
   border-left: 3px solid var(--diff-del-border);
   color: var(--diff-del-border);
   font-size: 13px;
 }
 
-/* ── Reset topic typography inside diff cells ── */
+/* ── Reset topic typography inside blocks ── */
 
-.diff-cell p:first-child { margin-top: 0; }
-.diff-cell p:last-child { margin-bottom: 0; }
+.dv-block p:first-child { margin-top: 0; }
+.dv-block p:last-child { margin-bottom: 0; }
 
-/* ── Narrow layout: stack cells instead of side-by-side ──
+/* ── Narrow layout: stack the two documents vertically ──
  *
- * This panel is its own webview, so @media here measures the panel's own
- * width, not the whole VS Code window -- exactly what we want. Was
- * previously a fixed two-column flex row regardless of width, unreadable
- * once the panel got narrow (split editors, small windows). Mirrors VS
- * Code's own diff editor, which falls back to a stacked/inline layout
- * below a similar width instead of forcing side-by-side.
+ * This panel is its own webview, so @media measures the panel's own width, not
+ * the whole VS Code window. Below ~700px two proportional columns are
+ * unreadable, so the columns stack -- old document above new document -- each
+ * still flowing continuously.
  */
 @media (max-width: 700px) {
-  .diff-row {
+  .diff-columns {
     flex-direction: column;
   }
 
-  .diff-cell {
-    /* Let each stacked cell size to its own content instead of splitting
-       the row's height evenly, which `flex: 1` (the side-by-side default)
-       would otherwise do once the direction is column. */
-    flex: none;
+  /* Connectors only make side-by-side; drop the gutter and let the two
+     documents stack, separated by a rule. */
+  .diff-gutter {
+    display: none;
   }
 
-  .diff-cell:first-child {
-    border-right: none;
+  .diff-col--left {
     border-bottom: 1px solid var(--diff-gutter);
+  }
+
+  /* No gutter to face once stacked, so mark every change on its left edge --
+     otherwise a left-column block would carry a bar on its far-right edge with
+     nothing there to connect to. */
+  .diff-col--left .dv-block--removed {
+    border-right: none;
+    border-left: 3px solid var(--diff-del-border);
+  }
+
+  .diff-col--left .dv-block--modified {
+    border-right: none;
+    border-left: 3px solid var(--diff-mod-border);
   }
 }
