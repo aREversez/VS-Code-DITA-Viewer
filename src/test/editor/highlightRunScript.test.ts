@@ -1,5 +1,23 @@
 import * as assert from 'assert';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { getHighlightRunScript } from '../../editor/webview/highlightRunScript';
+
+// dist-test/test/editor -> repo root is three levels up.
+const repoRoot = join(__dirname, '..', '..', '..');
+const read = (rel: string): string => readFileSync(join(repoRoot, rel), 'utf8');
+
+/** The exact characters getHighlightRunScript() returns -- the body of its
+ * template literal, with no interpretation of ${} or backticks. */
+function rawScriptSource(): string {
+  const text = read('src/editor/webview/highlightRunScript.ts');
+  const start = text.indexOf('return `');
+  assert.notStrictEqual(start, -1, 'highlightRunScript.ts must return a template literal');
+  const body = text.slice(start + 'return `'.length);
+  const end = body.indexOf('`;');
+  assert.notStrictEqual(end, -1, 'the template literal must close');
+  return body.slice(0, end);
+}
 
 // The topic preview's highlight box. A conref/conkeyref/conrefend merge stamps
 // every transplanted node with the referencing element's own source range
@@ -233,5 +251,35 @@ describe('topic preview highlight: merged conref runs', () => {
     h.api.highlightElements([a], false);
     h.api.highlightElements([], false);
     assert.strictEqual(classesOf(a), '');
+  });
+});
+
+describe('the extracted highlight script is still the one the topic preview ships', () => {
+  // d4495a0 moved the highlight block out of topicScript.ts with the claim
+  // that the generated webview script was unchanged apart from two blank
+  // lines -- a claim nothing could regress-check, because topicScript.ts
+  // imports vscode and no test can call getWebviewScript(). These two cases
+  // keep the move honest: the text the tests above execute is the exact text
+  // in the file (the extracted script takes no parameters, so returning the
+  // literal means the literal), and topicScript.ts ships it only through the
+  // call, holding no copy of its own. A second inline copy drifting from the
+  // module -- the failure mode the extraction exists to prevent -- fails one
+  // of the two.
+  it('getHighlightRunScript returns the file text byte for byte', () => {
+    assert.strictEqual(getHighlightRunScript(), rawScriptSource());
+  });
+
+  it('topicScript inlines the module and keeps no highlight copy of its own', () => {
+    const topic = read('src/editor/webview/topicScript.ts');
+    assert.ok(
+      topic.includes("import { getHighlightRunScript } from './highlightRunScript';"),
+      'topicScript.ts must import the module',
+    );
+    assert.ok(
+      topic.includes('${getHighlightRunScript()}'),
+      'topicScript.ts must ship the highlight block through the call',
+    );
+    assert.ok(!topic.includes('function findRunElements'), 'no highlight copy may sit back inside topicScript.ts');
+    assert.ok(!topic.includes('var HL_VISIBLE_MS'), 'no highlight copy may sit back inside topicScript.ts');
   });
 });
