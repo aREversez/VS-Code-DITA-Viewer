@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="diff-visual-check" xml:lang="en-US">
+    <title>Diff Visual Check</title>
+    <shortdesc>Fixture for eyeballing the "Compare with Git Version" rendering. Each section is a checkpoint for one change type; the paired "after" edit (see the next commit to this file, or the working copy) is what produces the diff.</shortdesc>
+    <body>
+
+        <section id="sec-intro">
+            <title>0. Unchanged control</title>
+            <p>This paragraph is byte-for-byte identical in both versions. It should render as a plain, untinted row on both sides -- the straight edge against which every other row is judged.</p>
+        </section>
+
+        <section id="sec-modified-para">
+            <title>1. Modified paragraph (word-level)</title>
+            <p>The report aggregates telemetry from every connected sensor, computes rolling averages over a five minute window, and raises an alert when a reading crosses the configured threshold for three consecutive samples.</p>
+        </section>
+
+        <section id="sec-removed">
+            <title>2. Removed block</title>
+            <p>This whole paragraph exists only in the older version, so in the diff it should appear on the left with a struck-through tint and an empty placeholder on the right.</p>
+        </section>
+
+        <section id="sec-added">
+            <title>3. Added section</title>
+            <p>The paragraph that the newer version introduces below this heading should surface as a fully tinted added block, with an empty placeholder on the base side.</p>
+        </section>
+
+        <section id="sec-list">
+            <title>4. List with one changed item</title>
+            <ul>
+                <li>Wipe the contact surface with a dry cloth.</li>
+                <li>Do not use alcohol or abrasive cleaners.</li>
+                <li>Power the device off before cleaning.</li>
+                <li>Reattach the cover once it is fully dry.</li>
+            </ul>
+        </section>
+
+        <section id="sec-table">
+            <title>5. Table with one changed cell</title>
+            <simpletable>
+                <sthead>
+                    <stentry>Parameter</stentry>
+                    <stentry>Default</stentry>
+                </sthead>
+                <strow>
+                    <stentry>retry_count</stentry>
+                    <stentry>3</stentry>
+                </strow>
+                <strow>
+                    <stentry>timeout_ms</stentry>
+                    <stentry>5000</stentry>
+                </strow>
+                <strow>
+                    <stentry>batch_size</stentry>
+                    <stentry>200</stentry>
+                </strow>
+            </simpletable>
+        </section>
+
+        <section id="sec-cjk">
+            <title>6. 中文段落（词级修改）</title>
+            <p>系统在检测到异常时会自动记录日志，并将诊断信息上传到云端服务器。</p>
+        </section>
+
+        <section id="sec-note">
+            <title>7. Note with changed text</title>
+            <note type="warning">
+                <p>Failing to ground the chassis before opening the panel may damage the board.</p>
+            </note>
+        </section>
+
+    </body>
+</topic>
