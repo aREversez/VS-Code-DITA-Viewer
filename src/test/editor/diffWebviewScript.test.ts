@@ -102,4 +102,110 @@ describe('diff panel webview script', () => {
       `${SCRIPT_REL} is excluded from the package; the diff panel would load no script`,
     );
   });
+  describe('connector redraw', () => {
+    interface FakeEl {
+      addEventListener: (type: string, fn: () => void) => void;
+      setAttribute: (k: string, v: unknown) => void;
+      appendChild: (c: unknown) => void;
+      removeChild: (c: unknown) => void;
+      firstChild: null;
+      textContent: string;
+      offsetParent: object | null;
+      getBoundingClientRect: () => { top: number; height: number; width: number };
+    }
+
+    /** Runs the real script against a hand-rolled DOM. Returns how many times
+     *  the connector pass measured the gutter (drawConnectors reads its rect
+     *  only when the gutter is laid out) plus handles to the stubbed browser
+     *  APIs, so a test can fire a resize notification and flush animation
+     *  frames the way a webview would. */
+    function boot(withObserver: boolean) {
+      let draws = 0;
+      const frames: Array<() => void> = [];
+      const observed: unknown[] = [];
+      let notify: (() => void) | undefined;
+
+      const makeEl = (): FakeEl => {
+        const el: FakeEl = {
+          addEventListener: () => undefined,
+          setAttribute: () => undefined,
+          appendChild: () => undefined,
+          removeChild: () => undefined,
+          firstChild: null,
+          textContent: '',
+          offsetParent: {},
+          getBoundingClientRect: () => ({ top: 0, height: 0, width: 0 }),
+        };
+        return el;
+      };
+      const gutter = makeEl();
+      gutter.getBoundingClientRect = () => {
+        draws++;
+        return { top: 0, height: 0, width: 40 };
+      };
+      const columns = makeEl();
+      const byId: Record<string, FakeEl> = { 'diff-gutter': gutter };
+      const doc = {
+        body: { classList: { toggle: () => false, contains: () => false } },
+        getElementById: (id: string) => byId[id] || (byId[id] = makeEl()),
+        querySelector: (sel: string) => (sel === '.diff-columns' ? columns : null),
+        querySelectorAll: () => [],
+        createElementNS: () => makeEl(),
+        addEventListener: () => undefined,
+      };
+      class FakeObserver {
+        constructor(cb: () => void) {
+          notify = cb;
+        }
+        observe(target: unknown): void {
+          observed.push(target);
+        }
+      }
+      // eslint-disable-next-line @typescript-eslint/no-implied-eval
+      const run = new Function(
+        'document',
+        'window',
+        'requestAnimationFrame',
+        'ResizeObserver',
+        'acquireVsCodeApi',
+        script,
+      );
+      run(
+        doc,
+        { addEventListener: () => undefined },
+        (fn: () => void) => frames.push(fn),
+        withObserver ? FakeObserver : undefined,
+        () => ({ postMessage: () => undefined }),
+      );
+      const flush = (): void => {
+        while (frames.length) frames.shift()!();
+      };
+      return { columns, observed, flush, fire: () => notify && notify(), draws: () => draws };
+    }
+
+    it('observes the columns container and redraws when it resizes after first paint', () => {
+      const env = boot(true);
+      env.flush(); // the initial draw
+      const before = env.draws();
+      assert.deepStrictEqual(env.observed, [env.columns], 'expected the columns container to be observed');
+      env.fire();
+      env.flush();
+      assert.strictEqual(env.draws(), before + 1, 'a resize notification must redraw the connectors');
+    });
+
+    it('coalesces a burst of resize notifications into one redraw', () => {
+      const env = boot(true);
+      env.flush();
+      const before = env.draws();
+      env.fire();
+      env.fire();
+      env.fire();
+      env.flush();
+      assert.strictEqual(env.draws(), before + 1);
+    });
+
+    it('still boots where ResizeObserver does not exist', () => {
+      assert.doesNotThrow(() => boot(false));
+    });
+  });
 });

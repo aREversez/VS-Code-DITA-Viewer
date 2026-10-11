@@ -146,8 +146,16 @@
     });
   }
 
+  // Coalesced: a burst of resize notifications (or a toggle landing in the same
+  // frame as one) redraws once, not once per notification.
+  let drawPending = false;
   function scheduleDraw() {
-    requestAnimationFrame(drawConnectors);
+    if (drawPending) return;
+    drawPending = true;
+    requestAnimationFrame(function () {
+      drawPending = false;
+      drawConnectors();
+    });
   }
 
   // Hovering either side of a change lights up its connector and both blocks,
@@ -182,6 +190,14 @@
   scheduleDraw();
   window.addEventListener('load', drawConnectors);
   window.addEventListener('resize', drawConnectors);
+  // Connector endpoints are measured block midpoints, so anything that changes
+  // either column's height after first paint (an image finishing its load, a
+  // web font swapping in, content that grows later) leaves them stale. Watching
+  // the columns container catches all of those; drawing only edits the SVG, so
+  // it cannot feed back into this observer.
+  if (columns && typeof ResizeObserver === 'function') {
+    new ResizeObserver(scheduleDraw).observe(columns);
+  }
 
   updateCounter();
 })();
