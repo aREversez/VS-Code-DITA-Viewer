@@ -1090,10 +1090,16 @@ function extractTitle(doc: DitaDocument): string | undefined {
 
 function countStats(rows: AlignedRow[], stats: { added: number; removed: number; modified: number }): void {
   for (const row of rows) {
+    // A recursed container (section / list / table) is never drawn itself --
+    // only its children are -- so counting it as well double-counted every
+    // change inside it and disagreed with the view's next/prev counter.
+    if (row.children && row.children.length > 0) {
+      countStats(row.children, stats);
+      continue;
+    }
     if (row.changeType === 'added') stats.added++;
     else if (row.changeType === 'removed') stats.removed++;
     else if (row.changeType === 'modified') stats.modified++;
-    if (row.children) countStats(row.children, stats);
   }
 }
 

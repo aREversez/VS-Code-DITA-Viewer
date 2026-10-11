@@ -366,6 +366,20 @@ describe('ditaDiffEngine', () => {
       assert.strictEqual(titleRow!.changeType, 'unchanged', 'an identical heading should pair unchanged, not modified');
     });
 
+    it('counts only the leaf changes the view actually draws, not the recursed container row as well (regression: a section with one edited paragraph reported ~2 -- the section row plus its child -- while the view shows, and next/prev navigates, exactly one change)', () => {
+      const left = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
+        <section id="s"><title>Widget Setup</title><p>Turn the widget dial to the left before use.</p></section>
+      </body></topic>`;
+      const right = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
+        <section id="s"><title>Widget Setup</title><p>Turn the widget dial to the right before use.</p></section>
+      </body></topic>`;
+
+      const result = runDiff(left, right);
+      assert.strictEqual(result.stats.modified, 1, 'one edited paragraph is one modification');
+      assert.strictEqual(result.stats.added, 0);
+      assert.strictEqual(result.stats.removed, 0);
+    });
+
     it('recurses into matched sections with their own per-side render calls (regression: alignSectionChildren used to share one side\'s renderBlock for both sides)', () => {
       const left = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
         <section><title>Sec</title><p>the quick brown fox jumps over left-marker-AAA the lazy dog</p></section>
