@@ -54,10 +54,15 @@ body {
 
 .diff-stats {
   font-size: 12px;
-  padding: 2px 6px;
+  padding: 2px 8px;
   border-radius: 3px;
-  background: var(--vscode-badge-background, #e0e0e0);
-  color: var(--vscode-badge-foreground, #333);
+  /* A badge background made the colored +/−/~ counts unreadable: the theme's
+     --vscode-badge-background is a saturated fill (blue in common dark themes),
+     and green/red/purple text on top of it has almost no contrast. Keep the
+     chip a neutral outline and let the counts sit on the toolbar background. */
+  border: 1px solid var(--diff-toolbar-border);
+  background: transparent;
+  color: var(--vscode-editor-foreground);
 }
 
 .diff-stats .stat-add { color: var(--diff-add-border); }
@@ -113,6 +118,13 @@ body {
   /* stretch (not flex-start) so the center gutter is as tall as the taller
      column, giving the alignment SVG a full-height canvas to draw on. */
   align-items: stretch;
+  /* Cap the measure and center the pair: text ran edge-to-edge across the whole
+     viewport with no air on either side. The auto margins open up outer space
+     on wide screens; the padding guarantees a band of breathing room on narrow
+     ones too. */
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 28px;
 }
 
 .diff-col {
@@ -184,6 +196,14 @@ body {
 .dv-block {
   padding: 8px 16px;
   overflow-wrap: break-word;
+}
+
+/* A list item is emitted as its own block -- a bare <li> with no <ul> to carry
+   the browser's default ~40px indent -- so its outside-position bullet drew
+   over the block edge and clipped off-screen. Pull the bullet into the text
+   flow to keep list blocks left-aligned and fully visible. */
+.dv-block li {
+  list-style-position: inside;
 }
 
 /* ── Change type marker ──
