@@ -53,6 +53,14 @@ export interface AlignedRow {
    *  tsconfig.test.json (see the note there), which is how this went
    *  unnoticed. */
   inlineDiff?: DiffPart[];
+  /** Set on a 'modified' row whose two sides were paired by type/position but
+   *  share (almost) no wording -- a wholesale replacement. The renderer draws
+   *  its edge marker dashed so "rewritten" reads differently from "edited". */
+  replaced?: boolean;
+  /** Set on a removed row and its added counterpart when the same block moved
+   *  (exactly, or by identical id with edits). Both rows carry the same value;
+   *  the renderer gives them one data-diff-idx so one connector joins them. */
+  moveId?: number;
 }
 
 export interface TopicDiffResult {
@@ -278,6 +286,32 @@ export function lcsAlign<T>(
   equals: (x: T, y: T) => boolean,
   keyOf: (item: T) => string,
 ): LcsOp<T>[] {
+  // Trim the common prefix and suffix first: most real diffs touch a small
+  // part of a long, mostly identical sequence, and this keeps the DP table
+  // (and the idOnlyAlign fallback below) off the unchanged bulk.
+  let lo = 0;
+  while (lo < a.length && lo < b.length && equals(a[lo], b[lo])) lo++;
+  let ea = a.length;
+  let eb = b.length;
+  while (ea > lo && eb > lo && equals(a[ea - 1], b[eb - 1])) {
+    ea--;
+    eb--;
+  }
+  const ops: LcsOp<T>[] = [];
+  for (let k = 0; k < lo; k++) ops.push({ op: 'same', left: a[k], right: b[k] });
+  for (const op of lcsCore(a.slice(lo, ea), b.slice(lo, eb), equals, keyOf)) ops.push(op);
+  for (let k = 0; k < a.length - ea; k++) {
+    ops.push({ op: 'same', left: a[ea + k], right: b[eb + k] });
+  }
+  return ops;
+}
+
+function lcsCore<T>(
+  a: T[],
+  b: T[],
+  equals: (x: T, y: T) => boolean,
+  keyOf: (item: T) => string,
+): LcsOp<T>[] {
   const m = a.length;
   const n = b.length;
 
@@ -314,21 +348,44 @@ export function lcsAlign<T>(
   return ops;
 }
 
+/** Longest strictly increasing subsequence of `pairs` by second element
+ *  (`pairs` is already sorted by first element). Returns the kept pairs. */
+function increasingPairs(pairs: Array<[number, number]>): Array<[number, number]> {
+  const tails: number[] = []; // index into pairs of the best tail per length
+  const prev = new Array<number>(pairs.length).fill(-1);
+  for (let k = 0; k < pairs.length; k++) {
+    let lo = 0;
+    let hi = tails.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (pairs[tails[mid]][1] < pairs[k][1]) lo = mid + 1;
+      else hi = mid;
+    }
+    if (lo > 0) prev[k] = tails[lo - 1];
+    tails[lo] = k;
+  }
+  const out: Array<[number, number]> = [];
+  let k = tails.length > 0 ? tails[tails.length - 1] : -1;
+  while (k >= 0) {
+    out.push(pairs[k]);
+    k = prev[k];
+  }
+  return out.reverse();
+}
+
 /**
- * O(n) fallback for when the full O(mn) DP table (above) would exceed
- * LCS_CELL_LIMIT -- matches items by an identity key instead of a full
- * alignment, so it's less precise about *where* an unmatched item sits
- * relative to others, but doesn't blow up memory on huge documents.
+ * Fallback for when the full O(mn) DP table would exceed LCS_CELL_LIMIT:
+ * matches items by an identity key instead of a full alignment.
+ *
+ * The matches are reduced to the longest order-preserving subset, and the
+ * stretch between two consecutive matches is emitted as its removed items then
+ * its added items. The old version emitted every unmatched removed item first
+ * and every unmatched added item last, which threw away all position
+ * information -- the pairing pass then matched unrelated blocks by index.
  *
  * Takes an explicit keyOf function rather than requiring T to structurally
- * have a .key field: lcsAlign is called with RenderedBlock[] (which does
- * have .key) AND with plain string[] token arrays from diffTokens (which
- * don't and can't reasonably be forced to) -- a `T extends { key: string }`
- * constraint on lcsAlign itself would reject that second, entirely
- * legitimate caller. This was actually broken by an earlier version of
- * this fix that added exactly that constraint without checking every call
- * site first; caught by actually running tsc against this file rather
- * than assuming a plausible-looking type change was correct.
+ * have a .key field: lcsAlign is called with RenderedBlock[] AND with plain
+ * string[] token arrays from diffTokens.
  */
 function idOnlyAlign<T>(
   a: T[],
@@ -336,30 +393,41 @@ function idOnlyAlign<T>(
   equals: (x: T, y: T) => boolean,
   keyOf: (item: T) => string,
 ): LcsOp<T>[] {
-  const bByKey = new Map<string, T>();
-  for (const item of b) {
-    bByKey.set(keyOf(item), item);
+  const bByKey = new Map<string, number[]>();
+  b.forEach((item, j) => {
+    const k = keyOf(item);
+    const list = bByKey.get(k);
+    if (list) list.push(j);
+    else bByKey.set(k, [j]);
+  });
+  const nextFree = new Map<string, number>();
+  const pairs: Array<[number, number]> = [];
+  for (let i = 0; i < a.length; i++) {
+    const k = keyOf(a[i]);
+    const list = bByKey.get(k);
+    if (!list) continue;
+    let at = nextFree.get(k) || 0;
+    while (at < list.length && !equals(a[i], b[list[at]])) at++;
+    if (at < list.length) {
+      pairs.push([i, list[at]]);
+      nextFree.set(k, at + 1);
+    }
   }
+
   const ops: LcsOp<T>[] = [];
-  const usedB = new Set<string>();
-
-  for (const itemA of a) {
-    const key = keyOf(itemA);
-    const match = bByKey.get(key);
-    if (match && !usedB.has(key) && equals(itemA, match)) {
-      ops.push({ op: 'same', left: itemA, right: match });
-      usedB.add(key);
-      continue;
-    }
-    ops.push({ op: 'removed', left: itemA });
+  let ai = 0;
+  let bj = 0;
+  const flush = (ae: number, be: number): void => {
+    for (; ai < ae; ai++) ops.push({ op: 'removed', left: a[ai] });
+    for (; bj < be; bj++) ops.push({ op: 'added', right: b[bj] });
+  };
+  for (const [i, j] of increasingPairs(pairs)) {
+    flush(i, j);
+    ops.push({ op: 'same', left: a[i], right: b[j] });
+    ai = i + 1;
+    bj = j + 1;
   }
-
-  for (const itemB of b) {
-    if (!usedB.has(keyOf(itemB))) {
-      ops.push({ op: 'added', right: itemB });
-    }
-  }
-
+  flush(a.length, b.length);
   return ops;
 }
 
@@ -444,19 +512,99 @@ const SIMILARITY_THRESHOLD = 0.45;
 // -- the two texts share almost no tokens, so diffTokens degenerates into
 // "strike every word on the left / highlight every word on the right": a wall of
 // color that reads as noise rather than a cue about what changed. In that case
-// return no parts and let the block's modified border plus its connector carry
-// the change. Reuses the same similarity notion that used to gate pairing (before
-// the pairing rule was relaxed to "same baseType always pairs", see
-// pairAdjacentChanges) -- so it keeps diceSimilarity/charDiceSimilarity earning
-// their keep instead of going unused.
-function computeInlineDiff(leftText: string, rightText: string): DiffPart[] {
-  if (
-    diceSimilarity(leftText, rightText) < SIMILARITY_THRESHOLD &&
-    charDiceSimilarity(leftText, rightText) < SIMILARITY_THRESHOLD
-  ) {
-    return [];
+// return no parts and let the block's border plus its connector carry the change,
+// and report `replaced` so the renderer can mark it as a rewrite.
+//
+// Three tiers instead of one on/off gate:
+//   - similar (either dice score >= SIMILARITY_THRESHOLD): full word diff;
+//   - middling: keep the diff only if, once trivial shared words are folded
+//     into the surrounding change, enough real shared text remains to anchor
+//     it (a long shared phrase inside an otherwise rewritten paragraph);
+//   - dissimilar: no marks, `replaced`.
+
+const PHRASE_KEEP_RATIO = 0.3;
+const PHRASE_TRY_FLOOR = 0.2;
+
+function isWeakEqual(value: string): boolean {
+  return [...value.replace(/\s+/g, '')].length <= 3;
+}
+
+/** Fold tiny unchanged runs (a lone "the", a comma) that sit between two
+ *  changes into those changes, so the marks read as phrases rather than a
+ *  confetti of single words. Left/right text is preserved exactly. */
+export function coalesceDiffParts(input: DiffPart[]): DiffPart[] {
+  // diffTokens emits every unchanged token as its own part (mergePart compares
+  // `undefined` with `false`, so adjacent unchanged tokens never merge). Join
+  // neighbours of the same kind first, or every single word would look like an
+  // isolated tiny equal run.
+  const parts: DiffPart[] = [];
+  for (const p of input) {
+    const last = parts[parts.length - 1];
+    if (last && !!last.added === !!p.added && !!last.removed === !!p.removed) {
+      last.value += p.value;
+    } else {
+      parts.push({ value: p.value, added: p.added || undefined, removed: p.removed || undefined });
+    }
   }
-  return diffTokens(tokenizeForDiff(leftText), tokenizeForDiff(rightText));
+  const out: DiffPart[] = [];
+  let leftBuf = '';
+  let rightBuf = '';
+  const flush = (): void => {
+    if (leftBuf) out.push({ value: leftBuf, removed: true });
+    if (rightBuf) out.push({ value: rightBuf, added: true });
+    leftBuf = '';
+    rightBuf = '';
+  };
+  parts.forEach((part, i) => {
+    if (part.removed) {
+      leftBuf += part.value;
+    } else if (part.added) {
+      rightBuf += part.value;
+    } else if (i > 0 && i < parts.length - 1 && isWeakEqual(part.value)) {
+      leftBuf += part.value;
+      rightBuf += part.value;
+    } else {
+      flush();
+      out.push(part);
+    }
+  });
+  flush();
+  return out;
+}
+
+interface InlineResult {
+  parts: DiffPart[];
+  replaced: boolean;
+}
+
+function computeInline(leftText: string, rightText: string): InlineResult {
+  if (leftText === rightText) return { parts: [], replaced: false };
+  const tokenSim = diceSimilarity(leftText, rightText);
+  const charSim = charDiceSimilarity(leftText, rightText);
+  const similar = tokenSim >= SIMILARITY_THRESHOLD || charSim >= SIMILARITY_THRESHOLD;
+  if (!similar && Math.max(tokenSim, charSim) < PHRASE_TRY_FLOOR) {
+    return { parts: [], replaced: true };
+  }
+  const raw = diffTokens(tokenizeForDiff(leftText), tokenizeForDiff(rightText));
+  if (raw.length === 0) return { parts: [], replaced: false }; // over the token cap
+  const parts = coalesceDiffParts(raw);
+  if (!similar) {
+    let kept = 0;
+    for (const p of parts) if (!p.added && !p.removed) kept += p.value.length;
+    if (kept / Math.max(leftText.length, rightText.length) < PHRASE_KEEP_RATIO) {
+      return { parts: [], replaced: true };
+    }
+  }
+  return { parts, replaced: false };
+}
+
+/** Compute and attach the inline diff (and the `replaced` flag) of a modified row. */
+function applyInline(row: AlignedRow): void {
+  if (!row.left || !row.right) return;
+  const { parts, replaced } = computeInline(row.left.text, row.right.text);
+  row.inlineDiff = parts;
+  if (replaced) row.replaced = true;
+  else delete row.replaced;
 }
 
 // ── Aligning one change run ──
@@ -479,6 +627,7 @@ function computeInlineDiff(leftText: string, rightText: string): DiffPart[] {
 
 const PAIR_BASE = 0.3;
 const ID_BONUS = 2;
+const REF_BONUS = 0.5;
 // Above this many (removed x added) cells fall back to in-order pairing
 // instead of paying for the DP table.
 const PAIR_DP_CELL_LIMIT = 250_000;
@@ -488,6 +637,36 @@ interface PairFeat {
   nTokens: number;
   grams: Map<string, number>;
   nGrams: number;
+  /** href / keyref / conref targets inside the block. Unlike the prose they
+   *  survive a rewrite or a translation, and the visible text never shows them,
+   *  so the dice scores cannot see them at all. Lowercased. */
+  refs: Set<string>;
+}
+
+const REF_ATTRS = ['href', 'keyref', 'conref', 'conkeyref'];
+const REF_WALK_CAP = 400;
+
+function collectRefs(node: DitaNode): Set<string> {
+  const refs = new Set<string>();
+  let seen = 0;
+  const walk = (n: DitaNode): void => {
+    if (seen++ > REF_WALK_CAP) return;
+    if (n.type === 'element') {
+      for (const attr of REF_ATTRS) {
+        const v = n.attributes?.[attr];
+        if (v) refs.add(v.trim().toLowerCase());
+      }
+    }
+    for (const c of n.children || []) walk(c);
+  };
+  walk(node);
+  return refs;
+}
+
+function countShared(a: Set<string>, b: Set<string>): number {
+  let n = 0;
+  for (const v of a) if (b.has(v)) n++;
+  return n;
 }
 
 function bagOf(items: string[]): Map<string, number> {
@@ -496,10 +675,16 @@ function bagOf(items: string[]): Map<string, number> {
   return bag;
 }
 
-function pairFeat(text: string): PairFeat {
-  const tokens = tokenize(text);
-  const grams = charBigrams(text);
-  return { tokens: bagOf(tokens), nTokens: tokens.length, grams: bagOf(grams), nGrams: grams.length };
+function pairFeat(block: RenderedBlock): PairFeat {
+  const tokens = tokenize(block.text);
+  const grams = charBigrams(block.text);
+  return {
+    tokens: bagOf(tokens),
+    nTokens: tokens.length,
+    grams: bagOf(grams),
+    nGrams: grams.length,
+    refs: collectRefs(block.node),
+  };
 }
 
 function bagDice(a: Map<string, number>, nA: number, b: Map<string, number>, nB: number): number {
@@ -522,7 +707,8 @@ function pairScore(
     bagDice(lf.grams, lf.nGrams, rf.grams, rf.nGrams),
   );
   const sameId = left.key === right.key && left.key.startsWith('id:');
-  return PAIR_BASE + sim + (sameId ? ID_BONUS : 0);
+  const sharedRef = countShared(lf.refs, rf.refs) > 0;
+  return PAIR_BASE + sim + (sharedRef ? REF_BONUS : 0) + (sameId ? ID_BONUS : 0);
 }
 
 function alignChangeRun<T extends RenderedBlock>(removedRun: T[], addedRun: T[]): AlignedRow[] {
@@ -536,8 +722,8 @@ function alignChangeRun<T extends RenderedBlock>(removedRun: T[], addedRun: T[])
       if (removedRun[p].baseType === addedRun[p].baseType) match[p] = p;
     }
   } else {
-    const lf = removedRun.map((b) => pairFeat(b.text));
-    const rf = addedRun.map((b) => pairFeat(b.text));
+    const lf = removedRun.map((b) => pairFeat(b));
+    const rf = addedRun.map((b) => pairFeat(b));
     const w = m + 1;
     const dp = new Float64Array((k + 1) * w);
     for (let i = 1; i <= k; i++) {
@@ -620,6 +806,77 @@ function pairAdjacentChanges<T extends RenderedBlock>(ops: LcsOp<T>[]): AlignedR
     }
   }
 
+  return markMoves(rows);
+}
+
+// ── Moved blocks ──
+//
+// A block that moved shows up as a removed row at its old position and an added
+// row at its new one -- two unrelated-looking changes, two navigation stops,
+// and a gutter stub each. Pair them up and give both rows one moveId so the
+// renderer joins them with a single connector.
+//
+// Two ways to be "the same block": byte-identical rendered HTML under the same
+// key, or the same explicit id (unique among the unpaired rows of this level)
+// with edited content -- moved AND edited, which gets a word-level diff too.
+
+let nextMoveId = 1;
+
+function markMoves(rows: AlignedRow[]): AlignedRow[] {
+  const removedRows = rows.filter((r) => r.changeType === 'removed' && r.left);
+  const addedRows = rows.filter((r) => r.changeType === 'added' && r.right);
+  if (removedRows.length === 0 || addedRows.length === 0) return rows;
+
+  const link = (from: AlignedRow, to: AlignedRow): void => {
+    const id = nextMoveId++;
+    from.moveId = id;
+    to.moveId = id;
+  };
+
+  const exact = new Map<string, AlignedRow[]>();
+  for (const r of addedRows) {
+    const k = `${r.right!.key}\u0000${r.right!.html}`;
+    const list = exact.get(k);
+    if (list) list.push(r);
+    else exact.set(k, [r]);
+  }
+  const unmatchedRemoved: AlignedRow[] = [];
+  for (const r of removedRows) {
+    const list = exact.get(`${r.left!.key}\u0000${r.left!.html}`);
+    const target = list && list.shift();
+    if (target) link(r, target);
+    else unmatchedRemoved.push(r);
+  }
+
+  const idCount = (rs: AlignedRow[], side: 'left' | 'right'): Map<string, number> => {
+    const counts = new Map<string, number>();
+    for (const r of rs) {
+      const k = r[side]!.key;
+      if (r.moveId === undefined && k.startsWith('id:')) counts.set(k, (counts.get(k) || 0) + 1);
+    }
+    return counts;
+  };
+  const leftIds = idCount(unmatchedRemoved, 'left');
+  const rightIds = idCount(addedRows, 'right');
+  const addedById = new Map<string, AlignedRow>();
+  for (const r of addedRows) {
+    if (r.moveId === undefined && r.right!.key.startsWith('id:')) addedById.set(r.right!.key, r);
+  }
+  for (const r of unmatchedRemoved) {
+    const k = r.left!.key;
+    const target = addedById.get(k);
+    if (
+      target &&
+      leftIds.get(k) === 1 &&
+      rightIds.get(k) === 1 &&
+      r.left!.baseType === target.right!.baseType
+    ) {
+      link(r, target);
+      const { parts } = computeInline(r.left!.text, target.right!.text);
+      r.inlineDiff = parts;
+      target.inlineDiff = parts;
+    }
+  }
   return rows;
 }
 
@@ -656,7 +913,7 @@ function alignSectionChildren(
 
   for (const row of childRows) {
     if (row.changeType === 'modified' && row.left && row.right) {
-      row.inlineDiff = computeInlineDiff(row.left.text, row.right.text);
+      applyInline(row);
 
       // Recurse for as many levels as the document actually nests diffable
       // containers (a <parml> inside a <section>, a <ul> inside a
@@ -702,12 +959,9 @@ function alignTitleRow(
     if (left.key === right.key && left.text === right.text) {
       return { left, right, changeType: 'unchanged' };
     }
-    return {
-      left,
-      right,
-      changeType: 'modified',
-      inlineDiff: computeInlineDiff(left.text, right.text),
-    };
+    const titleRow: AlignedRow = { left, right, changeType: 'modified' };
+    applyInline(titleRow);
+    return titleRow;
   }
   if (leftTitle) {
     return { left: makeBlock(leftTitle, leftOpts, parentType, level), changeType: 'removed' };
@@ -1058,6 +1312,17 @@ export function swapAlignedRows(rows: AlignedRow[]): AlignedRow[] {
     if (row.children) {
       swapped.children = swapAlignedRows(row.children);
     }
+    if (row.replaced) swapped.replaced = true;
+    if (row.moveId !== undefined) {
+      swapped.moveId = row.moveId;
+      // Both halves of a move carry the same left->right parts; flipping the
+      // sides flips what counts as removed and added.
+      swapped.inlineDiff = row.inlineDiff?.map((p) => ({
+        value: p.value,
+        added: p.removed,
+        removed: p.added,
+      }));
+    }
     if (swapped.left && swapped.right && row.changeType === 'modified') {
       swapped.inlineDiff = row.inlineDiff?.map((p) => ({
         value: p.value,
@@ -1173,7 +1438,7 @@ export function diffTopics(input: DiffTopicsInput): TopicDiffResult {
 
   for (const row of rows) {
     if (row.changeType === 'modified' && row.left && row.right) {
-      row.inlineDiff = computeInlineDiff(row.left.text, row.right.text);
+      applyInline(row);
 
       if (
         isDiffableContainer(row.left) &&
@@ -1218,7 +1483,10 @@ function countStats(rows: AlignedRow[], stats: { added: number; removed: number;
       countStats(row.children, stats);
       continue;
     }
-    if (row.changeType === 'added') stats.added++;
+    // A move is one change drawn as two blocks: count it once, as modified.
+    if (row.moveId !== undefined) {
+      if (row.changeType === 'added') stats.modified++;
+    } else if (row.changeType === 'added') stats.added++;
     else if (row.changeType === 'removed') stats.removed++;
     else if (row.changeType === 'modified') stats.modified++;
   }

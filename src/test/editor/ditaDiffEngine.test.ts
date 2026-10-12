@@ -6,6 +6,7 @@ import {
   normalizeText,
   tokenizeForDiff,
   diffTokens,
+  coalesceDiffParts,
   applyInlineMarksToHtml,
   swapAlignedRows,
   buildQuickCommitChoices,
@@ -161,6 +162,107 @@ describe('ditaDiffEngine', () => {
       const gamma = pRows.find((r) => r.changeType === 'modified' && r.left!.text.startsWith('Gamma'));
       assert.ok(gamma, 'Gamma must pair as modified');
       assert.ok(gamma!.right!.text.startsWith('Gamma'), `Gamma was paired with: ${gamma!.right!.text}`);
+    });
+
+    describe('moved blocks, wholesale replacements, anchors', () => {
+      const mk = (ps: string[]) =>
+        `<?xml version="1.0"?><topic id="t"><title>T</title><body>${ps.join('')}</body></topic>`;
+      const para = (t: string, attrs = '') => `<p${attrs ? ' ' + attrs : ''}>${t}</p>`;
+      const pRows = (rows: AlignedRow[]) => rows.filter((r) => (r.left || r.right)?.baseType === 'topic/p');
+      // Distinct three-letter nonsense words from a given alphabet: shares no
+      // token and almost no character bigram with words from another alphabet.
+      const gib = (alpha: string, n: number): string => {
+        const out: string[] = [];
+        for (const a of alpha) for (const b of alpha) for (const c of alpha) {
+          if (out.length < n) out.push(a + b + c);
+        }
+        return out.join(' ');
+      };
+
+      it('pairs a block that moved unchanged as one move: one change, not a removal plus an insertion (regression: a moved block showed as a removed row and an unrelated added row -- two navigation stops, two gutter stubs)', () => {
+        const a = para('Alpha block that moves to the end of the topic.');
+        const b = para('Bravo block that stays in place for the whole time.');
+        const c = para('Charlie block that also stays right where it is.');
+        const result = runDiff(mk([a, b, c]), mk([b, c, a]));
+        const rows = pRows(result.rows).filter((r) => r.changeType !== 'unchanged');
+        assert.strictEqual(rows.length, 2, 'expected the removed + added halves of the move');
+        assert.ok(rows[0].moveId !== undefined && rows[0].moveId === rows[1].moveId, 'both halves must share one moveId');
+        assert.deepStrictEqual(result.stats, { added: 0, removed: 0, modified: 1 }, 'a move counts as a single change');
+      });
+
+      it('pairs a block that moved AND was edited, matched by its id, and gives it a word-level diff (regression: an id-keyed block with edited text and a new position landed in two different change runs and was never re-paired)', () => {
+        const moved = (t: string) => para(t, 'id="mv"');
+        const b = para('Bravo block that stays in place for the whole time.');
+        const c = para('Charlie block that also stays right where it is.');
+        const result = runDiff(
+          mk([moved('Alpha text before the edit was made here.'), b, c]),
+          mk([b, c, moved('Alpha text after the edit was made here.')]),
+        );
+        const rows = pRows(result.rows).filter((r) => r.changeType !== 'unchanged');
+        assert.strictEqual(rows.length, 2);
+        assert.ok(rows[0].moveId !== undefined && rows[0].moveId === rows[1].moveId);
+        assert.ok((rows[0].inlineDiff || []).some((p) => p.removed), 'expected word-level marks on the moved+edited block');
+        assert.strictEqual(result.stats.modified, 1);
+        assert.strictEqual(result.stats.added + result.stats.removed, 0);
+      });
+
+      it('does not treat two different images with no text as a moved block (identical keys, different html)', () => {
+        // The shared test renderer drops attributes; this one keeps href, like the real renderer.
+        const result = diffTopics({
+          leftXml: mk(['<image href="a.png"/>', para('Keep this paragraph exactly as it is.')]),
+          rightXml: mk([para('Keep this paragraph exactly as it is.'), '<image href="b.png"/>']),
+          leftDocDir: '/tmp/left',
+          rightDocDir: '/tmp/right',
+          renderBlockFactory: () => (node: DitaNode) =>
+            `<div data-src="${node.attributes?.href ?? ''}">${collectPlainText(node)}</div>`,
+        });
+        assert.ok(result.rows.every((r) => r.moveId === undefined));
+      });
+
+      it('flags a wholesale replacement so it can be drawn differently from an edit, and leaves a light edit unflagged (regression: both rendered as the same amber block)', () => {
+        const rewrite = runDiff(
+          mk([para('Deploy the application to a Kubernetes cluster using Helm')]),
+          mk([para('使用容器编排技术将应用部署到本地测试环境')]),
+        ).rows.find((r) => r.changeType === 'modified');
+        assert.strictEqual(rewrite?.replaced, true);
+        const edit = runDiff(
+          mk([para('Restart the service before continuing with the next step.')]),
+          mk([para('Restart the service before proceeding with the next step.')]),
+        ).rows.find((r) => r.changeType === 'modified');
+        assert.ok(edit && !edit.replaced);
+      });
+
+      it('keeps phrase-level marks when a long phrase survives inside an otherwise rewritten paragraph (regression: below the similarity threshold the marks were dropped entirely, hiding the one thing the two versions share)', () => {
+        const shared = 'the system configuration guide describes every supported deployment option';
+        const left = para(`${gib('zxqjkvw', 28)} ${shared}`);
+        const right = para(`${gib('plmnbhg', 28)} ${shared}`);
+        const row = runDiff(mk([left]), mk([right])).rows.find((r) => r.changeType === 'modified');
+        assert.ok(row, 'expected a modified row');
+        assert.ok(!row!.replaced, 'a shared phrase of this size is not a wholesale replacement');
+        const kept = (row!.inlineDiff || []).filter((p) => !p.added && !p.removed).map((p) => p.value).join('|');
+        assert.ok(kept.includes('configuration guide describes'), `shared phrase must stay unmarked, got: ${kept}`);
+      });
+
+      it('pairs by a shared href when the wording shares nothing (regression: the link target is the one thing a rewrite leaves intact, and no text score can see it, so the tie broke toward the wrong block)', () => {
+        const link = (href: string, t: string) => para(`${t} <xref href="${href}">x</xref>`);
+        const result = runDiff(
+          mk([link('first.dita', 'Aaa bbb ccc'), link('second.dita', 'Ddd eee fff')]),
+          mk([link('first.dita', '这是完全不同的语言')]),
+        );
+        const mod = pRows(result.rows).find((r) => r.changeType === 'modified');
+        assert.ok(mod && mod.left!.text.startsWith('Aaa'), `paired with: ${mod?.left?.text}`);
+      });
+
+      it('keeps the move link and flips the marks when the two sides are swapped', () => {
+        const a = para('Alpha text before the edit was made here.', 'id="mv"');
+        const a2 = para('Alpha text after the edit was made here.', 'id="mv"');
+        const b = para('Bravo block that stays in place for the whole time.');
+        const result = runDiff(mk([a, b]), mk([b, a2]));
+        const swapped = pRows(swapAlignedRows(result.rows)).filter((r) => r.moveId !== undefined);
+        assert.strictEqual(swapped.length, 2);
+        assert.strictEqual(swapped[0].moveId, swapped[1].moveId);
+        assert.ok((swapped[0].inlineDiff || []).some((p) => p.added), 'swapping must flip removed/added in the marks');
+      });
     });
 
     it('keeps a genuine baseType change (paragraph replaced by a note) split into a separate removed + added pair', () => {
@@ -512,6 +614,43 @@ describe('ditaDiffEngine', () => {
   describe('normalizeText', () => {
     it('collapses whitespace and trims', () => {
       assert.strictEqual(normalizeText('  a   b\n\tc  '), 'a b c');
+    });
+  });
+
+  describe('lcsAlign over the DP cell limit', () => {
+    it('keeps the id-only fallback in document order, putting each unmatched run where it sits (regression: all unmatched left items were emitted first and all unmatched right items last, so the pairing pass matched unrelated blocks by index)', () => {
+      const n = 2100;
+      const a = Array.from({ length: n }, (_, i) => `x${i}`);
+      const b = a.slice();
+      a[0] = 'oldHead';
+      b[0] = 'newHead';
+      a[n - 1] = 'oldTail';
+      b[n - 1] = 'newTail';
+      const ops = lcsAlign(a, b, (x, y) => x === y, (x) => x);
+      assert.deepStrictEqual(
+        ops.slice(0, 2).map((o) => `${o.op}:${o.left ?? o.right}`),
+        ['removed:oldHead', 'added:newHead'],
+      );
+      const tail = ops.slice(-2).map((o) => `${o.op}:${o.left ?? o.right}`);
+      assert.deepStrictEqual(tail, ['removed:oldTail', 'added:newTail']);
+    });
+  });
+
+  describe('coalesceDiffParts', () => {
+    it('folds a tiny unchanged run between two changes into them and leaves both texts intact, so marks read as phrases', () => {
+      const parts = coalesceDiffParts([
+        { value: 'red', removed: true },
+        { value: 'blue', added: true },
+        { value: ' a ' },
+        { value: 'cat', removed: true },
+        { value: 'dog', added: true },
+        { value: ' sat on the mat today' },
+      ]);
+      const left = parts.filter((p) => !p.added).map((p) => p.value).join('');
+      const right = parts.filter((p) => !p.removed).map((p) => p.value).join('');
+      assert.strictEqual(left, 'red a cat sat on the mat today');
+      assert.strictEqual(right, 'blue a dog sat on the mat today');
+      assert.strictEqual(parts.filter((p) => !p.added && !p.removed).length, 1, 'only the long unchanged tail stays unmarked');
     });
   });
 
