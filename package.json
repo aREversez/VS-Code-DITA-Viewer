@@ -132,6 +132,11 @@
         "icon": "$(diff)"
       },
       {
+        "command": "ditaViewer.showRenderedDiffFromSource",
+        "title": "%command.showRenderedDiffFromSource.title%",
+        "icon": "$(open-preview)"
+      },
+      {
         "command": "ditaViewer.mapExplorer.refresh",
         "title": "%command.mapExplorerRefresh.title%",
         "icon": "$(refresh)"
@@ -437,6 +442,11 @@
         {
           "command": "ditaViewer.transformWithDitaOt",
           "when": "resourceExtname == .ditamap",
+          "group": "navigation"
+        },
+        {
+          "command": "ditaViewer.showRenderedDiffFromSource",
+          "when": "resourceScheme == dita-diff",
           "group": "navigation"
         }
       ],

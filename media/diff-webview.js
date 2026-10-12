@@ -5,6 +5,7 @@
   const btnNext = document.getElementById('btn-next');
   const btnSwap = document.getElementById('btn-swap');
   const btnInline = document.getElementById('btn-inline');
+  const btnSource = document.getElementById('btn-source');
   const counter = document.getElementById('nav-counter');
   const gutter = document.getElementById('diff-gutter');
   const svg = document.getElementById('align-svg');
@@ -28,10 +29,10 @@
   function updateCounter() {
     const idxs = getChangeIdxs();
     if (idxs.length === 0) {
-      counter.textContent = '0 / 0';
+      counter.value = '0 / 0';
       return;
     }
-    counter.textContent = (currentIdx + 1) + ' / ' + idxs.length;
+    counter.value = (currentIdx + 1) + ' / ' + idxs.length;
   }
 
   function navigateTo(idx) {
@@ -48,6 +49,29 @@
   btnPrev.addEventListener('click', function() { navigateTo(currentIdx - 1); });
   btnNext.addEventListener('click', function() { navigateTo(currentIdx === -1 ? 0 : currentIdx + 1); });
 
+  // The counter doubles as a jump box: type the number of the change you want
+  // and press Enter to go straight there, instead of hammering next/prev past
+  // every intermediate one. Enter reads the first integer in the field -- so a
+  // bare "3" and the "3 / 12" the navigation writes back both parse -- clamps
+  // it into range, and jumps. Escape abandons the edit and restores the
+  // current / total readout.
+  counter.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const idxs = getChangeIdxs();
+      if (idxs.length === 0) return;
+      const m = counter.value.match(/\d+/);
+      if (!m) { updateCounter(); return; }
+      const target = Math.min(Math.max(parseInt(m[0], 10), 1), idxs.length);
+      navigateTo(target - 1);
+      counter.select();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      updateCounter();
+      counter.blur();
+    }
+  });
+
   btnSwap.addEventListener('click', function() {
     vscode.postMessage({ type: 'swapSides' });
   });
@@ -58,7 +82,16 @@
     scheduleDraw();
   });
 
+  // Hand the exact two versions this panel is showing to the extension, which
+  // publishes them as in-memory documents and opens VS Code's own diff editor
+  // over the raw source. The reverse jump (source -> this rendered view) lives
+  // on the editor/title bar of the native diff, not here.
+  btnSource.addEventListener('click', function() {
+    vscode.postMessage({ type: 'openSourceDiff' });
+  });
+
   document.addEventListener('keydown', function(e) {
+    if (e.target === counter) return;
     if (e.key === 'F7' && !e.shiftKey) {
       e.preventDefault();
       navigateTo(currentIdx === -1 ? 0 : currentIdx + 1);
@@ -92,6 +125,16 @@
     return r.top + r.height / 2 - rect.top;
   }
 
+  // Where a connector should land on one side of a change. A modified block
+  // carries word-level marks; pointing at the first mark (the wording that
+  // actually changed) rather than the block's geometric center keeps the line
+  // anchored to "this bit" instead of "somewhere in this tall paragraph". Added
+  // / removed blocks have no marks, so this falls back to the block midpoint.
+  function anchorY(el, rect) {
+    const mark = el.querySelector('.diff-inline-del, .diff-inline-add');
+    return midY(mark || el, rect);
+  }
+
   function makeCurve(x1, y1, x2, y2, key) {
     const p = document.createElementNS(SVG_NS, 'path');
     const mx = (x1 + x2) / 2;
@@ -118,6 +161,33 @@
     return g;
   }
 
+  // A modified pair whose two sides have drifted more than half a screen apart
+  // would need a curve that visually crosses the whole viewport -- that reads
+  // as noise, not as an alignment cue. Instead of the full-span curve, draw a
+  // short faded dashed stub with a dot on each side, pointing into the gutter:
+  // it still says "these two go together" and lights up on hover, without the
+  // eye-straining diagonal.
+  function makeFadedPair(gw, y1, y2, key) {
+    const g = document.createElementNS(SVG_NS, 'g');
+    const mk = (x, y, dir) => {
+      const line = document.createElementNS(SVG_NS, 'path');
+      line.setAttribute('d', 'M ' + x + ' ' + y + ' L ' + (x + dir) + ' ' + y);
+      line.setAttribute('class', 'align-line align-line--stub align-line--modified align-line--faded');
+      line.setAttribute('data-align-idx', key);
+      const dot = document.createElementNS(SVG_NS, 'circle');
+      dot.setAttribute('cx', String(x + dir));
+      dot.setAttribute('cy', String(y));
+      dot.setAttribute('r', '3');
+      dot.setAttribute('class', 'align-dot align-dot--modified align-dot--faded');
+      dot.setAttribute('data-align-idx', key);
+      g.appendChild(line);
+      g.appendChild(dot);
+    };
+    mk(0, y1, gw * 0.4);
+    mk(gw, y2, -gw * 0.4);
+    return g;
+  }
+
   function drawConnectors() {
     if (!svg || !gutter) return;
     while (svg.firstChild) svg.removeChild(svg.firstChild);
@@ -137,11 +207,17 @@
       const left = pickSide(els, 'diff-col--left');
       const right = pickSide(els, 'diff-col--right');
       if (left && right) {
-        svg.appendChild(makeCurve(0, midY(left, rect), gw, midY(right, rect), key));
+        const y1 = anchorY(left, rect);
+        const y2 = anchorY(right, rect);
+        if (Math.abs(y1 - y2) > window.innerHeight * 0.5) {
+          svg.appendChild(makeFadedPair(gw, y1, y2, key));
+        } else {
+          svg.appendChild(makeCurve(0, y1, gw, y2, key));
+        }
       } else if (left) {
-        svg.appendChild(makeStub(0, midY(left, rect), gw * 0.5, 'removed', key));
+        svg.appendChild(makeStub(0, anchorY(left, rect), gw * 0.5, 'removed', key));
       } else if (right) {
-        svg.appendChild(makeStub(gw, midY(right, rect), gw * 0.5, 'added', key));
+        svg.appendChild(makeStub(gw, anchorY(right, rect), gw * 0.5, 'added', key));
       }
     });
   }

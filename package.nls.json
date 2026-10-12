@@ -9,6 +9,7 @@
   "command.transformWithDitaOt.title": "DITA-OT: Transform Map…",
   "command.exportHtml.title": "DITA: Export as HTML…",
   "command.compareWithGit.title": "DITA: Compare with Git Version…",
+  "command.showRenderedDiffFromSource.title": "DITA: Open Rendered Diff",
   "command.mapExplorerRefresh.title": "Refresh DITA Map",
   "command.mapExplorerSelectMap.title": "Select DITA Map…",
   "command.mapExplorerExpandAll.title": "Expand All",

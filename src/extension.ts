@@ -41,7 +41,7 @@ import { registerLanguageFeatures } from './language/ditaLanguageFeatures';
 import { registerMapTreeView } from './language/ditaMapTreeProvider';
 import { ditaFileWatcherCounts } from './editor/ditaFileWatcher';
 import { registerExportHtmlCommand, getActiveDitaUri } from './editor/exportHtml';
-import { registerCompareCommand, getLastDiffHtmlForTesting } from './editor/ditaDiffProvider';
+import { registerCompareCommand, getLastDiffHtmlForTesting, openSourceDiffForTesting } from './editor/ditaDiffProvider';
 import { resolveOxygenLaunch, buildOxygenSpawnArgs } from './editor/oxygenLauncher';
 import { registerWrapSelectionCommand } from './editor/wrapSelectionCommand';
 import { registerFindReferencingMapsCommand } from './editor/findDitaReferences';
@@ -863,6 +863,12 @@ export function activate(context: vscode.ExtensionContext) {
       // given rename and returns each affected file's post-edit content, which
       // is what the suite asserts against.
       computeRenameEdits: computeRenameEditsForTesting,
+      // Reproduces the webview "Open source diff" button's exact production
+      // path (register the virtual-doc provider, then vscode.diff over two
+      // .dita-scheme URIs) so the integration suite can confirm the native
+      // diff editor opens instead of the ditaViewer.preview custom editor.
+      openSourceDiffForTesting: (input: { leftXml: string; rightXml: string; leftLabel: string; rightLabel: string; docUri: vscode.Uri }) =>
+        openSourceDiffForTesting(context, input),
     },
   };
 }

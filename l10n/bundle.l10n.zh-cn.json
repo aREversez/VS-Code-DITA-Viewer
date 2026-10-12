@@ -134,6 +134,8 @@
   "Previous change": "上一处变更",
   "Next change": "下一处变更",
   "Show word-level changes": "显示词级变更",
+  "Jump to change (type a number and press Enter)": "跳转到第几处变更（输入数字后按回车）",
+  "Open source diff": "打开源码差异",
   "Rendering book…": "正在渲染书籍…",
   "Switching view…": "正在切换视图…",
   "Switch between outline tree, full book view and docsite view": "在大纲树、整书视图和文档站视图之间切换",

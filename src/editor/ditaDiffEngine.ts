@@ -103,6 +103,18 @@ const DIFFABLE_CONTAINER_TYPES = new Set([
   // row rendered as one flat amber block instead of pinpointing the one
   // <stentry> that actually changed.
   'topic/strow',
+  // Definition lists had the same coarse-grain problem a <ul>/<ol> used to:
+  // a <dl> holding several <dlentry>s was compared as one opaque block, so
+  // two edits landing in far-apart entries collapsed into a single
+  // "modified" row -- one giant marker plus one connector drawn across the
+  // whole screen instead of one per change. Recursing <dl> into its entries
+  // (and each <dlentry> into its <dt>/<dd>) lets a distant pair of edits
+  // split into independent data-diff-idx blocks, each with its own short
+  // connector. Unlike <li>/<note>/<fig>, these wrappers carry no visible
+  // bullet/number or "Note:" chrome that recursion would drop, so decomposing
+  // them loses nothing a reader relies on.
+  'topic/dl',
+  'topic/dlentry',
 ]);
 
 function isDiffableContainer(b: RenderedBlock): boolean {
@@ -426,7 +438,28 @@ function charDiceSimilarity(a: string, b: string): number {
 
 const SIMILARITY_THRESHOLD = 0.45;
 
-// ── Pairing adjacent removed+added as "modified" ──
+// Word-level inline marks are informative when the two versions share enough
+// wording (a rephrase, a value bump, a couple of edited characters). For a
+// wholesale replacement -- cross-lingual rewrite, a paragraph swapped end to end
+// -- the two texts share almost no tokens, so diffTokens degenerates into
+// "strike every word on the left / highlight every word on the right": a wall of
+// color that reads as noise rather than a cue about what changed. In that case
+// return no parts and let the block's modified border plus its connector carry
+// the change. Reuses the same similarity notion that used to gate pairing (before
+// the pairing rule was relaxed to "same baseType always pairs", see
+// pairAdjacentChanges) -- so it keeps diceSimilarity/charDiceSimilarity earning
+// their keep instead of going unused.
+function computeInlineDiff(leftText: string, rightText: string): DiffPart[] {
+  if (
+    diceSimilarity(leftText, rightText) < SIMILARITY_THRESHOLD &&
+    charDiceSimilarity(leftText, rightText) < SIMILARITY_THRESHOLD
+  ) {
+    return [];
+  }
+  return diffTokens(tokenizeForDiff(leftText), tokenizeForDiff(rightText));
+}
+
+// ── Pairing adjacent removed+added within a change run ──
 
 function pairAdjacentChanges<T extends RenderedBlock>(ops: LcsOp<T>[]): AlignedRow[] {
   const rows: AlignedRow[] = [];
@@ -457,29 +490,23 @@ function pairAdjacentChanges<T extends RenderedBlock>(ops: LcsOp<T>[]): AlignedR
       for (let p = 0; p < pairCount; p++) {
         const left = removedRun[p];
         const right = addedRun[p];
-        // Same explicit id => the same logical element, so pair it as one
-        // 'modified' row and let recursion pinpoint what changed inside,
-        // even when the overall text moved too much for the similarity score
-        // (deleting most of a section drops diceSimilarity below the
-        // threshold). Without this, a section whose bulk was removed split
-        // into a full-height 'removed' block plus a separate 'added' block,
-        // which not only painted a huge red-then-green slab but pushed every
-        // following section out of left/right alignment.
-        // Only id-based keys qualify: an fp: key embeds a hash of the text,
-        // so two fp: blocks with equal keys already have equal text and would
-        // have matched as 'same' in the LCS pass, never reaching here.
-        const sameIdentity = left.key === right.key && left.key.startsWith('id:');
-        // Token dice first (cheap, and it short-circuits the character pass for
-        // the common mostly-unchanged block); char-bigram dice as a fallback so
-        // a single-token value edit -- "5000" -> "8000" -- still reads as
-        // modified instead of a delete + insert.
-        const similar =
-          sameIdentity ||
-          diceSimilarity(left.text, right.text) >= SIMILARITY_THRESHOLD ||
-          charDiceSimilarity(left.text, right.text) >= SIMILARITY_THRESHOLD;
-        if (left.baseType === right.baseType && similar) {
+        if (left.baseType === right.baseType) {
+          // Same baseType at the same relative position within one change run =
+          // one element replacing another, regardless of how different the text
+          // is. This used to also require the pair to clear SIMILARITY_THRESHOLD,
+          // which cross-lingual rewrites (English -> Chinese share almost no
+          // tokens or character bigrams) and heavy edits always failed -- so a
+          // single logical replacement split into an independent 'removed' plus
+          // 'added' row, each carrying its own data-diff-idx. The gutter then
+          // filled with one-sided stubs instead of a curve and the navigation
+          // counter doubled: the primary source of the "乱" (mess) readers hit
+          // on large diffs. An explicit id match is the obvious sub-case of this
+          // rule (same id => same baseType), so the old sameIdentity special-case
+          // needs no separate branch anymore.
           rows.push({ left, right, changeType: 'modified' });
         } else {
+          // Genuinely different element types (a <p> replaced by a <note>): no
+          // meaningful left/right pairing, so keep them as separate one-sided rows.
           rows.push({ left, changeType: 'removed' });
           rows.push({ right, changeType: 'added' });
         }
@@ -535,7 +562,7 @@ function alignSectionChildren(
 
   for (const row of childRows) {
     if (row.changeType === 'modified' && row.left && row.right) {
-      row.inlineDiff = diffTokens(tokenizeForDiff(row.left.text), tokenizeForDiff(row.right.text));
+      row.inlineDiff = computeInlineDiff(row.left.text, row.right.text);
 
       // Recurse for as many levels as the document actually nests diffable
       // containers (a <parml> inside a <section>, a <ul> inside a
@@ -585,7 +612,7 @@ function alignTitleRow(
       left,
       right,
       changeType: 'modified',
-      inlineDiff: diffTokens(tokenizeForDiff(left.text), tokenizeForDiff(right.text)),
+      inlineDiff: computeInlineDiff(left.text, right.text),
     };
   }
   if (leftTitle) {
@@ -1052,7 +1079,7 @@ export function diffTopics(input: DiffTopicsInput): TopicDiffResult {
 
   for (const row of rows) {
     if (row.changeType === 'modified' && row.left && row.right) {
-      row.inlineDiff = diffTokens(tokenizeForDiff(row.left.text), tokenizeForDiff(row.right.text));
+      row.inlineDiff = computeInlineDiff(row.left.text, row.right.text);
 
       if (
         isDiffableContainer(row.left) &&

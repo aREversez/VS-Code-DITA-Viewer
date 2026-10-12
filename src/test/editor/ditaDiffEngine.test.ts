@@ -103,6 +103,36 @@ describe('ditaDiffEngine', () => {
       assert.strictEqual(result.stats.removed, 0);
     });
 
+    it('pairs a same-baseType cross-lingual rewrite as one modified row, not a removed+added split (regression: the similarity gate split an English paragraph replaced by a Chinese one into two independent one-sided rows, since the two scripts share almost no tokens or character bigrams -- flooding the gutter with one-sided stubs and doubling the navigation counter on large diffs)', () => {
+      const left = `<?xml version="1.0"?><topic id="t"><title>T</title><body><p>Deploy the application to a Kubernetes cluster using Helm</p></body></topic>`;
+      const right = `<?xml version="1.0"?><topic id="t"><title>T</title><body><p>使用容器编排技术将应用部署到本地测试环境</p></body></topic>`;
+      const result = runDiff(left, right);
+      const pRow = result.rows.find((r) => (r.left || r.right)?.baseType === 'topic/p');
+      assert.ok(pRow, 'expected a <p> row');
+      assert.strictEqual(pRow!.changeType, 'modified', `a same-type replacement must pair as one modified row, got: ${pRow!.changeType}`);
+      assert.ok(pRow!.left && pRow!.right, 'the modified row must carry both sides');
+      assert.strictEqual(result.stats.removed, 0, 'a cross-lingual replacement must not surface as a removal');
+      assert.strictEqual(result.stats.added, 0, 'a cross-lingual replacement must not surface as an insertion');
+    });
+
+    it('omits word-level inline marks for a wholesale cross-lingual replacement (the block border + connector already say "this changed"; a full strike-through-plus-highlight wall is noise, not signal)', () => {
+      const left = `<?xml version="1.0"?><topic id="t"><title>T</title><body><p>Deploy the application to a Kubernetes cluster using Helm</p></body></topic>`;
+      const right = `<?xml version="1.0"?><topic id="t"><title>T</title><body><p>使用容器编排技术将应用部署到本地测试环境</p></body></topic>`;
+      const result = runDiff(left, right);
+      const pRow = result.rows.find((r) => r.changeType === 'modified' && r.left?.baseType === 'topic/p');
+      assert.ok(pRow, 'expected the cross-lingual <p> to be modified');
+      assert.deepStrictEqual(pRow!.inlineDiff, [], 'expected no word-level marks for a full replacement');
+    });
+
+    it('keeps a genuine baseType change (paragraph replaced by a note) split into a separate removed + added pair', () => {
+      const left = `<?xml version="1.0"?><topic id="t"><title>T</title><body><p>Some paragraph of prose content.</p></body></topic>`;
+      const right = `<?xml version="1.0"?><topic id="t"><title>T</title><body><note>Some note of prose content.</note></body></topic>`;
+      const result = runDiff(left, right);
+      const types = result.rows.map((r) => r.changeType);
+      assert.ok(types.includes('removed'), `a <p>-><note> change must keep a removed side, got: ${types.join(',')}`);
+      assert.ok(types.includes('added'), `a <p>-><note> change must keep an added side, got: ${types.join(',')}`);
+    });
+
     it('reports a per-side parse error without throwing when one side is malformed', () => {
       const result = runDiff(TOPIC_A, '<topic><unclosed></topic>');
       assert.ok(result.errorRight, 'expected errorRight to be set for malformed XML');
@@ -289,6 +319,33 @@ describe('ditaDiffEngine', () => {
       assert.ok(parmlRow, `expected a recursed parml row among section children: ${JSON.stringify(sectionRow!.children?.map((r) => r.changeType))}`);
       const plentryTypes = (parmlRow!.children || []).map((r) => r.changeType);
       assert.deepStrictEqual(plentryTypes, ['unchanged', 'modified', 'unchanged'], `expected only the middle plentry to be modified, got: ${plentryTypes.join(',')}`);
+    });
+
+    it('splits two far-apart edits inside one <dl> into independent changed blocks rather than one merged "modified" container (regression: <dl>/<dlentry> were not diffable containers, so two edits landing in different entries collapsed into a single modified row -- one giant marker plus one connector drawn across the whole screen; recursing the list lets each edit become its own data-diff-idx)', () => {
+      const left = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
+        <dl>
+          <dlentry><dt>Term A</dt><dd>First definition, will change here.</dd></dlentry>
+          <dlentry><dt>Term B</dt><dd>Second definition, unchanged.</dd></dlentry>
+          <dlentry><dt>Term C</dt><dd>Third definition, also changes here.</dd></dlentry>
+        </dl>
+      </body></topic>`;
+      const right = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
+        <dl>
+          <dlentry><dt>Term A</dt><dd>First definition, changed here.</dd></dlentry>
+          <dlentry><dt>Term B</dt><dd>Second definition, unchanged.</dd></dlentry>
+          <dlentry><dt>Term C</dt><dd>Third definition, also changed here.</dd></dlentry>
+        </dl>
+      </body></topic>`;
+
+      const result = runDiff(left, right);
+      const dlRow = result.rows.find((r) => r.left?.baseType === 'topic/dl');
+      assert.ok(dlRow, 'expected a dl row');
+      assert.strictEqual(dlRow!.changeType, 'modified');
+      const entryTypes = (dlRow!.children || []).map((r) => r.changeType);
+      assert.deepStrictEqual(entryTypes, ['modified', 'unchanged', 'modified'], `expected the two edited entries to be individually modified and the middle left unchanged, got: ${entryTypes.join(',')}`);
+      // The two far-apart edits must count as two separate changes, not one
+      // merged container modification.
+      assert.strictEqual(result.stats.modified, 2, `expected the two edits to split into 2 counted changes, got: ${JSON.stringify(result.stats)}`);
     });
 
     it('pairs a same-id section whose bulk was deleted as one modified row that recurses, not a removed+added pair (regression: deleting most of a section dropped its dice similarity below the threshold, so the whole section split into a full-height removed block plus a separate added block -- a huge red-then-green slab that also pushed the following sections out of left/right alignment)', () => {

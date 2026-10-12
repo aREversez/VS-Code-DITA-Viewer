@@ -134,6 +134,8 @@
   "Previous change": "Previous change",
   "Next change": "Next change",
   "Show word-level changes": "Show word-level changes",
+  "Jump to change (type a number and press Enter)": "Jump to change (type a number and press Enter)",
+  "Open source diff": "Open source diff",
   "Rendering book…": "Rendering book…",
   "Switching view…": "Switching view…",
   "Switch between outline tree, full book view and docsite view": "Switch between outline tree, full book view and docsite view",

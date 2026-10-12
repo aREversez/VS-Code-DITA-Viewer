@@ -9,6 +9,7 @@
   "command.transformWithDitaOt.title": "DITA-OT：转换 Map…",
   "command.exportHtml.title": "DITA：导出为 HTML…",
   "command.compareWithGit.title": "DITA：与 Git 版本比较…",
+  "command.showRenderedDiffFromSource.title": "DITA：打开渲染差异视图",
   "command.mapExplorerRefresh.title": "刷新 DITA Map",
   "command.mapExplorerSelectMap.title": "选择 DITA Map…",
   "command.mapExplorerExpandAll.title": "全部展开",

@@ -71,9 +71,29 @@ body {
 
 .diff-spacer { flex: 1; }
 
+/* Navigation counter, doubling as a jump box (see diff-webview.js). Styled as
+   a compact field rather than static text so it reads as editable: type a
+   change number + Enter to jump straight to it. The border only shows on
+   hover/focus so the toolbar stays quiet when it isn't being used. */
 .diff-nav-counter {
   font-size: 12px;
-  opacity: 0.7;
+  opacity: 0.85;
+  width: 7ch;
+  text-align: center;
+  padding: 2px 4px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--vscode-editor-foreground);
+  font-family: inherit;
+}
+
+.diff-nav-counter:hover,
+.diff-nav-counter:focus {
+  opacity: 1;
+  border-color: var(--diff-gutter);
+  background: var(--vscode-input-background, transparent);
+  outline: none;
 }
 
 #diff-toolbar button {
@@ -94,6 +114,17 @@ body {
 #diff-toolbar button[aria-pressed="true"] {
   background: var(--vscode-inputOption-activeBackground, rgba(0,100,200,0.2));
   border-color: var(--vscode-inputOption-activeBorder, #007acc);
+}
+
+#diff-toolbar #btn-prev,
+#diff-toolbar #btn-next {
+  padding: 1px 8px;
+}
+
+#diff-toolbar #btn-source {
+  font-weight: 300;
+  font-size: 11px;
+  letter-spacing: -0.5px;
 }
 
 /* ── Scroll container ── */
@@ -189,6 +220,19 @@ body {
 .align-line--stub {
   stroke-width: 2;
   opacity: 1;
+}
+
+/* A modified pair that has drifted more than half a screen apart is not drawn
+   as a full-span diagonal (that reads as noise). Instead each side gets a short
+   dashed stub; faded so it hints at the link without demanding the eye trace it
+   across the viewport. Hover re-solidifies it via __align_active below. */
+.align-line--faded {
+  opacity: 0.28;
+  stroke-dasharray: 3 3;
+}
+
+.align-dot--faded {
+  opacity: 0.4;
 }
 
 /* ── Block: one rendered DITA block on one side ── */
