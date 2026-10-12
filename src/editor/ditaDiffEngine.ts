@@ -664,8 +664,9 @@ function applyInline(row: AlignedRow): void {
 const PAIR_BASE = 0.3;
 const ID_BONUS = 2;
 const REF_BONUS = 0.5;
-// Above this many (removed x added) cells the scored DP is skipped in favour of
-// alignChangeRunByAnchors. The per-cell cost is not the table itself but
+// Above this many (removed x added) cells the full scored table is replaced by a
+// band around the diagonal (scoredMatch), or by alignChangeRunByAnchors when even
+// the band would be too narrow to be useful. The per-cell cost is not the table itself but
 // pairScore's bag-dice over two token/gram bags (~6us/cell for real paragraphs,
 // measured), so 250k cells meant a multi-second synchronous stall in the
 // extension host. Dropping the ceiling only shrinks how often scoring runs; it
@@ -828,44 +829,89 @@ function alignChangeRunByAnchors<T extends RenderedBlock>(removedRun: T[], added
   return match;
 }
 
+// Narrowest half-width worth scoring. Below this the band could not follow even
+// a handful of insertions, so the id-anchor fallback is the better tool.
+const PAIR_MIN_HALF_BAND = 8;
+
+/**
+ * The scored, order-preserving alignment of one change run, optionally
+ * restricted to a band around the run's diagonal.
+ *
+ * A run too big for the full (k x m) table used to drop to alignChangeRunByAnchors,
+ * which pairs by id and otherwise by index -- and DITA paragraphs mostly have no
+ * id, so the "every paragraph touched + one insertion" document (the case the DP
+ * exists for) came back as a cascade of wrong pairs again (measured: 150 of 300).
+ * An insertion or deletion only moves the true alignment a little off the
+ * diagonal, so scoring just the cells within `halfBand` of the line j = i*m/k
+ * finds it at the cost of k*(2*halfBand+1) cells instead of k*m.
+ *
+ * Cells outside the band are unreachable (-Infinity); row/column 0 are the
+ * free-gap boundary, as in the full table.
+ */
+function scoredMatch<T extends RenderedBlock>(removedRun: T[], addedRun: T[], halfBand: number): number[] {
+  const k = removedRun.length;
+  const m = addedRun.length;
+  const match = new Array<number>(k).fill(-1);
+  const lf = removedRun.map((b) => pairFeat(b));
+  const rf = addedRun.map((b) => pairFeat(b));
+
+  const lo = new Int32Array(k + 1);
+  const hi = new Int32Array(k + 1);
+  const base = new Int32Array(k + 2);
+  for (let i = 1; i <= k; i++) {
+    const c = Math.round((i * m) / k);
+    lo[i] = Math.max(1, c - halfBand);
+    hi[i] = Math.min(m, c + halfBand);
+    base[i + 1] = base[i] + Math.max(0, hi[i] - lo[i] + 1);
+  }
+  const dp = new Float64Array(base[k + 1]);
+  const get = (i: number, j: number): number => {
+    if (i === 0 || j === 0) return 0;
+    if (j < lo[i] || j > hi[i]) return -Infinity;
+    return dp[base[i] + j - lo[i]];
+  };
+
+  for (let i = 1; i <= k; i++) {
+    for (let j = lo[i]; j <= hi[i]; j++) {
+      let best = Math.max(get(i - 1, j), get(i, j - 1));
+      const sc = pairScore(removedRun[i - 1], addedRun[j - 1], lf[i - 1], rf[j - 1]);
+      if (sc !== undefined) best = Math.max(best, get(i - 1, j - 1) + sc);
+      dp[base[i] + j - lo[i]] = best;
+    }
+  }
+  let i = k;
+  let j = m;
+  while (i > 0 && j > 0) {
+    const sc = pairScore(removedRun[i - 1], addedRun[j - 1], lf[i - 1], rf[j - 1]);
+    const here = get(i, j);
+    // Prefer the diagonal on ties so equal-shape runs keep pairing in order.
+    if (sc !== undefined && here === get(i - 1, j - 1) + sc) {
+      match[i - 1] = j - 1;
+      i--;
+      j--;
+    } else if (here === get(i - 1, j)) {
+      i--;
+    } else {
+      j--;
+    }
+  }
+  return match;
+}
+
 function alignChangeRun<T extends RenderedBlock>(removedRun: T[], addedRun: T[]): AlignedRow[] {
   const k = removedRun.length;
   const m = addedRun.length;
   // match[i] = index in addedRun that removedRun[i] pairs with, or -1.
-  const match = new Array<number>(k).fill(-1);
+  let match: number[];
 
-  if (k * m > PAIR_DP_CELL_LIMIT) {
-    alignChangeRunByAnchors(removedRun, addedRun).forEach((j, i) => {
-      match[i] = j;
-    });
+  if (k * m <= PAIR_DP_CELL_LIMIT) {
+    match = scoredMatch(removedRun, addedRun, m);
   } else {
-    const lf = removedRun.map((b) => pairFeat(b));
-    const rf = addedRun.map((b) => pairFeat(b));
-    const w = m + 1;
-    const dp = new Float64Array((k + 1) * w);
-    for (let i = 1; i <= k; i++) {
-      for (let j = 1; j <= m; j++) {
-        let best = Math.max(dp[(i - 1) * w + j], dp[i * w + (j - 1)]);
-        const sc = pairScore(removedRun[i - 1], addedRun[j - 1], lf[i - 1], rf[j - 1]);
-        if (sc !== undefined) best = Math.max(best, dp[(i - 1) * w + (j - 1)] + sc);
-        dp[i * w + j] = best;
-      }
-    }
-    let i = k;
-    let j = m;
-    while (i > 0 && j > 0) {
-      const sc = pairScore(removedRun[i - 1], addedRun[j - 1], lf[i - 1], rf[j - 1]);
-      // Prefer the diagonal on ties so equal-shape runs keep pairing in order.
-      if (sc !== undefined && dp[i * w + j] === dp[(i - 1) * w + (j - 1)] + sc) {
-        match[i - 1] = j - 1;
-        i--;
-        j--;
-      } else if (dp[i * w + j] === dp[(i - 1) * w + j]) {
-        i--;
-      } else {
-        j--;
-      }
-    }
+    const halfBand = Math.floor((PAIR_DP_CELL_LIMIT / k - 1) / 2);
+    match =
+      halfBand >= PAIR_MIN_HALF_BAND
+        ? scoredMatch(removedRun, addedRun, halfBand)
+        : alignChangeRunByAnchors(removedRun, addedRun);
   }
 
   const rows: AlignedRow[] = [];

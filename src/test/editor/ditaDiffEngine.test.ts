@@ -165,6 +165,39 @@ describe('ditaDiffEngine', () => {
       assert.ok(gamma!.right!.text.startsWith('Gamma'), `Gamma was paired with: ${gamma!.right!.text}`);
     });
 
+    describe('large id-less change runs', () => {
+      const mk = (ps: string[]) =>
+        `<?xml version="1.0"?><topic id="t"><title>T</title><body>${ps.map((t) => `<p>${t}</p>`).join('')}</body></topic>`;
+      const steps = (n: number) =>
+        Array.from({ length: n }, (_, i) => `Step ${i + 1}: configure the alpha${i} service on the server now.`);
+      const stepOf = (t: string) => /Step (\d+):/.exec(t)?.[1];
+
+      it('keeps every pair right when 300 un-id\'d paragraphs are all edited and one is inserted (regression: above the DP limit the fallback paired by index for blocks without ids, so one insertion put 150 of 300 pairs against the wrong neighbour)', () => {
+        const left = steps(300);
+        const right = left.map((t) => t.replace('configure', 'set up'));
+        right.splice(150, 0, 'Brand new unrelated paragraph about backups and restore.');
+        const result = runDiff(mk(left), mk(right));
+        const paired = result.rows.filter((r) => r.changeType === 'modified' && r.left && r.right);
+        assert.strictEqual(paired.length, 300);
+        const wrong = paired.filter((r) => stepOf(r.left!.text) !== stepOf(r.right!.text));
+        assert.strictEqual(wrong.length, 0, `${wrong.length} of 300 pairs drawn against the wrong paragraph`);
+        assert.deepStrictEqual(result.stats, { added: 1, removed: 0, modified: 300 });
+      });
+
+      it('keeps every pair right when one of 300 edited paragraphs is deleted', () => {
+        const left = steps(300);
+        const right = left.map((t) => t.replace('configure', 'set up'));
+        right.splice(80, 1);
+        const result = runDiff(mk(left), mk(right));
+        const paired = result.rows.filter((r) => r.changeType === 'modified' && r.left && r.right);
+        assert.strictEqual(paired.length, 299);
+        assert.ok(paired.every((r) => stepOf(r.left!.text) === stepOf(r.right!.text)));
+        const removed = result.rows.filter((r) => r.changeType === 'removed');
+        assert.strictEqual(removed.length, 1);
+        assert.strictEqual(stepOf(removed[0].left!.text), '81');
+      });
+    });
+
     describe('moved blocks, wholesale replacements, anchors', () => {
       const mk = (ps: string[]) =>
         `<?xml version="1.0"?><topic id="t"><title>T</title><body>${ps.join('')}</body></topic>`;
