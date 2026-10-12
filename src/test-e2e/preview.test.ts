@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 
 const EXTENSION_ID = 'dita-viewer.dita-viewer';
 
-// dist/test/preview.test.js -> repo root is two levels up.
+// dist/e2e/preview.test.js -> repo root is two levels up.
 const repoRoot = path.resolve(__dirname, '..', '..');
 const fixturesDir = path.join(repoRoot, 'test-dita-file');
 // test-dita-file/fixture holds the generic DITA-element/keyref/conref smoke-test

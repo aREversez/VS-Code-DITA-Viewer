@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 const EXTENSION_ID = 'dita-viewer.dita-viewer';
 const run = promisify(execFile);
 
-// dist/test/providers.test.js -> repo root is two levels up. The scratch folder
+// dist/e2e/providers.test.js -> repo root is two levels up. The scratch folder
 // lives inside the workspace folder (test-dita-file) like rename.test.ts's, so
 // the extension sees it exactly as it would a user's files.
 const repoRoot = path.resolve(__dirname, '..', '..');

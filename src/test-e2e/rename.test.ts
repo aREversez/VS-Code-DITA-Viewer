@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 
 const EXTENSION_ID = 'dita-viewer.dita-viewer';
 
-// dist/test/rename.test.js -> repo root is two levels up.
+// dist/e2e/rename.test.js -> repo root is two levels up.
 const repoRoot = path.resolve(__dirname, '..', '..');
 // Lives inside the workspace folder (test-dita-file) so the participant's real
 // `vscode.workspace.findFiles` sees it, exactly as it does at runtime.
