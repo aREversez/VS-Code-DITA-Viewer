@@ -601,6 +601,18 @@ table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.95e
 table th, table td { border: 1px solid var(--table-border); padding: 0.5rem 0.75rem; text-align: left; vertical-align: top; overflow-wrap: break-word; }
 table th { background: var(--color-code-bg); color: var(--vscode-editor-foreground); font-weight: 600; }
 
+/* A <table>/<simpletable> title is that table's <caption> (see baseTypeMap's
+   'topic/title'), and HTML's default caption alignment is centered -- which in
+   an otherwise left-aligned document reads as a stray heading, the way
+   figcaption would. DITA-OT's html5 output and site-chrome.css both put it
+   left; match them, and give it the weight a table heading needs without the
+   full h1 rule (a caption belongs to its table, not to the document outline). */
+table > caption {
+  text-align: left;
+  font-weight: 600;
+  padding-bottom: 0.35rem;
+}
+
 /* Profiling on table rows: the generic .profiled treatment below (box-
    shadow ring + padding + margin) is built for ordinary block content and
    doesn't fit a <tr> living inside this table's border-collapse: collapse

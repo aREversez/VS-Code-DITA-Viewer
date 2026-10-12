@@ -254,6 +254,140 @@ describe('ditaDiffRender (rendered-diff column assembly)', () => {
     });
   });
 
+  describe('a recursed table keeps its caption', () => {
+    const titled = (caption: string, rows: string) => `<?xml version="1.0"?>
+<topic id="t"><title>Spec</title><body>
+<table id="tb">${caption}<tgroup cols="1"><colspec colname="c" colwidth="1*"/><tbody>${rows}</tbody></tgroup></table>
+<p id="p">tail paragraph</p>
+</body></topic>`;
+    const CAP = '<title>Performance figures</title>';
+    const ROWS = '<row><entry>12 Nm</entry></row>';
+
+    it("surfaces the caption inside its own table (regression: SKIP_BASETYPES drops topic/title from a recursed container, so a table's caption was drawn on neither side and editing ONLY the caption was not a change at all -- measured as stats {added:0, removed:0, modified:0})", () => {
+      const result = runDiff(titled(CAP, ROWS), titled(CAP, ROWS));
+      assert.deepStrictEqual(result.stats, { added: 0, removed: 0, modified: 0 });
+      const cols = renderDiffColumns(result.rows);
+      for (const [side, html] of [
+        ['left', cols.left],
+        ['right', cols.right],
+      ] as const) {
+        const $ = parseColumn(html, side);
+        assert.strictEqual($('caption').length, 1, `${side}: the caption is drawn`);
+        assert.strictEqual($('caption').text(), 'Performance figures');
+        assert.strictEqual(
+          $('caption').parent().get(0)!.tagName,
+          'table',
+          `${side}: a caption belongs to its table, and one emitted beside a <div> is deleted by the parser`,
+        );
+        assert.strictEqual($('caption')[0]!.attribs['data-diff-idx'], undefined, 'unchanged, so not navigable');
+        // The caption must not steal the table's structure or widths.
+        assert.strictEqual($('tbody tr td').text(), '12 Nm');
+        assert.strictEqual($('col').length, 1, 'the colgroup widths still arrive');
+      }
+    });
+
+    it('counts an edited caption as one change and marks it on the caption itself, with word-level highlights', () => {
+      const result = runDiff(titled(CAP, ROWS), titled('<title>Torque figures</title>', ROWS));
+      assert.strictEqual(result.stats.modified, 1, 'the caption edit is a change');
+      const cols = renderDiffColumns(result.rows);
+      const l$ = parseColumn(cols.left, 'left');
+      const r$ = parseColumn(cols.right, 'right');
+      assert.strictEqual(l$('caption.dv-frag--modified').length, 1);
+      assert.strictEqual(l$('caption').attr('data-diff-idx'), r$('caption').attr('data-diff-idx'), 'both halves share one index');
+      assert.strictEqual(l$('.diff-inline-del').text(), 'Performance', 'the changed word is pinpointed');
+      assert.strictEqual(r$('.diff-inline-add').text(), 'Torque');
+      assert.strictEqual(l$('[data-diff-idx]').length, 1, 'and nothing else in the table is marked');
+      assert.strictEqual(l$('td.dv-frag').length, 0);
+    });
+
+    it('draws a caption that only exists on one side, on that side only', () => {
+      const added = renderDiffColumns(runDiff(titled('', ROWS), titled(CAP, ROWS)).rows);
+      assert.strictEqual(parseColumn(added.left, 'left')('caption').length, 0, 'no caption to invent');
+      const r$ = parseColumn(added.right, 'right');
+      assert.strictEqual(r$('caption.dv-frag--added').length, 1);
+      assert.strictEqual(r$('caption').parent().get(0)!.tagName, 'table');
+      assert.strictEqual(r$('tbody tr td').length, 1, 'the unchanged rows are still there');
+
+      const removed = renderDiffColumns(runDiff(titled(CAP, ROWS), titled('', ROWS)).rows);
+      assert.strictEqual(parseColumn(removed.left, 'left')('caption.dv-frag--removed').length, 1);
+      assert.strictEqual(parseColumn(removed.right, 'right')('caption').length, 0);
+    });
+
+    it('attaches a caption to the table it titles, never to the next one (two tables in a row: editing the second caption must not mark the first table)', () => {
+      const two = (capA: string, capB: string) => `<?xml version="1.0"?>
+<topic id="t"><title>S</title><body>
+<table id="a">${capA}<tgroup cols="1"><colspec colname="c" colwidth="1*"/><tbody><row><entry>a1</entry></row></tbody></tgroup></table>
+<table id="b">${capB}<tgroup cols="1"><colspec colname="c" colwidth="1*"/><tbody><row><entry>b1</entry></row></tbody></tgroup></table>
+</body></topic>`;
+      const cols = renderDiffColumns(
+        runDiff(two('<title>First</title>', '<title>Second</title>'), two('<title>First</title>', '<title>Secunda</title>')).rows,
+      );
+      const $ = parseColumn(cols.left, 'left');
+      assert.strictEqual($('caption').length, 2, 'both captions are drawn');
+      // The first table is unchanged, so it stays one opaque block; the second
+      // recurses, and only ITS caption carries the marker.
+      const recursed = $('table.dv-table');
+      assert.strictEqual(recursed.length, 1, 'only the changed table is re-assembled');
+      assert.strictEqual(recursed.find('> caption').text(), 'Second');
+      assert.ok(recursed.find('> caption').attr('class')!.includes('dv-frag--modified'));
+      assert.strictEqual(recursed.find('> caption').attr('data-diff-idx'), '0');
+      assert.strictEqual(cols.changeCount, 1, 'one caption edit, one change');
+      assert.ok($('table:not(.dv-table) > caption').text().startsWith('First'), 'the untouched table keeps its own caption unmarked');
+    });
+
+    it('keeps a table caption inside the table even when the table sits in a section, without swallowing the section heading', () => {
+      const inSection = (cap: string) => `<?xml version="1.0"?>
+<topic id="t"><title>S</title><body><section id="s"><title>My section</title>
+<table id="tb">${cap}<tgroup cols="1"><tbody><row><entry>12 Nm</entry></row></tbody></tgroup></table>
+</section></body></topic>`;
+      const cols = renderDiffColumns(runDiff(inSection('<title>Cap</title>'), inSection('<title>Cap edited</title>')).rows);
+      const l$ = parseColumn(cols.left, 'left');
+      assert.strictEqual(l$('caption').length, 1, 'the caption is drawn inside the table');
+      assert.strictEqual(l$('caption').parent().get(0)!.tagName, 'table');
+      assert.strictEqual(l$('caption').text(), 'Cap', 'the section title is a heading, not a caption');
+      assert.ok(l$('h1, h2, h3').text().includes('My section'), 'and the section keeps its own heading');
+      // A section heading edit and a caption edit are two separate changes.
+      const both = renderDiffColumns(
+        runDiff(inSection('<title>Cap</title>').replace('My section', 'Mine'), inSection('<title>Cap edited</title>').replace('My section', 'Yours')).rows,
+      );
+      assert.strictEqual(both.changeCount, 2, 'section title + table caption are two changes');
+    });
+
+    it('draws one caption per table when the whole table is added or removed (its caption rides inside the whole-table block, so it must not also surface as a separate row)', () => {
+      const added = renderDiffColumns(runDiff(titled('', ''), titled(CAP, ROWS)).rows);
+      const a$ = parseColumn(added.right, 'right');
+      assert.strictEqual(a$('caption').length, 1, 'the added table has exactly one caption');
+      assert.strictEqual(a$('caption').parents('table').length, 1, 'inside its table');
+      assert.strictEqual(a$('tbody tr td').text(), '12 Nm', 'and its rows');
+
+      const removed = renderDiffColumns(runDiff(titled(CAP, ROWS), titled('', '')).rows);
+      const r$ = parseColumn(removed.left, 'left');
+      assert.strictEqual(r$('caption').length, 1);
+      assert.strictEqual(r$('caption').parents('table').length, 1);
+    });
+
+    it('still shows a CHANGED caption on the side that lost every row, and shows nothing on the side whose caption did not change (a caption needs a <table> to sit in, but inventing a rowless shell for an unchanged one is the empty-table artifact)', () => {
+      const both = renderDiffColumns(runDiff(titled(CAP, ROWS), titled('<title>Torque figures</title>', '')).rows);
+      const b$ = parseColumn(both.right, 'right');
+      assert.strictEqual(b$('caption').text(), 'Torque figures', 'the edited caption survives its table losing all rows');
+      assert.strictEqual(b$('tr').length, 0, 'and no rows are invented');
+
+      const same = renderDiffColumns(runDiff(titled(CAP, ROWS), titled(CAP, '')).rows);
+      const s$ = parseColumn(same.right, 'right');
+      assert.strictEqual(s$('table').length, 0, 'an unchanged caption on an emptied side draws no shell');
+      assert.strictEqual(s$('caption').length, 0);
+    });
+
+    it('survives a side swap without orphaning the caption', () => {
+      const result = runDiff(titled(CAP, ROWS), titled('<title>Torque figures</title>', ROWS));
+      const swapped = renderDiffColumns(swapAlignedRows(result.rows));
+      const sw$ = parseColumn(swapped.left, 'left');
+      assert.strictEqual(sw$('caption').length, 1, 'the swapped column still captions its table');
+      assert.strictEqual(sw$('caption').parent().get(0)!.tagName, 'table');
+      assert.strictEqual(sw$('caption').text(), 'Torque figures', 'the swapped side shows its own caption text');
+    });
+  });
+
   describe('blocks that render nothing are not blocks', () => {
     it("emits no empty ghost row per <colspec> (regression: topic/colspec renders '' by design -- it feeds the tgroup's <colgroup> -- yet each one became an empty `<div class=\"dv-block\">`, a visible ~40px gap, so a 4-column table grew 4 phantom rows)", () => {
       const cols = renderDiffColumns(runDiff(CALS('12 Nm'), CALS('15 Nm')).rows);

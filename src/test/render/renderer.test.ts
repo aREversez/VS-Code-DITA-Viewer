@@ -198,6 +198,45 @@ describe('renderer', () => {
     assert.ok(/<td\b[^>]*>Data<\/td>/.test(html), `body entry should render as td, got: ${html}`);
   });
 
+  it('renders a table\'s own <title> as the table\'s <caption>, not a heading (regression: topic/title fell through to <h1> for every parent, and an <h1> inside <table> is foster-parented OUT of the table by the HTML parser -- the caption text landed above the table with no caption at all, and every table title in a book was collected into the page outline, which scrapes h1-h3 from the content root)', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/table', [
+        makeEl('topic/title', [makeText('Performance figures')]),
+        makeEl('topic/tgroup', [
+          makeEl('topic/tbody', [makeEl('topic/row', [makeEl('topic/entry', [makeText('12 Nm')])])]),
+        ]),
+      ]),
+      makeEl('topic/simpletable', [
+        makeEl('topic/title', [makeText('Small figures')]),
+        makeEl('topic/strow', [makeEl('topic/stentry', [makeText('1')])]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(
+      /<caption[^>]*class="[^"]*title tabletitle[^"]*"[^>]*>Performance figures<\/caption>/.test(html),
+      `CALS table title should render as a caption, got: ${html}`,
+    );
+    assert.ok(html.includes('>Small figures</caption>'), `simpletable title should render as a caption, got: ${html}`);
+    assert.ok(!/<h\d[^>]*>Performance figures/.test(html), 'a table title must not become a heading');
+    assert.ok(!/<h\d[^>]*>Small figures/.test(html), 'a simpletable title must not become a heading');
+  });
+
+  it('keeps a topic or section title a heading (the caption branch is scoped to table owners only)', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/title', [makeText('Topic title')]),
+      makeEl('topic/body', [
+        makeEl('topic/section', [
+          makeEl('topic/title', [makeText('Section title')]),
+          makeEl('topic/p', [makeText('body')]),
+        ]),
+      ]),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(/<h1[^>]*class="title topictitle1"[^>]*>Topic title<\/h1>/.test(html), `got: ${html}`);
+    assert.ok(/class="title sectiontitle"/.test(html), `section title should keep sectiontitle, got: ${html}`);
+    assert.ok(!html.includes('<caption'), 'no caption markup outside a table');
+  });
+
   it('marks a CALS table with real colwidth hints as fixed-layout so a wide colgroup width is authoritative regardless of cell content (regression: default table-layout:auto only treats colgroup widths as a hint, so a column with a long unbroken run of content could still force the browser to redistribute space away from a short-content column, leaving some tables with backwards-looking proportions while others -- with less demanding content -- happened to render fine)', () => {
     const doc = makeEl('topic/topic', [
       makeEl('topic/table', [

@@ -44,6 +44,12 @@
 // markers' 3px gutter border would draw a stray vertical bar through the
 // middle of the grid. The table rules in diff-styles.css mark fragments
 // instead by tinting the collapsed grid edges of the cells themselves.
+//
+// A recursed table's own <title> follows the same rule: the preview renders it
+// as <caption>, and a caption exists only inside its <table> -- in a plain div
+// the parser deletes it outright (measured: 0 <caption> survives). It is
+// therefore buffered per group and attached to that group's first emitted
+// table, ahead of everything else in it.
 
 import { AlignedRow, RenderedBlock, applyInlineMarksToHtml } from './ditaDiffEngine';
 
@@ -99,12 +105,26 @@ interface ColumnSink {
    *  be recognised as empty at flush time. */
   pendingLeftContent: number;
   pendingRightContent: number;
+  /** The current table group's caption, marked and ready to drop into the
+   *  first <table> that group emits. Cleared once consumed or when the group
+   *  ends, so a caption can never attach to the NEXT table. */
+  captionLeft?: PendingCaption;
+  captionRight?: PendingCaption;
   /** Classes of the <table> the current pending group belongs to, per side. */
   tableClsLeft: string;
   tableClsRight: string;
 }
 
 const DEFAULT_TABLE_CLS = 'table cals-table';
+
+/** A buffered caption. `changed` is what makes an unchanged caption droppable:
+ *  a side whose table lost all its rows draws nothing at all (see
+ *  flushPartials), and only a caption that is itself the change has to force a
+ *  table into existence to be visible in. */
+interface PendingCaption {
+  html: string;
+  changed: boolean;
+}
 
 export function renderDiffColumns(rows: AlignedRow[]): { left: string; right: string; changeCount: number } {
   const sink: ColumnSink = {
@@ -119,9 +139,9 @@ export function renderDiffColumns(rows: AlignedRow[]): { left: string; right: st
     tableClsLeft: DEFAULT_TABLE_CLS,
     tableClsRight: DEFAULT_TABLE_CLS,
   };
-  collectColumns(rows, sink);
+  collectColumns(rows, sink, false);
   // A table ending the document leaves its fragments buffered.
-  flushPartials(sink);
+  endTableGroup(sink);
   return { left: sink.left.join('\n'), right: sink.right.join('\n'), changeCount: sink.changeCount };
 }
 
@@ -135,17 +155,20 @@ export function renderDiffColumns(rows: AlignedRow[]): { left: string; right: st
 // group; everything until the next one joins that group.
 const TABLE_ROOT_BASETYPES = new Set(['topic/table', 'topic/simpletable']);
 
-function collectColumns(rows: AlignedRow[], sink: ColumnSink): void {
+function collectColumns(rows: AlignedRow[], sink: ColumnSink, inTableGroup: boolean): void {
   for (const row of rows) {
     // A modified container (section / list / table) recurses into its children;
     // the container itself contributes no block of its own, matching the
     // aligned-row renderer, which only ever showed the recursed children.
     if (row.children && row.children.length > 0) {
+      let children = row.children;
       const isTableRoot =
         !!row.left && TABLE_ROOT_BASETYPES.has(row.left.baseType || '') ||
         !!row.right && TABLE_ROOT_BASETYPES.has(row.right.baseType || '');
       if (isTableRoot) {
-        flushPartials(sink);
+        // The previous table's group is complete: its fragments and its
+        // caption have to be emitted before anything of THIS table appears.
+        endTableGroup(sink);
         // The assembled wrapper must carry the SOURCE table's own classes.
         // Hardcoding the CALS ones instead silently restyled every recursed
         // simpletable (styles.css's .simple-table: lighter cell padding,
@@ -154,6 +177,15 @@ function collectColumns(rows: AlignedRow[], sink: ColumnSink): void {
         // widths authoritative rather than a hint.
         sink.tableClsLeft = (row.left && tableClasses(row.left.html)) || DEFAULT_TABLE_CLS;
         sink.tableClsRight = (row.right && tableClasses(row.right.html)) || DEFAULT_TABLE_CLS;
+        // A recursed table's own <title> is surfaced by the engine as this
+        // group's FIRST row (alignSectionChildren). Buffer it rather than
+        // flowing it: a <caption> only survives in its own table's caption
+        // slot, and it has to precede the <colgroup> the tgroup below carries
+        // in, which plain document order would not guarantee.
+        if (isCaptionRow(children[0])) {
+          bufferCaption(children[0], sink);
+          children = children.slice(1);
+        }
       }
       // A recursed <tgroup> contributes no block of its own, so the <colgroup>
       // the tgroup RENDERER synthesizes from its <colspec> children (the only
@@ -174,22 +206,21 @@ function collectColumns(rows: AlignedRow[], sink: ColumnSink): void {
       const skeleton = fragmentSkeleton(row);
       if (skeleton.left) sink.pendingLeft.push(skeleton.left[0]);
       if (skeleton.right) sink.pendingRight.push(skeleton.right[0]);
-      collectColumns(row.children, sink);
+      collectColumns(children, sink, isTableRoot || inTableGroup);
       if (skeleton.left) sink.pendingLeft.push(skeleton.left[1]);
       if (skeleton.right) sink.pendingRight.push(skeleton.right[1]);
       continue;
     }
 
-    let idx: number | undefined;
-    if (row.changeType !== 'unchanged') {
-      if (row.moveId !== undefined && sink.moveIdx.has(row.moveId)) {
-        idx = sink.moveIdx.get(row.moveId);
-      } else {
-        idx = sink.changeCount++;
-        if (row.moveId !== undefined) sink.moveIdx.set(row.moveId, idx);
-      }
+    // A caption that reaches the flow inside a table group (the engine put it
+    // somewhere other than the group's first row) still belongs to that group's
+    // table, not to a div -- bufferCaption allocates its change index.
+    if (inTableGroup && isCaptionRow(row)) {
+      bufferCaption(row, sink);
+      continue;
     }
-    const idxAttr = idx !== undefined ? ` data-diff-idx="${idx}"` : '';
+
+    const idxAttr = takeIdxAttr(row, sink);
 
     // A row is paired by baseType, so one side's fragment kind is the other's;
     // a one-sided added/removed row only has one side to ask.
@@ -203,12 +234,22 @@ function collectColumns(rows: AlignedRow[], sink: ColumnSink): void {
       flushPartials(sink);
       if (row.left) {
         sink.left.push(
-          wrapInTable(applyInlineDiff(row.left.html, row, 'left'), sink.tableClsLeft, wrapperClass(row), idxAttr),
+          wrapInTable(
+            takeCaption(sink, 'left') + applyInlineDiff(row.left.html, row, 'left'),
+            sink.tableClsLeft,
+            wrapperClass(row),
+            idxAttr,
+          ),
         );
       }
       if (row.right) {
         sink.right.push(
-          wrapInTable(applyInlineDiff(row.right.html, row, 'right'), sink.tableClsRight, wrapperClass(row), idxAttr),
+          wrapInTable(
+            takeCaption(sink, 'right') + applyInlineDiff(row.right.html, row, 'right'),
+            sink.tableClsRight,
+            wrapperClass(row),
+            idxAttr,
+          ),
         );
       }
       continue;
@@ -230,7 +271,10 @@ function collectColumns(rows: AlignedRow[], sink: ColumnSink): void {
       continue;
     }
 
-    flushPartials(sink);
+    // Leaving the table (a following paragraph, list or section): the group's
+    // table has to close before this block can open, and a caption that never
+    // got a table of its own must still be drawn -- it is a change.
+    endTableGroup(sink);
     const cls = `dv-block dv-block--${row.changeType}` + blockFlags(row);
     if (row.left) {
       sink.left.push(`<div class="${cls}"${idxAttr}>${applyInlineDiff(row.left.html, row, 'left')}</div>`);
@@ -239,6 +283,17 @@ function collectColumns(rows: AlignedRow[], sink: ColumnSink): void {
       sink.right.push(`<div class="${cls}"${idxAttr}>${applyInlineDiff(row.right.html, row, 'right')}</div>`);
     }
   }
+}
+
+/** Allocate this row's change index, or '' for an unchanged row. */
+function takeIdxAttr(row: AlignedRow, sink: ColumnSink): string {
+  if (row.changeType === 'unchanged') return '';
+  if (row.moveId !== undefined && sink.moveIdx.has(row.moveId)) {
+    return ` data-diff-idx="${sink.moveIdx.get(row.moveId)}"`;
+  }
+  const idx = sink.changeCount++;
+  if (row.moveId !== undefined) sink.moveIdx.set(row.moveId, idx);
+  return ` data-diff-idx="${idx}"`;
 }
 
 /** ` dv-frag--moved`/` dv-frag--replaced` suffixes for fragment leaves. */
@@ -254,6 +309,64 @@ function blockFlags(row: AlignedRow): string {
 
 function wrapperClass(row: AlignedRow): string {
   return 'dv-block dv-block--table' + ` dv-block--${row.changeType}` + blockFlags(row);
+}
+
+/**
+ * A block the preview rendered as a table caption. The test is the rendered
+ * markup, not just the baseType: topic/title is a heading everywhere else
+ * (<body>'s own title, a section's heading), and those must keep flowing as
+ * normal blocks. See baseTypeMap.ts's 'topic/title' renderer.
+ */
+function isCaptionRow(row: AlignedRow | undefined): boolean {
+  if (!row) return false;
+  const side = row.left || row.right;
+  return !!side && side.baseType === 'topic/title' && /^<caption\b/i.test(side.html);
+}
+
+/** Mark a caption like any other fragment and hold it for this table group. */
+function bufferCaption(row: AlignedRow, sink: ColumnSink): void {
+  const cls = `dv-frag dv-frag--${row.changeType}` + fragFlags(row);
+  const idxAttr = takeIdxAttr(row, sink);
+  const changed = row.changeType !== 'unchanged';
+  if (row.left) {
+    sink.captionLeft = { html: injectFragmentAttrs(applyInlineDiff(row.left.html, row, 'left'), cls, idxAttr), changed };
+  }
+  if (row.right) {
+    sink.captionRight = { html: injectFragmentAttrs(applyInlineDiff(row.right.html, row, 'right'), cls, idxAttr), changed };
+  }
+}
+
+/**
+ * Hand a side's buffered caption to the table being emitted for it, and
+ * consume it -- the caption belongs to exactly one table, and the next one
+ * either has its own or has none.
+ */
+function takeCaption(sink: ColumnSink, side: 'left' | 'right'): string {
+  const caption = side === 'left' ? sink.captionLeft : sink.captionRight;
+  if (side === 'left') sink.captionLeft = undefined;
+  else sink.captionRight = undefined;
+  return caption ? caption.html : '';
+}
+
+/**
+ * Close the current table group: emit the table it assembled, then draw any
+ * caption that never found a table to sit in -- a table whose rows all live on
+ * the other column still has to show that its title was edited or deleted.
+ * A caption that did not change is dropped with them: on that side it is not a
+ * change, and inventing a rowless table to hold it is the empty-shell artifact
+ * flushPartials already refuses to draw.
+ */
+function endTableGroup(sink: ColumnSink): void {
+  flushPartials(sink);
+  for (const side of ['left', 'right'] as const) {
+    const caption = side === 'left' ? sink.captionLeft : sink.captionRight;
+    if (side === 'left') sink.captionLeft = undefined;
+    else sink.captionRight = undefined;
+    if (!caption || !caption.changed) continue;
+    (side === 'left' ? sink.left : sink.right).push(
+      wrapInTable(caption.html, side === 'left' ? sink.tableClsLeft : sink.tableClsRight),
+    );
+  }
 }
 
 /**
@@ -282,10 +395,10 @@ function flushPartials(sink: ColumnSink): void {
   // colgroup came from the side that no longer has the table's content. Only
   // rows and cells count as content, so the buffer is dropped for an empty side.
   if (sink.pendingLeftContent > 0) {
-    sink.left.push(wrapInTable(sink.pendingLeft.join(''), sink.tableClsLeft));
+    sink.left.push(wrapInTable(takeCaption(sink, 'left') + sink.pendingLeft.join(''), sink.tableClsLeft));
   }
   if (sink.pendingRightContent > 0) {
-    sink.right.push(wrapInTable(sink.pendingRight.join(''), sink.tableClsRight));
+    sink.right.push(wrapInTable(takeCaption(sink, 'right') + sink.pendingRight.join(''), sink.tableClsRight));
   }
   sink.pendingLeft = [];
   sink.pendingRight = [];

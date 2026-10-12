@@ -1008,16 +1008,26 @@ function alignSectionChildren(
 ): AlignedRow[] {
   const rows: AlignedRow[] = [];
 
-  // A section/example's own <title> is in SKIP_BASETYPES, so extractChildBlocks
-  // below never turns it into a block: a recursed (modified) section rendered
-  // its changed children but silently lost its heading, which read as orphaned
-  // body text with no context. Emit the title as the first row so every
-  // recursed section keeps its heading. Gated to section/example on purpose --
-  // a <table> also has a <title>, but that belongs rendered as a caption inside
-  // the whole-table block, and lifting it out as a standalone heading here
-  // would look wrong, so tables/lists keep their current behavior.
+  // A container's own <title> is in SKIP_BASETYPES, so extractChildBlocks below
+  // never turns it into a block: a recursed (modified) container rendered its
+  // changed children but silently lost its heading, which read as orphaned body
+  // text with no context -- and for a <table>, whose title is its caption, it
+  // meant an edited caption was not a change at all (measured: changing only
+  // "Performance figures" gave stats {added:0, removed:0, modified:0}).
+  //
+  // Tables/simpletables are included on the same terms sections already were:
+  // the row goes out as the group's FIRST row, and ditaDiffRender.ts places a
+  // title inside that group into the assembled <table>'s caption slot rather
+  // than beside it, so it stays the table's caption instead of becoming a
+  // standalone heading. (The renderer emits <caption> for exactly that reason;
+  // an <h1> inside <table> is foster-parented out of it by the parser.)
   const parentType = leftParent.baseType || rightParent.baseType || '';
-  if (parentType === 'topic/section' || parentType === 'topic/example') {
+  if (
+    parentType === 'topic/section' ||
+    parentType === 'topic/example' ||
+    parentType === 'topic/table' ||
+    parentType === 'topic/simpletable'
+  ) {
     const titleRow = alignTitleRow(leftParent, rightParent, leftOpts, rightOpts, parentType, headingLevel);
     if (titleRow) rows.push(titleRow);
   }

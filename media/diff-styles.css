@@ -383,6 +383,64 @@ body {
   outline-offset: -2px;
 }
 
+/* A table's own caption is the one fragment the border-colour rules above
+   cannot mark: a <caption> sits OUTSIDE the collapsed grid (it is the table's
+   box, not one of its cells), so it shares no cell edges, and `border-color`
+   alone paints nothing on an element that has no border of its own. A CHANGED
+   caption therefore carries the same gutter-facing edge marker the div blocks
+   use, so an edited, added or deleted table title is findable at a glance
+   instead of showing only the word-level marks. An unchanged caption matches
+   the fragment rules above and gets nothing.
+
+   Only the gutter-facing edge is given a width, and the style overrides are
+   side-specific (`border-right-style`, not `border-style`): border-width
+   defaults to medium on all four edges, so a shorthand style would turn the
+   whole caption into a dotted box. */
+.diff-col--left .dv-table > caption.dv-frag--removed,
+.diff-col--left .dv-table > caption.dv-frag--modified,
+.diff-col--left .dv-table > caption.dv-frag--replaced,
+.diff-col--left .dv-table > caption.dv-frag--moved {
+  border-right: 3px solid var(--diff-mod-border);
+}
+
+.diff-col--right .dv-table > caption.dv-frag--added,
+.diff-col--right .dv-table > caption.dv-frag--modified,
+.diff-col--right .dv-table > caption.dv-frag--replaced,
+.diff-col--right .dv-table > caption.dv-frag--moved {
+  border-left: 3px solid var(--diff-mod-border);
+}
+
+.diff-col--left .dv-table > caption.dv-frag--removed {
+  border-right-color: var(--diff-del-border);
+}
+
+.diff-col--right .dv-table > caption.dv-frag--added {
+  border-left-color: var(--diff-add-border);
+}
+
+/* A moved caption is drawn on the side its original block sits on, so the
+   del/add colour has to give to amber before the dashed/dotted rules read. */
+.diff-col .dv-table > caption.dv-frag--moved {
+  border-right-color: var(--diff-mod-border);
+  border-left-color: var(--diff-mod-border);
+}
+
+.diff-col--left .dv-table > caption.dv-frag--replaced {
+  border-right-style: dashed;
+}
+
+.diff-col--right .dv-table > caption.dv-frag--replaced {
+  border-left-style: dashed;
+}
+
+.diff-col--left .dv-table > caption.dv-frag--moved {
+  border-right-style: dotted;
+}
+
+.diff-col--right .dv-table > caption.dv-frag--moved {
+  border-left-style: dotted;
+}
+
 /* ── Inline diff marks ── */
 
 .diff-inline-del {
