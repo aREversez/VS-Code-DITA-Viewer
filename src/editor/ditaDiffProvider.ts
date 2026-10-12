@@ -561,10 +561,13 @@ interface ColumnSink {
   left: string[];
   right: string[];
   changeCount: number;
+  /** moveId -> data-diff-idx, so the two halves of a moved block (one in each
+   *  column, at different positions) share one change index and one connector. */
+  moveIdx: Map<number, number>;
 }
 
 function renderColumns(rows: AlignedRow[]): { left: string; right: string; changeCount: number } {
-  const sink: ColumnSink = { left: [], right: [], changeCount: 0 };
+  const sink: ColumnSink = { left: [], right: [], changeCount: 0, moveIdx: new Map() };
   collectColumns(rows, sink);
   return { left: sink.left.join('\n'), right: sink.right.join('\n'), changeCount: sink.changeCount };
 }
@@ -579,22 +582,31 @@ function collectColumns(rows: AlignedRow[], sink: ColumnSink): void {
       continue;
     }
 
-    const idxAttr = row.changeType !== 'unchanged' ? ` data-diff-idx="${sink.changeCount++}"` : '';
+    let idx: number | undefined;
+    if (row.changeType !== 'unchanged') {
+      if (row.moveId !== undefined && sink.moveIdx.has(row.moveId)) {
+        idx = sink.moveIdx.get(row.moveId);
+      } else {
+        idx = sink.changeCount++;
+        if (row.moveId !== undefined) sink.moveIdx.set(row.moveId, idx);
+      }
+    }
+    const idxAttr = idx !== undefined ? ` data-diff-idx="${idx}"` : '';
+    const cls =
+      `dv-block dv-block--${row.changeType}` +
+      (row.moveId !== undefined ? ' dv-block--moved' : '') +
+      (row.replaced ? ' dv-block--replaced' : '');
     if (row.left) {
-      sink.left.push(
-        `<div class="dv-block dv-block--${row.changeType}"${idxAttr}>${applyInlineDiff(row.left.html, row, 'left')}</div>`,
-      );
+      sink.left.push(`<div class="${cls}"${idxAttr}>${applyInlineDiff(row.left.html, row, 'left')}</div>`);
     }
     if (row.right) {
-      sink.right.push(
-        `<div class="dv-block dv-block--${row.changeType}"${idxAttr}>${applyInlineDiff(row.right.html, row, 'right')}</div>`,
-      );
+      sink.right.push(`<div class="${cls}"${idxAttr}>${applyInlineDiff(row.right.html, row, 'right')}</div>`);
     }
   }
 }
 
 function applyInlineDiff(html: string, row: AlignedRow, side: 'left' | 'right'): string {
-  if (row.changeType !== 'modified' || !row.inlineDiff) return html;
+  if (!row.inlineDiff || (row.changeType !== 'modified' && row.moveId === undefined)) return html;
   return applyInlineMarksToHtml(html, row.inlineDiff, side);
 }
 

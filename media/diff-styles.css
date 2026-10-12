@@ -283,6 +283,27 @@ body {
   border-left: 3px solid var(--diff-mod-border);
 }
 
+/* A wholesale replacement (paired by position, shares almost no wording): the
+   same amber marker as an edit, but dashed, so "rewritten" reads differently
+   from "edited". */
+.diff-col--left .dv-block--replaced {
+  border-right-style: dashed;
+}
+
+.diff-col--right .dv-block--replaced {
+  border-left-style: dashed;
+}
+
+/* A moved block: its two halves sit at different positions and are joined by
+   one connector. Dotted amber, so it reads as "same content, new place". */
+.diff-col--left .dv-block--moved {
+  border-right: 3px dotted var(--diff-mod-border);
+}
+
+.diff-col--right .dv-block--moved {
+  border-left: 3px dotted var(--diff-mod-border);
+}
+
 /* Transient counterpart emphasis while hovering the other side of a change.
    A hardcoded neutral tint, not --vscode-list-hoverBackground: that variable
    resolves to a color near-identical to the editor background in common dark
@@ -371,5 +392,14 @@ body:not(.show-inline) .diff-inline-add {
   .diff-col--left .dv-block--modified {
     border-right: none;
     border-left: 3px solid var(--diff-mod-border);
+  }
+
+  .diff-col--left .dv-block--replaced {
+    border-left-style: dashed;
+  }
+
+  .diff-col--left .dv-block--moved {
+    border-right: none;
+    border-left: 3px dotted var(--diff-mod-border);
   }
 }
