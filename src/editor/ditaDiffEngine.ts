@@ -1062,11 +1062,12 @@ function alignSectionChildren(
   // "Performance figures" gave stats {added:0, removed:0, modified:0}).
   //
   // Tables/simpletables are included on the same terms sections already were:
-  // the row goes out as the group's FIRST row, and ditaDiffRender.ts places a
-  // title inside that group into the assembled <table>'s caption slot rather
-  // than beside it, so it stays the table's caption instead of becoming a
-  // standalone heading. (The renderer emits <caption> for exactly that reason;
-  // an <h1> inside <table> is foster-parented out of it by the parser.)
+  // the row goes out as the group's FIRST row, and ditaDiffRender.ts buffers a
+  // title inside that group and re-writes it into the assembled <table>'s
+  // caption slot rather than flowing it beside the table -- an <h1> inside
+  // <table> is foster-parented out of it by the parser, and a <caption> emitted
+  // anywhere but that slot is deleted outright. The panel does that conversion
+  // itself from the preview's own heading markup; src/render is untouched.
   const parentType = leftParent.baseType || rightParent.baseType || '';
   if (
     parentType === 'topic/section' ||

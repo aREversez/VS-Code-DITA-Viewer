@@ -1,5 +1,6 @@
 import * as assert from 'assert';
 import { load } from 'cheerio';
+import { parseDita } from '../../parser/ditaParser';
 import { DitaNode } from '../../parser/domTypes';
 import { RenderContext, renderElement } from '../../render/renderer';
 import { diffTopics, DiffTopicsInput, swapAlignedRows } from '../../editor/ditaDiffEngine';
@@ -262,6 +263,91 @@ describe('ditaDiffRender (rendered-diff column assembly)', () => {
 </body></topic>`;
     const CAP = '<title>Performance figures</title>';
     const ROWS = '<row><entry>12 Nm</entry></row>';
+
+    it('converts the preview heading into a caption without changing the preview (the panel owns this markup: baseTypeMap still renders a table title as <h{level} class="title topictitle{N}">, so the conversion cannot be a shared-renderer change, and a heading left in table scope is foster-parented out of the re-assembled table)', () => {
+      const doc = parseDita(titled(CAP, ROWS));
+      const find = (n: DitaNode): DitaNode | undefined => {
+        if (n.baseType === 'topic/table') return n;
+        for (const c of n.children || []) {
+          const hit = find(c);
+          if (hit) return hit;
+        }
+        return undefined;
+      };
+      // The preview, untouched: a heading inside the table, and no caption.
+      const preview = renderElement(find(doc.root)!, { ...ctx0, headingLevel: 1, parentBaseType: 'topic/body' });
+      assert.ok(
+        /<h1[^>]*class="title topictitle1"[^>]*>Performance figures<\/h1>/.test(preview),
+        `preview keeps its own heading markup, got: ${preview}`,
+      );
+      assert.ok(!preview.includes('<caption'), 'the preview is not restyled by the diff panel');
+
+      // The panel, from the same source: caption markup, heading attributes kept.
+      const cols = renderDiffColumns(runDiff(titled(CAP, ROWS), titled('<title>Torque</title>', ROWS)).rows);
+      const cap = parseColumn(cols.left, 'left')('caption');
+      assert.strictEqual(cap.length, 1);
+      assert.ok(/\btitle\b/.test(cap.attr('class')!) && /\btabletitle\b/.test(cap.attr('class')!), 'topictitleN became tabletitle');
+      assert.ok(!/topictitle/.test(cap.attr('class')!), 'and the heading-level class is gone');
+      assert.strictEqual(cap.attr('data-dita-tagname'), 'title', 'the source-jump attributes survive the rename');
+      assert.notStrictEqual(cap.attr('data-line'), undefined, 'including the line number');
+    });
+
+    it('captions a table the diff did NOT recurse, so one edit does not restyle its untouched neighbour (an added/removed/unchanged table arrives as the preview markup, whose heading the parser hoists ABOVE the table -- while the recursed sibling beside it gets a caption)', () => {
+      const two = (capA: string, capB: string) => `<?xml version="1.0"?>
+<topic id="t"><title>S</title><body>
+<table id="a">${capA}<tgroup cols="1"><colspec colname="c" colwidth="1*"/><tbody><row><entry>a1</entry></row></tbody></tgroup></table>
+<table id="b">${capB}<tgroup cols="1"><colspec colname="c" colwidth="1*"/><tbody><row><entry>b1</entry></row></tbody></tgroup></table>
+</body></topic>`;
+      // Only the SECOND caption changes, so only the second table recurses.
+      const cols = renderDiffColumns(
+        runDiff(two('<title>First</title>', '<title>Second</title>'), two('<title>First</title>', '<title>Secunda</title>')).rows,
+      );
+      const $ = parseColumn(cols.left, 'left');
+      assert.strictEqual($('table').length, 2, 'one opaque, one re-assembled');
+      assert.strictEqual($('table > caption').length, 2, 'and both caption their own table');
+      assert.strictEqual($('table:not(.dv-table) > caption').text(), 'First', 'the opaque table keeps ITS title, as a caption');
+      assert.ok(!$('table:not(.dv-table) > caption').attr('class')!.includes('dv-frag'), 'unchanged, so unmarked');
+      // The heading must not have been hoisted out into the block wrapper.
+      assert.strictEqual($('div.dv-block > h1, div.dv-block > h2').length, 1, 'only the topic title is a heading');
+      assert.strictEqual($('div.dv-block > h1').text(), 'S');
+    });
+
+    it('captions a titled table that reaches the panel inside an opaque block (a table inside an UNCHANGED section is never recursed, so it goes out as the preview\'s own markup -- and its <h3 class="title topictitle3"> in table scope is hoisted ABOVE the table by the parser, leaving the table reading as untitled)', () => {
+      const doc = (word: string) => `<?xml version="1.0"?>
+<topic id="t"><title>S</title><body>
+<section id="sec"><title>Setup</title>
+<table id="tb"><title>Inner table</title><tgroup cols="1"><colspec colname="c" colwidth="1*"/><tbody><row><entry>12 Nm</entry></row></tbody></tgroup></table>
+</section>
+<p id="p">${word}</p>
+</body></topic>`;
+      // Only the paragraph outside the section changes: the section, and the table
+      // inside it, stay one opaque block.
+      const cols = renderDiffColumns(runDiff(doc('one'), doc('two')).rows);
+      const $ = parseColumn(cols.left, 'left');
+      assert.strictEqual($('table > caption').length, 1, 'the nested table is captioned');
+      assert.strictEqual($('table > caption').text(), 'Inner table');
+      assert.ok(!$('table > caption').attr('class')!.includes('dv-frag'), 'not a change, so unmarked');
+      assert.strictEqual($('table h1, table h2, table h3, table h4').length, 0, 'no heading left inside the table');
+      assert.strictEqual($('tbody tr td').text(), '12 Nm', 'the table itself is intact');
+      assert.ok($('h1, h2, h3').text().includes('Setup'), 'the section keeps its own heading');
+    });
+
+    it('captions a table nested in a cell while leaving the section heading beside it a heading (the guard is the topictitleN class, so only a table title converts)', () => {
+      const doc = (word: string) => `<?xml version="1.0"?>
+<topic id="t"><title>S</title><body>
+<table id="outer"><tgroup cols="1"><colspec colname="c" colwidth="1*"/><tbody><row><entry><section id="s"><title>Inner section</title><table id="inner"><title>Inner table</title><tgroup cols="1"><tbody><row><entry>${word}</entry></row></tbody></tgroup></table></section></entry></row></tbody></tgroup></table>
+</body></topic>`;
+      const cols = renderDiffColumns(runDiff(doc('one'), doc('two')).rows);
+      const $ = parseColumn(cols.left, 'left');
+      assert.strictEqual($('table').length, 2, 'outer and inner tables');
+      assert.strictEqual($('table > caption').length, 1, 'only the table that HAS a title is captioned');
+      assert.strictEqual($('table > caption').text(), 'Inner table');
+      assert.ok(
+        $('td h3').text().includes('Inner section'),
+        'a section title leading a cell\'s content stays a heading, not a caption',
+      );
+      assert.strictEqual($('tbody tr td').last().text().includes('one'), true, 'the inner cell is intact');
+    });
 
     it("surfaces the caption inside its own table (regression: SKIP_BASETYPES drops topic/title from a recursed container, so a table's caption was drawn on neither side and editing ONLY the caption was not a change at all -- measured as stats {added:0, removed:0, modified:0})", () => {
       const result = runDiff(titled(CAP, ROWS), titled(CAP, ROWS));

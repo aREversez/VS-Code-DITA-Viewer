@@ -45,11 +45,21 @@
 // middle of the grid. The table rules in diff-styles.css mark fragments
 // instead by tinting the collapsed grid edges of the cells themselves.
 //
-// A recursed table's own <title> follows the same rule: the preview renders it
-// as <caption>, and a caption exists only inside its <table> -- in a plain div
-// the parser deletes it outright (measured: 0 <caption> survives). It is
-// therefore buffered per group and attached to that group's first emitted
-// table, ahead of everything else in it.
+// A recursed table's own <title> follows the same rule, with one difference: the
+// PREVIEW renders a table title as a heading (that is the extension's existing
+// markup, and the diff panel must not restyle it), and inside the re-assembled
+// <table> here that heading would be foster-parented out of it again -- while a
+// <caption> emitted in the group buffer would be deleted outright (measured:
+// 0 <caption> survives outside a table). So the title row is buffered per group
+// and converted to a <caption> when it is attached to that group's first emitted
+// table, ahead of everything else in it. The conversion is the diff panel's own
+// layout decision, scoped to the panel; nothing in src/render changes.
+//
+// This is string surgery on markup, so two rules keep it honest: only a heading
+// sitting in a <table>'s own caption slot is rewritten (never one that merely
+// looks like a title), and the tag scan skips quoted attribute values, so a `<`
+// inside an attribute can't be mistaken for the start of a tag. Sample markup in
+// a <codeblock>/<pre> is escaped by the renderer, so it never reads as a tag here.
 
 import { AlignedRow, RenderedBlock, applyInlineMarksToHtml } from './ditaDiffEngine';
 
@@ -142,7 +152,11 @@ export function renderDiffColumns(rows: AlignedRow[]): { left: string; right: st
   collectColumns(rows, sink, false);
   // A table ending the document leaves its fragments buffered.
   endTableGroup(sink);
-  return { left: sink.left.join('\n'), right: sink.right.join('\n'), changeCount: sink.changeCount };
+  return {
+    left: captionTablesIn(sink.left.join('\n')),
+    right: captionTablesIn(sink.right.join('\n')),
+    changeCount: sink.changeCount,
+  };
 }
 
 // The wrapper a set of partial fragments is assembled into must be exactly one
@@ -312,15 +326,120 @@ function wrapperClass(row: AlignedRow): string {
 }
 
 /**
- * A block the preview rendered as a table caption. The test is the rendered
- * markup, not just the baseType: topic/title is a heading everywhere else
- * (<body>'s own title, a section's heading), and those must keep flowing as
- * normal blocks. See baseTypeMap.ts's 'topic/title' renderer.
+ * A block that is a table's own title, i.e. the current group's caption.
+ *
+ * The test is the group position plus the baseType, not the rendered markup:
+ * within a re-assembled table, 'topic/title' can only be that table's title --
+ * DITA allows no other title below <table>, and a SECTION's own title row is
+ * emitted before its table group opens, so it never reaches here as a group
+ * member. Keying on markup instead (a leading <caption>) would tie the panel to
+ * a preview change that does not exist: baseTypeMap keeps rendering a table
+ * title as <h{level} class="title topictitle{N}">, which is exactly why
+ * headingToCaption below converts it here.
  */
 function isCaptionRow(row: AlignedRow | undefined): boolean {
   if (!row) return false;
   const side = row.left || row.right;
-  return !!side && side.baseType === 'topic/title' && /^<caption\b/i.test(side.html);
+  return !!side && side.baseType === 'topic/title';
+}
+
+/**
+ * Convert a title heading that starts at `at` into a <caption>, returning the
+ * replacement text and the index just past the heading's own close tag.
+ *
+ * Only the element name and the title class change; every other attribute the
+ * preview put on the heading (data-dita-tagname, data-line, data-start-col) is
+ * kept, so clicking the caption still jumps to the source line.
+ *
+ * The guard is `topictitle{N}` -- the class baseTypeMap gives a title whose owner
+ * is neither section nor example, which is what a DITA title directly under
+ * <table>/<simpletable> always is. A section heading that happens to lead a
+ * cell's content (`class="title sectiontitle"`) therefore stays a heading, and so
+ * does anything that is not a titled heading: no fabricated <caption> that the
+ * markup cannot close.
+ *
+ * The close tag is matched by the heading's OWN level, and taken as the FIRST
+ * such tag after the open: a heading never nests a heading of its own level, so
+ * the first one closes this one -- a title can carry inline markup (a real
+ * <keyword>/<ph>, or the spans applyInlineDiff just inserted), and a greedy or
+ * last-index scan would run past the end of a following sibling heading.
+ */
+function captionAt(html: string, at: number): { text: string; after: number } | undefined {
+  const open = /^<h([1-6])\b/i.exec(html.slice(at));
+  if (!open) return undefined;
+  const end = tagEndAt(html, at);
+  if (end < 0) return undefined;
+
+  let tag = html.slice(at, end);
+  const classMatch = /\sclass="([^"]*)"/.exec(tag);
+  if (!classMatch || !/\btopictitle\d+\b/.test(classMatch[1])) return undefined;
+
+  tag = tag.replace(/^<h[1-6]/i, '<caption');
+  // topictitle{N} is the class a table title gets because <table> is not a
+  // section/example; in the caption slot the DITA name is tabletitle.
+  tag = tag.replace(/\sclass="[^"]*"/, ` class="${classMatch[1].replace(/\btopictitle\d+\b/g, 'tabletitle')}"`);
+
+  const body = html.slice(end + 1);
+  const close = `</h${open[1]}>`;
+  const closeAt = body.indexOf(close);
+  if (closeAt === -1) return undefined;
+  return { text: `${tag}>${body.slice(0, closeAt)}</caption>`, after: end + 1 + closeAt + close.length };
+}
+
+/** Convert a block that IS a table title heading; anything else passes through. */
+function headingToCaption(html: string): string {
+  const hit = captionAt(html, 0);
+  return hit ? hit.text + html.slice(hit.after) : html;
+}
+
+/**
+ * The same conversion wherever a table appears INSIDE a block's html.
+ *
+ * A table the diff did not recurse arrives as the preview's own markup -- and so
+ * does a table nested in a cell or inside an opaque <section>/<div> block, which
+ * is how most titled tables in a real book reach the panel. Their title is an
+ * `<h{N} class="title topictitle{N}">` in table scope, which the HTML parser
+ * hoists ABOVE the table: the caption text lands outside its table and the table
+ * reads as untitled. Without this the panel contradicts itself -- a recursed
+ * table gets a caption (bufferCaption) while the identical table next to it keeps
+ * a heading, so editing one table's title restyles its untouched neighbour too.
+ *
+ * Runs over the finished column strings, after assembly, so it reaches every path
+ * a table can arrive by. It converts only a heading sitting in the caption slot
+ * (directly after the table's own open tag), which is also the only slot a
+ * browser accepts, so a document that puts <title> after its <tgroup> keeps its
+ * previous layout instead of gaining a caption the parser would discard. Idempotent
+ * as well: the captions written here carry `tabletitle`, which the guard above
+ * does not match. This is the panel's markup only -- src/render is untouched.
+ */
+function captionTablesIn(html: string): string {
+  if (!/<(table|simpletable)\b/i.test(html)) return html;
+
+  let out = '';
+  let i = 0;
+  for (;;) {
+    const lt = html.indexOf('<', i);
+    if (lt < 0) {
+      out += html.slice(i);
+      break;
+    }
+    out += html.slice(i, lt);
+    const end = tagEndAt(html, lt);
+    if (end < 0) {
+      out += html.slice(lt);
+      break;
+    }
+    const tag = html.slice(lt, end + 1);
+    out += tag;
+    i = end + 1;
+    if (!/^<(?:simple)?table\b/i.test(tag)) continue;
+    const gap = /^\s*/.exec(html.slice(i))![0];
+    const hit = captionAt(html, i + gap.length);
+    if (!hit) continue;
+    out += gap + hit.text;
+    i = hit.after;
+  }
+  return out;
 }
 
 /** Mark a caption like any other fragment and hold it for this table group. */
@@ -329,10 +448,16 @@ function bufferCaption(row: AlignedRow, sink: ColumnSink): void {
   const idxAttr = takeIdxAttr(row, sink);
   const changed = row.changeType !== 'unchanged';
   if (row.left) {
-    sink.captionLeft = { html: injectFragmentAttrs(applyInlineDiff(row.left.html, row, 'left'), cls, idxAttr), changed };
+    sink.captionLeft = {
+      html: injectFragmentAttrs(headingToCaption(applyInlineDiff(row.left.html, row, 'left')), cls, idxAttr),
+      changed,
+    };
   }
   if (row.right) {
-    sink.captionRight = { html: injectFragmentAttrs(applyInlineDiff(row.right.html, row, 'right'), cls, idxAttr), changed };
+    sink.captionRight = {
+      html: injectFragmentAttrs(headingToCaption(applyInlineDiff(row.right.html, row, 'right')), cls, idxAttr),
+      changed,
+    };
   }
 }
 
@@ -462,9 +587,18 @@ export function injectFragmentAttrs(html: string, cls: string, idxAttr: string):
 
 /** Index of the `>` that closes the first opening tag, or -1 if there is none. */
 function firstTagEnd(html: string): number {
-  if (html[0] !== '<') return -1;
+  return html[0] === '<' ? tagEndAt(html, 0) : -1;
+}
+
+/**
+ * The same scan starting at `at`, which must be the index of a `<`. Returns the
+ * index of the `>` that closes the tag, or -1 when the tag is never closed.
+ * Quoted attribute values are skipped, so a `>` inside a title attribute (or
+ * inside the inline-diff spans injected above) cannot end the tag early.
+ */
+function tagEndAt(html: string, at: number): number {
   let inQuote: string | null = null;
-  for (let i = 1; i < html.length; i++) {
+  for (let i = at + 1; i < html.length; i++) {
     const ch = html[i];
     if (inQuote) {
       if (ch === inQuote) inQuote = null;

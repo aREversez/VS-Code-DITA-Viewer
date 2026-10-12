@@ -383,14 +383,31 @@ body {
   outline-offset: -2px;
 }
 
-/* A table's own caption is the one fragment the border-colour rules above
-   cannot mark: a <caption> sits OUTSIDE the collapsed grid (it is the table's
-   box, not one of its cells), so it shares no cell edges, and `border-color`
-   alone paints nothing on an element that has no border of its own. A CHANGED
-   caption therefore carries the same gutter-facing edge marker the div blocks
-   use, so an edited, added or deleted table title is findable at a glance
-   instead of showing only the word-level marks. An unchanged caption matches
-   the fragment rules above and gets nothing.
+/* A table's own <title> is rendered into this panel as that table's <caption>
+   (ditaDiffRender.ts converts the preview's heading; the preview itself keeps
+   emitting a heading, so the rule that makes a caption read like a table
+   heading lives here rather than in styles.css). HTML's default caption
+   alignment is centered, which in an otherwise left-aligned document reads as
+   a stray heading -- and here it would misalign against the left-aligned cells
+   directly below it. */
+.diff-col table > caption {
+  text-align: left;
+  font-weight: 600;
+  padding-bottom: 0.35rem;
+}
+
+/* A CHANGED caption is the one fragment the border-colour rules above cannot
+   mark: a <caption> sits OUTSIDE the collapsed grid (it is the table's box, not
+   one of its cells), so it shares no cell edges, and `border-color` alone paints
+   nothing on an element that has no border of its own. A changed caption
+   therefore carries the same gutter-facing edge marker the div blocks use, so an
+   edited, added or deleted table title is findable at a glance instead of
+   showing only the word-level marks. An unchanged caption matches the fragment
+   rules above and gets nothing.
+
+   `.dv-table` is the class of a RE-ASSEMBLED table; a table the diff did not
+   recurse is the preview's own markup and has no change class on its caption,
+   so these rules never touch it.
 
    Only the gutter-facing edge is given a width, and the style overrides are
    side-specific (`border-right-style`, not `border-style`): border-width

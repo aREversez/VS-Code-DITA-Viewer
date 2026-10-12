@@ -447,18 +447,6 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     // (plan §2.4: only add, never remove). Branch on the real parent -- the
     // overloaded ctx.parentBaseType would read back as 'topic/title' here.
     const owner = ctx.ownerBaseType;
-    // A <table>/<simpletable> title is a CAPTION, and HTML only allows it in
-    // the table's own caption slot. Emitting a heading instead -- what this
-    // branch used to fall through to -- means the parser foster-parents it out
-    // of the <table> entirely (measured with parse5: the <h1> lands as a
-    // sibling ABOVE the table, and the table itself has no title), which both
-    // puts the caption's text in the wrong place and adds every table title in
-    // a book to the page outline, because the outline scraper collects h1-h3
-    // from the content root (siteNavScripts.ts). DITA-OT's html5 plugin uses
-    // the same shape: table.table > caption > .title.
-    if (owner === 'topic/table' || owner === 'topic/simpletable') {
-      return `<caption class="title tabletitle">${renderChildren(node, ctx)}</caption>`;
-    }
     const titleClass =
       owner === 'topic/section' || owner === 'topic/example'
         ? 'title sectiontitle'
