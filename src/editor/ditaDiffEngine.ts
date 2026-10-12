@@ -459,6 +459,130 @@ function computeInlineDiff(leftText: string, rightText: string): DiffPart[] {
   return diffTokens(tokenizeForDiff(leftText), tokenizeForDiff(rightText));
 }
 
+// ── Aligning one change run ──
+//
+// A "change run" is a maximal stretch of removed blocks followed by added
+// blocks (the LCS found no exact match for any of them). Pairing them purely
+// by position was fine for a one-for-one edit but collapsed on big diffs: one
+// inserted or deleted block shifted every later pair by one, so each old block
+// was drawn against the NEXT new block -- a cascade of wrong connectors that
+// read as a total rewrite. Instead the run is aligned with a small
+// order-preserving dynamic program that maximizes total pair score, where a
+// pair is only possible between blocks of the same baseType.
+//
+//   score = PAIR_BASE + text similarity (+ ID_BONUS for an identical id: key)
+//
+// PAIR_BASE is positive on purpose: a same-type pair always beats leaving both
+// sides unmatched, so a cross-lingual rewrite (similarity ~0 everywhere) still
+// pairs one-for-one in order, exactly as before; similarity only decides WHICH
+// blocks pair when the two sides have different shapes.
+
+const PAIR_BASE = 0.3;
+const ID_BONUS = 2;
+// Above this many (removed x added) cells fall back to in-order pairing
+// instead of paying for the DP table.
+const PAIR_DP_CELL_LIMIT = 250_000;
+
+interface PairFeat {
+  tokens: Map<string, number>;
+  nTokens: number;
+  grams: Map<string, number>;
+  nGrams: number;
+}
+
+function bagOf(items: string[]): Map<string, number> {
+  const bag = new Map<string, number>();
+  for (const it of items) bag.set(it, (bag.get(it) || 0) + 1);
+  return bag;
+}
+
+function pairFeat(text: string): PairFeat {
+  const tokens = tokenize(text);
+  const grams = charBigrams(text);
+  return { tokens: bagOf(tokens), nTokens: tokens.length, grams: bagOf(grams), nGrams: grams.length };
+}
+
+function bagDice(a: Map<string, number>, nA: number, b: Map<string, number>, nB: number): number {
+  if (nA === 0 && nB === 0) return 1;
+  if (nA === 0 || nB === 0) return 0;
+  let inter = 0;
+  for (const [k, ca] of a) inter += Math.min(ca, b.get(k) || 0);
+  return (2 * inter) / (nA + nB);
+}
+
+function pairScore(
+  left: RenderedBlock,
+  right: RenderedBlock,
+  lf: PairFeat,
+  rf: PairFeat,
+): number | undefined {
+  if (left.baseType !== right.baseType) return undefined;
+  const sim = Math.max(
+    bagDice(lf.tokens, lf.nTokens, rf.tokens, rf.nTokens),
+    bagDice(lf.grams, lf.nGrams, rf.grams, rf.nGrams),
+  );
+  const sameId = left.key === right.key && left.key.startsWith('id:');
+  return PAIR_BASE + sim + (sameId ? ID_BONUS : 0);
+}
+
+function alignChangeRun<T extends RenderedBlock>(removedRun: T[], addedRun: T[]): AlignedRow[] {
+  const k = removedRun.length;
+  const m = addedRun.length;
+  // match[i] = index in addedRun that removedRun[i] pairs with, or -1.
+  const match = new Array<number>(k).fill(-1);
+
+  if (k * m > PAIR_DP_CELL_LIMIT) {
+    for (let p = 0; p < Math.min(k, m); p++) {
+      if (removedRun[p].baseType === addedRun[p].baseType) match[p] = p;
+    }
+  } else {
+    const lf = removedRun.map((b) => pairFeat(b.text));
+    const rf = addedRun.map((b) => pairFeat(b.text));
+    const w = m + 1;
+    const dp = new Float64Array((k + 1) * w);
+    for (let i = 1; i <= k; i++) {
+      for (let j = 1; j <= m; j++) {
+        let best = Math.max(dp[(i - 1) * w + j], dp[i * w + (j - 1)]);
+        const sc = pairScore(removedRun[i - 1], addedRun[j - 1], lf[i - 1], rf[j - 1]);
+        if (sc !== undefined) best = Math.max(best, dp[(i - 1) * w + (j - 1)] + sc);
+        dp[i * w + j] = best;
+      }
+    }
+    let i = k;
+    let j = m;
+    while (i > 0 && j > 0) {
+      const sc = pairScore(removedRun[i - 1], addedRun[j - 1], lf[i - 1], rf[j - 1]);
+      // Prefer the diagonal on ties so equal-shape runs keep pairing in order.
+      if (sc !== undefined && dp[i * w + j] === dp[(i - 1) * w + (j - 1)] + sc) {
+        match[i - 1] = j - 1;
+        i--;
+        j--;
+      } else if (dp[i * w + j] === dp[(i - 1) * w + j]) {
+        i--;
+      } else {
+        j--;
+      }
+    }
+  }
+
+  const rows: AlignedRow[] = [];
+  let nextAdded = 0;
+  const flushAddedUpTo = (limit: number): void => {
+    while (nextAdded < limit) rows.push({ right: addedRun[nextAdded++], changeType: 'added' });
+  };
+  for (let i = 0; i < k; i++) {
+    if (match[i] < 0) {
+      rows.push({ left: removedRun[i], changeType: 'removed' });
+      continue;
+    }
+    flushAddedUpTo(match[i]);
+    rows.push({ left: removedRun[i], right: addedRun[match[i]], changeType: 'modified' });
+    nextAdded = match[i] + 1;
+  }
+  flushAddedUpTo(m);
+  return rows;
+}
+
 // ── Pairing adjacent removed+added within a change run ──
 
 function pairAdjacentChanges<T extends RenderedBlock>(ops: LcsOp<T>[]): AlignedRow[] {
@@ -486,37 +610,7 @@ function pairAdjacentChanges<T extends RenderedBlock>(ops: LcsOp<T>[]): AlignedR
         idx++;
       }
 
-      const pairCount = Math.min(removedRun.length, addedRun.length);
-      for (let p = 0; p < pairCount; p++) {
-        const left = removedRun[p];
-        const right = addedRun[p];
-        if (left.baseType === right.baseType) {
-          // Same baseType at the same relative position within one change run =
-          // one element replacing another, regardless of how different the text
-          // is. This used to also require the pair to clear SIMILARITY_THRESHOLD,
-          // which cross-lingual rewrites (English -> Chinese share almost no
-          // tokens or character bigrams) and heavy edits always failed -- so a
-          // single logical replacement split into an independent 'removed' plus
-          // 'added' row, each carrying its own data-diff-idx. The gutter then
-          // filled with one-sided stubs instead of a curve and the navigation
-          // counter doubled: the primary source of the "乱" (mess) readers hit
-          // on large diffs. An explicit id match is the obvious sub-case of this
-          // rule (same id => same baseType), so the old sameIdentity special-case
-          // needs no separate branch anymore.
-          rows.push({ left, right, changeType: 'modified' });
-        } else {
-          // Genuinely different element types (a <p> replaced by a <note>): no
-          // meaningful left/right pairing, so keep them as separate one-sided rows.
-          rows.push({ left, changeType: 'removed' });
-          rows.push({ right, changeType: 'added' });
-        }
-      }
-      for (let p = pairCount; p < removedRun.length; p++) {
-        rows.push({ left: removedRun[p], changeType: 'removed' });
-      }
-      for (let p = pairCount; p < addedRun.length; p++) {
-        rows.push({ right: addedRun[p], changeType: 'added' });
-      }
+      for (const row of alignChangeRun(removedRun, addedRun)) rows.push(row);
       continue;
     }
 

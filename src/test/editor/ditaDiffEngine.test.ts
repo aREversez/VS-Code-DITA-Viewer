@@ -124,6 +124,45 @@ describe('ditaDiffEngine', () => {
       assert.deepStrictEqual(pRow!.inlineDiff, [], 'expected no word-level marks for a full replacement');
     });
 
+    it('keeps every edited paragraph paired with its own counterpart when one new paragraph is inserted in the middle of the run (regression: pairing was purely positional within a change run, so one insertion shifted every later pair by one -- each old paragraph was drawn against the NEXT new paragraph, a cascade of wrong connectors that read as a total rewrite)', () => {
+      const mk = (ps: string[]) =>
+        `<?xml version="1.0"?><topic id="t"><title>T</title><body>${ps.map((t) => `<p>${t}</p>`).join('')}</body></topic>`;
+      const leftPs = Array.from({ length: 8 }, (_, i) => `Step ${i + 1}: configure the alpha${i} service on the server now.`);
+      const rightPs = leftPs.map((t) => t.replace('configure', 'set up'));
+      rightPs.splice(4, 0, 'Brand new unrelated paragraph about backups and restore.');
+
+      const result = runDiff(mk(leftPs), mk(rightPs));
+      const pRows = result.rows.filter((r) => (r.left || r.right)?.baseType === 'topic/p');
+      const modified = pRows.filter((r) => r.changeType === 'modified');
+      assert.strictEqual(modified.length, 8, `all 8 edited paragraphs must pair, got ${modified.length}`);
+      for (const r of modified) {
+        const ln = /Step (\d+):/.exec(r.left!.text)![1];
+        const rn = /Step (\d+):/.exec(r.right!.text)![1];
+        assert.strictEqual(ln, rn, `"${r.left!.text}" was paired with "${r.right!.text}"`);
+      }
+      const added = pRows.filter((r) => r.changeType === 'added');
+      assert.strictEqual(added.length, 1);
+      assert.ok(added[0].right!.text.startsWith('Brand new'), 'the inserted paragraph must be the lone added row');
+      assert.strictEqual(result.stats.added, 1);
+      assert.strictEqual(result.stats.removed, 0);
+    });
+
+    it('shows a deleted paragraph between two rewritten neighbours as removed, and pairs the neighbours with their own rewrites (regression: positional pairing matched the deleted middle paragraph with the last rewrite and left the last original orphaned)', () => {
+      const mk = (ps: string[]) =>
+        `<?xml version="1.0"?><topic id="t"><title>T</title><body>${ps.map((t) => `<p>${t}</p>`).join('')}</body></topic>`;
+      const result = runDiff(
+        mk(['Alpha one original text here.', 'Beta two will be deleted entirely.', 'Gamma three original text here.']),
+        mk(['Alpha one rewritten wording there.', 'Gamma three rewritten wording there.']),
+      );
+      const pRows = result.rows.filter((r) => (r.left || r.right)?.baseType === 'topic/p');
+      const removed = pRows.filter((r) => r.changeType === 'removed');
+      assert.strictEqual(removed.length, 1);
+      assert.ok(removed[0].left!.text.startsWith('Beta'), `expected Beta to be the removed row, got: ${removed[0].left!.text}`);
+      const gamma = pRows.find((r) => r.changeType === 'modified' && r.left!.text.startsWith('Gamma'));
+      assert.ok(gamma, 'Gamma must pair as modified');
+      assert.ok(gamma!.right!.text.startsWith('Gamma'), `Gamma was paired with: ${gamma!.right!.text}`);
+    });
+
     it('keeps a genuine baseType change (paragraph replaced by a note) split into a separate removed + added pair', () => {
       const left = `<?xml version="1.0"?><topic id="t"><title>T</title><body><p>Some paragraph of prose content.</p></body></topic>`;
       const right = `<?xml version="1.0"?><topic id="t"><title>T</title><body><note>Some note of prose content.</note></body></topic>`;
