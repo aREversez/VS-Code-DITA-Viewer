@@ -101,4 +101,36 @@ describe('Source diff opens in the native editor, not the reading-view custom ed
     assert.ok(leftDoc.getText().includes('SENTINEL-LEFT-MARKER'), 'left virtual document should expose its XML to the text model');
     assert.ok(rightDoc.getText().includes('SENTINEL-RIGHT-MARKER'), 'right virtual document should expose its XML to the text model');
   });
+
+  // The filename rides into the virtual URI's PATH. `Uri.from` treats `path` as
+  // an already-decoded path, so a name that was percent-encoded first is stored
+  // literally and then encoded a SECOND time by toString() -- the tab then reads
+  // "%25E6%25B3%25B5…" instead of "泵坏了.dita". Encoding the basename here is
+  // exactly what produced that double encoding.
+  it('names the virtual documents with the real (non double-encoded) filename for a CJK topic', async () => {
+    const ext = vscode.extensions.getExtension(EXTENSION_ID)!;
+    const docUri = vscode.Uri.file(path.join(fixturesDir, 'manual', '泵坏了-adapter.dita'));
+
+    await ext.exports._test.openSourceDiffForTesting({
+      leftXml: '<topic id="t"><body><p>old</p></body></topic>',
+      rightXml: '<topic id="t"><body><p>new</p></body></topic>',
+      leftLabel: 'Left',
+      rightLabel: 'Right',
+      docUri,
+    });
+
+    const diffTab = await findDiffTab();
+    assert.ok(diffTab, 'expected a diff tab to be open');
+    // `path` is the DECODED path, so it is what the tab label is built from and
+    // what a pre-encoded name would still show as literal %XX escapes. Checked
+    // on the path rather than the whole URI string: the `doc=` query legitimately
+    // contains %25, because it is an encoded form of an already-encoded URI.
+    const uriPath = diffTab!.original.path;
+    assert.ok(!uriPath.includes('%'), `the virtual path must not carry percent-escapes, got: ${uriPath}`);
+    assert.ok(uriPath.includes('泵坏了-adapter'), `the CJK filename should read as itself, got: ${uriPath}`);
+    assert.ok(uriPath.endsWith('.left.dita'), 'the side suffix and extension are preserved');
+    // Content still resolves through the provider, i.e. the doc= query round-trips.
+    const doc = await vscode.workspace.openTextDocument(diffTab!.original);
+    assert.ok(doc.getText().includes('old'), 'the virtual document must still resolve for a non-ASCII filename');
+  });
 });

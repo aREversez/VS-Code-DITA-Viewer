@@ -110,6 +110,17 @@ const DIFFABLE_CONTAINER_TYPES = new Set([
   // its counterpart was never itself recursed into -- every cell in that
   // row rendered as one flat amber block instead of pinpointing the one
   // <stentry> that actually changed.
+  //
+  // Recursion down to <row>/<entry> therefore STAYS. The bug was never that
+  // the diff went too deep -- it was that the two-column renderer emitted the
+  // leaves it got as `<div class="dv-block"><td …>12 Nm</td></div>`. A <td>
+  // outside a table is foster-parented away by the HTML parser, so a recursed
+  // table reached the panel as bare unsegmented text (measured against the
+  // real renderer and a spec-compliant parser: 0 <table>, 0 <tr>, 0 <td>
+  // survived, and two adjacent cells with no separator read as "Pressure3
+  // bar"). ditaDiffRender.ts now gathers those fragments and re-assembles
+  // them inside one real <table> per source table, which is what makes
+  // cell-level granularity renderable again.
   'topic/strow',
   // Definition lists had the same coarse-grain problem a <ul>/<ol> used to:
   // a <dl> holding several <dlentry>s was compared as one opaque block, so
@@ -236,9 +247,32 @@ export function extractChildBlocks(
   for (const child of scope.children || []) {
     if (child.type !== 'element') continue;
     if (SKIP_BASETYPES.has(child.baseType || '')) continue;
-    blocks.push(makeBlock(child, opts, parentBaseType, headingLevel));
+    pushBlock(blocks, child, opts, parentBaseType, headingLevel);
   }
   return blocks;
+}
+
+/**
+ * makeBlock, plus the one filter both extraction paths need: an element whose
+ * renderer emits NOTHING is not a block. Several do by design --
+ * topic/colspec ('') feeds the tgroup's <colgroup> rather than rendering
+ * itself, and area/shape/coords, the index-* keywords, param, publisher,
+ * metadata and friends are authoring-only. As blocks each produced an empty
+ * `<div class="dv-block">`: a visible ~40px gap in the column, one per
+ * colspec, so a 4-column table grew 4 phantom rows. The same applies to any
+ * element that renders empty for another reason (a conditions-filtered
+ * subtree). No pixels, no block.
+ */
+function pushBlock(
+  blocks: RenderedBlock[],
+  child: DitaNode,
+  opts: BlockExtractOptions,
+  parentBaseType: string,
+  headingLevel: number,
+): void {
+  const block = makeBlock(child, opts, parentBaseType, headingLevel);
+  if (block.html.trim() === '') return;
+  blocks.push(block);
 }
 
 export function extractTopicBlocks(root: DitaNode, opts: BlockExtractOptions): RenderedBlock[] {
@@ -248,12 +282,14 @@ export function extractTopicBlocks(root: DitaNode, opts: BlockExtractOptions): R
   for (const child of children) {
     if (child.type !== 'element') continue;
     if (child.baseType === 'topic/title') {
-      blocks.push(makeBlock(child, opts, 'topic', 1));
+      pushBlock(blocks, child, opts, 'topic', 1);
     } else if (child.baseType === 'topic/shortdesc') {
-      blocks.push(makeBlock(child, opts, 'topic', 1));
+      pushBlock(blocks, child, opts, 'topic', 1);
     } else if (child.baseType === 'topic/prolog') {
       const block = makeProlgIndextermBlock(child, opts, 'topic', 1);
-      if (block) blocks.push(block);
+      // Same filter as pushBlock: an indexterm subtree that renders nothing
+      // (entries with no text content) would otherwise be a ghost row.
+      if (block && block.html.trim() !== '') blocks.push(block);
     }
   }
 
@@ -263,7 +299,7 @@ export function extractTopicBlocks(root: DitaNode, opts: BlockExtractOptions): R
       if (child.type !== 'element') continue;
       if (SKIP_BASETYPES.has(child.baseType || '')) continue;
       const hl = child.baseType === 'topic/section' || child.baseType === 'topic/example' ? 2 : 1;
-      blocks.push(makeBlock(child, opts, 'topic/body', hl));
+      pushBlock(blocks, child, opts, 'topic/body', hl);
     }
   }
 
@@ -628,9 +664,13 @@ function applyInline(row: AlignedRow): void {
 const PAIR_BASE = 0.3;
 const ID_BONUS = 2;
 const REF_BONUS = 0.5;
-// Above this many (removed x added) cells fall back to in-order pairing
-// instead of paying for the DP table.
-const PAIR_DP_CELL_LIMIT = 250_000;
+// Above this many (removed x added) cells the scored DP is skipped in favour of
+// alignChangeRunByAnchors. The per-cell cost is not the table itself but
+// pairScore's bag-dice over two token/gram bags (~6us/cell for real paragraphs,
+// measured), so 250k cells meant a multi-second synchronous stall in the
+// extension host. Dropping the ceiling only shrinks how often scoring runs; it
+// no longer costs correctness, because the fallback below still pairs by id.
+const PAIR_DP_CELL_LIMIT = 40_000;
 
 interface PairFeat {
   tokens: Map<string, number>;
@@ -711,6 +751,83 @@ function pairScore(
   return PAIR_BASE + sim + (sharedRef ? REF_BONUS : 0) + (sameId ? ID_BONUS : 0);
 }
 
+/**
+ * Fallback pairing for a run too large for the scored DP.
+ *
+ * The version this replaces paired purely by index (`removedRun[p]` with
+ * `addedRun[p]` when the baseTypes matched). That reintroduces exactly the
+ * failure the DP above exists to fix: one inserted or deleted block inside a
+ * big rewritten run shifts EVERY later index pair by one, so each old block is
+ * drawn against its neighbour's replacement -- hundreds of wrong connectors
+ * (measured: 299 of 600 pairs wrong for 600 paragraphs + 1 insertion).
+ *
+ * Identity is what actually survives a large rewrite, so this pass pairs by
+ * `id:` key first, in document order, then falls back to index only for the
+ * blocks that have no id to offer. A stable id is a declaration that two
+ * blocks are the same element, so it needs no DP to find it -- this is both
+ * cheaper (O(k+m) plus a LIS over the matches) and right more often than the
+ * scored table on the "every paragraph was touched" documents that trip the
+ * limit in the first place. Unpaired blocks are emitted by position around the
+ * anchors, which keeps the old behaviour for id-less documents.
+ */
+function alignChangeRunByAnchors<T extends RenderedBlock>(removedRun: T[], addedRun: T[]): number[] {
+  const k = removedRun.length;
+  const m = addedRun.length;
+  const match = new Array<number>(k).fill(-1);
+
+  const addedById = new Map<string, number[]>();
+  addedRun.forEach((b, j) => {
+    if (!b.key.startsWith('id:')) return;
+    const list = addedById.get(b.key);
+    if (list) list.push(j);
+    else addedById.set(b.key, [j]);
+  });
+  const idMatches: Array<[number, number]> = [];
+  for (let i = 0; i < k; i++) {
+    const b = removedRun[i];
+    if (!b.key.startsWith('id:') || !b.baseType) continue;
+    const list = addedById.get(b.key);
+    if (!list) continue;
+    // Same id implies the same element, so its baseType is the same by
+    // construction -- checked anyway to mirror what pairScore requires.
+    const at = list.findIndex((j) => addedRun[j].baseType === b.baseType);
+    if (at !== -1) idMatches.push([i, list[at]]);
+  }
+  // Only keep order-preserving matches; a block whose id appears out of order
+  // has genuinely moved, which markMoves handles, not pairing.
+  const anchors = increasingPairs(idMatches);
+  for (const [i, j] of anchors) match[i] = j;
+
+  // Whatever the anchors left unmatched pairs by position -- but only WITHIN
+  // the gap between two neighbouring anchors, on both sides at once. Pairing
+  // leftovers globally by index would put a j outside its i's bracket (or reuse
+  // one an anchor already holds), and alignChangeRun emits rows assuming
+  // `match` is strictly increasing: a non-monotonic match re-emits an
+  // already-consumed added block as a duplicate row.
+  const usedJ = new Set<number>(anchors.map(([, j]) => j));
+  const pairGap = (iLo: number, iHi: number, jLo: number, jHi: number): void => {
+    const li: number[] = [];
+    const rj: number[] = [];
+    for (let i = iLo; i < iHi; i++) if (match[i] < 0) li.push(i);
+    for (let j = jLo; j < jHi; j++) if (!usedJ.has(j)) rj.push(j);
+    for (let p = 0; p < Math.min(li.length, rj.length); p++) {
+      if (removedRun[li[p]].baseType === addedRun[rj[p]].baseType) {
+        match[li[p]] = rj[p];
+        usedJ.add(rj[p]);
+      }
+    }
+  };
+  let pi = -1;
+  let pj = -1;
+  for (const [i, j] of anchors) {
+    pairGap(pi + 1, i, pj + 1, j);
+    pi = i;
+    pj = j;
+  }
+  pairGap(pi + 1, k, pj + 1, m);
+  return match;
+}
+
 function alignChangeRun<T extends RenderedBlock>(removedRun: T[], addedRun: T[]): AlignedRow[] {
   const k = removedRun.length;
   const m = addedRun.length;
@@ -718,9 +835,9 @@ function alignChangeRun<T extends RenderedBlock>(removedRun: T[], addedRun: T[])
   const match = new Array<number>(k).fill(-1);
 
   if (k * m > PAIR_DP_CELL_LIMIT) {
-    for (let p = 0; p < Math.min(k, m); p++) {
-      if (removedRun[p].baseType === addedRun[p].baseType) match[p] = p;
-    }
+    alignChangeRunByAnchors(removedRun, addedRun).forEach((j, i) => {
+      match[i] = j;
+    });
   } else {
     const lf = removedRun.map((b) => pairFeat(b));
     const rf = addedRun.map((b) => pairFeat(b));
@@ -1490,6 +1607,23 @@ function countStats(rows: AlignedRow[], stats: { added: number; removed: number;
     else if (row.changeType === 'removed') stats.removed++;
     else if (row.changeType === 'modified') stats.modified++;
   }
+}
+
+/**
+ * The toolbar's `+n −n ~n` chip, recomputed from a set of rows.
+ *
+ * Needed after swapAlignedRows: that helper flips every row's changeType, so a
+ * result whose stats said `+1 −0` now draws one ADDED-side block where the
+ * count still claims an insertion. Counting from the rows themselves rather
+ * than swapping `stats.added`/`stats.removed` by hand keeps the chip honest for
+ * the cases a plain swap would get wrong -- moves, where each half is a
+ * different type and the pair must still count once as modified, and recursed
+ * containers, which contribute their children's counts only.
+ */
+export function computeRowStats(rows: AlignedRow[]): TopicDiffResult['stats'] {
+  const stats = { added: 0, removed: 0, modified: 0 };
+  countStats(rows, stats);
+  return stats;
 }
 
 // ── Quick commit-choice descriptors (for the "Compare with Git Version"

@@ -18,13 +18,13 @@ import { sharedWebviewStrings } from './webviewL10n';
 import { buildRenderContext } from './renderContext';
 import {
   diffTopics,
-  AlignedRow,
   TopicDiffResult,
-  applyInlineMarksToHtml,
   swapAlignedRows,
+  computeRowStats,
   buildQuickCommitChoices,
   arrangeByRecency,
 } from './ditaDiffEngine';
+import { renderDiffColumns } from './ditaDiffRender';
 import {
   getRepoRoot,
   toRepoRelPath,
@@ -343,8 +343,15 @@ function getOrCreateDiffPanel(
       // Swap is a whole-state flip: the rows, the labels, AND the raw XML both
       // turn around, so the native source diff (openSourceDiff below) always
       // reflects whatever the rendered view is currently showing.
+      //
+      // The stats chip has to be RECOUNTED, not reused. swapAlignedRows flips
+      // every row's changeType (added <-> removed), so carrying the old numbers
+      // over left the chip contradicting the view it sits on top of: an
+      // insertion-only diff showed "+1 −0" while the only changed block was on
+      // the left (a deletion) after the swap.
+      const rows = swapAlignedRows(state.result.rows);
       const swapped: DiffPanelState = {
-        result: { ...state.result, rows: swapAlignedRows(state.result.rows) },
+        result: { ...state.result, rows, stats: computeRowStats(rows) },
         leftXml: state.rightXml,
         rightXml: state.leftXml,
         leftLabel: state.rightLabel,
@@ -368,7 +375,12 @@ function getOrCreateDiffPanel(
 async function openSourceDiff(context: vscode.ExtensionContext, state: DiffPanelState): Promise<void> {
   const docs = ensureDitaDiffVirtualDocuments(context);
   const docKey = state.docUri.toString();
-  const stem = `${encodeURIComponent(basename(state.docUri.fsPath))}-${shortId(docKey)}`;
+  // No encodeURIComponent here: Uri.from treats `path` as an already-decoded
+  // path, so a pre-encoded name is stored literally and then percent-encoded a
+  // SECOND time on toString() -- `泵坏了.left.dita` reached the tab label as
+  // `%25E6%25B3%25B5...`. Uri/URI-tools escape the separators (`/`, `#`, `?`)
+  // themselves, once.
+  const stem = `${basename(state.docUri.fsPath)}-${shortId(docKey)}`;
   const query = `doc=${encodeURIComponent(docKey)}`;
   const leftUri = vscode.Uri.from({ scheme: DITA_DIFF_SCHEME, path: `/${stem}.left.dita`, query });
   const rightUri = vscode.Uri.from({ scheme: DITA_DIFF_SCHEME, path: `/${stem}.right.dita`, query });
@@ -499,7 +511,7 @@ function buildDiffHtml(
     copyToastFailed: L.imgCopyToastFailed,
   });
 
-  const cols = renderColumns(result.rows);
+  const cols = renderDiffColumns(result.rows);
   const statsHtml = renderStats(result.stats);
 
   const labels = {
@@ -547,67 +559,6 @@ ${result.errorRight ? `<div class="diff-error">${escapeHtml(result.errorRight)}<
 <script nonce="${nonce}">${lightboxScript}</script>
 </body>
 </html>`;
-}
-
-// Independent two-column layout: each side flows as its own continuous
-// document. A block present on only one side (added / removed) is emitted into
-// that column alone -- no full-height empty placeholder stretches the other
-// column to match, which is what broke the reading flow in the old aligned-row
-// model. Change type is carried by a thin edge marker (see .dv-block--* in
-// diff-styles.css) plus word-level inline marks. Both sides of one change share
-// a data-diff-idx so the webview's next/prev navigation can highlight the pair
-// together even though the columns are no longer row-for-row aligned.
-interface ColumnSink {
-  left: string[];
-  right: string[];
-  changeCount: number;
-  /** moveId -> data-diff-idx, so the two halves of a moved block (one in each
-   *  column, at different positions) share one change index and one connector. */
-  moveIdx: Map<number, number>;
-}
-
-function renderColumns(rows: AlignedRow[]): { left: string; right: string; changeCount: number } {
-  const sink: ColumnSink = { left: [], right: [], changeCount: 0, moveIdx: new Map() };
-  collectColumns(rows, sink);
-  return { left: sink.left.join('\n'), right: sink.right.join('\n'), changeCount: sink.changeCount };
-}
-
-function collectColumns(rows: AlignedRow[], sink: ColumnSink): void {
-  for (const row of rows) {
-    // A modified container (section / list / table) recurses into its children;
-    // the container itself contributes no block of its own, matching the
-    // aligned-row renderer, which only ever showed the recursed children.
-    if (row.children && row.children.length > 0) {
-      collectColumns(row.children, sink);
-      continue;
-    }
-
-    let idx: number | undefined;
-    if (row.changeType !== 'unchanged') {
-      if (row.moveId !== undefined && sink.moveIdx.has(row.moveId)) {
-        idx = sink.moveIdx.get(row.moveId);
-      } else {
-        idx = sink.changeCount++;
-        if (row.moveId !== undefined) sink.moveIdx.set(row.moveId, idx);
-      }
-    }
-    const idxAttr = idx !== undefined ? ` data-diff-idx="${idx}"` : '';
-    const cls =
-      `dv-block dv-block--${row.changeType}` +
-      (row.moveId !== undefined ? ' dv-block--moved' : '') +
-      (row.replaced ? ' dv-block--replaced' : '');
-    if (row.left) {
-      sink.left.push(`<div class="${cls}"${idxAttr}>${applyInlineDiff(row.left.html, row, 'left')}</div>`);
-    }
-    if (row.right) {
-      sink.right.push(`<div class="${cls}"${idxAttr}>${applyInlineDiff(row.right.html, row, 'right')}</div>`);
-    }
-  }
-}
-
-function applyInlineDiff(html: string, row: AlignedRow, side: 'left' | 'right'): string {
-  if (!row.inlineDiff || (row.changeType !== 'modified' && row.moveId === undefined)) return html;
-  return applyInlineMarksToHtml(html, row.inlineDiff, side);
 }
 
 function renderStats(stats: { added: number; removed: number; modified: number }): string {

@@ -312,6 +312,77 @@ body {
   background: rgba(127, 127, 127, 0.22);
 }
 
+/* ── Recursed tables ──
+ *
+ * A <table> that recurses is re-assembled as one real <table> per source table
+ * (see ditaDiffRender.ts), so the change classes land on the fragments
+ * themselves -- <td>, <tr>, <thead>, <tbody> -- not on a wrapper div. Two
+ * consequences the rules below have to respect:
+ *
+ *   - styles.css's grid is border-collapse: collapse, where a cell's own border
+ *     beats its row's, so a per-row edge marker is invisible. The preview
+ *     already solves the same problem for profiling (`tr.profiled > td`):
+ *     colour the CELLS' borders, so two adjacent changed rows share one
+ *     collapsed edge instead of drawing rings that drift off the grid.
+ *   - fragments must NOT reuse .dv-block. Its block-level padding would win
+ *     over `table td`'s cell padding (a class outranks that selector), and its
+ *     3px gutter border would draw a stray vertical bar through the middle of
+ *     the grid. Fragments are marked by border colour only, and dv-frag keeps
+ *     the cell's own padding.
+ */
+
+.dv-block--table > table {
+  /* The table brings its own 1rem margin; inside a diff block that stacks into
+     a gap that has nothing to do with the change. */
+  margin: 0;
+}
+
+/* Left column marks a deletion, right column an insertion -- same pairing the
+   div markers above use, and the fragment selector matches the element the
+   change actually landed on (a <td>, a <tr>, a <tbody>). */
+.diff-col--left .dv-table .dv-frag--removed,
+.diff-col--left .dv-table .dv-frag--removed > td,
+.diff-col--left .dv-table .dv-frag--removed > th {
+  border-color: var(--diff-del-border);
+}
+
+.diff-col--right .dv-table .dv-frag--added,
+.diff-col--right .dv-table .dv-frag--added > td,
+.diff-col--right .dv-table .dv-frag--added > th {
+  border-color: var(--diff-add-border);
+}
+
+.diff-col--left .dv-table .dv-frag--modified,
+.diff-col--left .dv-table .dv-frag--modified > td,
+.diff-col--left .dv-table .dv-frag--modified > th,
+.diff-col--right .dv-table .dv-frag--modified,
+.diff-col--right .dv-table .dv-frag--modified > td,
+.diff-col--right .dv-table .dv-frag--modified > th {
+  border-color: var(--diff-mod-border);
+}
+
+/* Rewritten / moved cells keep the collapsed grid but change its style, so they
+   read the same way as the dashed/dotted div markers above. */
+.diff-col .dv-table .dv-frag--replaced,
+.diff-col .dv-table .dv-frag--replaced > td,
+.diff-col .dv-table .dv-frag--replaced > th {
+  border-style: dashed;
+}
+
+.diff-col .dv-table .dv-frag--moved,
+.diff-col .dv-table .dv-frag--moved > td,
+.diff-col .dv-table .dv-frag--moved > th {
+  border-style: dotted;
+  border-color: var(--diff-mod-border);
+}
+
+/* Navigation focuses a change by index, and the index now sits on fragments
+   too. The div rules' outline still works on a cell or row. */
+.dv-frag.__diff_current {
+  outline: 2px solid var(--vscode-focusBorder, #007acc);
+  outline-offset: -2px;
+}
+
 /* ── Inline diff marks ── */
 
 .diff-inline-del {

@@ -9,6 +9,7 @@ import {
   coalesceDiffParts,
   applyInlineMarksToHtml,
   swapAlignedRows,
+  computeRowStats,
   buildQuickCommitChoices,
   arrangeByRecency,
   AlignedRow,
@@ -759,8 +760,7 @@ describe('ditaDiffEngine', () => {
   });
 
   describe('swapAlignedRows', () => {
-    it('swaps left and right on every row', () => {
-      const result = runDiff(TOPIC_A, TOPIC_B);
+    it('swaps left and right on every row', () => {      const result = runDiff(TOPIC_A, TOPIC_B);
       const swapped = swapAlignedRows(result.rows);
       for (let i = 0; i < result.rows.length; i++) {
         assert.strictEqual(swapped[i].left, result.rows[i].right);
@@ -778,6 +778,179 @@ describe('ditaDiffEngine', () => {
         else if (original === 'removed') assert.strictEqual(flipped, 'added');
         else assert.strictEqual(flipped, original);
       }
+    });
+  });
+
+  describe('large change runs beyond the pairing DP ceiling', () => {
+    /** n paragraphs, all rewritten on the right (so none matches by content),
+     *  optionally with a brand-new paragraph inserted at `insertAt`. With ids,
+     *  identity survives the rewrite; without, only position does. */
+    function mkRun(n: number, verb: string, ids: boolean, insertAt = -1): string {
+      const ps: string[] = [];
+      for (let i = 0; i < n; i++) {
+        if (insertAt === i) {
+          ps.push('<p id="inserted">An entirely new paragraph that shares no wording with anything in the rewritten run of documentation.</p>');
+        }
+        ps.push(
+          `<p${ids ? ` id="p${i}"` : ''}>The quick brown ${verb} ${i} jumps over the lazy dog and then the sleepy cat ${verb}s again while the reviewer reads the whole paragraph of technical documentation about DITA topics and maps.</p>`,
+        );
+      }
+      return `<?xml version="1.0"?>\n<topic id="t"><title>Title</title><body>\n${ps.join('\n')}\n</body></topic>`;
+    }
+
+    // 201 x 202 cells is already past PAIR_DP_CELL_LIMIT (40_000), which is
+    // where the id-anchored fallback takes over from the scored DP.
+    const N = 201;
+
+    it('pairs an over-sized rewritten run by id, so one insertion shifts nothing (regression: above the ceiling the fallback paired purely by index, so a single inserted paragraph mis-aligned EVERY later pair -- measured 299 of 600 pairs drawn against their neighbour\'s replacement, hundreds of wrong connectors, on documents whose ids were perfectly stable)', () => {
+      const result = runDiff(mkRun(N, 'fox', true), mkRun(N, 'cat', true, Math.floor(N / 2)));
+      const flat: AlignedRow[] = [];
+      const walk = (rows: AlignedRow[]): void => {
+        for (const r of rows) {
+          flat.push(r);
+          if (r.children) walk(r.children);
+        }
+      };
+      walk(result.rows);
+
+      const paired = flat.filter((r) => r.changeType === 'modified' && r.left && r.right);
+      assert.strictEqual(paired.length, N, 'every paragraph must pair with its own replacement');
+      const misPairs = paired.filter((r) => r.left!.key !== r.right!.key);
+      assert.deepStrictEqual(
+        misPairs.slice(0, 3).map((r) => [r.left!.key, r.right!.key]),
+        [],
+        'an id-anchored fallback must never pair p<i> against p<j>, j != i',
+      );
+      assert.strictEqual(result.stats.added, 1, 'the inserted paragraph is the only addition');
+      assert.strictEqual(result.stats.removed, 0, 'nothing was deleted, so nothing may read as deleted');
+    });
+
+    it('stays fast enough to run synchronously in the extension host (regression: the scored DP cost ~1.5s for a 250k-cell run -- every keystroke-level refresh of a large document blocked the extension host on it)', () => {
+      const started = Date.now();
+      runDiff(mkRun(1000, 'fox', true), mkRun(1000, 'cat', true, 500));
+      const elapsed = Date.now() - started;
+      // Generous ceiling (CI machines vary); the point is it is milliseconds,
+      // not the multi-second stall the old ceiling allowed.
+      assert.ok(elapsed < 2000, `expected a 1000-paragraph rewritten run to diff in well under a second, took ${elapsed}ms`);
+    });
+
+    it('keeps the pairing monotonic and duplicate-free when ids arrive out of order (regression: pairing leftovers globally by index after the anchors could reuse an index an anchor already holds, and alignChangeRun emits rows assuming a strictly increasing match, so an already-consumed block was re-emitted as a second row)', () => {
+      const n = 300;
+      const seq: number[] = Array.from({ length: n }, (_, i) => i);
+      const para = (i: number, verb: string) =>
+        `<p id="p${i}">The quick brown ${verb} ${i} jumps over the lazy dog and then the sleepy cat ${verb}s again while the reviewer reads the whole paragraph of technical documentation about DITA topics and maps.</p>`;
+      // Left: 0..n-1. Right: the LAST block moved to the front -- out of order,
+      // so it cannot be an anchor, and everything else must still pair in order.
+      const left = `<?xml version="1.0"?>\n<topic id="t"><title>T</title><body>\n${seq.map((i) => para(i, 'fox')).join('\n')}\n</body></topic>`;
+      const rightOrder = [n - 1, ...seq.slice(0, n - 1)];
+      const right = `<?xml version="1.0"?>\n<topic id="t"><title>T</title><body>\n${rightOrder.map((i) => para(i, 'cat')).join('\n')}\n</body></topic>`;
+
+      const result = runDiff(left, right);
+      const seenRight = new Set<string>();
+      let duplicates = 0;
+      for (const r of result.rows) {
+        if (!r.right) continue;
+        if (seenRight.has(r.right.key)) duplicates++;
+        seenRight.add(r.right.key);
+      }
+      assert.strictEqual(duplicates, 0, 'a block may not be emitted twice as two rows');
+
+      const pairedOrder = result.rows
+        .filter((r) => r.changeType === 'modified' && r.left && r.right)
+        .map((r) => rightOrder.indexOf(Number(r.right!.key.slice('id:'.length).replace(/^p/, ''))));
+      assert.ok(pairedOrder.every((i) => i >= 0), 'every paired right block should be one of the numbered paragraphs');
+      for (let i = 1; i < pairedOrder.length; i++) {
+        assert.ok(pairedOrder[i] > pairedOrder[i - 1], `paired right-side positions must increase, got ${pairedOrder.slice(0, i + 1).join(',')}`);
+      }
+      // The move itself is still recognized as a move, not as a hundred edits.
+      assert.ok(result.rows.some((r) => r.moveId !== undefined), 'the relocated block should be flagged as moved');
+    });
+
+    it('still pairs a run with no ids by position, so the fallback does not lose the behaviour it replaced', () => {
+      const result = runDiff(mkRun(N, 'fox', false), mkRun(N, 'cat', false));
+      assert.strictEqual(result.stats.removed, 0);
+      assert.strictEqual(result.stats.added, 0);
+      assert.strictEqual(result.stats.modified, N, 'id-less equal-length runs must still line up one-to-one');
+    });
+  });
+
+  describe('computeRowStats', () => {
+    it('recounts a swapped result so the toolbar chip matches the view (regression: swapSides flipped every row\'s changeType but reused the old stats, so an insertion-only diff showed "+1 −0" while the only changed block sat on the left as a deletion)', () => {
+      const left = `<?xml version="1.0"?><topic id="t"><body><p id="a">one</p></body></topic>`;
+      const right = `<?xml version="1.0"?><topic id="t"><body><p id="a">one</p><p id="b">two</p></body></topic>`;
+      const result = runDiff(left, right);
+      assert.deepStrictEqual(result.stats, { added: 1, removed: 0, modified: 0 });
+
+      const swapped = swapAlignedRows(result.rows);
+      assert.deepStrictEqual(
+        swapped.map((r) => r.changeType),
+        ['unchanged', 'removed'],
+        'the swap must put the change on the left as a deletion',
+      );
+      assert.deepStrictEqual(
+        computeRowStats(swapped),
+        { added: 0, removed: 1, modified: 0 },
+        'stats have to be recomputed from the swapped rows, not carried over',
+      );
+    });
+
+    it('counts a move once, as a modification, on either side (each half is a different changeType, so a hand-swapped added/removed pair would double-count it)', () => {
+      const mk = (order: number[]) =>
+        `<?xml version="1.0"?><topic id="t"><body>\n${order.map((i) => `<p id="p${i}">Paragraph ${i}, unchanged text that travels with it.</p>`).join('\n')}\n</body></topic>`;
+      const result = runDiff(mk([1, 2, 3]), mk([2, 1, 3]));
+      const moved = result.rows.filter((r) => r.moveId !== undefined);
+      assert.strictEqual(moved.length, 2, 'both halves of the move carry a moveId');
+
+      const forward = computeRowStats(result.rows);
+      const backward = computeRowStats(swapAlignedRows(result.rows));
+      assert.deepStrictEqual(forward, backward, 'swapping sides must not change how many changes there are');
+      assert.ok(forward.modified >= 1, 'a move counts as one modification');
+      assert.strictEqual(forward.added + forward.removed, 0, 'a move must not also read as an insertion and a deletion');
+    });
+
+    it('counts the drawn leaves of a recursed container, not the container as well', () => {
+      const mk = (cell: string) => `<?xml version="1.0"?><topic id="t"><body><table id="tb"><tgroup cols="1"><tbody>
+        <row><entry>${cell}</entry></row>
+        </tbody></tgroup></table></body></topic>`;
+      const result = runDiff(mk('Old value'), mk('New value'));
+      assert.deepStrictEqual(result.stats, computeRowStats(result.rows), 'the reported stats must equal a recount of the rows');
+      assert.strictEqual(result.stats.modified, 1, 'one changed cell is one change, not one per ancestor level');
+    });
+  });
+
+  describe('blocks that render nothing', () => {
+    it('are not turned into blocks at all (regression: elements whose renderer emits an empty string -- colspec, area/shape/coords, the index-* keywords, param, publisher -- each became an empty `<div class="dv-block">`, a visible ghost row in the column)', () => {
+      const mk = (extra: string) =>
+        `<?xml version="1.0"?><topic id="t"><title>T</title><body>\n${extra}<p id="p1">A paragraph that changes.</p></body></topic>`;
+      const renderBlock = (node: DitaNode): string => {
+        const text = collectPlainText(node);
+        // Stands in for the real renderers that emit '' for authoring-only
+        // elements and for anything a filter suppresses.
+        return text === '' ? '' : `<p>${text}</p>`;
+      };
+      const input: DiffTopicsInput = {
+        leftXml: mk(''),
+        rightXml: mk(''),
+        leftDocDir: '/tmp',
+        rightDocDir: '/tmp',
+        renderBlockFactory: () => renderBlock,
+      };
+      const withEmpty = (body: string) => ({ ...input, leftXml: mk(body) });
+
+      const clean = diffTopics(input);
+      const noisy = diffTopics(withEmpty('   '));
+      assert.strictEqual(
+        noisy.rows.length,
+        clean.rows.length,
+        'an element that renders nothing must not add a row',
+      );
+      for (const r of noisy.rows) {
+        for (const side of ['left', 'right'] as const) {
+          const b = r[side];
+          if (b) assert.ok(b.html.trim() !== '', `a ${side} block rendered empty markup: ${JSON.stringify(b.text)}`);
+        }
+      }
+      assert.deepStrictEqual(noisy.stats, clean.stats, 'and must not change the change counts either');
     });
   });
 
