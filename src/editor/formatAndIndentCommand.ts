@@ -1,25 +1,19 @@
 // "Format and Indent" for .dita / .ditamap source (Oxygen's command of the same
 // name). The layout engine is the pure src/language/xmlFormat.ts; this file is
-// the VS Code glue: a document/range formatting provider (Format Document,
-// Format Selection, format on save) and a Command Palette command that always
-// uses this formatter, whichever XML formatter is the editor's default.
+// the VS Code glue: one command (Command Palette, DITA submenu). It is
+// deliberately NOT registered as a formatting provider: that would add VS
+// Code's own "Format Document" / "Format Document With..." entries to the
+// editor context menu next to the DITA one.
 
 import * as vscode from 'vscode';
 import { FormatOptions, formatXml, formatXmlRange, minimalEdit, FormatEdit } from '../language/xmlFormat';
-
-const SELECTOR: vscode.DocumentSelector = [
-  { language: 'dita' },
-  { language: 'ditamap' },
-  { pattern: '**/*.dita' },
-  { pattern: '**/*.ditamap' },
-];
 
 function readOptions(document: vscode.TextDocument, editorOptions: { tabSize: number; insertSpaces: boolean }): Partial<FormatOptions> {
   const cfg = vscode.workspace.getConfiguration('dita-viewer.format', document.uri);
   return {
     indentSize: Math.max(1, editorOptions.tabSize),
     useTabs: !editorOptions.insertSpaces,
-    lineWidth: Math.max(0, cfg.get<number>('lineWidth', 100)),
+    lineWidth: Math.max(0, cfg.get<number>('lineWidth', 80)),
     expandEmptyElements: cfg.get<boolean>('expandEmptyElements', false),
     breakLineBeforeAttribute: cfg.get<boolean>('breakLineBeforeAttribute', false),
     breakLongAttributes: cfg.get<boolean>('breakLongAttributes', true),
@@ -75,18 +69,6 @@ function warnNotWellFormed(document: vscode.TextDocument, message: string, offse
 
 export function registerFormatAndIndent(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
-    vscode.languages.registerDocumentFormattingEditProvider(SELECTOR, {
-      provideDocumentFormattingEdits(document, options) {
-        const r = computeFormatEdits(document, options);
-        return r.ok ? r.edits : [];
-      },
-    }),
-    vscode.languages.registerDocumentRangeFormattingEditProvider(SELECTOR, {
-      provideDocumentRangeFormattingEdits(document, range, options) {
-        const r = computeFormatEdits(document, options, range);
-        return r.ok ? r.edits : [];
-      },
-    }),
     vscode.commands.registerTextEditorCommand('ditaViewer.formatAndIndent', async (editor) => {
       const sel = editor.selection;
       const r = computeFormatEdits(

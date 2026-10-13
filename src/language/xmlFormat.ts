@@ -26,22 +26,22 @@ export interface FormatOptions {
   lineWidth: number;
   /** `<a/>` becomes `<a></a>`; otherwise `<a></a>` becomes `<a/>`. */
   expandEmptyElements: boolean;
-  /** Every attribute of a block-level start tag on its own line. */
+  /** Every attribute of a start tag on its own line, one level deeper. */
   breakLineBeforeAttribute: boolean;
-  /** Break a block-level start tag's attributes when it exceeds the width. */
+  /** Wrap a start tag's attributes at the line width. */
   breakLongAttributes: boolean;
   /** Extra elements whose content is copied verbatim. */
   preserveSpaceElements: string[];
   /** Extra elements treated as inline (their parent's content stays mixed). */
   mixedContentElements: string[];
-  /** Extra elements that always start on their own line, even in mixed content. */
+  /** Elements that always start on their own line, even in mixed content (none by default: Oxygen keeps them in the text flow). */
   breakLineElements: string[];
 }
 
 export const DEFAULT_FORMAT_OPTIONS: FormatOptions = {
   indentSize: 2,
   useTabs: false,
-  lineWidth: 100,
+  lineWidth: 80,
   expandEmptyElements: false,
   breakLineBeforeAttribute: false,
   breakLongAttributes: true,
@@ -65,18 +65,6 @@ const INLINE = [
   'required-cleanup', 'xmlelement', 'xmlatt', 'textentity', 'numcharref',
   'parameterentity', 'xmlnsname', 'xmlpi', 'longquoteref', 'navtitle',
   'linktext', 'shortdesc-inline', 'data-about', 'sort-as',
-];
-
-// Elements that start on their own line even inside mixed content
-// (<li>text<ul>...</ul></li>).
-const BLOCK = [
-  'p', 'ul', 'ol', 'dl', 'sl', 'note', 'table', 'simpletable', 'fig', 'figgroup',
-  'section', 'example', 'codeblock', 'pre', 'lines', 'screen', 'msgblock',
-  'steps', 'steps-unordered', 'substeps', 'step', 'substep', 'choices',
-  'stepresult', 'stepxmp', 'info', 'itemgroup', 'lq', 'object', 'imagemap',
-  'dlentry', 'li', 'sli', 'choice', 'tutorialinfo', 'cmd', 'context',
-  'prereq', 'postreq', 'result', 'refsyn', 'properties', 'body', 'conbody',
-  'taskbody', 'refbody',
 ];
 
 // ─────────────────────────── tree ───────────────────────────
@@ -232,6 +220,7 @@ interface Ctx {
   o: FormatOptions;
   preserve: Set<string>;
   inline: Set<string>;
+  /** User-listed elements that always start a line (empty by default). */
   block: Set<string>;
 }
 
@@ -240,14 +229,13 @@ function makeCtx(o: FormatOptions): Ctx {
     o,
     preserve: new Set([...PRESERVE_SPACE, ...o.preserveSpaceElements]),
     inline: new Set([...INLINE, ...o.mixedContentElements]),
-    block: new Set([...BLOCK, ...o.breakLineElements]),
+    block: new Set(o.breakLineElements),
   };
 }
 
 const isWs = (n: XNode): boolean => n.kind === 'text' && n.raw.trim() === '';
 const hasXmlSpacePreserve = (el: XElement): boolean => /\bxml:space\s*=\s*["']preserve["']/.test(el.rawStartTag);
 const isPreserved = (el: XElement, c: Ctx): boolean => c.preserve.has(el.name) || hasXmlSpacePreserve(el);
-const isBlockEl = (el: XElement, c: Ctx): boolean => c.block.has(el.name) || isPreserved(el, c);
 
 function meaningful(el: XElement): XNode[] {
   return el.children.filter((n) => !isWs(n));
@@ -258,41 +246,74 @@ function isMixed(el: XElement, c: Ctx): boolean {
   for (const ch of el.children) {
     if (ch.kind === 'text' && ch.raw.trim() !== '') return true;
     if (ch.kind === 'cdata') return true;
-    if (ch.kind === 'element' && c.inline.has(ch.name) && !isBlockEl(ch, c)) return true;
+    if (ch.kind === 'element' && c.inline.has(ch.name)) return true;
   }
   return false;
 }
 
-function startTagText(el: XElement, closing: string, depth: number, o: Out, c: Ctx, breakable: boolean): string {
-  if (!el.attrs) return el.rawStartTag.slice(0, el.selfClosing ? -2 : -1) + closing;
-  const attrs = el.attrs.map((a) => a.text);
-  const one = `<${el.name}${attrs.map((a) => ' ' + a).join('')}${closing}`;
-  if (!breakable || attrs.length < 2) return one;
-  const startCols = o.indentCols(depth);
-  const tooLong = c.o.lineWidth > 0 && startCols + one.length > c.o.lineWidth && !one.includes('\n');
-  if (!(c.o.breakLineBeforeAttribute || (c.o.breakLongAttributes && tooLong))) return one;
-  const align = startCols + 1 + el.name.length + 1;
-  const pad = o.indent(depth) + ' '.repeat(Math.max(0, align - o.indentCols(depth)));
-  if (c.o.breakLineBeforeAttribute) {
-    return `<${el.name} ${attrs[0]}` + attrs.slice(1).map((a) => `\n${pad}${a}`).join('') + closing;
-  }
-  // Fill each line up to the line width (greedy), continuation lines aligned
-  // under the first attribute; the closing "/>" or ">" counts on the last line.
-  let text = `<${el.name} ${attrs[0]}`;
-  let cols = align + attrs[0].length;
-  for (let i = 1; i < attrs.length; i++) {
-    const a = attrs[i];
-    const tail = i === attrs.length - 1 ? closing.length : 0;
-    if (cols + 1 + a.length + tail > c.o.lineWidth) {
-      text += `\n${pad}${a}`;
-      cols = align + a.length;
-    } else {
-      text += ` ${a}`;
-      cols += 1 + a.length;
-    }
-  }
-  return text + closing;
+function firstLineLen(s: string): number {
+  const i = s.search(/[\r\n]/);
+  return i < 0 ? s.length : i;
 }
+
+// ── start tags ──
+
+/** A start tag in the stream: written attribute by attribute so it can wrap. */
+interface OpenTag {
+  el: XElement;
+  closing: '>' | '/>';
+  /** Depth of the element; attribute continuation lines sit at depth + 1. */
+  depth: number;
+}
+
+type Piece = string | OpenTag;
+
+function oneLine(t: OpenTag): string {
+  const { el } = t;
+  if (!el.attrs) return el.rawStartTag.slice(0, el.selfClosing ? -2 : -1) + t.closing;
+  return `<${el.name}${el.attrs.map((a) => ' ' + a.text).join('')}${t.closing}`;
+}
+
+const pieceLen = (p: Piece): number => firstLineLen(typeof p === 'string' ? p : oneLine(p));
+
+/**
+ * Write a start tag, filling each line up to the line width. An attribute that
+ * does not fit starts a continuation line one level below the element (the
+ * same indent its children get), not under the first attribute — this is how
+ * Oxygen lays long tags out, including tags that sit in the middle of a text
+ * line and are already past the width when they start.
+ */
+function putOpenTag(t: OpenTag, out: Out, c: Ctx): void {
+  const { el } = t;
+  const attrs = el.attrs ? el.attrs.map((a) => a.text) : [];
+  if (!el.attrs || attrs.length === 0) {
+    out.put(oneLine(t));
+    return;
+  }
+  const cont = t.depth + 1;
+  out.put(`<${el.name}`);
+  if (c.o.breakLineBeforeAttribute && attrs.length >= 2) {
+    for (const a of attrs) {
+      out.begin(cont);
+      out.put(a);
+    }
+    out.put(t.closing);
+    return;
+  }
+  const width = c.o.lineWidth;
+  attrs.forEach((a, i) => {
+    const tail = i === attrs.length - 1 ? t.closing.length : 0;
+    if (c.o.breakLongAttributes && width > 0 && out.cols + 1 + firstLineLen(a) + tail > width) {
+      out.begin(cont);
+      out.put(a);
+    } else {
+      out.put(' ' + a);
+    }
+  });
+  out.put(t.closing);
+}
+
+// ── element-only layout ──
 
 function emitBlock(node: XNode, depth: number, out: Out, c: Ctx): void {
   out.begin(depth);
@@ -308,13 +329,14 @@ function emitElement(el: XElement, depth: number, out: Out, c: Ctx): void {
   const kids = meaningful(el);
   if (kids.length === 0) {
     if (c.o.expandEmptyElements) {
-      out.put(startTagText(el, '>', depth, out, c, true) + `</${el.name}>`);
+      putOpenTag({ el, closing: '>', depth }, out, c);
+      out.put(`</${el.name}>`);
     } else {
-      out.put(startTagText(el, '/>', depth, out, c, true));
+      putOpenTag({ el, closing: '/>', depth }, out, c);
     }
     return;
   }
-  out.put(startTagText(el, '>', depth, out, c, true));
+  putOpenTag({ el, closing: '>', depth }, out, c);
   if (isMixed(el, c)) emitMixed(el, depth, out, c);
   else {
     for (const k of kids) emitBlock(k, depth + 1, out, c);
@@ -324,10 +346,23 @@ function emitElement(el: XElement, depth: number, out: Out, c: Ctx): void {
 }
 
 // ── mixed-content flow ──
+//
+// Inside mixed content nothing is forced onto its own line. Text, inline
+// elements and also elements such as <fig> or <ul> stay in the text flow; an
+// element whose own content is element-only writes its start tag in the flow,
+// puts its children on lines one level deeper and its end tag on a line of its
+// own at its depth, and the flow carries on right after that end tag
+// (`</ul></li>`, `</fig></p>`).
 
-type FlowItem = { atom: string; space: boolean } | { block: XNode };
+type FlowItem =
+  | { kind: 'piece'; piece: Piece; space: boolean; breakDepth?: number }
+  | { kind: 'eo'; el: XElement; open: OpenTag; depth: number; space: boolean; breakDepth?: number };
 
-function flatten(nodes: XNode[], items: FlowItem[], c: Ctx, pending: { space: boolean }): void {
+function flatten(nodes: XNode[], items: FlowItem[], c: Ctx, pending: { space: boolean }, depth: number): void {
+  const push = (piece: Piece, breakDepth?: number) => {
+    items.push({ kind: 'piece', piece, space: pending.space, breakDepth });
+    pending.space = false;
+  };
   for (const n of nodes) {
     if (n.kind === 'text') {
       // Every separator between the pieces of the split is whitespace that
@@ -336,88 +371,80 @@ function flatten(nodes: XNode[], items: FlowItem[], c: Ctx, pending: { space: bo
       for (let i = 0; i < parts.length; i++) {
         if (i > 0) pending.space = true;
         if (parts[i] === '') continue;
-        items.push({ atom: parts[i], space: pending.space });
-        pending.space = false;
+        push(parts[i]);
       }
     } else if (n.kind === 'element') {
-      if (isBlockEl(n, c)) {
-        items.push({ block: n });
-        pending.space = false;
-      } else if (n.children.length === 0) {
-        const open = n.attrs
-          ? `<${n.name}${n.attrs.map((a) => ' ' + a.text).join('')}`
-          : n.rawStartTag.slice(0, n.selfClosing ? -2 : -1);
+      const breakDepth = c.block.has(n.name) ? depth : undefined;
+      const kids = meaningful(n);
+      if (isPreserved(n, c)) {
+        push(n.raw, breakDepth);
+      } else if (n.children.length === 0 || (kids.length === 0 && !c.inline.has(n.name))) {
         if (c.o.expandEmptyElements) {
-          items.push({ atom: `${open}>`, space: pending.space });
-          items.push({ atom: `</${n.name}>`, space: false });
+          push({ el: n, closing: '>', depth }, breakDepth);
+          push(`</${n.name}>`);
         } else {
-          items.push({ atom: `${open}/>`, space: pending.space });
+          push({ el: n, closing: '/>', depth }, breakDepth);
         }
-        pending.space = false;
+      } else if (isMixed(n, c) || kids.length === 0) {
+        push({ el: n, closing: '>', depth }, breakDepth);
+        flatten(n.children, items, c, pending, depth + 1);
+        push(`</${n.name}>`);
       } else {
-        const open = n.attrs
-          ? `<${n.name}${n.attrs.map((a) => ' ' + a.text).join('')}>`
-          : n.rawStartTag;
-        items.push({ atom: open, space: pending.space });
-        pending.space = false;
-        flatten(n.children, items, c, pending);
-        items.push({ atom: `</${n.name}>`, space: pending.space });
+        items.push({
+          kind: 'eo', el: n, open: { el: n, closing: '>', depth }, depth, space: pending.space, breakDepth,
+        });
         pending.space = false;
       }
     } else {
-      items.push({ atom: n.raw, space: pending.space });
-      pending.space = false;
+      push(n.raw);
     }
   }
-}
-
-function firstLineLen(s: string): number {
-  const i = s.search(/[\r\n]/);
-  return i < 0 ? s.length : i;
 }
 
 function emitMixed(el: XElement, depth: number, out: Out, c: Ctx): void {
   const items: FlowItem[] = [];
-  flatten(el.children, items, c, { space: false });
+  flatten(el.children, items, c, { space: false }, depth + 1);
   const cont = depth + 1;
-  let afterBlock = false;
   let first = true;
   let i = 0;
   while (i < items.length) {
-    const it = items[i];
-    if ('block' in it) {
-      emitBlock(it.block, cont, out, c);
-      afterBlock = true;
-      first = false;
-      i++;
-      continue;
-    }
-    // A chunk is a run of atoms with no whitespace between them: the only
+    // A chunk is a run of pieces with no whitespace between them: the only
     // place the line may break is in front of it.
-    let text = it.atom;
-    const space = it.space;
-    i++;
+    const head = items[i];
+    const pieces: Piece[] = [];
+    let len = 0;
+    let terminator: Extract<FlowItem, { kind: 'eo' }> | null = null;
     while (i < items.length) {
-      const nx = items[i];
-      if ('block' in nx || nx.space) break;
-      text += nx.atom;
-      i++;
+      const it = items[i];
+      if (pieces.length > 0 && (it.space || it.breakDepth !== undefined)) break;
+      if (it.kind === 'piece') {
+        pieces.push(it.piece);
+        len += pieceLen(it.piece);
+        i++;
+      } else {
+        pieces.push(it.open);
+        len += pieceLen(it.open);
+        terminator = it;
+        i++;
+        break;
+      }
     }
-    if (afterBlock) {
-      out.begin(cont);
-      out.put(text);
-      afterBlock = false;
-    } else if (first || !space) {
-      out.put(text);
-    } else if (c.o.lineWidth > 0 && out.cols + 1 + firstLineLen(text) > c.o.lineWidth) {
-      out.begin(cont);
-      out.put(text);
-    } else {
-      out.put(' ' + text);
+    if (head.breakDepth !== undefined && !first) out.begin(head.breakDepth);
+    else if (first || !head.space) {
+      /* glued to what precedes it */
+    } else if (c.o.lineWidth > 0 && out.cols + 1 + len > c.o.lineWidth) out.begin(cont);
+    else out.put(' ');
+    for (const p of pieces) {
+      if (typeof p === 'string') out.put(p);
+      else putOpenTag(p, out, c);
+    }
+    if (terminator) {
+      for (const k of meaningful(terminator.el)) emitBlock(k, terminator.depth + 1, out, c);
+      out.begin(terminator.depth);
+      out.put(`</${terminator.el.name}>`);
     }
     first = false;
   }
-  if (afterBlock) out.begin(depth);
 }
 
 // ─────────────────────────── public API ───────────────────────────

@@ -69,10 +69,21 @@ describe('formatXml: mixed content and line wrapping', () => {
     assert.strictEqual(fmt(`<p>${words}</p>`, { lineWidth: 0 }).split('\n').length, 1);
   });
 
-  it('should put a block child of mixed content on its own line', () => {
+  it('should keep a nested list in the text flow: only its children and end tag get their own lines', () => {
     assert.strictEqual(
       fmt('<li>Intro text<ul><li>one</li></ul>tail</li>'),
-      '<li>Intro text\n  <ul>\n    <li>one</li>\n  </ul>\n  tail</li>',
+      '<li>Intro text<ul>\n    <li>one</li>\n  </ul>tail</li>',
+    );
+    assert.strictEqual(
+      fmt('<li>Intro: <ul id="u"><li>one</li></ul></li>'),
+      '<li>Intro: <ul id="u">\n    <li>one</li>\n  </ul></li>',
+    );
+  });
+
+  it('should honour breakLineElements by starting those elements on their own line', () => {
+    assert.strictEqual(
+      fmt('<li>Intro<ul><li>one</li></ul></li>', { breakLineElements: ['ul'] }),
+      '<li>Intro\n  <ul>\n    <li>one</li>\n  </ul></li>',
     );
   });
 });
@@ -103,20 +114,67 @@ describe('formatXml: empty elements and attributes', () => {
     assert.strictEqual(fmt(`<a   x = "1 > 2"   y='q' ></a>`), `<a x="1 > 2" y='q'/>`);
   });
 
-  it('should break attributes one per line, aligned, when asked', () => {
+  it('should put every attribute one level below the element when breakLineBeforeAttribute is on', () => {
     assert.strictEqual(
       fmt('<root><img href="a.png" id="i" alt="x"/></root>', { breakLineBeforeAttribute: true }),
-      '<root>\n  <img href="a.png"\n       id="i"\n       alt="x"/>\n</root>',
+      '<root>\n  <img\n    href="a.png"\n    id="i"\n    alt="x"/>\n</root>',
     );
   });
 
-  it('should pack attributes up to the line width, aligned under the first, when a tag is too long', () => {
+  it('should fill attributes up to the line width, continuing one level below the element', () => {
     const src = '<root><a href="aaaaaaaaaa" id="bbbbbbbbbb" scope="local" format="dita" type="topic" x="1"/><a x="1"/></root>';
     const out = fmt(src, { lineWidth: 40 });
-    assert.ok(out.includes('<a href="aaaaaaaaaa" id="bbbbbbbbbb"\n     scope="local" format="dita"\n     type="topic" x="1"/>'), out);
+    assert.ok(out.includes('<a href="aaaaaaaaaa" id="bbbbbbbbbb"\n    scope="local" format="dita"\n    type="topic" x="1"/>'), out);
     assert.ok(out.includes('<a x="1"/>'));
     for (const l of out.split('\n')) assert.ok(l.length <= 40, l);
-    assert.ok(!fmt(src, { lineWidth: 40, breakLongAttributes: false }).includes('\n     scope='));
+    assert.ok(!fmt(src, { lineWidth: 40, breakLongAttributes: false }).includes('\n    scope='));
+  });
+});
+
+describe('formatXml: layout verified against Oxygen output', () => {
+  const o = { indentSize: 4, lineWidth: 80 };
+
+  it('should keep <fig> in the text line, wrap its attribute when the line is already full, and glue </p>', () => {
+    const text = 'x'.repeat(66);
+    const src = `<topic id="123"><body><p>${text}<fig id="fig_oyb_3zh_rjc"><title>T</title><image placement="break" href="../images/_1.png" scale="70" id="image_pyb_3zh_rjc"/></fig></p></body></topic>`;
+    assert.strictEqual(
+      fmt(src, o),
+      [
+        '<topic id="123">',
+        '    <body>',
+        `        <p>${text}<fig`,
+        '                id="fig_oyb_3zh_rjc">',
+        '                <title>T</title>',
+        '                <image placement="break" href="../images/_1.png" scale="70"',
+        '                    id="image_pyb_3zh_rjc"/>',
+        '            </fig></p>',
+        '    </body>',
+        '</topic>',
+      ].join('\n'),
+    );
+  });
+
+  it('should wrap an <image> tag at width 80 (79 columns fit, 90 do not), as in the Oxygen sample', () => {
+    const names = ['t1', 't2', 't3', 't4', 't5', 't6', 't7', 't8'];
+    const open = names.map((n) => `<${n}>`).join('');
+    const close = [...names].reverse().map((n) => `</${n}>`).join('');
+    const out = fmt(`${open}<image placement="break" href="../images/_2.png" scale="70" id="image_fcr_sgj_rjc"/>${close}`, o);
+    assert.ok(out.includes(`\n${' '.repeat(32)}<image placement="break" href="../images/_2.png"\n${' '.repeat(36)}scale="70" id="image_fcr_sgj_rjc"/>\n`), out);
+  });
+
+  it('should keep a list in the item text, children one level deeper, </ul></li> glued', () => {
+    const src = '<ol id="o"><li>head: <ul id="u"><li><b>b1</b>: one</li><li><b>b2</b>: two</li></ul></li></ol>';
+    assert.strictEqual(
+      fmt(src, o),
+      [
+        '<ol id="o">',
+        '    <li>head: <ul id="u">',
+        '            <li><b>b1</b>: one</li>',
+        '            <li><b>b2</b>: two</li>',
+        '        </ul></li>',
+        '</ol>',
+      ].join('\n'),
+    );
   });
 });
 

@@ -664,7 +664,7 @@
         },
         "dita-viewer.format.lineWidth": {
           "type": "integer",
-          "default": 100,
+          "default": 80,
           "minimum": 0,
           "scope": "resource",
           "description": "%config.format.lineWidth.description%"
