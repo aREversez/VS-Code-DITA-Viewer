@@ -4,12 +4,13 @@ test-dita-file/**
 test/**
 test-visual/**
 src/**
-# dist/e2e/ is the e2e spec output (tsconfig.e2e.json); dist/test/ is what a
-# pre-separation build left behind on disk (unit tests emitted there by plain
-# `tsc -p tsconfig.json`) -- both are dev-only, and a stale one still ships if
+# dist/e2e/ is the e2e spec output (tsconfig.e2e.json); dist/test/ and
+# dist/test-e2e/ are where plain `tsc -p tsconfig.json` (rootDir src) writes the
+# unit tests and the e2e specs -- all dev-only, and a stale one still ships if
 # only the current path is ignored.
 dist/e2e/**
 dist/test/**
+dist/test-e2e/**
 dist/**/*.map
 dist-test/**
 dist-test-visual/**

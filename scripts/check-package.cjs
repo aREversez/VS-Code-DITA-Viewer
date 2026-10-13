@@ -43,9 +43,9 @@ const REQUIRED_DIRS = [
 // holds Playwright screenshots -- both leak into the vsix if .vscodeignore drifts
 // (it had, for the -visual siblings of already-ignored paths).
 //
-// dist/e2e/ is the e2e spec output, and dist/test/ is where the UNIT tests land
-// when someone runs plain `tsc -p tsconfig.json` (rootDir src, outDir dist).
-// Both sit UNDER the shipped dist/ folder, so the top-level allowlist cannot
+// dist/e2e/ is the e2e spec output; dist/test/ and dist/test-e2e/ are where the
+// UNIT tests and the e2e specs land when someone runs plain
+// `tsc -p tsconfig.json` (rootDir src, outDir dist). All three sit UNDER the shipped dist/ folder, so the top-level allowlist cannot
 // catch them -- 'dist' is legitimately allowed -- and only an explicit denylist
 // entry can: an e2e suite in a user's install is dead weight, and a stale copy
 // of it is exactly what made dist/test ambiguous in the first place.
@@ -57,6 +57,7 @@ const FORBIDDEN = [
   'extension/dist-test-visual/',
   'extension/dist/e2e/',
   'extension/dist/test/',
+  'extension/dist/test-e2e/',
   'extension/test-visual/',
   'extension/tsconfig.visual.json',
   'extension/.mocharc.visual.json',

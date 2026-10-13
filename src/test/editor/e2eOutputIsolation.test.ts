@@ -47,6 +47,9 @@ describe('e2e and unit-test build outputs do not share a directory', () => {
   const mainOut = outDirOf('tsconfig.json');
   // Where plain `tsc -p tsconfig.json` puts src/test/**/*.test.ts (rootDir: src).
   const unitLanding = `${mainOut}/test`;
+  // ...and the e2e specs themselves, which the same plain tsc emits to
+  // dist/test-e2e/ (src/test-e2e is inside tsconfig.json's include).
+  const e2eLanding = `${mainOut}/test-e2e`;
 
   it('the e2e output is neither the plain tsc output nor the directory the unit tests land in (regression: both were dist/test, and index.ts walks its own directory recursively, so every unit test tsc emitted there ran inside the VS Code host against stale dist/editor builds)', () => {
     assert.notStrictEqual(e2eOut, mainOut, 'e2e must not emit into the whole tsc output tree');
@@ -70,10 +73,10 @@ describe('e2e and unit-test build outputs do not share a directory', () => {
     );
   });
 
-  it('the dev-only test output dirs stay out of the packaged extension (both sit UNDER the shipped dist/ folder, so the package checker top-level allowlist cannot catch them -- only its denylist can)', () => {
+  it('the dev-only test output dirs stay out of the packaged extension (all three sit UNDER the shipped dist/ folder, so the package checker top-level allowlist cannot catch them -- only its denylist can)', () => {
     const ignore = read('.vscodeignore');
     const checker = read('scripts/check-package.cjs');
-    for (const dir of [e2eOut, unitLanding]) {
+    for (const dir of [e2eOut, unitLanding, e2eLanding]) {
       assert.ok(ignore.includes(`${dir}/**`), `.vscodeignore must ignore ${dir}/**`);
       assert.ok(
         checker.includes(`'extension/${dir}/'`),
