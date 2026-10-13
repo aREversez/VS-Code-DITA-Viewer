@@ -42,6 +42,24 @@ function outDirOf(file: string): string {
   return String(out).replace(/\\/g, '/').replace(/\/+$/, '');
 }
 
+/** One compilerOptions key of a tsconfig as written in THAT file (not inherited). */
+function ownOption(file: string, key: string): unknown {
+  const json = JSON.parse(stripComments(read(file))) as { compilerOptions?: Record<string, unknown> };
+  return json.compilerOptions?.[key];
+}
+
+describe('tsconfig.json is typecheck-only', () => {
+  it('a plain `tsc -p tsconfig.json` emits nothing (regression: with rootDir src / outDir dist it wrote an unbundled copy of every module into dist/ -- overwriting the esbuild dist/extension.js -- plus dist/test and dist/test-e2e, all of which then shipped in the vsix)', () => {
+    assert.strictEqual(ownOption('tsconfig.json', 'noEmit'), true);
+  });
+
+  it('every config that really emits opts back in explicitly, rather than inheriting noEmit and silently producing no output', () => {
+    for (const file of ['tsconfig.e2e.json', 'tsconfig.test.json', 'tsconfig.visual.json']) {
+      assert.strictEqual(ownOption(file, 'noEmit'), false, `${file} must set "noEmit": false`);
+    }
+  });
+});
+
 describe('e2e and unit-test build outputs do not share a directory', () => {
   const e2eOut = outDirOf('tsconfig.e2e.json');
   const mainOut = outDirOf('tsconfig.json');

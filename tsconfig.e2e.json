@@ -4,6 +4,7 @@
     "outDir": "dist/e2e",
     "rootDir": "src/test-e2e",
     "declaration": false,
+    "noEmit": false,
     "sourceMap": true
   },
   "include": ["src/test-e2e/**/*"],

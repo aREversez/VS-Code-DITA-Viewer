@@ -5,8 +5,8 @@ async function main() {
   try {
     const extensionDevelopmentPath = path.resolve(__dirname);
     // dist/e2e, and not dist/test: `tsc -p tsconfig.json` (rootDir src, outDir
-    // dist) emits the UNIT tests to dist/test/<subdir>/*.test.js as a side
-    // effect, and index.ts collects the e2e specs by walking its own directory
+    // dist) used to emit the UNIT tests to dist/test/<subdir>/*.test.js as a side
+    // effect (it is noEmit now, but stale trees remain), and index.ts collects the e2e specs by walking its own directory
     // recursively. Sharing one directory therefore made a stale unit-test build
     // run inside the real VS Code host, against the esbuild output in
     // dist/editor -- where src/test's imports resolve differently and the
