@@ -44,6 +44,7 @@ import { registerExportHtmlCommand, getActiveDitaUri } from './editor/exportHtml
 import { registerCompareCommand, getLastDiffHtmlForTesting, openSourceDiffForTesting } from './editor/ditaDiffProvider';
 import { resolveOxygenLaunch, buildOxygenSpawnArgs } from './editor/oxygenLauncher';
 import { registerWrapSelectionCommand } from './editor/wrapSelectionCommand';
+import { registerFormatAndIndent } from './editor/formatAndIndentCommand';
 import { registerFindReferencingMapsCommand } from './editor/findDitaReferences';
 import { registerKeyContextCommand } from './editor/keyContextCommand';
 import { registerUnreferencedResourcesCommand } from './editor/unreferencedResourcesUi';
@@ -155,6 +156,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Oxygen-style "select text, press Enter, pick a tag to wrap it in"
   registerWrapSelectionCommand(context);
+
+  // Oxygen-style "Format and Indent" (Format Document / Selection + a palette command)
+  registerFormatAndIndent(context);
 
   // "Open with Oxygen" — hands the file to Oxygen XML Editor
   context.subscriptions.push(
