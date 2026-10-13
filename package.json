@@ -669,6 +669,12 @@
           "scope": "resource",
           "description": "%config.format.lineWidth.description%"
         },
+        "dita-viewer.format.detectLineWidth": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "%config.format.detectLineWidth.description%"
+        },
         "dita-viewer.format.expandEmptyElements": {
           "type": "boolean",
           "default": false,

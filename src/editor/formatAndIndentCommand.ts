@@ -6,14 +6,24 @@
 // editor context menu next to the DITA one.
 
 import * as vscode from 'vscode';
-import { FormatOptions, formatXml, formatXmlRange, minimalEdit, FormatEdit } from '../language/xmlFormat';
+import { FormatOptions, formatXml, formatXmlRange, minimalEdit, detectLineWidth, FormatEdit } from '../language/xmlFormat';
 
 function readOptions(document: vscode.TextDocument, editorOptions: { tabSize: number; insertSpaces: boolean }): Partial<FormatOptions> {
   const cfg = vscode.workspace.getConfiguration('dita-viewer.format', document.uri);
+  const configuredWidth = Math.max(0, cfg.get<number>('lineWidth', 80));
+  // Mirror Oxygen's "Detect line width on open": when enabled, adopt the width
+  // the document was already wrapped to so re-formatting is a no-op rather than
+  // a reflow (a lone unwrapped source line, or no clear width signal, keeps the
+  // configured value). A configured width of 0 means "never wrap" and wins.
+  let lineWidth = configuredWidth;
+  if (configuredWidth > 0 && cfg.get<boolean>('detectLineWidth', true)) {
+    const detected = detectLineWidth(document.getText());
+    if (detected !== null) lineWidth = detected;
+  }
   return {
     indentSize: Math.max(1, editorOptions.tabSize),
     useTabs: !editorOptions.insertSpaces,
-    lineWidth: Math.max(0, cfg.get<number>('lineWidth', 80)),
+    lineWidth,
     expandEmptyElements: cfg.get<boolean>('expandEmptyElements', false),
     breakLineBeforeAttribute: cfg.get<boolean>('breakLineBeforeAttribute', false),
     breakLongAttributes: cfg.get<boolean>('breakLongAttributes', true),

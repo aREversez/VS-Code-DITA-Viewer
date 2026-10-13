@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { formatXml, formatXmlRange, minimalEdit } from '../../language/xmlFormat';
+import { formatXml, formatXmlRange, minimalEdit, detectLineWidth } from '../../language/xmlFormat';
 
 const fmt = (t: string, o = {}) => {
   const r = formatXml(t, o);
@@ -175,6 +175,127 @@ describe('formatXml: layout verified against Oxygen output', () => {
         '</ol>',
       ].join('\n'),
     );
+  });
+});
+
+describe('formatXml: Oxygen attribute/tag wrap parity (real samples)', () => {
+  // Reproduced byte-for-byte from Oxygen "Format and Indent" output
+  // (test-dita-file/manual/topics/lang-properties.dita and product_intro.dita,
+  // both at line width 100). A start tag in mixed content is never relocated as
+  // a whole: `<name` stays where it is, attributes fill and wrap one level below
+  // the tag, and a closing bracket glued to an unbreakable run drops to a
+  // continuation line together with that run.
+  const wrap = { lineWidth: 100 };
+
+  it('should keep <xref after the leading text and wrap its attributes one level below', () => {
+    const src = '<concept id="x"><title>t</title><conbody><p>See <xref href="some_quite_long_target_topic_name.dita" format="dita" scope="peer" type="topic" keyref="product-name" id="xref_probe_001"/> for details.</p></conbody></concept>';
+    assert.strictEqual(
+      fmt(src, { indentSize: 4, ...wrap }),
+      [
+        '<concept id="x">',
+        '    <title>t</title>',
+        '    <conbody>',
+        '        <p>See <xref href="some_quite_long_target_topic_name.dita" format="dita" scope="peer"',
+        '                type="topic" keyref="product-name" id="xref_probe_001"/> for details.</p>',
+        '    </conbody>',
+        '</concept>',
+      ].join('\n'),
+    );
+  });
+
+  it('should glue the trailing <xref name to the text and drop only its attribute', () => {
+    const src = '<concept id="x"><title>t</title><conbody><p>混排中文引导 <xref href="feature_alpha.dita" format="dita" scope="peer" type="topic"/> 与 <xref href="feature_beta.dita" format="dita" scope="peer" type="topic"/> 两段。</p></conbody></concept>';
+    assert.strictEqual(
+      fmt(src, { indentSize: 4, ...wrap }),
+      [
+        '<concept id="x">',
+        '    <title>t</title>',
+        '    <conbody>',
+        '        <p>混排中文引导 <xref href="feature_alpha.dita" format="dita" scope="peer" type="topic"/> 与 <xref',
+        '                href="feature_beta.dita" format="dita" scope="peer" type="topic"/> 两段。</p>',
+        '    </conbody>',
+        '</concept>',
+      ].join('\n'),
+    );
+  });
+
+  it('should drop an inline self-closing tag\'s bracket with the glued run that follows it', () => {
+    const run =
+      '（以下简称"中控主机"）采用四核处理器与本地场景引擎，即使外网中断，已配置的自动化场景依然可以在局域网内正常运行。主机正面配备触摸屏与环形氛围灯，背面提供千兆网口、USB 与电源接口。';
+    const src = `<concept id="x"><title>t</title><conbody><p><ph keyref="product-name"/>${run}</p></conbody></concept>`;
+    assert.strictEqual(
+      fmt(src, { indentSize: 2, ...wrap }),
+      [
+        '<concept id="x">',
+        '  <title>t</title>',
+        '  <conbody>',
+        '    <p><ph keyref="product-name"',
+        '      />（以下简称"中控主机"）采用四核处理器与本地场景引擎，即使外网中断，已配置的自动化场景依然可以在局域网内正常运行。主机正面配备触摸屏与环形氛围灯，背面提供千兆网口、USB',
+        '      与电源接口。</p>',
+        '  </conbody>',
+        '</concept>',
+      ].join('\n'),
+    );
+  });
+
+  it('should wrap an inline <xref attribute past the width and glue its closer', () => {
+    const src = '<concept id="x"><title>t</title><conbody><ul><li><b>统一接入</b>：支持 Zigbee 3.0、红外与 Wi-Fi 设备接入，详见 <xref href="feature_zigbee.dita"/> 与 <xref href="feature_ir.dita"/>。</li></ul></conbody></concept>';
+    assert.strictEqual(
+      fmt(src, { indentSize: 2, ...wrap }),
+      [
+        '<concept id="x">',
+        '  <title>t</title>',
+        '  <conbody>',
+        '    <ul>',
+        '      <li><b>统一接入</b>：支持 Zigbee 3.0、红外与 Wi-Fi 设备接入，详见 <xref href="feature_zigbee.dita"/> 与 <xref',
+        '          href="feature_ir.dita"/>。</li>',
+        '    </ul>',
+        '  </conbody>',
+        '</concept>',
+      ].join('\n'),
+    );
+  });
+
+  it('should be idempotent for the wrapped inline tags', () => {
+    const src = '<concept id="x"><title>t</title><conbody><p>See <xref href="some_quite_long_target_topic_name.dita" format="dita" scope="peer" type="topic" keyref="product-name" id="xref_probe_001"/> for details.</p></conbody></concept>';
+    const once = fmt(src, { indentSize: 4, ...wrap });
+    assert.strictEqual(fmt(once, { indentSize: 4, ...wrap }), once);
+  });
+});
+
+describe('detectLineWidth', () => {
+  it('should return the longest line of a document that is clearly hard-wrapped', () => {
+    const long = 'x'.repeat(70);
+    const doc = ['<a>', long, long, '</a>'].join('\n');
+    assert.strictEqual(detectLineWidth(doc), 70);
+  });
+
+  it('should fall back to null when there are fewer than two content lines', () => {
+    assert.strictEqual(detectLineWidth('<a>one line only</a>'), null);
+    assert.strictEqual(detectLineWidth(''), null);
+  });
+
+  it('should fall back to null for a lone long unwrapped paragraph', () => {
+    // One very long line surrounded by short ones is unwrapped content, not
+    // evidence of a wrap column: only one line is anywhere near the maximum.
+    const doc = ['<a>', 'y'.repeat(160), '</a>', '<b>no</b>'].join('\n');
+    assert.strictEqual(detectLineWidth(doc), null);
+  });
+
+  it('should fall back to null when the longest line is implausibly wide', () => {
+    const doc = ['<a>', 'z'.repeat(305), 'z'.repeat(300), '</a>'].join('\n');
+    assert.strictEqual(detectLineWidth(doc), null);
+  });
+
+  it('should reproduce a freshly wrapped document unchanged (no reflow)', () => {
+    const src =
+      '<topic id="t"><title>A reasonably long title for wrapping</title><body><p>' +
+      'lorem ipsum dolor sit amet '.repeat(8) +
+      '</p></body></topic>';
+    const wrapped = fmt(src, { indentSize: 2, lineWidth: 60 });
+    const detected = detectLineWidth(wrapped);
+    assert.notStrictEqual(detected, null);
+    assert.strictEqual(fmt(wrapped, { indentSize: 2, lineWidth: detected as number }), wrapped);
   });
 });
 

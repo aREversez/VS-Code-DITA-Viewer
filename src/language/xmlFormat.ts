@@ -282,8 +282,15 @@ const pieceLen = (p: Piece): number => firstLineLen(typeof p === 'string' ? p : 
  * same indent its children get), not under the first attribute — this is how
  * Oxygen lays long tags out, including tags that sit in the middle of a text
  * line and are already past the width when they start.
+ *
+ * `tailRun` is the width of the content glued right after the closing bracket
+ * (a text or inline run that starts on the same line, with no whitespace in
+ * front of it). Oxygen treats that bracket plus its glued run as one unit: if
+ * they no longer fit, the bracket itself drops to a continuation line at the
+ * tag's own level — one level shallower than the attribute continuation, the
+ * indent a wrapped run of text would get — and the run follows right after it.
  */
-function putOpenTag(t: OpenTag, out: Out, c: Ctx): void {
+function putOpenTag(t: OpenTag, out: Out, c: Ctx, tailRun = 0): void {
   const { el } = t;
   const attrs = el.attrs ? el.attrs.map((a) => a.text) : [];
   if (!el.attrs || attrs.length === 0) {
@@ -310,6 +317,9 @@ function putOpenTag(t: OpenTag, out: Out, c: Ctx): void {
       out.put(' ' + a);
     }
   });
+  if (c.o.breakLongAttributes && width > 0 && out.cols + t.closing.length + tailRun > width) {
+    out.begin(t.depth);
+  }
   out.put(t.closing);
 }
 
@@ -405,6 +415,10 @@ function emitMixed(el: XElement, depth: number, out: Out, c: Ctx): void {
   const items: FlowItem[] = [];
   flatten(el.children, items, c, { space: false }, depth + 1);
   const cont = depth + 1;
+  // The owner's end tag `</name>` is glued to the last line of the flow, so the
+  // final run has to reserve its width before a break is considered (Oxygen
+  // wraps `…USB` and keeps `与电源接口。</p>` together on the next line).
+  const ownerCloseLen = 2 + el.name.length;
   let first = true;
   let i = 0;
   while (i < items.length) {
@@ -429,14 +443,32 @@ function emitMixed(el: XElement, depth: number, out: Out, c: Ctx): void {
         break;
       }
     }
+    // A start tag never gets relocated as a whole: only its `<name` has to fit
+    // where the chunk begins; the attributes (and the closing bracket, via the
+    // tailRun above) wrap on their own. A text chunk still moves as one unit.
+    const headPiece = head.kind === 'eo' ? head.open : head.kind === 'piece' ? head.piece : null;
+    const isLast = !terminator && i >= items.length;
+    const isTagHead = !!headPiece && typeof headPiece !== 'string';
+    const headFit = isTagHead ? 1 + headPiece.el.name.length : len + (isLast ? ownerCloseLen : 0);
     if (head.breakDepth !== undefined && !first) out.begin(head.breakDepth);
     else if (first || !head.space) {
       /* glued to what precedes it */
-    } else if (c.o.lineWidth > 0 && out.cols + 1 + len > c.o.lineWidth) out.begin(cont);
+    } else if (c.o.lineWidth > 0 && out.cols + 1 + headFit > c.o.lineWidth) out.begin(cont);
     else out.put(' ');
-    for (const p of pieces) {
+    // A start tag is not an atomic wrap unit: `<name` is placed here and its
+    // attributes wrap by themselves. The content glued right after the tag's
+    // closing bracket (the rest of this chunk, and the owner's end tag when this
+    // is the flow's last chunk) is passed as `tailRun` so the bracket can drop
+    // to a continuation line together with that run.
+    for (let k = 0; k < pieces.length; k++) {
+      const p = pieces[k];
       if (typeof p === 'string') out.put(p);
-      else putOpenTag(p, out, c);
+      else {
+        let tailRun = 0;
+        for (let j = k + 1; j < pieces.length; j++) tailRun += pieceLen(pieces[j]);
+        if (isLast && k === pieces.length - 1) tailRun += ownerCloseLen;
+        putOpenTag(p, out, c, tailRun);
+      }
     }
     if (terminator) {
       for (const k of meaningful(terminator.el)) emitBlock(k, terminator.depth + 1, out, c);
@@ -565,4 +597,35 @@ export function minimalEdit(oldText: string, newText: string): FormatEdit | null
   let b = 0;
   while (b < max - a && oldText[oldText.length - 1 - b] === newText[newText.length - 1 - b]) b++;
   return { start: a, end: oldText.length - b, newText: newText.slice(a, newText.length - b) };
+}
+
+// Above this line length a document is not treated as already hard-wrapped: the
+// long line is either a source written on one line or an unbreakable run, so
+// there is no wrap width to detect and the configured lineWidth is kept instead.
+const DETECT_MAX_WIDTH = 300;
+
+/**
+ * Estimate the hard-wrap line width a document was already formatted with, so
+ * re-formatting it is a no-op instead of a reflow (Oxygen's "Detect line width
+ * on open", which exists to keep pretty-print diffs out of version control).
+ *
+ * The estimate is the longest non-blank line. Formatting at a width equal to
+ * the longest existing line is idempotent: every line still fits, and an
+ * element/word the source moved to the next line still does not fit, so the
+ * same break is chosen. Returns null (use the configured width) when there is
+ * no wrap structure to detect: fewer than two content lines, a longest line
+ * above DETECT_MAX_WIDTH, or only one line that is anywhere near full length
+ * (a lone long paragraph is unwrapped content, not evidence of a width).
+ */
+export function detectLineWidth(text: string): number | null {
+  const lengths = text
+    .split(/\r\n|\r|\n/)
+    .filter((l) => l.trim() !== '')
+    .map((l) => l.length);
+  if (lengths.length < 2) return null;
+  const max = Math.max(...lengths);
+  if (max > DETECT_MAX_WIDTH) return null;
+  const nearFull = lengths.filter((n) => n >= Math.ceil(max * 0.75)).length;
+  if (nearFull < 2) return null;
+  return max;
 }

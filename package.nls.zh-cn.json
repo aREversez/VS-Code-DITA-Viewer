@@ -57,6 +57,7 @@
   "config.updateReferencesOnRename.never": "从不更新引用",
   "command.formatAndIndent.title": "DITA：格式化并缩进",
   "config.format.lineWidth.description": "格式化并缩进：文本、行内标记与属性超过此列数时换行（Oxygen 默认 80）。0 表示不换行。只会在原本就有空白的位置断行。",
+  "config.format.detectLineWidth.description": "格式化并缩进：沿用文档已经换行所用的行宽（类似 Oxygen 的“打开时检测行宽”），使重新格式化不产生重排而保持幂等。当检测不到明确行宽时回退到配置的 lineWidth。行宽为 0 时忽略。",
   "config.format.expandEmptyElements.description": "格式化并缩进：把空元素写成 <a></a> 而不是 <a/>。",
   "config.format.breakLineBeforeAttribute.description": "格式化并缩进：起始标签的每个属性单独占一行，比元素深一层（不再按行宽填充）。",
   "config.format.breakLongAttributes.description": "格式化并缩进：起始标签超过行宽时对属性换行：每行尽量多放，续行比元素深一层。",
