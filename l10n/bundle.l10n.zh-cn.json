@@ -276,7 +276,6 @@
   "Also check remote (http/https) resources": "同时检查远程（http/https）资源",
   "needs the check above": "需要先启用上一项",
   "Filter with DITAVAL files": "使用 DITAVAL 文件过滤",
-  "{0} file(s) — check runs once per file": "{0} 个文件 — 每个文件各运行一次检查",
   "choose files after accepting": "确认后选择文件",
   "References": "引用",
   "References to resources outside the map folder": "对 Map 文件夹之外资源的引用",

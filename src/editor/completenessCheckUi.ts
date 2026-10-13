@@ -206,7 +206,7 @@ interface CheckItem extends vscode.QuickPickItem {
   id?: CheckId;
 }
 
-function checkItems(picked: Set<string>, ditavalCount: number): CheckItem[] {
+function checkItems(picked: Set<string>): CheckItem[] {
   const it = (id: CheckId, label: string, description?: string): CheckItem => ({ id, label, description, picked: picked.has(id) });
   const sep = (label: string): CheckItem => ({ label, kind: vscode.QuickPickItemKind.Separator });
   return [
@@ -214,11 +214,7 @@ function checkItems(picked: Set<string>, ditavalCount: number): CheckItem[] {
     it('batchValidate', vscode.l10n.t('Validate referenced DITA files'), vscode.l10n.t('XML errors; topic id, title and root element')),
     it('checkNonDita', vscode.l10n.t('Check that referenced images and other files exist')),
     it('includeRemote', vscode.l10n.t('Also check remote (http/https) resources'), vscode.l10n.t('needs the check above')),
-    it(
-      'useDitaval',
-      vscode.l10n.t('Filter with DITAVAL files'),
-      ditavalCount > 0 ? vscode.l10n.t('{0} file(s) — check runs once per file', String(ditavalCount)) : vscode.l10n.t('choose files after accepting'),
-    ),
+    it('useDitaval', vscode.l10n.t('Filter with DITAVAL files'), vscode.l10n.t('choose files after accepting')),
     sep(vscode.l10n.t('References')),
     it('reportOutsideMapFolder', vscode.l10n.t('References to resources outside the map folder')),
     it('reportUnreferencedLinks', vscode.l10n.t('Links to topics not referenced in any map')),
@@ -237,7 +233,7 @@ function checkItems(picked: Set<string>, ditavalCount: number): CheckItem[] {
 
 type PickResult = { picked: CheckId[]; map: string } | undefined;
 
-function pickChecks(map: string, ditavalCount: number): Promise<PickResult> {
+function pickChecks(map: string): Promise<PickResult> {
   return new Promise((resolve) => {
     let currentMap = map;
     const qp = vscode.window.createQuickPick<CheckItem>();
@@ -247,7 +243,7 @@ function pickChecks(map: string, ditavalCount: number): Promise<PickResult> {
     const setTitle = () => (qp.title = vscode.l10n.t('Validate and Check for Completeness — {0}', basename(currentMap)));
     setTitle();
     qp.placeholder = vscode.l10n.t('Choose the checks to run, then press Enter');
-    const items = checkItems(new Set(readEnabled()), ditavalCount);
+    const items = checkItems(new Set(readEnabled()));
     qp.items = items;
     qp.selectedItems = items.filter((i) => i.picked);
     const btn = (icon: string, tooltip: string): vscode.QuickInputButton => ({ iconPath: new vscode.ThemeIcon(icon), tooltip });
@@ -319,16 +315,23 @@ async function announce(map: string, issues: Issue[]): Promise<void> {
   if (pick === show) await vscode.commands.executeCommand('workbench.actions.view.problems');
 }
 
-/** Asks which checks to run (remembering the answer in settings), then runs them. */
+/**
+ * Asks which checks to run (remembering the answer in settings), then runs them.
+ * When "Filter with DITAVAL files" is on, the files are always asked for: a
+ * DITAVAL is rarely next to the map, so neither a remembered path nor the map's
+ * folder is trusted. The dialog opens at the previous choice (or the map's
+ * folder) and its selection becomes the new remembered value.
+ */
 async function chooseAndRun(map: string): Promise<void> {
-  const ditavalCount = readDitavalFiles(dirname(map)).length;
-  const res = await pickChecks(map, ditavalCount);
+  const res = await pickChecks(map);
   if (!res) return;
-  let picked = normalizeEnabled(res.picked);
-  if (picked.includes('useDitaval') && readDitavalFiles(dirname(res.map)).length === 0) {
-    const files = await browseFiles(vscode.l10n.t('DITAVAL Filter Files'), ['ditaval'], true);
-    if (files.length === 0) picked = picked.filter((id) => id !== 'useDitaval');
-    else await updateSetting(SETTINGS, 'ditavalFiles', files.map((f) => toStoredPath(dirname(res.map), f)));
+  const picked = normalizeEnabled(res.picked);
+  const mapDir = dirname(res.map);
+  if (picked.includes('useDitaval')) {
+    const previous = readDitavalFiles(mapDir)[0];
+    const files = await browseFiles(vscode.l10n.t('DITAVAL Filter Files'), ['ditaval'], true, previous ?? mapDir);
+    if (files.length === 0) return; // dialog dismissed: cancel the run rather than silently run unfiltered
+    await updateSetting(SETTINGS, 'ditavalFiles', files.map((f) => toStoredPath(mapDir, f)));
   }
   await updateSetting(SETTINGS, 'enabledChecks', picked);
   await run(res.map);

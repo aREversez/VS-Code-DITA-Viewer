@@ -276,7 +276,6 @@
   "Also check remote (http/https) resources": "Also check remote (http/https) resources",
   "needs the check above": "needs the check above",
   "Filter with DITAVAL files": "Filter with DITAVAL files",
-  "{0} file(s) — check runs once per file": "{0} file(s) — check runs once per file",
   "choose files after accepting": "choose files after accepting",
   "References": "References",
   "References to resources outside the map folder": "References to resources outside the map folder",

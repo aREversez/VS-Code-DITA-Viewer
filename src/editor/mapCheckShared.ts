@@ -51,8 +51,9 @@ export function mapFromArg(arg: unknown): string | undefined {
   return arg instanceof vscode.Uri && /\.ditamap$/i.test(arg.fsPath) ? arg.fsPath : undefined;
 }
 
-export async function browseFiles(title: string, extensions: string[], many: boolean): Promise<string[]> {
+export async function browseFiles(title: string, extensions: string[], many: boolean, defaultPath?: string): Promise<string[]> {
   const uris = await vscode.window.showOpenDialog({
+    defaultUri: defaultPath ? vscode.Uri.file(defaultPath) : undefined,
     canSelectMany: many,
     canSelectFiles: true,
     canSelectFolders: false,
