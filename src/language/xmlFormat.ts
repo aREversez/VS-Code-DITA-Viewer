@@ -276,6 +276,13 @@ function oneLine(t: OpenTag): string {
 
 const pieceLen = (p: Piece): number => firstLineLen(typeof p === 'string' ? p : oneLine(p));
 
+/** Whether `putOpenTag` can break this tag between `<name` and its end. */
+function canWrapAttributes(t: OpenTag, c: Ctx): boolean {
+  const n = t.el.attrs ? t.el.attrs.length : 0;
+  if (n === 0 || c.o.lineWidth <= 0) return false;
+  return c.o.breakLongAttributes || (c.o.breakLineBeforeAttribute && n >= 2);
+}
+
 /**
  * Write a start tag, filling each line up to the line width. An attribute that
  * does not fit starts a continuation line one level below the element (the
@@ -446,10 +453,12 @@ function emitMixed(el: XElement, depth: number, out: Out, c: Ctx): void {
     // A start tag never gets relocated as a whole: only its `<name` has to fit
     // where the chunk begins; the attributes (and the closing bracket, via the
     // tailRun above) wrap on their own. A text chunk still moves as one unit.
-    const headPiece = head.kind === 'eo' ? head.open : head.kind === 'piece' ? head.piece : null;
+    const headPiece = head.kind === 'eo' ? head.open : head.piece;
     const isLast = !terminator && i >= items.length;
-    const isTagHead = !!headPiece && typeof headPiece !== 'string';
-    const headFit = isTagHead ? 1 + headPiece.el.name.length : len + (isLast ? ownerCloseLen : 0);
+    // Only a tag that has attributes to wrap can be split at its `<name`; a tag
+    // without any (`<b>`) is as unbreakable as a word and moves as one unit.
+    const splitsAtName = typeof headPiece !== 'string' && canWrapAttributes(headPiece, c);
+    const headFit = splitsAtName ? 1 + (headPiece as OpenTag).el.name.length : len + (isLast ? ownerCloseLen : 0);
     if (head.breakDepth !== undefined && !first) out.begin(head.breakDepth);
     else if (first || !head.space) {
       /* glued to what precedes it */
@@ -599,33 +608,91 @@ export function minimalEdit(oldText: string, newText: string): FormatEdit | null
   return { start: a, end: oldText.length - b, newText: newText.slice(a, newText.length - b) };
 }
 
-// Above this line length a document is not treated as already hard-wrapped: the
-// long line is either a source written on one line or an unbreakable run, so
-// there is no wrap width to detect and the configured lineWidth is kept instead.
+const DETECT_MIN_WIDTH = 20;
 const DETECT_MAX_WIDTH = 300;
+const DETECT_MAX_CANDIDATES = 24;
+// Widths people actually configure. The width a file was wrapped to need not
+// equal any of its line lengths (no line may reach it exactly), so these are
+// tried besides the line lengths.
+const DETECT_COMMON_WIDTHS = [60, 70, 72, 75, 78, 80, 90, 100, 110, 120, 132, 140, 160, 180, 200];
+// Detection formats the text once per candidate; skip it for very large files.
+const DETECT_MAX_TEXT = 1_000_000;
+
+/** Lines of `a` that do not appear verbatim in `b` (order-independent). */
+function lineDistance(a: string, b: string): number {
+  const bag = new Map<string, number>();
+  for (const l of b.split(/\r?\n/)) bag.set(l, (bag.get(l) ?? 0) + 1);
+  let d = 0;
+  for (const l of a.split(/\r?\n/)) {
+    const n = bag.get(l) ?? 0;
+    if (n > 0) bag.set(l, n - 1);
+    else d++;
+  }
+  return d;
+}
+
+/** Visual width of a line the way the formatter measures it (a leading tab is one indent). */
+function lineCols(line: string, indentSize: number): number {
+  let cols = 0;
+  let i = 0;
+  while (i < line.length && (line[i] === ' ' || line[i] === '\t')) {
+    cols += line[i] === '\t' ? indentSize : 1;
+    i++;
+  }
+  return cols + line.length - i;
+}
 
 /**
- * Estimate the hard-wrap line width a document was already formatted with, so
- * re-formatting it is a no-op instead of a reflow (Oxygen's "Detect line width
- * on open", which exists to keep pretty-print diffs out of version control).
+ * Find the line width a document was already wrapped to (Oxygen's "Detect line
+ * width on open"), so that re-formatting it is a no-op instead of a reflow.
  *
- * The estimate is the longest non-blank line. Formatting at a width equal to
- * the longest existing line is idempotent: every line still fits, and an
- * element/word the source moved to the next line still does not fit, so the
- * same break is chosen. Returns null (use the configured width) when there is
- * no wrap structure to detect: fewer than two content lines, a longest line
- * above DETECT_MAX_WIDTH, or only one line that is anywhere near full length
- * (a lone long paragraph is unwrapped content, not evidence of a width).
+ * The width is not guessed from line lengths — an unbreakable run (a long CJK
+ * sentence, a codeblock line, a long attribute value) is longer than the width
+ * and would be mistaken for it. Instead each plausible width is tried: the
+ * candidates are the distinct line lengths, and the one whose formatted result
+ * differs least from the text wins (zero lines for a document Oxygen wrapped).
+ *
+ * Returns null — keep `options.lineWidth` — when
+ *  - the document is already stable at the configured width,
+ *  - there is no evidence of hard wrapping: formatting without any wrapping is
+ *    as close to the text as the best width (a hand-written document whose
+ *    paragraphs are single long lines), or
+ *  - the text is malformed, too large, or `options.lineWidth` is 0 (never wrap).
  */
-export function detectLineWidth(text: string): number | null {
-  const lengths = text
-    .split(/\r\n|\r|\n/)
-    .filter((l) => l.trim() !== '')
-    .map((l) => l.length);
-  if (lengths.length < 2) return null;
-  const max = Math.max(...lengths);
-  if (max > DETECT_MAX_WIDTH) return null;
-  const nearFull = lengths.filter((n) => n >= Math.ceil(max * 0.75)).length;
-  if (nearFull < 2) return null;
-  return max;
+export function detectLineWidth(text: string, options: Partial<FormatOptions> = {}): number | null {
+  const base: FormatOptions = { ...DEFAULT_FORMAT_OPTIONS, ...options };
+  if (base.lineWidth <= 0 || text.length > DETECT_MAX_TEXT) return null;
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const distance = (width: number): number | null => {
+    const r = formatXml(text, { ...base, lineWidth: width }, eol);
+    return r.ok ? lineDistance(text, r.text) : null;
+  };
+
+  const atConfigured = distance(base.lineWidth);
+  if (atConfigured === null || atConfigured === 0) return null;
+  const unwrapped = distance(0);
+  if (unwrapped === null) return null;
+
+  const candidates = [
+    ...new Set(
+      text
+        .split(/\r\n|\r|\n/)
+        .filter((l) => l.trim() !== '')
+        .map((l) => lineCols(l, base.indentSize)),
+    ),
+  ]
+    .filter((w) => w >= DETECT_MIN_WIDTH && w <= DETECT_MAX_WIDTH && w !== base.lineWidth)
+    .sort((x, y) => y - x)
+    .slice(0, DETECT_MAX_CANDIDATES);
+  for (const w of DETECT_COMMON_WIDTHS) if (w !== base.lineWidth && !candidates.includes(w)) candidates.push(w);
+
+  let best: { width: number; d: number } | null = null;
+  for (const w of candidates) {
+    const d = distance(w);
+    if (d === null) continue;
+    const closer = best !== null && Math.abs(w - base.lineWidth) < Math.abs(best.width - base.lineWidth);
+    if (best === null || d < best.d || (d === best.d && closer)) best = { width: w, d };
+  }
+  if (best === null || best.d >= unwrapped || best.d >= atConfigured) return null;
+  return best.width;
 }

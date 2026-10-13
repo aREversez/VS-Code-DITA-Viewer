@@ -263,39 +263,72 @@ describe('formatXml: Oxygen attribute/tag wrap parity (real samples)', () => {
   });
 });
 
+describe('formatXml: a tag without attributes moves as a whole', () => {
+  it('should wrap before <b>boldtext</b> instead of overflowing the line', () => {
+    const out = fmt('<p>aaaa bbbb cccc dddd eeee ffff gggg <b>boldtext</b> tail</p>', { indentSize: 4, lineWidth: 40 });
+    assert.strictEqual(out, '<p>aaaa bbbb cccc dddd eeee ffff gggg\n    <b>boldtext</b> tail</p>');
+  });
+
+  it('should still split a tag that has attributes at its <name', () => {
+    const out = fmt('<p>aaaa bbbb cccc dddd eeee ffff <xref href="a_long_target.dita" scope="local">go</xref></p>', { indentSize: 4, lineWidth: 40 });
+    assert.ok(out.split('\n').every((l) => l.length <= 40), out);
+  });
+});
+
 describe('detectLineWidth', () => {
-  it('should return the longest line of a document that is clearly hard-wrapped', () => {
-    const long = 'x'.repeat(70);
-    const doc = ['<a>', long, long, '</a>'].join('\n');
-    assert.strictEqual(detectLineWidth(doc), 70);
-  });
+  const words = (n: number) => Array.from({ length: n }, (_, i) => `word${i}`).join(' ');
+  const base = { indentSize: 4, lineWidth: 80 };
+  const doc = (paras: string[]) => `<topic id="t"><title>T</title><body>${paras.map((x) => `<p>${x}</p>`).join('')}</body></topic>\n`;
 
-  it('should fall back to null when there are fewer than two content lines', () => {
-    assert.strictEqual(detectLineWidth('<a>one line only</a>'), null);
-    assert.strictEqual(detectLineWidth(''), null);
-  });
-
-  it('should fall back to null for a lone long unwrapped paragraph', () => {
-    // One very long line surrounded by short ones is unwrapped content, not
-    // evidence of a wrap column: only one line is anywhere near the maximum.
-    const doc = ['<a>', 'y'.repeat(160), '</a>', '<b>no</b>'].join('\n');
-    assert.strictEqual(detectLineWidth(doc), null);
-  });
-
-  it('should fall back to null when the longest line is implausibly wide', () => {
-    const doc = ['<a>', 'z'.repeat(305), 'z'.repeat(300), '</a>'].join('\n');
-    assert.strictEqual(detectLineWidth(doc), null);
-  });
-
-  it('should reproduce a freshly wrapped document unchanged (no reflow)', () => {
-    const src =
-      '<topic id="t"><title>A reasonably long title for wrapping</title><body><p>' +
-      'lorem ipsum dolor sit amet '.repeat(8) +
-      '</p></body></topic>';
-    const wrapped = fmt(src, { indentSize: 2, lineWidth: 60 });
-    const detected = detectLineWidth(wrapped);
+  it('should find the width an already wrapped document uses, so re-formatting is a no-op', () => {
+    const wrapped = fmt(doc([words(60), words(45)]), { ...base, lineWidth: 100 });
+    const detected = detectLineWidth(wrapped, base);
     assert.notStrictEqual(detected, null);
-    assert.strictEqual(fmt(wrapped, { indentSize: 2, lineWidth: detected as number }), wrapped);
+    assert.strictEqual(fmt(wrapped, { ...base, lineWidth: detected as number }), wrapped);
+    assert.notStrictEqual(fmt(wrapped, base), wrapped, 'precondition: the configured width would reflow it');
+  });
+
+  it('should not be fooled by unbreakable runs longer than the width', () => {
+    const wrapped = fmt(doc([words(60), '乙'.repeat(150), '甲'.repeat(140), words(30)]), { ...base, lineWidth: 100 });
+    const detected = detectLineWidth(wrapped, base);
+    assert.notStrictEqual(detected, null);
+    assert.strictEqual(fmt(wrapped, { ...base, lineWidth: detected as number }), wrapped);
+  });
+
+  it('should measure tab indentation the way the formatter does', () => {
+    const tabs = { indentSize: 4, useTabs: true };
+    const wrapped = fmt('<a><b2><c2><d2><p>' + words(40) + '</p></d2></c2></b2></a>\n', { ...tabs, lineWidth: 60 });
+    const detected = detectLineWidth(wrapped, { ...tabs, lineWidth: 80 });
+    assert.notStrictEqual(detected, null);
+    assert.strictEqual(fmt(wrapped, { ...tabs, lineWidth: detected as number }), wrapped);
+  });
+
+  it('should keep the configured width when the document is already stable at it', () => {
+    assert.strictEqual(detectLineWidth(fmt(doc([words(60)]), base), base), null);
+  });
+
+  it('should keep the configured width for a hand-written document with one long line per paragraph', () => {
+    const handWritten = `<topic id="t">\n    <body>\n        <p>${words(25)}</p>\n        <p>${words(25)}</p>\n    </body>\n</topic>\n`;
+    assert.strictEqual(detectLineWidth(handWritten, base), null);
+  });
+
+  it('should return null for malformed, empty, or never-wrap input', () => {
+    assert.strictEqual(detectLineWidth('<a><b></a>', base), null);
+    assert.strictEqual(detectLineWidth('', base), null);
+    assert.strictEqual(detectLineWidth(fmt(doc([words(60)]), { ...base, lineWidth: 100 }), { ...base, lineWidth: 0 }), null);
+  });
+
+  it('should cope with a very large document without throwing', () => {
+    const big = '<a>\n' + Array.from({ length: 300000 }, () => '<b2/>').join('\n') + '\n</a>\n';
+    assert.strictEqual(detectLineWidth(big, base), null);
+  });
+
+  it('should also detect in a CRLF document', () => {
+    const wrapped = fmt(doc([words(60)]), { ...base, lineWidth: 100 }).replace(/\n/g, '\r\n');
+    const detected = detectLineWidth(wrapped, base);
+    assert.notStrictEqual(detected, null);
+    const r = formatXml(wrapped, { ...base, lineWidth: detected as number }, '\r\n');
+    assert.ok(r.ok && r.text === wrapped);
   });
 });
 

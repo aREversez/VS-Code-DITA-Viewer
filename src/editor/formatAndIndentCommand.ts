@@ -10,20 +10,10 @@ import { FormatOptions, formatXml, formatXmlRange, minimalEdit, detectLineWidth,
 
 function readOptions(document: vscode.TextDocument, editorOptions: { tabSize: number; insertSpaces: boolean }): Partial<FormatOptions> {
   const cfg = vscode.workspace.getConfiguration('dita-viewer.format', document.uri);
-  const configuredWidth = Math.max(0, cfg.get<number>('lineWidth', 80));
-  // Mirror Oxygen's "Detect line width on open": when enabled, adopt the width
-  // the document was already wrapped to so re-formatting is a no-op rather than
-  // a reflow (a lone unwrapped source line, or no clear width signal, keeps the
-  // configured value). A configured width of 0 means "never wrap" and wins.
-  let lineWidth = configuredWidth;
-  if (configuredWidth > 0 && cfg.get<boolean>('detectLineWidth', true)) {
-    const detected = detectLineWidth(document.getText());
-    if (detected !== null) lineWidth = detected;
-  }
-  return {
+  const options: Partial<FormatOptions> = {
     indentSize: Math.max(1, editorOptions.tabSize),
     useTabs: !editorOptions.insertSpaces,
-    lineWidth,
+    lineWidth: Math.max(0, cfg.get<number>('lineWidth', 80)),
     expandEmptyElements: cfg.get<boolean>('expandEmptyElements', false),
     breakLineBeforeAttribute: cfg.get<boolean>('breakLineBeforeAttribute', false),
     breakLongAttributes: cfg.get<boolean>('breakLongAttributes', true),
@@ -31,6 +21,15 @@ function readOptions(document: vscode.TextDocument, editorOptions: { tabSize: nu
     mixedContentElements: cfg.get<string[]>('mixedContentElements', []),
     breakLineElements: cfg.get<string[]>('breakLineElements', []),
   };
+  // Mirror Oxygen's "Detect line width on open": adopt the width the document
+  // was already wrapped to, so re-formatting it is a no-op rather than a reflow.
+  // The configured width stays when nothing is detected or when it is 0
+  // ("never wrap"); detection needs the other options to try the formatter.
+  if (cfg.get<boolean>('detectLineWidth', true)) {
+    const detected = detectLineWidth(document.getText(), options);
+    if (detected !== null) options.lineWidth = detected;
+  }
+  return options;
 }
 
 export type ComputedEdits =
