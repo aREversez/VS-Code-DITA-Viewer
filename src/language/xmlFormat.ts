@@ -273,7 +273,25 @@ function startTagText(el: XElement, closing: string, depth: number, o: Out, c: C
   if (!(c.o.breakLineBeforeAttribute || (c.o.breakLongAttributes && tooLong))) return one;
   const align = startCols + 1 + el.name.length + 1;
   const pad = o.indent(depth) + ' '.repeat(Math.max(0, align - o.indentCols(depth)));
-  return `<${el.name} ${attrs[0]}` + attrs.slice(1).map((a) => `\n${pad}${a}`).join('') + closing;
+  if (c.o.breakLineBeforeAttribute) {
+    return `<${el.name} ${attrs[0]}` + attrs.slice(1).map((a) => `\n${pad}${a}`).join('') + closing;
+  }
+  // Fill each line up to the line width (greedy), continuation lines aligned
+  // under the first attribute; the closing "/>" or ">" counts on the last line.
+  let text = `<${el.name} ${attrs[0]}`;
+  let cols = align + attrs[0].length;
+  for (let i = 1; i < attrs.length; i++) {
+    const a = attrs[i];
+    const tail = i === attrs.length - 1 ? closing.length : 0;
+    if (cols + 1 + a.length + tail > c.o.lineWidth) {
+      text += `\n${pad}${a}`;
+      cols = align + a.length;
+    } else {
+      text += ` ${a}`;
+      cols += 1 + a.length;
+    }
+  }
+  return text + closing;
 }
 
 function emitBlock(node: XNode, depth: number, out: Out, c: Ctx): void {

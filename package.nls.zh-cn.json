@@ -59,7 +59,7 @@
   "config.format.lineWidth.description": "格式化并缩进：文本与行内标记超过此列数时换行。0 表示不换行。只会在原本就有空白的位置断行。",
   "config.format.expandEmptyElements.description": "格式化并缩进：把空元素写成 <a></a> 而不是 <a/>。",
   "config.format.breakLineBeforeAttribute.description": "格式化并缩进：块级起始标签的每个属性单独占一行，并与第一个属性对齐。",
-  "config.format.breakLongAttributes.description": "格式化并缩进：块级起始标签超过行宽时，把属性拆到多行。",
+  "config.format.breakLongAttributes.description": "格式化并缩进：块级起始标签超过行宽时对属性换行：每行尽量多放，续行与第一个属性对齐。",
   "config.format.preserveSpaceElements.description": "格式化并缩进：额外需要原样保留内容的元素名（codeblock、pre、lines、screen、msgblock 以及带 xml:space=\"preserve\" 的元素始终原样保留）。",
   "config.format.mixedContentElements.description": "格式化并缩进：额外视为行内元素的元素名，其父元素的内容会与文字保持在同一行流中。",
   "config.format.breakLineElements.description": "格式化并缩进：额外的元素名，即使位于文字之间也总是另起一行。"

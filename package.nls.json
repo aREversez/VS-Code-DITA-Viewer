@@ -58,8 +58,8 @@
   "command.formatAndIndent.title": "DITA: Format and Indent",
   "config.format.lineWidth.description": "Format and Indent: wrap text and inline markup at this many columns. 0 turns wrapping off. Whitespace is only ever broken where whitespace already was.",
   "config.format.expandEmptyElements.description": "Format and Indent: write an empty element as <a></a> instead of <a/>.",
-  "config.format.breakLineBeforeAttribute.description": "Format and Indent: put every attribute of a block-level start tag on its own line, aligned under the first.",
-  "config.format.breakLongAttributes.description": "Format and Indent: when a block-level start tag is wider than the line width, put its attributes on separate lines.",
+  "config.format.breakLineBeforeAttribute.description": "Format and Indent: put every attribute of a block-level start tag on its own line, aligned under the first (instead of filling lines up to the width).",
+  "config.format.breakLongAttributes.description": "Format and Indent: when a block-level start tag is wider than the line width, wrap its attributes: as many per line as fit, continuation lines aligned under the first attribute.",
   "config.format.preserveSpaceElements.description": "Format and Indent: additional element names whose content is copied verbatim (codeblock, pre, lines, screen, msgblock and anything with xml:space=\"preserve\" always are).",
   "config.format.mixedContentElements.description": "Format and Indent: additional element names treated as inline, so a parent holding them keeps its content on the same lines as its text.",
   "config.format.breakLineElements.description": "Format and Indent: additional element names that always start on their own line, even inside text."

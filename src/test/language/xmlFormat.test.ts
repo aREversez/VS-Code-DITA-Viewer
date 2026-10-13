@@ -110,12 +110,13 @@ describe('formatXml: empty elements and attributes', () => {
     );
   });
 
-  it('should break only a start tag that exceeds the width when breakLongAttributes is on', () => {
-    const src = '<root><a href="aaaaaaaaaa" id="bbbbbbbbbb"/><a x="1"/></root>';
-    const out = fmt(src, { lineWidth: 30 });
-    assert.ok(out.includes('<a href="aaaaaaaaaa"\n     id="bbbbbbbbbb"/>'));
+  it('should pack attributes up to the line width, aligned under the first, when a tag is too long', () => {
+    const src = '<root><a href="aaaaaaaaaa" id="bbbbbbbbbb" scope="local" format="dita" type="topic" x="1"/><a x="1"/></root>';
+    const out = fmt(src, { lineWidth: 40 });
+    assert.ok(out.includes('<a href="aaaaaaaaaa" id="bbbbbbbbbb"\n     scope="local" format="dita"\n     type="topic" x="1"/>'), out);
     assert.ok(out.includes('<a x="1"/>'));
-    assert.ok(!fmt(src, { lineWidth: 30, breakLongAttributes: false }).includes('\n     id='));
+    for (const l of out.split('\n')) assert.ok(l.length <= 40, l);
+    assert.ok(!fmt(src, { lineWidth: 40, breakLongAttributes: false }).includes('\n     scope='));
   });
 });
 
