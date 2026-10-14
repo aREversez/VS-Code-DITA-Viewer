@@ -11,14 +11,23 @@ const fmt = (t: string, o = {}) => {
 describe('formatXml: recursive indentation', () => {
   it('should indent element-only content one level per depth', () => {
     assert.strictEqual(
-      fmt('<root><a><y>t</y><z>t</z></a><w><v>t</v></w></root>\n'),
+      fmt('<root>\n  <a>\n    <y>t</y>\n    <z>t</z>\n  </a>\n  <w>\n    <v>t</v>\n  </w>\n</root>\n'),
       '<root>\n  <a>\n    <y>t</y>\n    <z>t</z>\n  </a>\n  <w>\n    <v>t</v>\n  </w>\n</root>\n',
     );
   });
 
   it('should honour indentSize and useTabs', () => {
-    assert.strictEqual(fmt('<a><y><z/></y></a>', { indentSize: 4 }), '<a>\n    <y>\n        <z/>\n    </y>\n</a>');
-    assert.strictEqual(fmt('<a><y><z/></y></a>', { useTabs: true }), '<a>\n\t<y>\n\t\t<z/>\n\t</y>\n</a>');
+    // A source whose <y> children are glued with zero gap collapses under the
+    // Oxygen rule, so break them apart to exercise indentSize and useTabs in
+    // isolation.
+    assert.strictEqual(
+      fmt('<a>\n  <y>\n    <z/>\n    <w/>\n  </y>\n</a>', { indentSize: 4 }),
+      '<a>\n    <y>\n        <z/>\n        <w/>\n    </y>\n</a>',
+    );
+    assert.strictEqual(
+      fmt('<a>\n  <y>\n    <z/>\n    <w/>\n  </y>\n</a>', { useTabs: true }),
+      '<a>\n\t<y>\n\t\t<z/>\n\t\t<w/>\n\t</y>\n</a>',
+    );
   });
 
   it('should re-indent badly indented input', () => {
@@ -26,7 +35,10 @@ describe('formatXml: recursive indentation', () => {
   });
 
   it('should keep prolog items on their own lines and drop blank text between them', () => {
-    const src = '<?xml version="1.0"?><!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd"><!-- c --><topic id="t"><title>T</title></topic>';
+    // The `<topic>` in the source has whitespace around `<title>`; if it were
+    // glued the collapse rule would keep the pair on one line. The test checks
+    // prolog-level line structure, not collapse.
+    const src = '<?xml version="1.0"?><!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd"><!-- c --><topic id="t">\n  <title>T</title>\n</topic>';
     assert.strictEqual(
       fmt(src),
       '<?xml version="1.0"?>\n<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">\n<!-- c -->\n<topic id="t">\n  <title>T</title>\n</topic>',
@@ -35,6 +47,45 @@ describe('formatXml: recursive indentation', () => {
 
   it('should keep a comment and a PI inside element-only content on their own lines', () => {
     assert.strictEqual(fmt('<a><!-- x --><y/><?pi y?></a>'), '<a>\n  <!-- x -->\n  <y/>\n  <?pi y?>\n</a>');
+  });
+
+  it('should collapse an element-only parent with a single self-closing child that has no source whitespace around it', () => {
+    // Oxygen keeps `<vrmlist><vrm version="1.0"/></vrmlist>` on the line the source had it;
+    // `<prodname><keyword keyref="product-name"/></prodname>` likewise, with or without
+    // attributes on the parent. A source that already broke them out stays broken out.
+    assert.strictEqual(
+      fmt('<metadata><prodname><keyword keyref="product-name"/></prodname><vrmlist><vrm version="1.0"/></vrmlist></metadata>'),
+      // 96 chars at the top level does not fit width 80, so `<metadata>` stays broken
+      // out; its two children each fit and collapse.
+      '<metadata>\n  <prodname><keyword keyref="product-name"/></prodname>\n  <vrmlist><vrm version="1.0"/></vrmlist>\n</metadata>',
+    );
+    assert.strictEqual(
+      fmt('<metadata><prodname>\n  <keyword keyref="product-name"/>\n</prodname></metadata>'),
+      '<metadata>\n  <prodname>\n    <keyword keyref="product-name"/>\n  </prodname>\n</metadata>',
+    );
+    // The recursive collapse covers single-child chains and text leaves too:
+    // `<a><y><z>t</z></y></a>` (17 chars, zero-gap source) fits width 80 and
+    // stays on one line, matching Oxygen's treatment of `<p><codeph>x</codeph></p>`.
+    assert.strictEqual(fmt('<a><y><z>t</z></y></a>'), '<a><y><z>t</z></y></a>');
+    // A source newline in front of the leaf still refuses collapse (whitespace
+    // gap between `<y>` and `<z>` breaks the zero-gap rule).
+    assert.strictEqual(fmt('<a><y>\n  <z>t</z>\n</y></a>'), '<a>\n  <y>\n    <z>t</z>\n  </y>\n</a>');
+    // no collapse when breakLineBeforeAttribute or expandEmptyElements are on
+    assert.ok(fmt('<a id="x"><y n="1"/></a>', { breakLineBeforeAttribute: true }).includes('\n'));
+    assert.ok(!fmt('<a id="x"><y n="1"/></a>', { expandEmptyElements: true }).includes('<a id="x"><y n="1"/></a>'));
+  });
+
+  it('should glue a comment that had no whitespace behind a real close tag in element-only content', () => {
+    // Oxygen keeps `</p><!-- trailing note -->` on the same line when the
+    // source glued them, and breaks a comment that stood on its own line.
+    assert.strictEqual(
+      fmt('<section>\n  <p>a</p><!-- tail -->\n</section>'),
+      '<section>\n  <p>a</p><!-- tail -->\n</section>',
+    );
+    assert.strictEqual(
+      fmt('<section>\n  <p>a</p>\n  <!-- own line -->\n</section>'),
+      '<section>\n  <p>a</p>\n  <!-- own line -->\n</section>',
+    );
   });
 });
 
@@ -49,7 +100,7 @@ describe('formatXml: mixed content and line wrapping', () => {
 
   it('should wrap at the line width, continuing one level below the owner', () => {
     const words = Array.from({ length: 30 }, (_, i) => `word${i}`).join(' ');
-    const out = fmt(`<a><p>${words}</p></a>`, { lineWidth: 40 });
+    const out = fmt(`<a><p>${words}</p></a>`, { lineWidth: 40, wrapMixedContent: true });
     const lines = out.split('\n');
     assert.ok(lines.length > 4);
     assert.ok(lines[1].startsWith('  <p>word0'));
@@ -61,7 +112,7 @@ describe('formatXml: mixed content and line wrapping', () => {
   });
 
   it('should never break inside a glued run such as </b>, or at an entity', () => {
-    const out = fmt('<p>aaaa bbbb<b>cccc</b>,&amp; dddd</p>', { lineWidth: 10 });
+    const out = fmt('<p>aaaa bbbb<b>cccc</b>,&amp; dddd</p>', { lineWidth: 10, wrapMixedContent: true });
     assert.ok(out.includes('bbbb<b>cccc</b>,&amp;'));
   });
 
@@ -204,7 +255,11 @@ describe('formatXml: Oxygen attribute/tag wrap parity (real samples)', () => {
   // a whole: `<name` stays where it is, attributes fill and wrap one level below
   // the tag, and a closing bracket glued to an unbreakable run drops to a
   // continuation line together with that run.
-  const wrap = { lineWidth: 100 };
+  // `wrapMixedContent: true` opts into the print-style prose reflow that these
+  // legacy Oxygen samples were produced with; a modern Oxygen layout (see
+  // format_indent_stress2.dita) leaves mixed content on single long lines and
+  // only wraps attributes.
+  const wrap = { lineWidth: 100, wrapMixedContent: true };
 
   it('should keep <xref after the leading text and wrap its attributes one level below', () => {
     const src = '<concept id="x"><title>t</title><conbody><p>See <xref href="some_quite_long_target_topic_name.dita" format="dita" scope="peer" type="topic" keyref="product-name" id="xref_probe_001"/> for details.</p></conbody></concept>';
@@ -283,51 +338,71 @@ describe('formatXml: Oxygen attribute/tag wrap parity (real samples)', () => {
 });
 
 describe('formatXml: Oxygen-formatted document', () => {
+  // OXYGEN_FORMATTED_SAMPLE was captured from an Oxygen configuration that
+  // reflows prose at the line width (wrapMixedContent). Keep that flag on for
+  // these parity tests so the sample remains byte-identical.
+  const legacy = { wrapMixedContent: true };
+
   it('should leave a document Oxygen formatted untouched (zero diff)', () => {
-    const detected = detectLineWidth(OXYGEN_FORMATTED_SAMPLE, { indentSize: 4, lineWidth: 80 });
+    const detected = detectLineWidth(OXYGEN_FORMATTED_SAMPLE, { indentSize: 4, lineWidth: 80, ...legacy });
     assert.strictEqual(detected, 100);
-    assert.strictEqual(fmt(OXYGEN_FORMATTED_SAMPLE, { indentSize: 4, lineWidth: detected as number }), OXYGEN_FORMATTED_SAMPLE);
+    assert.strictEqual(fmt(OXYGEN_FORMATTED_SAMPLE, { indentSize: 4, lineWidth: detected as number, ...legacy }), OXYGEN_FORMATTED_SAMPLE);
   });
 
   it('should leave the same document untouched with every </fig></p>, </ul></li> glued, too', () => {
     // Oxygen keeps whichever layout the source has there; the formatter must not pick one for it.
     const glued = OXYGEN_FORMATTED_SAMPLE.replace(/(<\/(?:fig|ul)>)\n\s*(<\/(?:li|p)>)/g, '$1$2');
     assert.notStrictEqual(glued, OXYGEN_FORMATTED_SAMPLE);
-    assert.strictEqual(fmt(glued, { indentSize: 4, lineWidth: 100 }), glued);
+    assert.strictEqual(fmt(glued, { indentSize: 4, lineWidth: 100, ...legacy }), glued);
     // and a mixture of both
     let n = 0;
     const mixed = OXYGEN_FORMATTED_SAMPLE.replace(/(<\/(?:fig|ul)>)\n\s*(<\/(?:li|p)>)/g, (m, a, b) => (n++ % 2 ? m : a + b));
-    assert.strictEqual(fmt(mixed, { indentSize: 4, lineWidth: 100 }), mixed);
+    assert.strictEqual(fmt(mixed, { indentSize: 4, lineWidth: 100, ...legacy }), mixed);
   });
 
   it('should start a wrapped element-only child at its own depth + 1, the indent of its children', () => {
     const run = 'x'.repeat(70);
     const expected = ['<ol>', `    <li>${run}`, '            <fig id="f">', '            <title>T</title>', '        </fig></li>', '</ol>'].join('\n');
     // too long for the line (a space in front of it) ...
-    assert.strictEqual(fmt(`<ol><li>${run} <fig id="f"><title>T</title></fig></li></ol>`, { indentSize: 4, lineWidth: 80 }), expected);
+    assert.strictEqual(fmt(`<ol><li>${run} <fig id="f"><title>T</title></fig></li></ol>`, { indentSize: 4, lineWidth: 80, ...legacy }), expected);
     // ... and a line break in the source in front of it is kept even when it would fit
-    assert.strictEqual(fmt(`<ol><li>${'x'.repeat(10)}\n<fig id="f"><title>T</title></fig></li></ol>`, { indentSize: 4, lineWidth: 80 }).split('\n')[2], '            <fig id="f">');
+    assert.strictEqual(fmt(`<ol><li>${'x'.repeat(10)}\n<fig id="f"><title>T</title></fig></li></ol>`, { indentSize: 4, lineWidth: 80, ...legacy }).split('\n')[2], '            <fig id="f">');
   });
 
   it('should count an attribute as fitting when it ends within the width, not the ">" behind it', () => {
     const run = 'x'.repeat(81); // `    <li>` + run + `<fig id="f"` ends at column 100; the `>` is column 101
-    const out = fmt(`<ol><li>${run}<fig id="f"><title>T</title></fig></li></ol>`, { indentSize: 4, lineWidth: 100 });
+    const out = fmt(`<ol><li>${run}<fig id="f"><title>T</title></fig></li></ol>`, { indentSize: 4, lineWidth: 100, ...legacy });
     assert.strictEqual(out.split('\n')[1], `    <li>${run}<fig id="f">`);
-    const over = fmt(`<ol><li>${run}x<fig id="f"><title>T</title></fig></li></ol>`, { indentSize: 4, lineWidth: 100 });
+    const over = fmt(`<ol><li>${run}x<fig id="f"><title>T</title></fig></li></ol>`, { indentSize: 4, lineWidth: 100, ...legacy });
     assert.strictEqual(over.split('\n')[1], `    <li>${run}x<fig`);
   });
 
   it('should start an inline element that wraps onto a line of its own at its depth + 1, and the text behind it at depth + 1 of the owner', () => {
     assert.strictEqual(
-      fmt('<p>aaaa bbbb cccc dddd <uicontrol>x</uicontrol> tail</p>', { indentSize: 4, lineWidth: 30 }),
+      fmt('<p>aaaa bbbb cccc dddd <uicontrol>x</uicontrol> tail</p>', { indentSize: 4, lineWidth: 30, ...legacy }),
       '<p>aaaa bbbb cccc dddd\n        <uicontrol>x</uicontrol>\n    tail</p>',
     );
+  });
+
+  it('should honour the source\'s own indent when an inline start tag follows a line break', () => {
+    // Oxygen's real behaviour in a mixed flow: a source that already indented
+    // `<sup>` at column 10 keeps it at column 10; a source whose `<keyword>`
+    // started at column 0 falls back to the flow's continuation indent.
+    const p = '<topic id="t"><body><section><p>a <term>t</term>、\n{lead}<sup>s</sup> tail</p></section></body></topic>';
+    const withLead = (lead: string) => fmt(p.replace('{lead}', lead), { indentSize: 2, lineWidth: 200 });
+    assert.ok(withLead('            ').split('\n').some((l) => /^ {12}<sup>s<\/sup>/.test(l)), 'deep source indent preserved');
+    assert.ok(withLead('').split('\n').some((l) => /^ {8}<sup>s<\/sup>/.test(l)), 'col-0 source falls back to the flow continuation (section depth + 1)');
+    // and the result is idempotent in both cases
+    for (const lead of ['            ', '']) {
+      const once = withLead(lead);
+      assert.strictEqual(fmt(once, { indentSize: 2, lineWidth: 200 }), once);
+    }
   });
 
   it('should keep <ph .../> and the run behind it whole when only the <fig name follows in the line (width 100)', () => {
     const run = 'a'.repeat(38);
     const src = `<topic id="t"><body><p><ph keyref="product_name"/>${run}<fig id="fig_oyb_3zh_rjc"><title>T</title></fig></p></body></topic>`;
-    const out = fmt(src, { indentSize: 4, lineWidth: 100 });
+    const out = fmt(src, { indentSize: 4, lineWidth: 100, wrapMixedContent: true });
     assert.ok(out.includes(`        <p><ph keyref="product_name"/>${run}<fig\n                id="fig_oyb_3zh_rjc">\n`), out);
   });
 
@@ -338,20 +413,25 @@ describe('formatXml: Oxygen-formatted document', () => {
 
 describe('formatXml: a tag without attributes moves as a whole', () => {
   it('should wrap before <b>boldtext</b> instead of overflowing the line', () => {
-    const out = fmt('<p>aaaa bbbb cccc dddd eeee ffff gggg <b>boldtext</b> tail</p>', { indentSize: 4, lineWidth: 40 });
+    const out = fmt('<p>aaaa bbbb cccc dddd eeee ffff gggg <b>boldtext</b> tail</p>', { indentSize: 4, lineWidth: 40, wrapMixedContent: true });
     // a tag that wraps onto a line of its own sits at its own depth + 1, like Oxygen's <uicontrol>
     assert.strictEqual(out, '<p>aaaa bbbb cccc dddd eeee ffff gggg\n        <b>boldtext</b> tail</p>');
   });
 
   it('should still split a tag that has attributes at its <name', () => {
-    const out = fmt('<p>aaaa bbbb cccc dddd eeee ffff <xref href="a_long_target.dita" scope="local">go</xref></p>', { indentSize: 4, lineWidth: 40 });
+    const out = fmt('<p>aaaa bbbb cccc dddd eeee ffff <xref href="a_long_target.dita" scope="local">go</xref></p>', { indentSize: 4, lineWidth: 40, wrapMixedContent: true });
     assert.ok(out.split('\n').every((l) => l.length <= 40), out);
   });
 });
 
 describe('detectLineWidth', () => {
   const words = (n: number) => Array.from({ length: n }, (_, i) => `word${i}`).join(' ');
-  const base = { indentSize: 4, lineWidth: 80 };
+  // Detection needs mixed-content reflow on: the whole point of detecting a
+  // width is that a document was hard-wrapped at some prose width and re-
+  // formatting should reproduce the layout. Modern Oxygen leaves prose on
+  // single long lines and only wraps attributes, and there is nothing for
+  // detection to lock onto in that shape.
+  const base = { indentSize: 4, lineWidth: 80, wrapMixedContent: true };
   const doc = (paras: string[]) => `<topic id="t"><title>T</title><body>${paras.map((x) => `<p>${x}</p>`).join('')}</body></topic>\n`;
 
   it('should find the width an already wrapped document uses, so re-formatting is a no-op', () => {
@@ -370,7 +450,7 @@ describe('detectLineWidth', () => {
   });
 
   it('should measure tab indentation the way the formatter does', () => {
-    const tabs = { indentSize: 4, useTabs: true };
+    const tabs = { indentSize: 4, useTabs: true, wrapMixedContent: true };
     const wrapped = fmt('<a><b2><c2><d2><p>' + words(40) + '</p></d2></c2></b2></a>\n', { ...tabs, lineWidth: 60 });
     const detected = detectLineWidth(wrapped, { ...tabs, lineWidth: 80 });
     assert.notStrictEqual(detected, null);

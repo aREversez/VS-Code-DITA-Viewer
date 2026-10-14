@@ -14,6 +14,7 @@ function readOptions(document: vscode.TextDocument, editorOptions: { tabSize: nu
     indentSize: Math.max(1, editorOptions.tabSize),
     useTabs: !editorOptions.insertSpaces,
     lineWidth: Math.max(0, cfg.get<number>('lineWidth', 80)),
+    wrapMixedContent: cfg.get<boolean>('wrapMixedContent', false),
     expandEmptyElements: cfg.get<boolean>('expandEmptyElements', false),
     breakLineBeforeAttribute: cfg.get<boolean>('breakLineBeforeAttribute', false),
     breakLongAttributes: cfg.get<boolean>('breakLongAttributes', true),
