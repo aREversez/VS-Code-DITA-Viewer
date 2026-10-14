@@ -317,16 +317,15 @@ function putOpenTag(t: OpenTag, out: Out, c: Ctx, tailRun = 0): void {
     return;
   }
   const width = c.o.lineWidth;
-  attrs.forEach((a, i) => {
-    const tail = i === attrs.length - 1 ? t.closing.length : 0;
-    if (c.o.breakLongAttributes && width > 0 && out.cols + 1 + firstLineLen(a) + tail > width) {
+  attrs.forEach((a) => {
+    if (c.o.breakLongAttributes && width > 0 && out.cols + 1 + firstLineLen(a) > width) {
       out.begin(cont);
       out.put(a);
     } else {
       out.put(' ' + a);
     }
   });
-  if (c.o.breakLongAttributes && width > 0 && out.cols + t.closing.length + tailRun > width) {
+  if (c.o.breakLongAttributes && width > 0 && tailRun > 0 && out.cols + t.closing.length + tailRun > width) {
     out.begin(t.depth);
   }
   out.put(t.closing);
@@ -500,7 +499,7 @@ function emitMixed(el: XElement, depth: number, out: Out, c: Ctx): void {
       // A start tag that wraps onto a line of its own sits where its children
       // go (depth + 1), like its attribute continuation lines; text and inline
       // markup continue at the owner's depth + 1.
-      out.begin(head.kind === 'eo' ? head.depth + 1 : cont);
+      out.begin(head.kind === 'eo' ? head.depth + 1 : typeof head.piece !== 'string' ? head.piece.depth + 1 : cont);
     }
     else out.put(' ');
     // A start tag is not an atomic wrap unit: `<name` is placed here and its

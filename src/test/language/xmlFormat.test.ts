@@ -309,6 +309,21 @@ describe('formatXml: Oxygen-formatted document', () => {
     assert.strictEqual(fmt(`<ol><li>${'x'.repeat(10)}\n<fig id="f"><title>T</title></fig></li></ol>`, { indentSize: 4, lineWidth: 80 }).split('\n')[2], '            <fig id="f">');
   });
 
+  it('should count an attribute as fitting when it ends within the width, not the ">" behind it', () => {
+    const run = 'x'.repeat(81); // `    <li>` + run + `<fig id="f"` ends at column 100; the `>` is column 101
+    const out = fmt(`<ol><li>${run}<fig id="f"><title>T</title></fig></li></ol>`, { indentSize: 4, lineWidth: 100 });
+    assert.strictEqual(out.split('\n')[1], `    <li>${run}<fig id="f">`);
+    const over = fmt(`<ol><li>${run}x<fig id="f"><title>T</title></fig></li></ol>`, { indentSize: 4, lineWidth: 100 });
+    assert.strictEqual(over.split('\n')[1], `    <li>${run}x<fig`);
+  });
+
+  it('should start an inline element that wraps onto a line of its own at its depth + 1, and the text behind it at depth + 1 of the owner', () => {
+    assert.strictEqual(
+      fmt('<p>aaaa bbbb cccc dddd <uicontrol>x</uicontrol> tail</p>', { indentSize: 4, lineWidth: 30 }),
+      '<p>aaaa bbbb cccc dddd\n        <uicontrol>x</uicontrol>\n    tail</p>',
+    );
+  });
+
   it('should keep <ph .../> and the run behind it whole when only the <fig name follows in the line (width 100)', () => {
     const run = 'a'.repeat(38);
     const src = `<topic id="t"><body><p><ph keyref="product_name"/>${run}<fig id="fig_oyb_3zh_rjc"><title>T</title></fig></p></body></topic>`;
@@ -324,7 +339,8 @@ describe('formatXml: Oxygen-formatted document', () => {
 describe('formatXml: a tag without attributes moves as a whole', () => {
   it('should wrap before <b>boldtext</b> instead of overflowing the line', () => {
     const out = fmt('<p>aaaa bbbb cccc dddd eeee ffff gggg <b>boldtext</b> tail</p>', { indentSize: 4, lineWidth: 40 });
-    assert.strictEqual(out, '<p>aaaa bbbb cccc dddd eeee ffff gggg\n    <b>boldtext</b> tail</p>');
+    // a tag that wraps onto a line of its own sits at its own depth + 1, like Oxygen's <uicontrol>
+    assert.strictEqual(out, '<p>aaaa bbbb cccc dddd eeee ffff gggg\n        <b>boldtext</b> tail</p>');
   });
 
   it('should still split a tag that has attributes at its <name', () => {
