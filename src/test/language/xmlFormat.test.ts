@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import { OXYGEN_FORMATTED_SAMPLE } from './oxygenSample';
 import { formatXml, formatXmlRange, minimalEdit, detectLineWidth } from '../../language/xmlFormat';
 
 const fmt = (t: string, o = {}) => {
@@ -74,10 +75,28 @@ describe('formatXml: mixed content and line wrapping', () => {
       fmt('<li>Intro text<ul><li>one</li></ul>tail</li>'),
       '<li>Intro text<ul>\n    <li>one</li>\n  </ul>tail</li>',
     );
+  });
+
+  it('should keep the layout the source has between a multi-line child and the owner end tag', () => {
+    // glued stays glued, a line break stays a line break (as Oxygen does)
     assert.strictEqual(
       fmt('<li>Intro: <ul id="u"><li>one</li></ul></li>'),
       '<li>Intro: <ul id="u">\n    <li>one</li>\n  </ul></li>',
     );
+    assert.strictEqual(
+      fmt('<li>Intro: <ul id="u"><li>one</li></ul>\n</li>'),
+      '<li>Intro: <ul id="u">\n    <li>one</li>\n  </ul>\n</li>',
+    );
+    assert.strictEqual(
+      fmt('<li>Intro: <ul id="u"><li>one</li></ul> </li>'),
+      '<li>Intro: <ul id="u">\n    <li>one</li>\n  </ul></li>',
+    );
+  });
+
+  it('should keep a line break behind a multi-line child in front of the text that follows', () => {
+    assert.strictEqual(fmt('<li>a <ul><li>x</li></ul>\ntail</li>'), '<li>a <ul>\n    <li>x</li>\n  </ul>\n  tail</li>');
+    assert.strictEqual(fmt('<li>a <ul><li>x</li></ul>\n   tail</li>'), fmt('<li>a <ul><li>x</li></ul>\ntail</li>'));
+    assert.strictEqual(fmt('<li>a <ul><li>x</li></ul> tail</li>'), '<li>a <ul>\n    <li>x</li>\n  </ul> tail</li>');
   });
 
   it('should honour breakLineElements by starting those elements on their own line', () => {
@@ -134,7 +153,7 @@ describe('formatXml: empty elements and attributes', () => {
 describe('formatXml: layout verified against Oxygen output', () => {
   const o = { indentSize: 4, lineWidth: 80 };
 
-  it('should keep <fig> in the text line, wrap its attribute when the line is already full, and glue </p>', () => {
+  it('should keep <fig> in the text line, wrap its attribute when the line is already full, and keep </p> where the source had it', () => {
     const text = 'x'.repeat(66);
     const src = `<topic id="123"><body><p>${text}<fig id="fig_oyb_3zh_rjc"><title>T</title><image placement="break" href="../images/_1.png" scale="70" id="image_pyb_3zh_rjc"/></fig></p></body></topic>`;
     assert.strictEqual(
@@ -162,7 +181,7 @@ describe('formatXml: layout verified against Oxygen output', () => {
     assert.ok(out.includes(`\n${' '.repeat(32)}<image placement="break" href="../images/_2.png"\n${' '.repeat(36)}scale="70" id="image_fcr_sgj_rjc"/>\n`), out);
   });
 
-  it('should keep a list in the item text, children one level deeper, </ul></li> glued', () => {
+  it('should keep a list in the item text, children one level deeper, </li> glued as in the source', () => {
     const src = '<ol id="o"><li>head: <ul id="u"><li><b>b1</b>: one</li><li><b>b2</b>: two</li></ul></li></ol>';
     assert.strictEqual(
       fmt(src, o),
@@ -260,6 +279,45 @@ describe('formatXml: Oxygen attribute/tag wrap parity (real samples)', () => {
     const src = '<concept id="x"><title>t</title><conbody><p>See <xref href="some_quite_long_target_topic_name.dita" format="dita" scope="peer" type="topic" keyref="product-name" id="xref_probe_001"/> for details.</p></conbody></concept>';
     const once = fmt(src, { indentSize: 4, ...wrap });
     assert.strictEqual(fmt(once, { indentSize: 4, ...wrap }), once);
+  });
+});
+
+describe('formatXml: Oxygen-formatted document', () => {
+  it('should leave a document Oxygen formatted untouched (zero diff)', () => {
+    const detected = detectLineWidth(OXYGEN_FORMATTED_SAMPLE, { indentSize: 4, lineWidth: 80 });
+    assert.strictEqual(detected, 100);
+    assert.strictEqual(fmt(OXYGEN_FORMATTED_SAMPLE, { indentSize: 4, lineWidth: detected as number }), OXYGEN_FORMATTED_SAMPLE);
+  });
+
+  it('should leave the same document untouched with every </fig></p>, </ul></li> glued, too', () => {
+    // Oxygen keeps whichever layout the source has there; the formatter must not pick one for it.
+    const glued = OXYGEN_FORMATTED_SAMPLE.replace(/(<\/(?:fig|ul)>)\n\s*(<\/(?:li|p)>)/g, '$1$2');
+    assert.notStrictEqual(glued, OXYGEN_FORMATTED_SAMPLE);
+    assert.strictEqual(fmt(glued, { indentSize: 4, lineWidth: 100 }), glued);
+    // and a mixture of both
+    let n = 0;
+    const mixed = OXYGEN_FORMATTED_SAMPLE.replace(/(<\/(?:fig|ul)>)\n\s*(<\/(?:li|p)>)/g, (m, a, b) => (n++ % 2 ? m : a + b));
+    assert.strictEqual(fmt(mixed, { indentSize: 4, lineWidth: 100 }), mixed);
+  });
+
+  it('should start a wrapped element-only child at its own depth + 1, the indent of its children', () => {
+    const run = 'x'.repeat(70);
+    const expected = ['<ol>', `    <li>${run}`, '            <fig id="f">', '            <title>T</title>', '        </fig></li>', '</ol>'].join('\n');
+    // too long for the line (a space in front of it) ...
+    assert.strictEqual(fmt(`<ol><li>${run} <fig id="f"><title>T</title></fig></li></ol>`, { indentSize: 4, lineWidth: 80 }), expected);
+    // ... and a line break in the source in front of it is kept even when it would fit
+    assert.strictEqual(fmt(`<ol><li>${'x'.repeat(10)}\n<fig id="f"><title>T</title></fig></li></ol>`, { indentSize: 4, lineWidth: 80 }).split('\n')[2], '            <fig id="f">');
+  });
+
+  it('should keep <ph .../> and the run behind it whole when only the <fig name follows in the line (width 100)', () => {
+    const run = 'a'.repeat(38);
+    const src = `<topic id="t"><body><p><ph keyref="product_name"/>${run}<fig id="fig_oyb_3zh_rjc"><title>T</title></fig></p></body></topic>`;
+    const out = fmt(src, { indentSize: 4, lineWidth: 100 });
+    assert.ok(out.includes(`        <p><ph keyref="product_name"/>${run}<fig\n                id="fig_oyb_3zh_rjc">\n`), out);
+  });
+
+  it('should keep the owner end tag glued after text, and after an inline element', () => {
+    assert.strictEqual(fmt('<p>a <b>b</b> c</p>'), '<p>a <b>b</b> c</p>');
   });
 });
 

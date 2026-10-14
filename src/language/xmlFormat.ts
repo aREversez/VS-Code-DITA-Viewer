@@ -296,6 +296,8 @@ function canWrapAttributes(t: OpenTag, c: Ctx): boolean {
  * they no longer fit, the bracket itself drops to a continuation line at the
  * tag's own level — one level shallower than the attribute continuation, the
  * indent a wrapped run of text would get — and the run follows right after it.
+ * The glued run ends where the next tag with attributes begins: that tag
+ * wraps at its own attributes, so only its `<name` belongs to the unit.
  */
 function putOpenTag(t: OpenTag, out: Out, c: Ctx, tailRun = 0): void {
   const { el } = t;
@@ -371,24 +373,51 @@ function emitElement(el: XElement, depth: number, out: Out, c: Ctx): void {
 // own at its depth, and the flow carries on right after that end tag
 // (`</ul></li>`, `</fig></p>`).
 
-type FlowItem =
-  | { kind: 'piece'; piece: Piece; space: boolean; breakDepth?: number }
-  | { kind: 'eo'; el: XElement; open: OpenTag; depth: number; space: boolean; breakDepth?: number };
+// Oxygen keeps the layout the source already has around a multi-line child
+// (`</ul></li>` stays on one line, `</ul>` + newline + `</li>` stays on two),
+// so besides "was there whitespace" the flow records "did it contain a line
+// break". Only those boundaries use it; whitespace inside running text is
+// still reflowed.
+interface Pending {
+  space: boolean;
+  nl: boolean;
+}
 
-function flatten(nodes: XNode[], items: FlowItem[], c: Ctx, pending: { space: boolean }, depth: number): void {
-  const push = (piece: Piece, breakDepth?: number) => {
-    items.push({ kind: 'piece', piece, space: pending.space, breakDepth });
+type FlowItem =
+  | { kind: 'piece'; piece: Piece; space: boolean; nl: boolean; breakDepth?: number }
+  | { kind: 'eo'; el: XElement; open: OpenTag; depth: number; space: boolean; nl: boolean; breakDepth?: number };
+
+function flatten(nodes: XNode[], items: FlowItem[], c: Ctx, pending: Pending, depth: number): void {
+  const take = () => {
+    const w = { space: pending.space, nl: pending.nl };
     pending.space = false;
+    pending.nl = false;
+    return w;
+  };
+  const push = (piece: Piece, breakDepth?: number) => {
+    items.push({ kind: 'piece', piece, ...take(), breakDepth });
   };
   for (const n of nodes) {
     if (n.kind === 'text') {
-      // Every separator between the pieces of the split is whitespace that
-      // was in the source, so each piece after the first is preceded by one.
-      const parts = n.raw.split(XML_WS);
-      for (let i = 0; i < parts.length; i++) {
-        if (i > 0) pending.space = true;
-        if (parts[i] === '') continue;
-        push(parts[i]);
+      const words = n.raw.split(XML_WS).filter((w) => w !== '');
+      if (words.length === 0) {
+        pending.space = true;
+        if (n.raw.includes('\n')) pending.nl = true;
+        continue;
+      }
+      const lead = (/^[ \t\r\n]*/.exec(n.raw) as RegExpExecArray)[0];
+      const trail = (/[ \t\r\n]*$/.exec(n.raw) as RegExpExecArray)[0];
+      if (lead) {
+        pending.space = true;
+        if (lead.includes('\n')) pending.nl = true;
+      }
+      words.forEach((w, idx) => {
+        if (idx > 0) pending.space = true;
+        push(w);
+      });
+      if (trail) {
+        pending.space = true;
+        pending.nl = trail.includes('\n');
       }
     } else if (n.kind === 'element') {
       const breakDepth = c.block.has(n.name) ? depth : undefined;
@@ -407,10 +436,7 @@ function flatten(nodes: XNode[], items: FlowItem[], c: Ctx, pending: { space: bo
         flatten(n.children, items, c, pending, depth + 1);
         push(`</${n.name}>`);
       } else {
-        items.push({
-          kind: 'eo', el: n, open: { el: n, closing: '>', depth }, depth, space: pending.space, breakDepth,
-        });
-        pending.space = false;
+        items.push({ kind: 'eo', el: n, open: { el: n, closing: '>', depth }, depth, ...take(), breakDepth });
       }
     } else {
       push(n.raw);
@@ -420,13 +446,15 @@ function flatten(nodes: XNode[], items: FlowItem[], c: Ctx, pending: { space: bo
 
 function emitMixed(el: XElement, depth: number, out: Out, c: Ctx): void {
   const items: FlowItem[] = [];
-  flatten(el.children, items, c, { space: false }, depth + 1);
+  const pending: Pending = { space: false, nl: false };
+  flatten(el.children, items, c, pending, depth + 1);
   const cont = depth + 1;
   // The owner's end tag `</name>` is glued to the last line of the flow, so the
   // final run has to reserve its width before a break is considered (Oxygen
   // wraps `…USB` and keeps `与电源接口。</p>` together on the next line).
   const ownerCloseLen = 2 + el.name.length;
   let first = true;
+  let afterEo = false; // the cursor is right behind the end tag of a multi-line child
   let i = 0;
   while (i < items.length) {
     // A chunk is a run of pieces with no whitespace between them: the only
@@ -460,9 +488,20 @@ function emitMixed(el: XElement, depth: number, out: Out, c: Ctx): void {
     const splitsAtName = typeof headPiece !== 'string' && canWrapAttributes(headPiece, c);
     const headFit = splitsAtName ? 1 + (headPiece as OpenTag).el.name.length : len + (isLast ? ownerCloseLen : 0);
     if (head.breakDepth !== undefined && !first) out.begin(head.breakDepth);
-    else if (first || !head.space) {
+    else if (head.kind === 'eo' && head.nl) {
+      // A line break in front of a multi-line child is kept, at its children's indent.
+      out.begin(head.depth + 1);
+    } else if (afterEo && head.nl) {
+      // So is a line break behind its end tag.
+      out.begin(cont);
+    } else if (first || !head.space) {
       /* glued to what precedes it */
-    } else if (c.o.lineWidth > 0 && out.cols + 1 + headFit > c.o.lineWidth) out.begin(cont);
+    } else if (c.o.lineWidth > 0 && out.cols + 1 + headFit > c.o.lineWidth) {
+      // A start tag that wraps onto a line of its own sits where its children
+      // go (depth + 1), like its attribute continuation lines; text and inline
+      // markup continue at the owner's depth + 1.
+      out.begin(head.kind === 'eo' ? head.depth + 1 : cont);
+    }
     else out.put(' ');
     // A start tag is not an atomic wrap unit: `<name` is placed here and its
     // attributes wrap by themselves. The content glued right after the tag's
@@ -474,8 +513,17 @@ function emitMixed(el: XElement, depth: number, out: Out, c: Ctx): void {
       if (typeof p === 'string') out.put(p);
       else {
         let tailRun = 0;
-        for (let j = k + 1; j < pieces.length; j++) tailRun += pieceLen(pieces[j]);
-        if (isLast && k === pieces.length - 1) tailRun += ownerCloseLen;
+        let reachedEnd = true;
+        for (let j = k + 1; j < pieces.length; j++) {
+          const q = pieces[j];
+          if (typeof q !== 'string' && canWrapAttributes(q, c)) {
+            tailRun += 1 + q.el.name.length; // only `<name`; its attributes wrap on their own
+            reachedEnd = false;
+            break;
+          }
+          tailRun += pieceLen(q);
+        }
+        if (isLast && reachedEnd) tailRun += ownerCloseLen;
         putOpenTag(p, out, c, tailRun);
       }
     }
@@ -484,8 +532,13 @@ function emitMixed(el: XElement, depth: number, out: Out, c: Ctx): void {
       out.begin(terminator.depth);
       out.put(`</${terminator.el.name}>`);
     }
+    afterEo = terminator !== null;
     first = false;
   }
+  // Behind a multi-line child (`</fig>`, `</ul>`) the owner's end tag stays
+  // where the source had it: on a line of its own at the owner's depth if the
+  // source put a line break there, glued to the child's end tag otherwise.
+  if (afterEo && pending.nl) out.begin(depth);
 }
 
 // ─────────────────────────── public API ───────────────────────────
