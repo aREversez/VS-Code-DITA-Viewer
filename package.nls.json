@@ -54,14 +54,5 @@
   "command.clearMapCheckResults.title": "DITA: Clear Map Check Results",
   "config.updateReferencesOnRename.description": "Control whether href and conref references are automatically updated when DITA files are renamed or moved.",
   "config.updateReferencesOnRename.always": "Always update references automatically",
-  "config.updateReferencesOnRename.never": "Never update references",
-  "command.formatAndIndent.title": "DITA: Format and Indent",
-  "config.format.lineWidth.description": "Format and Indent: wrap attributes and mixed content (text and inline tags) at this many columns, counted in characters (Oxygen's default is 80). 0 turns wrapping off. Whitespace is only ever broken where whitespace already was.",
-  "config.format.detectLineWidth.description": "Format and Indent: adopt the line width a document was already wrapped to, like Oxygen's \"Detect line width on open\", so re-formatting it is a no-op instead of a reflow. The width is found by trying candidate widths and keeping the one that changes the fewest lines. The configured line width is kept when the document is already stable at it, shows no sign of hard wrapping (paragraphs on single long lines), or is malformed, and when the line width is 0.",
-  "config.format.expandEmptyElements.description": "Format and Indent: write an empty element as <a></a> instead of <a/>.",
-  "config.format.breakLineBeforeAttribute.description": "Format and Indent: put every attribute of a start tag on its own line, one level below the element (instead of filling lines up to the width).",
-  "config.format.breakLongAttributes.description": "Format and Indent: wrap the attributes of a start tag that is wider than the line width: as many per line as fit, continuation lines one level below the element.",
-  "config.format.preserveSpaceElements.description": "Format and Indent: additional element names whose content is copied verbatim (codeblock, pre, lines, screen, msgblock and anything with xml:space=\"preserve\" always are).",
-  "config.format.mixedContentElements.description": "Format and Indent: additional element names treated as inline, so a parent holding them keeps its content on the same lines as its text.",
-  "config.format.breakLineElements.description": "Format and Indent: element names that always start on their own line, even inside text. Empty by default: like Oxygen, <fig>, <ul> and the like stay in the text flow."
+  "config.updateReferencesOnRename.never": "Never update references"
 }

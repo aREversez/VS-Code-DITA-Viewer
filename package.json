@@ -177,11 +177,6 @@
         "icon": "$(symbol-tag)"
       },
       {
-        "command": "ditaViewer.formatAndIndent",
-        "title": "%command.formatAndIndent.title%",
-        "icon": "$(list-flat)"
-      },
-      {
         "command": "ditaViewer.findReferencingMaps",
         "title": "%command.findReferencingMaps.title%",
         "icon": "$(references)"
@@ -474,11 +469,6 @@
       ],
       "ditaViewer.editorContext": [
         {
-          "command": "ditaViewer.formatAndIndent",
-          "when": "resourceExtname == .dita || resourceExtname == .ditamap",
-          "group": "0_edit@1"
-        },
-        {
           "command": "ditaViewer.exportHtml",
           "when": "resourceExtname == .dita || resourceExtname == .ditamap",
           "group": "1_output@1"
@@ -661,58 +651,6 @@
           "type": "boolean",
           "default": true,
           "description": "%config.wrapSelectionOnEnter.description%"
-        },
-        "dita-viewer.format.lineWidth": {
-          "type": "integer",
-          "default": 80,
-          "minimum": 0,
-          "scope": "resource",
-          "description": "%config.format.lineWidth.description%"
-        },
-        "dita-viewer.format.detectLineWidth": {
-          "type": "boolean",
-          "default": true,
-          "scope": "resource",
-          "description": "%config.format.detectLineWidth.description%"
-        },
-        "dita-viewer.format.expandEmptyElements": {
-          "type": "boolean",
-          "default": false,
-          "scope": "resource",
-          "description": "%config.format.expandEmptyElements.description%"
-        },
-        "dita-viewer.format.breakLineBeforeAttribute": {
-          "type": "boolean",
-          "default": false,
-          "scope": "resource",
-          "description": "%config.format.breakLineBeforeAttribute.description%"
-        },
-        "dita-viewer.format.breakLongAttributes": {
-          "type": "boolean",
-          "default": true,
-          "scope": "resource",
-          "description": "%config.format.breakLongAttributes.description%"
-        },
-        "dita-viewer.format.preserveSpaceElements": {
-          "type": "array",
-          "items": { "type": "string" },
-          "default": [],
-          "scope": "resource",
-          "description": "%config.format.preserveSpaceElements.description%"
-        },
-        "dita-viewer.format.mixedContentElements": {
-          "type": "array",
-          "items": { "type": "string" },
-          "default": [],
-          "scope": "resource",
-          "description": "%config.format.mixedContentElements.description%"
-        },
-        "dita-viewer.format.breakLineElements": {
-          "type": "array",
-          "items": { "type": "string" },
-          "default": [],
-          "scope": "resource",
-          "description": "%config.format.breakLineElements.description%"
         },
         "dita-viewer.customCss": {
           "type": "array",

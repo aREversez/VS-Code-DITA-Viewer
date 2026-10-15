@@ -327,6 +327,5 @@
   "Updated {0} references in {1} files": "已更新 {1} 个文件中的 {0} 处引用",
   "Rename reference update exceeded file limit of {0}": "重命名引用更新超出 {0} 个文件的限制",
   "Open the referenced content in its source file": "在源文件中打开被引用的内容",
-  "Reusable content. Press Enter to open the referenced content in its source file.": "可复用内容。按 Enter 键可在源文件中打开被引用的内容。",
-  "Cannot format: the document is not well-formed ({0}, line {1}). Fix it first; nothing was changed.": "无法格式化：文档不是格式良好的 XML（{0}，第 {1} 行）。请先修复，未做任何更改。"
+  "Reusable content. Press Enter to open the referenced content in its source file.": "可复用内容。按 Enter 键可在源文件中打开被引用的内容。"
 }
