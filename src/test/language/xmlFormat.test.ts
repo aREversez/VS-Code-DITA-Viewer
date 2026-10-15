@@ -688,3 +688,29 @@ describe('formatXml: Oxygen layout of sources that carry no layout', () => {
     assert.ok(fmt(src, o).includes('源码里 <uicontrol>x</uicontrol> 位于 0 列。</p>'), fmt(src, o));
   });
 });
+
+describe('formatXml: closing bracket of a wrapped element-only tag', () => {
+  it('should drop "/>" to its own line, under the tag, when it does not fit behind the last attribute', () => {
+    // From an Oxygen-formatted file (tabs, indent 4, line width 80): the
+    // attributes fill the line up to the width and `/>` has no room left.
+    let open = '';
+    let close = '';
+    for (let i = 0; i < 6; i++) {
+      open += `<d${i}>`;
+      close = `</d${i}>` + close;
+    }
+    const img =
+      '<image href="../images/pre_amble_transform_tatate1.png" placement="break" id="image_asf_3kp_4hc" scale="25"/>';
+    const out = fmt(open + img + close, { indentSize: 4, useTabs: true, lineWidth: 80 }).split('\n');
+    const k = out.findIndex((l) => l.includes('<image'));
+    const t = (n: number) => '\t'.repeat(n);
+    assert.deepStrictEqual(out.slice(k, k + 3), [
+      `${t(6)}<image href="../images/pre_amble_transform_tatate1.png"`,
+      `${t(7)}placement="break" id="image_asf_3kp_4hc" scale="25"`,
+      `${t(6)}/>`,
+    ]);
+    // and Oxygen's own layout is a fixed point (the viewer used to glue `/>` back on)
+    const oxygen = out.join('\n');
+    assert.strictEqual(fmt(oxygen, { indentSize: 4, useTabs: true, lineWidth: 80 }), oxygen);
+  });
+});

@@ -340,7 +340,9 @@ function putOpenTag(t: OpenTag, out: Out, c: Ctx, tailRun = 0): void {
       out.put(' ' + a);
     }
   });
-  if (c.o.breakLongAttributes && width > 0 && tailRun > 0 && out.cols + t.closing.length + tailRun > width) {
+  // A `/>` that no longer fits drops to its own line even with nothing glued
+  // behind it (`<image …\n    scale="25"\n/>`); a `>` only moves together with a run.
+  if (c.o.breakLongAttributes && width > 0 && (tailRun > 0 || t.closing === '/>') && out.cols + t.closing.length + tailRun > width) {
     // Oxygen (checked with sources that carry no layout at all): `/>` lines up
     // with its tag, `>` with the tag's content — whether or not the attributes
     // wrapped before it.
