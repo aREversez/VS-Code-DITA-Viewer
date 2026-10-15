@@ -28,6 +28,27 @@
     "message": "Key \"unusedkey\" is defined but never referenced"
   },
   {
+    "category": "multiple-reference",
+    "severity": "warning",
+    "file": "corpus.ditamap",
+    "line": 30,
+    "message": "Topic referenced more than once (2 times): topics/ok.dita"
+  },
+  {
+    "category": "multiple-reference",
+    "severity": "warning",
+    "file": "corpus.ditamap",
+    "line": 35,
+    "message": "Topic referenced more than once (2 times): topics/keytopic.dita"
+  },
+  {
+    "category": "undefined-key",
+    "severity": "error",
+    "file": "corpus.ditamap",
+    "line": 38,
+    "message": "Key reference \"nosuchkey\" does not match any key definition"
+  },
+  {
     "category": "unreferenced-link",
     "severity": "warning",
     "file": "topics/linker.dita",

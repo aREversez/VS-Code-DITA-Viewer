@@ -59,6 +59,7 @@ export function localizeMsg(m: Msg): string {
     case 'ref.multiple': return vscode.l10n.t('Topic referenced more than once ({1} times): {0}', ...a);
     case 'id.duplicate': return vscode.l10n.t('Duplicate topic id "{0}" ({1} topics share it)', ...a);
     case 'key.duplicate': return vscode.l10n.t('Key "{0}" is already defined; this definition is ignored', ...a);
+    case 'key.undefined': return vscode.l10n.t('Key reference "{0}" does not match any key definition', ...a);
     case 'key.unreferenced': return vscode.l10n.t('Key "{0}" is defined but never referenced', ...a);
     case 'reuse.unreferenced': return vscode.l10n.t('Reusable element <{0} id="{1}"> is never referenced by a conref or conkeyref', ...a);
     case 'prof.conflict': return vscode.l10n.t('@{0}="{1}" on <{2}> shares no value with the enclosing "{3}"; the content is overshadowed in profiled output', ...a);
@@ -117,6 +118,7 @@ function categoryLabel(c: IssueCategory): string {
   switch (c) {
     case 'validation': return vscode.l10n.t('Validation');
     case 'missing-reference': return vscode.l10n.t('Missing topics and maps');
+    case 'undefined-key': return vscode.l10n.t('Undefined key references');
     case 'missing-resource': return vscode.l10n.t('Missing resources');
     case 'remote-resource': return vscode.l10n.t('Unreachable remote resources');
     case 'outside-folder': return vscode.l10n.t('References outside the map folder');

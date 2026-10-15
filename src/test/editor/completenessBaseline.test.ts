@@ -45,6 +45,7 @@ describe('Validate and Check for Completeness: Oxygen differential baseline', ()
     const expected = [
       'validation',
       'missing-reference',
+      'undefined-key',
       'outside-folder',
       'unreferenced-link',
       'multiple-reference',

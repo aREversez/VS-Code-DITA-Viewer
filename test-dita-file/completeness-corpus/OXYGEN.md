@@ -112,4 +112,11 @@ list in `README.md`):
 - `topics/invalid.dita` — schema-invalid but well-formed → expect **Oxygen only**
   (the extension has no DTD/RNG validation).
 - `keydef keys="kusekey"` + two `topicref keyref="kusekey"` in `corpus.ditamap`
-  → expect an Oxygen multiple-reference complaint the extension does not emit.
+  → *(fixed)* the extension now resolves keyrefs; the two references produce a
+  `multiple-reference`, matching Oxygen.
+- `topicref keyref="nosuchkey"` → the extension reports `undefined-key`
+  (`dmv.undef.key`).
+
+The full list of Oxygen problem IDs and the extension's status against each is
+in **[OXYGEN-PROBLEMS.md](OXYGEN-PROBLEMS.md)**, which is the parity spec now
+that a real report needs a license we do not have.

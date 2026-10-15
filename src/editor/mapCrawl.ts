@@ -75,10 +75,32 @@ export interface KeyDef extends Location {
   scopeIds: string[];
   href?: string;
   target?: string;
+  /** The @format attribute on the defining element, if any. */
+  format?: string;
 }
 
 export interface KeyUse extends Location {
+  /** Bare key name (the part before any `/`). */
   key: string;
+  /** The attribute value as written (a keyref may carry a `/elementid`). */
+  value?: string;
+  /** Which attribute used the key. Only `keyref` is resolved to a target. */
+  attribute?: 'keyref' | 'conkeyref';
+  /** The element that used the key. */
+  tag?: string;
+  /** For a keyref on a resource reference: the kind the element implies. */
+  kind?: RefKind;
+  /** Key scopes in effect where the key was used (map keyrefs only). */
+  scopeChains?: string[][];
+  resourceOnly?: boolean;
+  inReltable?: boolean;
+  copyTo?: string;
+}
+
+/** A keyref that matches no key definition (Oxygen's `dmv.undef.key`). */
+export interface UndefinedKey extends Location {
+  key: string;
+  value: string;
 }
 
 export interface TopicId extends Location {
@@ -141,6 +163,7 @@ export interface CrawlResult {
   refs: Reference[];
   keyDefs: KeyDef[];
   keyUses: KeyUse[];
+  undefinedKeys: UndefinedKey[];
   topicIds: TopicId[];
   reusable: ReusableCandidate[];
   conrefUses: ConrefUse[];
@@ -261,6 +284,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     refs: [],
     keyDefs: [],
     keyUses: [],
+    undefinedKeys: [],
     topicIds: [],
     reusable: [],
     conrefUses: [],
@@ -376,16 +400,26 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     const tag = n.tag;
     if (tag === 'reltable') localCtx.inReltable = true;
 
-    // Uses of keys within the map itself (keyref on topicrefs etc.)
-    const keyref = n.attrs['keyref'];
-    if (keyref) result.keyUses.push({ file: ctx.file, line: n.line, key: keyref.split('/')[0] });
-
     const href = n.attrs['href'];
+    const keyref = n.attrs['keyref'];
     const keys = n.attrs['keys'];
     const isKeydef = tag === 'keydef' || /\bmap\/keydef\b/.test(classOf(n));
     const procRole = n.attrs['processing-role'];
     const resourceOnly = procRole === 'resource-only' || (isKeydef && procRole !== 'normal') || ctx.resourceOnly;
     localCtx.resourceOnly = procRole === 'normal' ? false : resourceOnly;
+
+    // A keyref on a map element is a reference to whatever the key resolves
+    // to. Resolution happens once every map is crawled (a definition may live
+    // in a submap or after the use), so the context is recorded here.
+    if (keyref) {
+      const isMap = tag === 'mapref' || /\bmap\/mapref\b/.test(classOf(n));
+      result.keyUses.push({
+        file: ctx.file, line: n.line, key: keyref.split('/')[0],
+        value: keyref, attribute: 'keyref', tag, kind: isMap ? 'mapref' : 'topicref',
+        scopeChains, resourceOnly: localCtx.resourceOnly,
+        inReltable: localCtx.inReltable, copyTo: n.attrs['copy-to'],
+      });
+    }
 
     // Cascade profiling attributes from this topicref to descendants and to its topic.
     const cascaded = new Map(ctx.profile);
@@ -417,6 +451,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
         const qualified = qualifiedNamesMulti(name, scopeChains);
         const def: KeyDef = {
           file: ctx.file, line: n.line, key: name, qualified, scopeId: scopeIds[0], scopeIds, href,
+          format: n.attrs['format'],
         };
         if (href && !URL_RE.test(href) && n.attrs['scope'] !== 'external') {
           const p = href.split('#')[0];
@@ -426,7 +461,9 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       }
     }
 
-    if (href !== undefined && href !== '' && (isMapTag(n) || tag === 'linkref' || n.attrs['href'])) {
+    // DITA: @keyref takes precedence over @href, so an element that has a
+    // keyref gets its reference from the key (resolved below), not the href.
+    if (href !== undefined && href !== '' && !keyref && (isMapTag(n) || tag === 'linkref' || n.attrs['href'])) {
       const isRelInner = ctx.inReltable && !isMapTag(n);
       const kind: RefKind = isKeydef ? 'keydef' : isMapHref(n, href) ? 'mapref' : 'topicref';
       if (!isRelInner || isMapTag(n)) {
@@ -500,7 +537,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
         if (!v) continue;
         if (a === 'conkeyref') {
           const key = v.split('/')[0];
-          result.keyUses.push({ file: path, line: n.line, key });
+          result.keyUses.push({ file: path, line: n.line, key, value: v, attribute: 'conkeyref', tag: n.tag });
           result.conrefUses.push({ key, targetId: v.includes('/') ? v.split('/').pop() : undefined });
         } else if (a === 'conref') {
           const ref = addRef(path, n, 'conref', v);
@@ -519,14 +556,18 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
           if (!ref.target && !ref.remote && frag) usedElementIds.add(frag.split('/').pop() ?? '');
         }
       }
-      for (const a of ['keyref']) {
-        const v = n.attrs[a];
-        if (v) result.keyUses.push({ file: path, line: n.line, key: v.split('/')[0] });
+      const keyrefValue = n.attrs['keyref'];
+      if (keyrefValue) {
+        result.keyUses.push({
+          file: path, line: n.line, key: keyrefValue.split('/')[0],
+          value: keyrefValue, attribute: 'keyref', tag: n.tag, kind: hrefAttrKind(n),
+        });
       }
       for (const a of ['href', 'data']) {
         const href = n.attrs[a];
         if (!href) continue;
         if (a === 'data' && n.tag !== 'object') continue;
+        if (n.attrs['keyref']) continue; // @keyref wins over @href
         const kind = hrefAttrKind(n);
         if (!kind) continue;
         const ref = addRef(path, n, kind, href);
@@ -733,15 +774,53 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     await crawlTopic(t.path, t.inherited);
   }
 
-  // ── Key-based references: <image keyref>, <xref keyref>, ... ──
-  // A key whose definition has an href is a reference to that resource from
-  // wherever it is used; count each such definition target once as a
-  // reference so the resource is not reported as unreferenced.
+  // ── Key resolution ──
+  // Every @keyref use is resolved against the keys the maps define. This runs
+  // after both loops because a definition may live in a submap or after the
+  // use. A keyref that resolves to a resource becomes a reference, so the
+  // ordinary existence / duplicate / link checks see it; a keyref that resolves
+  // to nothing is reported as an undefined key (Oxygen's `dmv.undef.key`).
+  const keyIndex = new Map<string, KeyDef>();
   for (const def of result.keyDefs) {
-    if (!def.target) continue;
-    // already recorded as a 'keydef'/'topicref' Reference via addRef; nothing more to add
+    for (const q of def.qualified) if (!keyIndex.has(q)) keyIndex.set(q, def);
+  }
+  for (const use of result.keyUses) {
+    if (use.attribute !== 'keyref') continue;
+    const def = resolveKeyUse(use, keyIndex);
+    if (!def) {
+      result.undefinedKeys.push({ file: use.file, line: use.line, key: use.key, value: use.value ?? use.key });
+      continue;
+    }
+    if (!def.target) continue; // a text-only key: defined, but no resource
+    const pathPart = (def.href ?? '').split('#')[0];
+    result.refs.push({
+      file: use.file,
+      line: use.line,
+      kind: use.kind ?? 'topicref',
+      href: def.href ?? use.value ?? use.key,
+      target: def.target,
+      remote: false,
+      dita: isDitaHref(pathPart, def.format),
+      resourceOnly: !!use.resourceOnly,
+      copyTo: use.copyTo,
+      inReltable: !!use.inReltable,
+    });
   }
   return result;
+}
+
+/**
+ * Resolves a keyref use against the key index: the most-qualified name first,
+ * so a key inside a key scope wins over a same-named key at an outer scope
+ * (DITA's nearest-scope precedence).
+ */
+function resolveKeyUse(use: KeyUse, index: ReadonlyMap<string, KeyDef>): KeyDef | undefined {
+  const candidates = qualifiedNamesMulti(use.key, use.scopeChains ?? [[]]).reverse();
+  for (const c of candidates) {
+    const def = index.get(c);
+    if (def) return def;
+  }
+  return undefined;
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────

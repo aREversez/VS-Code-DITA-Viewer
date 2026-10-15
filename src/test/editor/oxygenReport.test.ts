@@ -61,6 +61,12 @@ describe('Oxygen completeness report adapter', () => {
       categoryForProblemId('dmv.file.not.found'),
       'missing-reference',
     );
+    assert.strictEqual(categoryForProblemId('dmv.undef.key'), 'undefined-key');
+    assert.strictEqual(categoryForProblemId('dmv.dup.topic'), 'multiple-reference');
+    assert.strictEqual(
+      categoryForProblemId('duplicate.key.definition'),
+      'duplicate-key',
+    );
     assert.strictEqual(
       categoryForProblemId('dtd.element.not.allowed'),
       'oxygen:dtd.element.not.allowed',

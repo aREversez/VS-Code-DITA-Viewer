@@ -111,6 +111,45 @@ describe('completeness: references', () => {
   });
 });
 
+describe('completeness: key references', () => {
+  it('resolves a topicref keyref so the topic counts as referenced twice', async () => {
+    const issues = await check(
+      {
+        'root.ditamap': '<map><keydef keys="k" href="t.dita"/><topicref keyref="k"/><topicref keyref="k"/></map>',
+        't.dita': topic('t'),
+      },
+      { reportMultipleRefs: true },
+    );
+    assert.strictEqual(issues.filter((i) => i.category === 'multiple-reference').length, 1);
+  });
+
+  it('reports a keyref that matches no key definition', async () => {
+    const issues = await check(
+      { 'root.ditamap': '<map><topicref keyref="nope"/></map>' },
+      {},
+    );
+    const un = issues.filter((i) => i.category === 'undefined-key');
+    assert.strictEqual(un.length, 1);
+    assert.ok(un[0].message.includes('nope'));
+  });
+
+  it('does not report a keyref that resolves to a text-only key', async () => {
+    const issues = await check(
+      { 'root.ditamap': '<map><keydef keys="prod">Product</keydef><topicref keyref="prod"/></map>' },
+      {},
+    );
+    assert.strictEqual(issues.filter((i) => i.category === 'undefined-key').length, 0);
+  });
+
+  it('reports a missing file behind a keyref', async () => {
+    const issues = await check(
+      { 'root.ditamap': '<map><keydef keys="k" href="gone.dita"/><topicref keyref="k"/></map>' },
+      {},
+    );
+    assert.ok(issues.some((i) => i.category === 'missing-reference' && i.message.includes('gone.dita')));
+  });
+});
+
 describe('completeness: multiple references', () => {
   const map = (second: string) =>
     `<map><topicref href="t.dita"/>${second}</map>`;

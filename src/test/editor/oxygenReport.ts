@@ -199,12 +199,34 @@ export function parseOxygenReportAuto(text: string): OxygenIncident[] {
 }
 
 /**
- * Oxygen problem-ID -> extension category. Only entries confirmed against a
- * real report belong here; everything else keeps an `oxygen:` prefix so the
- * diff (and the user) can see exactly which IDs still need mapping.
+ * Oxygen problem-ID -> extension category. Every ID the extension implements is
+ * listed here, so a report diffs category-for-category. IDs the extension does
+ * not implement yet stay unmapped and show up with an `oxygen:` prefix (see
+ * OXYGEN-PROBLEMS.md for the full catalog and which ones are still gaps).
  */
 export const PROBLEM_ID_CATEGORY: Record<string, string> = {
+  // references
   'dmv.file.not.found': 'missing-reference',
+  'dmv.reference.not.exist': 'missing-reference',
+  // keys
+  'dmv.undef.key': 'undefined-key',
+  'duplicate.key.definition': 'duplicate-key',
+  'dmv.not.used.key.defs': 'unreferenced-key',
+  // duplicates
+  'dmv.dup.topic': 'multiple-reference',
+  'dmv.dup.topic.id': 'duplicate-id',
+  // not in map
+  'dmv.not.topic.ref.in.map': 'unreferenced-link',
+  'dmv.not.topic.ref.reltable.in.map': 'unreferenced-link',
+  // reuse
+  'dmv.not.used.reusable.component': 'unreferenced-reusable',
+  // folders
+  'dmv.external.references.map': 'outside-folder',
+  // profiling
+  'dmv.prof.attr.innef.cond': 'profiling-conflict',
+  'dmv.prof.attr.group.innef.cond': 'profiling-conflict',
+  'dmv.prof.attr.prefs.undef': 'profiling-preference',
+  'dmv.prof.attr.val.prefs.undef': 'profiling-preference',
 };
 
 export function categoryForProblemId(problemID: string): string {

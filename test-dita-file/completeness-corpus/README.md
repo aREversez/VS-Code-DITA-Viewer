@@ -4,6 +4,10 @@ This folder is the fixed input for Phase 0 of the "Validate and Check for
 Completeness" parity effort: **run both tools over the same map and diff their
 findings**, so a divergence is a test failure rather than a user report.
 
+The parity *specification* (what Oxygen can report) is
+**[OXYGEN-PROBLEMS.md](OXYGEN-PROBLEMS.md)** — read from the installed editor's
+own DITA-validation resources, no license required.
+
 - `corpus.ditamap` — the root map. Every child is a deliberate probe.
 - `topics/` — the referenced topics.
 - `../completeness-outside/outside.dita` — a sibling folder, to probe the
@@ -58,6 +62,9 @@ is a hand-built stand-in for testing the parser until a real report exists.
 | duplicate topic id | `topics/twoidsa/b.dita` | `duplicate-id` |
 | duplicate key | `keydef keys="dupkey"` ×2 | `duplicate-key` |
 | unused key | `keydef keys="unusedkey"` | `unreferenced-key` |
+| topic reached twice through a key | `keydef keys="kusekey"` + 2× `topicref keyref` | `multiple-reference` |
+| keyref to an undefined key | `topicref keyref="nosuchkey"` | `undefined-key` |
+| keyref to a key that is already referenced by `@href` | `<topicref keyref="dupkey"/>` (also `topics/ok.dita`) | `multiple-reference` |
 | unreferenced reusable | `topics/reuse.dita#orphan` | `unreferenced-reusable` |
 | CALS/simple table problems | `topics/tables.dita` | `table-layout` ×2 |
 | profiling conflict | `topics/profiling.dita` | `profiling-conflict` |
@@ -75,10 +82,11 @@ expected to show up as `onlyInBaseline`/`onlyInRun` differences:
 1. **DTD/schema validation** — `topics/invalid.dita` is well-formed but invalid
    (`bogus` attribute, `<notanelement>`). The extension has no DTD/RNG check and
    stays silent; Oxygen's validator should flag it.
-2. **Key-based references** — `keydef keys="kusekey"` + two `topicref
-   keyref="kusekey"`. The crawler records no `Reference` for a topicref without
-   `@href`, so the extension reports **no** `multiple-reference` (and misses
-   existence/link checks) for key-referenced topics.
+2. **Key-based references** — *(fixed)* the crawler now resolves `@keyref` to
+   the key definition after the maps are crawled, so a topic reached twice
+   through a key is a `multiple-reference`, an unresolvable keyref is an
+   `undefined-key`, and a keyref to a missing file is a `missing-reference`.
+   Recursion into a submap reached *only* through a keyref is still not done.
 3. **Partial profiling overlap** — `topics/profiling.dita`'s `audience="admin
    novice"` under a cascaded `novice` overlaps, so the extension reports no
    conflict; Oxygen's "values not found in parent" rule may treat it

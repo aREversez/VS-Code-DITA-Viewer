@@ -103,6 +103,7 @@ export function resolveStoredPath(mapDir: string, stored: string): string {
 export type IssueCategory =
   | 'validation'
   | 'missing-reference'
+  | 'undefined-key'
   | 'missing-resource'
   | 'remote-resource'
   | 'outside-folder'
@@ -179,6 +180,15 @@ export async function runChecks(
         });
       }
     }
+  }
+
+  // 1b. Key references that match no key definition.
+  for (const u of crawl.undefinedKeys) {
+    if (env.host.cancelled?.()) break;
+    issues.push({
+      category: 'undefined-key', severity: 'error', file: u.file, line: u.line,
+      msg: msg('key.undefined', u.value),
+    });
   }
 
   if (opts.checkNonDita && opts.includeRemote && env.checkRemote) {

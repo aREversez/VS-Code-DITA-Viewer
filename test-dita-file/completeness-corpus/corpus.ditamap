@@ -34,6 +34,9 @@
   <topicref keyref="kusekey"/>
   <topicref keyref="kusekey"/>
 
+  <!-- keyref that matches no key definition: probe for dmv.undef.key -->
+  <topicref keyref="nosuchkey"/>
+
   <!-- unreferenced reusable elements in a resource-only topic -->
   <topicref href="topics/reuse.dita" processing-role="resource-only"/>
 

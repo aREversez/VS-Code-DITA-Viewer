@@ -20,6 +20,7 @@ export const MESSAGE_TEMPLATES = {
   'ref.multiple': 'Topic referenced more than once ({1} times): {0}',
   // ids, keys, reuse
   'id.duplicate': 'Duplicate topic id "{0}" ({1} topics share it)',
+  'key.undefined': 'Key reference "{0}" does not match any key definition',
   'key.duplicate': 'Key "{0}" is already defined; this definition is ignored',
   'key.unreferenced': 'Key "{0}" is defined but never referenced',
   'reuse.unreferenced': 'Reusable element <{0} id="{1}"> is never referenced by a conref or conkeyref',
