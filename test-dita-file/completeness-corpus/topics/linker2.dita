@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<topic id="linker2">
+  <title>Linker 2</title>
+  <body>
+    <!-- control: linktarget2.dita is referenced by a topicref, so no warning -->
+    <p>Links to <xref href="linktarget2.dita">a topic that is in the map</xref>.</p>
+    <!-- control: consumes the reusable content so it is not reported -->
+    <p><ph conref="ok.dita#used"/></p>
+    <p><ph conref="reuse.dita#shared"/></p>
+  </body>
+</topic>

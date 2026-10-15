@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<topic id="ok">
+  <title>OK</title>
+  <body>
+    <p id="used">A paragraph reused through conref.</p>
+    <p><image href="https://example.invalid/diagram.png" scope="external" format="png"/></p>
+  </body>
+</topic>

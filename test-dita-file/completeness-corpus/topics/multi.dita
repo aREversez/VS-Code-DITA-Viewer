@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<topic id="multi">
+  <title>Multi</title>
+  <body>
+    <p>Referenced twice without a copy-to attribute.</p>
+  </body>
+</topic>

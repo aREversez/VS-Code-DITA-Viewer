@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<topic id="linktarget">
+  <title>Link target</title>
+  <body>
+    <p>Exists on disk but is never referenced by a topicref.</p>
+  </body>
+</topic>

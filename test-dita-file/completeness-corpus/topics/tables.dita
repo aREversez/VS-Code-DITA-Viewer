@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<topic id="tables">
+  <title>Tables</title>
+  <body>
+    <!-- CALS: @cols says 3 but only 2 colspecs are declared -->
+    <table>
+      <tgroup cols="3">
+        <colspec colname="c1"/>
+        <colspec colname="c2"/>
+        <tbody>
+          <row><entry>a</entry><entry>b</entry></row>
+        </tbody>
+      </tgroup>
+    </table>
+    <!-- simpletable: the body row is shorter than the header row -->
+    <simpletable>
+      <sthead><stentry>h1</stentry><stentry>h2</stentry></sthead>
+      <strow><stentry>only one cell</stentry></strow>
+    </simpletable>
+  </body>
+</topic>

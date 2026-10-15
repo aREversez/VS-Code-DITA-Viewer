@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SAMPLE ONLY - not real Oxygen output.
+
+  Hand-built from the report structure documented at
+  https://www.oxygenxml.com/doc/ug-editor/topics/scripting_oxygen_validate.html
+  (report > filesWithValidationProblems > file > incidents > incident).
+
+  It exists so scripts/oxygen-diff.cjs and oxygenReport.test.ts have a fixed
+  input. Replace it with a real report produced by:
+
+    sh scripts/validateCheckDITA.sh -i test-dita-file/completeness-corpus/corpus.ditamap \
+        -s test-dita-file/completeness-corpus/corpus.settings.xml -r oxygen-report.xml
+
+  (see OXYGEN.md). Then update PROBLEM_ID_CATEGORY in
+  src/test/editor/oxygenReport.ts from the problem IDs it actually contains.
+-->
+<report>
+  <summary>
+    <totalNumberOfFilesVerified>20</totalNumberOfFilesVerified>
+    <numberOfFilesWithValidationProblems>3</numberOfFilesWithValidationProblems>
+    <problemsFoundOnAggregate>4</problemsFoundOnAggregate>
+  </summary>
+  <filesWithValidationProblems>
+    <file filePath="D:\corpus\corpus.ditamap" numberOfProblems="1">
+      <incidents>
+        <incident>
+          <engine>DITA Validation</engine>
+          <severity>error</severity>
+          <problemID>dmv.file.not.found</problemID>
+          <description>Reference to file "topics/missing.dita" cannot be resolved.</description>
+          <startLocation>12:24</startLocation>
+        </incident>
+      </incidents>
+    </file>
+    <file filePath="D:\corpus\topics\invalid.dita" numberOfProblems="2">
+      <incidents>
+        <incident>
+          <engine>DITA Validation</engine>
+          <severity>error</severity>
+          <problemID>dtd.attribute.not.allowed</problemID>
+          <description>Attribute "bogus" is not allowed on element "p".</description>
+          <startLocation>6:8</startLocation>
+        </incident>
+        <incident>
+          <engine>DITA Validation</engine>
+          <severity>error</severity>
+          <problemID>dtd.element.not.allowed</problemID>
+          <description>Element "notanelement" is not allowed at this location.</description>
+          <startLocation>6:22</startLocation>
+        </incident>
+      </incidents>
+    </file>
+    <file filePath="D:\corpus\topics\profiling.dita" numberOfProblems="1">
+      <incidents>
+        <incident>
+          <engine>DITA Validate and Check for Completeness</engine>
+          <severity>warning</severity>
+          <problemID>dmv.profiling.conflict</problemID>
+          <description>Profiling value "admin" is not found in the parent profiling attributes.</description>
+          <startLocation>6:8</startLocation>
+        </incident>
+      </incidents>
+    </file>
+  </filesWithValidationProblems>
+</report>

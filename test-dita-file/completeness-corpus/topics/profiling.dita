@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<topic id="profiling">
+  <title>Profiling</title>
+  <body>
+    <!-- disjoint with the cascaded map value (novice): conflict -->
+    <p audience="admin">only admin</p>
+    <!-- partially overlaps the cascaded value: no conflict in the extension -->
+    <p audience="admin novice">admin or novice</p>
+    <!-- profiling attribute with no entry in the preference list -->
+    <p platform="linux">unlisted platform</p>
+    <p>plain</p>
+  </body>
+</topic>

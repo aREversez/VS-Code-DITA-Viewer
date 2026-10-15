@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<topic id="linker">
+  <title>Linker</title>
+  <body>
+    <p>Links to <xref href="linktarget.dita">a topic nothing references in the map</xref>.</p>
+  </body>
+</topic>

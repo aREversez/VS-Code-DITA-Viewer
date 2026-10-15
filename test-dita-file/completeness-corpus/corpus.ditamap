@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Phase-0 differential corpus for "Validate and Check for Completeness".
+     Every element here is a deliberate probe; see README.md for what each one
+     is expected to make the extension (and Oxygen) report. -->
+<map id="corpus">
+  <title>Completeness Check Corpus</title>
+
+  <!-- control: a plain, resolvable topic -->
+  <topicref href="topics/ok.dita"/>
+
+  <!-- missing referenced topic -->
+  <topicref href="topics/missing.dita"/>
+
+  <!-- multiple references to the same topic (no @copy-to) -->
+  <topicref href="topics/multi.dita"/>
+  <topicref href="topics/multi.dita"/>
+
+  <!-- multiple references with a unique @copy-to: not a warning -->
+  <topicref href="topics/multi2.dita"/>
+  <topicref href="topics/multi2.dita" copy-to="multi2-copy.dita"/>
+
+  <!-- duplicate topic ids -->
+  <topicref href="topics/twoidsa.dita"/>
+  <topicref href="topics/twoidsb.dita"/>
+
+  <!-- duplicate key definition (dupkey) and an unreferenced key (unusedkey) -->
+  <keydef keys="dupkey" href="topics/ok.dita"/>
+  <keydef keys="dupkey" href="topics/ok.dita"/>
+  <keydef keys="unusedkey" href="topics/ok.dita"/>
+  <topicref keyref="dupkey"/>
+
+  <!-- key-based reference (no @href): probe for the multiple-reference gap -->
+  <keydef keys="kusekey" href="topics/keytopic.dita"/>
+  <topicref keyref="kusekey"/>
+  <topicref keyref="kusekey"/>
+
+  <!-- unreferenced reusable elements in a resource-only topic -->
+  <topicref href="topics/reuse.dita" processing-role="resource-only"/>
+
+  <!-- table layout problems -->
+  <topicref href="topics/tables.dita"/>
+
+  <!-- profiling conflict (map value cascades into the topic) -->
+  <topicref href="topics/profiling.dita" audience="novice"/>
+
+  <!-- reference to a resource outside the map folder -->
+  <topicref href="topics/outside.dita"/>
+
+  <!-- link to a topic that no map references -->
+  <topicref href="topics/linker.dita"/>
+
+  <!-- control: the linked topic IS referenced in the map -->
+  <topicref href="topics/linker2.dita"/>
+  <topicref href="topics/linktarget2.dita"/>
+
+  <!-- schema-invalid (but well-formed) content: probe for the DTD-validation gap -->
+  <topicref href="topics/invalid.dita"/>
+
+  <!-- not well-formed XML: reported by both tools -->
+  <topicref href="topics/malformed.dita"/>
+</map>
