@@ -83,6 +83,12 @@ describe('Oxygen completeness report adapter', () => {
     ]);
   });
 
+  it('keeps the root slash of a POSIX file: URL and drops it before a drive letter', () => {
+    assert.strictEqual(oxygenPathToLocal('file:///tmp/ccorpus/a.ditamap'), '/tmp/ccorpus/a.ditamap');
+    assert.strictEqual(oxygenPathToLocal('file:/tmp/a%20b/x.dita'), '/tmp/a b/x.dita');
+    assert.strictEqual(oxygenPathToLocal('file:///C:/my%20dir/x.dita'), 'C:/my dir/x.dita');
+  });
+
   it('normalizes file: URLs and local paths relative to the corpus', () => {
     const corpus = join(tmpdir(), 'ccorpus');
     const fromUrl = pathToFileURL(join(corpus, 'corpus.ditamap')).href;

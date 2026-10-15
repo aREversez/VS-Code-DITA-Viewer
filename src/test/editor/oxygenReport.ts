@@ -238,10 +238,8 @@ export function categoryForProblemId(problemID: string): string {
 export function oxygenPathToLocal(filePath: string): string {
   let p = filePath.trim();
   if (/^file:/i.test(p)) {
-    p = p
-      .replace(/^file:\/\/\//i, '')
-      .replace(/^file:\/\//i, '')
-      .replace(/^file:/i, '');
+    // `file:///tmp/x` -> `/tmp/x` (keep the root slash); `file:///C:/x` -> `C:/x`.
+    p = p.replace(/^file:(?:\/\/)?/i, '');
     if (/^\/[a-zA-Z]:/.test(p)) p = p.slice(1);
     try {
       p = decodeURIComponent(p);

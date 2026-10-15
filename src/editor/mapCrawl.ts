@@ -95,6 +95,11 @@ export interface KeyUse extends Location {
   resourceOnly?: boolean;
   inReltable?: boolean;
   copyTo?: string;
+  /**
+   * The reference made from the element's own @href. DITA uses it as a fallback
+   * only when the key is undefined, so it is dropped once the key resolves.
+   */
+  fallbackRef?: Reference;
 }
 
 /** A keyref that matches no key definition (Oxygen's `dmv.undef.key`). */
@@ -411,14 +416,17 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     // A keyref on a map element is a reference to whatever the key resolves
     // to. Resolution happens once every map is crawled (a definition may live
     // in a submap or after the use), so the context is recorded here.
+    let mapKeyUse: KeyUse | undefined;
     if (keyref) {
       const isMap = tag === 'mapref' || /\bmap\/mapref\b/.test(classOf(n));
-      result.keyUses.push({
+      mapKeyUse = {
         file: ctx.file, line: n.line, key: keyref.split('/')[0],
-        value: keyref, attribute: 'keyref', tag, kind: isMap ? 'mapref' : 'topicref',
+        value: keyref, attribute: 'keyref', tag,
+        kind: isKeydef ? 'keydef' : isMap ? 'mapref' : 'topicref',
         scopeChains, resourceOnly: localCtx.resourceOnly,
         inReltable: localCtx.inReltable, copyTo: n.attrs['copy-to'],
-      });
+      };
+      result.keyUses.push(mapKeyUse);
     }
 
     // Cascade profiling attributes from this topicref to descendants and to its topic.
@@ -461,13 +469,15 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       }
     }
 
-    // DITA: @keyref takes precedence over @href, so an element that has a
-    // keyref gets its reference from the key (resolved below), not the href.
-    if (href !== undefined && href !== '' && !keyref && (isMapTag(n) || tag === 'linkref' || n.attrs['href'])) {
+    // DITA: @keyref takes precedence over @href, but @href is the fallback when
+    // the key is undefined. The href is recorded as usual and the key resolution
+    // below drops it again if the key turns out to be defined.
+    if (href !== undefined && href !== '' && (isMapTag(n) || tag === 'linkref' || n.attrs['href'])) {
       const isRelInner = ctx.inReltable && !isMapTag(n);
       const kind: RefKind = isKeydef ? 'keydef' : isMapHref(n, href) ? 'mapref' : 'topicref';
       if (!isRelInner || isMapTag(n)) {
         const ref = addRef(ctx.file, n, kind, href, { resourceOnly: localCtx.resourceOnly, inReltable: localCtx.inReltable });
+        if (mapKeyUse) mapKeyUse.fallbackRef = ref;
         if (ref.target && !ref.remote) {
           const tkey = norm(ref.target);
           if (kind === 'mapref') {
@@ -557,20 +567,22 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
         }
       }
       const keyrefValue = n.attrs['keyref'];
+      let topicKeyUse: KeyUse | undefined;
       if (keyrefValue) {
-        result.keyUses.push({
+        topicKeyUse = {
           file: path, line: n.line, key: keyrefValue.split('/')[0],
           value: keyrefValue, attribute: 'keyref', tag: n.tag, kind: hrefAttrKind(n),
-        });
+        };
+        result.keyUses.push(topicKeyUse);
       }
       for (const a of ['href', 'data']) {
         const href = n.attrs[a];
         if (!href) continue;
         if (a === 'data' && n.tag !== 'object') continue;
-        if (n.attrs['keyref']) continue; // @keyref wins over @href
         const kind = hrefAttrKind(n);
         if (!kind) continue;
         const ref = addRef(path, n, kind, href);
+        if (topicKeyUse) topicKeyUse.fallbackRef = ref; // dropped if the key resolves
         if (ref.dita && ref.target) {
           const tkey = norm(ref.target);
           if (!seenTopics.has(tkey) && !ref.target.toLowerCase().endsWith('.ditamap')) {
@@ -784,6 +796,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
   for (const def of result.keyDefs) {
     for (const q of def.qualified) if (!keyIndex.has(q)) keyIndex.set(q, def);
   }
+  const droppedFallbacks = new Set<Reference>();
   for (const use of result.keyUses) {
     if (use.attribute !== 'keyref') continue;
     const def = resolveKeyUse(use, keyIndex);
@@ -791,12 +804,16 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       result.undefinedKeys.push({ file: use.file, line: use.line, key: use.key, value: use.value ?? use.key });
       continue;
     }
+    // The key is defined, so the element's own @href is not used.
+    if (use.fallbackRef) droppedFallbacks.add(use.fallbackRef);
     if (!def.target) continue; // a text-only key: defined, but no resource
-    const pathPart = (def.href ?? '').split('#')[0];
+    // Only elements that make a link (xref, image, topicref, ...) are references;
+    // a <ph keyref> or <keyword keyref> merely borrows the key's text.
+    if (!use.kind) continue;    const pathPart = (def.href ?? '').split('#')[0];
     result.refs.push({
       file: use.file,
       line: use.line,
-      kind: use.kind ?? 'topicref',
+      kind: use.kind,
       href: def.href ?? use.value ?? use.key,
       target: def.target,
       remote: false,
@@ -806,6 +823,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       inReltable: !!use.inReltable,
     });
   }
+  if (droppedFallbacks.size) result.refs = result.refs.filter((r) => !droppedFallbacks.has(r));
   return result;
 }
 

@@ -141,6 +141,48 @@ describe('completeness: key references', () => {
     assert.strictEqual(issues.filter((i) => i.category === 'undefined-key').length, 0);
   });
 
+  it('falls back to @href when the keyref names no key', async () => {
+    const issues = await check(
+      { 'root.ditamap': '<map><topicref keyref="nosuch" href="gone.dita"/></map>' },
+      {},
+    );
+    assert.ok(issues.some((i) => i.category === 'missing-reference' && i.message.includes('gone.dita')));
+  });
+
+  it('ignores @href when the keyref resolves to a text-only key', async () => {
+    const issues = await check(
+      {
+        'root.ditamap':
+          '<map><keydef keys="k"><topicmeta><keywords><keyword>x</keyword></keywords></topicmeta></keydef><topicref keyref="k" href="gone.dita"/></map>',
+      },
+      {},
+    );
+    assert.strictEqual(issues.filter((i) => i.category === 'missing-reference').length, 0);
+  });
+
+  it('does not count a <ph keyref> as a second reference to the key target', async () => {
+    const issues = await check(
+      {
+        'root.ditamap': '<map><keydef keys="k" href="t.dita"/><topicref href="t.dita"/><topicref href="u.dita"/></map>',
+        't.dita': topic('t'),
+        'u.dita': topic('u', '<p><ph keyref="k"/></p>'),
+      },
+      { reportMultipleRefs: true },
+    );
+    assert.strictEqual(issues.filter((i) => i.category === 'multiple-reference').length, 0);
+  });
+
+  it('does not count a keydef that redirects through @keyref as a topicref', async () => {
+    const issues = await check(
+      {
+        'root.ditamap': '<map><keydef keys="b" href="t.dita"/><keydef keys="a" keyref="b"/><topicref href="t.dita"/></map>',
+        't.dita': topic('t'),
+      },
+      { reportMultipleRefs: true },
+    );
+    assert.strictEqual(issues.filter((i) => i.category === 'multiple-reference').length, 0);
+  });
+
   it('reports a missing file behind a keyref', async () => {
     const issues = await check(
       { 'root.ditamap': '<map><keydef keys="k" href="gone.dita"/><topicref keyref="k"/></map>' },
