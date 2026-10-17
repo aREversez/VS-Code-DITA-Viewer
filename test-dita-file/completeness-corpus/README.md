@@ -69,6 +69,9 @@ is a hand-built stand-in for testing the parser until a real report exists.
 | CALS/simple table problems | `topics/tables.dita` | `table-layout` ×2 |
 | profiling conflict | `topics/profiling.dita` | `profiling-conflict` |
 | profiling preference | `topics/profiling.dita` | `profiling-preference` ×3 |
+| missing local resource | `topics/resources.dita` → `img/no-such-image.png`, `media/no-such-video.mp4` | `missing-resource` ×2 |
+| existing local resource | `topics/resources.dita` → `img/used.png` | *(none — control)* |
+| unreachable remote resource | `topics/remote.dita` | *(none here; `remote-resource` only with "include remote" on, which the harness keeps off)* |
 | outside the map folder | `topics/outside.dita` | `outside-folder` |
 | link to a topic no map references | `topics/linker.dita` | `unreferenced-link` |
 | in-map link | `topics/linker2.dita` | *(none — control)* |
@@ -91,10 +94,15 @@ expected to show up as `onlyInBaseline`/`onlyInRun` differences:
    novice"` under a cascaded `novice` overlaps, so the extension reports no
    conflict; Oxygen's "values not found in parent" rule may treat it
    differently.
-4. **Remote resources** — `topics/ok.dita` references an `https://` image; the
-   harness disables remote probing, so neither existence nor a `remote-resource`
-   note appears. Enable `includeRemote` to exercise it.
-5. **Table rules** — the extension emits `colspecCount`/simple-row findings; some
+4. **Remote resources** — `topics/ok.dita` and `topics/remote.dita` reference
+   `https://` images; the harness disables remote probing, so neither existence
+   nor a `remote-resource` note appears. Enable `includeRemote` to exercise it
+   (`remote.dita` is the ledger probe for rule R005).
+5. **Non-DITA resources** — `topics/resources.dita` points at two files that do
+   not exist; Oxygen's catalog has no id for this (the closest is the schema-level
+   `dmv.file.not.found`), so the first Oxygen run should tell us whether it is
+   extension-only.
+6. **Table rules** — the extension emits `colspecCount`/simple-row findings; some
    Oxygen table complaints are schema-level and will only appear on the Oxygen
    side.
 
