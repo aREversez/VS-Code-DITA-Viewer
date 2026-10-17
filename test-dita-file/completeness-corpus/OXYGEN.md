@@ -1,10 +1,43 @@
 # How to run the Oxygen side (step by step)
 
 This gets Oxygen's own findings for `corpus.ditamap` so they can be diffed
-against the extension's. It uses **Oxygen Scripting**, which is the same
-*Validate and Check for Completeness* action, run from the command line.
+against the extension's. There are two ways to get them:
 
-## 1. What you need
+- **The GUI** (sections 0 and below) — works with the plain Windows editor, and
+  is what produced the real reports so far.
+- **Oxygen Scripting** (sections 1–3) — the same *Validate and Check for
+  Completeness* action run headlessly from the command line, but it needs the
+  paid *All Platforms* distribution plus a scripting license that this machine
+  does not have. Use it when you want the run to be reproducible in CI.
+
+## 0. The Windows editor: run it from the GUI
+
+This checkout is paired with **Oxygen XML Editor 27** (Windows installer), which
+has no `scripts\` folder and no scripting license, so sections 1–3 do not apply
+here. The identical check is a GUI action:
+
+1. Open `corpus.ditamap` in the **DITA Maps Manager**, not the text editor.
+   Oxygen recognises a DITA map only through its **DOCTYPE**, which is why every
+   corpus file now carries a `<!DOCTYPE …PUBLIC "-//OASIS//DTD DITA …">`. Without
+   it Maps Manager says "does not appear to be a DITA map" and the completeness
+   check builds no topicref graph — it crawls nothing and reports only map-level
+   `dmv.invalid.class.format` (confirmed by two real runs).
+2. Menu **DITA Maps → Validate and Check for Completeness…**. Tick **every**
+   option except *Include remote resources* (to match `CORPUS_OPTIONS` in
+   `src/test/editor/completenessHarness.ts`).
+3. In the **Results** view, right-click → **Save Results as XML…** and save to
+   `test-dita-file\completeness-corpus\oxygen-report.xml`. Commit it.
+4. Diff from the repo root:
+   `node scripts/oxygen-diff.cjs test-dita-file/completeness-corpus/oxygen-report.xml`.
+
+The GUI report does **not** read `corpus.settings.xml`: profiling preferences are
+whatever this Oxygen is configured with, so match them to `CORPUS_PREFERENCES`
+(audience = novice, expert) before a clean compare, or the diff will be full of
+`dmv.prof.attr.prefs.undef` on values the extension considers defined. The report
+records absolute paths on this machine, so `--corpus-root` (section 4) is not
+needed while it runs on this checkout.
+
+## 1. What you need (scripting route only)
 
 - The **Oxygen XML Editor All Platforms distribution** (this is Oxygen
   Scripting): download `oxygen.tar.gz` from
@@ -99,10 +132,11 @@ The report may be XML or JSON; the parser auto-detects both.
 ## The sample file
 
 `oxygen-report.sample.xml` is **hand-built from the documented structure, not
-real Oxygen output**. It exists so the parser and the diff can be tested before
-a real report is available. Once step 3 succeeds, treat the real
-`oxygen-report.xml` as the authority (you can commit it too, since it is now
-reproducible) and update `PROBLEM_ID_CATEGORY` from it.
+real Oxygen output**. It exists so the parser and the diff can be tested without
+any Oxygen at all. A real `oxygen-report.xml` can already be produced from the
+GUI (section 0); treat it as the authority once it exists and update
+`PROBLEM_ID_CATEGORY` from the IDs it actually contains. The scripted route
+(section 3) only adds CI reproducibility.
 
 ## Probes to look for in the diff
 
@@ -118,5 +152,6 @@ list in `README.md`):
   (`dmv.undef.key`).
 
 The full list of Oxygen problem IDs and the extension's status against each is
-in **[OXYGEN-PROBLEMS.md](OXYGEN-PROBLEMS.md)**, which is the parity spec now
-that a real report needs a license we do not have.
+in **[OXYGEN-PROBLEMS.md](OXYGEN-PROBLEMS.md)**, which stands in as the parity
+spec until a full GUI report (with the completeness crawl, once the map is
+recognised) is committed as `oxygen-report.xml`.

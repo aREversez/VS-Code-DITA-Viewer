@@ -10,6 +10,9 @@ own DITA-validation resources, no license required.
 
 - `corpus.ditamap` — the root map. Every child is a deliberate probe.
 - `topics/` — the referenced topics.
+- Every file carries a DITA 1.3 `<!DOCTYPE …PUBLIC "-//OASIS//DTD DITA …">`. The
+  extension strips it (`ditaParser.stripDoctype`, findings unchanged); Oxygen
+  needs it to recognise the map and run the completeness crawl at all.
 - `../completeness-outside/outside.dita` — a sibling folder, to probe the
   "outside the map folder" check.
 - `baseline.extension.json` — the extension's current findings, locked by
@@ -44,13 +47,16 @@ bundles the harness with esbuild, so it needs no build step.
 
 ## Producing the Oxygen side
 
-See **[OXYGEN.md](OXYGEN.md)**. In short: Oxygen Scripting's `validateCheckDITA`
-runs the same check headlessly and writes an XML report; the adapter
+See **[OXYGEN.md](OXYGEN.md)**. The practical route on this machine is the GUI:
+open `corpus.ditamap` in the **DITA Maps Manager**, run **DITA Maps → Validate and
+Check for Completeness** (every option except *Include remote resources*), and
+**Save Results as XML…** to `oxygen-report.xml`. The adapter
 (`src/test/editor/oxygenReport.ts`) normalizes it and
 `node scripts/oxygen-diff.cjs <report.xml>` prints the parity diff (non-zero exit
-on any difference). `validateCheckDITA` needs the *all-platforms* Oxygen install
-plus a scripting license — the Windows editor has neither. `oxygen-report.sample.xml`
-is a hand-built stand-in for testing the parser until a real report exists.
+on any difference). The scripted route (`validateCheckDITA`) is the same check
+but needs the paid *all-platforms* Oxygen install plus a scripting license — the
+Windows editor has neither. `oxygen-report.sample.xml` is a hand-built stand-in
+for testing the parser without any Oxygen.
 
 ## What the corpus probes
 

@@ -170,6 +170,33 @@ Two corroborated divergences from `baseline.extension.json`:
    the crawler now resolves `@keyref` after the maps are crawled, so this is a
    `multiple-reference` (and an unresolvable key is `undefined-key`).
 
+## Observed in real Oxygen reports
+
+Two GUI *Validate and Check for Completeness* runs on the corpus (before it
+carried a DOCTYPE) returned **only** `corpus.ditamap` findings:
+`dmv.invalid.class.format` ×29 (one per map element), a single
+`dmv.prof.attr.prefs.undef` on the map's `audience` topicref, and one
+"There is no schema or DTD associated with the document" error. Nothing reached
+the topics.
+
+Root cause: Oxygen recognises a DITA map through its DOCTYPE. Without one, the
+Maps Manager does not build the topicref graph, so the *completeness* half of
+the check is a no-op and only map-level `dmv.*` structure errors fire. Every
+corpus file now carries a DITA 1.3 DOCTYPE so the next run is the first genuine
+parity test of the completeness categories.
+
+What the two runs did settle:
+
+- `dmv.invalid.class.format` is **confirmed as a gap** — the extension emits
+  nothing for a missing/malformed `@class`. Once the corpus has a DOCTYPE the DTD
+  supplies the default `@class`, so this noise should disappear and stop masking
+  the completeness findings.
+- `profiling-preference` parity is decided by the **configured preference set**,
+  not by a rule difference. Oxygen flagged the map's `audience="novice"` only
+  because this Oxygen had empty profiling preferences; the extension checks map
+  topicrefs too (`mapCrawl`) and stays silent because its harness allows
+  `novice`. Align the two preference sets before comparing.
+
 ## How to use this
 
 1. Implement a check, pick the `dmv.*` ID it corresponds to, and add it to
