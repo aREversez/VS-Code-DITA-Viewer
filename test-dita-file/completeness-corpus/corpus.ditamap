@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
 <!-- Phase-0 differential corpus for "Validate and Check for Completeness".
      Every element here is a deliberate probe; see README.md for what each one
      is expected to make the extension (and Oxygen) report. -->

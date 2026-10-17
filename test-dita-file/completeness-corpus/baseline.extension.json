@@ -3,147 +3,147 @@
     "category": "missing-reference",
     "severity": "error",
     "file": "corpus.ditamap",
-    "line": 12,
+    "line": 13,
     "message": "Referenced topic not found: topics/missing.dita"
   },
   {
     "category": "multiple-reference",
     "severity": "warning",
     "file": "corpus.ditamap",
-    "line": 16,
+    "line": 17,
     "message": "Topic referenced more than once (2 times): topics/multi.dita"
   },
   {
     "category": "duplicate-key",
     "severity": "warning",
     "file": "corpus.ditamap",
-    "line": 28,
+    "line": 29,
     "message": "Key \"dupkey\" is already defined; this definition is ignored"
   },
   {
     "category": "unreferenced-key",
     "severity": "warning",
     "file": "corpus.ditamap",
-    "line": 29,
+    "line": 30,
     "message": "Key \"unusedkey\" is defined but never referenced"
   },
   {
     "category": "multiple-reference",
     "severity": "warning",
     "file": "corpus.ditamap",
-    "line": 30,
+    "line": 31,
     "message": "Topic referenced more than once (2 times): topics/ok.dita"
   },
   {
     "category": "multiple-reference",
     "severity": "warning",
     "file": "corpus.ditamap",
-    "line": 35,
+    "line": 36,
     "message": "Topic referenced more than once (2 times): topics/keytopic.dita"
   },
   {
     "category": "undefined-key",
     "severity": "error",
     "file": "corpus.ditamap",
-    "line": 38,
+    "line": 39,
     "message": "Key reference \"nosuchkey\" does not match any key definition"
   },
   {
     "category": "unreferenced-link",
     "severity": "warning",
     "file": "topics/linker.dita",
-    "line": 5,
+    "line": 6,
     "message": "Link target is not referenced in any map: linktarget.dita"
   },
   {
     "category": "validation",
     "severity": "error",
     "file": "topics/malformed.dita",
-    "line": 4,
+    "line": 5,
     "message": "XML error: Unexpected close tag"
   },
   {
     "category": "outside-folder",
     "severity": "warning",
     "file": "topics/outside.dita",
-    "line": 6,
+    "line": 7,
     "message": "Reference points outside the map folder: ../../completeness-outside/outside.dita"
   },
   {
     "category": "unreferenced-link",
     "severity": "warning",
     "file": "topics/outside.dita",
-    "line": 6,
+    "line": 7,
     "message": "Link target is not referenced in any map: ../../completeness-outside/outside.dita"
   },
   {
     "category": "profiling-preference",
     "severity": "warning",
     "file": "topics/profiling.dita",
-    "line": 10,
+    "line": 11,
     "message": "Profiling attribute @platform on <p> is not defined in the profiling preferences"
   },
   {
     "category": "profiling-conflict",
     "severity": "warning",
     "file": "topics/profiling.dita",
-    "line": 6,
+    "line": 7,
     "message": "@audience=\"admin\" on <p> shares no value with the enclosing \"novice\"; the content is overshadowed in profiled output"
   },
   {
     "category": "profiling-preference",
     "severity": "warning",
     "file": "topics/profiling.dita",
-    "line": 6,
+    "line": 7,
     "message": "@audience value \"admin\" is not defined in the profiling preferences"
   },
   {
     "category": "profiling-preference",
     "severity": "warning",
     "file": "topics/profiling.dita",
-    "line": 8,
+    "line": 9,
     "message": "@audience value \"admin\" is not defined in the profiling preferences"
   },
   {
     "category": "missing-resource",
     "severity": "error",
     "file": "topics/resources.dita",
-    "line": 6,
+    "line": 7,
     "message": "Referenced resource not found: img/no-such-image.png"
   },
   {
     "category": "missing-resource",
     "severity": "error",
     "file": "topics/resources.dita",
-    "line": 7,
+    "line": 8,
     "message": "Referenced resource not found: media/no-such-video.mp4"
   },
   {
     "category": "unreferenced-reusable",
     "severity": "warning",
     "file": "topics/reuse.dita",
-    "line": 5,
+    "line": 6,
     "message": "Reusable element <p id=\"orphan\"> is never referenced by a conref or conkeyref"
   },
   {
     "category": "table-layout",
     "severity": "warning",
     "file": "topics/tables.dita",
-    "line": 18,
+    "line": 19,
     "message": "Simple table: row 2 has 1 cell(s); expected 2"
   },
   {
     "category": "table-layout",
     "severity": "warning",
     "file": "topics/tables.dita",
-    "line": 7,
+    "line": 8,
     "message": "CALS table: 2 <colspec> element(s) but @cols is 3"
   },
   {
     "category": "duplicate-id",
     "severity": "error",
     "file": "topics/twoidsb.dita",
-    "line": 2,
+    "line": 3,
     "message": "Duplicate topic id \"dup\" (2 topics share it)"
   }
 ]
