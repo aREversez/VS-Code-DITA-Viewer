@@ -108,7 +108,7 @@ ignored by the `(file, category)` diff.
 | Problem ID | Oxygen reports | Extension status |
 | --- | --- | --- |
 | `dmv.dup.topic` | the same topic referenced more than once | ok (`multiple-reference`) |
-| `dmv.dup.topic.id` | duplicate topic ID in the map context | ok (`duplicate-id`) |
+| `dmv.dup.topic.id` | duplicate topic ID in the map context | ok (`duplicate-id`) — the extension reports one participant of a pair, Oxygen reports both, so the other file shows as Oxygen-only |
 | `dmv.dup.el.id` | duplicate element ID inside one topic | gap |
 | `dmv.dup.cond.filter` | duplicate condition in a filter file | gap |
 
@@ -156,7 +156,10 @@ DITA validator.
 
 ## Extension-only findings (not in Oxygen's catalog)
 
-- `missing-resource` — non-DITA (image/object/…) files that do not exist.
+- `missing-resource` — non-DITA (image/object/…) files that do not exist. Oxygen
+  has no separate category: it reports the same dangling href as
+  `dmv.file.not.found` (`missing-reference`), so a `missing-resource` finding pairs
+  with an Oxygen-only `missing-reference` on the same file.
 - `remote-resource` — HTTP(S) resources that do not respond to a HEAD probe.
 - `table-layout` — CALS/simple table layout heuristics.
 
@@ -196,6 +199,29 @@ What the two runs did settle:
   because this Oxygen had empty profiling preferences; the extension checks map
   topicrefs too (`mapCrawl`) and stays silent because its harness allows
   `novice`. Align the two preference sets before comparing.
+
+### The first genuine run (corpus carrying DITA 1.3 DOCTYPEs)
+
+*Validate and Check for Completeness* over the corpus produced 35 incidents across
+17 problem ids (`oxygen-report.xml`; the parity set is locked in
+`oxygen-parity.expected.json` — 11 matched, 4 extension-only, 11 Oxygen-only).
+Every Oxygen-only row, read against that report:
+
+| Oxygen-only finding | Report evidence | Verdict |
+| --- | --- | --- |
+| `resources.dita` `missing-reference` | `dmv.file.not.found` ×2 (lines 7, 8) | **Relabel** — the same dangling hrefs the extension calls `missing-resource`; Oxygen has no resource/reference split. |
+| `twoidsa.dita` `duplicate-id` | `dmv.dup.topic.id` (line 3) | **Convention** — one `<topic id="dup">` pair shared with `twoidsb`; the extension reports it once (`twoidsb`, "2 topics share it"), Oxygen reports each side. Same duplicate. |
+| `../completeness-outside/outside.dita` no-schema (`unknown`) + `dmv.invalid.class.format` | "There is no schema or DTD associated with the document" | **Corpus artifact** — `outside.dita` lives in `completeness-outside/`, so the DOCTYPE pass skipped it. Not a parity gap; give it a DOCTYPE before reading these two. |
+| `invalid.dita` `MSG_*` ×3 + `dmv.invalid.class.format`; `corpus.ditamap` `dmv.invalid.parse.dita.content`; `linker2.dita` `dmv.invalid.ref.topic.id` ×2 | schema/DTD + reference-hygiene ids | **Genuine gap (A-class)** — needs a real validator or unimplemented checks; defer past the preference-aligned re-run and source each id before building. |
+| `ok.dita` `unreferenced-reusable` | `dmv.not.used.reusable.component` (line 6) | **Genuine gap (A-class)** — the extension catches the unused reusable on `reuse.dita` but not `ok.dita`. |
+
+Two run-wide notes:
+
+- `dmv.invalid.class.format` fell from 29 to 5 once the DOCTYPEs landed, confirming
+  the earlier diagnosis: most were map-level noise from the missing DTD default.
+- The 2 `dmv.prof.attr.val.prefs.undef` (`profiling-preference`) are set by the
+  configured preference set, not a rule. Align Oxygen's profiling preferences with
+  the harness (`audience: novice|expert`) and re-run before calling profiling parity.
 
 ## How to use this
 
