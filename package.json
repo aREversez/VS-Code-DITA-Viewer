@@ -797,7 +797,7 @@
   "bench:book-render": "node scripts/bench-book-render.js",
     "build:icons": "node scripts/build-icon-font.js",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
-    "pretest": "tsc -p tsconfig.test.json",
+    "pretest": "node -e \"require('fs').rmSync('dist-test',{recursive:true,force:true})\" && tsc -p tsconfig.test.json",
     "test": "mocha --config .mocharc.json",
     "test:e2e": "node esbuild.config.js && tsc -p tsconfig.e2e.json && node test-runner.cjs",
     "playwright:install": "playwright install chromium",
