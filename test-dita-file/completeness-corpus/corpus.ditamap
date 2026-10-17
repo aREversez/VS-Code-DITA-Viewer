@@ -61,4 +61,10 @@
 
   <!-- not well-formed XML: reported by both tools -->
   <topicref href="topics/malformed.dita"/>
+
+  <!-- missing local non-DITA resources -->
+  <topicref href="topics/resources.dita"/>
+
+  <!-- unreachable remote resources (probed only when "include remote" is on) -->
+  <topicref href="topics/remote.dita"/>
 </map>

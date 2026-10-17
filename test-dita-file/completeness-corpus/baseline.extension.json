@@ -105,6 +105,20 @@
     "message": "@audience value \"admin\" is not defined in the profiling preferences"
   },
   {
+    "category": "missing-resource",
+    "severity": "error",
+    "file": "topics/resources.dita",
+    "line": 6,
+    "message": "Referenced resource not found: img/no-such-image.png"
+  },
+  {
+    "category": "missing-resource",
+    "severity": "error",
+    "file": "topics/resources.dita",
+    "line": 7,
+    "message": "Referenced resource not found: media/no-such-video.mp4"
+  },
+  {
     "category": "unreferenced-reusable",
     "severity": "warning",
     "file": "topics/reuse.dita",
