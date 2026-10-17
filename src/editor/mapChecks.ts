@@ -100,22 +100,26 @@ export function resolveStoredPath(mapDir: string, stored: string): string {
   return isAbsolute(stored) ? stored : resolve(mapDir, stored);
 }
 
-export type IssueCategory =
-  | 'validation'
-  | 'missing-reference'
-  | 'undefined-key'
-  | 'missing-resource'
-  | 'remote-resource'
-  | 'outside-folder'
-  | 'unreferenced-link'
-  | 'multiple-reference'
-  | 'duplicate-id'
-  | 'duplicate-key'
-  | 'unreferenced-key'
-  | 'unreferenced-reusable'
-  | 'table-layout'
-  | 'profiling-conflict'
-  | 'profiling-preference';
+/** Every kind of finding the completeness check can report (also the ledger's row keys). */
+export const ISSUE_CATEGORIES = [
+  'validation',
+  'missing-reference',
+  'undefined-key',
+  'missing-resource',
+  'remote-resource',
+  'outside-folder',
+  'unreferenced-link',
+  'multiple-reference',
+  'duplicate-id',
+  'duplicate-key',
+  'unreferenced-key',
+  'unreferenced-reusable',
+  'table-layout',
+  'profiling-conflict',
+  'profiling-preference',
+] as const;
+
+export type IssueCategory = (typeof ISSUE_CATEGORIES)[number];
 
 export interface Issue extends Location {
   category: IssueCategory;
