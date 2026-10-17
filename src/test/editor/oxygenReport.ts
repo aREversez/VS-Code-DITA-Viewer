@@ -27,7 +27,7 @@
 // elements and keeps every field it sees, because the exact element names can
 // only be confirmed against a real report.
 
-import { isAbsolute, relative, resolve, sep } from 'path';
+import { isAbsolute, relative, resolve, sep, win32 } from 'path';
 import sax from 'sax';
 import { NormalizedFinding } from './completenessHarness';
 
@@ -279,6 +279,21 @@ function toPosix(p: string): string {
   return sep === '/' ? p : p.split(sep).join('/');
 }
 
+const WINDOWS_ABSOLUTE = /^(?:[A-Za-z]:[\\/]|\\\\)/;
+
+/**
+ * The folder the report's corpus lived in when Oxygen ran, taken from the
+ * incident that names the root map. Undefined when no incident does.
+ */
+export function corpusRootFromReport(incidents: readonly OxygenIncident[]): string | undefined {
+  for (const i of incidents) {
+    const local = oxygenPathToLocal(i.filePath);
+    const m = /^(.*)[\\/]corpus\.ditamap$/.exec(local);
+    if (m) return m[1];
+  }
+  return undefined;
+}
+
 /** Maps parsed incidents to the harness shape, with paths relative to the corpus. */
 export function normalizeOxygenFindings(
   corpusDir: string,
@@ -288,10 +303,14 @@ export function normalizeOxygenFindings(
   return incidents
     .map((i) => {
       const local = oxygenPathToLocal(i.filePath);
-      const file =
-        local && isAbsolute(local)
-          ? toPosix(relative(absCorpus, resolve(local)))
-          : toPosix(local);
+      let file: string;
+      if (WINDOWS_ABSOLUTE.test(local) && WINDOWS_ABSOLUTE.test(corpusDir)) {
+        // A report produced on Windows, read on any host: relate the two with
+        // Windows path rules, not the host's.
+        file = win32.relative(win32.resolve(corpusDir), win32.resolve(local)).replace(/\\/g, '/');
+      } else {
+        file = local && isAbsolute(local) ? toPosix(relative(absCorpus, resolve(local))) : toPosix(local);
+      }
       return {
         category: categoryForProblemId(i.problemID),
         severity: i.severity || 'warning',

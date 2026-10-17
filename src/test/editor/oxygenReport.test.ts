@@ -7,6 +7,7 @@ import { findingSignature, diffKeys } from './completenessHarness';
 import {
   OxygenIncident,
   categoryForProblemId,
+  corpusRootFromReport,
   normalizeOxygenFindings,
   oxygenPathToLocal,
   parseOxygenReport,
@@ -82,6 +83,28 @@ describe('Oxygen completeness report adapter', () => {
       'dtd.attribute.not.allowed',
       'dtd.element.not.allowed',
     ]);
+  });
+
+  const inc = (filePath: string, line = 1): OxygenIncident => ({
+    engine: 'oXygen', severity: 'error', problemID: 'dmv.file.not.found', description: 'd', filePath, line, fields: {},
+  });
+
+  it('relativizes Windows report paths against a Windows corpus root on any host', () => {
+    const out = normalizeOxygenFindings('H:\\w\\corpus', [
+      inc('H:\\w\\corpus\\topics\\a.dita', 3),
+      inc('H:\\w\\corpus\\corpus.ditamap'),
+      inc('H:\\w\\outside\\o.dita'),
+    ]);
+    assert.deepStrictEqual(out.map((f) => f.file).sort(), ['../outside/o.dita', 'corpus.ditamap', 'topics/a.dita']);
+  });
+
+  it('finds the corpus root a report was produced from', () => {
+    assert.strictEqual(
+      corpusRootFromReport([inc('H:\\w\\corpus\\topics\\a.dita'), inc('H:\\w\\corpus\\corpus.ditamap')]),
+      'H:\\w\\corpus',
+    );
+    assert.strictEqual(corpusRootFromReport([inc('/tmp/c/corpus.ditamap')]), '/tmp/c');
+    assert.strictEqual(corpusRootFromReport([inc('/tmp/c/a.dita')]), undefined);
   });
 
   it('keeps the root slash of a POSIX file: URL and drops it before a drive letter', () => {

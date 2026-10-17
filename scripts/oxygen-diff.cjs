@@ -48,7 +48,7 @@ async function loadModules() {
 async function main() {
   const args = process.argv.slice(2);
   const rootAt = args.indexOf('--corpus-root');
-  const oxygenRoot = rootAt !== -1 ? args[rootAt + 1] : CORPUS;
+  const explicitRoot = rootAt !== -1 ? args[rootAt + 1] : undefined;
   const skip = rootAt !== -1 ? rootAt + 1 : -1;
   const reportPath = args.filter((a, i) => !a.startsWith('--') && i !== skip)[0];
   if (!reportPath) {
@@ -61,6 +61,9 @@ async function main() {
   const mod = await loadModules();
   const extension = await mod.collectExtensionFindings(CORPUS);
   const incidents = mod.parseOxygenReportAuto(fs.readFileSync(reportPath, 'utf8'));
+  // Default to the folder the report was produced from, so a report saved on
+  // another machine (another drive, another OS) still lines up with the corpus.
+  const oxygenRoot = explicitRoot ?? mod.corpusRootFromReport(incidents) ?? CORPUS;
   const oxygen = mod.normalizeOxygenFindings(oxygenRoot, incidents);
 
   const extSigs = extension.map(mod.findingSignature);
@@ -78,7 +81,7 @@ async function main() {
   console.log(`report:     ${reportPath}`);
   console.log(`oxygen root:${oxygenRoot}`);
   console.log(`extension findings: ${extension.length}   Oxygen incidents: ${oxygen.length}`);
-  console.log(`signatures matched: ${extSigs.filter((s) => oxSigs.includes(s)).length}`);
+  console.log(`signatures matched: ${new Set(extSigs.filter((s) => oxSigs.includes(s))).size}`);
   console.log(`\n# extension only (found here, not by Oxygen) [${diff.onlyInA.length}]`);
   for (const s of diff.onlyInA) console.log(`  - ${s.replace('\t', '  ')}`);
   console.log(`\n# Oxygen only (found by Oxygen, not here) [${diff.onlyInB.length}]`);

@@ -1,0 +1,34 @@
+{
+  "matched": [
+    "corpus.ditamap  duplicate-key",
+    "corpus.ditamap  missing-reference",
+    "corpus.ditamap  multiple-reference",
+    "corpus.ditamap  undefined-key",
+    "corpus.ditamap  unreferenced-key",
+    "topics/linker.dita  unreferenced-link",
+    "topics/outside.dita  outside-folder",
+    "topics/outside.dita  unreferenced-link",
+    "topics/profiling.dita  profiling-preference",
+    "topics/reuse.dita  unreferenced-reusable",
+    "topics/twoidsb.dita  duplicate-id"
+  ],
+  "extensionOnly": [
+    "topics/malformed.dita  validation",
+    "topics/profiling.dita  profiling-conflict",
+    "topics/resources.dita  missing-resource",
+    "topics/tables.dita  table-layout"
+  ],
+  "oxygenOnly": [
+    "../completeness-outside/outside.dita  oxygen:dmv.invalid.class.format",
+    "../completeness-outside/outside.dita  oxygen:unknown",
+    "corpus.ditamap  oxygen:dmv.invalid.parse.dita.content",
+    "topics/invalid.dita  oxygen:MSG_ATTRIBUTE_NOT_DECLARED",
+    "topics/invalid.dita  oxygen:MSG_CONTENT_INVALID_UNEXPECTED_ELEMENT",
+    "topics/invalid.dita  oxygen:MSG_ELEMENT_NOT_DECLARED",
+    "topics/invalid.dita  oxygen:dmv.invalid.class.format",
+    "topics/linker2.dita  oxygen:dmv.invalid.ref.topic.id",
+    "topics/ok.dita  unreferenced-reusable",
+    "topics/resources.dita  missing-reference",
+    "topics/twoidsa.dita  duplicate-id"
+  ]
+}
