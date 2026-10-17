@@ -21,6 +21,13 @@ the value is kept only so `ruleLedger.test.ts` still guards the rule. Where a ro
 cites `catalog` or names an Oxygen finding, that citation comes from the working
 notes in [OXYGEN-PROBLEMS.md](OXYGEN-PROBLEMS.md), not from the current install.
 
+The `dita-ot` message ids are quoted from the DITA-OT install's
+`config/messages_en_US.properties` and spot-checked there. Two were wrong and are
+corrected: R018 cited `DOTX002W` (which is the map `@title` for Eclipse output, not
+a topic's `<title>` — the authority there is `topicMod.xsd` alone), and R019 cited
+`DOTJ013E`/`DOTJ043W` (parse-failure and conref-push, not "target not found") —
+replaced with `DOTX010E`/`DOTJ046E`.
+
 Not allowed anywhere in a reference: Oxygen's compiled classes or anything read from
 them. `legacy` is only for the grandfathered rows `R001`–`R015`; every new rule
 needs a real source and a corpus probe (a path under `completeness-corpus/`).
@@ -41,9 +48,9 @@ clean-room loop).
 | R001 | `validation` | a crawled file cannot be read, or is not well-formed XML | spec | XML 1.0 well-formedness; DITA-OT stops with `DOTJ012F`/`DOTJ034F` when a parse fails | `topics/malformed.dita` |
 | R016 | `validation` | a map file's root is not a map, or a topic file's root is not a topic type | dita-ot | the v1.3 grammars ship with DITA-OT and fix the roots: `schema/base/xsd/topicMod.xsd`, `.../mapMod.xsd`; `DOTJ034F` | `topics/twoidsa.dita` |
 | R017 | `validation` | a topic-type element has no `@id` | dita-ot | `topicMod.xsd` declares `@id` `use="required"` type `xs:ID` on `<topic>`; `DOTJ067E` "No @id attribute on topic type element" | `topics/twoidsa.dita` |
-| R018 | `validation` | a topic element has no `<title>` child | dita-ot | `topicMod.xsd` topic content model (title required); `DOTX002W` "the @title attribute or element ... is required" | `topics/twoidsa.dita` |
+| R018 | `validation` | a topic element has no `<title>` child | dita-ot | `topicMod.xsd` `topic.content` lists `<title>` as the first child with no `minOccurs="0"`, so it is required; no DITA-OT message asserts this (`DOTX002W` is the map `@title` for Eclipse output, not a topic's `<title>`) | `topics/twoidsa.dita` |
 | R002 | `missing-reference` | a local DITA reference (topicref, mapref, keyref target) resolves to a file that does not exist; the probe is the map carrying the dangling `topics/missing.dita` href | catalog | `dmv.file.not.found` | `corpus.ditamap` |
-| R019 | `missing-reference` | `@conref` / `@conkeyref` resolves to no retrievable target | catalog | `dmv.reference.not.exist`; DITA-OT `DOTJ013E`, `DOTJ043W` | `topics/reuse.dita` |
+| R019 | `missing-reference` | `@conref` / `@conkeyref` resolves to no retrievable target | catalog | `dmv.reference.not.exist`; DITA-OT `DOTX010E` "Unable to find the @conref target ... see if the target resource exists" and `DOTJ046E` "@conkeyref ... cannot be resolved" | `topics/reuse.dita` |
 | R003 | `undefined-key` | a `@keyref` matches no key definition in its key space; when the key is defined the element's `@href` is dropped, when it is not the `@href` stays and answers for the reference | catalog | `dmv.undef.key`; DITA-OT `DOTJ047I`/`DOTJ048I` say the fallback is used "if it exists"; spec `archSpec/base/using-keys-for-addressing` | `corpus.ditamap` |
 | R004 | `missing-resource` | a non-DITA resource (`image`/`object`/`data`/phrase hrefs) names a local file that does not exist | dita-ot | `DOTJ023E` image not available, `DOTJ051E` coderef target; spec `archSpec/base/uri-based-addressing` | `topics/resources.dita` |
 | R005 | `remote-resource` | with remote probing on, an HTTP(S) resource href does not answer a HEAD request | own | this extension's addition: Oxygen has no catalog id for it and DITA-OT never probes the network, so it is opt-in and warning-only | `topics/remote.dita` |
