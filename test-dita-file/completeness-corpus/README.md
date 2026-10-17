@@ -105,6 +105,11 @@ expected to show up as `onlyInBaseline`/`onlyInRun` differences:
 6. **Table rules** — the extension emits `colspecCount`/simple-row findings; some
    Oxygen table complaints are schema-level and will only appear on the Oxygen
    side.
+7. **Text-only keyrefs** — a `<ph keyref="undefined">` is an `undefined-key` for
+   the extension, because every `@keyref` goes through the same resolution. The
+   spec says such elements only borrow the key's text and cannot form a link
+   (`archSpec/base/processing-keyref-for-text` rule 2), so Oxygen may well stay
+   silent. No corpus file exercises this yet; add one when the answer is known.
 
 When a difference is a *legitimate* extension gap, fix the check; when it is an
 intentional scope difference, record it here and in the accepted-divergence list

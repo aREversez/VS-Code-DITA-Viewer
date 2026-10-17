@@ -53,9 +53,14 @@ parity 计划为准（见本目录的 README 与 `OXYGEN-PROBLEMS.md`）。
 1. `@keyref` 与 `@href` 同时存在：key 已定义则忽略 href；key 未定义时 `@href` 是回退。
    （DITA 1.3.2 规范已核实：`archSpec/base/using-keys-for-addressing` 与 `image` 元素页。）
 2. `<ph keyref>`、`<keyword keyref>` 等非链接元素只借用 key 的文字，不算对 key 目标的引用，
-   不应触发"重复引用"。（待核实）
+   不应触发"重复引用"。（DITA 1.3 规范已核实：`archSpec/base/processing-keyref-for-text`
+   规则 2——"For elements that do not allow the @href attribute" 只从 topicmeta 取文字。
+   注意：未定义的 key 出现在这类元素上，扩展目前仍报 `undefined-key`，这一点规范没写，
+   要看 Oxygen 实际报告。）
 3. `<keydef keyref="…">`（key 重定向）不是 `topicref`，且重定向后的 key 应继承目标。（待核实）
-4. 元素 `@id` 在**每个 topic 内**唯一，不是每个文件内；嵌套 topic 可以复用父 topic 的元素 id。（待核实）
+4. 元素 `@id` 在**每个 topic 内**唯一，不是每个文件内；嵌套 topic 可以复用父 topic 的元素 id。
+   （DITA 1.3 规范已核实：`archSpec/base/id`——非 topic 元素的 id 只需在同一 nearest-ancestor
+   topic 内唯一，规范用的是 "should"；topic/map 元素的 `@id` 是 XML ID，整篇文档内唯一。）
 5. 一个 topic 只要被某个正常的（非 resource-only、非 reltable）topicref 发布，就不是
    resource-only。（待核实 `processing-role`）
 6. `<xref conref>` / `<xref conkeyref>` 靠引用取内容，不需要 `@href`/`@keyref`。（待核实）
