@@ -44,8 +44,8 @@ describe('Oxygen completeness report adapter', () => {
     assert.strictEqual(first.filePath, 'D:\\corpus\\corpus.ditamap');
     assert.strictEqual(first.problemID, 'dmv.file.not.found');
     assert.strictEqual(first.severity, 'error');
-    assert.strictEqual(first.engine, 'DITA Validation');
-    assert.strictEqual(first.line, 12, 'startLocation 12:24 -> line 12');
+    assert.strictEqual(first.engine, 'oXygen');
+    assert.strictEqual(first.line, 12, 'location/start/line -> 12');
     assert.match(first.description, /missing\.dita/);
 
     // every incident is attributed to its enclosing <file>
@@ -62,6 +62,7 @@ describe('Oxygen completeness report adapter', () => {
       'missing-reference',
     );
     assert.strictEqual(categoryForProblemId('dmv.undef.key'), 'undefined-key');
+    assert.strictEqual(categoryForProblemId('dmv.key.undef'), 'undefined-key');
     assert.strictEqual(categoryForProblemId('dmv.dup.topic'), 'multiple-reference');
     assert.strictEqual(
       categoryForProblemId('duplicate.key.definition'),

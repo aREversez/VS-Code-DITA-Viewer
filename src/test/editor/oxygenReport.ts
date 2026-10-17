@@ -95,28 +95,58 @@ function findAll(node: XNode, tag: string): XNode[] {
   return out;
 }
 
+/** The line inside `<location><start><line>` of a real Oxygen incident. */
+function findStartLine(node: XNode): number {
+  const loc = node.children.find((c) => c.tag.toLowerCase() === 'location');
+  if (!loc) return 0;
+  const start = loc.children.find((c) => c.tag.toLowerCase() === 'start') ?? loc;
+  const lineEl = start.children.find((c) => c.tag.toLowerCase() === 'line');
+  const n = Number((lineEl?.text ?? '').trim());
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/** Older/`-rft` reports group incidents under `<file filePath=...>`; climb to it. */
+function ancestorFilePath(node: XNode): string {
+  for (let p = node.parent; p; p = p.parent) {
+    if (p.tag.toLowerCase() === 'file') {
+      const fp = p.attrs.filePath ?? p.attrs.filepath ?? p.attrs.path;
+      if (fp) return fp;
+    }
+  }
+  return '';
+}
+
 function toLine(
   fields: Record<string, string>,
   attrs: Record<string, string>,
+  node?: XNode,
 ): number {
-  const loc = fields.startLocation ?? fields.location ?? fields.start;
+  const loc = fields.startLocation;
   if (loc) {
     const m = /(\d+)/.exec(loc);
     if (m) return Number(m[1]);
+  }
+  if (node) {
+    const nested = findStartLine(node);
+    if (nested) return nested;
   }
   const n = Number(fields.line ?? attrs.line);
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-function toIncident(filePath: string, node: XNode): OxygenIncident {
+function toIncident(node: XNode): OxygenIncident {
   const fields: Record<string, string> = {};
   for (const child of node.children) fields[child.tag] = child.text.trim();
   // Attributes can carry the same data on some report versions.
   for (const [k, v] of Object.entries(node.attrs))
     if (!(k in fields)) fields[k] = v;
+  // The real report names the file per incident (`<systemID>`); the grouped
+  // variant only carries it on the enclosing `<file>`.
+  const filePath =
+    fields.systemID ?? fields.systemId ?? ancestorFilePath(node) ?? '';
   return {
     filePath,
-    line: toLine(fields, node.attrs),
+    line: toLine(fields, node.attrs, node),
     severity: fields.severity ?? '',
     problemID: fields.problemID ?? fields.problemId ?? '',
     engine: fields.engine ?? '',
@@ -125,26 +155,19 @@ function toIncident(filePath: string, node: XNode): OxygenIncident {
   };
 }
 
-/** Every incident in an Oxygen completeness/validation report. */
+/**
+ * Every incident in an Oxygen completeness/validation report.
+ *
+ * The live "Save Results as XML" report puts `<incident>` elements directly
+ * under `<report>` and names the file in a per-incident `<systemID>`; the
+ * documented grouped form nests them under `<file>`/`<incidents>`. Both are
+ * handled: incidents are collected by tag wherever they sit, and the file
+ * falls back from `<systemID>` to the enclosing `<file>`.
+ */
 export function parseOxygenReport(xml: string): OxygenIncident[] {
   const root = parseTree(xml);
   if (!root) return [];
-  const out: OxygenIncident[] = [];
-  for (const fileNode of findAll(root, 'file')) {
-    const filePath =
-      fileNode.attrs.filePath ??
-      fileNode.attrs.filepath ??
-      fileNode.attrs.path ??
-      '';
-    const incidentsNode = fileNode.children.find(
-      (c) => c.tag.toLowerCase() === 'incidents',
-    );
-    const candidates = (
-      incidentsNode ? incidentsNode.children : fileNode.children
-    ).filter((c) => c.tag.toLowerCase() === 'incident');
-    for (const inc of candidates) out.push(toIncident(filePath, inc));
-  }
-  return out;
+  return findAll(root, 'incident').map(toIncident);
 }
 
 function asRecord(v: unknown): Record<string, unknown> {
@@ -210,6 +233,8 @@ export const PROBLEM_ID_CATEGORY: Record<string, string> = {
   'dmv.reference.not.exist': 'missing-reference',
   // keys
   'dmv.undef.key': 'undefined-key',
+  // the live report emits dmv.key.undef for the same finding (confirmed empirically)
+  'dmv.key.undef': 'undefined-key',
   'duplicate.key.definition': 'duplicate-key',
   'dmv.not.used.key.defs': 'unreferenced-key',
   // duplicates
