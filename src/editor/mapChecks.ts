@@ -286,11 +286,17 @@ export async function runChecks(
     }
     for (const [id, list] of byId) {
       if (list.length < 2) continue;
-      for (const dup of list.slice(1)) {
+      // A duplicate is a property of the whole group: report every topic that
+      // shares the id (as Oxygen does), each related to the others, not just the
+      // later arrivals. Reporting one side left the other file invisible.
+      for (const dup of list) {
         issues.push({
-          category: 'duplicate-id', severity: 'error', file: dup.file, line: dup.line,
+          category: 'duplicate-id',
+          severity: 'error',
+          file: dup.file,
+          line: dup.line,
           msg: msg('id.duplicate', id, list.length),
-          related: [{ file: list[0].file, line: list[0].line }],
+          related: list.filter((o) => o !== dup).map((o) => ({ file: o.file, line: o.line })),
         });
       }
     }

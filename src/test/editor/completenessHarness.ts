@@ -127,11 +127,30 @@ export function diffFindings(
 }
 
 /**
- * Coarse "problem signature" (file + category), for comparing the extension
- * against Oxygen, whose line numbers and wording legitimately differ.
+ * Categories the two tools name differently for the *same* (file, kind) finding.
+ * Parity is compared on canonical categories; the extension's own UI keeps the
+ * finer split (only `findingSignature` collapses them, never `findingKey`).
+ *
+ * - `missing-resource` -> `missing-reference`: Oxygen reports a dangling non-DITA
+ *   href as `dmv.file.not.found` (missing-reference); the extension keeps a
+ *   dedicated `missing-resource` category. Same missing file, seen through the
+ *   extension's resource/reference split. Documented in OXYGEN-PROBLEMS.md.
+ */
+export const CATEGORY_EQUIVALENCES: Readonly<Record<string, string>> = {
+  'missing-resource': 'missing-reference',
+};
+
+/** The category a finding is compared under: its equivalence target, or itself. */
+export function canonicalCategory(category: string): string {
+  return CATEGORY_EQUIVALENCES[category] ?? category;
+}
+
+/**
+ * Coarse "problem signature" (file + canonical category), for comparing the
+ * extension against Oxygen, whose line numbers and wording legitimately differ.
  */
 export function findingSignature(f: NormalizedFinding): string {
-  return `${f.file}\t${f.category}`;
+  return `${f.file}\t${canonicalCategory(f.category)}`;
 }
 
 /** Symmetric difference of two key lists, de-duplicated and sorted. */

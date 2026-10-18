@@ -222,7 +222,7 @@ describe('completeness: multiple references', () => {
 });
 
 describe('completeness: ids and keys', () => {
-  it('reports duplicate topic ids across files, with the first as related', async () => {
+  it('reports duplicate topic ids on every file that shares the id, related to the others', async () => {
     const issues = await check(
       {
         'root.ditamap': '<map><topicref href="a.dita"/><topicref href="b.dita"/></map>',
@@ -232,9 +232,15 @@ describe('completeness: ids and keys', () => {
       { checkDuplicateTopicIds: true },
     );
     const dup = issues.filter((i) => i.category === 'duplicate-id');
-    assert.strictEqual(dup.length, 1);
-    assert.ok(dup[0].file.endsWith('b.dita'));
-    assert.ok(dup[0].related![0].file.endsWith('a.dita'));
+    assert.strictEqual(dup.length, 2);
+    assert.deepStrictEqual(
+      dup.map((i) => (i.file.endsWith('a.dita') ? 'a' : 'b')).sort(),
+      ['a', 'b'],
+    );
+    for (const i of dup) {
+      assert.strictEqual(i.related!.length, 1);
+      assert.ok(i.related![0].file.endsWith(i.file.endsWith('a.dita') ? 'b.dita' : 'a.dita'));
+    }
   });
 
   it('duplicate keys: reports same-scope duplicates, not the same key in a key scope (Oxygen doc example)', async () => {

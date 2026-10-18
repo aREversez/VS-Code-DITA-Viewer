@@ -1,7 +1,13 @@
 import * as assert from 'assert';
 import { readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { collectExtensionFindings, diffKeys, findingSignature } from './completenessHarness';
+import {
+  NormalizedFinding,
+  canonicalCategory,
+  collectExtensionFindings,
+  diffKeys,
+  findingSignature,
+} from './completenessHarness';
 import { corpusRootFromReport, normalizeOxygenFindings, parseOxygenReportAuto } from './oxygenReport';
 
 // __dirname is dist-test/test/editor at runtime, so the repo root is three up.
@@ -51,5 +57,18 @@ describe('Oxygen parity on the corpus (real report)', () => {
       expected,
       'parity with the Oxygen report changed; if that is intended, rerun with UPDATE_OXYGEN_PARITY=1',
     );
+  });
+
+  it('compares on canonical categories, so a resource/reference split still counts as matched', () => {
+    // The mechanism behind the resources.dita parity (OXYGEN-PROBLEMS.md): the
+    // extension and Oxygen name the same missing file differently, and
+    // canonicalCategory folds them into one signature. It collapses only the
+    // documented equivalences and leaves every other category untouched.
+    const ext: NormalizedFinding = { category: 'missing-resource', severity: 'error', file: 'topics/resources.dita', line: 7, message: 'm' };
+    const ox: NormalizedFinding = { category: 'missing-reference', severity: 'error', file: 'topics/resources.dita', line: 7, message: 'n' };
+    assert.strictEqual(findingSignature(ext), findingSignature(ox));
+    assert.strictEqual(canonicalCategory('missing-resource'), 'missing-reference');
+    assert.strictEqual(canonicalCategory('duplicate-id'), 'duplicate-id');
+    assert.strictEqual(canonicalCategory('unreferenced-link'), 'unreferenced-link');
   });
 });

@@ -142,6 +142,13 @@
   {
     "category": "duplicate-id",
     "severity": "error",
+    "file": "topics/twoidsa.dita",
+    "line": 3,
+    "message": "Duplicate topic id \"dup\" (2 topics share it)"
+  },
+  {
+    "category": "duplicate-id",
+    "severity": "error",
     "file": "topics/twoidsb.dita",
     "line": 3,
     "message": "Duplicate topic id \"dup\" (2 topics share it)"
