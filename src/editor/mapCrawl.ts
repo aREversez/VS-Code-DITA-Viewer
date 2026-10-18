@@ -566,11 +566,13 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
             }
           }
           const frag = v.includes('#') ? v.split('#')[1] : '';
+          // "." is DITA's same-topic fragment (`#.`, `#./elem`): it names no topic id to look up.
           const segs = frag ? frag.split('/') : [];
+          const sameTopic = segs[0] === '.';
           result.conrefUses.push({
             targetFile: ref.target ?? path,
-            targetId: segs.length ? segs[segs.length - 1] : undefined,
-            topicId: segs[0] || undefined,
+            targetId: segs.length && !(sameTopic && segs.length === 1) ? segs[segs.length - 1] : undefined,
+            topicId: segs[0] && !sameTopic ? segs[0] : undefined,
             elemId: segs.length > 1 ? segs.slice(1).join('/') : undefined,
             sourceFile: path,
             sourceLine: n.line,

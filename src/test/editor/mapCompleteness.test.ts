@@ -353,6 +353,19 @@ describe('completeness: invalid referenced topic ids', () => {
     assert.strictEqual(issues.filter((i) => i.category === 'invalid-ref-topic-id').length, 0);
     assert.strictEqual(issues.filter((i) => i.category === 'unreferenced-reusable').length, 0);
   });
+
+  it('treats the same-topic forms #. and #./elem as resolved, and counts #./elem as a use', async () => {
+    // DITA 1.3 (uri-based-addressing): "." stands for the topic that holds the reference.
+    const issues = await check(
+      {
+        'root.ditamap': '<map><topicref href="a.dita"/></map>',
+        'a.dita': topic('a', '<p conref="#./src"/><p conref="#."/><p id="src">s</p>'),
+      },
+      { batchValidate: true, reportUnreferencedReusable: true },
+    );
+    assert.deepStrictEqual(issues.filter((i) => i.category === 'invalid-ref-topic-id'), []);
+    assert.deepStrictEqual(issues.filter((i) => i.category === 'unreferenced-reusable'), []);
+  });
 });
 
 describe('completeness: tables', () => {
