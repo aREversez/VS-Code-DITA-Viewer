@@ -50,7 +50,9 @@ bundles the harness with esbuild, so it needs no build step.
 See **[OXYGEN.md](OXYGEN.md)**. The practical route on this machine is the GUI:
 open `corpus.ditamap` in the **DITA Maps Manager**, run **DITA Maps → Validate and
 Check for Completeness** (every option except *Include remote resources*), and
-**Save Results as XML…** to `oxygen-report.xml`. The adapter
+**Save Results as XML…** to the git-ignored `oxygen-report.raw.xml`, then run
+`node scripts/sanitize-oxygen-report.cjs` on it to produce the committable
+`oxygen-report.xml` (relative paths; see OXYGEN.md). The adapter
 (`src/test/editor/oxygenReport.ts`) normalizes it and
 `node scripts/oxygen-diff.cjs <report.xml>` prints the parity diff (non-zero exit
 on any difference). The scripted route (`validateCheckDITA`) is the same check

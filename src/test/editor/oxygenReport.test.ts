@@ -12,6 +12,7 @@ import {
   oxygenPathToLocal,
   parseOxygenReport,
   parseOxygenReportAuto,
+  sanitizeOxygenReport,
   unmappedProblemIds,
 } from './oxygenReport';
 
@@ -105,6 +106,40 @@ describe('Oxygen completeness report adapter', () => {
     );
     assert.strictEqual(corpusRootFromReport([inc('/tmp/c/corpus.ditamap')]), '/tmp/c');
     assert.strictEqual(corpusRootFromReport([inc('/tmp/c/a.dita')]), undefined);
+  });
+
+  it('makes a Windows report relative to the corpus, including the folder above it', () => {
+    const raw = [
+      '<systemID>H:\\w\\corpus\\topics\\a.dita</systemID>',
+      '<systemID>H:\\w\\corpus\\corpus.ditamap</systemID>',
+      '<systemID>H:\\w\\outside\\o.dita</systemID>',
+      '<description>File not found: &quot;H:\\w\\corpus\\topics\\x.dita&quot;.</description>',
+    ].join('\n');
+    const res = sanitizeOxygenReport(raw, 'H:\\w\\corpus');
+    assert.deepStrictEqual(res.leftovers, []);
+    assert.ok(res.xml.includes('<systemID>topics/a.dita</systemID>'), res.xml);
+    assert.ok(res.xml.includes('<systemID>corpus.ditamap</systemID>'), res.xml);
+    assert.ok(res.xml.includes('<systemID>../outside/o.dita</systemID>'), res.xml);
+    assert.ok(res.xml.includes('&quot;topics/x.dita&quot;'), res.xml);
+  });
+
+  it('sanitizes file: URLs with escapes and POSIX roots', () => {
+    const raw = '<systemID>file:///home/me/my%20work/corpus/topics/a.dita</systemID>';
+    const res = sanitizeOxygenReport(raw, '/home/me/my work/corpus');
+    assert.deepStrictEqual(res.leftovers, []);
+    assert.ok(res.xml.includes('<systemID>topics/a.dita</systemID>'), res.xml);
+  });
+
+  it('lists the machine paths it cannot make relative instead of hiding them', () => {
+    const raw = [
+      '<systemID>H:\\w\\corpus\\corpus.ditamap</systemID>',
+      '<description>Loaded from G:\\Program Files\\Oxygen\\lib.</description>',
+      '<description>Also /Users/someone/x.</description>',
+    ].join('\n');
+    const res = sanitizeOxygenReport(raw, 'H:\\w\\corpus');
+    assert.strictEqual(res.leftovers.length, 2, res.leftovers.join('|'));
+    assert.ok(res.leftovers.some((l) => l.startsWith('G:')));
+    assert.ok(res.leftovers.some((l) => l.includes('/Users/someone')));
   });
 
   it('keeps the root slash of a POSIX file: URL and drops it before a drive letter', () => {

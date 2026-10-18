@@ -13,3 +13,6 @@ test-dita-file/out/
 # exit; ignored so a crashed run can never leave it staged).
 test-dita-file/__rename-e2e/
 test-dita-file/__providers-e2e/
+
+# raw Oxygen reports name files by absolute machine paths; commit the sanitized one
+test-dita-file/completeness-corpus/*.raw.xml

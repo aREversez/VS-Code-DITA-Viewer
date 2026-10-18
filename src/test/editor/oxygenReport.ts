@@ -338,3 +338,49 @@ export function unmappedProblemIds(
     if (i.problemID && !PROBLEM_ID_CATEGORY[i.problemID]) ids.add(i.problemID);
   return [...ids].sort();
 }
+
+/** Machine-specific absolute paths: a drive letter, a home directory or a UNC share. */
+const MACHINE_PATH_IN_TEXT =
+  /(?<![A-Za-z])[A-Za-z]:[\\/][^\s"'<>&]*|(?:^|[\s"'=(>])\/(?:Users|home)\/[^\s"'<>&]+|\\\\[A-Za-z0-9_.-]+\\[A-Za-z0-9_.$-][^\s"'<>&]*/g;
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Makes a real Oxygen report safe to commit: every path under the corpus folder
+ * becomes relative to it, paths under the folder above it become `../...`, and
+ * what is left of a machine-specific absolute path (an install folder in a
+ * message, say) is returned in `leftovers` so the caller can refuse to write it.
+ */
+export function sanitizeOxygenReport(xml: string, corpusRoot: string): { xml: string; leftovers: string[] } {
+  const fwd = corpusRoot.replace(/\\/g, '/').replace(/\/+$/, '');
+  const slash = fwd.lastIndexOf('/');
+  const parent = slash > 0 ? fwd.slice(0, slash) : '';
+  // One regex per root spelling: plain, backslashed, and file: URLs (plain or %-encoded).
+  const spellings = (dir: string): string[] => {
+    const bs = dir.replace(/\//g, '\\');
+    const out = [dir, bs, encodeURI(dir)];
+    const noLead = dir.replace(/^\//, '');
+    for (const prefix of ['file:///', 'file://', 'file:/']) out.push(prefix + noLead, prefix + encodeURI(noLead));
+    return [...new Set(out)].sort((a, b) => b.length - a.length);
+  };
+  const replaceDir = (text: string, dir: string, replacement: string, bare: string): string => {
+    let out = text;
+    for (const sp of spellings(dir)) {
+      const sepAfter = sp.includes('\\') ? '\\\\' : '/';
+      // The rest of the path after the folder is kept, with its separators made forward slashes.
+      out = out.replace(
+        new RegExp(`${escapeRegExp(sp)}${sepAfter}([^\\s"'<>&:*?|]*)`, 'gi'),
+        (_m, rest: string) => replacement + rest.replace(/\\/g, '/'),
+      );
+      out = out.replace(new RegExp(`${escapeRegExp(sp)}(?![\\w/\\\\.-])`, 'gi'), bare);
+    }
+    return out;
+  };
+  let out = replaceDir(xml, fwd, '', '.');
+  if (parent) out = replaceDir(out, parent, '../', '..');
+  out = out.replace(/<systemID>([^<]*)<\/systemID>/g, (_m, p: string) => `<systemID>${p.replace(/\\/g, '/')}</systemID>`);
+  const leftovers = [...new Set((out.match(MACHINE_PATH_IN_TEXT) ?? []).map((s) => s.trim()))];
+  return { xml: out, leftovers };
+}

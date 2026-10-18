@@ -10,7 +10,7 @@
 // Steps it performs:
 //   1. finds scripts/validateCheckDITA.bat (Windows) or .sh (Unix) in that folder
 //   2. runs it on corpus.ditamap, with corpus.settings.xml if present, writing
-//      oxygen-report.xml next to the corpus
+//      oxygen-report.raw.xml, then sanitizes it into oxygen-report.xml
 //   3. runs scripts/oxygen-diff.cjs on the report
 //
 // See test-dita-file/completeness-corpus/OXYGEN.md for the full explanation and
@@ -23,6 +23,9 @@ const ROOT = path.resolve(__dirname, '..');
 const CORPUS = path.join(ROOT, 'test-dita-file', 'completeness-corpus');
 const ROOT_MAP = path.join(CORPUS, 'corpus.ditamap');
 const SETTINGS = path.join(CORPUS, 'corpus.settings.xml');
+// Oxygen writes absolute machine paths; the raw file is git-ignored and only the
+// sanitized copy (oxygen-report.xml) is committed.
+const RAW_REPORT = path.join(CORPUS, 'oxygen-report.raw.xml');
 const REPORT = path.join(CORPUS, 'oxygen-report.xml');
 
 function findScript(dir) {
@@ -72,7 +75,7 @@ function main() {
     );
   }
 
-  const args = ['-i', ROOT_MAP, '-r', REPORT];
+  const args = ['-i', ROOT_MAP, '-r', RAW_REPORT];
   if (fs.existsSync(SETTINGS)) {
     args.push('-s', SETTINGS);
   } else {
@@ -90,7 +93,7 @@ function main() {
       ? { command: 'cmd.exe', args: ['/c', quoted] }
       : { command: 'sh', args: ['-c', quoted] };
 
-  console.log(`Running ${script}\n  on ${ROOT_MAP}\n  -> ${REPORT}\n`);
+  console.log(`Running ${script}\n  on ${ROOT_MAP}\n  -> ${RAW_REPORT}\n`);
   const run = spawnSync(invocation.command, invocation.args, { stdio: 'inherit' });
   if (run.error) throw run.error;
   if (run.status !== 0) {
@@ -98,10 +101,15 @@ function main() {
     console.error('Common causes: missing/invalid license key, no Java 11/17 on PATH, or a bad -s settings file.');
     process.exit(run.status ?? 1);
   }
-  if (!fs.existsSync(REPORT)) {
-    console.error(`\nThe script reported success but ${REPORT} was not written.`);
+  if (!fs.existsSync(RAW_REPORT)) {
+    console.error(`\nThe script reported success but ${RAW_REPORT} was not written.`);
     process.exit(1);
   }
+  const clean = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'sanitize-oxygen-report.cjs'), RAW_REPORT], {
+    stdio: 'inherit',
+  });
+  if (clean.error) throw clean.error;
+  if (clean.status !== 0) process.exit(clean.status ?? 1);
 
   console.log('\n--- diff ---\n');
   const diff = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'oxygen-diff.cjs'), REPORT], {

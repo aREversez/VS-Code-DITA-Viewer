@@ -26,7 +26,12 @@ here. The identical check is a GUI action:
    option except *Include remote resources* (to match `CORPUS_OPTIONS` in
    `src/test/editor/completenessHarness.ts`).
 3. In the **Results** view, right-click → **Save Results as XML…** and save to
-   `test-dita-file\completeness-corpus\oxygen-report.xml`. Commit it.
+   `test-dita-file\completeness-corpus\oxygen-report.raw.xml` (git-ignored: the raw
+   report names files by absolute paths of this machine and must not be committed).
+   Then make it safe and commit the result:
+   `node scripts/sanitize-oxygen-report.cjs test-dita-file/completeness-corpus/oxygen-report.raw.xml`
+   writes `oxygen-report.xml` with paths relative to the corpus, and refuses to write
+   if any other machine path (an install folder in a message, say) is left.
 4. Diff from the repo root:
    `node scripts/oxygen-diff.cjs test-dita-file/completeness-corpus/oxygen-report.xml`.
 
@@ -82,7 +87,8 @@ That wrapper (`scripts/run-oxygen-completeness.cjs`):
 
 1. finds `validateCheckDITA.bat` in that folder,
 2. runs it on `corpus.ditamap` with `corpus.settings.xml`,
-3. writes `test-dita-file\completeness-corpus\oxygen-report.xml`,
+3. writes `test-dita-file\completeness-corpus\oxygen-report.raw.xml` (git-ignored) and
+   sanitizes it into `oxygen-report.xml` with `scripts/sanitize-oxygen-report.cjs`,
 4. runs the diff and prints the parity result.
 
 You can also set `OXYGEN_SCRIPTING_HOME` instead of passing the path.
