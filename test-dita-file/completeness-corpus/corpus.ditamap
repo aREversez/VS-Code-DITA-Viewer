@@ -68,4 +68,7 @@
 
   <!-- unreachable remote resources (probed only when "include remote" is on) -->
   <topicref href="topics/remote.dita"/>
+
+  <!-- conref fragment forms: #topicID/elemID and the same-topic #./elemID (no finding expected) -->
+  <topicref href="topics/conref-forms.dita"/>
 </map>
