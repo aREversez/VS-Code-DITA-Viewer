@@ -69,7 +69,7 @@ ignored by the `(file, category)` diff.
 | `dmv.invalid.ref.id` | referenced ID not found | gap |
 | `dmv.invalid.ref.id.path` | referenced ID path not found | gap |
 | `dmv.invalid.ref.id.path.keyref.elemid` | key-target element ID not found under the key | gap |
-| `dmv.invalid.ref.topic.id` | referenced topic ID not found | gap |
+| `dmv.invalid.ref.topic.id` | referenced topic ID not found | ok (`invalid-ref-topic-id`) |
 | `dmv.link.no.target` | link/xref has neither `@href` nor `@keyref` | gap |
 | `dmv.link.topic.to.map` | topic-to-map reference is not resolved in output | gap |
 | `dmv.ref.to.resource.only` | cross-reference to a resource-only topic breaks | gap |
@@ -204,9 +204,10 @@ What the two runs did settle:
 ### The first genuine run (corpus carrying DITA 1.3 DOCTYPEs)
 
 *Validate and Check for Completeness* over the corpus produced 35 incidents across
-17 problem ids (`oxygen-report.xml`). After the B-class reconciliations below the
-parity set (`oxygen-parity.expected.json`) locks **13 matched, 3 extension-only,
-9 Oxygen-only**. Every Oxygen-only row and how it is handled:
+17 problem ids (`oxygen-report.xml`). After the B-class reconciliations and the two
+spec-backed A-class checks below, the parity set (`oxygen-parity.expected.json`)
+locks **15 matched, 3 extension-only, 7 Oxygen-only**. Every Oxygen-only row and
+how it is handled:
 
 | Oxygen-only row | Report evidence | Handling |
 | --- | --- | --- |
@@ -214,8 +215,8 @@ parity set (`oxygen-parity.expected.json`) locks **13 matched, 3 extension-only,
 | `twoidsa.dita` `duplicate-id` | `dmv.dup.topic.id` (line 3) | **Fixed.** `mapChecks` used to report one participant of a duplicate group; it now flags every topic that shares the id (as Oxygen does), each related to the others. |
 | `../completeness-outside/outside.dita` no-schema (`unknown`) + `dmv.invalid.class.format` | "There is no schema or DTD associated with the document" | **DOCTYPE added.** The file lives in `completeness-outside/` and the first DOCTYPE pass skipped it; with one now, both rows drop at the next Oxygen run. Kept in the list until the report is regenerated. |
 | `corpus.ditamap` `dmv.invalid.parse.dita.content` | line 64, message names `topics/malformed.dita` | **B — attribution, not a gap.** The same malformed-topic finding the extension reports as `topics/malformed.dita validation`; Oxygen reports it on the referencing map. Kept as an understood divergence: the `(file, category)` signature cannot fold a *different* file, so it stays one extension-only + one Oxygen-only until we decide whether to redirect map-level parse errors to the target. |
-| `linker2.dita` `dmv.invalid.ref.topic.id` ×2 | referenced topic ID not found (lines 9, 10) | **A-class gap, spec-backed** — reference-hygiene check the extension can implement now. |
-| `ok.dita` `unreferenced-reusable` | `dmv.not.used.reusable.component` (line 6) | **A-class gap, spec-backed** — the reusable-never-conref'd rule catches `reuse.dita` but not `ok.dita`; implementable now. |
+| `linker2.dita` `dmv.invalid.ref.topic.id` ×2 | referenced topic ID not found (lines 9, 10) | **Implemented — now matched.** New `invalid-ref-topic-id` check (`mapChecks`) fires when a `@conref` resolves to a file that exists but its topic-id segment (the part after `#`) names no topic in it. Ledger R020. |
+| `ok.dita` `unreferenced-reusable` | `dmv.not.used.reusable.component` (line 6) | **Implemented — now matched.** `unreferencedReusable` is now strict: a broken conref (its topic id does not resolve, R020) no longer counts as consuming its target, so `ok.dita`'s `p#used` (and `reuse.dita`'s `p#shared`) stay unreferenced, as Oxygen reports. |
 | `invalid.dita` `MSG_*` ×3 + `dmv.invalid.class.format` | schema/DTD + malformed `@class` | **A-class — schema validation (Phase 5).** Needs real DTD/schema validation; deferred to the DITA-OT-preprocess-reuse evaluation, not built here on guesses. |
 
 Two run-wide notes:

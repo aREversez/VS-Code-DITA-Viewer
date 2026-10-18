@@ -317,6 +317,44 @@ describe('completeness: reusable elements', () => {
   });
 });
 
+describe('completeness: invalid referenced topic ids', () => {
+  it('flags a conref whose file exists but whose topic id does not, and leaves the target unreferenced', async () => {
+    // Mirrors the corpus's linker2 -> `ok.dita#used`: the file resolves, but `used`
+    // is not a topic id in ok.dita, so the reference is broken (Oxygen's
+    // dmv.invalid.ref.topic.id) and the element it aimed at is never pulled in.
+    const issues = await check(
+      {
+        'root.ditamap':
+          '<map><topicref href="a.dita"/><topicref href="lib.dita" processing-role="resource-only"/></map>',
+        'a.dita': topic('a', '<p><ph conref="lib.dita#nope"/></p>'),
+        'lib.dita': topic('lib', '<p id="nope">n</p>'),
+      },
+      { batchValidate: true, reportUnreferencedReusable: true },
+    );
+    const bad = issues.filter((i) => i.category === 'invalid-ref-topic-id');
+    assert.strictEqual(bad.length, 1);
+    assert.ok(bad[0].file.endsWith('a.dita'), bad[0].file);
+    assert.ok(bad[0].message.includes('nope'), bad[0].message);
+    const re = issues.filter((i) => i.category === 'unreferenced-reusable');
+    assert.strictEqual(re.length, 1, re.map((i) => i.message).join('\n'));
+    assert.ok(re[0].message.includes('nope'));
+  });
+
+  it('accepts a well-formed conref to an existing topic id and counts it as a use', async () => {
+    const issues = await check(
+      {
+        'root.ditamap':
+          '<map><topicref href="a.dita"/><topicref href="lib.dita" processing-role="resource-only"/></map>',
+        'a.dita': topic('a', '<p><ph conref="lib.dita#lib/used"/></p>'),
+        'lib.dita': topic('lib', '<p id="used">u</p>'),
+      },
+      { batchValidate: true, reportUnreferencedReusable: true },
+    );
+    assert.strictEqual(issues.filter((i) => i.category === 'invalid-ref-topic-id').length, 0);
+    assert.strictEqual(issues.filter((i) => i.category === 'unreferenced-reusable').length, 0);
+  });
+});
+
 describe('completeness: tables', () => {
   const cals = (cols: string, rows: string, colspecs = '') =>
     topic('t', `<table><tgroup cols="${cols}">${colspecs}<tbody>${rows}</tbody></tgroup></table>`);

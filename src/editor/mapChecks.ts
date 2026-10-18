@@ -104,6 +104,7 @@ export function resolveStoredPath(mapDir: string, stored: string): string {
 export const ISSUE_CATEGORIES = [
   'validation',
   'missing-reference',
+  'invalid-ref-topic-id',
   'undefined-key',
   'missing-resource',
   'remote-resource',
@@ -218,6 +219,11 @@ export async function runChecks(
     if (fi.structural && !opts.batchValidate) continue;
     issues.push({ category: 'validation', severity: fi.severity, file: fi.file, line: fi.line, msg: fi.msg });
   }
+
+  // 2b. A content reference (conref) that resolves to a file that exists, but whose
+  // topic-id segment names no topic element there. Oxygen files this as
+  // dmv.invalid.ref.topic.id; it is part of validating references, so it runs with batch validation.
+  if (opts.batchValidate) issues.push(...invalidRefTopicIds(crawl, norm));
 
   // 3. References outside the map folder.
   if (opts.reportOutsideMapFolder && rootDir) {
@@ -419,6 +425,40 @@ function copyToKey(ref: Reference): string {
   return `copy-to\u0000${dirname(ref.file)}\u0000${ref.copyTo}`;
 }
 
+/** Normalized target file -> the set of topic ids declared in it (root and nested). */
+function topicIdsByFile(crawl: CrawlResult, norm: (p: string) => string): Map<string, Set<string>> {
+  const byFile = new Map<string, Set<string>>();
+  for (const t of crawl.topicIds) {
+    const k = norm(t.topicFile);
+    let s = byFile.get(k);
+    if (!s) byFile.set(k, (s = new Set()));
+    s.add(t.id);
+  }
+  return byFile;
+}
+
+/**
+ * A `@conref` whose target file was found but whose topic-id segment (the part after
+ * `#`) names no topic element in that file. The DITA addressing rule is
+ * `file#topicID/elemID`: the topic-id segment must resolve. Oxygen reports this as
+ * `dmv.invalid.ref.topic.id`. Files we never crawled are skipped (their reference
+ * problem is already reported elsewhere), so this only fires on a confirmed mismatch.
+ */
+function invalidRefTopicIds(crawl: CrawlResult, norm: (p: string) => string): Array<Omit<Issue, 'message'>> {
+  const byFile = topicIdsByFile(crawl, norm);
+  const out: Array<Omit<Issue, 'message'>> = [];
+  for (const use of crawl.conrefUses) {
+    if (use.key || !use.targetFile || !use.topicId || !use.sourceFile) continue;
+    const ids = byFile.get(norm(use.targetFile));
+    if (!ids || ids.has(use.topicId)) continue;
+    out.push({
+      category: 'invalid-ref-topic-id', severity: 'error', file: use.sourceFile, line: use.sourceLine ?? 1,
+      msg: msg('ref.invalidTopicId', use.topicId),
+    });
+  }
+  return out;
+}
+
 function unreferencedReusable(crawl: CrawlResult, norm: (p: string) => string): Array<Omit<Issue, 'message'>> {
   // Topics to look in: those a resource-only topicref points at, and those
   // some conref/conkeyref already draws from.
@@ -431,12 +471,18 @@ function unreferencedReusable(crawl: CrawlResult, norm: (p: string) => string): 
     if (!def.target) continue;
     for (const q of def.qualified) if (!keyTarget.has(q)) keyTarget.set(q, def.target);
   }
+  const byFile = topicIdsByFile(crawl, norm);
   const used = new Set<string>(); // "<norm file>#<id>"
   for (const use of crawl.conrefUses) {
     const file = use.targetFile ?? (use.key ? keyTarget.get(use.key) : undefined);
     if (!file) continue;
     candidates.add(norm(file));
-    if (use.targetId) used.add(`${norm(file)}#${use.targetId}`);
+    if (!use.targetId) continue;
+    // A broken direct conref (its topic id names no topic in the target) never pulls the
+    // element in, exactly as Oxygen treats it: the target stays unreferenced-reusable.
+    const ids = byFile.get(norm(file));
+    if (!use.key && use.topicId && ids && !ids.has(use.topicId)) continue;
+    used.add(`${norm(file)}#${use.targetId}`);
   }
   const out: Array<Omit<Issue, 'message'>> = [];
   for (const el of crawl.reusable) {

@@ -122,8 +122,15 @@ export interface ReusableCandidate extends Location {
 export interface ConrefUse {
   /** Absolute path of the conref target file (own file for `#…`), if resolvable. */
   targetFile?: string;
-  /** Element id targeted (last path segment of the fragment), if any. */
+  /** Last fragment segment: the element id for `#topic/elem`, the topic id for a bare `#topic`. */
   targetId?: string;
+  /** The topic-id segment (the part right after `#`), if the value carried a fragment. */
+  topicId?: string;
+  /** The element-id segment after the topic id (`#topic/elem`), if any. */
+  elemId?: string;
+  /** Where the conref is written, so an unresolvable topic id can be reported on it. */
+  sourceFile?: string;
+  sourceLine?: number;
   /** Key name for a conkeyref. */
   key?: string;
 }
@@ -559,9 +566,14 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
             }
           }
           const frag = v.includes('#') ? v.split('#')[1] : '';
+          const segs = frag ? frag.split('/') : [];
           result.conrefUses.push({
             targetFile: ref.target ?? path,
-            targetId: frag ? frag.split('/').pop() : undefined,
+            targetId: segs.length ? segs[segs.length - 1] : undefined,
+            topicId: segs[0] || undefined,
+            elemId: segs.length > 1 ? segs.slice(1).join('/') : undefined,
+            sourceFile: path,
+            sourceLine: n.line,
           });
           if (!ref.target && !ref.remote && frag) usedElementIds.add(frag.split('/').pop() ?? '');
         }

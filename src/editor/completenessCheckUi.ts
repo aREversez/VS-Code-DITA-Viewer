@@ -57,6 +57,7 @@ export function localizeMsg(m: Msg): string {
     case 'ref.outsideFolder': return vscode.l10n.t('Reference points outside the map folder: {0}', ...a);
     case 'ref.linkNotInMap': return vscode.l10n.t('Link target is not referenced in any map: {0}', ...a);
     case 'ref.multiple': return vscode.l10n.t('Topic referenced more than once ({1} times): {0}', ...a);
+    case 'ref.invalidTopicId': return vscode.l10n.t('Referenced topic id "{0}" not found', ...a);
     case 'id.duplicate': return vscode.l10n.t('Duplicate topic id "{0}" ({1} topics share it)', ...a);
     case 'key.duplicate': return vscode.l10n.t('Key "{0}" is already defined; this definition is ignored', ...a);
     case 'key.undefined': return vscode.l10n.t('Key reference "{0}" does not match any key definition', ...a);
@@ -118,6 +119,7 @@ function categoryLabel(c: IssueCategory): string {
   switch (c) {
     case 'validation': return vscode.l10n.t('Validation');
     case 'missing-reference': return vscode.l10n.t('Missing topics and maps');
+    case 'invalid-ref-topic-id': return vscode.l10n.t('References to a missing topic id');
     case 'undefined-key': return vscode.l10n.t('Undefined key references');
     case 'missing-resource': return vscode.l10n.t('Missing resources');
     case 'remote-resource': return vscode.l10n.t('Unreachable remote resources');

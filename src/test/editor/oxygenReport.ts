@@ -231,6 +231,7 @@ export const PROBLEM_ID_CATEGORY: Record<string, string> = {
   // references
   'dmv.file.not.found': 'missing-reference',
   'dmv.reference.not.exist': 'missing-reference',
+  'dmv.invalid.ref.topic.id': 'invalid-ref-topic-id',
   // keys
   'dmv.undef.key': 'undefined-key',
   // the live report emits dmv.key.undef for the same finding (confirmed empirically)

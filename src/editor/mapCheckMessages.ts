@@ -18,6 +18,7 @@ export const MESSAGE_TEMPLATES = {
   'ref.outsideFolder': 'Reference points outside the map folder: {0}',
   'ref.linkNotInMap': 'Link target is not referenced in any map: {0}',
   'ref.multiple': 'Topic referenced more than once ({1} times): {0}',
+  'ref.invalidTopicId': 'Referenced topic id "{0}" not found',
   // ids, keys, reuse
   'id.duplicate': 'Duplicate topic id "{0}" ({1} topics share it)',
   'key.undefined': 'Key reference "{0}" does not match any key definition',

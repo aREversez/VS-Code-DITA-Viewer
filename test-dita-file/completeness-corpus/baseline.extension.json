@@ -56,11 +56,32 @@
     "message": "Link target is not referenced in any map: linktarget.dita"
   },
   {
+    "category": "invalid-ref-topic-id",
+    "severity": "error",
+    "file": "topics/linker2.dita",
+    "line": 10,
+    "message": "Referenced topic id \"shared\" not found"
+  },
+  {
+    "category": "invalid-ref-topic-id",
+    "severity": "error",
+    "file": "topics/linker2.dita",
+    "line": 9,
+    "message": "Referenced topic id \"used\" not found"
+  },
+  {
     "category": "validation",
     "severity": "error",
     "file": "topics/malformed.dita",
     "line": 5,
     "message": "XML error: Unexpected close tag"
+  },
+  {
+    "category": "unreferenced-reusable",
+    "severity": "warning",
+    "file": "topics/ok.dita",
+    "line": 6,
+    "message": "Reusable element <p id=\"used\"> is never referenced by a conref or conkeyref"
   },
   {
     "category": "outside-folder",
@@ -124,6 +145,13 @@
     "file": "topics/reuse.dita",
     "line": 6,
     "message": "Reusable element <p id=\"orphan\"> is never referenced by a conref or conkeyref"
+  },
+  {
+    "category": "unreferenced-reusable",
+    "severity": "warning",
+    "file": "topics/reuse.dita",
+    "line": 7,
+    "message": "Reusable element <p id=\"shared\"> is never referenced by a conref or conkeyref"
   },
   {
     "category": "table-layout",

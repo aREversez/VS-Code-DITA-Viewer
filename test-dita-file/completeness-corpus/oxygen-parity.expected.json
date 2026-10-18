@@ -6,6 +6,8 @@
     "corpus.ditamap  undefined-key",
     "corpus.ditamap  unreferenced-key",
     "topics/linker.dita  unreferenced-link",
+    "topics/linker2.dita  invalid-ref-topic-id",
+    "topics/ok.dita  unreferenced-reusable",
     "topics/outside.dita  outside-folder",
     "topics/outside.dita  unreferenced-link",
     "topics/profiling.dita  profiling-preference",
@@ -26,8 +28,6 @@
     "topics/invalid.dita  oxygen:MSG_ATTRIBUTE_NOT_DECLARED",
     "topics/invalid.dita  oxygen:MSG_CONTENT_INVALID_UNEXPECTED_ELEMENT",
     "topics/invalid.dita  oxygen:MSG_ELEMENT_NOT_DECLARED",
-    "topics/invalid.dita  oxygen:dmv.invalid.class.format",
-    "topics/linker2.dita  oxygen:dmv.invalid.ref.topic.id",
-    "topics/ok.dita  unreferenced-reusable"
+    "topics/invalid.dita  oxygen:dmv.invalid.class.format"
   ]
 }
