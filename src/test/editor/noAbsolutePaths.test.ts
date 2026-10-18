@@ -14,6 +14,11 @@ const dirs = [
 // only a standalone drive letter is flagged. Committed test data must be relative.
 const DRIVE_ABSOLUTE = /(?<![A-Za-z])[A-Za-z]:[\\/]/;
 
+// A POSIX home-directory path (/Users/<name>/..., /home/<name>/...) or a UNC share
+// (\\\\host\\share): the same per-machine leak on macOS, Linux and shared drives.
+const HOME_OR_UNC = /(?:^|[\s"'=(>])\/(?:Users|home)\/[^\s"'/]+\/|\\\\[A-Za-z0-9_.-]+\\[A-Za-z0-9_.$-]+/;
+const MACHINE_PATH = (line: string): boolean => DRIVE_ABSOLUTE.test(line) || HOME_OR_UNC.test(line);
+
 // Only files that hold genuine per-machine output are guarded: the corpus topics,
 // the map, the real Oxygen report and the baselines. Markdown is documentation
 // that legitimately shows example setup paths (e.g. `C:\\OxygenAll`), and the
@@ -37,13 +42,13 @@ function walk(dir: string): string[] {
 }
 
 describe('committed test data carries no machine paths', () => {
-  it('no corpus or report file contains a drive-letter absolute path', () => {
+  it('no corpus or report file contains a drive-letter, home-directory or UNC path', () => {
     const offenders: string[] = [];
     for (const dir of dirs) {
       for (const file of walk(dir)) {
         const lines = readFileSync(file, 'utf8').split(/\r?\n/);
         lines.forEach((line, i) => {
-          if (DRIVE_ABSOLUTE.test(line)) {
+          if (MACHINE_PATH(line)) {
             offenders.push(`${file.replace(repoRoot, '')}:${i + 1}: ${line.trim().slice(0, 80)}`);
           }
         });
@@ -52,7 +57,7 @@ describe('committed test data carries no machine paths', () => {
     assert.deepStrictEqual(
       offenders,
       [],
-      `privacy: a drive-letter absolute path was committed in test data:\n${offenders.join('\n')}\n` +
+      `privacy: a machine-specific absolute path was committed in test data:\n${offenders.join('\n')}\n` +
         'make paths relative to the corpus folder instead.',
     );
   });
