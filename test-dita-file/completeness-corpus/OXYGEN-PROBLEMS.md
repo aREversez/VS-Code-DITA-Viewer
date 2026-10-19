@@ -228,9 +228,14 @@ Run-wide notes:
   landed, confirming the earlier diagnosis: most were map-level noise from the
   missing DTD default. The one left sits on `topics/invalid.dita` (the
   schema-invalid probe).
-- Profiling parity holds: Oxygen's `audience` preference already carried
-  `expert novice`, so `profiling-preference` and `profiling-conflict` match on
-  `profiling.dita`. The harness's `CORPUS_PREFERENCES` defines only `audience`, so
+- Profiling: Oxygen's `audience` preference already carried `expert novice`, so
+  `profiling-preference` matches on `profiling.dita`. `profiling-conflict` does
+  **not** match there, but that is not yet a divergence: the probe's value
+  (`audience="admin"` inside `novice`) is outside the preference list, which Oxygen
+  reports as `dmv.prof.attr.val.prefs.undef`, so the probe may never reach its
+  ineffective-condition rule (`dmv.prof.attr.innef.cond`). `topics/profiling-defined.dita`
+  adds a conflict made only of defined values (`expert` inside `novice`); the next
+  real report decides (R022). The harness's `CORPUS_PREFERENCES` defines only `audience`, so
   the extension additionally flags `platform="linux"` as an undefined attribute
   while Oxygen (whose stock set defines `platform`) stays quiet — a
   preference-set artifact, invisible at `(file, category)` granularity.

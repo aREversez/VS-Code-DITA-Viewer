@@ -18,6 +18,7 @@
   ],
   "extensionOnly": [
     "topics/malformed.dita  validation",
+    "topics/profiling-defined.dita  profiling-conflict",
     "topics/profiling.dita  profiling-conflict",
     "topics/tables.dita  table-layout"
   ],

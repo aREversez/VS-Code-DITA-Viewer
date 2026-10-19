@@ -82,6 +82,7 @@ for testing the parser without any Oxygen.
 | link to a topic no map references | `topics/linker.dita` | `unreferenced-link` |
 | in-map link | `topics/linker2.dita` | *(none — control)* |
 | same-topic conref forms `#topicID/elem`, `#./elem` | `topics/conref-forms.dita` | *(none — control)* |
+| profiling conflict with defined values (`expert` in `novice`) | `topics/profiling-defined.dita` | `profiling-conflict` |
 | malformed XML | `topics/malformed.dita` | `validation` |
 
 ## Known divergence probes (confirm against Oxygen)

@@ -98,6 +98,13 @@
     "message": "Link target is not referenced in any map: ../../completeness-outside/outside.dita"
   },
   {
+    "category": "profiling-conflict",
+    "severity": "warning",
+    "file": "topics/profiling-defined.dita",
+    "line": 7,
+    "message": "@audience=\"expert\" on <p> shares no value with the enclosing \"novice\"; the content is overshadowed in profiled output"
+  },
+  {
     "category": "profiling-preference",
     "severity": "warning",
     "file": "topics/profiling.dita",

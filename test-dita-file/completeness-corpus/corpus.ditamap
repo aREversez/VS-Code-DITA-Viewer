@@ -71,4 +71,7 @@
 
   <!-- conref fragment forms: #topicID/elemID and the same-topic #./elemID (no finding expected) -->
   <topicref href="topics/conref-forms.dita"/>
+
+  <!-- profiling conflict made only of values in the preference list (R022) -->
+  <topicref href="topics/profiling-defined.dita" audience="novice"/>
 </map>
