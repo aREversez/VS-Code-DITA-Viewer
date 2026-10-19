@@ -224,9 +224,10 @@ remaining Oxygen-only row and how it is handled:
 
 Run-wide notes:
 
-- `dmv.invalid.class.format` fell from 29 to a handful once the DOCTYPEs landed,
-  confirming the earlier diagnosis: most were map-level noise from the missing DTD
-  default. The remaining ones sit on `topics/invalid.dita` (the schema-invalid probe).
+- `dmv.invalid.class.format` fell from 29 to a single incident once the DOCTYPEs
+  landed, confirming the earlier diagnosis: most were map-level noise from the
+  missing DTD default. The one left sits on `topics/invalid.dita` (the
+  schema-invalid probe).
 - Profiling parity holds: Oxygen's `audience` preference already carried
   `expert novice`, so `profiling-preference` and `profiling-conflict` match on
   `profiling.dita`. The harness's `CORPUS_PREFERENCES` defines only `audience`, so
