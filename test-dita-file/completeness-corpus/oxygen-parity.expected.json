@@ -22,8 +22,6 @@
     "topics/tables.dita  table-layout"
   ],
   "oxygenOnly": [
-    "../completeness-outside/outside.dita  oxygen:dmv.invalid.class.format",
-    "../completeness-outside/outside.dita  oxygen:unknown",
     "corpus.ditamap  oxygen:dmv.invalid.parse.dita.content",
     "topics/invalid.dita  oxygen:MSG_ATTRIBUTE_NOT_DECLARED",
     "topics/invalid.dita  oxygen:MSG_CONTENT_INVALID_UNEXPECTED_ELEMENT",
