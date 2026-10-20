@@ -12,6 +12,7 @@ import {
   oxygenPathToLocal,
   parseOxygenReport,
   parseOxygenReportAuto,
+  foreignKeySources,
   sanitizeOxygenReport,
   unmappedProblemIds,
 } from './oxygenReport';
@@ -156,6 +157,23 @@ describe('Oxygen completeness report adapter', () => {
     assert.deepStrictEqual(res.leftovers, []);
     assert.ok(res.xml.includes('<schema>topic.dtd</schema>'), res.xml);
     assert.ok(res.xml.includes('<schema>map.dtd</schema>'), res.xml);
+  });
+
+  it('refuses a report whose keys were gathered from a map other than the corpus', () => {
+    const raw = [
+      '<systemID>H:\\w\\corpus\\corpus.ditamap</systemID>',
+      '<description>Cannot find definition for key &quot;k&quot;. Keys are gathered from: other_product.ditamap.</description>',
+    ].join('\n');
+    const res = sanitizeOxygenReport(raw, 'H:\\w\\corpus');
+    assert.deepStrictEqual(res.leftovers, ['keys gathered from other_product.ditamap, not corpus.ditamap']);
+  });
+
+  it('accepts keys gathered from the corpus map only', () => {
+    const xml = '<description>Cannot find definition for key &quot;k&quot;. Keys are gathered from: corpus.ditamap.</description>';
+    assert.deepStrictEqual(foreignKeySources(xml), []);
+    assert.deepStrictEqual(foreignKeySources('<description>Keys are gathered from: corpus.ditamap, a/b.ditamap.</description>'), [
+      'keys gathered from b.ditamap, not corpus.ditamap',
+    ]);
   });
 
   it('keeps the root slash of a POSIX file: URL and drops it before a drive letter', () => {

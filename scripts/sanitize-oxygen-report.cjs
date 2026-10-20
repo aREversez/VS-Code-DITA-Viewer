@@ -56,7 +56,7 @@ async function main() {
   }
   const res = mod.sanitizeOxygenReport(xml, root);
   if (res.leftovers.length) {
-    console.error('machine-specific paths remain; nothing written. Fix the report or add them to the sanitizer:');
+    console.error('the report is not safe to commit (machine paths remain, or it was run on another root map); nothing written:');
     for (const l of res.leftovers) console.error(`  ${l}`);
     process.exit(1);
   }

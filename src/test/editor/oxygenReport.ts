@@ -347,6 +347,26 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/** The only root map a corpus report may gather keys from. */
+const CORPUS_KEY_SOURCE = 'corpus.ditamap';
+
+/**
+ * Oxygen resolves keys from whichever root map is active, and says so in each
+ * undefined-key message ("Keys are gathered from: <map>"). A report whose keys came
+ * from any map but the corpus was run in the wrong context: its key findings
+ * (undefined, unreferenced, duplicate topic references) do not describe the corpus.
+ */
+export function foreignKeySources(xml: string): string[] {
+  const found = new Set<string>();
+  for (const m of xml.matchAll(/Keys are gathered from:\s*([^<]*)/g)) {
+    for (const raw of m[1].split(',')) {
+      const name = raw.trim().replace(/\.$/, '').split(/[\\/]/).pop() ?? '';
+      if (name && name !== CORPUS_KEY_SOURCE) found.add(`keys gathered from ${name}, not ${CORPUS_KEY_SOURCE}`);
+    }
+  }
+  return [...found];
+}
+
 /**
  * Makes a real Oxygen report safe to commit: every path under the corpus folder
  * becomes relative to it, paths under the folder above it become `../...`, and
@@ -391,5 +411,6 @@ export function sanitizeOxygenReport(xml: string, corpusRoot: string): { xml: st
     return `<schema>${base}</schema>`;
   });
   const leftovers = [...new Set((out.match(MACHINE_PATH_IN_TEXT) ?? []).map((s) => s.trim()))];
+  leftovers.push(...foreignKeySources(out));
   return { xml: out, leftovers };
 }
