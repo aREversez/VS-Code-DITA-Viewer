@@ -105,13 +105,6 @@
     "message": "Link target is not referenced in any map: ../../completeness-outside/outside.dita"
   },
   {
-    "category": "profiling-conflict",
-    "severity": "warning",
-    "file": "topics/profiling-defined.dita",
-    "line": 7,
-    "message": "@audience=\"expert\" on <p> shares no value with the enclosing \"novice\"; the content is overshadowed in profiled output"
-  },
-  {
     "category": "profiling-preference",
     "severity": "warning",
     "file": "topics/profiling-shape-inner.dita",
@@ -140,6 +133,13 @@
     "message": "@audience=\"expert\" on <topic> shares no value with the enclosing \"novice\"; the content is overshadowed in profiled output"
   },
   {
+    "category": "profiling-conflict",
+    "severity": "warning",
+    "file": "topics/profiling-shape-root.dita",
+    "line": 8,
+    "message": "@audience=\"novice admin\" on <p> shares no value with the enclosing \"expert\"; the content is overshadowed in profiled output"
+  },
+  {
     "category": "profiling-preference",
     "severity": "warning",
     "file": "topics/profiling-shape-root.dita",
@@ -152,13 +152,6 @@
     "file": "topics/profiling.dita",
     "line": 11,
     "message": "Profiling attribute @platform on <p> is not defined in the profiling preferences"
-  },
-  {
-    "category": "profiling-conflict",
-    "severity": "warning",
-    "file": "topics/profiling.dita",
-    "line": 7,
-    "message": "@audience=\"admin\" on <p> shares no value with the enclosing \"novice\"; the content is overshadowed in profiled output"
   },
   {
     "category": "profiling-preference",

@@ -75,7 +75,7 @@ for testing the parser without any Oxygen.
 | keyref to a key that is already referenced by `@href` | `<topicref keyref="dupkey"/>` (also `topics/ok.dita`) | `multiple-reference` |
 | unreferenced reusable | `topics/reuse.dita#orphan` | `unreferenced-reusable` |
 | CALS/simple table problems | `topics/tables.dita` | `table-layout` ×2 |
-| profiling conflict | `topics/profiling.dita` | `profiling-conflict` |
+| body paragraph against a topicref value (not compared; the root is) | `topics/profiling.dita` | *(none — Oxygen agrees)* |
 | profiling preference | `topics/profiling.dita` | `profiling-preference` ×3 |
 | missing local resource | `topics/resources.dita` → `img/no-such-image.png`, `media/no-such-video.mp4` | `missing-resource` ×2 |
 | existing local resource | `topics/resources.dita` → `img/used.png` | *(none — control)* |
@@ -84,7 +84,7 @@ for testing the parser without any Oxygen.
 | link to a topic no map references | `topics/linker.dita` | `unreferenced-link` |
 | in-map link | `topics/linker2.dita` | *(none — control)* |
 | same-topic conref forms `#topicID/elem`, `#./elem` | `topics/conref-forms.dita` | *(none — control)* |
-| profiling conflict with defined values (`expert` in `novice`) | `topics/profiling-defined.dita` | `profiling-conflict` |
+| body paragraph with defined values against a topicref value (`expert` in `novice`) | `topics/profiling-defined.dita` | *(none — Oxygen agrees)* |
 | profiling conflict between two map elements (topicgroup `novice` > topicref `expert`) | `topics/profiling-shape-map.dita` | `profiling-conflict` on `corpus.ditamap`, plus `profiling-preference` (control) |
 | profiling conflict between two elements of one topic (`ul` `novice` > `li` `expert`) | `topics/profiling-shape-inner.dita` | `profiling-conflict`, plus `profiling-preference` (control) |
 | profiling conflict between the topic root and its topicref | `topics/profiling-shape-root.dita` | `profiling-conflict`, plus `profiling-preference` (control) |

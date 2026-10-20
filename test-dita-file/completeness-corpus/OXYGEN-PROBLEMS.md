@@ -230,24 +230,14 @@ Run-wide notes:
   missing DTD default. The one left sits on `topics/invalid.dita` (the
   schema-invalid probe).
 - Profiling: Oxygen's `audience` preference already carried `expert novice`, so
-  `profiling-preference` matches on `profiling.dita`. `profiling-conflict` does
-  **not** match there, but that is not yet a divergence: the probe's value
-  (`audience="admin"` inside `novice`) is outside the preference list, which Oxygen
-  reports as `dmv.prof.attr.val.prefs.undef`, so the probe may never reach its
-  ineffective-condition rule (`dmv.prof.attr.innef.cond`). `topics/profiling-defined.dita`
-  adds a conflict made only of defined values (`expert` inside `novice`); the real
-  report behind `oxygen-report.raw.xml` **decided it (R022)**: Oxygen emitted no
-  `dmv.prof.attr.innef.cond` — no incident at all — for that topic, so the
-  extension-only `profiling-conflict` on `profiling-defined.dita` is a confirmed
-  divergence, locked in `oxygen-parity.expected.json`. (No `corpus.settings.xml`
-  was committed with the run, but its 30 incidents are identical to the
-  every-option-on run above, so the ineffective-condition check was in play and
-  the silence is the report's own verdict on the probe.) That settled the two shapes probed
-  then. The second run (below) covers the remaining shapes R023-R025 (map against map,
-  element against element, topic root against map), each file carrying the control paragraph
-  (`audience="novice admin"`) Oxygen is known to report: all three controls were reported and
-  Oxygen emitted `dmv.prof.attr.innef.cond` for the conflict in every one, so **R023-R025 are
-  matched** — by evidence, not by absence. The harness's `CORPUS_PREFERENCES` defines only `audience`, so
+  `profiling-preference` matches on `profiling.dita`. For `profiling-conflict` the
+  first two probes (`audience="admin"`, then `expert`, on a body paragraph under a
+  `novice` topicref) drew no `dmv.prof.attr.innef.cond`. That alone did not say where
+  Oxygen's rule applies, so R023-R025 probe the other shapes, each file carrying a
+  control paragraph (`audience="novice admin"`) that Oxygen is known to report: the
+  controls were all reported and the rule fired for map against map, element against
+  element and topic root against map (see "The second run" below). The harness's
+  `CORPUS_PREFERENCES` defines only `audience`, so
   the extension additionally flags `platform="linux"` as an undefined attribute
   while Oxygen (whose stock set defines `platform`) stays quiet — a
   preference-set artifact, invisible at `(file, category)` granularity.
@@ -263,8 +253,8 @@ off), now carrying the three shape probes, produced **36 incidents** — the 30 
 first run plus 3 control paragraphs and 3 `dmv.prof.attr.innef.cond` findings. Every
 control was reported (`dmv.prof.attr.val.prefs.undef` on the `audience="admin"` paragraph
 in each file), so the run reached all three probes and is usable as evidence.
-`oxygen-parity.expected.json` now locks **21 matched, 4 extension-only, 5 Oxygen-only**
-(`scripts/oxygen-diff.cjs` agrees: `signatures matched: 21`).
+With the alignment below, `oxygen-parity.expected.json` locks **21 matched, 2 extension-only,
+5 Oxygen-only** (`scripts/oxygen-diff.cjs` agrees: `signatures matched: 21`).
 
 | Shape | Where Oxygen put `dmv.prof.attr.innef.cond` | Outcome |
 | --- | --- | --- |
@@ -272,12 +262,19 @@ in each file), so the run reached all three probes and is usable as evidence.
 | R024 element against element | `topics/profiling-shape-inner.dita` — the `audience="expert"` `<li>` inside the `audience="novice"` `<ul>` | **matched** — Oxygen does flag a body element against a body ancestor |
 | R025 topic root against map | `topics/profiling-shape-root.dita` — the topic root's `audience="expert"` against the referencing topicref's `audience="novice"` | **matched** |
 
-So Oxygen's ineffective-condition rule fires for map↔map, body↔body and root↔map, yet the
-two extension-only `profiling-conflict` rows survive: `topics/profiling.dita` and
-`topics/profiling-defined.dita`. Both put a body `<p>` against the value **cascaded from the
-map** topicref (`novice`); Oxygen reports the paragraph only as `dmv.prof.attr.val.prefs.undef`
-and emits no `innef.cond`. **The divergence narrows to one shape: a body element against a
-map-cascaded condition** (R014/R022).
+So Oxygen's ineffective-condition rule fires for map↔map, body↔body and root↔map, but not
+for a body `<p>` against the value **cascaded from the map** topicref (`topics/profiling.dita`,
+`topics/profiling-defined.dita`): there Oxygen reports the paragraph only as
+`dmv.prof.attr.val.prefs.undef`, if at all.
+
+**Aligned.** The extension used to carry the topicref value down to every element of the
+topic. It now compares it with the topic **root** only and compares each element below the
+root with its ancestors in the same file (R014, R022); the two extension-only
+`profiling-conflict` rows are gone. What stays extension-only is `malformed.dita` `validation`
+(the B-class attribution difference above) and `tables.dita` `table-layout` (the documented
+extension-only check). One case was not probed: a root that overlaps the map value only
+partly, with a child that conflicts with the part the map removed; the extension compares
+that child with the root's own values.
 
 ## How to use this
 

@@ -422,11 +422,38 @@ describe('completeness: profiling', () => {
     assert.ok(c[0].message.includes('"user"'));
   });
 
-  it('flags a topic whose values conflict with its topicref', async () => {
+  const rooted = (attrs: string, body: string) =>
+    `<?xml version="1.0"?><topic id="a"${attrs}><title>T</title><body>${body}</body></topic>`;
+
+  it('flags a topic root whose values conflict with its topicref', async () => {
+    const issues = await check(
+      {
+        'root.ditamap': '<map><topicref href="a.dita" platform="linux"/></map>',
+        'a.dita': rooted(' platform="windows"', '<p>x</p>'),
+      },
+      { identifyProfilingConflicts: true },
+    );
+    assert.strictEqual(issues.filter((i) => i.category === 'profiling-conflict').length, 1);
+  });
+
+  it('does not carry a topicref value down to body elements (Oxygen compares the topic root only)', async () => {
+    // Real Oxygen run (profiling.dita, profiling-defined.dita): no ineffective-condition
+    // finding for a body element against the map value.
     const issues = await check(
       {
         'root.ditamap': '<map><topicref href="a.dita" platform="linux"/></map>',
         'a.dita': topic('a', '<p platform="windows">x</p>'),
+      },
+      { identifyProfilingConflicts: true },
+    );
+    assert.deepStrictEqual(issues.filter((i) => i.category === 'profiling-conflict'), []);
+  });
+
+  it('still compares body elements with the topic root\'s own values', async () => {
+    const issues = await check(
+      {
+        'root.ditamap': '<map><topicref href="a.dita"/></map>',
+        'a.dita': rooted(' audience="novice"', '<p audience="expert">x</p>'),
       },
       { identifyProfilingConflicts: true },
     );

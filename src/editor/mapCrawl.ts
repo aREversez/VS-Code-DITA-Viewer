@@ -762,15 +762,20 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
 
   // ── Profiling ──
   function checkProfiling(root: XNode, path: string, inherited: Map<string, string[]>): void {
+    // The values a topicref passes down are compared with the topic root only, as Oxygen
+    // does (real report: nothing for a body element against the map value, a conflict for
+    // the root). Below the root an element is compared with its ancestors in this file.
     const visit = (n: XNode, eff: Map<string, string[]>): void => {
-      let next = eff;
+      const isRoot = n === root;
+      const against = isRoot ? inherited : eff;
+      let next = isRoot ? new Map<string, string[]>() : eff;
       for (const a of profilingAttrs) {
         const v = n.attrs[a];
         if (v === undefined) continue;
         const values = splitValues(v);
         if (values.length === 0) continue;
         result.profilingValues.push({ file: path, line: n.line, attribute: a, values, tag: n.tag });
-        const prev = next.get(a);
+        const prev = against.get(a);
         if (prev) {
           const inter = values.filter((x) => prev.includes(x));
           if (inter.length === 0) {
@@ -779,7 +784,8 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
             });
           }
           if (next === eff) next = new Map(eff);
-          next.set(a, inter.length ? inter : prev);
+          // The root hands its own values on; elsewhere the overlap (or the ancestor's set).
+          next.set(a, isRoot ? values : inter.length ? inter : prev);
         } else {
           if (next === eff) next = new Map(eff);
           next.set(a, values);
