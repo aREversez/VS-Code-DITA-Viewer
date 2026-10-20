@@ -74,4 +74,12 @@
 
   <!-- profiling conflict made only of values in the preference list (R022) -->
   <topicref href="topics/profiling-defined.dita" audience="novice"/>
+
+  <!-- where does a profiling conflict have to sit for Oxygen to report it? one probe per
+       shape (R023-R025), each with a control paragraph Oxygen is known to report -->
+  <topicgroup audience="novice">
+    <topicref href="topics/profiling-shape-map.dita" audience="expert"/>
+  </topicgroup>
+  <topicref href="topics/profiling-shape-inner.dita"/>
+  <topicref href="topics/profiling-shape-root.dita" audience="novice"/>
 </map>

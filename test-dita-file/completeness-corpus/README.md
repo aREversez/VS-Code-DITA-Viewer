@@ -85,6 +85,9 @@ for testing the parser without any Oxygen.
 | in-map link | `topics/linker2.dita` | *(none — control)* |
 | same-topic conref forms `#topicID/elem`, `#./elem` | `topics/conref-forms.dita` | *(none — control)* |
 | profiling conflict with defined values (`expert` in `novice`) | `topics/profiling-defined.dita` | `profiling-conflict` |
+| profiling conflict between two map elements (topicgroup `novice` > topicref `expert`) | `topics/profiling-shape-map.dita` | `profiling-conflict` on `corpus.ditamap`, plus `profiling-preference` (control) |
+| profiling conflict between two elements of one topic (`ul` `novice` > `li` `expert`) | `topics/profiling-shape-inner.dita` | `profiling-conflict`, plus `profiling-preference` (control) |
+| profiling conflict between the topic root and its topicref | `topics/profiling-shape-root.dita` | `profiling-conflict`, plus `profiling-preference` (control) |
 | malformed XML | `topics/malformed.dita` | `validation` |
 
 ## Known divergence probes (confirm against Oxygen)

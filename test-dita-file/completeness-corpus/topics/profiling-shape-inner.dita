@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="shapeinner">
+  <title>Profiling shape: nested elements in one topic</title>
+  <body>
+    <!-- R024: the conflict is between two elements of this topic, with no map value above -->
+    <ul audience="novice">
+      <li audience="expert">only expert, inside a novice list</li>
+    </ul>
+    <!-- control: see profiling-shape-map.dita -->
+    <p audience="novice admin">control</p>
+  </body>
+</topic>

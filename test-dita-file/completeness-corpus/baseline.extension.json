@@ -49,6 +49,13 @@
     "message": "Key reference \"nosuchkey\" does not match any key definition"
   },
   {
+    "category": "profiling-conflict",
+    "severity": "warning",
+    "file": "corpus.ditamap",
+    "line": 81,
+    "message": "@audience=\"expert\" on <topicref> shares no value with the enclosing \"novice\"; the content is overshadowed in profiled output"
+  },
+  {
     "category": "unreferenced-link",
     "severity": "warning",
     "file": "topics/linker.dita",
@@ -103,6 +110,41 @@
     "file": "topics/profiling-defined.dita",
     "line": 7,
     "message": "@audience=\"expert\" on <p> shares no value with the enclosing \"novice\"; the content is overshadowed in profiled output"
+  },
+  {
+    "category": "profiling-preference",
+    "severity": "warning",
+    "file": "topics/profiling-shape-inner.dita",
+    "line": 11,
+    "message": "@audience value \"admin\" is not defined in the profiling preferences"
+  },
+  {
+    "category": "profiling-conflict",
+    "severity": "warning",
+    "file": "topics/profiling-shape-inner.dita",
+    "line": 8,
+    "message": "@audience=\"expert\" on <li> shares no value with the enclosing \"novice\"; the content is overshadowed in profiled output"
+  },
+  {
+    "category": "profiling-preference",
+    "severity": "warning",
+    "file": "topics/profiling-shape-map.dita",
+    "line": 10,
+    "message": "@audience value \"admin\" is not defined in the profiling preferences"
+  },
+  {
+    "category": "profiling-conflict",
+    "severity": "warning",
+    "file": "topics/profiling-shape-root.dita",
+    "line": 4,
+    "message": "@audience=\"expert\" on <topic> shares no value with the enclosing \"novice\"; the content is overshadowed in profiled output"
+  },
+  {
+    "category": "profiling-preference",
+    "severity": "warning",
+    "file": "topics/profiling-shape-root.dita",
+    "line": 8,
+    "message": "@audience value \"admin\" is not defined in the profiling preferences"
   },
   {
     "category": "profiling-preference",

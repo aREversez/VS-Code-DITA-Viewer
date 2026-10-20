@@ -241,7 +241,12 @@ Run-wide notes:
   divergence, locked in `oxygen-parity.expected.json`. (No `corpus.settings.xml`
   was committed with the run, but its 30 incidents are identical to the
   every-option-on run above, so the ineffective-condition check was in play and
-  the silence is the report's own verdict on the probe.) The harness's `CORPUS_PREFERENCES` defines only `audience`, so
+  the silence is the report's own verdict on the probe.) That settles the two shapes probed so far, not where Oxygen's rule applies:
+  R023-R025 probe the other shapes (map against map, element against element,
+  topic root against map), each file with a control paragraph (`audience="novice admin"`)
+  that Oxygen is known to report, so a silent conflict means Oxygen looked and chose not to
+  report it. Until a report that contains those files is committed, the rows for them in
+  `oxygen-parity.expected.json` are extension-only by absence, not by evidence. The harness's `CORPUS_PREFERENCES` defines only `audience`, so
   the extension additionally flags `platform="linux"` as an undefined attribute
   while Oxygen (whose stock set defines `platform`) stays quiet — a
   preference-set artifact, invisible at `(file, category)` granularity.
