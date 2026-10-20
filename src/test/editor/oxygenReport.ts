@@ -381,6 +381,15 @@ export function sanitizeOxygenReport(xml: string, corpusRoot: string): { xml: st
   let out = replaceDir(xml, fwd, '', '.');
   if (parent) out = replaceDir(out, parent, '../', '..');
   out = out.replace(/<systemID>([^<]*)<\/systemID>/g, (_m, p: string) => `<systemID>${p.replace(/\\/g, '/')}</systemID>`);
+  // Xerces incidents carry `<operationDescription><schemas><schema>` pointing at
+  // Oxygen's own DTD (e.g. `C:\Program Files\Oxygen XML Author 28\...\topic.dtd`).
+  // Only the basename is meaningful for parity; the prefix is both machine- and
+  // version-specific, so reduce it here instead of failing the whole report.
+  out = out.replace(/<schema>([^<]*)<\/schema>/g, (_m, p: string) => {
+    const trimmed = p.trim();
+    const base = trimmed.split(/[\\/]/).pop() ?? trimmed;
+    return `<schema>${base}</schema>`;
+  });
   const leftovers = [...new Set((out.match(MACHINE_PATH_IN_TEXT) ?? []).map((s) => s.trim()))];
   return { xml: out, leftovers };
 }

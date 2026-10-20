@@ -142,6 +142,22 @@ describe('Oxygen completeness report adapter', () => {
     assert.ok(res.leftovers.some((l) => l.includes('/Users/someone')));
   });
 
+  it('strips Oxygen install paths inside <schema> down to the basename', () => {
+    const raw = [
+      '<systemID>H:\\w\\corpus\\topics\\invalid.dita</systemID>',
+      '<operationDescription>',
+      '<schemas>',
+      '<schema>C:\\Program Files\\Oxygen XML Author 28\\frameworks\\dita\\topic.dtd</schema>',
+      '<schema>/Applications/Oxygen XML Editor 27/frameworks/dita/map.dtd</schema>',
+      '</schemas>',
+      '</operationDescription>',
+    ].join('\n');
+    const res = sanitizeOxygenReport(raw, 'H:\\w\\corpus');
+    assert.deepStrictEqual(res.leftovers, []);
+    assert.ok(res.xml.includes('<schema>topic.dtd</schema>'), res.xml);
+    assert.ok(res.xml.includes('<schema>map.dtd</schema>'), res.xml);
+  });
+
   it('keeps the root slash of a POSIX file: URL and drops it before a drive letter', () => {
     assert.strictEqual(oxygenPathToLocal('file:///tmp/ccorpus/a.ditamap'), '/tmp/ccorpus/a.ditamap');
     assert.strictEqual(oxygenPathToLocal('file:/tmp/a%20b/x.dita'), '/tmp/a b/x.dita');

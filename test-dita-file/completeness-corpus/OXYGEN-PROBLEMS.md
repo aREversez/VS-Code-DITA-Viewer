@@ -207,7 +207,7 @@ What the two runs did settle:
 off; Oxygen's `audience` profiling preference already matched the harness's
 `expert novice`, so no preference change was needed) produced **30 incidents**
 (`oxygen-report.xml`). The parity set (`oxygen-parity.expected.json`) locks
-**15 matched, 3 extension-only, 5 Oxygen-only**. An earlier run had 7 Oxygen-only
+**15 matched, 4 extension-only, 5 Oxygen-only** (the 4th extension-only row, `topics/profiling-defined.dita` `profiling-conflict`, is the R022 probe the latest report confirmed Oxygen-silent — see the profiling note below). An earlier run had 7 Oxygen-only
 rows; once `outside.dita` carried a DOCTYPE and the report was regenerated, its
 two stale rows matched and the lone `oxygen:unknown` id disappeared. Every
 remaining Oxygen-only row and how it is handled:
@@ -234,8 +234,14 @@ Run-wide notes:
   (`audience="admin"` inside `novice`) is outside the preference list, which Oxygen
   reports as `dmv.prof.attr.val.prefs.undef`, so the probe may never reach its
   ineffective-condition rule (`dmv.prof.attr.innef.cond`). `topics/profiling-defined.dita`
-  adds a conflict made only of defined values (`expert` inside `novice`); the next
-  real report decides (R022). The harness's `CORPUS_PREFERENCES` defines only `audience`, so
+  adds a conflict made only of defined values (`expert` inside `novice`); the real
+  report behind `oxygen-report.raw.xml` **decided it (R022)**: Oxygen emitted no
+  `dmv.prof.attr.innef.cond` — no incident at all — for that topic, so the
+  extension-only `profiling-conflict` on `profiling-defined.dita` is a confirmed
+  divergence, locked in `oxygen-parity.expected.json`. (No `corpus.settings.xml`
+  was committed with the run, but its 30 incidents are identical to the
+  every-option-on run above, so the ineffective-condition check was in play and
+  the silence is the report's own verdict on the probe.) The harness's `CORPUS_PREFERENCES` defines only `audience`, so
   the extension additionally flags `platform="linux"` as an undefined attribute
   while Oxygen (whose stock set defines `platform`) stays quiet — a
   preference-set artifact, invisible at `(file, category)` granularity.

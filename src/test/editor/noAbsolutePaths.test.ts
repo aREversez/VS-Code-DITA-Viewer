@@ -24,11 +24,15 @@ const MACHINE_PATH = (line: string): boolean => DRIVE_ABSOLUTE.test(line) || HOM
 // that legitimately shows example setup paths (e.g. `C:\\OxygenAll`), and the
 // `.sample.` report is a parser fixture whose fabricated `D:\\corpus` paths are
 // asserted verbatim to prove Windows-path normalization -- neither is a leak.
+// `.raw.xml` is Oxygen's un-sanitized output on the developer's machine; it is
+// listed in `.gitignore` and never committed, so guarding it here would just
+// fail whenever someone regenerates it locally.
 const GUARDED_EXT = /\.(?:dita|ditamap|xml|json)$/i;
 const SAMPLE_FIXTURE = /\.sample\./i;
+const LOCAL_RAW_REPORT = /\.raw\.xml$/i;
 
 function isGuarded(file: string): boolean {
-  return GUARDED_EXT.test(file) && !SAMPLE_FIXTURE.test(file);
+  return GUARDED_EXT.test(file) && !SAMPLE_FIXTURE.test(file) && !LOCAL_RAW_REPORT.test(file);
 }
 
 function walk(dir: string): string[] {
