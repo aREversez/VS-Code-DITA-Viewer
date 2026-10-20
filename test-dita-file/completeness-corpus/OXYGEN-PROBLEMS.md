@@ -206,8 +206,9 @@ What the two runs did settle:
 *Validate and Check for Completeness* over the corpus (every option on, remote
 off; Oxygen's `audience` profiling preference already matched the harness's
 `expert novice`, so no preference change was needed) produced **30 incidents**
-(`oxygen-report.xml`). The parity set (`oxygen-parity.expected.json`) locks
-**15 matched, 4 extension-only, 5 Oxygen-only** (the 4th extension-only row, `topics/profiling-defined.dita` `profiling-conflict`, is the R022 probe the latest report confirmed Oxygen-silent — see the profiling note below). An earlier run had 7 Oxygen-only
+(`oxygen-report.xml`). At this run the parity set (`oxygen-parity.expected.json`) locked
+**15 matched, 4 extension-only, 5 Oxygen-only** — the second run below supersedes it with
+21 matched (the 4th extension-only row, `topics/profiling-defined.dita` `profiling-conflict`, is the R022 probe the latest report confirmed Oxygen-silent — see the profiling note below). An earlier run had 7 Oxygen-only
 rows; once `outside.dita` carried a DOCTYPE and the report was regenerated, its
 two stale rows matched and the lone `oxygen:unknown` id disappeared. Every
 remaining Oxygen-only row and how it is handled:
@@ -241,12 +242,12 @@ Run-wide notes:
   divergence, locked in `oxygen-parity.expected.json`. (No `corpus.settings.xml`
   was committed with the run, but its 30 incidents are identical to the
   every-option-on run above, so the ineffective-condition check was in play and
-  the silence is the report's own verdict on the probe.) That settles the two shapes probed so far, not where Oxygen's rule applies:
-  R023-R025 probe the other shapes (map against map, element against element,
-  topic root against map), each file with a control paragraph (`audience="novice admin"`)
-  that Oxygen is known to report, so a silent conflict means Oxygen looked and chose not to
-  report it. Until a report that contains those files is committed, the rows for them in
-  `oxygen-parity.expected.json` are extension-only by absence, not by evidence. The harness's `CORPUS_PREFERENCES` defines only `audience`, so
+  the silence is the report's own verdict on the probe.) That settled the two shapes probed
+  then. The second run (below) covers the remaining shapes R023-R025 (map against map,
+  element against element, topic root against map), each file carrying the control paragraph
+  (`audience="novice admin"`) Oxygen is known to report: all three controls were reported and
+  Oxygen emitted `dmv.prof.attr.innef.cond` for the conflict in every one, so **R023-R025 are
+  matched** — by evidence, not by absence. The harness's `CORPUS_PREFERENCES` defines only `audience`, so
   the extension additionally flags `platform="linux"` as an undefined attribute
   while Oxygen (whose stock set defines `platform`) stays quiet — a
   preference-set artifact, invisible at `(file, category)` granularity.
@@ -254,6 +255,29 @@ Run-wide notes:
   incident in Oxygen and none from the extension: **Oxygen agrees the same-topic
   `.` form resolves**, so R021 is confirmed against the real tool, not just the
   unit test.
+
+### The second run — R023–R025 ineffective-condition shapes
+
+*Validate and Check for Completeness* over the same corpus (every option on, remote
+off), now carrying the three shape probes, produced **36 incidents** — the 30 from the
+first run plus 3 control paragraphs and 3 `dmv.prof.attr.innef.cond` findings. Every
+control was reported (`dmv.prof.attr.val.prefs.undef` on the `audience="admin"` paragraph
+in each file), so the run reached all three probes and is usable as evidence.
+`oxygen-parity.expected.json` now locks **21 matched, 4 extension-only, 5 Oxygen-only**
+(`scripts/oxygen-diff.cjs` agrees: `signatures matched: 21`).
+
+| Shape | Where Oxygen put `dmv.prof.attr.innef.cond` | Outcome |
+| --- | --- | --- |
+| R023 map against map | `corpus.ditamap` — the `audience="expert"` topicref inside the `audience="novice"` topicgroup | **matched** — Oxygen cascades values across map elements |
+| R024 element against element | `topics/profiling-shape-inner.dita` — the `audience="expert"` `<li>` inside the `audience="novice"` `<ul>` | **matched** — Oxygen does flag a body element against a body ancestor |
+| R025 topic root against map | `topics/profiling-shape-root.dita` — the topic root's `audience="expert"` against the referencing topicref's `audience="novice"` | **matched** |
+
+So Oxygen's ineffective-condition rule fires for map↔map, body↔body and root↔map, yet the
+two extension-only `profiling-conflict` rows survive: `topics/profiling.dita` and
+`topics/profiling-defined.dita`. Both put a body `<p>` against the value **cascaded from the
+map** topicref (`novice`); Oxygen reports the paragraph only as `dmv.prof.attr.val.prefs.undef`
+and emits no `innef.cond`. **The divergence narrows to one shape: a body element against a
+map-cascaded condition** (R014/R022).
 
 ## How to use this
 
