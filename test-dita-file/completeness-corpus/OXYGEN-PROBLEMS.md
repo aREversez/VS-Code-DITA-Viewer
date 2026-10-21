@@ -17,7 +17,9 @@ real report is ever compared empirically.
 The **Status** column says where the extension stands:
 
 - **ok** — the extension has an equivalent check and it is mapped in
-  `PROBLEM_ID_CATEGORY` (`src/test/editor/oxygenReport.ts`).
+  `PROBLEM_ID_CATEGORY` (`src/test/editor/oxygenReport.ts`). That does not mean a real
+  report was seen to carry this exact id: a row says so when it did not ("mapped only"),
+  and only the rows without that note are backed by an incident of that id.
 - **gap** — Oxygen reports it; the extension does not.
 - **n/a** — the extension deliberately diverges (documented below).
 
@@ -39,7 +41,7 @@ ignored by the `(file, category)` diff.
 | `dmv.unencoded.ref` | reference has characters that need URI-encoding | ok (`reference-syntax`) |
 | `dmv.extra.slash.ref` | reference contains `//` | ok (`reference-syntax`) |
 | `dmv.ref.extra.slash` | extra trailing slash after the topic file | ok (`reference-syntax`) |
-| `dmv.file.url.two.slashes` | `file:` URL with a wrong number of slashes | ok (`reference-syntax`) — mapped; the corpus-2 report raised `dmv.absolute.ref` for these probes instead, so no incident carries this id |
+| `dmv.file.url.two.slashes` | `file:` URL with a wrong number of slashes | ok (`reference-syntax`) — mapped only: the corpus-2 report raised `dmv.absolute.ref` for these probes instead, so no incident carries this id |
 | `dmv.incorect.capit.ref` | reference capitalization differs from the real file name | ok (`incorrect-case-reference`) |
 | `dmv.external.references.map` | reference outside the main map folder | ok (`outside-folder`) |
 
@@ -48,17 +50,17 @@ ignored by the `(file, category)` diff.
 | Problem ID | Oxygen reports | Extension status |
 | --- | --- | --- |
 | `dmv.topicref.no.format` | referenced resource does not look like DITA; needs `@format` | ok (`format-missing`) |
-| `dmv.topicref.map.no.format` | looks like a map but `@format` is not `ditamap` | ok (`format-mismatch`) |
+| `dmv.topicref.map.no.format` | looks like a map but `@format` is not `ditamap` | ok (`format-mismatch`) — mapped only: the corpus-2 report has no incident with this id |
 | `dmv.topicref.topic.no.format` | looks like a topic but `@format` is not `dita` | ok (`format-mismatch`) |
 | `dmv.ref.map.no.proper.format` | DITA map whose `@format` is not `ditamap` | ok (`format-mismatch`) |
 | `dmv.ref.res.as.dita` | non-DITA resource referenced as DITA | ok (`format-mismatch`) |
 | `dmv.ref.res.as.map` | non-DITA resource with `@format="ditamap"` | ok (`format-mismatch`) |
 | `dmv.ref.topic.as.map` | topic marked as a map | ok (`format-mismatch`) |
 | `dmv.ref.topic.inside.mapref` | topicref/keydef inside a map reference is ignored | ok (`ignored-mapref-content`) |
-| `dmv.no.format.non.dita.ref` | non-DITA reference missing `@format` | ok (`format-missing`) |
-| `dmv.topicref.remote` | external reference missing `@format` | ok (`external-reference`) — mapped; the corpus-2 report produced no incident for this id (its `ext scope` probes carry `dmv.topicref.ext.scope.no.format`) |
+| `dmv.no.format.non.dita.ref` | non-DITA reference missing `@format` | ok (`format-missing`) — mapped only: the corpus-2 report has no incident with this id |
+| `dmv.topicref.remote` | external reference missing `@format` | ok (`external-reference`) — mapped only: the corpus-2 report produced no incident for this id (its `ext scope` probes carry `dmv.topicref.ext.scope.no.format`) |
 | `dmv.topicref.remote.no.external.scope` | external reference should set `@scope="external"` | ok (`external-reference`) |
-| `dmv.topicref.remote.local.scope` | external reference needs `@format` and `@scope` | ok (`external-reference`) |
+| `dmv.topicref.remote.local.scope` | external reference needs `@format` and `@scope` | ok (`external-reference`) — mapped only: the corpus-2 report has no incident with this id |
 | `dmv.topicref.ext.scope.no.format` | external-scope non-DITA ref missing `@format` | ok (`format-missing`) |
 | `dmv.ref.type.class.mismatch` | `@type` does not match the target's class | gap |
 | `dmv.ref.type.class.mismatch.specific` | `@type` less specific than the target's class | gap |
@@ -99,9 +101,9 @@ ignored by the `(file, category)` diff.
 | `dmv.not.used.key.defs` | key defined but never referenced | ok (`unreferenced-key`) |
 | `dmv.circular.keyref` | circular key reference | gap |
 | `dmv.no.link.keyref` | target key definition has no reference | gap |
-| `dmv.invalid.keyref.syntax.1` | keyref has more than one `/` | ok (`invalid-key-syntax`) |
+| `dmv.invalid.keyref.syntax.1` | keyref has more than one `/` | ok (`invalid-key-syntax`) — the report carries the family as `dmv.invalid.keyref.syntax`, without the suffix |
 | `dmv.invalid.keyref.syntax.2` | invalid character in a keyref | n/a — the corpus-2 report produced no incident for it; the extension checks only `/` and whitespace |
-| `dmv.invalid.keyref.syntax.3` | keyref contains whitespace | ok (`invalid-key-syntax`) |
+| `dmv.invalid.keyref.syntax.3` | keyref contains whitespace | ok (`invalid-key-syntax`) — the report carries the family as `dmv.invalid.keyref.syntax`, without the suffix |
 
 ## Duplicates
 
