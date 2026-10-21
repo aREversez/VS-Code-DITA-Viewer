@@ -2,6 +2,7 @@ import * as assert from 'assert';
 import { readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import {
+  CORPUS_FOLDERS,
   NormalizedFinding,
   collectExtensionFindings,
   diffFindings,
@@ -12,32 +13,37 @@ import {
 
 // __dirname is dist-test/test/editor at runtime, so the repo root is three up.
 const repoRoot = join(__dirname, '..', '..', '..');
-const corpusDir = join(repoRoot, 'test-dita-file', 'completeness-corpus');
-const baselinePath = join(corpusDir, 'baseline.extension.json');
+const corpusDirOf = (folder: string): string => join(repoRoot, 'test-dita-file', folder);
+// The original corpus also has to exercise every category listed below.
+const corpusDir = corpusDirOf('completeness-corpus');
 
 // Set UPDATE_COMPLETENESS_BASELINE=1 to regenerate the committed baseline.
 const updateBaseline = process.env.UPDATE_COMPLETENESS_BASELINE === '1';
 
 describe('Validate and Check for Completeness: Oxygen differential baseline', () => {
-  it('locks the extension findings for the corpus to the committed baseline', async () => {
-    const run = await collectExtensionFindings(corpusDir);
-    if (updateBaseline) {
-      writeFileSync(baselinePath, serializeFindings(run), 'utf8');
-      return;
-    }
-    const baseline = parseFindings(readFileSync(baselinePath, 'utf8'));
-    const diff = diffFindings(baseline, run);
-    assert.deepStrictEqual(
-      diff.onlyInRun,
-      [],
-      `findings the extension now reports but the baseline does not:\n${diff.onlyInRun.join('\n')}`,
-    );
-    assert.deepStrictEqual(
-      diff.onlyInBaseline,
-      [],
-      `findings the baseline has but the extension no longer reports:\n${diff.onlyInBaseline.join('\n')}`,
-    );
-  });
+  for (const folder of CORPUS_FOLDERS) {
+    it(`${folder}: locks the extension findings to the committed baseline`, async () => {
+      const dir = corpusDirOf(folder);
+      const baselinePath = join(dir, 'baseline.extension.json');
+      const run = await collectExtensionFindings(dir);
+      if (updateBaseline) {
+        writeFileSync(baselinePath, serializeFindings(run), 'utf8');
+        return;
+      }
+      const baseline = parseFindings(readFileSync(baselinePath, 'utf8'));
+      const diff = diffFindings(baseline, run);
+      assert.deepStrictEqual(
+        diff.onlyInRun,
+        [],
+        `findings the extension now reports but the baseline does not:\n${diff.onlyInRun.join('\n')}`,
+      );
+      assert.deepStrictEqual(
+        diff.onlyInBaseline,
+        [],
+        `findings the baseline has but the extension no longer reports:\n${diff.onlyInBaseline.join('\n')}`,
+      );
+    });
+  }
 
   it('exercises every check category the corpus is meant to cover', async () => {
     const run = await collectExtensionFindings(corpusDir);

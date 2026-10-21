@@ -1,7 +1,8 @@
 import * as assert from 'assert';
-import { readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import {
+  CORPUS_FOLDERS,
   NormalizedFinding,
   canonicalCategory,
   collectExtensionFindings,
@@ -12,9 +13,7 @@ import { corpusRootFromReport, normalizeOxygenFindings, parseOxygenReportAuto } 
 
 // __dirname is dist-test/test/editor at runtime, so the repo root is three up.
 const repoRoot = join(__dirname, '..', '..', '..');
-const corpusDir = join(repoRoot, 'test-dita-file', 'completeness-corpus');
-const reportPath = join(corpusDir, 'oxygen-report.xml');
-const expectedPath = join(corpusDir, 'oxygen-parity.expected.json');
+const corpusPath = (folder: string): string => join(repoRoot, 'test-dita-file', folder);
 
 // Set UPDATE_OXYGEN_PARITY=1 to rewrite the expected file after a deliberate
 // change in parity (a new real report, or a check that now matches Oxygen).
@@ -31,8 +30,8 @@ interface Parity {
 
 const show = (sigs: string[]): string[] => sigs.map((s) => s.replace('\t', '  '));
 
-async function computeParity(): Promise<Parity> {
-  const incidents = parseOxygenReportAuto(readFileSync(reportPath, 'utf8'));
+async function computeParity(corpusDir: string): Promise<Parity> {
+  const incidents = parseOxygenReportAuto(readFileSync(join(corpusDir, 'oxygen-report.xml'), 'utf8'));
   const root = corpusRootFromReport(incidents) ?? corpusDir;
   const oxygen = normalizeOxygenFindings(root, incidents).map(findingSignature);
   const extension = (await collectExtensionFindings(corpusDir)).map(findingSignature);
@@ -45,19 +44,26 @@ async function computeParity(): Promise<Parity> {
 }
 
 describe('Oxygen parity on the corpus (real report)', () => {
-  it('matches the committed parity state, so any change in parity is deliberate', async () => {
-    const actual = await computeParity();
-    if (update) {
-      writeFileSync(expectedPath, `${JSON.stringify(actual, null, 2)}\n`, 'utf8');
-      return;
-    }
-    const expected = JSON.parse(readFileSync(expectedPath, 'utf8')) as Parity;
-    assert.deepStrictEqual(
-      actual,
-      expected,
-      'parity with the Oxygen report changed; if that is intended, rerun with UPDATE_OXYGEN_PARITY=1',
-    );
-  });
+  for (const folder of CORPUS_FOLDERS) {
+    it(`${folder}: matches the committed parity state, so any change in parity is deliberate`, async function () {
+      const corpusDir = corpusPath(folder);
+      if (!existsSync(join(corpusDir, 'oxygen-report.xml'))) {
+        this.skip(); // no real Oxygen run has been committed for this corpus yet
+      }
+      const expectedPath = join(corpusDir, 'oxygen-parity.expected.json');
+      const actual = await computeParity(corpusDir);
+      if (update) {
+        writeFileSync(expectedPath, `${JSON.stringify(actual, null, 2)}\n`, 'utf8');
+        return;
+      }
+      const expected = JSON.parse(readFileSync(expectedPath, 'utf8')) as Parity;
+      assert.deepStrictEqual(
+        actual,
+        expected,
+        `${folder}: parity with the Oxygen report changed; if that is intended, rerun with UPDATE_OXYGEN_PARITY=1`,
+      );
+    });
+  }
 
   it('compares on canonical categories, so a resource/reference split still counts as matched', () => {
     // The mechanism behind the resources.dita parity (OXYGEN-PROBLEMS.md): the

@@ -6,6 +6,7 @@ import { join } from 'path';
 const repoRoot = join(__dirname, '..', '..', '..');
 const dirs = [
   join(repoRoot, 'test-dita-file', 'completeness-corpus'),
+  join(repoRoot, 'test-dita-file', 'completeness-corpus-2'),
   join(repoRoot, 'test-dita-file', 'completeness-outside'),
 ];
 
@@ -17,7 +18,12 @@ const DRIVE_ABSOLUTE = /(?<![A-Za-z])[A-Za-z]:[\\/]/;
 // A POSIX home-directory path (/Users/<name>/..., /home/<name>/...) or a UNC share
 // (\\\\host\\share): the same per-machine leak on macOS, Linux and shared drives.
 const HOME_OR_UNC = /(?:^|[\s"'=(>])\/(?:Users|home)\/[^\s"'/]+\/|\\\\[A-Za-z0-9_.-]+\\[A-Za-z0-9_.$-]+/;
-const MACHINE_PATH = (line: string): boolean => DRIVE_ABSOLUTE.test(line) || HOME_OR_UNC.test(line);
+// A probe that is about absolute references (completeness-corpus-2) has to contain one. Such
+// a line says so with `probe-absolute-path` and uses a made-up location (Z:\\probe\\...), never
+// a real one; every other line is still held to the rule.
+const PROBE_MARK = /probe-absolute-path/;
+const MACHINE_PATH = (line: string): boolean =>
+  !PROBE_MARK.test(line) && (DRIVE_ABSOLUTE.test(line) || HOME_OR_UNC.test(line));
 
 // Only files that hold genuine per-machine output are guarded: the corpus topics,
 // the map, the real Oxygen report and the baselines. Markdown is documentation
@@ -46,6 +52,13 @@ function walk(dir: string): string[] {
 }
 
 describe('committed test data carries no machine paths', () => {
+  it('exempts only a line that is marked as an absolute-path probe', () => {
+    assert.strictEqual(MACHINE_PATH('<topicref href="Z:\\probe\\x.dita"/>'), true);
+    assert.strictEqual(MACHINE_PATH('<topicref href="Z:\\probe\\x.dita"/> <!-- probe-absolute-path -->'), false);
+    assert.strictEqual(MACHINE_PATH('<!-- probe-absolute-path --> <p>/Users/someone/x</p>'), false);
+    assert.strictEqual(MACHINE_PATH('<p>fine</p>'), false);
+  });
+
   it('no corpus or report file contains a drive-letter, home-directory or UNC path', () => {
     const offenders: string[] = [];
     for (const dir of dirs) {

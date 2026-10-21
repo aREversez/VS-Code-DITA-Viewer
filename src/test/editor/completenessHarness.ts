@@ -44,6 +44,14 @@ export const CORPUS_PREFERENCES: ProfilingPreferences = {
 
 export const CORPUS_ROOT_MAP = 'corpus.ditamap';
 
+/**
+ * The corpus folders under test-dita-file/, each with its own corpus.ditamap,
+ * baseline.extension.json and, once Oxygen has been run on it, oxygen-report.xml
+ * and oxygen-parity.expected.json. The first is the original; the second holds the
+ * reference-spelling and @format/@scope probes (see completeness-corpus/BATCH-1.md).
+ */
+export const CORPUS_FOLDERS = ['completeness-corpus', 'completeness-corpus-2'] as const;
+
 /** One finding, reduced to what both tools can express and normalized for stable diffs. */
 export interface NormalizedFinding {
   category: string;

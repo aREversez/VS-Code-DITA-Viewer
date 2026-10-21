@@ -16,7 +16,16 @@ const esbuild = require('esbuild');
 const Module = require('module');
 
 const ROOT = path.resolve(__dirname, '..');
-const CORPUS = path.join(ROOT, 'test-dita-file', 'completeness-corpus');
+
+// --corpus <folder under test-dita-file/> selects the corpus (default: completeness-corpus).
+const CORPUS_FOLDER = (() => {
+  const at = process.argv.indexOf('--corpus');
+  if (at === -1) return 'completeness-corpus';
+  const name = process.argv[at + 1];
+  process.argv.splice(at, 2);
+  return name;
+})();
+const CORPUS = path.join(ROOT, 'test-dita-file', CORPUS_FOLDER);
 const BASELINE = path.join(CORPUS, 'baseline.extension.json');
 
 // The harness chain is vscode-free, but stub it so a future transitive import

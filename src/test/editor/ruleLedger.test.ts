@@ -71,7 +71,7 @@ describe('completeness rule ledger (RULES.md)', () => {
     for (const r of rows.filter((x) => x.source !== 'legacy')) {
       if (!r.reference || r.reference === '—') problems.push(`${r.id}: no reference`);
       if (!r.probe || r.probe === '—' || !existsSync(join(corpusDir, r.probe))) {
-        problems.push(`${r.id}: probe "${r.probe}" is not a file under completeness-corpus/`);
+        problems.push(`${r.id}: probe "${r.probe}" is not a file under completeness-corpus/ (use ../completeness-corpus-2/... for the second corpus)`);
       }
     }
     assert.deepStrictEqual(problems, []);

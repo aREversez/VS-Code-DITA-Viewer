@@ -5,7 +5,8 @@
 //   node scripts/sanitize-oxygen-report.cjs <raw-report.xml> [--root <corpus dir as it
 //     appears in the report>] [--out <file>]     (default out: the committed report)
 //
-// Without --out it writes test-dita-file/completeness-corpus/oxygen-report.xml.
+// Without --out it writes oxygen-report.xml in the corpus folder (--corpus <folder>,
+// default completeness-corpus).
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -13,7 +14,16 @@ const esbuild = require('esbuild');
 const Module = require('module');
 
 const ROOT = path.resolve(__dirname, '..');
-const DEFAULT_OUT = path.join(ROOT, 'test-dita-file', 'completeness-corpus', 'oxygen-report.xml');
+
+// --corpus <folder under test-dita-file/> selects the corpus (default: completeness-corpus).
+const CORPUS_FOLDER = (() => {
+  const at = process.argv.indexOf('--corpus');
+  if (at === -1) return 'completeness-corpus';
+  const name = process.argv[at + 1];
+  process.argv.splice(at, 2);
+  return name;
+})();
+const DEFAULT_OUT = path.join(ROOT, 'test-dita-file', CORPUS_FOLDER, 'oxygen-report.xml');
 
 async function loadAdapter() {
   const out = path.join(os.tmpdir(), `dita-oxygen-sanitize-${process.pid}.cjs`);
