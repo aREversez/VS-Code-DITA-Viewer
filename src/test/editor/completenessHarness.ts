@@ -52,6 +52,14 @@ export const CORPUS_ROOT_MAP = 'corpus.ditamap';
  */
 export const CORPUS_FOLDERS = ['completeness-corpus', 'completeness-corpus-2'] as const;
 
+/**
+ * Corpora whose probes depend on Windows file-system semantics (backslash
+ * separators resolve, lookup is case-insensitive) and on the Windows Oxygen run
+ * that produced their report. Their baselines are only meaningful on win32, so
+ * the baseline and parity tests skip them elsewhere.
+ */
+export const WINDOWS_ONLY_CORPORA: readonly string[] = ['completeness-corpus-2'];
+
 /** One finding, reduced to what both tools can express and normalized for stable diffs. */
 export interface NormalizedFinding {
   category: string;

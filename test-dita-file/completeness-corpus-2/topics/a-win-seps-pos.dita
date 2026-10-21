@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.win.seps.ref, positive: backslashes separate the href. The file resolves
+     on Windows, so the finding is about the spelling, not a missing file. -->
+<topic id="a-win-seps-pos">
+  <title>Backslash separators (positive)</title>
+  <body>
+    <p><xref href="..\topics\ok.dita">backslash path</xref></p>
+  </body>
+</topic>

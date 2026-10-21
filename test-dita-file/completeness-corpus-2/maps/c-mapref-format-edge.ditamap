@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.ref.map.no.proper.format, boundary: no @format on a mapref, which the
+     element itself already declares to be a map. -->
+<map>
+  <title>Mapref without a format</title>
+  <mapref href="c-mapref-format-sub.ditamap"/>
+</map>

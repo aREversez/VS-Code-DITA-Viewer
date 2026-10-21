@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.no.format.non.dita.ref, boundary: a binary file with no @format. -->
+<topic id="c-no-format-nondita-edge">
+  <title>Non-DITA xref, no format (boundary)</title>
+  <body>
+    <p><xref href="../topics/c-nondita-edge.bin">binary file without a format</xref></p>
+  </body>
+</topic>

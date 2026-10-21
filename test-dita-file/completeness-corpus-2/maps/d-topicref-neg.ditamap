@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.topicref.no.navtitle, negative: a topicref with an href. Its navigation
+     title comes from the topic's own title, so no navtitle is required. -->
+<map>
+  <title>Topicref with a target and no navigation title</title>
+  <topicref href="../topics/ok.dita" copy-to="d2-neg"/>
+</map>

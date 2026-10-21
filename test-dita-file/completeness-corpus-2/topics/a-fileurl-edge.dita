@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.file.url.two.slashes, boundary: one slash after the scheme. RFC 8089
+     permits this abbreviated form; the report decides whether Oxygen does. -->
+<topic id="a-fileurl-edge">
+  <title>file: URL with one slash (boundary)</title>
+  <body>
+    <p><xref href="file:/topics/ok.dita">file URL, one slash</xref></p>
+  </body>
+</topic>

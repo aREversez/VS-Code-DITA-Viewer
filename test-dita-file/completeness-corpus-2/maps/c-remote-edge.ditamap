@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.topicref.remote, boundary: a URL with no path at all. -->
+<map>
+  <title>External reference, bare URL</title>
+  <topicref href="https://example.invalid/" scope="external" format="html"/>
+</map>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.invalid.id.syntax.3, positive: whitespace in a topic id. -->
+<topic id="a b">
+  <title>Whitespace in a topic id (positive)</title>
+  <body>
+    <p>The topic id is "a b".</p>
+  </body>
+</topic>

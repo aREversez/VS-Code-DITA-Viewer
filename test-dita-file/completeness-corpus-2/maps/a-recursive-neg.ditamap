@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.recursive.ref, negative: a normal one-level nesting, no cycle. -->
+<map>
+  <title>Recursive reference, negative</title>
+  <mapref href="a-recursive-child.ditamap" format="ditamap"/>
+</map>

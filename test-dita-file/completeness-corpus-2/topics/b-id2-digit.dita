@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.invalid.id.syntax.2, boundary: a digit at the start. XML 1.0 does not
+     allow it in a Name; DITA may or may not enforce the same rule. -->
+<topic id="1a">
+  <title>Digit at the start of a topic id (boundary)</title>
+  <body>
+    <p>The topic id is "1a".</p>
+  </body>
+</topic>

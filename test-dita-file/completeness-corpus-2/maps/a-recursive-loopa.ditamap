@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.recursive.ref: one half of a two-map cycle. Both maps reference each
+     other; the report says whether Oxygen names every map or only the closing one. -->
+<map>
+  <title>Recursive reference, loop A</title>
+  <mapref href="a-recursive-loopb.ditamap" format="ditamap"/>
+</map>

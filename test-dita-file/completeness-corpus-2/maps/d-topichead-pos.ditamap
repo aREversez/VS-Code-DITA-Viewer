@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.topichead.no.navtitle, positive: a topichead with no topicmeta at all,
+     so the navigation entry has no title. -->
+<map>
+  <title>Topichead without a navigation title</title>
+  <topichead>
+    <topicref href="../topics/ok.dita" copy-to="d1-pos-child"/>
+  </topichead>
+</map>

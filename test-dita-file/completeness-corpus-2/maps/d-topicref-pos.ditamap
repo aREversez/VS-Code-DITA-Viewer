@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.topicref.no.navtitle, positive: a topicref with no href and no
+     navtitle, so the grouping entry has no label of its own. -->
+<map>
+  <title>Topicref without a navigation title</title>
+  <topicref>
+    <topicref href="../topics/ok.dita" copy-to="d2-pos-child"/>
+  </topicref>
+</map>

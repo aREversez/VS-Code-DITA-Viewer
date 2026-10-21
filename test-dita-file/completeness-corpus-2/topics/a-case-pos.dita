@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.incorect.capit.ref, positive: "OK.dita" while the file on disk is
+     "ok.dita". Windows resolves it; a case-sensitive file system would not. -->
+<topic id="a-case-pos">
+  <title>Wrong capitalization (positive)</title>
+  <body>
+    <p><xref href="../topics/OK.dita">upper-case target</xref></p>
+  </body>
+</topic>

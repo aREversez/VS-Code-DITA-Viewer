@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.topic.as.map, boundary: the same xref with no @format at all. -->
+<topic id="c-topic-as-map-edge">
+  <title>Topic as map, xref (boundary)</title>
+  <body>
+    <p><xref href="../topics/c-topic-as-map-target.dita">xref without a format</xref></p>
+  </body>
+</topic>

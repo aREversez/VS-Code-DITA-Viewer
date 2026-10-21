@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- Target for dmv.unencoded.ref: a bare "%" in the file name. -->
+<topic id="okpercent">
+  <title>File name with a percent sign</title>
+  <body>
+    <p>Reached through an encoded href, or a raw one that cannot be decoded.</p>
+  </body>
+</topic>

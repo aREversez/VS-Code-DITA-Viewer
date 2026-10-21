@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- Target for dmv.ref.topic.as.map: a real topic used by an xref that claims
+     format="ditamap". Contrast with dmv.topicref.topic.no.format (a topicref). -->
+<topic id="c-topic-as-map-target">
+  <title>Topic target for an xref declared as a map</title>
+  <body>
+    <p>Only the xref carries the format claim.</p>
+  </body>
+</topic>

@@ -4,6 +4,7 @@ import { join } from 'path';
 import {
   CORPUS_FOLDERS,
   NormalizedFinding,
+  WINDOWS_ONLY_CORPORA,
   collectExtensionFindings,
   diffFindings,
   findingKey,
@@ -22,7 +23,10 @@ const updateBaseline = process.env.UPDATE_COMPLETENESS_BASELINE === '1';
 
 describe('Validate and Check for Completeness: Oxygen differential baseline', () => {
   for (const folder of CORPUS_FOLDERS) {
-    it(`${folder}: locks the extension findings to the committed baseline`, async () => {
+    it(`${folder}: locks the extension findings to the committed baseline`, async function () {
+      if (process.platform !== 'win32' && WINDOWS_ONLY_CORPORA.includes(folder)) {
+        this.skip(); // its probes read Windows-only spelling and case behaviour
+      }
       const dir = corpusDirOf(folder);
       const baselinePath = join(dir, 'baseline.extension.json');
       const run = await collectExtensionFindings(dir);

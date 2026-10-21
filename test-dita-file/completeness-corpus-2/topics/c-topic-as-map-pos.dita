@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.topic.as.map, positive: an xref to a topic with format="ditamap".
+     The xref (not a topicref) is what separates this from the topicref probe. -->
+<topic id="c-topic-as-map-pos">
+  <title>Topic as map, xref (positive)</title>
+  <body>
+    <p><xref href="../topics/c-topic-as-map-target.dita" format="ditamap">xref to a topic declared as a map</xref></p>
+  </body>
+</topic>

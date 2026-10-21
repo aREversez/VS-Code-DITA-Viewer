@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- Target for dmv.topicref.topic.no.format, positive: a real topic that the
+     probe declares with format="ditamap". -->
+<topic id="c-topic-no-format-pos">
+  <title>Topic target declared as a map</title>
+  <body>
+    <p>The reference, not the file, carries the wrong format.</p>
+  </body>
+</topic>

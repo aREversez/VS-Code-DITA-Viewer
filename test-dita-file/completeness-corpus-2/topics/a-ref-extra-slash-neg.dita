@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.extra.slash, negative: no trailing slash. -->
+<topic id="a-ref-extra-slash-neg">
+  <title>Trailing slash after a file (negative)</title>
+  <body>
+    <p><xref href="../topics/ok.dita">plain file path</xref></p>
+  </body>
+</topic>

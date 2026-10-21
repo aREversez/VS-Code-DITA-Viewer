@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.extra.slash.ref, negative: the same target without an empty segment. -->
+<topic id="a-extra-slash-neg">
+  <title>Double slash in a path (negative)</title>
+  <body>
+    <p><xref href="../topics/ok.dita">single slashes</xref></p>
+  </body>
+</topic>

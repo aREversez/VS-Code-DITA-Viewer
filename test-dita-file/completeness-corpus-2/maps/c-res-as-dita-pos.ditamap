@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.ref.res.as.dita, positive: a text file declared as DITA. -->
+<map>
+  <title>Text resource declared as dita</title>
+  <topicref href="../topics/c-res-as-dita-pos.txt" format="dita"/>
+</map>

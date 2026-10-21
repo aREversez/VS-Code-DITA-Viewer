@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.invalid.keyref.syntax.2, negative: a dot, which XML names allow. -->
+<topic id="b-keyref2-neg">
+  <title>Invalid character in a keyref (negative)</title>
+  <body>
+    <p><xref keyref="a.b">dot in key</xref></p>
+  </body>
+</topic>

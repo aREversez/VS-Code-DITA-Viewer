@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- Target for dmv.topicref.topic.no.format, negative: the same topic declared
+     as a topic. -->
+<topic id="c-topic-no-format-neg">
+  <title>Topic target declared correctly</title>
+  <body>
+    <p>The reference, not the file, carries the format.</p>
+  </body>
+</topic>

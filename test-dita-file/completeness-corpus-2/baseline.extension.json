@@ -3,7 +3,84 @@
     "category": "missing-reference",
     "severity": "error",
     "file": "corpus.ditamap",
-    "line": 11,
+    "line": 17,
     "message": "Referenced topic not found: topics/control-missing.dita"
+  },
+  {
+    "category": "missing-reference",
+    "severity": "error",
+    "file": "maps/a-absolute-posix.ditamap",
+    "line": 7,
+    "message": "Referenced topic not found: /probe/x.dita"
+  },
+  {
+    "category": "outside-folder",
+    "severity": "warning",
+    "file": "maps/a-absolute-posix.ditamap",
+    "line": 7,
+    "message": "Reference points outside the map folder: /probe/x.dita"
+  },
+  {
+    "category": "validation",
+    "severity": "warning",
+    "file": "maps/c-map-no-format-sub-edge.ditamap",
+    "line": 4,
+    "message": "Root element <map> is not a DITA topic"
+  },
+  {
+    "category": "missing-resource",
+    "severity": "error",
+    "file": "topics/a-unencoded-hash.dita",
+    "line": 9,
+    "message": "Referenced resource not found: ../topics/ok#1.dita"
+  },
+  {
+    "category": "undefined-key",
+    "severity": "error",
+    "file": "topics/b-keyref3-edge.dita",
+    "line": 7,
+    "message": "Key reference \" a\" does not match any key definition"
+  },
+  {
+    "category": "undefined-key",
+    "severity": "error",
+    "file": "topics/b-keyref3-pos.dita",
+    "line": 8,
+    "message": "Key reference \"a b\" does not match any key definition"
+  },
+  {
+    "category": "validation",
+    "severity": "warning",
+    "file": "topics/c-res-as-dita-edge.html",
+    "line": 3,
+    "message": "Root element <html> is not a DITA topic"
+  },
+  {
+    "category": "validation",
+    "severity": "warning",
+    "file": "topics/c-res-as-dita-pos.txt",
+    "line": 3,
+    "message": "Root element <notdita> is not a DITA topic"
+  },
+  {
+    "category": "validation",
+    "severity": "warning",
+    "file": "topics/c-res-as-map-edge.html",
+    "line": 3,
+    "message": "Root element <html> is not a DITA map"
+  },
+  {
+    "category": "validation",
+    "severity": "warning",
+    "file": "topics/c-res-as-map-pos.txt",
+    "line": 3,
+    "message": "Root element <notdita> is not a DITA map"
+  },
+  {
+    "category": "validation",
+    "severity": "warning",
+    "file": "topics/c-topic-no-format-target-pos.dita",
+    "line": 5,
+    "message": "Root element <topic> is not a DITA map"
   }
 ]

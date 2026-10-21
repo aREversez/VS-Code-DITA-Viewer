@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.invalid.keyref.syntax.1, negative: one slash separates the key from an
+     element id, which is the allowed form. -->
+<topic id="b-keyref1-neg">
+  <title>Two slashes in a keyref (negative)</title>
+  <body>
+    <p><xref keyref="a/b">key with one slash</xref></p>
+  </body>
+</topic>

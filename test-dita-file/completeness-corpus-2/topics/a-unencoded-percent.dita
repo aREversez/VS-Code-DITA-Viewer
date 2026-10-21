@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.unencoded.ref, boundary: a bare "%". It is not a valid escape, so it
+     cannot be decoded; the file on disk really is named "100%.dita". -->
+<topic id="a-unencoded-percent">
+  <title>Bare percent (boundary)</title>
+  <body>
+    <p><xref href="../topics/100%.dita">bare percent</xref></p>
+  </body>
+</topic>

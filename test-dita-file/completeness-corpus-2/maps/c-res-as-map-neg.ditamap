@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.ref.res.as.map, negative: the same file with its real format. -->
+<map>
+  <title>Text resource with its real format, again</title>
+  <topicref href="../topics/c-res-as-map-neg.txt" format="txt"/>
+</map>

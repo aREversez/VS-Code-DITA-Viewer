@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.incorect.capit.ref, boundary: only the first letter differs. -->
+<topic id="a-case-edge">
+  <title>Wrong capitalization (boundary)</title>
+  <body>
+    <p><xref href="../topics/Ok.dita">title-case target</xref></p>
+  </body>
+</topic>

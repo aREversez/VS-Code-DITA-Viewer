@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- Parent topic for dmv.ref.topic.inside.mapref, boundary: a normal topicref
+     with a nested topicref is allowed; only a mapref ignores its content. -->
+<topic id="c-mapref-parent">
+  <title>Topic with a nested topicref in the map</title>
+  <body>
+    <p>The map references this topic and nests another topicref below it.</p>
+  </body>
+</topic>

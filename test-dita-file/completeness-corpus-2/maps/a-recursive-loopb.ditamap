@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.recursive.ref: the other half of the cycle with loop A. -->
+<map>
+  <title>Recursive reference, loop B</title>
+  <mapref href="a-recursive-loopa.ditamap" format="ditamap"/>
+</map>

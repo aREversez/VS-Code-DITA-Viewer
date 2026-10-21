@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.extra.slash.ref, boundary: "//" belongs to an external URL, where it is
+     the authority separator and must not be reported as a doubled path slash. -->
+<topic id="a-extra-slash-edge">
+  <title>Double slash in a URL (boundary)</title>
+  <body>
+    <p><xref href="http://example.invalid//a.html" scope="external" format="html">URL with a doubled path</xref></p>
+  </body>
+</topic>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.absolute.ref, boundary: a file: URL that carries an absolute drive path.
+     The question is whether Oxygen counts file: URLs as absolute references. -->
+<map>
+  <title>Absolute reference, file URL</title>
+  <topicref href="file:///Z:/probe/x.dita"/> <!-- probe-absolute-path -->
+</map>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.topicref.remote.no.external.scope, boundary: the same omission with
+     an https URL instead of http. -->
+<map>
+  <title>HTTPS URL without an external scope</title>
+  <topicref href="https://example.invalid/a.html" format="html"/>
+</map>

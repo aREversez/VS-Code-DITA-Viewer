@@ -4,6 +4,7 @@ import { join } from 'path';
 import {
   CORPUS_FOLDERS,
   NormalizedFinding,
+  WINDOWS_ONLY_CORPORA,
   canonicalCategory,
   collectExtensionFindings,
   diffKeys,
@@ -46,6 +47,9 @@ async function computeParity(corpusDir: string): Promise<Parity> {
 describe('Oxygen parity on the corpus (real report)', () => {
   for (const folder of CORPUS_FOLDERS) {
     it(`${folder}: matches the committed parity state, so any change in parity is deliberate`, async function () {
+      if (process.platform !== 'win32' && WINDOWS_ONLY_CORPORA.includes(folder)) {
+        this.skip(); // the report comes from a Windows Oxygen run over Windows-only probes
+      }
       const corpusDir = corpusPath(folder);
       if (!existsSync(join(corpusDir, 'oxygen-report.xml'))) {
         this.skip(); // no real Oxygen run has been committed for this corpus yet

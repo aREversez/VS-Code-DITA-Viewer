@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.file.url.two.slashes, negative: the RFC 8089 form for an absolute local
+     path, with three slashes (empty authority). -->
+<topic id="a-fileurl-neg">
+  <title>file: URL with three slashes (negative)</title>
+  <body>
+    <p><xref href="file:///topics/ok.dita">file URL, three slashes</xref></p>
+  </body>
+</topic>

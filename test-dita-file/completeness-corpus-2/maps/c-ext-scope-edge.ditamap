@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.topicref.ext.scope.no.format, boundary: scope="external" on a local
+     file, with no format. -->
+<map>
+  <title>Local file with an external scope and no format</title>
+  <topicref href="../topics/c-remote-local.html" scope="external"/>
+</map>

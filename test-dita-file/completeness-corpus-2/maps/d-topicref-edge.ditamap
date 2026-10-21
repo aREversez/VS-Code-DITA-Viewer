@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.topicref.no.navtitle, boundary: an external reference. There is no
+     topic title to borrow, so Oxygen may require a navtitle here. -->
+<map>
+  <title>External topicref without a navigation title</title>
+  <topicref href="http://example.invalid/a.html" scope="external" format="html"/>
+</map>

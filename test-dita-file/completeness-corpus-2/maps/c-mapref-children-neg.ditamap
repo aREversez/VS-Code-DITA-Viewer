@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.ref.topic.inside.mapref, negative: a mapref with no content of its own. -->
+<map>
+  <title>Plain map reference</title>
+  <mapref href="c-mapref-children-sub.ditamap" format="ditamap"/>
+</map>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.unencoded.ref, negative: the same target as the space probe, already
+     encoded. Nothing here should be reported. -->
+<topic id="a-unencoded-encoded">
+  <title>Encoded space (negative)</title>
+  <body>
+    <p><xref href="../topics/ok%20file.dita">encoded space</xref></p>
+  </body>
+</topic>

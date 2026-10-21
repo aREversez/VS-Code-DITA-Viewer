@@ -131,6 +131,26 @@ describe('Oxygen completeness report adapter', () => {
     assert.ok(res.xml.includes('<systemID>topics/a.dita</systemID>'), res.xml);
   });
 
+  it('rewrites the fabricated probe drive instead of leaking an absolute path', () => {
+    const raw = [
+      '<systemID>H:\\w\\corpus\\maps\\a-absolute-drive.ditamap</systemID>',
+      '<description>File not found: &quot;Z:\\probe\\x.dita&quot;.</description>',
+      '<description>File not found: &quot;Z:/probe/x.dita&quot;.</description>',
+      '<description>File not found: &quot;file:///Z:/probe/x.dita&quot;.</description>',
+    ].join('\n');
+    const res = sanitizeOxygenReport(raw, 'H:\\w\\corpus');
+    assert.deepStrictEqual(res.leftovers, []);
+    assert.ok(!/Z:/i.test(res.xml), res.xml);
+    assert.strictEqual(res.xml.match(/probe-absolute-path/g)?.length, 3, res.xml);
+    assert.ok(res.xml.includes('probe-absolute-path/x.dita'), res.xml);
+  });
+
+  it('still refuses a drive path outside the probe folder', () => {
+    const raw = '<description>File not found: &quot;Z:\\other\\x.dita&quot;.</description>';
+    const res = sanitizeOxygenReport(raw, 'H:\\w\\corpus');
+    assert.strictEqual(res.leftovers.length, 1, res.leftovers.join('|'));
+  });
+
   it('lists the machine paths it cannot make relative instead of hiding them', () => {
     const raw = [
       '<systemID>H:\\w\\corpus\\corpus.ditamap</systemID>',

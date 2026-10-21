@@ -410,6 +410,12 @@ export function sanitizeOxygenReport(xml: string, corpusRoot: string): { xml: st
     const base = trimmed.split(/[\\/]/).pop() ?? trimmed;
     return `<schema>${base}</schema>`;
   });
+  // The second corpus probes absolute references with a fabricated drive that
+  // cannot exist on any machine (`Z:\probe\...`). Oxygen quotes the href in its
+  // message, so rewrite that one prefix to the marker the corpus files use. Any
+  // other drive path is still a leftover and still blocks the commit.
+  out = out.replace(/Z:[\\/]probe(?![\w$.-])/gi, 'probe-absolute-path');
+  out = out.replace(/(probe-absolute-path)\\+/g, '$1/');
   const leftovers = [...new Set((out.match(MACHINE_PATH_IN_TEXT) ?? []).map((s) => s.trim()))];
   leftovers.push(...foreignKeySources(out));
   return { xml: out, leftovers };

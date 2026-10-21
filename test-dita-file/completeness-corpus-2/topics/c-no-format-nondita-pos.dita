@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.no.format.non.dita.ref, positive: an xref to a PDF with no @format. -->
+<topic id="c-no-format-nondita-pos">
+  <title>Non-DITA xref, no format (positive)</title>
+  <body>
+    <p><xref href="../topics/c-nondita-pos.pdf">PDF without a format</xref></p>
+  </body>
+</topic>

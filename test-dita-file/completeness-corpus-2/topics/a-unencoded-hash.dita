@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.unencoded.ref, positive: a "#" in the middle of a file name. In URI
+     syntax it starts the fragment, so the extension resolves the path "ok"
+     (a missing resource) until the syntax check reports the file name itself. -->
+<topic id="a-unencoded-hash">
+  <title>Unencoded hash (positive)</title>
+  <body>
+    <p><xref href="../topics/ok#1.dita">literal hash</xref></p>
+  </body>
+</topic>

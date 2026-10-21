@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.absolute.ref, positive: a drive-letter absolute path. Z: is fabricated;
+     the line is marked so the privacy guard lets it through. -->
+<map>
+  <title>Absolute reference, drive form</title>
+  <topicref href="Z:/probe/x.dita"/> <!-- probe-absolute-path -->
+</map>
