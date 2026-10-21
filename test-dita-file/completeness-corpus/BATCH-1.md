@@ -80,19 +80,52 @@ C 组要特别问 Oxygen：缺 `@format` 时它靠扩展名猜到什么程度（
 | `dmv.topichead.no.navtitle` | `topichead` 没有 navtitle | 无 `topicmeta`；有 `topicmeta` 但无 `navtitle`；有 `navtitle` |
 | `dmv.topicref.no.navtitle` | 没有 `href` 的 topicref 没有 navtitle | 同上；带 `href` 的对照；`scope="external"` 的情形 |
 
-## 流程
+## 探针设计：一条规则一个文件
 
-1. 先写完**整批**探针和对照（语料 2 里的 `control-missing.dita` 保留），一条规则一组文件，登记账本行（`RULES.md`，
-   来源写 RFC 或规范，探针路径写 `../completeness-corpus-2/...`）。
-2. 把扩展的现状跑一遍（`node scripts/completeness-baseline.cjs --corpus completeness-corpus-2`），
-   实现这批检查，刷新基线。
-3. 每个新类别要补：`ISSUE_CATEGORIES`、消息模板、界面标签、中英文 l10n，并在账本里写它挂在哪个
-   `enabledChecks` 选项下；严重度先取临时值，等报告再定。
-4. 请维护者对**语料 2 的 `corpus.ditamap`** 跑一次 Validate and Check for Completeness（只开这一个根 map，选项全开、
-   remote 关），用 `scripts/sanitize-oxygen-report.cjs --corpus completeness-corpus-2` 生成 `oxygen-report.xml`。
-5. 对照：`scripts/oxygen-diff.cjs --corpus completeness-corpus-2`。按报告修正实现和账本；
-   报告里观察到的结果记为来源 `oxygen-report`。把 `PROBLEM_ID_CATEGORY` 补全。
-6. `UPDATE_OXYGEN_PARITY=1 npm test` 刷新语料 2 的 parity 预期，再跑 `npm run verify`。
+对照的键是 `(文件, 类别)`。同一个文件里、同一类别下的几条规则会塌缩成一个签名，其中一条没对上也看不出来。
+所以：
+
+- 每条规则的探针放在**自己的文件**里。针对 topic 内容的探针放进各自的 topic；针对 map 里引用本身的探针，
+  放进各自的小 map（`maps/<组>-<规则>.ditamap`），再从 `corpus.ditamap` 用 `format="ditamap"` 引用。
+- 这样即使几条规则共用一个类别，对照仍能精确到每条规则。
+
+## 类别粒度（建议，新会话可调整，但要在账本里写理由）
+
+类别是用户看到的单位（问题面板的标签、l10n、选项归属），也是对照的单位。按**用户怎么修**来分，不是一个 id 一个类别，
+也不是一组一个类别：
+
+| 类别 | 包含的 id | 为什么这样分 |
+| --- | --- | --- |
+| `reference-syntax` | `win.seps.ref`、`absolute.ref`、`extra.slash.ref`、`ref.extra.slash`、`file.url.two.slashes`、`unencoded.ref` | 都是字符串写法问题，改法是改 href 的文字 |
+| `incorrect-case-reference` | `incorect.capit.ref` | 要读目录才能判断，结果随文件系统而变，单独便于选项和排查 |
+| `folder-reference` | `folder.ref` | 目标是目录，改法是指向文件 |
+| `recursive-reference` | `recursive.ref` | 在 map 链上判断，和路径写法无关 |
+| `invalid-key-syntax` | `invalid.keyref.syntax.1/2/3` | 同一对象（keyref）的三种写法错误 |
+| `invalid-id-syntax` | `invalid.id.syntax.2/3` | 同一对象（`@id`）的两种写法错误 |
+| `format-missing` | `topicref.no.format`、`no.format.non.dita.ref`、`topicref.ext.scope.no.format` | 改法都是补上 `@format` |
+| `format-mismatch` | `topicref.map.no.format`、`topicref.topic.no.format`、`ref.map.no.proper.format`、`ref.res.as.dita`、`ref.res.as.map`、`ref.topic.as.map` | `@format` 与目标实际类型不符，改法是改正 `@format` |
+| `external-reference` | `topicref.remote`、`remote.no.external.scope`、`remote.local.scope` | 外部引用与 `@scope` 的关系 |
+| `ignored-mapref-content` | `ref.topic.inside.mapref` | 内容被忽略，改法是移走 |
+| `missing-navtitle` | `topichead.no.navtitle`、`topicref.no.navtitle` | 同一问题的两种元素 |
+
+共 11 个类别。经验规则：改法不同、Oxygen 给的严重度不同、依赖的数据不同（如文件系统）、归在不同选项下，就拆；
+否则合并。**选项归属不要新增选择器条目**，挂到已有的引用类选项下，并在账本里写明。
+
+## 流程：先探针，再跑 Oxygen，最后实现
+
+1. 写完**整批**探针和对照（语料 2 里的 `control-missing.dita` 保留）。这一步不需要实现，也不要先写账本行：
+   账本行要求类别已存在，会随实现一起提交。
+2. 提交探针，并刷新语料 2 的基线（`node scripts/completeness-baseline.cjs --corpus completeness-corpus-2 --update`）。
+3. 请维护者对**语料 2 的 `corpus.ditamap`** 跑一次 Validate and Check for Completeness（只开这一个根 map，
+   选项全开、remote 关），用 `scripts/sanitize-oxygen-report.cjs --corpus completeness-corpus-2` 生成
+   `oxygen-report.xml`，提交，并刷新 parity 预期。**此时 Oxygen-only 列表就是这一批的待办清单**，每一项都有 Oxygen 的真实结论，
+   包括非 ASCII href 之类此前没有定论的问题。
+4. 照着报告实现：新类别（`ISSUE_CATEGORIES`、消息模板、界面标签、中英文 l10n）、`PROBLEM_ID_CATEGORY`、账本行
+   （来源写 RFC / 规范 / `oxygen-report`，并记录挂在哪个选项下）；严重度取报告里的值。
+   每实现一组，刷新一次 parity 预期，让这些行从 Oxygen-only 挪进 matched。
+5. 全部做完跑 `npm run verify`。只有探针被改动过才需要再跑一次 Oxygen。
+
+这个顺序的好处是实现之前就知道 Oxygen 的真实行为，省掉"先按规范做、再被报告推翻"的返工。
 
 ## 完成标准
 

@@ -8,6 +8,9 @@ Oxygen has been run on it, its own `oxygen-report.xml` and
 
 ## Conventions
 
+- **One rule per file.** Parity compares `(file, category)`, so two rules of one category in one
+  file collapse into a single signature. A map-level probe goes into its own small map under
+  `maps/`, referenced from `corpus.ditamap`.
 - **One probe per file or map entry, named for the rule:** `topics/<group>-<id>-<pos|neg|edge>.dita`
   (for example `topics/a-win-seps-pos.dita`), or a topicref in `corpus.ditamap` when
   the probe is the reference itself. A comment on the probe names the rule and its
