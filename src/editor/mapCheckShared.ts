@@ -28,6 +28,20 @@ export function makeHost(token?: vscode.CancellationToken): CrawlHost {
         return false;
       }
     },
+    isDirectory: async (p) => {
+      try {
+        return (await fsp.stat(p)).isDirectory();
+      } catch {
+        return false;
+      }
+    },
+    readDir: async (p) => {
+      try {
+        return await fsp.readdir(p);
+      } catch {
+        return undefined;
+      }
+    },
     cancelled: () => !!token?.isCancellationRequested,
   };
 }

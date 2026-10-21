@@ -24,6 +24,10 @@ export interface CrawlHost {
   readFile(absPath: string): Promise<string>;
   exists(absPath: string): Promise<boolean>;
   platform: NodeJS.Platform;
+  /** Whether an existing path is a folder (folder-reference check). */
+  isDirectory?(absPath: string): Promise<boolean>;
+  /** Entry names of a folder, or undefined when it cannot be listed (capitalization check). */
+  readDir?(absPath: string): Promise<string[] | undefined>;
   /** Polled between files; returning true stops the crawl early. */
   cancelled?(): boolean;
 }
@@ -60,6 +64,16 @@ export interface Reference extends Location {
   copyTo?: string;
   /** Where the reference sits: inside a relationship table. */
   inReltable: boolean;
+  /** The element that carries the reference. */
+  tag: string;
+  /** The @scope attribute as written, if any. */
+  scope?: string;
+  /** The @format attribute as written, if any. */
+  format?: string;
+  /** True when the reference was written in a map (topicref, mapref, keydef). */
+  inMap: boolean;
+  /** True for a reference made by resolving a @keyref: its @format is not the element's own. */
+  viaKeyref?: boolean;
 }
 
 export interface KeyDef extends Location {
@@ -92,6 +106,8 @@ export interface KeyUse extends Location {
   kind?: RefKind;
   /** Key scopes in effect where the key was used (map keyrefs only). */
   scopeChains?: string[][];
+  /** Why the key name cannot be parsed, when it cannot (Oxygen's invalid.keyref.syntax.1/.3). */
+  keySyntax?: 'slash' | 'whitespace';
   resourceOnly?: boolean;
   inReltable?: boolean;
   copyTo?: string;
@@ -111,6 +127,32 @@ export interface UndefinedKey extends Location {
 export interface TopicId extends Location {
   id: string;
   topicFile: string;
+}
+
+/** An @id attribute, on any element of a crawled map or topic (id-syntax check). */
+export interface IdUse extends Location {
+  id: string;
+  tag: string;
+}
+
+/** A map reference whose target is already being crawled: a cycle (Oxygen's dmv.recursive.ref). */
+export interface RecursiveRef extends Location {
+  /** The map reference as written. */
+  href: string;
+}
+
+/** A topicref/keydef that sits inside a reference to a map, where DITA ignores it. */
+export interface IgnoredMaprefContent extends Location {
+  tag: string;
+}
+
+/** A map element that carries, or needs, a navigation title. */
+export interface MapEntry extends Location {
+  tag: string;
+  href?: string;
+  keyref?: string;
+  scope?: string;
+  navTitle: boolean;
 }
 
 export interface ReusableCandidate extends Location {
@@ -177,6 +219,11 @@ export interface CrawlResult {
   keyUses: KeyUse[];
   undefinedKeys: UndefinedKey[];
   topicIds: TopicId[];
+  /** Every @id attribute seen, in maps and topics. */
+  ids: IdUse[];
+  recursiveRefs: RecursiveRef[];
+  ignoredMaprefContent: IgnoredMaprefContent[];
+  mapEntries: MapEntry[];
   reusable: ReusableCandidate[];
   conrefUses: ConrefUse[];
   tables: TableInfo[];
@@ -298,6 +345,10 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     keyUses: [],
     undefinedKeys: [],
     topicIds: [],
+    ids: [],
+    recursiveRefs: [],
+    ignoredMaprefContent: [],
+    mapEntries: [],
     reusable: [],
     conrefUses: [],
     tables: [],
@@ -342,7 +393,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     node: XNode,
     kind: RefKind,
     href: string,
-    extra: { resourceOnly?: boolean; inReltable?: boolean } = {},
+    extra: { resourceOnly?: boolean; inReltable?: boolean; inMap?: boolean } = {},
   ): Reference {
     const scope = node.attrs['scope'];
     const format = node.attrs['format'];
@@ -360,6 +411,10 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       resourceOnly: !!extra.resourceOnly,
       copyTo: node.attrs['copy-to'],
       inReltable: !!extra.inReltable,
+      tag: node.tag,
+      scope,
+      format,
+      inMap: !!extra.inMap,
     };
     if (!remote && !pathPart) ref.target = undefined; // "#id" -- same-file fragment
     result.refs.push(ref);
@@ -374,8 +429,12 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     const root = await load(mapPath, from);
     if (!root) return;
     result.maps.add(mapPath);
-    const isMapRoot = /\bmap\/map\b/.test(classOf(root)) || /map$/i.test(root.tag) || root.tag === 'bookmap';
-    if (!isMapRoot) {
+    const rootId = root.attrs['id'];
+    if (rootId) result.ids.push({ file: mapPath, line: root.line, id: rootId, tag: root.tag });
+    const isMapRoot = isMapRootNode(root);
+    // A topic read as a map (a @format mismatch) is reported by the reference check,
+    // not as a structural problem of the target; only a root that is neither is a warning.
+    if (!isMapRoot && !isTopicElement(root)) {
       result.fileIssues.push({
         file: mapPath, line: root.line, severity: 'warning',
         msg: msg('val.notMap', root.tag), structural: true,
@@ -400,6 +459,16 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     // Branch filtering
     if (opts.filter && opts.filter.excludes(n.attrs)) return;
 
+    const tag = n.tag;
+    const id = n.attrs['id'];
+    if (id) result.ids.push({ file: ctx.file, line: n.line, id, tag });
+    if (tag === 'topichead' || TOPICREF_TAGS.has(tag)) {
+      result.mapEntries.push({
+        file: ctx.file, line: n.line, tag, href: n.attrs['href'],
+        keyref: n.attrs['keyref'], scope: n.attrs['scope'], navTitle: hasNavTitle(n),
+      });
+    }
+
     // Key scopes
     let scopeChains = ctx.scopeChains;
     const keyscope = n.attrs['keyscope'];
@@ -409,7 +478,6 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     }
     const localCtx: MapCtx = { ...ctx, scopeChains };
 
-    const tag = n.tag;
     if (tag === 'reltable') localCtx.inReltable = true;
 
     const href = n.attrs['href'];
@@ -425,10 +493,12 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     // in a submap or after the use), so the context is recorded here.
     let mapKeyUse: KeyUse | undefined;
     if (keyref) {
+      const keyName = keyref.trim();
       const isMap = tag === 'mapref' || /\bmap\/mapref\b/.test(classOf(n));
       mapKeyUse = {
-        file: ctx.file, line: n.line, key: keyref.split('/')[0],
+        file: ctx.file, line: n.line, key: keyName.split('/')[0],
         value: keyref, attribute: 'keyref', tag,
+        keySyntax: keyrefSyntax(keyName),
         kind: isKeydef ? 'keydef' : isMap ? 'mapref' : 'topicref',
         scopeChains, resourceOnly: localCtx.resourceOnly,
         inReltable: localCtx.inReltable, copyTo: n.attrs['copy-to'],
@@ -479,22 +549,40 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     // DITA: @keyref takes precedence over @href, but @href is the fallback when
     // the key is undefined. The href is recorded as usual and the key resolution
     // below drops it again if the key turns out to be defined.
+    let followedMap = false;
     if (href !== undefined && href !== '' && (isMapTag(n) || tag === 'linkref' || n.attrs['href'])) {
       const isRelInner = ctx.inReltable && !isMapTag(n);
       const kind: RefKind = isKeydef ? 'keydef' : isMapHref(n, href) ? 'mapref' : 'topicref';
       if (!isRelInner || isMapTag(n)) {
-        const ref = addRef(ctx.file, n, kind, href, { resourceOnly: localCtx.resourceOnly, inReltable: localCtx.inReltable });
+        const ref = addRef(ctx.file, n, kind, href, {
+          resourceOnly: localCtx.resourceOnly, inReltable: localCtx.inReltable, inMap: true,
+        });
         if (mapKeyUse) mapKeyUse.fallbackRef = ref;
         if (ref.target && !ref.remote) {
           const tkey = norm(ref.target);
           if (kind === 'mapref') {
-            if (!chain.includes(tkey)) await crawlMap(ref.target, chain, ref);
+            // A target already on the crawl path closes a cycle: report it where it
+            // closes (Oxygen names the map that points back, not every member).
+            if (chain.includes(tkey)) result.recursiveRefs.push({ file: ctx.file, line: n.line, href });
+            else await crawlMap(ref.target, chain, ref);
+            followedMap = true;
           } else if (ref.dita && !seenTopics.has(tkey) && n.attrs['format'] !== 'ditamap') {
             seenTopics.add(tkey);
             topicQueue.push({ path: ref.target, inherited: cascaded });
           }
+        } else if (kind === 'mapref') {
+          followedMap = true;
         }
       }
+    }
+    // The content of a reference to a map is ignored by DITA (dmv.ref.topic.inside.mapref).
+    if (followedMap) {
+      for (const c of n.children) {
+        if (c.tag !== 'topicmeta' && (isMapTag(c) || TOPICREF_TAGS.has(c.tag))) {
+          result.ignoredMaprefContent.push({ file: ctx.file, line: c.line, tag: c.tag });
+        }
+      }
+      return;
     }
     for (const c of n.children) await walkMapNode(c, localCtx, chain);
   }
@@ -526,12 +614,20 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       return;
     }
     result.topics.add(path);
-    const isTopic = /\btopic\/topic\b/.test(classOf(root)) || TOPIC_ROOTS.has(root.tag);
-    if (!isTopic && !/\bmap\/map\b/.test(classOf(root))) {
+    const isTopic = isTopicElement(root);
+    // A map read as a topic (a @format mismatch) is reported by the reference check.
+    if (!isTopic && !isMapRootNode(root)) {
       result.fileIssues.push({
         file: path, line: root.line, severity: 'warning',
         msg: msg('val.notTopic', root.tag), structural: true,
       });
+    }
+
+    // Every @id, including reusable elements (id syntax); topic ids additionally
+    // feed the duplicate-id and conref-target checks.
+    for (const n of walk(root)) {
+      const id = n.attrs['id'];
+      if (id) result.ids.push({ file: path, line: n.line, id, tag: n.tag });
     }
 
     // Topic ids (root and nested)
@@ -553,7 +649,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
         const v = n.attrs[a];
         if (!v) continue;
         if (a === 'conkeyref') {
-          const key = v.split('/')[0];
+          const key = v.trim().split('/')[0];
           result.keyUses.push({ file: path, line: n.line, key, value: v, attribute: 'conkeyref', tag: n.tag });
           result.conrefUses.push({ key, targetId: v.includes('/') ? v.split('/').pop() : undefined });
         } else if (a === 'conref') {
@@ -583,9 +679,11 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       const keyrefValue = n.attrs['keyref'];
       let topicKeyUse: KeyUse | undefined;
       if (keyrefValue) {
+        const keyName = keyrefValue.trim();
         topicKeyUse = {
-          file: path, line: n.line, key: keyrefValue.split('/')[0],
+          file: path, line: n.line, key: keyName.split('/')[0],
           value: keyrefValue, attribute: 'keyref', tag: n.tag, kind: hrefAttrKind(n),
+          keySyntax: keyrefSyntax(keyName),
         };
         result.keyUses.push(topicKeyUse);
       }
@@ -628,6 +726,10 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
   function isTopicElement(n: XNode): boolean {
     if (/\btopic\/topic\b/.test(classOf(n))) return true;
     return TOPIC_ROOTS.has(n.tag);
+  }
+
+  function isMapRootNode(n: XNode): boolean {
+    return /\bmap\/map\b/.test(classOf(n)) || n.tag === 'map' || n.tag === 'bookmap';
   }
 
   // ── Tables ──
@@ -819,6 +921,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
   const droppedFallbacks = new Set<Reference>();
   for (const use of result.keyUses) {
     if (use.attribute !== 'keyref') continue;
+    if (use.keySyntax) continue; // reported as invalid key syntax, not as an undefined key
     const def = resolveKeyUse(use, keyIndex);
     if (!def) {
       result.undefinedKeys.push({ file: use.file, line: use.line, key: use.key, value: use.value ?? use.key });
@@ -841,6 +944,10 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       resourceOnly: !!use.resourceOnly,
       copyTo: use.copyTo,
       inReltable: !!use.inReltable,
+      tag: use.tag ?? '',
+      format: def.format,
+      inMap: !!use.scopeChains,
+      viaKeyref: true,
     });
   }
   if (droppedFallbacks.size) result.refs = result.refs.filter((r) => !droppedFallbacks.has(r));
@@ -869,6 +976,19 @@ function splitValues(v: string): string[] {
   const cleaned = v.replace(/[A-Za-z_][\w.-]*\(([^)]*)\)/g, (_m, inner: string) => ` ${inner} `);
   for (const t of cleaned.trim().split(/\s+/)) if (t) out.push(t);
   return out;
+}
+
+/** Why a key name cannot be parsed, if it cannot (Oxygen's invalid.keyref.syntax.1/.3). */
+function keyrefSyntax(key: string): 'slash' | 'whitespace' | undefined {
+  if (!key) return 'whitespace';
+  if (key.split('/').length > 2) return 'slash';
+  return /\s/.test(key) ? 'whitespace' : undefined;
+}
+
+/** Whether a map element carries a navigation title (a @navtitle or topicmeta/navtitle). */
+function hasNavTitle(n: XNode): boolean {
+  if (n.attrs['navtitle'] !== undefined) return true;
+  return n.children.some((c) => c.tag === 'topicmeta' && c.children.some((t) => t.tag === 'navtitle'));
 }
 
 // qualifiedNames / qualifiedNamesMulti live in keySpace.ts (the preview's key

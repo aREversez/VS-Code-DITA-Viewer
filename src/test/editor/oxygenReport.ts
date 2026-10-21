@@ -232,12 +232,30 @@ export const PROBLEM_ID_CATEGORY: Record<string, string> = {
   'dmv.file.not.found': 'missing-reference',
   'dmv.reference.not.exist': 'missing-reference',
   'dmv.invalid.ref.topic.id': 'invalid-ref-topic-id',
+  // reference spelling
+  'dmv.win.seps.ref': 'reference-syntax',
+  'dmv.absolute.ref': 'reference-syntax',
+  'dmv.extra.slash.ref': 'reference-syntax',
+  'dmv.ref.extra.slash': 'reference-syntax',
+  'dmv.file.url.two.slashes': 'reference-syntax',
+  'dmv.unencoded.ref': 'reference-syntax',
+  'dmv.incorect.capit.ref': 'incorrect-case-reference',
+  'dmv.folder.ref': 'folder-reference',
+  'dmv.recursive.ref': 'recursive-reference',
   // keys
   'dmv.undef.key': 'undefined-key',
   // the live report emits dmv.key.undef for the same finding (confirmed empirically)
   'dmv.key.undef': 'undefined-key',
   'duplicate.key.definition': 'duplicate-key',
   'dmv.not.used.key.defs': 'unreferenced-key',
+  'dmv.invalid.keyref.syntax': 'invalid-key-syntax',
+  'dmv.invalid.keyref.syntax.1': 'invalid-key-syntax',
+  'dmv.invalid.keyref.syntax.2': 'invalid-key-syntax',
+  'dmv.invalid.keyref.syntax.3': 'invalid-key-syntax',
+  // ids
+  'IDInvalidWithNamespaces': 'invalid-id-syntax',
+  'dmv.invalid.id.syntax.2': 'invalid-id-syntax',
+  'dmv.invalid.id.syntax.3': 'invalid-id-syntax',
   // duplicates
   'dmv.dup.topic': 'multiple-reference',
   'dmv.dup.topic.id': 'duplicate-id',
@@ -248,6 +266,25 @@ export const PROBLEM_ID_CATEGORY: Record<string, string> = {
   'dmv.not.used.reusable.component': 'unreferenced-reusable',
   // folders
   'dmv.external.references.map': 'outside-folder',
+  // @format presence and agreement with the target
+  'dmv.topicref.no.format': 'format-missing',
+  'dmv.no.format.non.dita.ref': 'format-missing',
+  'dmv.topicref.ext.scope.no.format': 'format-missing',
+  'dmv.topicref.map.no.format': 'format-mismatch',
+  'dmv.topicref.topic.no.format': 'format-mismatch',
+  'dmv.ref.map.no.proper.format': 'format-mismatch',
+  'dmv.ref.res.as.dita': 'format-mismatch',
+  'dmv.ref.res.as.map': 'format-mismatch',
+  'dmv.ref.topic.as.map': 'format-mismatch',
+  'dmv.link.topic.to.map': 'format-mismatch',
+  // @scope against the target
+  'dmv.topicref.remote': 'external-reference',
+  'dmv.topicref.remote.no.external.scope': 'external-reference',
+  'dmv.topicref.remote.local.scope': 'external-reference',
+  // map structure
+  'dmv.ref.topic.inside.mapref': 'ignored-mapref-content',
+  'dmv.topichead.no.navtitle': 'missing-navtitle',
+  'dmv.topicref.no.navtitle': 'missing-navtitle',
   // profiling
   'dmv.prof.attr.innef.cond': 'profiling-conflict',
   'dmv.prof.attr.group.innef.cond': 'profiling-conflict',

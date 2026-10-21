@@ -55,44 +55,86 @@ once `oxygen-report.xml` exists (until then its test is skipped).
 ## What the corpus probes
 
 The 29 rules of batch 1, one rule per file, each with `pos` (must report), `neg`
-(must not) and `edge` (the boundary). "Extension now" is what
-`baseline.extension.json` locks: `(none)` means the rule is not implemented yet, so
-the first real report supplies both the finding and its severity. The eleven issue
-categories those ids will share are in `../completeness-corpus/BATCH-1.md`; the
-corpus keeps one file per rule so that two rules of one category stay
-distinguishable by `(file, category)`.
+(must not) and `edge` (the boundary). The rules are implemented in `mapCrawl.ts` /
+`mapChecks.ts` and locked by `baseline.extension.json` (65 findings); the eleven
+categories they share are in `../completeness-corpus/BATCH-1.md` and in the ledger
+(`../completeness-corpus/RULES.md`, R026-R036). The corpus keeps one file per rule so
+that two rules of one category stay distinguishable by `(file, category)`.
 
 | Rule | Probes | Extension now |
 | --- | --- | --- |
-| `dmv.win.seps.ref` | `topics/a-win-seps-{pos,neg,edge}.dita` | *(none)* — backslashes resolve on Windows |
-| `dmv.absolute.ref` | `maps/a-absolute-{posix,drive,neg,fileurl}.ditamap` | the POSIX probe is also `missing-reference` + `outside-folder`; `Z:` and `file:` look remote |
-| `dmv.extra.slash.ref` | `topics/a-extra-slash-{pos,neg,edge}.dita` | *(none)* |
-| `dmv.ref.extra.slash` | `topics/a-ref-extra-slash-{pos,neg,edge}.dita` | *(none)* |
-| `dmv.file.url.two.slashes` | `topics/a-fileurl-{pos,neg,edge}.dita` | *(none)* |
-| `dmv.unencoded.ref` | `topics/a-unencoded-{space,chinese,brackets,hash,percent,encoded}.dita` | the `#` probe is also `missing-resource`: the href splits at the `#` |
-| `dmv.incorect.capit.ref` | `topics/a-case-{pos,neg,edge}.dita` | *(none)* — Windows lookup is case-insensitive |
-| `dmv.folder.ref` | `topics/a-folder-{pos,neg,edge}.dita` | *(none)* |
-| `dmv.recursive.ref` | `maps/a-recursive-{loopa,loopb,self,neg,child}.ditamap` | *(none)* |
-| `dmv.invalid.keyref.syntax.1` | `topics/b-keyref1-{pos,neg,edge}.dita` | *(none)* |
-| `dmv.invalid.keyref.syntax.2` | `topics/b-keyref2-{pos,neg,edge}.dita` | *(none)* |
-| `dmv.invalid.keyref.syntax.3` | `topics/b-keyref3-{pos,neg,edge}.dita` | `undefined-key` on `pos` and `edge` — no key can carry whitespace |
-| `dmv.invalid.id.syntax.2` | `topics/b-id2-{colon,digit,valid}.dita` | *(none)* |
-| `dmv.invalid.id.syntax.3` | `topics/b-id3-{space,neg}.dita`, `maps/b-id3-map.ditamap` | *(none)* |
-| `dmv.topicref.no.format` | `maps/c-topicref-no-format-{pos,neg,edge}.ditamap`, `maps/c-guess-{dita,xml,html,noext}.ditamap` | *(none)* |
-| `dmv.topicref.map.no.format` | `maps/c-map-no-format-{pos,neg,edge}.ditamap` + `-sub-` targets | `validation` on `edge`: `format="dita"` makes the map be read as a topic |
-| `dmv.topicref.topic.no.format` | `maps/c-topic-no-format-{pos,neg,edge}.ditamap` + `topics/c-topic-no-format-target-*.dita` | `validation` on the `pos` target: `format="ditamap"` makes it be read as a map |
-| `dmv.ref.map.no.proper.format` | `maps/c-mapref-format-{pos,neg,edge}.ditamap` + `-sub` | *(none)* |
-| `dmv.ref.res.as.dita` | `maps/c-res-as-dita-{pos,neg,edge}.ditamap` + `topics/c-res-as-dita-*` | `validation` on `pos.txt` and `edge.html`: parsed as DITA, root rejected |
-| `dmv.ref.res.as.map` | `maps/c-res-as-map-{pos,neg,edge}.ditamap` + `topics/c-res-as-map-*` | `validation` on `pos.txt` and `edge.html`: parsed as a map, root rejected |
-| `dmv.ref.topic.as.map` | `topics/c-topic-as-map-{pos,neg,edge}.dita` + `topics/c-topic-as-map-target.dita` | *(none)* |
-| `dmv.no.format.non.dita.ref` | `topics/c-no-format-nondita-{pos,neg,edge}.dita` + `topics/c-nondita-*.{pdf,bin}` | *(none)* |
-| `dmv.topicref.remote` | `maps/c-remote-{pos,neg,edge}.ditamap` | *(none)* |
-| `dmv.topicref.remote.no.external.scope` | `maps/c-remote-no-external-{pos,neg,edge}.ditamap` | *(none)* |
-| `dmv.topicref.remote.local.scope` | `maps/c-remote-local-{pos,neg,edge}.ditamap` | *(none)* |
-| `dmv.topicref.ext.scope.no.format` | `maps/c-ext-scope-{pos,neg,edge}.ditamap` | *(none)* |
-| `dmv.ref.topic.inside.mapref` | `maps/c-mapref-children-{pos,neg,edge}.ditamap` + `-sub` + `topics/c-mapref-{parent,child}.dita` | *(none)* |
-| `dmv.topichead.no.navtitle` | `maps/d-topichead-{pos,neg,edge}.ditamap` | *(none)* |
-| `dmv.topicref.no.navtitle` | `maps/d-topicref-{pos,neg,edge}.ditamap` | *(none)* |
+| `dmv.win.seps.ref` | `topics/a-win-seps-{pos,neg,edge}.dita` | `reference-syntax` error (matched) |
+| `dmv.absolute.ref` | `maps/a-absolute-{posix,drive,neg,fileurl}.ditamap` | `reference-syntax` warning on the POSIX and `file:` probes (matched, except the POSIX row: extension-only, see below); `Z:` is a drive-letter URL to the crawler, so that probe stays remote (treated like `file:`) |
+| `dmv.extra.slash.ref` | `topics/a-extra-slash-{pos,neg,edge}.dita` | `reference-syntax` warning (matched) |
+| `dmv.ref.extra.slash` | `topics/a-ref-extra-slash-{pos,neg,edge}.dita` | `reference-syntax` warning; the two `topics/` probes are also `folder-reference` (matched) |
+| `dmv.file.url.two.slashes` | `topics/a-fileurl-{pos,neg,edge}.dita` | `reference-syntax` warning on the `file:/` and `file:///` forms, as absolute paths; the report raised `dmv.absolute.ref` there instead, so this id itself has no incident (mapped, not exercised) |
+| `dmv.unencoded.ref` | `topics/a-unencoded-{space,chinese,brackets,hash,percent,encoded}.dita` | `reference-syntax` error on space, brackets and `%` (matched); non-ASCII is not reported, and the `#` probe is `missing-resource` (the href splits at the `#`), as the report agrees |
+| `dmv.incorect.capit.ref` | `topics/a-case-{pos,neg,edge}.dita` | `incorrect-case-reference` error (matched) |
+| `dmv.folder.ref` | `topics/a-folder-{pos,neg,edge}.dita` | `folder-reference` error (matched) |
+| `dmv.recursive.ref` | `maps/a-recursive-{loopa,loopb,self,neg,child}.ditamap` | `recursive-reference` error at the closing reference only (matched) |
+| `dmv.invalid.keyref.syntax.1` | `topics/b-keyref1-{pos,neg,edge}.dita` | `invalid-key-syntax` error on `pos` (matched) |
+| `dmv.invalid.keyref.syntax.2` | `topics/b-keyref2-{pos,neg,edge}.dita` | the report produced no incident for this id; the extension checks only `/` and whitespace |
+| `dmv.invalid.keyref.syntax.3` | `topics/b-keyref3-{pos,neg,edge}.dita` | `invalid-key-syntax` error on `pos` (matched; the value also cannot name a key) |
+| `dmv.invalid.id.syntax.2` | `topics/b-id2-{colon,digit,valid}.dita` | `invalid-id-syntax` error (matched) |
+| `dmv.invalid.id.syntax.3` | `topics/b-id3-{space,neg}.dita`, `maps/b-id3-map.ditamap` | `invalid-id-syntax` error, topics and map alike (matched) |
+| `dmv.topicref.no.format` | `maps/c-topicref-no-format-{pos,neg,edge}.ditamap`, `maps/c-guess-{dita,xml,html,noext}.ditamap` | `format-missing` on `pos`; `format-mismatch` where a wrong `@format` is present (matched) |
+| `dmv.topicref.map.no.format` | `maps/c-map-no-format-{pos,neg,edge}.ditamap` + `-sub-` targets | `format-mismatch` error on `pos` and `edge` (matched); a bare `mapref` is left alone because its default format is `ditamap` |
+| `dmv.topicref.topic.no.format` | `maps/c-topic-no-format-{pos,neg,edge}.ditamap` + `topics/c-topic-no-format-target-*.dita` | `format-mismatch` error on `pos`, warning on `edge` (matched) |
+| `dmv.ref.map.no.proper.format` | `maps/c-mapref-format-{pos,neg,edge}.ditamap` + `-sub` | `format-mismatch` error on `format="dita"` (matched) |
+| `dmv.ref.res.as.dita` | `maps/c-res-as-dita-{pos,neg,edge}.ditamap` + `topics/c-res-as-dita-*` | `format-mismatch` error (matched) |
+| `dmv.ref.res.as.map` | `maps/c-res-as-map-{pos,neg,edge}.ditamap` + `topics/c-res-as-map-*` | `format-mismatch` error (matched) |
+| `dmv.ref.topic.as.map` | `topics/c-topic-as-map-{pos,neg,edge}.dita` + `topics/c-topic-as-map-target.dita` | `format-mismatch` error (matched) |
+| `dmv.no.format.non.dita.ref` | `topics/c-no-format-nondita-{pos,neg,edge}.dita` + `topics/c-nondita-*.{pdf,bin}` | `format-missing` error (matched); Oxygen's `edge` incident carries `dmv.invalid.parse.dita.content` instead, because it tried to parse the `.bin` |
+| `dmv.topicref.remote` | `maps/c-remote-{pos,neg,edge}.ditamap` | the report produced no incident for this id; the extension's `extNoFormat` covers the same shape |
+| `dmv.topicref.remote.no.external.scope` | `maps/c-remote-no-external-{pos,neg,edge}.ditamap` | `external-reference` warning (matched) |
+| `dmv.topicref.remote.local.scope` | `maps/c-remote-local-{pos,neg,edge}.ditamap` | `external-reference` warning (matched) |
+| `dmv.topicref.ext.scope.no.format` | `maps/c-ext-scope-{pos,neg,edge}.ditamap` | `format-missing` warning (matched) |
+| `dmv.ref.topic.inside.mapref` | `maps/c-mapref-children-{pos,neg,edge}.ditamap` + `-sub` + `topics/c-mapref-{parent,child}.dita` | `ignored-mapref-content` error (matched) |
+| `dmv.topichead.no.navtitle` | `maps/d-topichead-{pos,neg,edge}.ditamap` | `missing-navtitle` warning (matched) |
+| `dmv.topicref.no.navtitle` | `maps/d-topicref-{pos,neg,edge}.ditamap` | `missing-navtitle` warning on `edge` (matched; `pos` stays silent, as Oxygen does) |
+
+## Parity after batch 1
+
+`oxygen-parity.expected.json` locks **59 matched, 6 extension-only, 31 Oxygen-only**
+(`scripts/oxygen-diff.cjs` agrees). Every row that does not match has a recorded reason:
+
+**Extension-only (6).**
+
+- `maps/a-absolute-posix.ditamap reference-syntax` — the extension reports a POSIX
+  root-absolute href because it cannot be portable; Oxygen resolves it and files only
+  `dmv.file.not.found`.
+- `topics/c-res-as-{dita,map}-{pos.txt,edge.html} validation` — `@format="dita"` or
+  `"ditamap"` makes the extraction read the non-DITA file as DITA, so its root is
+  rejected. Oxygen reports the same files through `dmv.invalid.class.format` instead
+  (batch validation, not implemented). The `format-mismatch` finding on the map that
+  points at them is matched.
+
+**Oxygen-only (31).**
+
+- **`missing-reference` on a `file:` or drive-letter href (6):** `a-absolute-drive`,
+  `a-absolute-fileurl`, the three `a-fileurl-*` probes and `a-unencoded-percent`. The
+  crawler treats any `scheme:` URL (including `file:`) and a drive-letter path as
+  remote and never probes the local file system for them; it still reports the
+  spelling (`reference-syntax`) where the form is absolute. For `a-unencoded-percent`
+  the extension resolves the literal `100%.dita` on disk, while Oxygen decodes the
+  `%` escape and looks for a different name.
+- **`unreferenced-link` (2):** `a-extra-slash-pos` — Oxygen compares the doubled-slash
+  href with the map references literally, the extension normalizes it and sees
+  `ok.dita` is in the map; `c-no-format-nondita-edge` — the extension only calls a
+  link "not in map" when it targets a DITA topic, and this one targets a `.bin`.
+- **`oxygen:dmv.no.link.keyref` (7):** a key definition whose target has no
+  reference; not implemented and outside batch 1.
+- **`oxygen:dmv.invalid.class.format` (7) and `oxygen:unknown` (7):** Oxygen's
+  class/format validation on the non-DITA probe files (`c-guess.html`,
+  `c-resource.*`, `c-res-as-*`), plus the incidents whose `problemID` is empty.
+  Batch validation is out of scope (same handling as corpus 1).
+- **`c-no-format-nondita-edge.dita oxygen:dmv.invalid.parse.dita.content` (1):**
+  Oxygen parses the `.bin` because `@format` is missing; the extension reports the
+  actionable finding (`format-missing`) on the same file, which is matched.
+- **`topics/ok.dita duplicate-id` (1):** Oxygen instantiates one topic per `@copy-to`
+  and sees the shared `@id` as a duplicate; the extension checks ids per file, so the
+  reused topic has one.
+
 
 Supporting files are not probes of their own. `topics/ok.dita` is the neutral target;
 `topics/control-missing.dita` is absent on purpose (`missing-reference` on line 17 of the

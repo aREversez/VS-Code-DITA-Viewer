@@ -8,7 +8,7 @@
 // corpus directory is passed in (never derived from `__dirname`), so the module
 // works both compiled under mocha and bundled by scripts/completeness-baseline.cjs.
 
-import { access, readFile } from 'fs/promises';
+import { access, readFile, readdir, stat } from 'fs/promises';
 import { relative, resolve, sep } from 'path';
 import { CrawlHost, crawlMaps } from '../../editor/mapCrawl';
 import {
@@ -80,6 +80,20 @@ function makeDiskHost(): CrawlHost {
         return true;
       } catch {
         return false;
+      }
+    },
+    isDirectory: async (p: string) => {
+      try {
+        return (await stat(p)).isDirectory();
+      } catch {
+        return false;
+      }
+    },
+    readDir: async (p: string) => {
+      try {
+        return await readdir(p);
+      } catch {
+        return undefined;
       }
     },
   };

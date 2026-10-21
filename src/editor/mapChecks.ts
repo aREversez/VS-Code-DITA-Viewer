@@ -7,7 +7,7 @@
 //   - Profiling preferences come from the dita-viewer.completenessCheck.*
 //     settings rather than Oxygen's preferences page.
 
-import { dirname, isAbsolute, relative, resolve } from 'path';
+import { dirname, isAbsolute, join, relative, resolve } from 'path';
 import { normalizePathForCompare } from './mapReferenceTools';
 import { CrawlHost, CrawlResult, Location, Reference } from './mapCrawl';
 import { Msg, MsgCode, formatMessage, msg } from './mapCheckMessages';
@@ -109,6 +109,17 @@ export const ISSUE_CATEGORIES = [
   'missing-resource',
   'remote-resource',
   'outside-folder',
+  'reference-syntax',
+  'incorrect-case-reference',
+  'folder-reference',
+  'recursive-reference',
+  'invalid-key-syntax',
+  'invalid-id-syntax',
+  'format-missing',
+  'format-mismatch',
+  'external-reference',
+  'ignored-mapref-content',
+  'missing-navtitle',
   'unreferenced-link',
   'multiple-reference',
   'duplicate-id',
@@ -225,12 +236,14 @@ export async function runChecks(
   // dmv.invalid.ref.topic.id; it is part of validating references, so it runs with batch validation.
   if (opts.batchValidate) issues.push(...invalidRefTopicIds(crawl, norm));
 
-  // 3. References outside the map folder.
+  // 3. References outside the map folder. A target that does not exist at all is
+  // already a missing reference; only an existing one can be "outside the folder".
   if (opts.reportOutsideMapFolder && rootDir) {
     const prefix = norm(rootDir).replace(/\/+$/, '') + '/';
     for (const ref of crawl.refs) {
       if (!ref.target || ref.remote) continue;
       if (!norm(ref.target).startsWith(prefix)) {
+        if (!(await exists(ref.target))) continue;
         issues.push({
           category: 'outside-folder', severity: 'warning', file: ref.file, line: ref.line,
           msg: msg('ref.outsideFolder', ref.href),
@@ -238,6 +251,33 @@ export async function runChecks(
       }
     }
   }
+
+  // 3b. Reference spelling, capitalization, folder targets, cycles, key and id
+  // syntax, @format/@scope and navigation titles (Oxygen's reference families).
+  // They ride the existing "check non-DITA references" option, except the id
+  // syntax, which belongs to batch validation.
+  if (opts.checkNonDita) {
+    issues.push(...referenceSyntaxIssues(crawl));
+    issues.push(...(await incorrectCaseIssues(crawl, env.host)));
+    issues.push(...(await folderReferenceIssues(crawl, env.host)));
+    for (const r of crawl.recursiveRefs) {
+      issues.push({
+        category: 'recursive-reference', severity: 'error', file: r.file, line: r.line,
+        msg: msg('ref.recursiveMap', r.href),
+      });
+    }
+    issues.push(...invalidKeySyntaxIssues(crawl));
+    issues.push(...formatIssues(crawl));
+    issues.push(...externalScopeIssues(crawl));
+    for (const c of crawl.ignoredMaprefContent) {
+      issues.push({
+        category: 'ignored-mapref-content', severity: 'error', file: c.file, line: c.line,
+        msg: msg('ref.maprefContent'),
+      });
+    }
+    issues.push(...missingNavTitleIssues(crawl));
+  }
+  if (opts.batchValidate) issues.push(...invalidIdSyntaxIssues(crawl));
 
   // 4. Links to topics that no map references.
   if (opts.reportUnreferencedLinks) {
@@ -411,6 +451,269 @@ export async function runChecks(
   }
 
   return dedupeIssues(issues.map((i) => ({ ...i, message: formatMessage(i.msg) })));
+}
+
+// ── Reference spelling and structure (batch 1) ──────────────────────────
+
+const URL_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
+
+function pathPartOf(href: string): string {
+  const i = href.indexOf('#');
+  return i >= 0 ? href.slice(0, i) : href;
+}
+
+/**
+ * An absolute path reference: `/x` (not protocol-relative `//x`), or a `file:`
+ * URL whose path is absolute (`file:/x`, `file:///x`). A drive-letter form
+ * (`Z:/x`) is left alone: it is a machine path, so the crawl treats it as
+ * remote and the check never probes it.
+ */
+function isAbsoluteHrefPath(p: string): boolean {
+  return /^\/(?!\/)/.test(p) || /^file:\/\/\//i.test(p) || /^file:\/[^/]/i.test(p);
+}
+
+/** Characters that RFC 3986 requires to be percent-encoded in a path. */
+function hasUnencodedChars(p: string): boolean {
+  if (/\s/.test(p) || p.includes('[') || p.includes(']')) return true;
+  for (let i = 0; i < p.length; i++) {
+    if (p[i] === '%' && !/^[0-9A-Fa-f]{2}$/.test(p.slice(i + 1, i + 3))) return true;
+  }
+  return false;
+}
+
+/** Spelling problems in the href itself (Oxygen's dmv.*.ref family). */
+function referenceSyntaxIssues(crawl: CrawlResult): Array<Omit<Issue, 'message'>> {
+  const out: Array<Omit<Issue, 'message'>> = [];
+  const push = (ref: Reference, severity: Issue['severity'], code: MsgCode, ...args: Array<string | number>): void => {
+    out.push({ category: 'reference-syntax', severity, file: ref.file, line: ref.line, msg: msg(code, ...args) });
+  };
+  for (const ref of crawl.refs) {
+    if (ref.viaKeyref) continue;
+    const p = pathPartOf(ref.href);
+    if (!p) continue;
+    if (isAbsoluteHrefPath(p)) {
+      // No arguments: the href may name a machine path, and findings are committed.
+      push(ref, 'warning', 'ref.absolute');
+      continue;
+    }
+    const url = URL_SCHEME.test(ref.href);
+    if (!url) {
+      // Windows separators and doubled/trailing slashes are local-path spelling.
+      // A URL's `//` belongs to its authority and is not a doubled path slash.
+      if (p.includes('\\')) {
+        push(ref, 'error', 'ref.winSeparators', ref.href);
+        continue;
+      }
+      if (p.includes('//')) {
+        push(ref, 'warning', 'ref.doubleSlash', ref.href);
+        continue;
+      }
+      if (p.endsWith('/')) {
+        push(ref, 'warning', 'ref.trailingSlash', ref.href);
+        continue;
+      }
+    }
+    if (hasUnencodedChars(p)) push(ref, 'error', 'ref.unencoded', ref.href);
+  }
+  return out;
+}
+
+/**
+ * A path segment whose spelling differs from the file on disk only in case. On
+ * a case-insensitive file system the reference resolves anyway; on a case-
+ * sensitive one it breaks, so the spelling is reported wherever it is seen.
+ */
+async function incorrectCaseIssues(crawl: CrawlResult, host: CrawlHost): Promise<Array<Omit<Issue, 'message'>>> {
+  if (!host.readDir) return [];
+  const cache = new Map<string, Promise<string[] | undefined>>();
+  const list = (dir: string): Promise<string[] | undefined> => {
+    let p = cache.get(dir);
+    if (!p) cache.set(dir, (p = host.readDir!(dir)));
+    return p;
+  };
+  const out: Array<Omit<Issue, 'message'>> = [];
+  for (const ref of crawl.refs) {
+    if (ref.viaKeyref || ref.remote || !ref.target) continue;
+    // A folder target is the folder-reference check's finding, not a case one.
+    if (host.isDirectory && (await host.isDirectory(ref.target))) continue;
+    const rel = relative(dirname(ref.file), ref.target);
+    if (!rel || isAbsolute(rel)) continue;
+    let dir = dirname(ref.file);
+    let wrong: { actual: string } | undefined;
+    for (const segment of rel.split(/[\\/]+/)) {
+      if (!segment || segment === '.') continue;
+      if (segment === '..') {
+        dir = dirname(dir);
+        continue;
+      }
+      const entries = await list(dir);
+      if (!entries) {
+        wrong = undefined;
+        break;
+      }
+      const actual = entries.find((e) => e.toLowerCase() === segment.toLowerCase());
+      if (!actual) {
+        wrong = undefined; // does not exist at all: a missing-reference finding
+        break;
+      }
+      if (actual !== segment && !wrong) wrong = { actual };
+      dir = join(dir, actual);
+    }
+    if (wrong) {
+      out.push({
+        category: 'incorrect-case-reference', severity: 'error', file: ref.file, line: ref.line,
+        msg: msg('ref.wrongCase', ref.href, wrong.actual),
+      });
+    }
+  }
+  return out;
+}
+
+/** A reference whose target is an existing folder (Oxygen's dmv.folder.ref). */
+async function folderReferenceIssues(crawl: CrawlResult, host: CrawlHost): Promise<Array<Omit<Issue, 'message'>>> {
+  if (!host.isDirectory) return [];
+  const out: Array<Omit<Issue, 'message'>> = [];
+  for (const ref of crawl.refs) {
+    if (ref.viaKeyref || ref.remote || !ref.target) continue;
+    if (!(await host.isDirectory(ref.target))) continue;
+    out.push({
+      category: 'folder-reference', severity: 'error', file: ref.file, line: ref.line,
+      msg: msg('ref.folder', ref.href),
+    });
+  }
+  return out;
+}
+
+/** A keyref that cannot name a key: more than one `/`, or whitespace in it. */
+function invalidKeySyntaxIssues(crawl: CrawlResult): Array<Omit<Issue, 'message'>> {
+  const out: Array<Omit<Issue, 'message'>> = [];
+  for (const use of crawl.keyUses) {
+    if (!use.keySyntax) continue;
+    out.push({
+      category: 'invalid-key-syntax', severity: 'error', file: use.file, line: use.line,
+      msg: msg(use.keySyntax === 'slash' ? 'key.invalidSlash' : 'key.invalidWhitespace', use.value ?? use.key),
+    });
+  }
+  return out;
+}
+
+/** The DITA `@id` grammar is XML's NCName: a letter or `_` first, then letters, digits, `.`, `-`, `_`, `·` and combining marks. */
+const DITA_ID = /^[A-Za-z_\p{L}][\p{L}\p{Nd}._\-\u00B7\p{Mn}\p{Mc}]*$/u;
+
+function invalidIdSyntaxIssues(crawl: CrawlResult): Array<Omit<Issue, 'message'>> {
+  const out: Array<Omit<Issue, 'message'>> = [];
+  for (const id of crawl.ids) {
+    if (DITA_ID.test(id.id)) continue;
+    out.push({
+      category: 'invalid-id-syntax', severity: 'error', file: id.file, line: id.line,
+      msg: msg('id.invalid', id.id),
+    });
+  }
+  return out;
+}
+
+/** What the file-name extension says the target is; `xml` and no extension say nothing. */
+type TargetKind = 'topic' | 'map' | 'resource' | 'unknown';
+
+function hrefTargetKind(pathPart: string): TargetKind {
+  const m = /\.([A-Za-z0-9]+)$/.exec(pathPart);
+  if (!m) return 'unknown';
+  const ext = m[1].toLowerCase();
+  if (ext === 'ditamap') return 'map';
+  if (ext === 'dita') return 'topic';
+  if (ext === 'xml') return 'unknown';
+  return 'resource';
+}
+
+/** `@format` that is missing for the target kind, or contradicts it. */
+function formatIssues(crawl: CrawlResult): Array<Omit<Issue, 'message'>> {
+  const out: Array<Omit<Issue, 'message'>> = [];
+  const push = (
+    ref: Reference, category: 'format-missing' | 'format-mismatch', severity: Issue['severity'],
+    code: MsgCode, ...args: Array<string | number>
+  ): void => {
+    out.push({ category, severity, file: ref.file, line: ref.line, msg: msg(code, ...args) });
+  };
+  for (const ref of crawl.refs) {
+    if (ref.viaKeyref || ref.remote) continue;
+    if (ref.kind !== 'topicref' && ref.kind !== 'mapref' && ref.kind !== 'xref' && ref.kind !== 'link') continue;
+    // An explicit external scope is the external-reference check's business.
+    if (ref.scope === 'external' || ref.scope === 'peer') continue;
+    const p = pathPartOf(ref.href);
+    if (!p) continue;
+    const kind = hrefTargetKind(p);
+    if (kind === 'unknown') continue;
+    const fmt = ref.format;
+    if (kind === 'topic') {
+      if (fmt === 'ditamap') push(ref, 'format-mismatch', 'error', 'ref.topicAsMap', ref.href);
+      else if (fmt === 'xml' && (ref.kind === 'topicref' || ref.kind === 'mapref')) {
+        push(ref, 'format-mismatch', 'warning', 'ref.topicFormat', ref.href, fmt);
+      }
+    } else if (kind === 'map') {
+      // A mapref defaults to format="ditamap"; a topicref (or link) does not, so an
+      // undeclared format only contradicts the target outside a mapref.
+      if (fmt === 'dita' || (fmt === undefined && ref.tag !== 'mapref')) {
+        push(ref, 'format-mismatch', 'error', 'ref.mapFormat', ref.href);
+      }
+    } else if (fmt === 'dita') {
+      push(ref, 'format-mismatch', 'error', 'ref.resAsDita', ref.href);
+    } else if (fmt === 'ditamap') {
+      push(ref, 'format-mismatch', 'error', 'ref.resAsMap', ref.href);
+    } else if (fmt === undefined) {
+      if (ref.kind === 'xref' || ref.kind === 'link') push(ref, 'format-missing', 'error', 'ref.noFormat', ref.href);
+      else if (ref.kind === 'topicref') push(ref, 'format-mismatch', 'error', 'ref.resAsDita', ref.href);
+    }
+  }
+  return out;
+}
+
+/** `scope="external"` needs a `@format`; a URL needs `scope="external"` (Oxygen's dmv.topicref.remote.*). */
+function externalScopeIssues(crawl: CrawlResult): Array<Omit<Issue, 'message'>> {
+  const out: Array<Omit<Issue, 'message'>> = [];
+  for (const ref of crawl.refs) {
+    if (ref.viaKeyref) continue;
+    const external = ref.scope === 'external' || ref.scope === 'peer';
+    if (!external) {
+      if (ref.inMap && /^https?:/i.test(ref.href)) {
+        out.push({
+          category: 'external-reference', severity: 'warning', file: ref.file, line: ref.line,
+          msg: msg('ref.needsExternalScope', ref.href),
+        });
+      }
+      continue;
+    }
+    if (ref.format) continue;
+    const p = pathPartOf(ref.href);
+    if (!p) continue;
+    // A URL, or a local file that is not a DITA topic/map, needs a format too.
+    if (URL_SCHEME.test(ref.href) || hrefTargetKind(p) === 'resource') {
+      out.push({
+        category: 'format-missing', severity: 'warning', file: ref.file, line: ref.line,
+        msg: msg('ref.extNoFormat', ref.href),
+      });
+    }
+  }
+  return out;
+}
+
+/** topichead, and an explicitly external topicref, need a navigation title. */
+function missingNavTitleIssues(crawl: CrawlResult): Array<Omit<Issue, 'message'>> {
+  const out: Array<Omit<Issue, 'message'>> = [];
+  for (const entry of crawl.mapEntries) {
+    if (entry.navTitle) continue;
+    if (entry.tag === 'topichead') {
+      out.push({
+        category: 'missing-navtitle', severity: 'warning', file: entry.file, line: entry.line,
+        msg: msg('nav.topichead'),
+      });
+    } else if (entry.tag === 'topicref' && (entry.scope === 'external' || entry.scope === 'peer') && !entry.keyref) {
+      out.push({
+        category: 'missing-navtitle', severity: 'warning', file: entry.file, line: entry.line,
+        msg: msg('nav.topicref', entry.href ?? ''),
+      });
+    }
+  }
+  return out;
 }
 
 function missingCode(ref: Reference): MsgCode {

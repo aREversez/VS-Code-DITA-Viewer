@@ -58,6 +58,28 @@ export function localizeMsg(m: Msg): string {
     case 'ref.linkNotInMap': return vscode.l10n.t('Link target is not referenced in any map: {0}', ...a);
     case 'ref.multiple': return vscode.l10n.t('Topic referenced more than once ({1} times): {0}', ...a);
     case 'ref.invalidTopicId': return vscode.l10n.t('Referenced topic id "{0}" not found', ...a);
+    case 'ref.winSeparators': return vscode.l10n.t('Reference uses backslashes instead of forward slashes: {0}', ...a);
+    case 'ref.absolute': return vscode.l10n.t('Reference is an absolute path; DITA references should be relative to the map', ...a);
+    case 'ref.doubleSlash': return vscode.l10n.t('Reference contains a doubled path separator ("//"): {0}', ...a);
+    case 'ref.trailingSlash': return vscode.l10n.t('Reference ends with a slash: {0}', ...a);
+    case 'ref.unencoded': return vscode.l10n.t('Reference contains characters that must be percent-encoded: {0}', ...a);
+    case 'ref.wrongCase': return vscode.l10n.t('File name capitalization does not match the file on disk ("{1}"): {0}', ...a);
+    case 'ref.folder': return vscode.l10n.t('Reference points to a folder, not a file: {0}', ...a);
+    case 'ref.recursiveMap': return vscode.l10n.t('Map reference closes a cycle; this map is already being processed: {0}', ...a);
+    case 'key.invalidSlash': return vscode.l10n.t('Key reference has more than one "/" (expected key/element): {0}', ...a);
+    case 'key.invalidWhitespace': return vscode.l10n.t('Key reference contains whitespace: {0}', ...a);
+    case 'id.invalid': return vscode.l10n.t('ID "{0}" is not a valid DITA ID (XML NCName)', ...a);
+    case 'ref.noFormat': return vscode.l10n.t('Reference to a non-DITA resource has no @format: {0}', ...a);
+    case 'ref.extNoFormat': return vscode.l10n.t('External reference has no @format: {0}', ...a);
+    case 'ref.resAsDita': return vscode.l10n.t('Non-DITA resource is referenced as a DITA topic: {0}', ...a);
+    case 'ref.resAsMap': return vscode.l10n.t('Non-DITA resource is referenced as a DITA map: {0}', ...a);
+    case 'ref.mapFormat': return vscode.l10n.t('Map reference is not declared as format="ditamap": {0}', ...a);
+    case 'ref.topicFormat': return vscode.l10n.t('Topic is referenced with format="{1}": {0}', ...a);
+    case 'ref.topicAsMap': return vscode.l10n.t('Topic is referenced with format="ditamap": {0}', ...a);
+    case 'ref.needsExternalScope': return vscode.l10n.t('Reference to a URL must declare scope="external": {0}', ...a);
+    case 'ref.maprefContent': return vscode.l10n.t('Content inside a map reference is ignored', ...a);
+    case 'nav.topichead': return vscode.l10n.t('Topichead has no navigation title', ...a);
+    case 'nav.topicref': return vscode.l10n.t('External reference has no navigation title: {0}', ...a);
     case 'id.duplicate': return vscode.l10n.t('Duplicate topic id "{0}" ({1} topics share it)', ...a);
     case 'key.duplicate': return vscode.l10n.t('Key "{0}" is already defined; this definition is ignored', ...a);
     case 'key.undefined': return vscode.l10n.t('Key reference "{0}" does not match any key definition', ...a);
@@ -124,6 +146,17 @@ function categoryLabel(c: IssueCategory): string {
     case 'missing-resource': return vscode.l10n.t('Missing resources');
     case 'remote-resource': return vscode.l10n.t('Unreachable remote resources');
     case 'outside-folder': return vscode.l10n.t('References outside the map folder');
+    case 'reference-syntax': return vscode.l10n.t('Reference syntax');
+    case 'incorrect-case-reference': return vscode.l10n.t('Incorrect file name capitalization');
+    case 'folder-reference': return vscode.l10n.t('References to folders');
+    case 'recursive-reference': return vscode.l10n.t('Recursive map references');
+    case 'invalid-key-syntax': return vscode.l10n.t('Invalid key reference syntax');
+    case 'invalid-id-syntax': return vscode.l10n.t('Invalid ID syntax');
+    case 'format-missing': return vscode.l10n.t('References missing @format');
+    case 'format-mismatch': return vscode.l10n.t('Mismatched @format');
+    case 'external-reference': return vscode.l10n.t('External references');
+    case 'ignored-mapref-content': return vscode.l10n.t('Content ignored inside map references');
+    case 'missing-navtitle': return vscode.l10n.t('Missing navigation titles');
     case 'unreferenced-link': return vscode.l10n.t('Links to topics not referenced in maps');
     case 'multiple-reference': return vscode.l10n.t('Multiple references to the same topic');
     case 'duplicate-id': return vscode.l10n.t('Duplicate topic IDs');
@@ -215,8 +248,8 @@ function checkItems(picked: Set<string>): CheckItem[] {
   const sep = (label: string): CheckItem => ({ label, kind: vscode.QuickPickItemKind.Separator });
   return [
     sep(vscode.l10n.t('Files and resources')),
-    it('batchValidate', vscode.l10n.t('Validate referenced DITA files'), vscode.l10n.t('XML errors; topic id, title and root element')),
-    it('checkNonDita', vscode.l10n.t('Check that referenced images and other files exist')),
+    it('batchValidate', vscode.l10n.t('Validate referenced DITA files'), vscode.l10n.t('XML errors; id syntax, title and root element')),
+    it('checkNonDita', vscode.l10n.t('Check references and linked files'), vscode.l10n.t('existence, spelling, @format and @scope')),
     it('includeRemote', vscode.l10n.t('Also check remote (http/https) resources'), vscode.l10n.t('needs the check above')),
     it('useDitaval', vscode.l10n.t('Filter with DITAVAL files'), vscode.l10n.t('choose files after accepting')),
     sep(vscode.l10n.t('References')),

@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { resolve } from 'path';
+import { basename, dirname, resolve } from 'path';
 import { crawlMaps, CrawlHost } from '../../editor/mapCrawl';
 import {
   runChecks,
@@ -17,8 +17,9 @@ import { parseDitaval } from '../../editor/ditaval';
 
 const P = (p: string) => resolve('/proj', p);
 
-function makeHost(files: Record<string, string>): CrawlHost {
+function makeHost(files: Record<string, string>, dirs: string[] = []): CrawlHost {
   const abs = new Map(Object.entries(files).map(([k, v]) => [P(k), v]));
+  const dirSet = new Set(dirs.map(P));
   return {
     platform: 'linux',
     readFile: async (p) => {
@@ -26,7 +27,15 @@ function makeHost(files: Record<string, string>): CrawlHost {
       if (v === undefined) throw new Error('ENOENT');
       return v;
     },
-    exists: async (p) => abs.has(p),
+    exists: async (p) => abs.has(p) || dirSet.has(p),
+    isDirectory: async (p) => dirSet.has(p),
+    readDir: async (p) => {
+      const names: string[] = [];
+      for (const k of [...abs.keys(), ...dirSet]) {
+        if (dirname(k) === p && !names.includes(basename(k))) names.push(basename(k));
+      }
+      return names.length ? names : undefined;
+    },
   };
 }
 
@@ -35,8 +44,8 @@ const NONE: CompletenessOptions = {
   batchValidate: false, checkNonDita: false, reportUnreferencedLinks: false, reportTableProblems: false,
 };
 
-async function check(files: Record<string, string>, opts: Partial<CompletenessOptions>, root = 'root.ditamap'): Promise<Issue[]> {
-  const host = makeHost(files);
+async function check(files: Record<string, string>, opts: Partial<CompletenessOptions>, root = 'root.ditamap', dirs: string[] = []): Promise<Issue[]> {
+  const host = makeHost(files, dirs);
   const crawl = await crawlMaps([P(root)], host);
   return runChecks(crawl, { ...NONE, ...opts }, { host });
 }
@@ -479,6 +488,200 @@ describe('completeness: profiling', () => {
   it('says so when no preferences are configured', async () => {
     const issues = await check({ 'root.ditamap': '<map/>' }, { reportProfilingPreferences: true });
     assert.ok(issues.some((i) => i.category === 'profiling-preference' && i.severity === 'info'));
+  });
+});
+
+describe('completeness: reference spelling and @format (Oxygen batch 1)', () => {
+  it('reports local href spelling, but leaves URLs and encoded/non-ASCII names alone', async () => {
+    const issues = await check(
+      {
+        'root.ditamap': '<map><topicref href="a.dita"/></map>',
+        'a.dita': topic(
+          'a',
+          '<p>' +
+            '<xref href="..\\topics\\ok.dita"/>' +
+            '<xref href="/probe/x.dita"/>' +
+            '<xref href="../topics//ok.dita"/>' +
+            '<xref href="../topics/ok.dita/"/>' +
+            '<xref href="../topics/ok file.dita"/>' +
+            '<xref href="../topics/100%.dita"/>' +
+            '<xref href="../topics/ok%20file.dita"/>' +
+            '<xref href="../topics/中文.dita"/>' +
+            '</p>',
+        ),
+        'topics/ok.dita': topic('ok'),
+      },
+      { checkNonDita: true },
+    );
+    const syntax = issues.filter((i) => i.category === 'reference-syntax');
+    assert.deepStrictEqual(
+      syntax.map((i) => `${i.severity}:${i.message.split(':')[0]}`),
+      [
+        'error:Reference uses backslashes instead of forward slashes',
+        'warning:Reference is an absolute path; DITA references should be relative to the map',
+        'warning:Reference contains a doubled path separator ("//")',
+        'warning:Reference ends with a slash',
+        'error:Reference contains characters that must be percent-encoded',
+        'error:Reference contains characters that must be percent-encoded',
+      ],
+      JSON.stringify(syntax, null, 2),
+    );
+    // A committed finding must not quote the machine path the absolute href named.
+    assert.ok(!syntax[1].message.includes('/probe'), syntax[1].message);
+  });
+
+  it('reports a file name whose capitalization differs from the directory entry', async () => {
+    const issues = await check(
+      {
+        'root.ditamap': '<map><topicref href="topics/OK.dita"/><topicref href="topics/ok.dita"/></map>',
+        'topics/ok.dita': topic('ok'),
+      },
+      { checkNonDita: true },
+      'root.ditamap',
+      ['topics'],
+    );
+    const wrong = issues.filter((i) => i.category === 'incorrect-case-reference');
+    assert.strictEqual(wrong.length, 1, JSON.stringify(issues, null, 2));
+    assert.ok(wrong[0].message.includes('OK.dita') && wrong[0].message.includes('"ok.dita"'), wrong[0].message);
+  });
+
+  it('reports a reference that resolves to a folder', async () => {
+    const issues = await check(
+      { 'root.ditamap': '<map><topicref href="topics"/></map>' },
+      { checkNonDita: true },
+      'root.ditamap',
+      ['topics'],
+    );
+    const folder = issues.filter((i) => i.category === 'folder-reference');
+    assert.strictEqual(folder.length, 1, JSON.stringify(issues, null, 2));
+    assert.strictEqual(folder[0].severity, 'error');
+  });
+
+  it('reports the reference that closes a map cycle, once', async () => {
+    const issues = await check(
+      {
+        'root.ditamap': '<map><mapref href="a.ditamap" format="ditamap"/></map>',
+        'a.ditamap': '<map><mapref href="b.ditamap" format="ditamap"/></map>',
+        'b.ditamap': '<map><mapref href="a.ditamap" format="ditamap"/></map>',
+      },
+      { checkNonDita: true },
+    );
+    const rec = issues.filter((i) => i.category === 'recursive-reference');
+    assert.strictEqual(rec.length, 1, JSON.stringify(issues, null, 2));
+    assert.ok(rec[0].file.endsWith('b.ditamap'));
+    assert.strictEqual(rec[0].severity, 'error');
+  });
+
+  it('reports keyref values that cannot name a key', async () => {
+    const issues = await check(
+      {
+        'root.ditamap':
+          '<map><keydef keys="a" href="t.dita"/><topicref keyref="a/b/c"/><topicref keyref="a b"/><topicref keyref="a/b"/></map>',
+        't.dita': topic('t'),
+      },
+      { checkNonDita: true },
+    );
+    const bad = issues.filter((i) => i.category === 'invalid-key-syntax');
+    assert.deepStrictEqual(bad.map((i) => i.message), [
+      'Key reference has more than one "/" (expected key/element): a/b/c',
+      'Key reference contains whitespace: a b',
+    ]);
+  });
+
+  it('reports @id values that are not XML NCNames, only under batch validation', async () => {
+    const files = {
+      'root.ditamap': '<map><topicref href="a.dita"/></map>',
+      'a.dita': '<topic id="a"><title>T</title><body><p id="1a"/><p id="a:b"/><p id="ok-id"/></body></topic>',
+    };
+    const on = await check(files, { batchValidate: true });
+    const off = await check(files, { checkNonDita: true });
+    assert.deepStrictEqual(on.filter((i) => i.category === 'invalid-id-syntax').map((i) => i.message), [
+      'ID "1a" is not a valid DITA ID (XML NCName)',
+      'ID "a:b" is not a valid DITA ID (XML NCName)',
+    ]);
+    assert.strictEqual(off.filter((i) => i.category === 'invalid-id-syntax').length, 0);
+  });
+
+  it('reports a missing or contradicting @format against the target kind', async () => {
+    const issues = await check(
+      {
+        'root.ditamap':
+          '<map>' +
+          '<topicref href="a.dita"/>' +
+          '<topicref href="files/x.txt"/>' +
+          '<topicref href="sub.ditamap"/>' +
+          '<mapref href="sub.ditamap"/>' +
+          '<topicref href="t.dita" format="ditamap"/>' +
+          '</map>',
+        'a.dita': topic(
+          'a',
+          '<p>' +
+            '<xref href="files/y.pdf"/>' +
+            '<xref href="files/x.txt" format="dita"/>' +
+            '<xref href="files/x.txt" format="ditamap"/>' +
+            '</p>',
+        ),
+        'sub.ditamap': '<map/>',
+        't.dita': topic('t'),
+      },
+      { checkNonDita: true },
+    );
+    const missing = issues.filter((i) => i.category === 'format-missing').map((i) => i.message);
+    const mismatch = issues.filter((i) => i.category === 'format-mismatch').map((i) => i.message);
+    assert.deepStrictEqual(missing, ['Reference to a non-DITA resource has no @format: files/y.pdf']);
+    assert.deepStrictEqual(mismatch, [
+      'Non-DITA resource is referenced as a DITA topic: files/x.txt',
+      'Map reference is not declared as format="ditamap": sub.ditamap',
+      'Topic is referenced with format="ditamap": t.dita',
+      'Non-DITA resource is referenced as a DITA topic: files/x.txt',
+      'Non-DITA resource is referenced as a DITA map: files/x.txt',
+    ]);
+  });
+
+  it('reports a URL without scope="external", and an external reference without @format', async () => {
+    const issues = await check(
+      {
+        'root.ditamap':
+          '<map>' +
+          '<topicref href="http://example.invalid/a.html"/>' +
+          '<topicref href="http://example.invalid/b.html" scope="local"/>' +
+          '<topicref href="http://example.invalid/c.html" scope="external" format="html"/>' +
+          '<topicref href="http://example.invalid/d.html" scope="external"/>' +
+          '</map>',
+      },
+      { checkNonDita: true },
+    );
+    const ext = issues.filter((i) => i.category === 'external-reference');
+    const missing = issues.filter((i) => i.category === 'format-missing');
+    assert.strictEqual(ext.length, 2, JSON.stringify(issues, null, 2));
+    assert.ok(ext.every((i) => i.severity === 'warning'));
+    assert.deepStrictEqual(missing.map((i) => i.message), [
+      'External reference has no @format: http://example.invalid/d.html',
+    ]);
+  });
+
+  it('reports ignored content inside a map reference and missing navigation titles', async () => {
+    const issues = await check(
+      {
+        'root.ditamap':
+          '<map>' +
+          '<mapref href="sub.ditamap" format="ditamap"><topicref href="t.dita"/></mapref>' +
+          '<topichead><topicref href="t.dita"/></topichead>' +
+          '<topicref href="http://example.invalid/a.html" scope="external" format="html"/>' +
+          '</map>',
+        'sub.ditamap': '<map/>',
+        't.dita': topic('t'),
+      },
+      { checkNonDita: true },
+    );
+    const ignored = issues.filter((i) => i.category === 'ignored-mapref-content');
+    const nav = issues.filter((i) => i.category === 'missing-navtitle');
+    assert.strictEqual(ignored.length, 1, JSON.stringify(issues, null, 2));
+    assert.strictEqual(ignored[0].severity, 'error');
+    assert.deepStrictEqual(nav.map((i) => i.message), [
+      'Topichead has no navigation title',
+      'External reference has no navigation title: http://example.invalid/a.html',
+    ]);
   });
 });
 

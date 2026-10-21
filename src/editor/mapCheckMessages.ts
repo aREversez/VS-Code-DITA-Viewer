@@ -19,6 +19,32 @@ export const MESSAGE_TEMPLATES = {
   'ref.linkNotInMap': 'Link target is not referenced in any map: {0}',
   'ref.multiple': 'Topic referenced more than once ({1} times): {0}',
   'ref.invalidTopicId': 'Referenced topic id "{0}" not found',
+  // reference spelling and structure
+  'ref.winSeparators': 'Reference uses backslashes instead of forward slashes: {0}',
+  'ref.absolute': 'Reference is an absolute path; DITA references should be relative to the map',
+  'ref.doubleSlash': 'Reference contains a doubled path separator ("//"): {0}',
+  'ref.trailingSlash': 'Reference ends with a slash: {0}',
+  'ref.unencoded': 'Reference contains characters that must be percent-encoded: {0}',
+  'ref.wrongCase': 'File name capitalization does not match the file on disk ("{1}"): {0}',
+  'ref.folder': 'Reference points to a folder, not a file: {0}',
+  'ref.recursiveMap': 'Map reference closes a cycle; this map is already being processed: {0}',
+  // key and id syntax
+  'key.invalidSlash': 'Key reference has more than one "/" (expected key/element): {0}',
+  'key.invalidWhitespace': 'Key reference contains whitespace: {0}',
+  'id.invalid': 'ID "{0}" is not a valid DITA ID (XML NCName)',
+  // @format and @scope
+  'ref.noFormat': 'Reference to a non-DITA resource has no @format: {0}',
+  'ref.extNoFormat': 'External reference has no @format: {0}',
+  'ref.resAsDita': 'Non-DITA resource is referenced as a DITA topic: {0}',
+  'ref.resAsMap': 'Non-DITA resource is referenced as a DITA map: {0}',
+  'ref.mapFormat': 'Map reference is not declared as format="ditamap": {0}',
+  'ref.topicFormat': 'Topic is referenced with format="{1}": {0}',
+  'ref.topicAsMap': 'Topic is referenced with format="ditamap": {0}',
+  'ref.needsExternalScope': 'Reference to a URL must declare scope="external": {0}',
+  'ref.maprefContent': 'Content inside a map reference is ignored',
+  // navigation titles
+  'nav.topichead': 'Topichead has no navigation title',
+  'nav.topicref': 'External reference has no navigation title: {0}',
   // ids, keys, reuse
   'id.duplicate': 'Duplicate topic id "{0}" ({1} topics share it)',
   'key.undefined': 'Key reference "{0}" does not match any key definition',

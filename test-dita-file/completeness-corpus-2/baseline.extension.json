@@ -7,6 +7,13 @@
     "message": "Referenced topic not found: topics/control-missing.dita"
   },
   {
+    "category": "reference-syntax",
+    "severity": "warning",
+    "file": "maps/a-absolute-fileurl.ditamap",
+    "line": 7,
+    "message": "Reference is an absolute path; DITA references should be relative to the map"
+  },
+  {
     "category": "missing-reference",
     "severity": "error",
     "file": "maps/a-absolute-posix.ditamap",
@@ -14,18 +21,319 @@
     "message": "Referenced topic not found: /probe/x.dita"
   },
   {
-    "category": "outside-folder",
+    "category": "reference-syntax",
     "severity": "warning",
     "file": "maps/a-absolute-posix.ditamap",
     "line": 7,
-    "message": "Reference points outside the map folder: /probe/x.dita"
+    "message": "Reference is an absolute path; DITA references should be relative to the map"
   },
   {
-    "category": "validation",
+    "category": "recursive-reference",
+    "severity": "error",
+    "file": "maps/a-recursive-loopb.ditamap",
+    "line": 6,
+    "message": "Map reference closes a cycle; this map is already being processed: a-recursive-loopa.ditamap"
+  },
+  {
+    "category": "recursive-reference",
+    "severity": "error",
+    "file": "maps/a-recursive-self.ditamap",
+    "line": 6,
+    "message": "Map reference closes a cycle; this map is already being processed: a-recursive-self.ditamap"
+  },
+  {
+    "category": "invalid-id-syntax",
+    "severity": "error",
+    "file": "maps/b-id3-map.ditamap",
+    "line": 5,
+    "message": "ID \"a b\" is not a valid DITA ID (XML NCName)"
+  },
+  {
+    "category": "format-missing",
     "severity": "warning",
-    "file": "maps/c-map-no-format-sub-edge.ditamap",
-    "line": 4,
-    "message": "Root element <map> is not a DITA topic"
+    "file": "maps/c-ext-scope-edge.ditamap",
+    "line": 7,
+    "message": "External reference has no @format: ../topics/c-remote-local.html"
+  },
+  {
+    "category": "missing-navtitle",
+    "severity": "warning",
+    "file": "maps/c-ext-scope-edge.ditamap",
+    "line": 7,
+    "message": "External reference has no navigation title: ../topics/c-remote-local.html"
+  },
+  {
+    "category": "missing-navtitle",
+    "severity": "warning",
+    "file": "maps/c-ext-scope-neg.ditamap",
+    "line": 6,
+    "message": "External reference has no navigation title: http://example.invalid/a.html"
+  },
+  {
+    "category": "format-missing",
+    "severity": "warning",
+    "file": "maps/c-ext-scope-pos.ditamap",
+    "line": 7,
+    "message": "External reference has no @format: http://example.invalid/a.html"
+  },
+  {
+    "category": "missing-navtitle",
+    "severity": "warning",
+    "file": "maps/c-ext-scope-pos.ditamap",
+    "line": 7,
+    "message": "External reference has no navigation title: http://example.invalid/a.html"
+  },
+  {
+    "category": "format-mismatch",
+    "severity": "error",
+    "file": "maps/c-guess-html.ditamap",
+    "line": 6,
+    "message": "Non-DITA resource is referenced as a DITA topic: ../topics/c-guess.html"
+  },
+  {
+    "category": "format-mismatch",
+    "severity": "error",
+    "file": "maps/c-map-no-format-edge.ditamap",
+    "line": 7,
+    "message": "Map reference is not declared as format=\"ditamap\": c-map-no-format-sub-edge.ditamap"
+  },
+  {
+    "category": "format-mismatch",
+    "severity": "error",
+    "file": "maps/c-map-no-format-pos.ditamap",
+    "line": 7,
+    "message": "Map reference is not declared as format=\"ditamap\": c-map-no-format-sub-pos.ditamap"
+  },
+  {
+    "category": "ignored-mapref-content",
+    "severity": "error",
+    "file": "maps/c-mapref-children-pos.ditamap",
+    "line": 9,
+    "message": "Content inside a map reference is ignored"
+  },
+  {
+    "category": "format-mismatch",
+    "severity": "error",
+    "file": "maps/c-mapref-format-pos.ditamap",
+    "line": 6,
+    "message": "Map reference is not declared as format=\"ditamap\": c-mapref-format-sub.ditamap"
+  },
+  {
+    "category": "missing-navtitle",
+    "severity": "warning",
+    "file": "maps/c-remote-edge.ditamap",
+    "line": 6,
+    "message": "External reference has no navigation title: https://example.invalid/"
+  },
+  {
+    "category": "external-reference",
+    "severity": "warning",
+    "file": "maps/c-remote-local-edge.ditamap",
+    "line": 6,
+    "message": "Reference to a URL must declare scope=\"external\": https://example.invalid/a.html"
+  },
+  {
+    "category": "missing-navtitle",
+    "severity": "warning",
+    "file": "maps/c-remote-local-neg.ditamap",
+    "line": 6,
+    "message": "External reference has no navigation title: http://example.invalid/a.html"
+  },
+  {
+    "category": "external-reference",
+    "severity": "warning",
+    "file": "maps/c-remote-local-pos.ditamap",
+    "line": 6,
+    "message": "Reference to a URL must declare scope=\"external\": http://example.invalid/a.html"
+  },
+  {
+    "category": "external-reference",
+    "severity": "warning",
+    "file": "maps/c-remote-no-external-edge.ditamap",
+    "line": 7,
+    "message": "Reference to a URL must declare scope=\"external\": https://example.invalid/a.html"
+  },
+  {
+    "category": "missing-navtitle",
+    "severity": "warning",
+    "file": "maps/c-remote-no-external-neg.ditamap",
+    "line": 7,
+    "message": "External reference has no navigation title: http://example.invalid/a.html"
+  },
+  {
+    "category": "external-reference",
+    "severity": "warning",
+    "file": "maps/c-remote-no-external-pos.ditamap",
+    "line": 6,
+    "message": "Reference to a URL must declare scope=\"external\": http://example.invalid/a.html"
+  },
+  {
+    "category": "missing-navtitle",
+    "severity": "warning",
+    "file": "maps/c-remote-pos.ditamap",
+    "line": 6,
+    "message": "External reference has no navigation title: http://example.invalid/a.html"
+  },
+  {
+    "category": "format-mismatch",
+    "severity": "error",
+    "file": "maps/c-res-as-dita-edge.ditamap",
+    "line": 6,
+    "message": "Non-DITA resource is referenced as a DITA topic: ../topics/c-res-as-dita-edge.html"
+  },
+  {
+    "category": "format-mismatch",
+    "severity": "error",
+    "file": "maps/c-res-as-dita-pos.ditamap",
+    "line": 6,
+    "message": "Non-DITA resource is referenced as a DITA topic: ../topics/c-res-as-dita-pos.txt"
+  },
+  {
+    "category": "format-mismatch",
+    "severity": "error",
+    "file": "maps/c-res-as-map-edge.ditamap",
+    "line": 6,
+    "message": "Non-DITA resource is referenced as a DITA map: ../topics/c-res-as-map-edge.html"
+  },
+  {
+    "category": "format-mismatch",
+    "severity": "error",
+    "file": "maps/c-res-as-map-pos.ditamap",
+    "line": 6,
+    "message": "Non-DITA resource is referenced as a DITA map: ../topics/c-res-as-map-pos.txt"
+  },
+  {
+    "category": "format-mismatch",
+    "severity": "warning",
+    "file": "maps/c-topic-no-format-edge.ditamap",
+    "line": 7,
+    "message": "Topic is referenced with format=\"xml\": ../topics/c-topic-no-format-target-edge.dita"
+  },
+  {
+    "category": "format-mismatch",
+    "severity": "error",
+    "file": "maps/c-topic-no-format-pos.ditamap",
+    "line": 6,
+    "message": "Topic is referenced with format=\"ditamap\": ../topics/c-topic-no-format-target-pos.dita"
+  },
+  {
+    "category": "format-mismatch",
+    "severity": "error",
+    "file": "maps/c-topicref-no-format-edge.ditamap",
+    "line": 6,
+    "message": "Non-DITA resource is referenced as a DITA topic: ../topics/c-resource.html"
+  },
+  {
+    "category": "format-mismatch",
+    "severity": "error",
+    "file": "maps/c-topicref-no-format-pos.ditamap",
+    "line": 6,
+    "message": "Non-DITA resource is referenced as a DITA topic: ../topics/c-resource.txt"
+  },
+  {
+    "category": "missing-navtitle",
+    "severity": "warning",
+    "file": "maps/d-topichead-edge.ditamap",
+    "line": 7,
+    "message": "Topichead has no navigation title"
+  },
+  {
+    "category": "missing-navtitle",
+    "severity": "warning",
+    "file": "maps/d-topichead-pos.ditamap",
+    "line": 7,
+    "message": "Topichead has no navigation title"
+  },
+  {
+    "category": "missing-navtitle",
+    "severity": "warning",
+    "file": "maps/d-topicref-edge.ditamap",
+    "line": 7,
+    "message": "External reference has no navigation title: http://example.invalid/a.html"
+  },
+  {
+    "category": "incorrect-case-reference",
+    "severity": "error",
+    "file": "topics/a-case-edge.dita",
+    "line": 7,
+    "message": "File name capitalization does not match the file on disk (\"ok.dita\"): ../topics/Ok.dita"
+  },
+  {
+    "category": "incorrect-case-reference",
+    "severity": "error",
+    "file": "topics/a-case-pos.dita",
+    "line": 8,
+    "message": "File name capitalization does not match the file on disk (\"ok.dita\"): ../topics/OK.dita"
+  },
+  {
+    "category": "reference-syntax",
+    "severity": "warning",
+    "file": "topics/a-extra-slash-pos.dita",
+    "line": 8,
+    "message": "Reference contains a doubled path separator (\"//\"): ../topics//ok.dita"
+  },
+  {
+    "category": "reference-syntax",
+    "severity": "warning",
+    "file": "topics/a-fileurl-edge.dita",
+    "line": 8,
+    "message": "Reference is an absolute path; DITA references should be relative to the map"
+  },
+  {
+    "category": "reference-syntax",
+    "severity": "warning",
+    "file": "topics/a-fileurl-neg.dita",
+    "line": 8,
+    "message": "Reference is an absolute path; DITA references should be relative to the map"
+  },
+  {
+    "category": "folder-reference",
+    "severity": "error",
+    "file": "topics/a-folder-edge.dita",
+    "line": 8,
+    "message": "Reference points to a folder, not a file: ../topics/"
+  },
+  {
+    "category": "reference-syntax",
+    "severity": "warning",
+    "file": "topics/a-folder-edge.dita",
+    "line": 8,
+    "message": "Reference ends with a slash: ../topics/"
+  },
+  {
+    "category": "folder-reference",
+    "severity": "error",
+    "file": "topics/a-folder-pos.dita",
+    "line": 8,
+    "message": "Reference points to a folder, not a file: ../topics"
+  },
+  {
+    "category": "folder-reference",
+    "severity": "error",
+    "file": "topics/a-ref-extra-slash-edge.dita",
+    "line": 8,
+    "message": "Reference points to a folder, not a file: ../topics/"
+  },
+  {
+    "category": "reference-syntax",
+    "severity": "warning",
+    "file": "topics/a-ref-extra-slash-edge.dita",
+    "line": 8,
+    "message": "Reference ends with a slash: ../topics/"
+  },
+  {
+    "category": "reference-syntax",
+    "severity": "warning",
+    "file": "topics/a-ref-extra-slash-pos.dita",
+    "line": 8,
+    "message": "Reference ends with a slash: ../topics/ok.dita/"
+  },
+  {
+    "category": "reference-syntax",
+    "severity": "error",
+    "file": "topics/a-unencoded-brackets.dita",
+    "line": 8,
+    "message": "Reference contains characters that must be percent-encoded: ../topics/ok[1].dita"
   },
   {
     "category": "missing-resource",
@@ -35,18 +343,81 @@
     "message": "Referenced resource not found: ../topics/ok#1.dita"
   },
   {
-    "category": "undefined-key",
+    "category": "reference-syntax",
     "severity": "error",
-    "file": "topics/b-keyref3-edge.dita",
-    "line": 7,
-    "message": "Key reference \" a\" does not match any key definition"
+    "file": "topics/a-unencoded-percent.dita",
+    "line": 8,
+    "message": "Reference contains characters that must be percent-encoded: ../topics/100%.dita"
   },
   {
-    "category": "undefined-key",
+    "category": "reference-syntax",
+    "severity": "error",
+    "file": "topics/a-unencoded-space.dita",
+    "line": 8,
+    "message": "Reference contains characters that must be percent-encoded: ../topics/ok file.dita"
+  },
+  {
+    "category": "reference-syntax",
+    "severity": "error",
+    "file": "topics/a-win-seps-edge.dita",
+    "line": 8,
+    "message": "Reference uses backslashes instead of forward slashes: ..\\topics\\ok.dita#ok2"
+  },
+  {
+    "category": "reference-syntax",
+    "severity": "error",
+    "file": "topics/a-win-seps-pos.dita",
+    "line": 8,
+    "message": "Reference uses backslashes instead of forward slashes: ..\\topics\\ok.dita"
+  },
+  {
+    "category": "invalid-id-syntax",
+    "severity": "error",
+    "file": "topics/b-id2-colon.dita",
+    "line": 5,
+    "message": "ID \"a:b\" is not a valid DITA ID (XML NCName)"
+  },
+  {
+    "category": "invalid-id-syntax",
+    "severity": "error",
+    "file": "topics/b-id2-digit.dita",
+    "line": 5,
+    "message": "ID \"1a\" is not a valid DITA ID (XML NCName)"
+  },
+  {
+    "category": "invalid-id-syntax",
+    "severity": "error",
+    "file": "topics/b-id3-space.dita",
+    "line": 4,
+    "message": "ID \"a b\" is not a valid DITA ID (XML NCName)"
+  },
+  {
+    "category": "invalid-key-syntax",
+    "severity": "error",
+    "file": "topics/b-keyref1-pos.dita",
+    "line": 8,
+    "message": "Key reference has more than one \"/\" (expected key/element): a/b/c"
+  },
+  {
+    "category": "invalid-key-syntax",
     "severity": "error",
     "file": "topics/b-keyref3-pos.dita",
     "line": 8,
-    "message": "Key reference \"a b\" does not match any key definition"
+    "message": "Key reference contains whitespace: a b"
+  },
+  {
+    "category": "format-missing",
+    "severity": "error",
+    "file": "topics/c-no-format-nondita-edge.dita",
+    "line": 7,
+    "message": "Reference to a non-DITA resource has no @format: ../topics/c-nondita-edge.bin"
+  },
+  {
+    "category": "format-missing",
+    "severity": "error",
+    "file": "topics/c-no-format-nondita-pos.dita",
+    "line": 7,
+    "message": "Reference to a non-DITA resource has no @format: ../topics/c-nondita-pos.pdf"
   },
   {
     "category": "validation",
@@ -77,10 +448,10 @@
     "message": "Root element <notdita> is not a DITA map"
   },
   {
-    "category": "validation",
-    "severity": "warning",
-    "file": "topics/c-topic-no-format-target-pos.dita",
-    "line": 5,
-    "message": "Root element <topic> is not a DITA map"
+    "category": "format-mismatch",
+    "severity": "error",
+    "file": "topics/c-topic-as-map-pos.dita",
+    "line": 8,
+    "message": "Topic is referenced with format=\"ditamap\": ../topics/c-topic-as-map-target.dita"
   }
 ]

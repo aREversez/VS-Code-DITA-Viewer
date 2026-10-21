@@ -32,46 +32,46 @@ ignored by the `(file, category)` diff.
 | `dmv.reference.not.exist` | a reference cannot be resolved | ok (`missing-reference`) |
 | `dmv.invalid.DITA.reference` | reference is invalid DITA | gap |
 | `dmv.invalid.DITA.uri.target` | URI does not resolve to a DITA target | gap |
-| `dmv.folder.ref` | a reference points at a folder, not a file | gap |
-| `dmv.absolute.ref` | an absolute reference (not portable) | gap |
-| `dmv.recursive.ref` | a map recursively references itself | gap |
-| `dmv.win.seps.ref` | reference uses `\` separators | gap |
-| `dmv.unencoded.ref` | reference has characters that need URI-encoding | gap |
-| `dmv.extra.slash.ref` | reference contains `//` | gap |
-| `dmv.ref.extra.slash` | extra trailing slash after the topic file | gap |
-| `dmv.file.url.two.slashes` | `file:` URL with a wrong number of slashes | gap |
-| `dmv.incorect.capit.ref` | reference capitalization differs from the real file name | gap |
+| `dmv.folder.ref` | a reference points at a folder, not a file | ok (`folder-reference`) |
+| `dmv.absolute.ref` | an absolute reference (not portable) | ok (`reference-syntax`) |
+| `dmv.recursive.ref` | a map recursively references itself | ok (`recursive-reference`) |
+| `dmv.win.seps.ref` | reference uses `\` separators | ok (`reference-syntax`) |
+| `dmv.unencoded.ref` | reference has characters that need URI-encoding | ok (`reference-syntax`) |
+| `dmv.extra.slash.ref` | reference contains `//` | ok (`reference-syntax`) |
+| `dmv.ref.extra.slash` | extra trailing slash after the topic file | ok (`reference-syntax`) |
+| `dmv.file.url.two.slashes` | `file:` URL with a wrong number of slashes | ok (`reference-syntax`) — mapped; the corpus-2 report raised `dmv.absolute.ref` for these probes instead, so no incident carries this id |
+| `dmv.incorect.capit.ref` | reference capitalization differs from the real file name | ok (`incorrect-case-reference`) |
 | `dmv.external.references.map` | reference outside the main map folder | ok (`outside-folder`) |
 
 ## Reference type, format and scope
 
 | Problem ID | Oxygen reports | Extension status |
 | --- | --- | --- |
-| `dmv.topicref.no.format` | referenced resource does not look like DITA; needs `@format` | gap |
-| `dmv.topicref.map.no.format` | looks like a map but `@format` is not `ditamap` | gap |
-| `dmv.topicref.topic.no.format` | looks like a topic but `@format` is not `dita` | gap |
-| `dmv.ref.map.no.proper.format` | DITA map whose `@format` is not `ditamap` | gap |
-| `dmv.ref.res.as.dita` | non-DITA resource referenced as DITA | gap |
-| `dmv.ref.res.as.map` | non-DITA resource with `@format="ditamap"` | gap |
-| `dmv.ref.topic.as.map` | topic marked as a map | gap |
-| `dmv.ref.topic.inside.mapref` | topicref/keydef inside a map reference is ignored | gap |
-| `dmv.no.format.non.dita.ref` | non-DITA reference missing `@format` | gap |
-| `dmv.topicref.remote` | external reference missing `@format` | gap |
-| `dmv.topicref.remote.no.external.scope` | external reference should set `@scope="external"` | gap |
-| `dmv.topicref.remote.local.scope` | external reference needs `@format` and `@scope` | gap |
-| `dmv.topicref.ext.scope.no.format` | external-scope non-DITA ref missing `@format` | gap |
+| `dmv.topicref.no.format` | referenced resource does not look like DITA; needs `@format` | ok (`format-missing`) |
+| `dmv.topicref.map.no.format` | looks like a map but `@format` is not `ditamap` | ok (`format-mismatch`) |
+| `dmv.topicref.topic.no.format` | looks like a topic but `@format` is not `dita` | ok (`format-mismatch`) |
+| `dmv.ref.map.no.proper.format` | DITA map whose `@format` is not `ditamap` | ok (`format-mismatch`) |
+| `dmv.ref.res.as.dita` | non-DITA resource referenced as DITA | ok (`format-mismatch`) |
+| `dmv.ref.res.as.map` | non-DITA resource with `@format="ditamap"` | ok (`format-mismatch`) |
+| `dmv.ref.topic.as.map` | topic marked as a map | ok (`format-mismatch`) |
+| `dmv.ref.topic.inside.mapref` | topicref/keydef inside a map reference is ignored | ok (`ignored-mapref-content`) |
+| `dmv.no.format.non.dita.ref` | non-DITA reference missing `@format` | ok (`format-missing`) |
+| `dmv.topicref.remote` | external reference missing `@format` | ok (`external-reference`) — mapped; the corpus-2 report produced no incident for this id (its `ext scope` probes carry `dmv.topicref.ext.scope.no.format`) |
+| `dmv.topicref.remote.no.external.scope` | external reference should set `@scope="external"` | ok (`external-reference`) |
+| `dmv.topicref.remote.local.scope` | external reference needs `@format` and `@scope` | ok (`external-reference`) |
+| `dmv.topicref.ext.scope.no.format` | external-scope non-DITA ref missing `@format` | ok (`format-missing`) |
 | `dmv.ref.type.class.mismatch` | `@type` does not match the target's class | gap |
 | `dmv.ref.type.class.mismatch.specific` | `@type` less specific than the target's class | gap |
 | `dmv.topicref.to.element` | topicref points at an element ID, not a topic ID | gap |
-| `dmv.topichead.no.navtitle` | `topichead` has no navigation title | gap |
-| `dmv.topicref.no.navtitle` | non-local topicref has no navigation title | gap |
+| `dmv.topichead.no.navtitle` | `topichead` has no navigation title | ok (`missing-navtitle`) |
+| `dmv.topicref.no.navtitle` | non-local topicref has no navigation title | ok (`missing-navtitle`) |
 | `dmv.bad.id.ref` | bad ID reference | gap |
 | `dmv.invalid.ref.id` | referenced ID not found | gap |
 | `dmv.invalid.ref.id.path` | referenced ID path not found | gap |
 | `dmv.invalid.ref.id.path.keyref.elemid` | key-target element ID not found under the key | gap |
 | `dmv.invalid.ref.topic.id` | referenced topic ID not found | ok (`invalid-ref-topic-id`) |
 | `dmv.link.no.target` | link/xref has neither `@href` nor `@keyref` | gap |
-| `dmv.link.topic.to.map` | topic-to-map reference is not resolved in output | gap |
+| `dmv.link.topic.to.map` | topic-to-map reference is not resolved in output | ok (`format-mismatch`) — same file and fix as `dmv.ref.topic.as.map` in the corpus-2 probe |
 | `dmv.ref.to.resource.only` | cross-reference to a resource-only topic breaks | gap |
 | `dmv.ref.filtered` | target is excluded by profiling filters | gap |
 | `dmv.empty.link.peer.target` | peer-map reference needs explicit link text | gap |
@@ -99,9 +99,9 @@ ignored by the `(file, category)` diff.
 | `dmv.not.used.key.defs` | key defined but never referenced | ok (`unreferenced-key`) |
 | `dmv.circular.keyref` | circular key reference | gap |
 | `dmv.no.link.keyref` | target key definition has no reference | gap |
-| `dmv.invalid.keyref.syntax.1` | keyref has more than one `/` | gap |
-| `dmv.invalid.keyref.syntax.2` | invalid character in a keyref | gap |
-| `dmv.invalid.keyref.syntax.3` | keyref contains whitespace | gap |
+| `dmv.invalid.keyref.syntax.1` | keyref has more than one `/` | ok (`invalid-key-syntax`) |
+| `dmv.invalid.keyref.syntax.2` | invalid character in a keyref | n/a — the corpus-2 report produced no incident for it; the extension checks only `/` and whitespace |
+| `dmv.invalid.keyref.syntax.3` | keyref contains whitespace | ok (`invalid-key-syntax`) |
 
 ## Duplicates
 
@@ -142,8 +142,8 @@ ignored by the `(file, category)` diff.
 | `dmv.invalid.class.generalization` | `@class` is not a generalization | gap |
 | `dmv.invalid.class.specialization` | `@class` is not a specialization | gap |
 | `dmv.invalid.domains.format` | `@domains` missing/malformed | gap |
-| `dmv.invalid.id.syntax.2` | invalid character in an ID | gap |
-| `dmv.invalid.id.syntax.3` | ID contains whitespace | gap |
+| `dmv.invalid.id.syntax.2` | invalid character in an ID | ok (`invalid-id-syntax`) — the corpus-2 report files it as `IDInvalidWithNamespaces` |
+| `dmv.invalid.id.syntax.3` | ID contains whitespace | ok (`invalid-id-syntax`) — `IDInvalidWithNamespaces` in the corpus-2 report |
 | `dmv.invalid.parse.dita.content` | problem parsing DITA content | gap |
 | `dmv.section.first.title` | `<section>` title is not the first element | gap |
 | `dmv.section.no.dup.title` | `<section>` has more than one title | gap |
@@ -161,6 +161,11 @@ DITA validator.
   `dmv.file.not.found` (`missing-reference`). Parity folds the two through
   `CATEGORY_EQUIVALENCES` so the same file counts as matched; the extension UI
   keeps the resource/reference distinction.
+- `reference-syntax` — mostly Oxygen's `dmv.*.ref` family (see the table), but the
+  extension also reports a POSIX root-absolute href (`/topics/x.dita`), which Oxygen
+  resolves and files only as `dmv.file.not.found`. The extension keeps the spelling
+  finding because the path cannot be portable; locked as extension-only in the
+  corpus-2 parity.
 - `remote-resource` — HTTP(S) resources that do not respond to a HEAD probe.
 - `table-layout` — CALS/simple table layout heuristics.
 
