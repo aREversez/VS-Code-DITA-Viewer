@@ -410,10 +410,19 @@ export function sanitizeOxygenReport(xml: string, corpusRoot: string): { xml: st
     const base = trimmed.split(/[\\/]/).pop() ?? trimmed;
     return `<schema>${base}</schema>`;
   });
-  // The second corpus probes absolute references with a fabricated drive that
-  // cannot exist on any machine (`Z:\probe\...`). Oxygen quotes the href in its
-  // message, so rewrite that one prefix to the marker the corpus files use. Any
-  // other drive path is still a leftover and still blocks the commit.
+  // The second corpus probes references that resolve outside the corpus on
+  // purpose, and Oxygen quotes the machine-resolved target, not the href: a
+  // file: URL with an authority becomes a UNC share, and a root-absolute path
+  // or a file: URL with an empty authority becomes a path on the drive Oxygen
+  // was started from. Both target names are fabricated for the probe, so fold
+  // every such form to the marker the corpus files use. Any other absolute
+  // path is still a leftover and still blocks the commit.
+  out = out.replace(/\\\\topics\\ok\.dita/gi, 'probe-absolute-path');
+  out = out.replace(
+    /(?<![A-Za-z])[A-Za-z]:[\\/](?:topics[\\/]ok\.dita|probe[\\/]x\.dita)/gi,
+    'probe-absolute-path',
+  );
+  // The drive form of the same probe, for a report that quotes only the folder.
   out = out.replace(/Z:[\\/]probe(?![\w$.-])/gi, 'probe-absolute-path');
   out = out.replace(/(probe-absolute-path)\\+/g, '$1/');
   const leftovers = [...new Set((out.match(MACHINE_PATH_IN_TEXT) ?? []).map((s) => s.trim()))];

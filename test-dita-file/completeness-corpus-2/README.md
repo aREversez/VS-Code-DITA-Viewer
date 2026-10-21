@@ -29,12 +29,16 @@ Oxygen has been run on it, its own `oxygen-report.xml` and
   missing references, so both the baseline and the parity lock describe one Windows run.
   `src/test/editor/completenessBaseline.test.ts` and `oxygenParity.test.ts` skip this
   folder elsewhere (`WINDOWS_ONLY_CORPORA`).
-- **Fabricated absolute paths.** `maps/a-absolute-drive.ditamap` and
+- **Fabricated probe targets.** `maps/a-absolute-drive.ditamap` and
   `maps/a-absolute-fileurl.ditamap` need a literal absolute href, so they use the drive
   this corpus made up, `Z:`, with the folder `/probe`. That line carries the marker
   `probe-absolute-path`: `noAbsolutePaths.test.ts` exempts exactly that line, and
-  `sanitizeOxygenReport` rewrites the same prefix in a report, so neither a committed
-  probe nor a sanitized report can leak a real machine path.
+  `sanitizeOxygenReport` folds the same prefix in a report, so neither a committed probe
+  nor a sanitized report can leak a real machine path. The other probes that
+  resolve outside the corpus (`/probe/x.dita` and the three `file:` URLs to
+  `topics/ok.dita`) are folded the same way: Oxygen quotes the machine-resolved target
+  (a UNC share for the authority form, a path on its own start drive for the rest), and
+  every such form becomes `probe-absolute-path` in the report.
 
 ## Running it
 

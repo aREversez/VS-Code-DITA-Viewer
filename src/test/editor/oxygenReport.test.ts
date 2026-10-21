@@ -142,11 +142,31 @@ describe('Oxygen completeness report adapter', () => {
     assert.deepStrictEqual(res.leftovers, []);
     assert.ok(!/Z:/i.test(res.xml), res.xml);
     assert.strictEqual(res.xml.match(/probe-absolute-path/g)?.length, 3, res.xml);
-    assert.ok(res.xml.includes('probe-absolute-path/x.dita'), res.xml);
+  });
+
+  it('rewrites the machine-resolved form of the outside-corpus probes', () => {
+    // Oxygen resolves file://topics/ok.dita to a UNC share, and a root-absolute
+    // path or a file: URL with an empty authority to a path on its start drive.
+    const raw = [
+      '<systemID>H:\\w\\corpus\\topics\\a-fileurl-pos.dita</systemID>',
+      '<description>File not found: &quot;\\\\topics\\ok.dita&quot;.</description>',
+      '<description>File not found: &quot;G:\\topics\\ok.dita&quot;.</description>',
+      '<description>File not found: &quot;G:\\probe\\x.dita&quot;.</description>',
+    ].join('\n');
+    const res = sanitizeOxygenReport(raw, 'H:\\w\\corpus');
+    assert.deepStrictEqual(res.leftovers, []);
+    assert.ok(!/\\\\topics|[A-Za-z]:[\\/]/.test(res.xml), res.xml);
+    assert.strictEqual(res.xml.match(/probe-absolute-path/g)?.length, 3, res.xml);
   });
 
   it('still refuses a drive path outside the probe folder', () => {
     const raw = '<description>File not found: &quot;Z:\\other\\x.dita&quot;.</description>';
+    const res = sanitizeOxygenReport(raw, 'H:\\w\\corpus');
+    assert.strictEqual(res.leftovers.length, 1, res.leftovers.join('|'));
+  });
+
+  it('still refuses a drive path under a folder that only looks like a probe target', () => {
+    const raw = '<description>File not found: &quot;G:\\topics\\other.dita&quot;.</description>';
     const res = sanitizeOxygenReport(raw, 'H:\\w\\corpus');
     assert.strictEqual(res.leftovers.length, 1, res.leftovers.join('|'));
   });
