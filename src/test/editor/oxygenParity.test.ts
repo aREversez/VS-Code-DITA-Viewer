@@ -4,7 +4,9 @@ import { join } from 'path';
 import {
   CORPUS_FOLDERS,
   NormalizedFinding,
-  WINDOWS_ONLY_CORPORA,
+  PLATFORM_DEPENDENT_FILES,
+  dropPlatformDependent,
+  dropPlatformDependentSignatures,
   canonicalCategory,
   collectExtensionFindings,
   diffKeys,
@@ -31,11 +33,11 @@ interface Parity {
 
 const show = (sigs: string[]): string[] => sigs.map((s) => s.replace('\t', '  '));
 
-async function computeParity(corpusDir: string): Promise<Parity> {
+async function computeParity(folder: string, corpusDir: string): Promise<Parity> {
   const incidents = parseOxygenReportAuto(readFileSync(join(corpusDir, 'oxygen-report.xml'), 'utf8'));
   const root = corpusRootFromReport(incidents) ?? corpusDir;
-  const oxygen = normalizeOxygenFindings(root, incidents).map(findingSignature);
-  const extension = (await collectExtensionFindings(corpusDir)).map(findingSignature);
+  const oxygen = dropPlatformDependent(folder, normalizeOxygenFindings(root, incidents)).map(findingSignature);
+  const extension = dropPlatformDependent(folder, await collectExtensionFindings(corpusDir)).map(findingSignature);
   const diff = diffKeys(extension, oxygen);
   return {
     matched: show([...new Set(extension.filter((s) => oxygen.includes(s)))].sort()),
@@ -47,20 +49,26 @@ async function computeParity(corpusDir: string): Promise<Parity> {
 describe('Oxygen parity on the corpus (real report)', () => {
   for (const folder of CORPUS_FOLDERS) {
     it(`${folder}: matches the committed parity state, so any change in parity is deliberate`, async function () {
-      if (process.platform !== 'win32' && WINDOWS_ONLY_CORPORA.includes(folder)) {
-        this.skip(); // the report comes from a Windows Oxygen run over Windows-only probes
-      }
       const corpusDir = corpusPath(folder);
       if (!existsSync(join(corpusDir, 'oxygen-report.xml'))) {
         this.skip(); // no real Oxygen run has been committed for this corpus yet
       }
       const expectedPath = join(corpusDir, 'oxygen-parity.expected.json');
-      const actual = await computeParity(corpusDir);
+      const actual = await computeParity(folder, corpusDir);
       if (update) {
+        assert.ok(
+          !(folder in PLATFORM_DEPENDENT_FILES) || process.platform === 'win32',
+          `${folder} has Windows-dependent probes: refresh its parity state on Windows`,
+        );
         writeFileSync(expectedPath, `${JSON.stringify(actual, null, 2)}\n`, 'utf8');
         return;
       }
-      const expected = JSON.parse(readFileSync(expectedPath, 'utf8')) as Parity;
+      const saved = JSON.parse(readFileSync(expectedPath, 'utf8')) as Parity;
+      const expected: Parity = {
+        matched: dropPlatformDependentSignatures(folder, saved.matched),
+        extensionOnly: dropPlatformDependentSignatures(folder, saved.extensionOnly),
+        oxygenOnly: dropPlatformDependentSignatures(folder, saved.oxygenOnly),
+      };
       assert.deepStrictEqual(
         actual,
         expected,
@@ -68,6 +76,25 @@ describe('Oxygen parity on the corpus (real report)', () => {
       );
     });
   }
+
+  it('leaves platform-dependent probe files out of a comparison off Windows only', () => {
+    const f = (file: string) => ({ file, category: 'missing-reference' });
+    const both = [f('topics/a-case-pos.dita'), f('topics/ok.dita')];
+    assert.deepStrictEqual(
+      dropPlatformDependent('completeness-corpus-2', both, 'linux').map((x) => x.file),
+      ['topics/ok.dita'],
+    );
+    assert.strictEqual(dropPlatformDependent('completeness-corpus-2', both, 'win32').length, 2);
+    assert.strictEqual(dropPlatformDependent('completeness-corpus', both, 'linux').length, 2);
+    assert.deepStrictEqual(
+      dropPlatformDependentSignatures(
+        'completeness-corpus-2',
+        ['topics/a-win-seps-pos.dita  missing-reference', 'topics/ok.dita\tduplicate-id'],
+        'darwin',
+      ),
+      ['topics/ok.dita\tduplicate-id'],
+    );
+  });
 
   it('compares on canonical categories, so a resource/reference split still counts as matched', () => {
     // The mechanism behind the resources.dita parity (OXYGEN-PROBLEMS.md): the

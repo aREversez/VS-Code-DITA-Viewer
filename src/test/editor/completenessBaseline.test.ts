@@ -4,7 +4,8 @@ import { join } from 'path';
 import {
   CORPUS_FOLDERS,
   NormalizedFinding,
-  WINDOWS_ONLY_CORPORA,
+  PLATFORM_DEPENDENT_FILES,
+  dropPlatformDependent,
   collectExtensionFindings,
   diffFindings,
   findingKey,
@@ -23,18 +24,20 @@ const updateBaseline = process.env.UPDATE_COMPLETENESS_BASELINE === '1';
 
 describe('Validate and Check for Completeness: Oxygen differential baseline', () => {
   for (const folder of CORPUS_FOLDERS) {
-    it(`${folder}: locks the extension findings to the committed baseline`, async function () {
-      if (process.platform !== 'win32' && WINDOWS_ONLY_CORPORA.includes(folder)) {
-        this.skip(); // its probes read Windows-only spelling and case behaviour
-      }
+    it(`${folder}: locks the extension findings to the committed baseline`, async () => {
       const dir = corpusDirOf(folder);
       const baselinePath = join(dir, 'baseline.extension.json');
-      const run = await collectExtensionFindings(dir);
+      const complete = await collectExtensionFindings(dir);
+      const run = dropPlatformDependent(folder, complete);
       if (updateBaseline) {
-        writeFileSync(baselinePath, serializeFindings(run), 'utf8');
+        assert.ok(
+          !(folder in PLATFORM_DEPENDENT_FILES) || process.platform === 'win32',
+          `${folder} has Windows-dependent probes: refresh its baseline on Windows`,
+        );
+        writeFileSync(baselinePath, serializeFindings(complete), 'utf8');
         return;
       }
-      const baseline = parseFindings(readFileSync(baselinePath, 'utf8'));
+      const baseline = dropPlatformDependent(folder, parseFindings(readFileSync(baselinePath, 'utf8')));
       const diff = diffFindings(baseline, run);
       assert.deepStrictEqual(
         diff.onlyInRun,

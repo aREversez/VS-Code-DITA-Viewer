@@ -53,12 +53,41 @@ export const CORPUS_ROOT_MAP = 'corpus.ditamap';
 export const CORPUS_FOLDERS = ['completeness-corpus', 'completeness-corpus-2'] as const;
 
 /**
- * Corpora whose probes depend on Windows file-system semantics (backslash
- * separators resolve, lookup is case-insensitive) and on the Windows Oxygen run
- * that produced their report. Their baselines are only meaningful on win32, so
- * the baseline and parity tests skip them elsewhere.
+ * Probe files whose result depends on the operating system, per corpus folder: a
+ * backslash is a separator only on Windows, and a path that differs from the real
+ * file only in case resolves only on a case-insensitive file system. Their reports
+ * come from a Windows Oxygen run, so off Windows their findings are left out of both
+ * sides of a comparison; every other file in the corpus is locked on every platform.
  */
-export const WINDOWS_ONLY_CORPORA: readonly string[] = ['completeness-corpus-2'];
+export const PLATFORM_DEPENDENT_FILES: Readonly<Record<string, readonly string[]>> = {
+  'completeness-corpus-2': [
+    'topics/a-case-edge.dita',
+    'topics/a-case-pos.dita',
+    'topics/a-win-seps-edge.dita',
+    'topics/a-win-seps-pos.dita',
+  ],
+};
+
+const platformDependent = (folder: string, file: string, platform: string): boolean =>
+  platform !== 'win32' && (PLATFORM_DEPENDENT_FILES[folder] ?? []).includes(file);
+
+/** Drops the findings of platform-dependent probe files unless the platform is Windows. */
+export function dropPlatformDependent<T extends { file: string }>(
+  folder: string,
+  findings: readonly T[],
+  platform: string = process.platform,
+): T[] {
+  return findings.filter((f) => !platformDependent(folder, f.file, platform));
+}
+
+/** The same for signatures written as "file<TAB or two spaces>category". */
+export function dropPlatformDependentSignatures(
+  folder: string,
+  signatures: readonly string[],
+  platform: string = process.platform,
+): string[] {
+  return signatures.filter((sig) => !platformDependent(folder, sig.split(/\t|  /)[0], platform));
+}
 
 /** One finding, reduced to what both tools can express and normalized for stable diffs. */
 export interface NormalizedFinding {

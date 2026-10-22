@@ -40,6 +40,19 @@ Oxygen has been run on it, its own `oxygen-report.xml` and
   (a UNC share for the authority form, a path on its own start drive for the rest), and
   every such form becomes `probe-absolute-path` in the report.
 
+## Platform-dependent probes
+
+Four probe files give a different result off Windows: `topics/a-win-seps-pos.dita` and
+`topics/a-win-seps-edge.dita` (a backslash is a separator only on Windows) and
+`topics/a-case-pos.dita` and `topics/a-case-edge.dita` (a path that differs from the
+real file only in case resolves only on a case-insensitive file system). Their Oxygen
+report comes from a Windows run, so on macOS and Linux the baseline and parity tests leave
+those four files out of **both** sides and still lock everything else
+(`PLATFORM_DEPENDENT_FILES` in `src/test/editor/completenessHarness.ts`). The two refresh
+commands below must be run on Windows; elsewhere they refuse for this corpus, because they
+would write the other platform's answer for those four files. A new probe whose result
+depends on the file system or the OS goes into that list.
+
 ## Running it
 
 ```
