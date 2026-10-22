@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- Third differential corpus: conref shape, id references, keys and links
+     (batch 2, see ../completeness-corpus/BATCH-2.md and README.md here).
+     Oxygen must be run with THIS map as the only root map. -->
+<map id="corpus3">
+  <title>Completeness Check Corpus 3</title>
+
+  <!-- Control, kept in every run: a reference to a file that does not exist. Both the
+       extension and Oxygen report it, so a run that lacks it did not look at this map. -->
+  <topicref href="topics/control-missing.dita"/>
+
+  <topicref href="topics/ok.dita"/>
+
+  <!-- Probes are added below, grouped by the batch-2 groups (E conref shape, F id
+       references, G keys and links, H duplicate element ids). -->
+</map>

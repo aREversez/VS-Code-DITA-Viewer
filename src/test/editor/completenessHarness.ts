@@ -48,9 +48,10 @@ export const CORPUS_ROOT_MAP = 'corpus.ditamap';
  * The corpus folders under test-dita-file/, each with its own corpus.ditamap,
  * baseline.extension.json and, once Oxygen has been run on it, oxygen-report.xml
  * and oxygen-parity.expected.json. The first is the original; the second holds the
- * reference-spelling and @format/@scope probes (see completeness-corpus/BATCH-1.md).
+ * reference-spelling and @format/@scope probes (completeness-corpus/BATCH-1.md); the
+ * third the conref, id-reference, key and link probes (completeness-corpus/BATCH-2.md).
  */
-export const CORPUS_FOLDERS = ['completeness-corpus', 'completeness-corpus-2'] as const;
+export const CORPUS_FOLDERS = ['completeness-corpus', 'completeness-corpus-2', 'completeness-corpus-3'] as const;
 
 /**
  * Probe files whose result depends on the operating system, per corpus folder: a
