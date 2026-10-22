@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.conref.siblings, boundary: @conref and @conrefend name the same element. -->
+<topic id="e-conref-siblings-edge">
+  <title>Range of one element (boundary)</title>
+  <body>
+    <p conref="lib.dita#lib3/p1" conrefend="lib.dita#lib3/p1"/>
+  </body>
+</topic>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.bad.id.ref, boundary: a fragment whose first segment is empty (#/elem), so no
+     topic id precedes the element id. -->
+<topic id="f-bad-id-ref-empty-topic">
+  <title>Empty topic segment (boundary)</title>
+  <body>
+    <p conref="lib.dita#/p1"/>
+  </body>
+</topic>

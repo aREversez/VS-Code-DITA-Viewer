@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.no.conref.has.target.attr.value: the key the boundary probe resolves through.
+     The three probe topics are published by corpus.ditamap itself; listing them here too
+     would only add multiple-reference findings. -->
+<map>
+  <title>Target value and conkeyref</title>
+  <keydef keys="k-e-target-attr" href="../topics/lib.dita#lib3"/>
+</map>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.no.link.keyref, positive: an xref keyref whose key is defined as text only, with
+     no href to link to. -->
+<topic id="g-link-keyref-pos">
+  <title>Link through a text-only key (positive)</title>
+  <body>
+    <p><xref keyref="k-g-link-text">text-only key</xref></p>
+  </body>
+</topic>

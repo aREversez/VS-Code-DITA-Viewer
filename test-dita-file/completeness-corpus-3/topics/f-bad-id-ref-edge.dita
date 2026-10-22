@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.bad.id.ref, boundary: DITA's same-topic fragment (#./elem), which names no topic
+     id at all but is legal. -->
+<topic id="f-bad-id-ref-edge">
+  <title>Same-topic fragment (boundary)</title>
+  <body>
+    <p id="first">The element the other paragraph reuses.</p>
+    <p conref="#./first"/>
+  </body>
+</topic>

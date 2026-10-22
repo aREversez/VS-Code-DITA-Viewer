@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.topicref.to.element, negative: the topicref names the topic id. -->
+<map>
+  <title>topicref to a topic id</title>
+  <topicref href="../topics/lib2-neg.dita#lib2n"/>
+</map>

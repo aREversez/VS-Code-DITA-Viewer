@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.link.no.target, negative: an xref with an href. -->
+<topic id="g-link-no-target-neg">
+  <title>xref with a target (negative)</title>
+  <body>
+    <p><xref href="ok.dita">neutral target</xref></p>
+  </body>
+</topic>

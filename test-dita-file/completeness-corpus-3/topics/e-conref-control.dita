@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- Control, not a probe: consumes every reusable element of lib.dita so that probes
+     pointing conrefs at lib.dita do not also produce unreferenced-reusable findings.
+     None of these conrefs is under test. -->
+<topic id="e-conref-control">
+  <title>Conref control</title>
+  <body>
+    <p conref="lib.dita#lib3/p1"/>
+    <p conref="lib.dita#lib3/p2"/>
+    <p conref="lib.dita#lib3/p3"/>
+    <p conref="lib.dita#lib3/p5"/>
+    <p conref="lib.dita#libinner3/p4"/>
+    <p conref="lib.dita#libinner3/p6"/>
+    <p><xref conref="lib.dita#lib3/xref1"/></p>
+    <section conref="lib.dita#lib3/sect3"/>
+  </body>
+</topic>

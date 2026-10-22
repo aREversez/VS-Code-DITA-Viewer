@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.circular.keyref, negative: a chain of redirects that ends at a real target. The
+     topic refs the first key, so the whole chain is reached and no key is left unused. -->
+<map>
+  <title>Linear key redirect</title>
+  <keydef keys="k-circ-chain-a" keyref="k-circ-chain-b"/>
+  <keydef keys="k-circ-chain-b" keyref="k-circ-chain-c"/>
+  <keydef keys="k-circ-chain-c" href="../topics/ok.dita"/>
+  <topicref href="../topics/g-circular-keyref-chain.dita"/>
+</map>

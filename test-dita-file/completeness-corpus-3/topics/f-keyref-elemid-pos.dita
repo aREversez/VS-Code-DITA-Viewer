@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.invalid.ref.id.path.keyref.elemid, positive: the key resolves to the topic, the
+     element id after the slash does not exist there. -->
+<topic id="f-keyref-elemid-pos">
+  <title>Missing element id under a key (positive)</title>
+  <body>
+    <p conkeyref="k-f-elemid/nope"/>
+  </body>
+</topic>

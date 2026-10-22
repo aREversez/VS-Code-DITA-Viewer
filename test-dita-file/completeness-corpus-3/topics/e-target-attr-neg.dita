@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.no.conref.has.target.attr.value, negative: the same value on an element that has
+     a @conref, where it is allowed. -->
+<topic id="e-target-attr-neg">
+  <title>Target value with conref (negative)</title>
+  <body>
+    <p><xref conref="lib.dita#lib3/xref1" scope="-dita-use-conref-target"/></p>
+  </body>
+</topic>

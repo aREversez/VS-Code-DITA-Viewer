@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.id.miss.conref, positive: @conref names a file but has no #id part. -->
+<topic id="e-id-miss-conref-pos">
+  <title>conref without a fragment (positive)</title>
+  <body>
+    <p conref="lib.dita"/>
+  </body>
+</topic>

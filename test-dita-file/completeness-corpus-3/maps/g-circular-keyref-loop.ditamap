@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.circular.keyref, positive: two keys redirect to each other. -->
+<map>
+  <title>Circular key redirect</title>
+  <keydef keys="k-circ-a" keyref="k-circ-b"/>
+  <keydef keys="k-circ-b" keyref="k-circ-a"/>
+</map>

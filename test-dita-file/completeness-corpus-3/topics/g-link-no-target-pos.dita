@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.link.no.target, positive: an xref with neither @href nor @keyref. -->
+<topic id="g-link-no-target-pos">
+  <title>xref without a target (positive)</title>
+  <body>
+    <p><xref>no target at all</xref></p>
+  </body>
+</topic>

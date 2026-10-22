@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.conkeyref.peer.map, negative: the key is defined in the same map. -->
+<topic id="e-conkeyref-peer-neg">
+  <title>conkeyref into the same map (negative)</title>
+  <body>
+    <p conkeyref="k-conkeyref-local/p2"/>
+  </body>
+</topic>

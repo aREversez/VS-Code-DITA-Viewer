@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.to.resource.only, boundary: a related-links link (the other link element) to
+     topics/resource-only-shared.dita, which maps/g-resource-only-edge.ditamap publishes
+     both resource-only and normally. The normal instance makes the target resolvable, so
+     the rule must not report just because a resource-only reference also exists. -->
+<topic id="g-resource-only-edge">
+  <title>Link to a topic published both ways (boundary)</title>
+  <related-links>
+    <link href="resource-only-shared.dita"/>
+  </related-links>
+</topic>

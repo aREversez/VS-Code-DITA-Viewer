@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.empty.link.peer.target, negative: a peer-scope xref that carries its own link
+     text, so nothing has to be fetched from a map this build never sees. -->
+<topic id="g-empty-peer-link-neg">
+  <title>Peer link with text (negative)</title>
+  <body>
+    <p><xref scope="peer" href="peer.dita#peer3">Peer topic</xref></p>
+  </body>
+</topic>

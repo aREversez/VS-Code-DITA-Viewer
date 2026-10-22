@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.dup.el.id, negative: @id is unique within each topic, so the outer topic and the
+     nested topic may each reuse "shared-el". A flat per-file view would falsely report
+     this. -->
+<topic id="h-dup-el-id-neg">
+  <title>Element id reused in nested topics (negative)</title>
+  <body>
+    <p id="shared-el">Outer topic paragraph.</p>
+  </body>
+  <topic id="h-dup-el-id-neg-inner">
+    <title>Nested topic</title>
+    <body>
+      <p id="shared-el">Inner topic paragraph, same @id, different topic.</p>
+    </body>
+  </topic>
+</topic>

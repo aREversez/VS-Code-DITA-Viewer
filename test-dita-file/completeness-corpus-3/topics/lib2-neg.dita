@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- Targets for dmv.topicref.to.element: a topic with no element id to name. -->
+<topic id="lib2n">
+  <title>Element reference target, negative</title>
+  <body>
+    <p>Paragraph without an id.</p>
+  </body>
+</topic>

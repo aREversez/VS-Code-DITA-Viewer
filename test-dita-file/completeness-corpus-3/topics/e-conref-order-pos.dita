@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.conref.proper.order, positive: @conref names the later element and @conrefend
+     the earlier one, so the range runs backwards. -->
+<topic id="e-conref-order-pos">
+  <title>Backwards range (positive)</title>
+  <body>
+    <p conref="lib.dita#lib3/p3" conrefend="lib.dita#lib3/p1"/>
+  </body>
+</topic>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.id.miss.conref, boundary: the fragment names a whole topic and no element.
+     Ask Oxygen whether a topic-level conref counts as a missing id. -->
+<topic id="e-id-miss-conref-edge">
+  <title>conref of a whole topic (boundary)</title>
+  <body>
+    <p conref="lib.dita#lib3"/>
+  </body>
+</topic>

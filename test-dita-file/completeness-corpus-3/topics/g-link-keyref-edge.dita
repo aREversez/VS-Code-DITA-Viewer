@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.no.link.keyref, boundary: a <link> element instead of an xref, through the same
+     text-only key. -->
+<topic id="g-link-keyref-edge">
+  <title>link element through a text-only key (boundary)</title>
+  <related-links>
+    <link keyref="k-g-link-text"/>
+  </related-links>
+</topic>

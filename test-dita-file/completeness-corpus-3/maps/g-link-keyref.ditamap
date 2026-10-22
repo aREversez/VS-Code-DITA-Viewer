@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.no.link.keyref: a text-only key (no href) used by a link element, next to a key
+     that does have a target. -->
+<map>
+  <title>Links through keys</title>
+  <keydef keys="k-g-link-text">
+    <topicmeta>
+      <keywords>
+        <keyword>Text-only key</keyword>
+      </keywords>
+    </topicmeta>
+  </keydef>
+  <keydef keys="k-g-link-target" href="../topics/ok.dita"/>
+  <topicref href="../topics/g-link-keyref-pos.dita"/>
+  <topicref href="../topics/g-link-keyref-neg.dita"/>
+  <topicref href="../topics/g-link-keyref-edge.dita"/>
+</map>

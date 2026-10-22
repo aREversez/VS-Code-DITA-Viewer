@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.to.resource.only target, negative side: also published by a normal topicref,
+     so a link to it is resolvable and must not be reported. -->
+<topic id="published3">
+  <title>Published topic</title>
+  <body>
+    <p>A normal topicref publishes this topic.</p>
+  </body>
+</topic>

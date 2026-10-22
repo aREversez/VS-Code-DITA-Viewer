@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.invalid.ref.id.path.keyref.elemid: one key to the topic, used three ways: a
+     conkeyref to a missing element, to an existing one, and an xref with the same
+     element-id suffix. -->
+<map>
+  <title>Key to a topic, element id after it</title>
+  <keydef keys="k-f-elemid" href="../topics/lib.dita#lib3"/>
+  <topicref href="../topics/f-keyref-elemid-pos.dita"/>
+  <topicref href="../topics/f-keyref-elemid-neg.dita"/>
+  <topicref href="../topics/f-keyref-elemid-edge.dita"/>
+</map>

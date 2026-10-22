@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.conrefend.confl.conref, positive: @conref and @conrefend resolve into different
+     topics (the root topic and its nested topic). -->
+<topic id="e-conrefend-confl-pos">
+  <title>Range ends in another topic (positive)</title>
+  <body>
+    <p conref="lib.dita#lib3/p1" conrefend="lib.dita#libinner3/p4"/>
+  </body>
+</topic>

@@ -44,7 +44,43 @@ refresh the baselines; `UPDATE_OXYGEN_PARITY=1 npm test` refreshes the parity lo
 
 ## What the corpus probes
 
-| Probe | File | Expected extension finding |
+The 18 Oxygen problem ids of batch 2 (`../completeness-corpus/BATCH-2.md`), one rule per
+file, each with `pos` (must report), `neg` (must not) and `edge` (the boundary). None of
+them is implemented yet: the baseline below only holds the control, so a finding that shows
+up here before the implementation is noise from an existing check, not a probe result.
+
+| Rule | Probes | What the probes hold |
 | --- | --- | --- |
-| control: reference to a file that does not exist | `topics/control-missing.dita` (absent) | `missing-reference` |
-| neutral target | `topics/ok.dita` | *(none — control)* |
+| `dmv.id.miss.conref` | `topics/e-id-miss-conref-{pos,neg,edge}.dita` | file without a fragment; full `#topic/element`; fragment naming only the topic |
+| `dmv.conref.siblings` | `topics/e-conref-siblings-{pos,neg,edge}.dita` | `conrefend` in another parent (body vs section); sibling paragraphs; range that starts and ends at one `p` |
+| `dmv.conref.proper.order` | `topics/e-conref-order-{pos,neg,edge}.dita` | forward range; reversed range; single element |
+| `dmv.conrefend.no.conref` | `topics/e-conrefend-no-conref-{pos,neg,edge}.dita` | `conrefend` alone; with `conref`; `conref=""` |
+| `dmv.conrefend.confl.conref` | `topics/e-conrefend-confl-{pos,neg,edge}.dita` | root topic to nested topic; both in one topic; both in the nested topic |
+| `dmv.no.conref.has.target.attr.value` | `topics/e-target-attr-{pos,neg,edge}.dita`, `maps/e-target-attr.ditamap` | value without `conref`; with `conref`; with `conkeyref` |
+| `dmv.conkeyref.peer.map` | `topics/e-conkeyref-peer-{pos,neg,edge}.dita`, `maps/e-conkeyref-peer{,-keys,-sub}.ditamap` | key in a `scope="peer"` map; in the same map; in a local submap |
+| `dmv.invalid.ref.id` | `topics/f-invalid-ref-id-{pos,neg,edge}.dita` | missing element via conref; existing; missing element via xref |
+| `dmv.invalid.ref.id.path` | `topics/f-ref-id-path-{pos,neg,edge}.dita` | missing id path; single element id; existing two-segment path (section then paragraph) |
+| `dmv.invalid.ref.id.path.keyref.elemid` | `topics/f-keyref-elemid-{pos,neg,edge}.dita`, `maps/f-keyref-elemid.ditamap` | conkeyref to a missing element; existing; xref keyref with the same suffix |
+| `dmv.bad.id.ref` | `topics/f-bad-id-ref-{pos,neg,edge,empty-topic}.dita` | trailing slash; well-formed; `#./element` same-topic form; empty topic segment `#/element` |
+| `dmv.topicref.to.element` | `maps/f-topicref-to-element-{pos,neg}.ditamap`, `topics/f-topicref-to-element-edge.dita`, `topics/lib2-{pos,neg}.dita` | topicref to an element id; to the topic id; the same element through an xref |
+| `dmv.circular.keyref` | `maps/g-circular-keyref-{loop,self,chain}.ditamap`, `topics/g-circular-keyref-chain.dita` | `a` and `b` to each other; a self-redirect; `a` to `b` to `c` ending at a topic |
+| `dmv.no.link.keyref` | `topics/g-link-keyref-{pos,neg,edge}.dita`, `maps/g-link-keyref.ditamap` | xref to a text-only key; to a key with `href`; a `link` through the text-only key |
+| `dmv.link.no.target` | `topics/g-link-no-target-{pos,neg,edge}.dita` | xref with neither `href` nor `keyref`; xref with `href`; xref fed by `conref` (known pitfall) |
+| `dmv.empty.link.peer.target` | `topics/g-empty-peer-link-{pos,neg,edge}.dita` | peer xref without text; with text; local xref without text |
+| `dmv.ref.to.resource.only` | `topics/g-resource-only-{pos,neg,edge}.dita`, `topics/{resource-only,published,resource-only-shared}.dita`, `maps/g-resource-only-edge.ditamap` | xref to a resource-only topic; to a normally published one; link to a topic published both ways (known pitfall) |
+| `dmv.dup.el.id` | `topics/h-dup-el-id-{pos,neg,edge}.dita` | two elements with one id; nested topics reusing an id; element id equal to the topic id |
+
+`topics/lib.dita` is the shared conref source; `topics/e-conref-control.dita` consumes every
+reusable element in it, so probes against it do not also report `unreferenced-reusable`.
+`topics/lib2-{pos,neg}.dita` are separate targets so the two `topicref.to.element` maps do
+not turn into a `multiple-reference` finding. The resource-only edge keeps its two
+references to one file apart with a `@copy-to` for the same reason. None of the probes
+depends on the OS or the file system, so this corpus needs no `PLATFORM_DEPENDENT_FILES`
+entry.
+
+## Baseline before the Oxygen run
+
+`baseline.extension.json` holds one finding: the control `missing-reference` at line 11 of
+`corpus.ditamap`. Everything else this corpus asks about is still unimplemented, which is
+why the probes stay silent in the extension today. The next step is the Oxygen run on
+`corpus.ditamap`; its report is the list the implementation follows.

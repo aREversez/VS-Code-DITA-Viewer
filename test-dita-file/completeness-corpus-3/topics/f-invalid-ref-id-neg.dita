@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.invalid.ref.id, negative: the element id exists. -->
+<topic id="f-invalid-ref-id-neg">
+  <title>Existing element id (negative)</title>
+  <body>
+    <p conref="lib.dita#lib3/p1"/>
+  </body>
+</topic>

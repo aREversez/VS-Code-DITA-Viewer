@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.ref.to.resource.only, boundary: topics/resource-only-shared.dita is referenced
+     once with processing-role="resource-only" and once normally. The copy-to keeps the two
+     references from collapsing into one topic instance (and from reporting
+     multiple-reference), so the file is published as well as resource-only. The link in
+     topics/g-resource-only-edge.dita must not be reported. -->
+<map>
+  <title>Resource-only side by side</title>
+  <topicref href="../topics/resource-only-shared.dita" processing-role="resource-only" copy-to="resource-only-shared-copy.dita"/>
+  <topicref href="../topics/resource-only-shared.dita"/>
+  <topicref href="../topics/g-resource-only-edge.dita"/>
+</map>

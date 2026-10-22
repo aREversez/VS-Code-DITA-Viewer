@@ -12,6 +12,77 @@
 
   <topicref href="topics/ok.dita"/>
 
-  <!-- Probes are added below, grouped by the batch-2 groups (E conref shape, F id
-       references, G keys and links, H duplicate element ids). -->
+  <!-- Shared conref source. lib.dita is resource-only and every reusable element in it
+       is consumed by topics/e-conref-control.dita, so a conref probe does not also
+       report unreferenced-reusable for the source. -->
+  <topicref href="topics/lib.dita" processing-role="resource-only"/>
+  <topicref href="topics/e-conref-control.dita"/>
+
+  <!-- G: a topic published normally next to one that only a resource-only topicref
+       publishes, so dmv.ref.to.resource.only has both sides to compare. -->
+  <topicref href="topics/resource-only.dita" processing-role="resource-only"/>
+  <topicref href="topics/published.dita"/>
+
+  <!-- E. conref shape (dmv.id.miss.conref, dmv.conref.siblings,
+       dmv.conref.proper.order, dmv.conrefend.no.conref, dmv.conrefend.confl.conref,
+       dmv.no.conref.has.target.attr.value, dmv.conkeyref.peer.map). -->
+  <topicref href="topics/e-id-miss-conref-pos.dita"/>
+  <topicref href="topics/e-id-miss-conref-neg.dita"/>
+  <topicref href="topics/e-id-miss-conref-edge.dita"/>
+  <topicref href="topics/e-conref-siblings-pos.dita"/>
+  <topicref href="topics/e-conref-siblings-neg.dita"/>
+  <topicref href="topics/e-conref-siblings-edge.dita"/>
+  <topicref href="topics/e-conref-order-pos.dita"/>
+  <topicref href="topics/e-conref-order-neg.dita"/>
+  <topicref href="topics/e-conref-order-edge.dita"/>
+  <topicref href="topics/e-conrefend-no-conref-pos.dita"/>
+  <topicref href="topics/e-conrefend-no-conref-neg.dita"/>
+  <topicref href="topics/e-conrefend-no-conref-edge.dita"/>
+  <topicref href="topics/e-conrefend-confl-pos.dita"/>
+  <topicref href="topics/e-conrefend-confl-neg.dita"/>
+  <topicref href="topics/e-conrefend-confl-edge.dita"/>
+  <topicref href="topics/e-target-attr-pos.dita"/>
+  <topicref href="topics/e-target-attr-neg.dita"/>
+  <topicref href="topics/e-target-attr-edge.dita"/>
+  <mapref href="maps/e-conkeyref-peer.ditamap" format="ditamap"/>
+  <mapref href="maps/e-target-attr.ditamap" format="ditamap"/>
+
+  <!-- F. id references (dmv.invalid.ref.id, dmv.invalid.ref.id.path,
+       dmv.invalid.ref.id.path.keyref.elemid, dmv.bad.id.ref,
+       dmv.topicref.to.element). -->
+  <topicref href="topics/f-invalid-ref-id-pos.dita"/>
+  <topicref href="topics/f-invalid-ref-id-neg.dita"/>
+  <topicref href="topics/f-invalid-ref-id-edge.dita"/>
+  <topicref href="topics/f-ref-id-path-pos.dita"/>
+  <topicref href="topics/f-ref-id-path-neg.dita"/>
+  <topicref href="topics/f-ref-id-path-edge.dita"/>
+  <topicref href="topics/f-bad-id-ref-pos.dita"/>
+  <topicref href="topics/f-bad-id-ref-neg.dita"/>
+  <topicref href="topics/f-bad-id-ref-edge.dita"/>
+  <topicref href="topics/f-bad-id-ref-empty-topic.dita"/>
+  <topicref href="topics/f-topicref-to-element-edge.dita"/>
+  <mapref href="maps/f-keyref-elemid.ditamap" format="ditamap"/>
+  <mapref href="maps/f-topicref-to-element-pos.ditamap" format="ditamap"/>
+  <mapref href="maps/f-topicref-to-element-neg.ditamap" format="ditamap"/>
+
+  <!-- G. keys and links (dmv.circular.keyref, dmv.no.link.keyref,
+       dmv.link.no.target, dmv.empty.link.peer.target, dmv.ref.to.resource.only). -->
+  <topicref href="topics/g-link-no-target-pos.dita"/>
+  <topicref href="topics/g-link-no-target-neg.dita"/>
+  <topicref href="topics/g-link-no-target-edge.dita"/>
+  <topicref href="topics/g-empty-peer-link-pos.dita"/>
+  <topicref href="topics/g-empty-peer-link-neg.dita"/>
+  <topicref href="topics/g-empty-peer-link-edge.dita"/>
+  <topicref href="topics/g-resource-only-pos.dita"/>
+  <topicref href="topics/g-resource-only-neg.dita"/>
+  <mapref href="maps/g-resource-only-edge.ditamap" format="ditamap"/>
+  <mapref href="maps/g-circular-keyref-loop.ditamap" format="ditamap"/>
+  <mapref href="maps/g-circular-keyref-self.ditamap" format="ditamap"/>
+  <mapref href="maps/g-circular-keyref-chain.ditamap" format="ditamap"/>
+  <mapref href="maps/g-link-keyref.ditamap" format="ditamap"/>
+
+  <!-- H. duplicate element ids (dmv.dup.el.id). -->
+  <topicref href="topics/h-dup-el-id-pos.dita"/>
+  <topicref href="topics/h-dup-el-id-neg.dita"/>
+  <topicref href="topics/h-dup-el-id-edge.dita"/>
 </map>

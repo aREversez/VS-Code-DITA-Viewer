@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.dup.el.id, boundary: an element whose @id equals the enclosing topic's id. Ask
+     Oxygen whether the topic id and an element id share one uniqueness scope. -->
+<topic id="h-dup-el-id-edge">
+  <title>Element id equal to the topic id (boundary)</title>
+  <body>
+    <p id="h-dup-el-id-edge">Paragraph carrying the topic's own @id.</p>
+  </body>
+</topic>

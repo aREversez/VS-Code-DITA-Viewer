@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.conrefend.no.conref, boundary: @conref is present but empty. Ask Oxygen whether
+     an empty value counts as having no conref. -->
+<topic id="e-conrefend-no-conref-edge">
+  <title>Empty conref (boundary)</title>
+  <body>
+    <p conref="" conrefend="lib.dita#lib3/p3"/>
+  </body>
+</topic>
