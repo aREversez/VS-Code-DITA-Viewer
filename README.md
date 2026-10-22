@@ -574,7 +574,7 @@ npm install
 npm run build
 ```
 
-Then press `F5` in VS Code to launch the Extension Development Host.
+Then press `F5` in VS Code to launch the Extension Development Host, which loads `dist/` straight from this checkout. To install the build into the VS Code you actually use, see [Installing the package into a local VS Code](#installing-the-package-into-a-local-vs-code).
 
 ## Development
 
@@ -588,6 +588,9 @@ npm run lint           # Lint source
 npm run format         # Format with Prettier
 npm run check:l10n     # Verify i18n catalogs match strings used in source
 npm run verify         # typecheck + lint + build + the checks above + npm test
+npm run package        # Package the built extension to output/<name>-<version>.vsix
+npm run vsix:install   # Install the newest output/*.vsix into the local VS Code
+npm run package:install  # build + package + install, for checking a real install
 npm run playwright:install  # Download Chromium for the visual check (once)
 npm run test:visual    # Render each template in a real Chromium, assert computed
                        # style and write test-visual/__screenshots__/*.png
@@ -610,10 +613,36 @@ Both are workspace-folder-level values, so a host opened on a subfolder (say `te
 ### Packaging
 
 ```bash
-npx @vscode/vsce package --out output/
+npm run package        # mkdir output, then vsce package --no-dependencies --out output/
 ```
 
-The `.vsix` file name is derived from the `name` and `version` fields in `package.json` (e.g. `output/dita-viewer-1.0.5.vsix`).
+The `.vsix` file name is derived from the `name` and `version` fields in `package.json` (e.g. `output/dita-viewer-1.0.9.vsix`). `npm run check:package` packages again and asserts the archive's contents (required assets present, `src/**` and the fixtures absent), which is the gate to trust before publishing a build.
+
+#### Installing the package into a local VS Code
+
+`npm run package:install` builds, packages and installs in one step. `npm run vsix:install` installs the newest `output/*.vsix` as it stands — no rebuild, no repackage — which is what you want after a packaging run, or when re-checking an archive someone sent you.
+
+The install does not trust `code` on `PATH`. On a machine where another VS Code-derived IDE sits earlier on `PATH` (its own bundled `code.cmd`), that shim installs the extension into the wrong application without failing, so `scripts/install-vsix.cjs` probes the standard Microsoft VS Code locations first — `%LOCALAPPDATA%\Programs`, `%ProgramFiles%`, `%ProgramFiles(x86)%` on Windows; `/Applications/Visual Studio Code.app/Contents/Resources/app/bin` on macOS; `/usr/share/code`, `/usr/bin/code`, `/snap/bin/code` on Linux — and only falls back to `PATH` with a warning. The CLI it picked is printed as the first line, so the target is verifiable at a glance. Point it at another installation with `VSCODE_CLI`:
+
+```powershell
+$env:VSCODE_CLI = "$env:LOCALAPPDATA\Programs\Microsoft VS Code Insiders\bin\code-insiders.cmd"
+npm run vsix:install
+```
+
+`VSIX_PROFILE` installs into a named [profile](https://code.visualstudio.com/docs/configure/profiles) instead of the default one, so a test build does not touch your everyday settings:
+
+```powershell
+$env:VSIX_PROFILE = "dita-dev"
+npm run package:install
+```
+
+`node scripts/install-vsix.cjs --dry-run` prints the CLI path and the vsix it would install, then stops — worth a look when the target matters and before anything changes.
+
+Installation passes `--force`, so a rebuild at an unchanged version replaces the installed copy instead of being refused as already installed; iterating does not require a version bump. The script then reads the version back with `--list-extensions --show-versions` and prints it, so the reported line is the installed state rather than `code`'s exit code.
+
+One step stays manual, because VS Code exposes no CLI to reload a window: run **Developer: Reload Window** in the target window to load the new build. A same-version reinstall can also hit a locked file while that window is open on Windows — close VS Code and run the install again if that happens.
+
+The same flow is available from the command palette as the `vsix: build + package + install` task in `.vscode/tasks.json`.
 
 ## Project Structure
 
