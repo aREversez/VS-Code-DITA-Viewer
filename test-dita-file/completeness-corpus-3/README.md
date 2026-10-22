@@ -45,9 +45,11 @@ refresh the baselines; `UPDATE_OXYGEN_PARITY=1 npm test` refreshes the parity lo
 ## What the corpus probes
 
 The 18 Oxygen problem ids of batch 2 (`../completeness-corpus/BATCH-2.md`), one rule per
-file, each with `pos` (must report), `neg` (must not) and `edge` (the boundary). None of
-them is implemented yet: the baseline below only holds the control, so a finding that shows
-up here before the implementation is noise from an existing check, not a probe result.
+file, each with `pos` (must report), `neg` (must not) and `edge` (the boundary). The run
+below covers all of them: 15 ids are implemented as seven new categories, one more through
+the existing `undefined-key` (a key from a peer map is undefined in this build), and two are
+*n/a* because Oxygen stayed silent on their probes. Every id and its status is recorded in
+`../completeness-corpus/OXYGEN-PROBLEMS.md`.
 
 | Rule | Probes | What the probes hold |
 | --- | --- | --- |
@@ -78,9 +80,36 @@ references to one file apart with a `@copy-to` for the same reason. None of the 
 depends on the OS or the file system, so this corpus needs no `PLATFORM_DEPENDENT_FILES`
 entry.
 
-## Baseline before the Oxygen run
+## The Oxygen run and its outcome
 
-`baseline.extension.json` holds one finding: the control `missing-reference` at line 11 of
-`corpus.ditamap`. Everything else this corpus asks about is still unimplemented, which is
-why the probes stay silent in the extension today. The next step is the Oxygen run on
-`corpus.ditamap`; its report is the list the implementation follows.
+*Validate and Check for Completeness* ran with `corpus.ditamap` as the only open root map
+(every option on, remote off). The report says `Keys are gathered from: corpus.ditamap`, and
+the control `topics/control-missing.dita` at line 11 is present, so it is a run of this map.
+It produced 30 incidents, saved as `oxygen-report.raw.xml` and sanitized to
+`oxygen-report.xml`. `node scripts/oxygen-diff.cjs --corpus completeness-corpus-3
+test-dita-file/completeness-corpus-3/oxygen-report.xml` reports:
+
+```
+27 extension findings, 30 incidents, 27 matched, 0 extension-only, 3 Oxygen-only
+```
+
+and names the three Oxygen-only rows, each with its reason in
+`../completeness-corpus/OXYGEN-PROBLEMS.md`:
+
+- `topics/e-conrefend-no-conref-edge.dita` `oxygen:unknown` — "Empty reference value." has
+  no problem id; the same element's `dmv.conrefend.confl.conref` is matched.
+- `topics/e-id-miss-conref-edge.dita` `dmv.invalid.class.generalization` — a conref that
+  names a whole topic; class checking is batch 4.
+- `topics/f-bad-id-ref-empty-topic.dita` `oxygen:unknown` — "Invalid anchor" has no problem
+  id; the trailing-slash probe matches.
+
+The same file records two ids as *n/a*: `dmv.circular.keyref` and
+`dmv.empty.link.peer.target` produced no incident on their probes, and the extension is
+silent on the same files.
+
+## Baseline and parity
+
+`baseline.extension.json` holds the 27 findings the extension produces on this corpus (the
+control plus the 26 probe findings). `oxygen-parity.expected.json` locks the parity state
+above. Refresh them with `--update` and `UPDATE_OXYGEN_PARITY=1` as described under
+"Running it".

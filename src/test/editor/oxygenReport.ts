@@ -246,6 +246,9 @@ export const PROBLEM_ID_CATEGORY: Record<string, string> = {
   'dmv.undef.key': 'undefined-key',
   // the live report emits dmv.key.undef for the same finding (confirmed empirically)
   'dmv.key.undef': 'undefined-key',
+  // a conkeyref into a peer map: the key is not in this map's key space, so the
+  // extension files it as an undefined key (mapped only: the report carries dmv.key.undef)
+  'dmv.conkeyref.peer.map': 'undefined-key',
   'duplicate.key.definition': 'duplicate-key',
   'dmv.not.used.key.defs': 'unreferenced-key',
   'dmv.invalid.keyref.syntax': 'invalid-key-syntax',
@@ -262,6 +265,23 @@ export const PROBLEM_ID_CATEGORY: Record<string, string> = {
   // not in map
   'dmv.not.topic.ref.in.map': 'unreferenced-link',
   'dmv.not.topic.ref.reltable.in.map': 'unreferenced-link',
+  // conref/conrefend shape
+  'dmv.id.miss.conref': 'invalid-conref-form',
+  'dmv.conref.siblings': 'invalid-conref-form',
+  'dmv.conref.proper.order': 'invalid-conref-form',
+  'dmv.conrefend.no.conref': 'invalid-conref-form',
+  'dmv.conrefend.confl.conref': 'invalid-conref-form',
+  'dmv.no.conref.has.target.attr.value': 'invalid-conref-form',
+  // id references and links
+  'dmv.invalid.ref.id': 'invalid-id-reference',
+  'dmv.invalid.ref.id.path': 'invalid-id-reference',
+  'dmv.invalid.ref.id.path.keyref.elemid': 'invalid-id-reference',
+  'dmv.bad.id.ref': 'invalid-id-reference',
+  'dmv.topicref.to.element': 'topicref-to-element',
+  'dmv.no.link.keyref': 'link-key-without-target',
+  'dmv.link.no.target': 'link-no-target',
+  'dmv.ref.to.resource.only': 'resource-only-target',
+  'dmv.dup.el.id': 'duplicate-element-id',
   // reuse
   'dmv.not.used.reusable.component': 'unreferenced-reusable',
   // folders

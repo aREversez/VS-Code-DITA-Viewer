@@ -89,6 +89,11 @@ export interface KeyDef extends Location {
   scopeIds: string[];
   href?: string;
   target?: string;
+  /**
+   * A key definition that redirects to another key (`<keydef keyref=...>`). The
+   * crawl does not follow redirect chains, so such a definition has no target.
+   */
+  keyref?: string;
   /** The @format attribute on the defining element, if any. */
   format?: string;
 }
@@ -133,6 +138,8 @@ export interface TopicId extends Location {
 export interface IdUse extends Location {
   id: string;
   tag: string;
+  /** The nearest enclosing topic element's id (topic files only). */
+  topicId?: string;
 }
 
 /** A map reference whose target is already being crawled: a cycle (Oxygen's dmv.recursive.ref). */
@@ -159,6 +166,12 @@ export interface ReusableCandidate extends Location {
   id: string;
   tag: string;
   topicFile: string;
+  /** The nearest enclosing topic element's id. */
+  topicId?: string;
+  /** Stable path of the parent element, compared by conref sibling checks. */
+  parentKey?: string;
+  /** Position among the parent's children, compared by conref order checks. */
+  order?: number;
 }
 
 export interface ConrefUse {
@@ -175,6 +188,54 @@ export interface ConrefUse {
   sourceLine?: number;
   /** Key name for a conkeyref. */
   key?: string;
+}
+
+/** The conref/conrefend/conkeyref attributes of one element, with their resolved ends. */
+export interface ConrefShape extends Location {
+  tag: string;
+  /** The attribute as written; undefined when it is absent (an empty value stays ""). */
+  conref?: string;
+  conrefend?: string;
+  conkeyref?: string;
+  /** Absolute local file @conref names (own file for `#elem`), if it names one. */
+  targetFile?: string;
+  endTargetFile?: string;
+  /** Fragment parts of @conref / @conrefend. */
+  targetTopicId?: string;
+  targetElementId?: string;
+  endTopicId?: string;
+  endElementId?: string;
+}
+
+/** An element that carries `-dita-use-conref-target` without being a content reference. */
+export interface ConrefTargetValue extends Location {
+  tag: string;
+  attribute: string;
+  value: string;
+}
+
+/** An xref/link with no @href, @keyref, @conref or @conkeyref (Oxygen's dmv.link.no.target). */
+export interface LinkWithoutTarget extends Location {
+  tag: string;
+}
+
+/** An xref/link whose keyref names a key that is defined without a target. */
+export interface KeyLinkWithoutTarget extends Location {
+  key: string;
+  value: string;
+  tag?: string;
+}
+
+/** The element-id part a keyref/conkeyref appends to its key, with the key's own target. */
+export interface KeyElementPath extends Location {
+  /** The attribute value as written. */
+  value: string;
+  /** The path after the key: `elem` or `elem/child`. */
+  elementPath: string;
+  /** Absolute file the key definition's @href resolves to, if it has one. */
+  targetFile?: string;
+  /** Topic id from the key definition's @href fragment, if any. */
+  topicId?: string;
 }
 
 export interface TableInfo extends Location {
@@ -226,6 +287,11 @@ export interface CrawlResult {
   mapEntries: MapEntry[];
   reusable: ReusableCandidate[];
   conrefUses: ConrefUse[];
+  conrefShapes: ConrefShape[];
+  conrefTargetValues: ConrefTargetValue[];
+  linksWithoutTarget: LinkWithoutTarget[];
+  keyLinksWithoutTarget: KeyLinkWithoutTarget[];
+  keyElementPaths: KeyElementPath[];
   tables: TableInfo[];
   profilingConflicts: ProfilingConflict[];
   profilingValues: ProfilingValueUse[];
@@ -351,6 +417,11 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     mapEntries: [],
     reusable: [],
     conrefUses: [],
+    conrefShapes: [],
+    conrefTargetValues: [],
+    linksWithoutTarget: [],
+    keyLinksWithoutTarget: [],
+    keyElementPaths: [],
     tables: [],
     profilingConflicts: [],
     profilingValues: [],
@@ -419,6 +490,20 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     if (!remote && !pathPart) ref.target = undefined; // "#id" -- same-file fragment
     result.refs.push(ref);
     return ref;
+  }
+
+  /** The file, topic id and element id a conref/conrefend value names. */
+  function contentTarget(value: string, sourceFile: string): { file?: string; topicId?: string; elementId?: string } {
+    const hash = value.indexOf('#');
+    const pathPart = hash >= 0 ? value.slice(0, hash) : value;
+    const frag = hash >= 0 ? value.slice(hash + 1) : '';
+    const segs = frag ? frag.split('/') : [];
+    const sameTopic = segs[0] === '.';
+    return {
+      file: URL_RE.test(value) ? undefined : pathPart ? resolve(dirname(sourceFile), decodeHrefPart(pathPart)) : sourceFile,
+      topicId: segs[0] && !sameTopic ? segs[0] : undefined,
+      elementId: segs.length && !(sameTopic && segs.length === 1) ? segs[segs.length - 1] || undefined : undefined,
+    };
   }
 
   // ── Maps ──
@@ -536,6 +621,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
         const qualified = qualifiedNamesMulti(name, scopeChains);
         const def: KeyDef = {
           file: ctx.file, line: n.line, key: name, qualified, scopeId: scopeIds[0], scopeIds, href,
+          keyref: keyref?.trim(),
           format: n.attrs['format'],
         };
         if (href && !URL_RE.test(href) && n.attrs['scope'] !== 'external') {
@@ -623,12 +709,26 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       });
     }
 
-    // Every @id, including reusable elements (id syntax); topic ids additionally
-    // feed the duplicate-id and conref-target checks.
-    for (const n of walk(root)) {
+    // Every @id (id syntax, duplicate element ids) and every reusable element
+    // (unreferenced-reusable, conref range checks), with the enclosing topic id
+    // and the element's place among its parent's children.
+    const visitIds = (n: XNode, topicId: string | undefined, parentKey: string, order: number): void => {
+      const isTopic = isTopicElement(n);
+      const currentTopic = isTopic ? (n.attrs['id'] ?? topicId) : topicId;
       const id = n.attrs['id'];
-      if (id) result.ids.push({ file: path, line: n.line, id, tag: n.tag });
-    }
+      if (id) {
+        result.ids.push({ file: path, line: n.line, id, tag: n.tag, topicId: currentTopic });
+        if (!isTopic) {
+          result.reusable.push({
+            file: path, line: n.line, id, tag: n.tag, topicFile: path, topicId: currentTopic,
+            parentKey, order,
+          });
+        }
+      }
+      const key = `${parentKey}/${n.tag}${id ? `#${id}` : `[${order}]`}`;
+      n.children.forEach((c, i) => visitIds(c, currentTopic, key, i));
+    };
+    visitIds(root, undefined, '', 0);
 
     // Topic ids (root and nested)
     for (const n of walk(root)) {
@@ -642,39 +742,58 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       }
     }
 
-    // Local-topic-only scan
-    const usedElementIds = new Set<string>();
+    // Local-topic-only scan.
     for (const n of walk(root)) {
-      for (const a of ['conref', 'conrefend', 'conkeyref']) {
-        const v = n.attrs[a];
-        if (!v) continue;
-        if (a === 'conkeyref') {
-          const key = v.trim().split('/')[0];
-          result.keyUses.push({ file: path, line: n.line, key, value: v, attribute: 'conkeyref', tag: n.tag });
-          result.conrefUses.push({ key, targetId: v.includes('/') ? v.split('/').pop() : undefined });
-        } else if (a === 'conref') {
-          const ref = addRef(path, n, 'conref', v);
-          if (ref.dita && ref.target) {
-            const ck = norm(ref.target);
-            if (!seenTopics.has(ck) && !ref.target.toLowerCase().endsWith('.ditamap')) {
-              seenTopics.add(ck);
-              topicQueue.push({ path: ref.target, inherited: new Map() });
-            }
+      const conref = n.attrs['conref'];
+      const conrefend = n.attrs['conrefend'];
+      const conkeyref = n.attrs['conkeyref'];
+      if (conref !== undefined || conrefend !== undefined || conkeyref !== undefined) {
+        const start = conref ? contentTarget(conref, path) : undefined;
+        const end = conrefend ? contentTarget(conrefend, path) : undefined;
+        result.conrefShapes.push({
+          file: path, line: n.line, tag: n.tag, conref, conrefend, conkeyref,
+          targetFile: start?.file, targetTopicId: start?.topicId, targetElementId: start?.elementId,
+          endTargetFile: end?.file, endTopicId: end?.topicId, endElementId: end?.elementId,
+        });
+      }
+      // `-dita-use-conref-target` is only meaningful on an element that is a
+      // content reference; without @conref or @conkeyref the value is a mistake.
+      if (conref === undefined && conkeyref === undefined) {
+        for (const [attribute, value] of Object.entries(n.attrs)) {
+          if (/(^|\s)-dita-use-conref-target(\s|$)/.test(value)) {
+            result.conrefTargetValues.push({ file: path, line: n.line, tag: n.tag, attribute, value });
           }
-          const frag = v.includes('#') ? v.split('#')[1] : '';
-          // "." is DITA's same-topic fragment (`#.`, `#./elem`): it names no topic id to look up.
-          const segs = frag ? frag.split('/') : [];
-          const sameTopic = segs[0] === '.';
-          result.conrefUses.push({
-            targetFile: ref.target ?? path,
-            targetId: segs.length && !(sameTopic && segs.length === 1) ? segs[segs.length - 1] : undefined,
-            topicId: segs[0] && !sameTopic ? segs[0] : undefined,
-            elemId: segs.length > 1 ? segs.slice(1).join('/') : undefined,
-            sourceFile: path,
-            sourceLine: n.line,
-          });
-          if (!ref.target && !ref.remote && frag) usedElementIds.add(frag.split('/').pop() ?? '');
         }
+      }
+      if ((n.tag === 'xref' || n.tag === 'link') && !n.attrs['href'] && !n.attrs['keyref'] && !conref && !conkeyref) {
+        result.linksWithoutTarget.push({ file: path, line: n.line, tag: n.tag });
+      }
+      if (conkeyref) {
+        const key = conkeyref.trim().split('/')[0];
+        result.keyUses.push({ file: path, line: n.line, key, value: conkeyref, attribute: 'conkeyref', tag: n.tag });
+        result.conrefUses.push({ key, targetId: conkeyref.includes('/') ? conkeyref.split('/').pop() : undefined });
+      }
+      if (conref) {
+        const ref = addRef(path, n, 'conref', conref);
+        if (ref.dita && ref.target) {
+          const ck = norm(ref.target);
+          if (!seenTopics.has(ck) && !ref.target.toLowerCase().endsWith('.ditamap')) {
+            seenTopics.add(ck);
+            topicQueue.push({ path: ref.target, inherited: new Map() });
+          }
+        }
+        const frag = conref.includes('#') ? conref.split('#')[1] : '';
+        // "." is DITA's same-topic fragment (`#.`, `#./elem`): it names no topic id to look up.
+        const segs = frag ? frag.split('/') : [];
+        const sameTopic = segs[0] === '.';
+        result.conrefUses.push({
+          targetFile: ref.target ?? path,
+          targetId: segs.length && !(sameTopic && segs.length === 1) ? segs[segs.length - 1] : undefined,
+          topicId: segs[0] && !sameTopic ? segs[0] : undefined,
+          elemId: segs.length > 1 ? segs.slice(1).join('/') : undefined,
+          sourceFile: path,
+          sourceLine: n.line,
+        });
       }
       const keyrefValue = n.attrs['keyref'];
       let topicKeyUse: KeyUse | undefined;
@@ -704,13 +823,6 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
         }
       }
       // <image keyref> etc. resolve through the key space (see resolveKeyRefs below).
-    }
-
-    // Reusable-element candidates: any element with an id that is not a topic/body/section container.
-    for (const n of walk(root)) {
-      const id = n.attrs['id'];
-      if (!id || isTopicElement(n)) continue;
-      result.reusable.push({ file: path, line: n.line, id, tag: n.tag, topicFile: path });
     }
 
     checkTables(root, path);
@@ -920,19 +1032,42 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
   }
   const droppedFallbacks = new Set<Reference>();
   for (const use of result.keyUses) {
-    if (use.attribute !== 'keyref') continue;
     if (use.keySyntax) continue; // reported as invalid key syntax, not as an undefined key
     const def = resolveKeyUse(use, keyIndex);
     if (!def) {
       result.undefinedKeys.push({ file: use.file, line: use.line, key: use.key, value: use.value ?? use.key });
       continue;
     }
+    // A keyref may append an element id (`key/element`): the key resolves to a
+    // file and a topic, so the appended id is checked against that topic later.
+    const suffix = use.value?.split('/').slice(1).join('/');
+    const keyHref = def.href ?? '';
+    const keyHash = keyHref.indexOf('#');
+    const keyTopic = keyHash >= 0 ? keyHref.slice(keyHash + 1).split('/')[0] : '';
+    if (suffix && !use.scopeChains) {
+      result.keyElementPaths.push({
+        file: use.file, line: use.line, value: use.value ?? use.key,
+        elementPath: suffix, targetFile: def.target, topicId: keyTopic || undefined,
+      });
+    }
     // The key is defined, so the element's own @href is not used.
     if (use.fallbackRef) droppedFallbacks.add(use.fallbackRef);
-    if (!def.target) continue; // a text-only key: defined, but no resource
+    if (use.attribute === 'conkeyref') continue; // content references never become References here
+    if (!def.target) {
+      // A text-only key: defined, but there is no resource to link to. A key that
+      // redirects to another key is left alone: this crawl does not follow
+      // redirect chains, so it cannot tell where the chain ends.
+      if (!def.keyref && (use.kind === 'xref' || use.kind === 'link')) {
+        result.keyLinksWithoutTarget.push({
+          file: use.file, line: use.line, key: use.key, value: use.value ?? use.key, tag: use.tag,
+        });
+      }
+      continue;
+    }
     // Only elements that make a link (xref, image, topicref, ...) are references;
     // a <ph keyref> or <keyword keyref> merely borrows the key's text.
-    if (!use.kind) continue;    const pathPart = (def.href ?? '').split('#')[0];
+    if (!use.kind) continue;
+    const pathPart = (def.href ?? '').split('#')[0];
     result.refs.push({
       file: use.file,
       line: use.line,

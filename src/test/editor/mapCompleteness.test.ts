@@ -685,6 +685,179 @@ describe('completeness: reference spelling and @format (Oxygen batch 1)', () => 
   });
 });
 
+describe('completeness: conref shape', () => {
+  const lib = topic('t', '<p id="p1">1</p><p id="p2">2</p><p id="p3">3</p><section id="s"><p id="p4">4</p></section>');
+
+  it('reports a conref without a fragment and a conrefend without conref', async () => {
+    const issues = await check(
+      {
+        'root.ditamap': '<map><topicref href="a.dita"/><topicref href="b.dita"/></map>',
+        'a.dita': topic('a', '<p conref="lib.dita"/>'),
+        'b.dita': topic('b', '<p conrefend="lib.dita#t/p2"/>'),
+        'lib.dita': lib,
+      },
+      { checkNonDita: true },
+    );
+    const msgs = issues.filter((i) => i.category === 'invalid-conref-form').map((i) => i.message);
+    assert.ok(msgs.some((m) => m.includes('no "#id" part')), msgs.join('\n'));
+    assert.ok(msgs.some((m) => m.includes('conrefend is used without conref')), msgs.join('\n'));
+  });
+
+  it('reports a backwards range and a range across parents, not a forward sibling range', async () => {
+    const issues = await check(
+      {
+        'root.ditamap': '<map><topicref href="a.dita"/><topicref href="b.dita"/><topicref href="c.dita"/></map>',
+        'a.dita': topic('a', '<p conref="lib.dita#t/p3" conrefend="lib.dita#t/p1"/>'),
+        'b.dita': topic('b', '<p conref="lib.dita#t/p1" conrefend="lib.dita#t/p4"/>'),
+        'c.dita': topic('c', '<p conref="lib.dita#t/p1" conrefend="lib.dita#t/p2"/>'),
+        'lib.dita': lib,
+      },
+      { checkNonDita: true },
+    );
+    const asserts = issues.filter((i) => i.category === 'invalid-conref-form' && i.file.endsWith('a.dita'));
+    assert.strictEqual(asserts.length, 1, JSON.stringify(issues, null, 2));
+    assert.ok(asserts[0].message.includes('must come before'), asserts[0].message);
+    const siblings = issues.filter((i) => i.category === 'invalid-conref-form' && i.file.endsWith('b.dita'));
+    assert.strictEqual(siblings.length, 1, JSON.stringify(issues, null, 2));
+    assert.ok(siblings[0].message.includes('sibling elements'), siblings[0].message);
+  });
+
+  it('reports -dita-use-conref-target only on an element that is not a content reference', async () => {
+    const issues = await check(
+      {
+        'root.ditamap': '<map><keydef keys="k" href="lib.dita#t"/><topicref href="a.dita"/><topicref href="b.dita"/><topicref href="ok.dita"/></map>',
+        'a.dita': topic('a', '<p><xref href="ok.dita" scope="-dita-use-conref-target">x</xref></p>'),
+        'b.dita': topic('b', '<p><xref conref="lib.dita#t/p1" scope="-dita-use-conref-target"/><xref conkeyref="k/p2" scope="-dita-use-conref-target"/></p>'),
+        'lib.dita': lib,
+        'ok.dita': topic('ok'),
+      },
+      { checkNonDita: true },
+    );
+    const found = issues.filter((i) => i.category === 'invalid-conref-form');
+    assert.strictEqual(found.length, 1, JSON.stringify(issues, null, 2));
+    assert.ok(found[0].file.endsWith('a.dita') && found[0].message.includes('-dita-use-conref-target'));
+  });
+});
+
+describe('completeness: id references', () => {
+  const lib = topic('t', '<p id="p1">1</p><section id="s"><p id="p5">5</p></section>');
+
+  it('reports a missing element id, a deeper id path and a trailing slash, and skips an empty topic id', async () => {
+    const issues = await check(
+      {
+        'root.ditamap':
+          '<map><topicref href="a.dita"/><topicref href="b.dita"/><topicref href="c.dita"/><topicref href="d.dita"/><topicref href="e.dita"/></map>',
+        'a.dita': topic('a', '<p conref="lib.dita#t/p1"/>'),
+        'b.dita': topic('b', '<p conref="lib.dita#t/nope"/>'),
+        'c.dita': topic('c', '<p><xref href="lib.dita#t/s/p5">deep</xref></p>'),
+        'd.dita': topic('d', '<p conref="lib.dita#t/"/>'),
+        'e.dita': topic('e', '<p conref="lib.dita#/p1"/>'),
+        'lib.dita': lib,
+      },
+      { checkNonDita: true },
+    );
+    const found = issues.filter((i) => i.category === 'invalid-id-reference');
+    assert.strictEqual(found.length, 3, JSON.stringify(issues, null, 2));
+    assert.ok(found.some((i) => i.message.includes('Referenced ID path "t/nope"')), JSON.stringify(found));
+    assert.ok(found.some((i) => i.message.includes('Referenced ID path "t/s/p5"')), JSON.stringify(found));
+    assert.ok(found.some((i) => i.message.includes('Bad ID reference')), JSON.stringify(found));
+  });
+
+  it('checks the element id a key appends to its key', async () => {
+    const issues = await check(
+      {
+        'root.ditamap': '<map><keydef keys="k" href="lib.dita#t"/><topicref href="a.dita"/></map>',
+        'a.dita': topic('a', '<p conkeyref="k/nope"/>'),
+        'lib.dita': lib,
+      },
+      { checkNonDita: true },
+    );
+    const found = issues.filter((i) => i.category === 'invalid-id-reference');
+    assert.strictEqual(found.length, 1, JSON.stringify(issues, null, 2));
+    assert.ok(found[0].message.includes('"t/nope"'), found[0].message);
+  });
+
+  it('reports a topicref to an element id but not one to a topic id', async () => {
+    const issues = await check(
+      {
+        'root.ditamap': '<map><topicref href="lib.dita#t/p1"/><topicref href="lib2.dita#t2"/></map>',
+        'lib.dita': lib,
+        'lib2.dita': topic('t2'),
+      },
+      { checkNonDita: true },
+    );
+    const found = issues.filter((i) => i.category === 'topicref-to-element');
+    assert.strictEqual(found.length, 1, JSON.stringify(issues, null, 2));
+    assert.ok(found[0].message.includes('t/p1'), found[0].message);
+  });
+
+  it('does not count a topic published only through an element-id topicref as in the map', async () => {
+    const issues = await check(
+      {
+        'root.ditamap': '<map><topicref href="lib.dita#t/p1"/><topicref href="a.dita"/></map>',
+        'a.dita': topic('a', '<p><xref href="lib.dita#t/p1">deep</xref></p>'),
+        'lib.dita': lib,
+      },
+      { reportUnreferencedLinks: true },
+    );
+    const links = issues.filter((i) => i.category === 'unreferenced-link');
+    assert.strictEqual(links.length, 1, JSON.stringify(issues, null, 2));
+    assert.ok(links[0].file.endsWith('a.dita'));
+  });
+});
+
+describe('completeness: links', () => {
+  it('reports a link through a text-only key and a link with no target', async () => {
+    const issues = await check(
+      {
+        'root.ditamap': '<map><keydef keys="k"/><topicref href="a.dita"/><topicref href="ok.dita"/></map>',
+        'a.dita': topic('a', '<p><xref keyref="k">text</xref><xref>none</xref><xref href="ok.dita">ok</xref></p>'),
+        'ok.dita': topic('ok'),
+      },
+      { checkNonDita: true },
+    );
+    assert.strictEqual(issues.filter((i) => i.category === 'link-key-without-target').length, 1, JSON.stringify(issues, null, 2));
+    assert.strictEqual(issues.filter((i) => i.category === 'link-no-target').length, 1, JSON.stringify(issues, null, 2));
+  });
+
+  it('reports a cross reference to a resource-only topic, unless a normal reference publishes it too', async () => {
+    const issues = await check(
+      {
+        'root.ditamap':
+          '<map><topicref href="lib.dita" processing-role="resource-only"/>' +
+          '<topicref href="pub.dita"/><topicref href="shared.dita" processing-role="resource-only" copy-to="shared-copy.dita"/>' +
+          '<topicref href="shared.dita"/><topicref href="a.dita"/><topicref href="b.dita"/><topicref href="c.dita"/></map>',
+        'a.dita': topic('a', '<p><xref href="lib.dita">broken</xref></p>'),
+        'b.dita': topic('b', '<p><xref href="pub.dita">ok</xref></p>'),
+        'c.dita': topic('c', '<related-links><link href="shared.dita"/></related-links>'),
+        'lib.dita': topic('lib'),
+        'pub.dita': topic('pub'),
+        'shared.dita': topic('shared'),
+      },
+      { checkNonDita: true },
+    );
+    const found = issues.filter((i) => i.category === 'resource-only-target');
+    assert.strictEqual(found.length, 1, JSON.stringify(issues, null, 2));
+    assert.ok(found[0].file.endsWith('a.dita'), found[0].file);
+  });
+});
+
+describe('completeness: duplicate element ids', () => {
+  it('reports the later duplicate inside one topic, not the same id in a nested topic', async () => {
+    const doc =
+      '<topic id="a"><title>T</title><body><p id="dup">1</p><p id="dup">2</p></body>' +
+      '<topic id="inner"><title>I</title><body><p id="dup">3</p></body></topic></topic>';
+    const issues = await check(
+      { 'root.ditamap': '<map><topicref href="a.dita"/></map>', 'a.dita': doc },
+      { checkDuplicateTopicIds: true },
+    );
+    const found = issues.filter((i) => i.category === 'duplicate-element-id');
+    assert.strictEqual(found.length, 1, JSON.stringify(issues, null, 2));
+    assert.strictEqual(found[0].line, 1);
+    assert.ok(found[0].related?.length === 1);
+  });
+});
+
 describe('completeness: validation and DITAVAL', () => {
   it('reports XML errors with the right line, even when the DOCTYPE spans lines', async () => {
     const bad = '<?xml version="1.0"?>\n<!DOCTYPE topic [\n<!ENTITY x "y">\n]>\n<topic id="a">\n<title>T</title>\n<body><p>oops</body>\n</topic>';

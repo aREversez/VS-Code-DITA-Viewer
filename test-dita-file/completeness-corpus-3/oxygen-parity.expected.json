@@ -1,0 +1,37 @@
+{
+  "matched": [
+    "corpus.ditamap  missing-reference",
+    "maps/f-topicref-to-element-pos.ditamap  topicref-to-element",
+    "topics/e-conkeyref-peer-pos.dita  undefined-key",
+    "topics/e-conref-order-edge.dita  invalid-conref-form",
+    "topics/e-conref-order-pos.dita  invalid-conref-form",
+    "topics/e-conref-siblings-edge.dita  invalid-conref-form",
+    "topics/e-conref-siblings-pos.dita  invalid-conref-form",
+    "topics/e-conrefend-confl-pos.dita  invalid-conref-form",
+    "topics/e-conrefend-no-conref-edge.dita  invalid-conref-form",
+    "topics/e-conrefend-no-conref-pos.dita  invalid-conref-form",
+    "topics/e-id-miss-conref-pos.dita  invalid-conref-form",
+    "topics/e-target-attr-pos.dita  invalid-conref-form",
+    "topics/f-bad-id-ref-pos.dita  invalid-id-reference",
+    "topics/f-invalid-ref-id-edge.dita  invalid-id-reference",
+    "topics/f-invalid-ref-id-edge.dita  resource-only-target",
+    "topics/f-invalid-ref-id-pos.dita  invalid-id-reference",
+    "topics/f-keyref-elemid-edge.dita  invalid-id-reference",
+    "topics/f-keyref-elemid-edge.dita  resource-only-target",
+    "topics/f-keyref-elemid-pos.dita  invalid-id-reference",
+    "topics/f-ref-id-path-edge.dita  invalid-id-reference",
+    "topics/f-ref-id-path-pos.dita  invalid-id-reference",
+    "topics/f-topicref-to-element-edge.dita  unreferenced-link",
+    "topics/g-link-keyref-edge.dita  link-key-without-target",
+    "topics/g-link-keyref-pos.dita  link-key-without-target",
+    "topics/g-link-no-target-pos.dita  link-no-target",
+    "topics/g-resource-only-pos.dita  resource-only-target",
+    "topics/h-dup-el-id-pos.dita  duplicate-element-id"
+  ],
+  "extensionOnly": [],
+  "oxygenOnly": [
+    "topics/e-conrefend-no-conref-edge.dita  oxygen:unknown",
+    "topics/e-id-miss-conref-edge.dita  oxygen:dmv.invalid.class.generalization",
+    "topics/f-bad-id-ref-empty-topic.dita  oxygen:unknown"
+  ]
+}

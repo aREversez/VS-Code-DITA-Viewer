@@ -64,32 +64,32 @@ ignored by the `(file, category)` diff.
 | `dmv.topicref.ext.scope.no.format` | external-scope non-DITA ref missing `@format` | ok (`format-missing`) |
 | `dmv.ref.type.class.mismatch` | `@type` does not match the target's class | gap |
 | `dmv.ref.type.class.mismatch.specific` | `@type` less specific than the target's class | gap |
-| `dmv.topicref.to.element` | topicref points at an element ID, not a topic ID | gap |
+| `dmv.topicref.to.element` | topicref points at an element ID, not a topic ID | ok (`topicref-to-element`) — the corpus-3 report carries it on `maps/f-topicref-to-element-pos.ditamap` |
 | `dmv.topichead.no.navtitle` | `topichead` has no navigation title | ok (`missing-navtitle`) |
 | `dmv.topicref.no.navtitle` | non-local topicref has no navigation title | ok (`missing-navtitle`) |
-| `dmv.bad.id.ref` | bad ID reference | gap |
-| `dmv.invalid.ref.id` | referenced ID not found | gap |
-| `dmv.invalid.ref.id.path` | referenced ID path not found | gap |
-| `dmv.invalid.ref.id.path.keyref.elemid` | key-target element ID not found under the key | gap |
+| `dmv.bad.id.ref` | bad ID reference | ok (`invalid-id-reference`) — the corpus-3 report carries it on `topics/f-bad-id-ref-pos.dita` (a trailing slash) |
+| `dmv.invalid.ref.id` | referenced ID not found | ok (`invalid-id-reference`) — mapped only: the corpus-3 report files its probes under `dmv.invalid.ref.id.path` |
+| `dmv.invalid.ref.id.path` | referenced ID path not found | ok (`invalid-id-reference`) — the corpus-3 report carries it for both the missing-element and the deeper-path probes |
+| `dmv.invalid.ref.id.path.keyref.elemid` | key-target element ID not found under the key | ok (`invalid-id-reference`) — mapped only: the corpus-3 report files both positive probes under `dmv.invalid.ref.id.path`, so no incident carries this id |
 | `dmv.invalid.ref.topic.id` | referenced topic ID not found | ok (`invalid-ref-topic-id`) |
-| `dmv.link.no.target` | link/xref has neither `@href` nor `@keyref` | gap |
+| `dmv.link.no.target` | link/xref has neither `@href` nor `@keyref` | ok (`link-no-target`) — the corpus-3 report carries it on `topics/g-link-no-target-pos.dita` |
 | `dmv.link.topic.to.map` | topic-to-map reference is not resolved in output | ok (`format-mismatch`) — same file and fix as `dmv.ref.topic.as.map` in the corpus-2 probe |
-| `dmv.ref.to.resource.only` | cross-reference to a resource-only topic breaks | gap |
+| `dmv.ref.to.resource.only` | cross-reference to a resource-only topic breaks | ok (`resource-only-target`) — the corpus-3 report carries it for a direct xref and for the two key-element boundaries |
 | `dmv.ref.filtered` | target is excluded by profiling filters | gap |
-| `dmv.empty.link.peer.target` | peer-map reference needs explicit link text | gap |
+| `dmv.empty.link.peer.target` | peer-map reference needs explicit link text | n/a — the corpus-3 report produced no incident for the peer xref without text, the one with text, or the local edge, so no shape has been observed to implement; see the batch 2 run below |
 
 ## Conref / conkeyref / reuse
 
 | Problem ID | Oxygen reports | Extension status |
 | --- | --- | --- |
-| `dmv.id.miss.conref` | conref missing the `#id` part | gap |
-| `dmv.conref.proper.order` | `conref` comes after `conrefend` | gap |
-| `dmv.conref.siblings` | `conref`/`conrefend` are not siblings | gap |
-| `dmv.conrefend.confl.conref` | `conrefend` targets a different topic than `conref` | gap |
-| `dmv.conrefend.no.conref` | `conrefend` without `conref` | gap |
+| `dmv.id.miss.conref` | conref missing the `#id` part | ok (`invalid-conref-form`) — the corpus-3 report carries it on `topics/e-id-miss-conref-pos.dita`; a conref that names a whole topic is `dmv.invalid.class.generalization` instead |
+| `dmv.conref.proper.order` | `conref` comes after `conrefend` | ok (`invalid-conref-form`) — the report also uses it for the two one-element edges, where neither end precedes the other |
+| `dmv.conref.siblings` | `conref`/`conrefend` are not siblings | ok (`invalid-conref-form`) — the report also uses it for a range that crosses two topics of one file |
+| `dmv.conrefend.confl.conref` | `conrefend` targets a different topic than `conref` | ok (`invalid-conref-form`) — the report carries it only on the empty-`@conref` edge, so the file comparison, not the topic comparison, is what it checks |
+| `dmv.conrefend.no.conref` | `conrefend` without `conref` | ok (`invalid-conref-form`) — the corpus-3 report carries it on `topics/e-conrefend-no-conref-pos.dita` |
 | `dmv.ref.filtered.conref` | conref target is dropped by content-ref processing | gap |
-| `dmv.conkeyref.peer.map` | conkeyref into a peer map | gap |
-| `dmv.no.conref.has.target.attr.value` | non-conref element carries a conref-target attribute | gap |
+| `dmv.conkeyref.peer.map` | conkeyref into a peer map | ok (`undefined-key`) — mapped only: the report files it as `dmv.key.undef`, because a peer map is not part of this build's key space (the probe sets no keyscope) |
+| `dmv.no.conref.has.target.attr.value` | non-conref element carries a conref-target attribute | ok (`invalid-conref-form`) — warning; the corpus-3 report carries it on `topics/e-target-attr-pos.dita` |
 | `dmv.not.used.reusable.component` | reusable element never conref'd | ok (`unreferenced-reusable`) |
 
 ## Keys
@@ -99,8 +99,8 @@ ignored by the `(file, category)` diff.
 | `dmv.undef.key` | keyref cannot be mapped to a target topic | ok (`undefined-key`) |
 | `duplicate.key.definition` | the same key is defined twice | ok (`duplicate-key`) |
 | `dmv.not.used.key.defs` | key defined but never referenced | ok (`unreferenced-key`) |
-| `dmv.circular.keyref` | circular key reference | gap |
-| `dmv.no.link.keyref` | target key definition has no reference | gap |
+| `dmv.circular.keyref` | circular key reference | n/a — the corpus-3 report produced no incident for the two-key loop, the self-redirect or the linear chain; the extension does not follow redirect chains and stays silent on the same probes, including the chain's link use |
+| `dmv.no.link.keyref` | target key definition has no reference | ok (`link-key-without-target`) — the corpus-3 report carries it on the xref and the `link` element probes; the seven corpus-2 incidents now match too |
 | `dmv.invalid.keyref.syntax.1` | keyref has more than one `/` | ok (`invalid-key-syntax`) — the report carries the family as `dmv.invalid.keyref.syntax`, without the suffix |
 | `dmv.invalid.keyref.syntax.2` | invalid character in a keyref | n/a — the corpus-2 report produced no incident for it; the extension checks only `/` and whitespace |
 | `dmv.invalid.keyref.syntax.3` | keyref contains whitespace | ok (`invalid-key-syntax`) — the report carries the family as `dmv.invalid.keyref.syntax`, without the suffix |
@@ -111,7 +111,7 @@ ignored by the `(file, category)` diff.
 | --- | --- | --- |
 | `dmv.dup.topic` | the same topic referenced more than once | ok (`multiple-reference`) |
 | `dmv.dup.topic.id` | duplicate topic ID in the map context | ok (`duplicate-id`) — the extension reports every topic that shares the id, as Oxygen does |
-| `dmv.dup.el.id` | duplicate element ID inside one topic | gap |
+| `dmv.dup.el.id` | duplicate element ID inside one topic | ok (`duplicate-element-id`) — the corpus-3 report carries it on `topics/h-dup-el-id-pos.dita` |
 | `dmv.dup.cond.filter` | duplicate condition in a filter file | gap |
 
 ## Unreferenced / not in map
@@ -141,7 +141,7 @@ ignored by the `(file, category)` diff.
 | Problem ID | Oxygen reports | Extension status |
 | --- | --- | --- |
 | `dmv.invalid.class.format` | malformed `@class` | gap |
-| `dmv.invalid.class.generalization` | `@class` is not a generalization | gap |
+| `dmv.invalid.class.generalization` | `@class` is not a generalization | gap — also the id the corpus-3 report used for a `conref` that names a whole topic (batch 4 checks classes) |
 | `dmv.invalid.class.specialization` | `@class` is not a specialization | gap |
 | `dmv.invalid.domains.format` | `@domains` missing/malformed | gap |
 | `dmv.invalid.id.syntax.2` | invalid character in an ID | ok (`invalid-id-syntax`) — the corpus-2 report files it as `IDInvalidWithNamespaces` |
@@ -282,6 +282,50 @@ root with its ancestors in the same file (R014, R022); the two extension-only
 extension-only check). One case was not probed: a root that overlaps the map value only
 partly, with a child that conflicts with the part the map removed; the extension compares
 that child with the root's own values.
+
+### The batch 2 run (third corpus)
+
+*Validate and Check for Completeness* over `../completeness-corpus-3/corpus.ditamap` — that
+map as the only open root map, every option on, remote off — produced **30 incidents**
+(`../completeness-corpus-3/oxygen-report.xml`). The report says
+`Keys are gathered from: corpus.ditamap`, and the control `topics/control-missing.dita`
+(line 11 of the map) is present, so it is a run of this map. `scripts/oxygen-diff.cjs`
+reports **27 extension findings, 30 incidents, 27 matched, 0 extension-only, 3 Oxygen-only**;
+`oxygen-parity.expected.json` locks that. The 18 batch-2 ids:
+
+| Group | Oxygen ids seen | Extension |
+| --- | --- | --- |
+| E conref shape | `dmv.id.miss.conref`, `dmv.conref.siblings`, `dmv.conref.proper.order`, `dmv.conrefend.no.conref`, `dmv.conrefend.confl.conref`, `dmv.no.conref.has.target.attr.value` | `invalid-conref-form` (R037-R042) |
+| E key in a peer map | `dmv.key.undef` | `undefined-key` — a peer map is not crawled, so the key is undefined without a keyscope |
+| F id references | `dmv.invalid.ref.id.path` for all five probes, `dmv.bad.id.ref` | `invalid-id-reference` (R043-R045) |
+| F topicref | `dmv.topicref.to.element` | `topicref-to-element` (R046) |
+| G link through a key | `dmv.no.link.keyref` | `link-key-without-target` (R047) |
+| G link without target | `dmv.link.no.target` | `link-no-target` (R048) |
+| G resource-only | `dmv.ref.to.resource.only` | `resource-only-target` (R049) — also on the two key-element boundaries, whose key target is resource-only |
+| H element ids | `dmv.dup.el.id` | `duplicate-element-id` (R050) |
+
+The report does not always use the id the catalog suggests; the mapping still works because
+parity is by category:
+
+- `dmv.invalid.ref.id` and `dmv.invalid.ref.id.path.keyref.elemid` both appear as
+  `dmv.invalid.ref.id.path`, so neither has an incident of its own.
+- `dmv.conkeyref.peer.map` appears as `dmv.key.undef`.
+- A one-element range is `dmv.conref.proper.order` on both edge probes, not `dmv.conref.siblings`.
+- A range across two topics of one file is `dmv.conref.siblings`, not `dmv.conrefend.confl.conref`.
+- `dmv.conrefend.confl.conref` fires on `conref=""` and nowhere else in this corpus.
+
+Three rows stay Oxygen-only:
+
+| Oxygen-only row | Report evidence | Handling |
+| --- | --- | --- |
+| `topics/e-conrefend-no-conref-edge.dita` `oxygen:unknown` | "Empty reference value." — no `problemID` in the raw report | **Understood.** The same element also carries `dmv.conrefend.confl.conref`, which matches as `invalid-conref-form`; the id-less row names no category to map. The extension reports the element once, not twice. |
+| `topics/e-id-miss-conref-edge.dita` `dmv.invalid.class.generalization` | the `<p>` conref names a whole topic (`lib.dita#lib`) | **Batch 4.** Oxygen calls that an element-class mismatch; the extension reports only a conref with no `#` at all (`e-id-miss-conref-pos.dita`). Whole-topic conref stays the documented boundary of `dmv.id.miss.conref`. |
+| `topics/f-bad-id-ref-empty-topic.dita` `oxygen:unknown` | "Invalid anchor `lib.dita#/p1`." — no `problemID` | **Understood.** The empty topic segment is the one `dmv.bad.id.ref` shape the catalog does not id; the trailing-slash probe matches on `f-bad-id-ref-pos.dita`. A finding for the empty segment would be extension-only. |
+
+Two ids are *n/a* after this run: `dmv.circular.keyref` (no incident on the loop,
+self-redirect or linear-chain probes) and `dmv.empty.link.peer.target` (no incident on the
+peer-without-text, peer-with-text or local probes). In both cases the extension stays silent
+on the same files, so the divergence is unprobed behaviour, not a known difference.
 
 ## How to use this
 

@@ -5,5 +5,187 @@
     "file": "corpus.ditamap",
     "line": 11,
     "message": "Referenced topic not found: topics/control-missing.dita"
+  },
+  {
+    "category": "topicref-to-element",
+    "severity": "error",
+    "file": "maps/f-topicref-to-element-pos.ditamap",
+    "line": 8,
+    "message": "Topic reference names an element id, not a topic id: lib2p/lib2p-p1"
+  },
+  {
+    "category": "undefined-key",
+    "severity": "error",
+    "file": "topics/e-conkeyref-peer-pos.dita",
+    "line": 8,
+    "message": "Key reference \"k-conkeyref-peer/p2\" does not match any key definition"
+  },
+  {
+    "category": "invalid-conref-form",
+    "severity": "error",
+    "file": "topics/e-conref-order-edge.dita",
+    "line": 8,
+    "message": "The conref target must come before the conrefend target: lib.dita#lib3/p1 → lib.dita#lib3/p1"
+  },
+  {
+    "category": "invalid-conref-form",
+    "severity": "error",
+    "file": "topics/e-conref-order-pos.dita",
+    "line": 8,
+    "message": "The conref target must come before the conrefend target: lib.dita#lib3/p3 → lib.dita#lib3/p1"
+  },
+  {
+    "category": "invalid-conref-form",
+    "severity": "error",
+    "file": "topics/e-conref-siblings-edge.dita",
+    "line": 7,
+    "message": "The conref target must come before the conrefend target: lib.dita#lib3/p1 → lib.dita#lib3/p1"
+  },
+  {
+    "category": "invalid-conref-form",
+    "severity": "error",
+    "file": "topics/e-conref-siblings-pos.dita",
+    "line": 8,
+    "message": "conref and conrefend do not refer to sibling elements: lib.dita#lib3/p1 → lib.dita#lib3/p5"
+  },
+  {
+    "category": "invalid-conref-form",
+    "severity": "error",
+    "file": "topics/e-conrefend-confl-pos.dita",
+    "line": 8,
+    "message": "conref and conrefend do not refer to sibling elements: lib.dita#lib3/p1 → lib.dita#libinner3/p4"
+  },
+  {
+    "category": "invalid-conref-form",
+    "severity": "error",
+    "file": "topics/e-conrefend-no-conref-edge.dita",
+    "line": 8,
+    "message": "conrefend \"lib.dita#lib3/p3\" points to a different file than conref \"\""
+  },
+  {
+    "category": "invalid-conref-form",
+    "severity": "error",
+    "file": "topics/e-conrefend-no-conref-pos.dita",
+    "line": 7,
+    "message": "conrefend is used without conref: lib.dita#lib3/p3"
+  },
+  {
+    "category": "invalid-conref-form",
+    "severity": "error",
+    "file": "topics/e-id-miss-conref-pos.dita",
+    "line": 7,
+    "message": "Content reference has no \"#id\" part: lib.dita"
+  },
+  {
+    "category": "invalid-conref-form",
+    "severity": "warning",
+    "file": "topics/e-target-attr-pos.dita",
+    "line": 8,
+    "message": "Element <xref> has no conref or conkeyref but @scope is \"-dita-use-conref-target\""
+  },
+  {
+    "category": "invalid-id-reference",
+    "severity": "error",
+    "file": "topics/f-bad-id-ref-pos.dita",
+    "line": 7,
+    "message": "Bad ID reference (trailing slash): lib3/"
+  },
+  {
+    "category": "invalid-id-reference",
+    "severity": "error",
+    "file": "topics/f-invalid-ref-id-edge.dita",
+    "line": 8,
+    "message": "Referenced ID path \"lib3/nope\" not found"
+  },
+  {
+    "category": "resource-only-target",
+    "severity": "warning",
+    "file": "topics/f-invalid-ref-id-edge.dita",
+    "line": 8,
+    "message": "Topic \"lib.dita\" is published only as resource-only; the cross-reference will break"
+  },
+  {
+    "category": "invalid-id-reference",
+    "severity": "error",
+    "file": "topics/f-invalid-ref-id-pos.dita",
+    "line": 8,
+    "message": "Referenced ID path \"lib3/nope\" not found"
+  },
+  {
+    "category": "invalid-id-reference",
+    "severity": "error",
+    "file": "topics/f-keyref-elemid-edge.dita",
+    "line": 9,
+    "message": "Referenced ID path \"lib3/nope\" not found"
+  },
+  {
+    "category": "resource-only-target",
+    "severity": "warning",
+    "file": "topics/f-keyref-elemid-edge.dita",
+    "line": 9,
+    "message": "Topic \"../topics/lib.dita\" is published only as resource-only; the cross-reference will break"
+  },
+  {
+    "category": "invalid-id-reference",
+    "severity": "error",
+    "file": "topics/f-keyref-elemid-pos.dita",
+    "line": 8,
+    "message": "Referenced ID path \"lib3/nope\" not found"
+  },
+  {
+    "category": "invalid-id-reference",
+    "severity": "error",
+    "file": "topics/f-ref-id-path-edge.dita",
+    "line": 8,
+    "message": "Referenced ID path \"lib3/sect3/p5\" not found"
+  },
+  {
+    "category": "invalid-id-reference",
+    "severity": "error",
+    "file": "topics/f-ref-id-path-pos.dita",
+    "line": 7,
+    "message": "Referenced ID path \"lib3/missing/nope\" not found"
+  },
+  {
+    "category": "unreferenced-link",
+    "severity": "warning",
+    "file": "topics/f-topicref-to-element-edge.dita",
+    "line": 8,
+    "message": "Link target is not referenced in any map: lib2-pos.dita#lib2p/lib2p-p1"
+  },
+  {
+    "category": "link-key-without-target",
+    "severity": "warning",
+    "file": "topics/g-link-keyref-edge.dita",
+    "line": 8,
+    "message": "Key \"k-g-link-text\" defines no target, so the reference will not appear as a link: k-g-link-text"
+  },
+  {
+    "category": "link-key-without-target",
+    "severity": "warning",
+    "file": "topics/g-link-keyref-pos.dita",
+    "line": 8,
+    "message": "Key \"k-g-link-text\" defines no target, so the reference will not appear as a link: k-g-link-text"
+  },
+  {
+    "category": "link-no-target",
+    "severity": "warning",
+    "file": "topics/g-link-no-target-pos.dita",
+    "line": 7,
+    "message": "<xref> has neither @href nor @keyref"
+  },
+  {
+    "category": "resource-only-target",
+    "severity": "warning",
+    "file": "topics/g-resource-only-pos.dita",
+    "line": 8,
+    "message": "Topic \"resource-only.dita\" is published only as resource-only; the cross-reference will break"
+  },
+  {
+    "category": "duplicate-element-id",
+    "severity": "error",
+    "file": "topics/h-dup-el-id-pos.dita",
+    "line": 8,
+    "message": "Duplicate element id \"dup-el\" in the same topic"
   }
 ]

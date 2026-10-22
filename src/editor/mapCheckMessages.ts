@@ -19,6 +19,20 @@ export const MESSAGE_TEMPLATES = {
   'ref.linkNotInMap': 'Link target is not referenced in any map: {0}',
   'ref.multiple': 'Topic referenced more than once ({1} times): {0}',
   'ref.invalidTopicId': 'Referenced topic id "{0}" not found',
+  // conref/conrefend shape
+  'conref.missingId': 'Content reference has no "#id" part: {0}',
+  'conref.endNoStart': 'conrefend is used without conref: {0}',
+  'conref.endOtherFile': 'conrefend "{0}" points to a different file than conref "{1}"',
+  'conref.siblings': 'conref and conrefend do not refer to sibling elements: {0} → {1}',
+  'conref.order': 'The conref target must come before the conrefend target: {0} → {1}',
+  'conref.targetValue': 'Element <{0}> has no conref or conkeyref but @{1} is "{2}"',
+  // id references and links
+  'id.badReference': 'Bad ID reference (trailing slash): {0}',
+  'id.pathNotFound': 'Referenced ID path "{0}" not found',
+  'topicref.element': 'Topic reference names an element id, not a topic id: {0}',
+  'key.linkNoTarget': 'Key "{0}" defines no target, so the reference will not appear as a link: {1}',
+  'link.noTarget': '<{0}> has neither @href nor @keyref',
+  'link.resourceOnly': 'Topic "{0}" is published only as resource-only; the cross-reference will break',
   // reference spelling and structure
   'ref.winSeparators': 'Reference uses backslashes instead of forward slashes: {0}',
   'ref.absolute': 'Reference is an absolute path; DITA references should be relative to the map',
@@ -47,6 +61,7 @@ export const MESSAGE_TEMPLATES = {
   'nav.topicref': 'External reference has no navigation title: {0}',
   // ids, keys, reuse
   'id.duplicate': 'Duplicate topic id "{0}" ({1} topics share it)',
+  'id.duplicateElement': 'Duplicate element id "{0}" in the same topic',
   'key.undefined': 'Key reference "{0}" does not match any key definition',
   'key.duplicate': 'Key "{0}" is already defined; this definition is ignored',
   'key.unreferenced': 'Key "{0}" is defined but never referenced',

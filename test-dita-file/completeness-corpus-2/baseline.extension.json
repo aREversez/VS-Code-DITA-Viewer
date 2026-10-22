@@ -392,11 +392,60 @@
     "message": "ID \"a b\" is not a valid DITA ID (XML NCName)"
   },
   {
+    "category": "link-key-without-target",
+    "severity": "warning",
+    "file": "topics/b-keyref1-edge.dita",
+    "line": 7,
+    "message": "Key \"a\" defines no target, so the reference will not appear as a link: a"
+  },
+  {
+    "category": "link-key-without-target",
+    "severity": "warning",
+    "file": "topics/b-keyref1-neg.dita",
+    "line": 8,
+    "message": "Key \"a\" defines no target, so the reference will not appear as a link: a/b"
+  },
+  {
     "category": "invalid-key-syntax",
     "severity": "error",
     "file": "topics/b-keyref1-pos.dita",
     "line": 8,
     "message": "Key reference has more than one \"/\" (expected key/element): a/b/c"
+  },
+  {
+    "category": "link-key-without-target",
+    "severity": "warning",
+    "file": "topics/b-keyref2-edge.dita",
+    "line": 7,
+    "message": "Key \"a-b\" defines no target, so the reference will not appear as a link: a-b"
+  },
+  {
+    "category": "link-key-without-target",
+    "severity": "warning",
+    "file": "topics/b-keyref2-neg.dita",
+    "line": 7,
+    "message": "Key \"a.b\" defines no target, so the reference will not appear as a link: a.b"
+  },
+  {
+    "category": "link-key-without-target",
+    "severity": "warning",
+    "file": "topics/b-keyref2-pos.dita",
+    "line": 8,
+    "message": "Key \"a$b\" defines no target, so the reference will not appear as a link: a$b"
+  },
+  {
+    "category": "link-key-without-target",
+    "severity": "warning",
+    "file": "topics/b-keyref3-edge.dita",
+    "line": 7,
+    "message": "Key \"a\" defines no target, so the reference will not appear as a link:  a"
+  },
+  {
+    "category": "link-key-without-target",
+    "severity": "warning",
+    "file": "topics/b-keyref3-neg.dita",
+    "line": 7,
+    "message": "Key \"a\" defines no target, so the reference will not appear as a link: a"
   },
   {
     "category": "invalid-key-syntax",

@@ -58,6 +58,18 @@ export function localizeMsg(m: Msg): string {
     case 'ref.linkNotInMap': return vscode.l10n.t('Link target is not referenced in any map: {0}', ...a);
     case 'ref.multiple': return vscode.l10n.t('Topic referenced more than once ({1} times): {0}', ...a);
     case 'ref.invalidTopicId': return vscode.l10n.t('Referenced topic id "{0}" not found', ...a);
+    case 'conref.missingId': return vscode.l10n.t('Content reference has no "#id" part: {0}', ...a);
+    case 'conref.endNoStart': return vscode.l10n.t('conrefend is used without conref: {0}', ...a);
+    case 'conref.endOtherFile': return vscode.l10n.t('conrefend "{0}" points to a different file than conref "{1}"', ...a);
+    case 'conref.siblings': return vscode.l10n.t('conref and conrefend do not refer to sibling elements: {0} → {1}', ...a);
+    case 'conref.order': return vscode.l10n.t('The conref target must come before the conrefend target: {0} → {1}', ...a);
+    case 'conref.targetValue': return vscode.l10n.t('Element <{0}> has no conref or conkeyref but @{1} is "{2}"', ...a);
+    case 'id.badReference': return vscode.l10n.t('Bad ID reference (trailing slash): {0}', ...a);
+    case 'id.pathNotFound': return vscode.l10n.t('Referenced ID path "{0}" not found', ...a);
+    case 'topicref.element': return vscode.l10n.t('Topic reference names an element id, not a topic id: {0}', ...a);
+    case 'key.linkNoTarget': return vscode.l10n.t('Key "{0}" defines no target, so the reference will not appear as a link: {1}', ...a);
+    case 'link.noTarget': return vscode.l10n.t('<{0}> has neither @href nor @keyref', ...a);
+    case 'link.resourceOnly': return vscode.l10n.t('Topic "{0}" is published only as resource-only; the cross-reference will break', ...a);
     case 'ref.winSeparators': return vscode.l10n.t('Reference uses backslashes instead of forward slashes: {0}', ...a);
     case 'ref.absolute': return vscode.l10n.t('Reference is an absolute path; DITA references should be relative to the map', ...a);
     case 'ref.doubleSlash': return vscode.l10n.t('Reference contains a doubled path separator ("//"): {0}', ...a);
@@ -81,6 +93,7 @@ export function localizeMsg(m: Msg): string {
     case 'nav.topichead': return vscode.l10n.t('Topichead has no navigation title', ...a);
     case 'nav.topicref': return vscode.l10n.t('External reference has no navigation title: {0}', ...a);
     case 'id.duplicate': return vscode.l10n.t('Duplicate topic id "{0}" ({1} topics share it)', ...a);
+    case 'id.duplicateElement': return vscode.l10n.t('Duplicate element id "{0}" in the same topic', ...a);
     case 'key.duplicate': return vscode.l10n.t('Key "{0}" is already defined; this definition is ignored', ...a);
     case 'key.undefined': return vscode.l10n.t('Key reference "{0}" does not match any key definition', ...a);
     case 'key.unreferenced': return vscode.l10n.t('Key "{0}" is defined but never referenced', ...a);
@@ -166,6 +179,13 @@ function categoryLabel(c: IssueCategory): string {
     case 'table-layout': return vscode.l10n.t('Table layout problems');
     case 'profiling-conflict': return vscode.l10n.t('Profiling attribute conflicts');
     case 'profiling-preference': return vscode.l10n.t('Profiling preferences conflicts');
+    case 'invalid-conref-form': return vscode.l10n.t('Invalid content reference forms');
+    case 'invalid-id-reference': return vscode.l10n.t('References to a missing element id');
+    case 'topicref-to-element': return vscode.l10n.t('Topic references to element ids');
+    case 'link-key-without-target': return vscode.l10n.t('Links through keys without a target');
+    case 'link-no-target': return vscode.l10n.t('Links without a target');
+    case 'resource-only-target': return vscode.l10n.t('Cross references to resource-only topics');
+    case 'duplicate-element-id': return vscode.l10n.t('Duplicate element ids');
   }
 }
 
