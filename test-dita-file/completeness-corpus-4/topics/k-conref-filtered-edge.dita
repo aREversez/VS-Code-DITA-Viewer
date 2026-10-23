@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.filtered, edge probe; the conref range starts at a kept element and ends at a filtered one. -->
+<topic id="kcfe">
+  <title>Conref range ending in filtered content</title>
+  <body>
+    <p conref="k-conref-target-edge.dita#kcte/first" conrefend="k-conref-target-edge.dita#kcte/last"/>
+  </body>
+</topic>

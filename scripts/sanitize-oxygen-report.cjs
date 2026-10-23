@@ -54,7 +54,7 @@ async function main() {
   const skip = new Set(['--root', '--out'].flatMap((n) => (args.includes(n) ? [args.indexOf(n) + 1] : [])));
   const input = args.filter((a, i) => !a.startsWith('--') && !skip.has(i))[0];
   if (!input) {
-    console.error('usage: node scripts/sanitize-oxygen-report.cjs <raw-report.xml> [--root <dir>] [--out <file>]');
+    console.error('usage: node scripts/sanitize-oxygen-report.cjs <raw-report.xml> [--corpus <folder>] [--root <dir>] [--out <file>]');
     process.exit(2);
   }
   const mod = await loadAdapter();

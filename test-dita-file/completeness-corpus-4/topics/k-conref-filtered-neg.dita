@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.filtered, negative probe; the conref target element is not filtered. -->
+<topic id="kcfn">
+  <title>Conref to a kept element</title>
+  <body>
+    <p conref="k-conref-target-neg.dita#kctn/kept"/>
+  </body>
+</topic>

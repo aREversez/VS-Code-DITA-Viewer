@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.prof.sbj.attr.val.rej: positive probe; otherprops is outside the scheme's values. -->
+<topic id="jrp">
+  <title>Value rejected by the subject scheme</title>
+  <body>
+    <p otherprops="gamma">The scheme allows alpha and beta only.</p>
+  </body>
+</topic>

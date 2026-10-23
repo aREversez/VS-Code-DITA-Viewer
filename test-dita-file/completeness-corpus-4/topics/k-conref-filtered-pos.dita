@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.filtered, positive probe; the conref target element is excluded by the filter.
+     The report labels a content reference into filtered content dmv.ref.filtered, whatever
+     the referencing element is. -->
+<topic id="kcfp">
+  <title>Conref to a filtered element</title>
+  <body>
+    <p conref="k-conref-target-pos.dita#kctp/gone"/>
+  </body>
+</topic>

@@ -1,7 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- The filter both tools use for this corpus. In Oxygen it is chosen in the dialog of
      Validate and Check for Completeness; in the harness it comes from CORPUS_SETTINGS.
-     Probes that need other conditions add them here (Oxygen takes one filter per run). -->
+     Probes that need other conditions add them here (Oxygen takes one filter per run).
+
+     The file is also the dmv.dup.cond.filter probe:
+       - the duplicate audience/expert rule below is its positive case;
+       - the platform/solaris rule with two actions is its edge case.
+     A negative case (no duplicate at all) cannot coexist in the same file, because
+     Oxygen takes one filter per run; it is recorded in README.md and the ledger. -->
 <val>
   <prop att="audience" val="expert" action="exclude"/>
+  <!-- dmv.dup.cond.filter, positive: the same condition as the line above. -->
+  <prop att="audience" val="expert" action="exclude"/>
+  <!-- dmv.dup.cond.filter, edge: the same rule with two different actions. -->
+  <prop att="platform" val="solaris" action="exclude"/>
+  <prop att="platform" val="solaris" action="include"/>
 </val>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.filtered at topic level: negative probe; the target topic is published without an
+     excluded condition, and the report says nothing about the xref. -->
+<topic id="kfrn">
+  <title>Reference to a published topic</title>
+  <body>
+    <p><xref href="k-filtered-target-neg.dita#kftn"/></p>
+  </body>
+</topic>

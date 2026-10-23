@@ -2,7 +2,7 @@
 // corpus. Signature-level (file + category), because wording and line numbers
 // legitimately differ between the two tools.
 //
-//   node scripts/oxygen-diff.cjs <oxygen-report.xml>
+//   node scripts/oxygen-diff.cjs <oxygen-report.xml> [--corpus <folder>]
 //
 // The Oxygen report is produced outside this repo by Oxygen Scripting:
 //   sh scripts/validateCheckDITA.sh -i <corpus>/corpus.ditamap \
@@ -62,7 +62,7 @@ async function main() {
   const reportPath = args.filter((a, i) => !a.startsWith('--') && i !== skip)[0];
   if (!reportPath) {
     console.error(
-      'usage: node scripts/oxygen-diff.cjs <oxygen-report.xml|json> [--corpus-root <dir>]',
+      'usage: node scripts/oxygen-diff.cjs <oxygen-report.xml|json> [--corpus <folder>] [--corpus-root <dir>]',
     );
     process.exit(2);
   }

@@ -1,0 +1,27 @@
+{
+  "matched": [
+    "corpus.ditamap  missing-reference",
+    "topics/k-ref-filtered-pos.dita  unreferenced-link"
+  ],
+  "extensionOnly": [
+    "maps/j-scheme.ditamap  unreferenced-key",
+    "topics/i-prof-group-edge.dita  profiling-preference",
+    "topics/i-prof-group-pos.dita  profiling-preference",
+    "topics/i-prof-single-pos.dita  profiling-preference"
+  ],
+  "oxygenOnly": [
+    "filters/probe.ditaval  oxygen:unknown",
+    "maps/j-scheme.ditamap  undefined-key",
+    "topics/i-prof-empty-edge.dita  oxygen:dmv.prof.attr.empty.value",
+    "topics/i-prof-empty-edge.dita  oxygen:dmv.prof.group.val.prefs.undef",
+    "topics/i-prof-empty-pos.dita  oxygen:dmv.prof.attr.empty.value",
+    "topics/i-prof-group-edge.dita  oxygen:dmv.prof.group.val.prefs.undef",
+    "topics/i-prof-group-pos.dita  oxygen:dmv.prof.group.val.prefs.undef",
+    "topics/i-prof-single-edge.dita  oxygen:dmv.prof.attr.empty.value",
+    "topics/i-prof-single-pos.dita  oxygen:dmv.prof.attr.val.prefs.confl",
+    "topics/k-conref-filtered-edge.dita  oxygen:dmv.ref.filtered",
+    "topics/k-conref-filtered-pos.dita  oxygen:dmv.ref.filtered",
+    "topics/k-conref-ignored-pos.dita  oxygen:dmv.ref.filtered.conref",
+    "topics/k-conref-target-edge.dita  unreferenced-reusable"
+  ]
+}

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.filtered at topic level: edge probe; the target topicref has one excluded and one
+     kept value, and the report says nothing: one kept value keeps the branch. -->
+<topic id="kfre">
+  <title>Reference to a partly filtered topic</title>
+  <body>
+    <p><xref href="k-filtered-target-edge.dita#kfte"/></p>
+  </body>
+</topic>

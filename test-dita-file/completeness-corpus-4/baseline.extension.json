@@ -3,7 +3,70 @@
     "category": "missing-reference",
     "severity": "error",
     "file": "corpus.ditamap",
-    "line": 12,
+    "line": 16,
     "message": "Referenced topic not found: topics/control-missing.dita"
+  },
+  {
+    "category": "unreferenced-key",
+    "severity": "warning",
+    "file": "maps/j-scheme.ditamap",
+    "line": 23,
+    "message": "Key \"linux\" is defined but never referenced"
+  },
+  {
+    "category": "unreferenced-key",
+    "severity": "warning",
+    "file": "maps/j-scheme.ditamap",
+    "line": 24,
+    "message": "Key \"windows\" is defined but never referenced"
+  },
+  {
+    "category": "unreferenced-key",
+    "severity": "warning",
+    "file": "maps/j-scheme.ditamap",
+    "line": 27,
+    "message": "Key \"alpha\" is defined but never referenced"
+  },
+  {
+    "category": "unreferenced-key",
+    "severity": "warning",
+    "file": "maps/j-scheme.ditamap",
+    "line": 28,
+    "message": "Key \"beta\" is defined but never referenced"
+  },
+  {
+    "category": "unreferenced-key",
+    "severity": "warning",
+    "file": "maps/j-scheme.ditamap",
+    "line": 31,
+    "message": "Key \"desktop\" is defined but never referenced"
+  },
+  {
+    "category": "profiling-preference",
+    "severity": "warning",
+    "file": "topics/i-prof-group-edge.dita",
+    "line": 7,
+    "message": "@props value \"red\" is not defined in the profiling preferences"
+  },
+  {
+    "category": "profiling-preference",
+    "severity": "warning",
+    "file": "topics/i-prof-group-pos.dita",
+    "line": 7,
+    "message": "@props value \"nobody\" is not defined in the profiling preferences"
+  },
+  {
+    "category": "profiling-preference",
+    "severity": "warning",
+    "file": "topics/i-prof-single-pos.dita",
+    "line": 7,
+    "message": "@platform is single-value but has 2 values (\"linux windows\")"
+  },
+  {
+    "category": "unreferenced-link",
+    "severity": "warning",
+    "file": "topics/k-ref-filtered-pos.dita",
+    "line": 10,
+    "message": "Link target is not referenced in any map: k-filtered-target-pos.dita#kftp"
   }
 ]

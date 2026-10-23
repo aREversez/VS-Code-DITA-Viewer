@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.prof.attr.empty.value: negative probe; the value is defined in the preferences. -->
+<topic id="ipen">
+  <title>Non-empty audience value</title>
+  <body>
+    <p audience="novice">This paragraph has an ordinary audience value.</p>
+  </body>
+</topic>

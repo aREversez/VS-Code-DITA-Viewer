@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.prof.attr.val.prefs.confl: negative probe; one value for the single-valued attribute. -->
+<topic id="ipsn">
+  <title>One value for a single-valued attribute</title>
+  <body>
+    <p platform="linux">The platform attribute carries one value.</p>
+  </body>
+</topic>

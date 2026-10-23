@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.filtered.conref, negative: the same shape without a conref, so the referenced
+     paragraph is ordinary content that survives. -->
+<topic id="kcin">
+  <title>A reference into content nothing replaces</title>
+  <body>
+    <div id="holder">
+      <p id="inside">This paragraph stays where it is.</p>
+    </div>
+    <p><xref href="#kcin/inside">A link to the paragraph that is kept</xref></p>
+  </body>
+</topic>

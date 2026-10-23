@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.filtered.conref, positive: the referenced paragraph is the own content of an
+     element that carries a conref, so content reference processing drops it. -->
+<topic id="kcip">
+  <title>A reference into content a conref replaces</title>
+  <body>
+    <div id="holder" conref="k-conref-ignored-src.dita#kcis/source">
+      <p id="inside">This paragraph is replaced when the conref resolves.</p>
+    </div>
+    <p><xref href="#kcip/inside">A link to the paragraph that is dropped</xref></p>
+  </body>
+</topic>

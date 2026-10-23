@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.filtered.conref, boundary: the reference names the element that carries the
+     conref, not the content inside it; the element itself survives the resolution. -->
+<topic id="kcie">
+  <title>A reference to the element that carries the conref</title>
+  <body>
+    <div id="holder" conref="k-conref-ignored-src.dita#kcis/source">
+      <p id="inside">This paragraph is replaced when the conref resolves.</p>
+    </div>
+    <p><xref href="#kcie/holder">A link to the element that is kept</xref></p>
+  </body>
+</topic>

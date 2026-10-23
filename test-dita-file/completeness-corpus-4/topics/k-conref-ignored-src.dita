@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.filtered.conref: the element the probes' conref points at. -->
+<topic id="kcis">
+  <title>Content a conref supplies</title>
+  <body>
+    <div id="source">
+      <p>The text that takes the place of the referencing element's own content.</p>
+    </div>
+  </body>
+</topic>

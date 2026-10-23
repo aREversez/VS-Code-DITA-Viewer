@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.filtered: target of the positive probe; the referenced element is filtered. -->
+<topic id="kctp">
+  <title>Filtered conref target</title>
+  <body>
+    <p>A neutral paragraph keeps the topic non-empty after filtering.</p>
+    <p id="gone" audience="expert">The element the conref points at.</p>
+  </body>
+</topic>

@@ -10,6 +10,7 @@
 
 import { access, readFile, readdir, stat } from 'fs/promises';
 import { basename, relative, resolve, sep } from 'path';
+import { DitavalFilter, parseDitaval } from '../../editor/ditaval';
 import { CrawlHost, crawlMaps } from '../../editor/mapCrawl';
 import {
   CompletenessOptions,
@@ -42,6 +43,11 @@ export const CORPUS_PREFERENCES: ProfilingPreferences = {
   singleValue: [],
 };
 
+/** Profiling attributes the crawl knows without the preferences; the UI adds the rest per corpus. */
+const BUILT_IN_PROFILING_ATTRIBUTES = [
+  'audience', 'platform', 'product', 'otherprops', 'props', 'rev',
+] as const;
+
 export const CORPUS_ROOT_MAP = 'corpus.ditamap';
 
 /**
@@ -72,7 +78,22 @@ export interface CorpusSettings {
 }
 
 export const CORPUS_SETTINGS: Readonly<Record<string, CorpusSettings>> = {
-  'completeness-corpus-4': { ditavalFiles: ['filters/probe.ditaval'] },
+  'completeness-corpus-4': {
+    ditavalFiles: ['filters/probe.ditaval'],
+    // The Oxygen page's group value audience(novice) is mirrored by its bare value:
+    // this model keeps one flat value list per attribute (see the corpus README).
+    preferences: {
+      attributes: {
+        audience: ['expert', 'novice'],
+        platform: ['linux', 'windows'],
+        product: ['desktop', 'mobile'],
+        otherprops: ['alpha', 'beta', 'gamma'],
+        deliveryTarget: ['pdf', 'html'],
+        props: ['novice'],
+      },
+      singleValue: ['platform'],
+    },
+  },
 };
 
 /**
@@ -184,16 +205,41 @@ export async function collectExtensionFindings(
   const absCorpus = resolve(corpusDir);
   const rootMap = resolve(absCorpus, CORPUS_ROOT_MAP);
   const host = makeDiskHost();
-  const crawl = await crawlMaps([rootMap], host);
   const settings = CORPUS_SETTINGS[basename(absCorpus)] ?? {};
-  const options: CompletenessOptions = {
-    ...CORPUS_OPTIONS,
-    ditavalFiles: (settings.ditavalFiles ?? []).map((f) => resolve(absCorpus, f)),
-  };
-  const issues = await runChecks(crawl, options, {
-    host,
-    preferences: settings.preferences ?? CORPUS_PREFERENCES,
-  });
+  const preferences = settings.preferences ?? CORPUS_PREFERENCES;
+  const ditavalFiles = (settings.ditavalFiles ?? []).map((f) => resolve(absCorpus, f));
+  const options: CompletenessOptions = { ...CORPUS_OPTIONS, ditavalFiles };
+
+  // Mirror the UI: no filter means one unfiltered run; each DITAVAL file adds a
+  // separate whole-map run, and the findings of all runs are de-duplicated.
+  const filters: Array<DitavalFilter | undefined> = [];
+  if (ditavalFiles.length === 0) filters.push(undefined);
+  for (const file of ditavalFiles) {
+    try {
+      filters.push(parseDitaval(await readFile(file, 'utf8')));
+    } catch {
+      // An unreadable DITAVAL is skipped, not fatal, as in the UI.
+    }
+  }
+
+  // The UI also profiles attributes that exist only in the preferences (deliveryTarget).
+  const extraProfilingAttributes = Object.keys(preferences.attributes).filter(
+    (a) => !(BUILT_IN_PROFILING_ATTRIBUTES as readonly string[]).includes(a),
+  );
+
+  const issues: Issue[] = [];
+  const seen = new Set<string>();
+  for (const filter of filters) {
+    const crawl = await crawlMaps([rootMap], host, { filter, extraProfilingAttributes });
+    const found = await runChecks(crawl, options, { host, preferences });
+    for (const i of found) {
+      const key = `${i.category}\u0000${i.file}\u0000${i.line}\u0000${i.message}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        issues.push(i);
+      }
+    }
+  }
   return issues
     .map((i) => normalizeFinding(absCorpus, i))
     .sort((a, b) => compareKeys(findingKey(a), findingKey(b)));

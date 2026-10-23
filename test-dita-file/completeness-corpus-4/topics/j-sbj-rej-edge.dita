@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.prof.sbj.attr.val.rej: edge probe; one accepted value and one rejected value. -->
+<topic id="jre">
+  <title>One accepted and one rejected value</title>
+  <body>
+    <p otherprops="alpha gamma">The scheme allows alpha but not gamma.</p>
+  </body>
+</topic>

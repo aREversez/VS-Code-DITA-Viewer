@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.filtered: target of the edge probe; its topicref carries audience="novice expert". -->
+<topic id="kfte">
+  <title>Partly filtered reference target</title>
+  <body>
+    <p>The map reference keeps this topic because one of its values is included.</p>
+  </body>
+</topic>
