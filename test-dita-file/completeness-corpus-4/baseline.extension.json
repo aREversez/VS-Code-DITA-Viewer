@@ -1,0 +1,9 @@
+[
+  {
+    "category": "missing-reference",
+    "severity": "error",
+    "file": "corpus.ditamap",
+    "line": 12,
+    "message": "Referenced topic not found: topics/control-missing.dita"
+  }
+]

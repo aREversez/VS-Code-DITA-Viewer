@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The filter both tools use for this corpus. In Oxygen it is chosen in the dialog of
+     Validate and Check for Completeness; in the harness it comes from CORPUS_SETTINGS.
+     Probes that need other conditions add them here (Oxygen takes one filter per run). -->
+<val>
+  <prop att="audience" val="expert" action="exclude"/>
+</val>

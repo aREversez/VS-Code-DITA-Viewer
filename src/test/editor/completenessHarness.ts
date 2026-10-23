@@ -9,7 +9,7 @@
 // works both compiled under mocha and bundled by scripts/completeness-baseline.cjs.
 
 import { access, readFile, readdir, stat } from 'fs/promises';
-import { relative, resolve, sep } from 'path';
+import { basename, relative, resolve, sep } from 'path';
 import { CrawlHost, crawlMaps } from '../../editor/mapCrawl';
 import {
   CompletenessOptions,
@@ -49,9 +49,31 @@ export const CORPUS_ROOT_MAP = 'corpus.ditamap';
  * baseline.extension.json and, once Oxygen has been run on it, oxygen-report.xml
  * and oxygen-parity.expected.json. The first is the original; the second holds the
  * reference-spelling and @format/@scope probes (completeness-corpus/BATCH-1.md); the
- * third the conref, id-reference, key and link probes (completeness-corpus/BATCH-2.md).
+ * third the conref, id-reference, key and link probes (completeness-corpus/BATCH-2.md);
+ * the fourth the profiling-value, subject-scheme and filter probes (BATCH-3.md).
  */
-export const CORPUS_FOLDERS = ['completeness-corpus', 'completeness-corpus-2', 'completeness-corpus-3'] as const;
+export const CORPUS_FOLDERS = [
+  'completeness-corpus',
+  'completeness-corpus-2',
+  'completeness-corpus-3',
+  'completeness-corpus-4',
+] as const;
+
+/**
+ * Settings a corpus needs on top of CORPUS_OPTIONS and CORPUS_PREFERENCES. Whatever is set
+ * here must also be what Oxygen had during the run that produced the corpus's report: the
+ * same DITAVAL chosen in its dialog, the same Profiling/Conditional Text preferences.
+ */
+export interface CorpusSettings {
+  /** DITAVAL files, relative to the corpus folder. */
+  ditavalFiles?: readonly string[];
+  /** Replaces CORPUS_PREFERENCES for this corpus. */
+  preferences?: ProfilingPreferences;
+}
+
+export const CORPUS_SETTINGS: Readonly<Record<string, CorpusSettings>> = {
+  'completeness-corpus-4': { ditavalFiles: ['filters/probe.ditaval'] },
+};
 
 /**
  * Probe files whose result depends on the operating system, per corpus folder: a
@@ -163,9 +185,14 @@ export async function collectExtensionFindings(
   const rootMap = resolve(absCorpus, CORPUS_ROOT_MAP);
   const host = makeDiskHost();
   const crawl = await crawlMaps([rootMap], host);
-  const issues = await runChecks(crawl, CORPUS_OPTIONS, {
+  const settings = CORPUS_SETTINGS[basename(absCorpus)] ?? {};
+  const options: CompletenessOptions = {
+    ...CORPUS_OPTIONS,
+    ditavalFiles: (settings.ditavalFiles ?? []).map((f) => resolve(absCorpus, f)),
+  };
+  const issues = await runChecks(crawl, options, {
     host,
-    preferences: CORPUS_PREFERENCES,
+    preferences: settings.preferences ?? CORPUS_PREFERENCES,
   });
   return issues
     .map((i) => normalizeFinding(absCorpus, i))

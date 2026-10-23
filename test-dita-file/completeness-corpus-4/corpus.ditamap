@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- Fourth differential corpus: profiling values and preferences, subject schemes and
+     filters (batch 3, see ../completeness-corpus/BATCH-3.md and README.md here).
+     Oxygen must be run with THIS map as the only root map, with the preferences and
+     the filter file this README lists. -->
+<map id="corpus4">
+  <title>Completeness Check Corpus 4</title>
+
+  <!-- Control, kept in every run: a reference to a file that does not exist. Both the
+       extension and Oxygen report it, so a run that lacks it did not look at this map. -->
+  <topicref href="topics/control-missing.dita"/>
+
+  <topicref href="topics/ok.dita"/>
+
+  <!-- Probes are added below, grouped by the batch-3 groups (I profiling values and
+       preferences, J subject scheme, K filters). -->
+</map>

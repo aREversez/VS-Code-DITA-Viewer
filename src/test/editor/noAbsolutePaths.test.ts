@@ -8,6 +8,7 @@ const dirs = [
   join(repoRoot, 'test-dita-file', 'completeness-corpus'),
   join(repoRoot, 'test-dita-file', 'completeness-corpus-2'),
   join(repoRoot, 'test-dita-file', 'completeness-corpus-3'),
+  join(repoRoot, 'test-dita-file', 'completeness-corpus-4'),
   join(repoRoot, 'test-dita-file', 'completeness-outside'),
 ];
 
@@ -34,7 +35,7 @@ const MACHINE_PATH = (line: string): boolean =>
 // `.raw.xml` is Oxygen's un-sanitized output on the developer's machine; it is
 // listed in `.gitignore` and never committed, so guarding it here would just
 // fail whenever someone regenerates it locally.
-const GUARDED_EXT = /\.(?:dita|ditamap|xml|json)$/i;
+const GUARDED_EXT = /\.(?:dita|ditamap|ditaval|xml|json)$/i;
 const SAMPLE_FIXTURE = /\.sample\./i;
 const LOCAL_RAW_REPORT = /\.raw\.xml$/i;
 

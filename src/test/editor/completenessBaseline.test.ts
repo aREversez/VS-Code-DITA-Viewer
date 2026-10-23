@@ -1,8 +1,9 @@
 import * as assert from 'assert';
-import { readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import {
   CORPUS_FOLDERS,
+  CORPUS_SETTINGS,
   NormalizedFinding,
   PLATFORM_DEPENDENT_FILES,
   dropPlatformDependent,
@@ -51,6 +52,15 @@ describe('Validate and Check for Completeness: Oxygen differential baseline', ()
       );
     });
   }
+
+  it('points every corpus setting at a file that exists', () => {
+    for (const [folder, settings] of Object.entries(CORPUS_SETTINGS)) {
+      assert.ok((CORPUS_FOLDERS as readonly string[]).includes(folder), `${folder} is not a corpus folder`);
+      for (const f of settings.ditavalFiles ?? []) {
+        assert.ok(existsSync(join(corpusDirOf(folder), f)), `${folder}: DITAVAL ${f} does not exist`);
+      }
+    }
+  });
 
   it('exercises every check category the corpus is meant to cover', async () => {
     const run = await collectExtensionFindings(corpusDir);
