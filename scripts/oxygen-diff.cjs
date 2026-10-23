@@ -73,9 +73,16 @@ async function main() {
   // Default to the folder the report was produced from, so a report saved on
   // another machine (another drive, another OS) still lines up with the corpus.
   const oxygenRoot = explicitRoot ?? mod.corpusRootFromReport(incidents) ?? CORPUS;
-  const oxygen = mod.normalizeOxygenFindings(oxygenRoot, incidents);
+  const oxygenAll = mod.normalizeOxygenFindings(oxygenRoot, incidents);
+  // Probe files whose result depends on the OS are compared on Windows only (see
+  // PLATFORM_DEPENDENT_FILES), exactly as the tests do.
+  const extensionKept = mod.dropPlatformDependent(CORPUS_FOLDER, extension);
+  const oxygen = mod.dropPlatformDependent(CORPUS_FOLDER, oxygenAll);
+  if (extensionKept.length !== extension.length || oxygen.length !== oxygenAll.length) {
+    console.log(`# off Windows: ${extension.length - extensionKept.length + oxygenAll.length - oxygen.length} finding(s) of platform-dependent probe files left out of the comparison`);
+  }
 
-  const extSigs = extension.map(mod.findingSignature);
+  const extSigs = extensionKept.map(mod.findingSignature);
   const oxSigs = oxygen.map(mod.findingSignature);
   const diff = mod.diffKeys(extSigs, oxSigs);
 
@@ -89,7 +96,7 @@ async function main() {
 
   console.log(`report:     ${reportPath}`);
   console.log(`oxygen root:${oxygenRoot}`);
-  console.log(`extension findings: ${extension.length}   Oxygen incidents: ${oxygen.length}`);
+  console.log(`extension findings: ${extensionKept.length}   Oxygen incidents: ${oxygen.length}`);
   console.log(`signatures matched: ${new Set(extSigs.filter((s) => oxSigs.includes(s))).size}`);
   console.log(`\n# extension only (found here, not by Oxygen) [${diff.onlyInA.length}]`);
   for (const s of diff.onlyInA) console.log(`  - ${s.replace('\t', '  ')}`);

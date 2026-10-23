@@ -21,7 +21,9 @@ The **Status** column says where the extension stands:
   report was seen to carry this exact id: a row says so when it did not ("mapped only"),
   and only the rows without that note are backed by an incident of that id.
 - **gap** — Oxygen reports it; the extension does not.
-- **n/a** — the extension deliberately diverges (documented below).
+- **n/a** — the extension deliberately diverges (documented below), or Oxygen reports nothing
+  for the probes and the extension is silent too, so there is nothing to match (the row says
+  which of the two it is).
 
 Descriptions are paraphrases; the exact wording legitimately differs and is
 ignored by the `(file, category)` diff.
