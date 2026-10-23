@@ -81,7 +81,6 @@ export {
   TopicRenderResult,
   TopicXmlRenderInput,
   ParsedTopicResult,
-  openHrefTarget,
   renderTopicXml,
   renderTopicToHtml,
   stampFiles,
@@ -93,6 +92,9 @@ export {
   setTopicRenderCacheBudgetForTesting,
   renderTopicCached,
 } from './topicRender';
+// The host-side href opener moved out of topicRender (which stays host-free);
+// re-exported so providers and tests keep resolving it from this module.
+export { openHrefTarget } from './openHrefTarget';
 
 /**
  * Default topic-type labeler used when no localized labeler is injected.
