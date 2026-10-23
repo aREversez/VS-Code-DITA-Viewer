@@ -219,37 +219,26 @@ What the reports answer:
 against the implementation as it stands:
 
 ```
-extension findings: 10   Oxygen incidents: 19
-signatures matched: 2
+extension findings: 19   Oxygen incidents: 19
+signatures matched: 13
 
-# extension only (found here, not by Oxygen) [4]
+# extension only (found here, not by Oxygen) [1]
   - maps/j-scheme.ditamap  unreferenced-key
-  - topics/i-prof-group-edge.dita  profiling-preference
-  - topics/i-prof-group-pos.dita  profiling-preference
-  - topics/i-prof-single-pos.dita  profiling-preference
 
-# Oxygen only (found by Oxygen, not here) [13]
-  + filters/probe.ditaval  oxygen:unknown
+# Oxygen only (found by Oxygen, not here) [2]
   + maps/j-scheme.ditamap  undefined-key
-  + topics/i-prof-empty-edge.dita  oxygen:dmv.prof.attr.empty.value
-  + topics/i-prof-empty-edge.dita  oxygen:dmv.prof.group.val.prefs.undef
-  + topics/i-prof-empty-pos.dita  oxygen:dmv.prof.attr.empty.value
-  + topics/i-prof-group-edge.dita  oxygen:dmv.prof.group.val.prefs.undef
-  + topics/i-prof-group-pos.dita  oxygen:dmv.prof.group.val.prefs.undef
-  + topics/i-prof-single-edge.dita  oxygen:dmv.prof.attr.empty.value
-  + topics/i-prof-single-pos.dita  oxygen:dmv.prof.attr.val.prefs.confl
-  + topics/k-conref-filtered-edge.dita  oxygen:dmv.ref.filtered
-  + topics/k-conref-filtered-pos.dita  oxygen:dmv.ref.filtered
-  + topics/k-conref-ignored-pos.dita  oxygen:dmv.ref.filtered.conref
   + topics/k-conref-target-edge.dita  unreferenced-reusable
 ```
 
-Three of the four extension-only rows are the same findings Oxygen gives under an id that was not mapped yet
-(`dmv.prof.group.val.prefs.undef` and `dmv.prof.attr.val.prefs.confl`); they become matched once the mapping lands.
-`maps/j-scheme.ditamap undefined-key` against `maps/j-scheme.ditamap unreferenced-key` is the scheme difference:
-per the DTD a `subjectdef` defines a key, so Oxygen's four `dmv.key.undef` are its refusal to load the scheme, and
-our five findings are the leaf subjects of a scheme we do read as a map. Both are recorded in
-`../completeness-corpus/OXYGEN-PROBLEMS.md`.
+Everything the run was probing for now matches: the three empty values, the three group findings,
+the single-value clash, both `dmv.ref.filtered` probes, `dmv.ref.filtered.conref` and the two
+id-less filter-file rows (mapped on the message wording, since the report gives them no
+`problemID`). What is left is the scheme difference and the one reuse row:
+`maps/j-scheme.ditamap undefined-key` against `maps/j-scheme.ditamap unreferenced-key` is
+the same finding seen from two sides — per the DTD a `subjectdef` defines a key, so Oxygen's
+four `dmv.key.undef` are its refusal to load the scheme, and our five `unreferenced-key`
+findings are the leaf subjects of a scheme we do read as a map. Both rows are recorded in
+`../completeness-corpus/OXYGEN-PROBLEMS.md`, together with `topics/k-conref-target-edge.dita`.
 
 ## Baseline and parity
 

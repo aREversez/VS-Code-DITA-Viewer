@@ -77,7 +77,7 @@ ignored by the `(file, category)` diff.
 | `dmv.link.no.target` | link/xref has neither `@href` nor `@keyref` | ok (`link-no-target`) — the corpus-3 report carries it on `topics/g-link-no-target-pos.dita` |
 | `dmv.link.topic.to.map` | topic-to-map reference is not resolved in output | ok (`format-mismatch`) — same file and fix as `dmv.ref.topic.as.map` in the corpus-2 probe |
 | `dmv.ref.to.resource.only` | cross-reference to a resource-only topic breaks | ok (`resource-only-target`) — the corpus-3 report carries it for a direct xref and for the two key-element boundaries |
-| `dmv.ref.filtered` | target is excluded by profiling filters | gap |
+| `dmv.ref.filtered` | target is excluded by profiling filters | ok (`filtered-reference`) — the corpus-4 report carries it on both filtered-range probes, reported on the referrer |
 | `dmv.empty.link.peer.target` | peer-map reference needs explicit link text | n/a — the corpus-3 report produced no incident for the peer xref without text, the one with text, or the local edge, so no shape has been observed to implement; see the batch 2 run below |
 
 ## Conref / conkeyref / reuse
@@ -89,7 +89,7 @@ ignored by the `(file, category)` diff.
 | `dmv.conref.siblings` | `conref`/`conrefend` are not siblings | ok (`invalid-conref-form`) — the report also uses it for a range that crosses two topics of one file |
 | `dmv.conrefend.confl.conref` | `conrefend` targets a different topic than `conref` | ok (`invalid-conref-form`) — the report carries it only on the empty-`@conref` edge, so the file comparison, not the topic comparison, is what it checks |
 | `dmv.conrefend.no.conref` | `conrefend` without `conref` | ok (`invalid-conref-form`) — the corpus-3 report carries it on `topics/e-conrefend-no-conref-pos.dita` |
-| `dmv.ref.filtered.conref` | conref target is dropped by content-ref processing | gap |
+| `dmv.ref.filtered.conref` | conref target is dropped by content-ref processing | ok (`filtered-reference`) — warning; the corpus-4 report has it for a link into the content an enclosing `@conref` replaces, and nothing for a link at the `@conref` element itself |
 | `dmv.conkeyref.peer.map` | conkeyref into a peer map | ok (`undefined-key`) — mapped only: the report files it as `dmv.key.undef`, because a peer map is not part of this build's key space (the probe sets no keyscope) |
 | `dmv.no.conref.has.target.attr.value` | non-conref element carries a conref-target attribute | ok (`invalid-conref-form`) — warning; the corpus-3 report carries it on `topics/e-target-attr-pos.dita` |
 | `dmv.not.used.reusable.component` | reusable element never conref'd | ok (`unreferenced-reusable`) |
@@ -114,7 +114,7 @@ ignored by the `(file, category)` diff.
 | `dmv.dup.topic` | the same topic referenced more than once | ok (`multiple-reference`) |
 | `dmv.dup.topic.id` | duplicate topic ID in the map context | ok (`duplicate-id`) — the extension reports every topic that shares the id, as Oxygen does |
 | `dmv.dup.el.id` | duplicate element ID inside one topic | ok (`duplicate-element-id`) — the corpus-3 report carries it on `topics/h-dup-el-id-pos.dita` |
-| `dmv.dup.cond.filter` | duplicate condition in a filter file | gap |
+| `dmv.dup.cond.filter` | duplicate condition in a filter file | ok (`duplicate-filter-condition`) — the corpus-4 report carries its two incidents **without** a `<problemID>`, so parity maps them on the message wording |
 
 ## Unreferenced / not in map
 
@@ -131,12 +131,12 @@ ignored by the `(file, category)` diff.
 | `dmv.prof.attr.group.innef.cond` | condition group can never show | ok (`profiling-conflict`) |
 | `dmv.prof.attr.prefs.undef` | attribute not defined in profiling preferences | ok (`profiling-preference`) |
 | `dmv.prof.attr.val.prefs.undef` | value not defined in profiling preferences | ok (`profiling-preference`) |
-| `dmv.prof.attr.empty.value` | profiling attribute has an empty value | gap |
-| `dmv.prof.attr.val.prefs.confl` | multi-value attribute defined as single-value | gap |
-| `dmv.prof.group.val.prefs.undef` | group value not defined in profiling preferences | gap |
-| `dmv.prof.sbj.attr.mult.val.confl` | multi-value attribute single-valued in the subject scheme | gap |
-| `dmv.prof.sbj.attr.val.rej` | value rejected by the subject scheme | gap |
-| `dmv.prof.sbj.attr.val.rej.all` | subject scheme rejects every value of an attribute | gap |
+| `dmv.prof.attr.empty.value` | profiling attribute has an empty value | ok (`empty-profiling-value`) — warning; the corpus-4 report fires it on `audience=""`, `audience="   "` and `platform=""`, but not on the empty group `props="audience()"` |
+| `dmv.prof.attr.val.prefs.confl` | multi-value attribute defined as single-value | ok (`profiling-preference`) — the corpus-4 report files `platform="linux windows"` here, not as an empty value |
+| `dmv.prof.group.val.prefs.undef` | group value not defined in profiling preferences | ok (`profiling-preference`) — the corpus-4 report names the group text (`audience()`) for an empty group and the member value otherwise |
+| `dmv.prof.sbj.attr.mult.val.confl` | multi-value attribute single-valued in the subject scheme | n/a — no run of the corpus-4 probes made Oxygen evaluate a subject scheme, so no shape has been observed; see the batch 3 run below |
+| `dmv.prof.sbj.attr.val.rej` | value rejected by the subject scheme | n/a — same run, no incident on any of the four scheme spellings |
+| `dmv.prof.sbj.attr.val.rej.all` | subject scheme rejects every value of an attribute | n/a — same run, no incident on any of the four scheme spellings |
 
 ## DITA structure, class and domains
 
@@ -328,6 +328,55 @@ Two ids are *n/a* after this run: `dmv.circular.keyref` (no incident on the loop
 self-redirect or linear-chain probes) and `dmv.empty.link.peer.target` (no incident on the
 peer-without-text, peer-with-text or local probes). In both cases the extension stays silent
 on the same files, so the divergence is unprobed behaviour, not a known difference.
+
+### The batch 3 run (fourth corpus)
+
+*Validate and Check for Completeness* over `../completeness-corpus-4/corpus.ditamap` — that
+map as the only open root map, every option on, remote off, the corpus's own
+`filters/probe.ditaval` chosen in the dialog, and the Profiling/Conditional Text page filled
+in — produced **19 incidents** (`../completeness-corpus-4/oxygen-report.xml`).
+`scripts/oxygen-diff.cjs` reports **19 extension findings, 19 incidents, 13 signatures
+matched, 1 extension-only, 2 Oxygen-only**; `oxygen-parity.expected.json` locks that. The
+nine batch-3 ids:
+
+| Group | Oxygen ids seen | Extension |
+| --- | --- | --- |
+| I empty values | `dmv.prof.attr.empty.value` ×3 (`i-prof-empty-pos`, `-edge`, `i-prof-single-edge`) | `empty-profiling-value` (R051) — warning, and whitespace counts as empty |
+| I grouped values | `dmv.prof.group.val.prefs.undef` ×3 (`i-prof-empty-edge`, `i-prof-group-pos`, `i-prof-group-edge`) | `profiling-preference` (R052) — an empty group is compared as its group text, a group with members by those members |
+| I single-value clash | `dmv.prof.attr.val.prefs.confl` (`i-prof-single-pos`) | `profiling-preference` (R015, which this report confirms) — the extension already had the multi-value-vs-preference finding |
+| K filtered target | `dmv.ref.filtered` ×2 (`k-conref-filtered-pos`, `-edge`) | `filtered-reference` (R053) — error on the referrer, one per named end of a range |
+| K replaced content | `dmv.ref.filtered.conref` (`k-conref-ignored-pos`) | `filtered-reference` (R054) — warning; a link at the `@conref` element itself is not a finding |
+| K filter file | *no* `problemID`, description "Duplicate condition in filter file …" ×2 (`filters/probe.ditaval`) | `duplicate-filter-condition` (R055) — error on the filter file, one per repeated condition |
+| J subject scheme | none | *n/a* — see below |
+
+What the run settled, beyond which id fires where:
+
+- **A filter file is not a DITA file, and Oxygen still reports on it.** Both incidents land
+  on `filters/probe.ditaval` at the line of the repeated `<prop>`, one per duplicate, and the
+  engine leaves `<problemID>` out — the only id-less rows in a report that parity has to map
+  by wording (`DESCRIPTION_CATEGORY` in `src/test/editor/oxygenReport.ts`).
+- **A filtered element is not a missing one.** Before batch 3 the extension reported a conref
+  at a filtered-out element as `invalid-id-reference`, because pruning removes the id from the
+  crawled tree; `idReferenceIssues` now defers to the filtered finding for exactly that case.
+- **The subject scheme never loads.** Five runs (`../completeness-corpus-4/README.md`) tried
+  all four spellings that register a scheme, including making the root map the scheme itself.
+  Every one left the three `dmv.prof.sbj.*` ids silent and reported the probes' `subjectdef`
+  keys as `dmv.key.undef`, so the group is recorded *n/a* rather than implemented against a
+  guess. (Root-as-scheme also added unrelated incidents to files that are controls, which is
+  why the corpus went back to the plain map root.)
+- **Three new categories, not four.** `BATCH-3.md` proposed a `subject-scheme-violation`
+  category for the J group on top of the three that landed here. With no observed incident to
+  give it a shape, a severity or a finding site, the category is left out of
+  `ISSUE_CATEGORIES` — an unreachable picker-less category is dead code, and the J group is
+  recorded *n/a* above instead.
+
+Two rows stay Oxygen-only, and one extension-only row is the same scheme story:
+
+| Row | Report evidence | Handling |
+| --- | --- | --- |
+| `topics/k-conref-target-edge.dita` `unreferenced-reusable` | `dmv.not.used.reusable.component` on a range end the filter excludes | **Documented difference.** The plain conref at an excluded element (`k-conref-filtered-pos`) produces no such incident, so the two probes give no rule that explains why one unreferenced target counts and the other does not. `unreferencedReusable` keeps its existing rule. |
+| `maps/j-scheme.ditamap` `undefined-key` | `dmv.key.undef` ×4 on the scheme's `subjectdef` keys | **Documented difference.** A `subjectdef` defines a key per the DITA 1.3 syntax, so Oxygen's four are its refusal to load the scheme; the extension reads the file as a map and reports the leaf subjects as defined-but-unused. |
+| `maps/j-scheme.ditamap` `unreferenced-key` | — | The other half of the same row above: the extension's five `unreferenced-key` findings where Oxygen produced none, because it never reached the scheme's contents. |
 
 ## How to use this
 

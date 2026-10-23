@@ -10,6 +10,7 @@
 import { dirname, isAbsolute, join, relative, resolve } from 'path';
 import { normalizePathForCompare } from './mapReferenceTools';
 import { CrawlHost, CrawlResult, Location, Reference } from './mapCrawl';
+import { parseDitavalRules } from './ditaval';
 import { Msg, MsgCode, formatMessage, msg } from './mapCheckMessages';
 
 export interface CompletenessOptions {
@@ -246,6 +247,12 @@ export async function runChecks(
   // dmv.invalid.ref.topic.id; it is part of validating references, so it runs with batch validation.
   if (opts.batchValidate) issues.push(...invalidRefTopicIds(crawl, norm));
 
+  // 2c. The filter file the run itself uses: a condition written twice can only ever
+  // take effect once (Oxygen's dmv.dup.cond.filter, an error on the filter file).
+  if (opts.batchValidate && opts.ditavalFiles.length > 0) {
+    issues.push(...(await duplicateFilterConditionIssues(crawl, opts, env)));
+  }
+
   // 3. References outside the map folder. A target that does not exist at all is
   // already a missing reference; only an existing one can be "outside the folder".
   if (opts.reportOutsideMapFolder && rootDir) {
@@ -288,6 +295,7 @@ export async function runChecks(
     issues.push(...missingNavTitleIssues(crawl));
     issues.push(...conrefFormIssues(crawl, norm));
     issues.push(...idReferenceIssues(crawl, norm));
+    issues.push(...filteredReferenceIssues(crawl, norm));
     issues.push(...topicrefToElementIssues(crawl));
     issues.push(...keyLinkIssues(crawl));
     issues.push(...linkTargetIssues(crawl));
@@ -428,6 +436,12 @@ export async function runChecks(
       issues.push({
         category: 'profiling-conflict', severity: 'warning', file: c.file, line: c.line,
         msg: msg('prof.conflict', c.attribute, c.values.join(' '), c.tag, c.ancestorValues.join(' ')),
+      });
+    }
+    for (const u of crawl.emptyProfilingValues) {
+      issues.push({
+        category: 'empty-profiling-value', severity: 'warning', file: u.file, line: u.line,
+        msg: msg('prof.emptyValue', u.attribute, u.tag),
       });
     }
   }
@@ -873,6 +887,7 @@ function conrefFormIssues(crawl: CrawlResult, norm: (p: string) => string): Arra
 function idReferenceIssues(crawl: CrawlResult, norm: (p: string) => string): Array<Omit<Issue, 'message'>> {
   const out: Array<Omit<Issue, 'message'>> = [];
   const topicIds = topicIdsByFile(crawl, norm);
+  const excluded = excludedIndex(crawl, norm);
   const elements = new Map<string, Set<string>>();
   for (const el of crawl.reusable) {
     if (!el.topicId) continue;
@@ -889,6 +904,8 @@ function idReferenceIssues(crawl: CrawlResult, norm: (p: string) => string): Arr
     if (!ids) return;
     // DITA addresses one element: a deeper path is invalid even when each id exists.
     if (path.includes('/') || !ids.has(path)) {
+      // An element the filter drops is not a missing one: dmv.ref.filtered reports it.
+      if (!path.includes('/') && isInIndex(excluded, norm, target, topicId, path)) return;
       out.push({
         category: 'invalid-id-reference', severity: 'error', file, line,
         msg: msg('id.pathNotFound', `${topicId}/${path}`),
@@ -914,6 +931,136 @@ function idReferenceIssues(crawl: CrawlResult, norm: (p: string) => string): Arr
   // `key/element` appends an element id to whatever topic the key resolves to.
   for (const k of crawl.keyElementPaths) {
     check(k.file, k.line, k.targetFile, k.topicId, k.elementPath);
+  }
+  return out;
+}
+
+/**
+ * Element ids of one file, keyed the way a fragment addresses them: `topic\0element`
+ * when the element sits in a topic that carries an id, plain file otherwise.
+ */
+interface IdIndex {
+  byTopic: Map<string, Set<string>>;
+  byFile: Map<string, Set<string>>;
+}
+
+function addToIdIndex(index: IdIndex, norm: (p: string) => string, file: string, topicId: string | undefined, id: string): void {
+  const key = norm(file);
+  if (!topicId) {
+    const s = index.byFile.get(key);
+    if (s) s.add(id);
+    else index.byFile.set(key, new Set([id]));
+    return;
+  }
+  const k = `${key}\u0000${topicId}`;
+  const s = index.byTopic.get(k);
+  if (s) s.add(id);
+  else index.byTopic.set(k, new Set([id]));
+}
+
+/** The index a `#topic/elem` address has to be looked up in: topic id when the reference names one. */
+function isInIndex(index: IdIndex, norm: (p: string) => string, file: string | undefined, topicId: string | undefined, id: string): boolean {
+  if (!file) return false;
+  const key = norm(file);
+  if (!topicId) return !!index.byFile.get(key)?.has(id);
+  return !!index.byTopic.get(`${key}\u0000${topicId}`)?.has(id);
+}
+
+/** Elements the active DITAVAL filter drops (Oxygen's dmv.ref.filtered). */
+function excludedIndex(crawl: CrawlResult, norm: (p: string) => string): IdIndex {
+  const index: IdIndex = { byTopic: new Map(), byFile: new Map() };
+  for (const el of crawl.excludedElements) addToIdIndex(index, norm, el.file, el.topicId, el.id);
+  return index;
+}
+
+/** Elements whose own content a carrying ancestor's `@conref` replaces (dmv.ref.filtered.conref). */
+function shadowedIndex(crawl: CrawlResult, norm: (p: string) => string): IdIndex {
+  const index: IdIndex = { byTopic: new Map(), byFile: new Map() };
+  for (const el of crawl.reusable) {
+    if (el.replacedByConref) addToIdIndex(index, norm, el.file, el.topicId, el.id);
+  }
+  return index;
+}
+
+/**
+ * A reference that addresses content the run takes out of the output: an element the
+ * filter excludes (Oxygen's dmv.ref.filtered, an error on the referencing element) or
+ * content that content reference processing replaces (dmv.ref.filtered.conref, a
+ * warning). The element carrying a conref survives it, so a reference that names that
+ * element itself is not a finding, and a path deeper than `topic/element` is
+ * invalid-id-reference's business, not this check's.
+ */
+function filteredReferenceIssues(crawl: CrawlResult, norm: (p: string) => string): Array<Omit<Issue, 'message'>> {
+  const out: Array<Omit<Issue, 'message'>> = [];
+  const excluded = excludedIndex(crawl, norm);
+  const shadowed = shadowedIndex(crawl, norm);
+  const pathOf = (topicId: string | undefined, elemId: string) => (topicId ? `${topicId}/${elemId}` : elemId);
+  const report = (file: string, line: number, target: string | undefined, topicId: string | undefined, elemId: string): void => {
+    if (!target) return;
+    if (isInIndex(excluded, norm, target, topicId, elemId)) {
+      out.push({
+        category: 'filtered-reference', severity: 'error', file, line,
+        msg: msg('ref.filteredTarget', pathOf(topicId, elemId)),
+      });
+    } else if (isInIndex(shadowed, norm, target, topicId, elemId)) {
+      out.push({
+        category: 'filtered-reference', severity: 'warning', file, line,
+        msg: msg('ref.filteredByConref', pathOf(topicId, elemId)),
+      });
+    }
+  };
+  // A content reference: either end of a range can name content that is gone.
+  for (const s of crawl.conrefShapes) {
+    if (s.conref !== undefined && s.targetElementId) report(s.file, s.line, s.targetFile, s.targetTopicId, s.targetElementId);
+    if (s.conrefend !== undefined && s.endElementId) report(s.file, s.line, s.endTargetFile, s.endTopicId, s.endElementId);
+  }
+  // Links: an own-file fragment names no path, so the referencing file is the target.
+  for (const ref of crawl.refs) {
+    if (ref.remote || ref.viaKeyref || ref.kind !== 'xref' && ref.kind !== 'link') continue;
+    const segs = fragmentSegments(ref.href);
+    if (!segs || segs.length !== 2 || !segs[1]) continue;
+    report(ref.file, ref.line, ref.target ?? ref.file, segs[0] || undefined, segs[1]);
+  }
+  for (const k of crawl.keyElementPaths) {
+    if (k.elementPath.includes('/')) continue;
+    report(k.file, k.line, k.targetFile, k.topicId, k.elementPath);
+  }
+  return out;
+}
+
+/**
+ * A condition the filter file states more than once: only the first one can ever be
+ * used, so each later one is dead (Oxygen reports it as an error on the filter file,
+ * with no problem id in the report). An unreadable file stays silent, as in the UI.
+ */
+async function duplicateFilterConditionIssues(
+  crawl: CrawlResult,
+  opts: CompletenessOptions,
+  env: CheckEnv,
+): Promise<Array<Omit<Issue, 'message'>>> {
+  const out: Array<Omit<Issue, 'message'>> = [];
+  const mapDir = dirname(crawl.rootMaps[0] ?? '');
+  for (const stored of opts.ditavalFiles) {
+    const path = resolveStoredPath(mapDir, stored);
+    let text: string;
+    try {
+      text = await env.host.readFile(path);
+    } catch {
+      continue;
+    }
+    const seen = new Set<string>();
+    for (const rule of parseDitavalRules(text)) {
+      // A rule with no @val is the attribute-level default; its condition is the attribute.
+      const cond = rule.val === undefined ? rule.att : `${rule.att}=${rule.val}`;
+      if (!seen.has(cond)) {
+        seen.add(cond);
+        continue;
+      }
+      out.push({
+        category: 'duplicate-filter-condition', severity: 'error', file: path, line: rule.line,
+        msg: msg('ditaval.duplicateCondition', cond),
+      });
+    }
   }
   return out;
 }

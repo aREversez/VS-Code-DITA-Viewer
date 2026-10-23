@@ -7,6 +7,20 @@
     "message": "Referenced topic not found: topics/control-missing.dita"
   },
   {
+    "category": "duplicate-filter-condition",
+    "severity": "error",
+    "file": "filters/probe.ditaval",
+    "line": 14,
+    "message": "Duplicate condition in the filter file for \"audience=expert\"; only the first encountered condition is used"
+  },
+  {
+    "category": "duplicate-filter-condition",
+    "severity": "error",
+    "file": "filters/probe.ditaval",
+    "line": 17,
+    "message": "Duplicate condition in the filter file for \"platform=solaris\"; only the first encountered condition is used"
+  },
+  {
     "category": "unreferenced-key",
     "severity": "warning",
     "file": "maps/j-scheme.ditamap",
@@ -42,6 +56,27 @@
     "message": "Key \"desktop\" is defined but never referenced"
   },
   {
+    "category": "empty-profiling-value",
+    "severity": "warning",
+    "file": "topics/i-prof-empty-edge.dita",
+    "line": 7,
+    "message": "Profiling attribute @audience on <p> has an empty value"
+  },
+  {
+    "category": "profiling-preference",
+    "severity": "warning",
+    "file": "topics/i-prof-empty-edge.dita",
+    "line": 8,
+    "message": "@props value \"audience()\" is not defined in the profiling preferences"
+  },
+  {
+    "category": "empty-profiling-value",
+    "severity": "warning",
+    "file": "topics/i-prof-empty-pos.dita",
+    "line": 7,
+    "message": "Profiling attribute @audience on <p> has an empty value"
+  },
+  {
     "category": "profiling-preference",
     "severity": "warning",
     "file": "topics/i-prof-group-edge.dita",
@@ -56,11 +91,39 @@
     "message": "@props value \"nobody\" is not defined in the profiling preferences"
   },
   {
+    "category": "empty-profiling-value",
+    "severity": "warning",
+    "file": "topics/i-prof-single-edge.dita",
+    "line": 7,
+    "message": "Profiling attribute @platform on <p> has an empty value"
+  },
+  {
     "category": "profiling-preference",
     "severity": "warning",
     "file": "topics/i-prof-single-pos.dita",
     "line": 7,
     "message": "@platform is single-value but has 2 values (\"linux windows\")"
+  },
+  {
+    "category": "filtered-reference",
+    "severity": "error",
+    "file": "topics/k-conref-filtered-edge.dita",
+    "line": 7,
+    "message": "Referenced ID path \"kcte/last\" is located in content excluded by the profiling filters"
+  },
+  {
+    "category": "filtered-reference",
+    "severity": "error",
+    "file": "topics/k-conref-filtered-pos.dita",
+    "line": 9,
+    "message": "Referenced ID path \"kctp/gone\" is located in content excluded by the profiling filters"
+  },
+  {
+    "category": "filtered-reference",
+    "severity": "warning",
+    "file": "topics/k-conref-ignored-pos.dita",
+    "line": 11,
+    "message": "Referenced ID path \"kcip/inside\" is located in content a content reference replaces"
   },
   {
     "category": "unreferenced-link",

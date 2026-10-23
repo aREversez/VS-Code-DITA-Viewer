@@ -8,6 +8,7 @@ import {
   CHECK_IDS,
   CompletenessOptions,
   Issue,
+  ProfilingPreferences,
   optionsFromSettings,
   normalizeEnabled,
   toStoredPath,
@@ -52,6 +53,29 @@ async function check(files: Record<string, string>, opts: Partial<CompletenessOp
 
 const topic = (id: string, body = '') =>
   `<?xml version="1.0"?><topic id="${id}"><title>T</title><body>${body}</body></topic>`;
+
+/**
+ * The same pipeline with the parts a batch 3 probe needs: a DITAVAL filter applied
+ * while crawling, profiling preferences, and the filter files the run uses (the
+ * findings on them are reported from the options, not from the crawl).
+ */
+async function checkWith(
+  files: Record<string, string>,
+  opts: Partial<CompletenessOptions>,
+  extra: {
+    filterXml?: string;
+    preferences?: ProfilingPreferences;
+    ditavalFiles?: string[];
+    root?: string;
+  } = {},
+): Promise<Issue[]> {
+  const host = makeHost(files);
+  const crawl = await crawlMaps([P(extra.root ?? 'root.ditamap')], host, {
+    filter: extra.filterXml ? parseDitaval(extra.filterXml) : undefined,
+  });
+  const options: CompletenessOptions = { ...NONE, ditavalFiles: extra.ditavalFiles ?? [], ...opts };
+  return runChecks(crawl, options, { host, preferences: extra.preferences });
+}
 
 describe('completeness: references', () => {
   it('reports a topicref to a missing topic and a missing image', async () => {
@@ -940,5 +964,229 @@ describe('completeness: settings mapping', () => {
     assert.strictEqual(toStoredPath(P('docs'), P('other/a.ditaval')), P('other/a.ditaval'));
     assert.strictEqual(resolveStoredPath(P('docs'), 'filters/a.ditaval'), P('docs/filters/a.ditaval'));
     assert.strictEqual(resolveStoredPath(P('docs'), P('other/a.ditaval')), P('other/a.ditaval'));
+  });
+});
+
+describe('completeness: batch 3 profiling values, filtered content and filter file', () => {
+  // These probes mirror corpus 4, where the committed Oxygen report is the only
+  // evidence for the severity and the finding site (see its README).
+  const prefs: ProfilingPreferences = {
+    attributes: { audience: ['expert', 'novice'], platform: ['linux', 'windows'], props: ['novice'] },
+    singleValue: [],
+  };
+
+  // i-prof-empty-pos (audience=""), i-prof-empty-edge (whitespace only) and
+  // i-prof-single-edge (platform=""): each drew one dmv.prof.attr.empty.value warning.
+  it('reports a profiling attribute whose value is empty or whitespace only', async () => {
+    const issues = await checkWith(
+      {
+        'root.ditamap': '<map><topicref href="a.dita"/><topicref href="b.dita" product=""/></map>',
+        'a.dita': topic('a', '<p audience="">x</p>'),
+        'b.dita': topic('b', '<p platform="   ">x</p>'),
+      },
+      { identifyProfilingConflicts: true },
+    );
+    const found = issues.filter((i) => i.category === 'empty-profiling-value');
+    assert.strictEqual(found.length, 3, JSON.stringify(issues.map((i) => [i.category, i.file, i.line])));
+    assert.ok(found.every((i) => i.severity === 'warning'), found.map((i) => i.severity).join(','));
+    assert.ok(found.some((i) => i.message.includes('@audience')), found.map((i) => i.message).join('\n'));
+    const inMap = found.filter((i) => i.file === P('root.ditamap'));
+    assert.strictEqual(inMap.length, 1, 'a map element with an empty value is reported too');
+    assert.ok(inMap[0].message.includes('@product'), inMap[0].message);
+  });
+
+  it('says nothing about a profiling attribute that carries values', async () => {
+    const issues = await checkWith(
+      {
+        'root.ditamap': '<map><topicref href="a.dita" product="desktop"/></map>',
+        'a.dita': topic('a', '<p audience="novice">x</p>'),
+      },
+      { identifyProfilingConflicts: true },
+    );
+    assert.deepStrictEqual(issues.filter((i) => i.category === 'empty-profiling-value'), []);
+  });
+
+  // i-prof-empty-edge's second paragraph: dmv.prof.group.val.prefs.undef names the
+  // group itself ("audience()"), so the group text has to reach the preference comparison.
+  it('compares an empty condition group with the preferences as the group text', async () => {
+    const issues = await checkWith(
+      {
+        'root.ditamap': '<map><topicref href="a.dita"/></map>',
+        'a.dita': topic('a', '<p props="audience()">x</p>'),
+      },
+      { reportProfilingPreferences: true },
+      { preferences: prefs },
+    );
+    const found = issues.filter((i) => i.category === 'profiling-preference');
+    assert.strictEqual(found.length, 1, JSON.stringify(issues.map((i) => [i.category, i.message])));
+    assert.ok(found[0].message.includes('audience()'), found[0].message);
+    assert.deepStrictEqual(issues.filter((i) => i.category === 'empty-profiling-value'), [], 'an empty group is not an empty attribute value');
+  });
+
+  // i-prof-group-neg produced nothing (novice is configured), i-prof-group-pos and
+  // i-prof-group-edge drew dmv.prof.group.val.prefs.undef for the member value.
+  it('compares a group that carries values by those values', async () => {
+    const issues = await checkWith(
+      {
+        'root.ditamap': '<map><topicref href="a.dita"/></map>',
+        'a.dita': topic('a', '<p props="audience(novice)">x</p>'),
+      },
+      { reportProfilingPreferences: true },
+      { preferences: prefs },
+    );
+    assert.deepStrictEqual(issues.filter((i) => i.category === 'profiling-preference'), []);
+    const other = await checkWith(
+      {
+        'root.ditamap': '<map><topicref href="a.dita"/></map>',
+        'a.dita': topic('a', '<p props="audience(nobody)">x</p>'),
+      },
+      { reportProfilingPreferences: true },
+      { preferences: prefs },
+    );
+    const found = other.filter((i) => i.category === 'profiling-preference');
+    assert.strictEqual(found.length, 1, JSON.stringify(other.map((i) => [i.category, i.message])));
+    assert.ok(found[0].message.includes('nobody'), found[0].message);
+  });
+
+  const dropExpert = '<val><prop att="audience" val="expert" action="exclude"/></val>';
+
+  // k-conref-filtered-pos: dmv.ref.filtered (error) on the referencing element, with
+  // the path Oxygen names being the topic id and the element id of the dropped target.
+  const intoFiltered = {
+    'root.ditamap': '<map><topicref href="src.dita"/></map>',
+    'src.dita': topic('src', '<p conref="tgt.dita#tgt/gone"/>'),
+    'tgt.dita': topic('tgt', '<p id="kept" audience="novice">k</p><p id="gone" audience="expert">g</p>'),
+  };
+
+  it('reports a conref whose target element the filter excludes', async () => {
+    const issues = await checkWith(intoFiltered, { checkNonDita: true }, { filterXml: dropExpert });
+    const found = issues.filter((i) => i.category === 'filtered-reference');
+    assert.strictEqual(found.length, 1, JSON.stringify(issues.map((i) => [i.category, i.file, i.line])));
+    assert.strictEqual(found[0].severity, 'error');
+    assert.strictEqual(found[0].file, P('src.dita'));
+    assert.ok(found[0].message.includes('tgt/gone'), found[0].message);
+  });
+
+  // k-conref-filtered-edge: the range starts at a kept element and ends at an
+  // excluded one; the report carries one finding, naming the excluded end.
+  it('reports the excluded end of a conref range', async () => {
+    const files = {
+      ...intoFiltered,
+      'src.dita': topic('src', '<p conref="tgt.dita#tgt/kept" conrefend="tgt.dita#tgt/gone"/>'),
+    };
+    const issues = await checkWith(files, { checkNonDita: true }, { filterXml: dropExpert });
+    const found = issues.filter((i) => i.category === 'filtered-reference');
+    assert.strictEqual(found.length, 1, JSON.stringify(issues.map((i) => [i.category, i.message])));
+    assert.ok(found[0].message.includes('tgt/gone'), found[0].message);
+  });
+
+  it('says nothing when the filter keeps the referenced element', async () => {
+    const files = {
+      ...intoFiltered,
+      'src.dita': topic('src', '<p conref="tgt.dita#tgt/kept"/>'),
+    };
+    const issues = await checkWith(files, { checkNonDita: true }, { filterXml: dropExpert });
+    assert.deepStrictEqual(issues.filter((i) => i.category === 'filtered-reference'), []);
+  });
+
+  it('says nothing about filtered content when no filter runs', async () => {
+    const issues = await checkWith(intoFiltered, { checkNonDita: true });
+    assert.deepStrictEqual(issues.filter((i) => i.category === 'filtered-reference'), []);
+  });
+
+  // k-conref-ignored-pos: dmv.ref.filtered.conref (warning) for a link into the own
+  // content of an element that carries a conref, which resolution replaces.
+  const intoReplaced = (target: string) => ({
+    'root.ditamap': '<map><topicref href="host.dita"/><topicref href="source.dita"/></map>',
+    'host.dita':
+      `<topic id="h"><title>T</title><body>` +
+      `<div id="holder" conref="source.dita#s/source"><p id="inside">x</p></div>` +
+      `<p><xref href="#h/${target}">l</xref></p></body></topic>`,
+    'source.dita': topic('s', '<div id="source"><p>the content that takes its place</p></div>'),
+  });
+
+  it('reports a reference into content that a conref replaces', async () => {
+    const issues = await checkWith(intoReplaced('inside'), { checkNonDita: true });
+    const found = issues.filter((i) => i.category === 'filtered-reference');
+    assert.strictEqual(found.length, 1, JSON.stringify(issues.map((i) => [i.category, i.message])));
+    assert.strictEqual(found[0].severity, 'warning');
+    assert.ok(found[0].message.includes('h/inside'), found[0].message);
+  });
+
+  // k-conref-ignored-edge (the conref element itself survives) and
+  // k-conref-ignored-neg (no conref at all) both produced nothing.
+  it('says nothing when the reference names the element that carries the conref', async () => {
+    const issues = await checkWith(intoReplaced('holder'), { checkNonDita: true });
+    assert.deepStrictEqual(issues.filter((i) => i.category === 'filtered-reference'), []);
+  });
+
+  it('says nothing about content no conref replaces', async () => {
+    const files = {
+      ...intoReplaced('inside'),
+      'host.dita':
+        '<topic id="h"><title>T</title><body>' +
+        '<div id="holder"><p id="inside">x</p></div>' +
+        '<p><xref href="#h/inside">l</xref></p></body></topic>',
+    };
+    const issues = await checkWith(files, { checkNonDita: true });
+    assert.deepStrictEqual(issues.filter((i) => i.category === 'filtered-reference'), []);
+  });
+
+  // The filter file of corpus 4 is itself the dmv.dup.cond.filter probe: the same
+  // condition twice, and the same condition with two actions. Both are errors the
+  // report puts on the filter file, with no problem id.
+  const repeatedFilter = [
+    '<?xml version="1.0"?>',
+    '<val>',
+    '  <prop att="audience" val="expert" action="exclude"/>',
+    '  <prop att="audience" val="expert" action="exclude"/>',
+    '  <prop att="platform" val="solaris" action="exclude"/>',
+    '  <prop att="platform" val="solaris" action="include"/>',
+    '</val>',
+  ].join('\n');
+
+  it('reports a condition the filter file repeats', async () => {
+    const issues = await checkWith(
+      {
+        'root.ditamap': '<map><topicref href="a.dita"/></map>',
+        'a.dita': topic('a', '<p>x</p>'),
+        'f.ditaval': repeatedFilter,
+      },
+      { batchValidate: true },
+      { filterXml: repeatedFilter, ditavalFiles: ['f.ditaval'] },
+    );
+    const found = issues.filter((i) => i.category === 'duplicate-filter-condition');
+    assert.strictEqual(found.length, 2, JSON.stringify(issues.map((i) => [i.category, i.message])));
+    assert.ok(found.every((i) => i.severity === 'error'));
+    assert.deepStrictEqual(found.map((i) => i.line), [4, 6]);
+    const text = found.map((i) => i.message).join('\n');
+    assert.ok(text.includes('audience=expert'), text);
+    assert.ok(text.includes('platform=solaris'), text);
+  });
+
+  it('says nothing about a filter file that states each condition once', async () => {
+    const once = '<val><prop att="audience" val="expert" action="exclude"/></val>';
+    const issues = await checkWith(
+      {
+        'root.ditamap': '<map><topicref href="a.dita"/></map>',
+        'a.dita': topic('a', '<p>x</p>'),
+        'f.ditaval': once,
+      },
+      { batchValidate: true },
+      { filterXml: once, ditavalFiles: ['f.ditaval'] },
+    );
+    assert.deepStrictEqual(issues.filter((i) => i.category === 'duplicate-filter-condition'), []);
+  });
+
+  it('stays silent about a filter file it cannot read, rather than failing the run', async () => {
+    const issues = await checkWith(
+      {
+        'root.ditamap': '<map><topicref href="a.dita"/></map>',
+        'a.dita': topic('a', '<p>x</p>'),
+      },
+      { batchValidate: true },
+      { ditavalFiles: ['gone.ditaval'] },
+    );
+    assert.deepStrictEqual(issues.filter((i) => i.category === 'duplicate-filter-condition'), []);
   });
 });

@@ -282,6 +282,10 @@ export const PROBLEM_ID_CATEGORY: Record<string, string> = {
   'dmv.link.no.target': 'link-no-target',
   'dmv.ref.to.resource.only': 'resource-only-target',
   'dmv.dup.el.id': 'duplicate-element-id',
+  // a reference into content the run filters out (the two severities differ, the
+  // category does not: the report distinguishes them by id)
+  'dmv.ref.filtered': 'filtered-reference',
+  'dmv.ref.filtered.conref': 'filtered-reference',
   // reuse
   'dmv.not.used.reusable.component': 'unreferenced-reusable',
   // folders
@@ -310,11 +314,29 @@ export const PROBLEM_ID_CATEGORY: Record<string, string> = {
   'dmv.prof.attr.group.innef.cond': 'profiling-conflict',
   'dmv.prof.attr.prefs.undef': 'profiling-preference',
   'dmv.prof.attr.val.prefs.undef': 'profiling-preference',
+  'dmv.prof.group.val.prefs.undef': 'profiling-preference',
+  // a multi-valued attribute the preferences page defines with a single value
+  'dmv.prof.attr.val.prefs.confl': 'profiling-preference',
+  'dmv.prof.attr.empty.value': 'empty-profiling-value',
 };
 
-export function categoryForProblemId(problemID: string): string {
-  const mapped = PROBLEM_ID_CATEGORY[problemID];
-  return mapped ?? (problemID ? `oxygen:${problemID}` : 'oxygen:unknown');
+/**
+ * Incidents the report carries with no `problemID` at all. Only a description can
+ * name them, and only where the extension has a category for the same finding:
+ * the duplicated filter-file condition (Oxygen's message for `dmv.dup.cond.filter`,
+ * which the report leaves unmarked) is reported on the filter file.
+ */
+const DESCRIPTION_CATEGORY: ReadonlyArray<{ test: RegExp; category: string }> = [
+  { test: /Duplicate condition in filter file/i, category: 'duplicate-filter-condition' },
+];
+
+export function categoryForProblemId(problemID: string, description = ''): string {
+  const mapped = problemID ? PROBLEM_ID_CATEGORY[problemID] : undefined;
+  if (mapped) return mapped;
+  if (!problemID) {
+    for (const d of DESCRIPTION_CATEGORY) if (d.test.test(description)) return d.category;
+  }
+  return problemID ? `oxygen:${problemID}` : 'oxygen:unknown';
 }
 
 /** Strips a `file:` URL scheme and URI escapes, leaving a local filesystem path. */
@@ -370,7 +392,7 @@ export function normalizeOxygenFindings(
         file = local && isAbsolute(local) ? toPosix(relative(absCorpus, resolve(local))) : toPosix(local);
       }
       return {
-        category: categoryForProblemId(i.problemID),
+        category: categoryForProblemId(i.problemID, i.description),
         severity: i.severity || 'warning',
         file,
         line: i.line,

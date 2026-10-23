@@ -172,6 +172,11 @@ export interface ReusableCandidate extends Location {
   parentKey?: string;
   /** Position among the parent's children, compared by conref order checks. */
   order?: number;
+  /**
+   * True when a strict ancestor carries `@conref`: resolving it replaces this
+   * element, so a reference that addresses it points at content that is gone.
+   */
+  replacedByConref?: boolean;
 }
 
 export interface ConrefUse {
@@ -257,6 +262,23 @@ export interface ProfilingValueUse extends Location {
   tag: string;
 }
 
+/** A profiling attribute present with no value at all (Oxygen's dmv.prof.attr.empty.value). */
+export interface EmptyProfilingValue extends Location {
+  attribute: string;
+  tag: string;
+}
+
+/**
+ * An element the active DITAVAL filter drops (Oxygen's dmv.ref.filtered): its id is
+ * gone from the output, while the topic that holds it stays.
+ */
+export interface ExcludedElement extends Location {
+  id: string;
+  tag: string;
+  /** The nearest enclosing topic element's id, as `#topic/elem` addresses it. */
+  topicId?: string;
+}
+
 export interface FileIssue extends Location {
   severity: 'error' | 'warning';
   msg: Msg;
@@ -295,6 +317,10 @@ export interface CrawlResult {
   tables: TableInfo[];
   profilingConflicts: ProfilingConflict[];
   profilingValues: ProfilingValueUse[];
+  /** Profiling attributes whose value is empty or whitespace only. */
+  emptyProfilingValues: EmptyProfilingValue[];
+  /** Elements dropped from the crawled tree by the DITAVAL filter. */
+  excludedElements: ExcludedElement[];
   fileIssues: FileIssue[];
   /** Normalized path -> original path, for every file the crawl opened. */
   visited: Map<string, string>;
@@ -365,9 +391,29 @@ function countNewlines(s: string): number {
 }
 
 /** Removes (in place) every descendant the DITAVAL filter would drop from the output. */
-function pruneExcluded(n: XNode, filter: DitavalFilter): void {
-  n.children = n.children.filter((c) => !filter.excludes(c.attrs));
-  for (const c of n.children) pruneExcluded(c, filter);
+function pruneExcluded(
+  n: XNode,
+  filter: DitavalFilter,
+  topicId: string | undefined,
+  topicIdOf: (n: XNode) => string | undefined,
+  onRemove: (removed: XNode, topicId: string | undefined) => void,
+): void {
+  const keep: XNode[] = [];
+  for (const c of n.children) {
+    if (filter.excludes(c.attrs)) {
+      // The whole subtree goes with it, so every id inside is gone from the output.
+      const below = (d: XNode, tid: string | undefined): void => {
+        const here = topicIdOf(d) ?? tid;
+        onRemove(d, here);
+        for (const k of d.children) below(k, here);
+      };
+      below(c, topicId);
+    } else {
+      keep.push(c);
+      pruneExcluded(c, filter, topicIdOf(c) ?? topicId, topicIdOf, onRemove);
+    }
+  }
+  n.children = keep;
 }
 
 function* walk(n: XNode): Generator<XNode> {
@@ -425,6 +471,8 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     tables: [],
     profilingConflicts: [],
     profilingValues: [],
+    emptyProfilingValues: [],
+    excludedElements: [],
     fileIssues: [],
     visited: new Map(),
     cancelled: false,
@@ -455,7 +503,14 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       result.fileIssues.push({ file: path, line: scanned.error.line, severity: 'error', msg: msg('val.xml', scanned.error.message), structural: false });
       return undefined;
     }
-    if (prune && opts.filter && scanned.root) pruneExcluded(scanned.root, opts.filter);
+    if (prune && opts.filter && scanned.root) {
+      const root = scanned.root;
+      const topicIdOf = (n: XNode): string | undefined => (isTopicElement(n) ? n.attrs['id'] : undefined);
+      pruneExcluded(root, opts.filter, topicIdOf(root), topicIdOf, (removed, removedTopicId) => {
+        const id = removed.attrs['id'];
+        if (id) result.excludedElements.push({ file: path, line: removed.line, id, tag: removed.tag, topicId: removedTopicId });
+      });
+    }
     return scanned.root;
   }
 
@@ -597,9 +652,16 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       for (const a of profilingAttrs) {
         const v = n.attrs[a];
         if (v === undefined) continue;
-        const values = splitValues(v);
-        if (values.length === 0) continue;
-        result.profilingValues.push({ file: ctx.file, line: n.line, attribute: a, values, tag });
+        const value = profileValueOf(v);
+        if (value.emptyValue) {
+          result.emptyProfilingValues.push({ file: ctx.file, line: n.line, attribute: a, tag });
+          continue;
+        }
+        result.profilingValues.push({ file: ctx.file, line: n.line, attribute: a, values: value.values, tag });
+        // An empty group carries no value: it reaches the preferences as its own text
+        // (Oxygen's dmv.prof.group.val.prefs.undef) but cascades nothing.
+        if (value.groupOnly) continue;
+        const values = value.values;
         const prev = cascaded.get(a);
         if (prev) {
           const inter = values.filter((x) => prev.includes(x));
@@ -712,7 +774,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     // Every @id (id syntax, duplicate element ids) and every reusable element
     // (unreferenced-reusable, conref range checks), with the enclosing topic id
     // and the element's place among its parent's children.
-    const visitIds = (n: XNode, topicId: string | undefined, parentKey: string, order: number): void => {
+    const visitIds = (n: XNode, topicId: string | undefined, parentKey: string, order: number, shadowed: boolean): void => {
       const isTopic = isTopicElement(n);
       const currentTopic = isTopic ? (n.attrs['id'] ?? topicId) : topicId;
       const id = n.attrs['id'];
@@ -721,14 +783,17 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
         if (!isTopic) {
           result.reusable.push({
             file: path, line: n.line, id, tag: n.tag, topicFile: path, topicId: currentTopic,
-            parentKey, order,
+            parentKey, order, replacedByConref: shadowed || undefined,
           });
         }
       }
       const key = `${parentKey}/${n.tag}${id ? `#${id}` : `[${order}]`}`;
-      n.children.forEach((c, i) => visitIds(c, currentTopic, key, i));
+      // The element's own @conref replaces what is written inside it (Oxygen's
+      // dmv.ref.filtered.conref); the element itself survives the resolution.
+      const childShadowed = shadowed || n.attrs['conref'] !== undefined;
+      n.children.forEach((c, i) => visitIds(c, currentTopic, key, i, childShadowed));
     };
-    visitIds(root, undefined, '', 0);
+    visitIds(root, undefined, '', 0, false);
 
     // Topic ids (root and nested)
     for (const n of walk(root)) {
@@ -986,9 +1051,14 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       for (const a of profilingAttrs) {
         const v = n.attrs[a];
         if (v === undefined) continue;
-        const values = splitValues(v);
-        if (values.length === 0) continue;
+        const value = profileValueOf(v);
+        if (value.emptyValue) {
+          result.emptyProfilingValues.push({ file: path, line: n.line, attribute: a, tag: n.tag });
+          continue;
+        }
+        const values = value.values;
         result.profilingValues.push({ file: path, line: n.line, attribute: a, values, tag: n.tag });
+        if (value.groupOnly) continue; // an empty group compares, but cascades nothing
         const prev = against.get(a);
         if (prev) {
           const inter = values.filter((x) => prev.includes(x));
@@ -1111,6 +1181,24 @@ function splitValues(v: string): string[] {
   const cleaned = v.replace(/[A-Za-z_][\w.-]*\(([^)]*)\)/g, (_m, inner: string) => ` ${inner} `);
   for (const t of cleaned.trim().split(/\s+/)) if (t) out.push(t);
   return out;
+}
+
+/**
+ * What a profiling attribute value means for the checks. Three shapes are told
+ * apart, because the Oxygen report treats them differently:
+ * - values: the tokens a group expands to, as splitValues finds them;
+ * - emptyValue: the attribute is written with no value at all, empty or spaces
+ *   only (dmv.prof.attr.empty.value);
+ * - groupOnly: the value is nothing but an empty condition group, `audience()`
+ *   (dmv.prof.group.val.prefs.undef), which names no value but is a group the
+ *   preferences can be missing.
+ */
+function profileValueOf(v: string): { values: string[]; emptyValue: boolean; groupOnly: boolean } {
+  const values = splitValues(v);
+  if (values.length > 0) return { values, emptyValue: false, groupOnly: false };
+  const groups = v.match(/[A-Za-z_][\w.-]*\(\s*\)/g);
+  if (groups && groups.length > 0) return { values: groups, emptyValue: false, groupOnly: true };
+  return { values: [], emptyValue: true, groupOnly: false };
 }
 
 /** Why a key name cannot be parsed, if it cannot (Oxygen's invalid.keyref.syntax.1/.3). */
