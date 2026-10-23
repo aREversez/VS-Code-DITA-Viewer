@@ -136,6 +136,9 @@ export const ISSUE_CATEGORIES = [
   'link-no-target',
   'resource-only-target',
   'duplicate-element-id',
+  'empty-profiling-value',
+  'filtered-reference',
+  'duplicate-filter-condition',
 ] as const;
 
 export type IssueCategory = (typeof ISSUE_CATEGORIES)[number];

@@ -58,6 +58,8 @@ export function localizeMsg(m: Msg): string {
     case 'ref.linkNotInMap': return vscode.l10n.t('Link target is not referenced in any map: {0}', ...a);
     case 'ref.multiple': return vscode.l10n.t('Topic referenced more than once ({1} times): {0}', ...a);
     case 'ref.invalidTopicId': return vscode.l10n.t('Referenced topic id "{0}" not found', ...a);
+    case 'ref.filteredTarget': return vscode.l10n.t('Referenced ID path "{0}" is located in content excluded by the profiling filters', ...a);
+    case 'ref.filteredByConref': return vscode.l10n.t('Referenced ID path "{0}" is located in content a content reference replaces', ...a);
     case 'conref.missingId': return vscode.l10n.t('Content reference has no "#id" part: {0}', ...a);
     case 'conref.endNoStart': return vscode.l10n.t('conrefend is used without conref: {0}', ...a);
     case 'conref.endOtherFile': return vscode.l10n.t('conrefend "{0}" points to a different file than conref "{1}"', ...a);
@@ -103,6 +105,8 @@ export function localizeMsg(m: Msg): string {
     case 'prof.attrUndefined': return vscode.l10n.t('Profiling attribute @{0} on <{1}> is not defined in the profiling preferences', ...a);
     case 'prof.valueUndefined': return vscode.l10n.t('@{0} value "{1}" is not defined in the profiling preferences', ...a);
     case 'prof.singleValue': return vscode.l10n.t('@{0} is single-value but has {1} values ("{2}")', ...a);
+    case 'prof.emptyValue': return vscode.l10n.t('Profiling attribute @{0} on <{1}> has an empty value', ...a);
+    case 'ditaval.duplicateCondition': return vscode.l10n.t('Duplicate condition in the filter file for "{0}"; only the first encountered condition is used', ...a);
     case 'val.unreadable': return vscode.l10n.t('File could not be read', ...a);
     case 'val.xml': return vscode.l10n.t('XML error: {0}', ...a);
     case 'val.notMap': return vscode.l10n.t('Root element <{0}> is not a DITA map', ...a);
@@ -186,6 +190,9 @@ function categoryLabel(c: IssueCategory): string {
     case 'link-no-target': return vscode.l10n.t('Links without a target');
     case 'resource-only-target': return vscode.l10n.t('Cross references to resource-only topics');
     case 'duplicate-element-id': return vscode.l10n.t('Duplicate element ids');
+    case 'empty-profiling-value': return vscode.l10n.t('Empty profiling attribute values');
+    case 'filtered-reference': return vscode.l10n.t('References into filtered content');
+    case 'duplicate-filter-condition': return vscode.l10n.t('Duplicate conditions in filter files');
   }
 }
 

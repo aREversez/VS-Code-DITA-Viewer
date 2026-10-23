@@ -19,6 +19,8 @@ export const MESSAGE_TEMPLATES = {
   'ref.linkNotInMap': 'Link target is not referenced in any map: {0}',
   'ref.multiple': 'Topic referenced more than once ({1} times): {0}',
   'ref.invalidTopicId': 'Referenced topic id "{0}" not found',
+  'ref.filteredTarget': 'Referenced ID path "{0}" is located in content excluded by the profiling filters',
+  'ref.filteredByConref': 'Referenced ID path "{0}" is located in content a content reference replaces',
   // conref/conrefend shape
   'conref.missingId': 'Content reference has no "#id" part: {0}',
   'conref.endNoStart': 'conrefend is used without conref: {0}',
@@ -72,6 +74,9 @@ export const MESSAGE_TEMPLATES = {
   'prof.attrUndefined': 'Profiling attribute @{0} on <{1}> is not defined in the profiling preferences',
   'prof.valueUndefined': '@{0} value "{1}" is not defined in the profiling preferences',
   'prof.singleValue': '@{0} is single-value but has {1} values ("{2}")',
+  'prof.emptyValue': 'Profiling attribute @{0} on <{1}> has an empty value',
+  // filter (DITAVAL) file
+  'ditaval.duplicateCondition': 'Duplicate condition in the filter file for "{0}"; only the first encountered condition is used',
   // validation
   'val.unreadable': 'File could not be read',
   'val.xml': 'XML error: {0}',
