@@ -127,8 +127,18 @@ DITA 1.x 里 `@class` 通常不写在文件里，而是 DTD 的默认值。语�
 | 2 接入 DTD 校验器 | 包含内容模型，理论最接近 Oxygen | 候选 `xmllint-wasm`（libxml2 编到 WASM，wasm+js 约 860 KB，Node ≥ 16，内部用 worker thread）：需核实包装层是否暴露 DTD 校验（其文档以 XSD 为主，DTD 要对上 xmllint 的 `--valid`）、1.7 MB / 168 个文件的 DTD 目录怎么让校验器看见（不能依赖本机 DITA-OT）；DTD 是 OASIS 发布物、DITA-OT 以 Apache-2.0 分发，随包要附声明；每文件一次 worker 有启动开销，得缓存或批处理 | 体积 +1.7 MB（未压缩）、分发许可、跨平台；`xmllint` 只给文本消息，要对上三个 `MSG_*` 还得按文本匹配，仍不等于 Oxygen 的措辞与 scope |
 | 3 接受差异 | 无 | 0：3 行写成有理由的 n/a，parity 继续把这 3 行留在 Oxygen-only 并记录 | `invalid.class.format` 的「未声明元素」形态在使用中会漏——但本批的 class 检查只管「有 class 的元素是否被按 DITA 解析」，元素是否存在不归它 |
 
-**建议（不代替决定）：** 先选 3，做完 L/M/N 再看「未声明元素/属性」是否是真问题，是再考虑 1；2 只在明确需要 schema 校验且接受
-+1.7 MB 与跨平台维护成本时才值得。三个选项都不影响其余 11 个 id。
+### 决定：选 3，并把「不做 schema 校验」写实
+
+维护者已定：**接受差异**。代价对比见上表；两项落地要求：
+
+- 三个 `MSG_*` 与 Xerces 的「没有关联 schema/DTD」文本进 `ACCEPTED_PROBLEM_IDS` /
+  `ACCEPTED_DESCRIPTIONS`（`src/test/editor/oxygenReport.ts`），`scripts/oxygen-diff.cjs` 把它们列成
+  "accepted differences (not counted)"，既不计入 diff，也不再用退出码 1 报「未映射 id」。
+- `OXYGEN-PROBLEMS.md` 写明范围：不覆盖元素/属性是否声明和内容模型；以后若要补，从选项 1 开始，
+  并且只对已知的标准 DOCTYPE 生效。日常的 schema 校验交给 VS Code 里支持 DTD/目录的 XML 语言服务器。
+
+`dmv.invalid.DITA.reference` / `dmv.invalid.DITA.uri.target` 不记为 gap：五份报告都没有这个 id
+（探针拿到的是 `dmv.ref.res.as.dita` 与 `dmv.invalid.parse.dita.content`），账本记为 n/a 并写明观察。
 
 ## 类别粒度（建议，新会话可调整，但要在账本里写理由）
 
@@ -164,3 +174,19 @@ Validate and Check for Completeness（只开这一个根 map，选项全开、re
 完成标准：这批每个 id 在 `OXYGEN-PROBLEMS.md` 里是 *ok* 或有理由的 *n/a*（没有同 id 的 incident 时写 "mapped only"；两边都沉默时写明是哪种
 n/a）。语料 5 的 parity 预期里，Oxygen-only 为空或每一项都有记录在案的理由。`npm run verify` 与 `ruleLedger` 测试通过。
 **84 个 id 里没有任何一个还是 gap。**
+
+## 结果
+
+- **class 表进了运行时。** `scripts/extract-dita-class.cjs --emit-module` 生成
+  `src/parser/ditaClassDefaults.ts`（333 topic + 49 map，按 topic/map 两侧分开），`--check-module`
+  离线只比较模块与已提交的 JSON（`npm run check:dita-class`，已接进 `npm run verify`），不读 DITA-OT
+  的 DTD；从 DTD 重生成 JSON 是另一个手动步骤。显式写出的 `@class` 优先，表只补缺失。
+- **运行时语义**在 `src/editor/ditaClass.ts`（`effectiveClassOf`、`classPairTag`、`sideOfRoot` 等）
+  里；表外元素一律跳过。`src/test/parser/ditaClassTables.test.ts` 钉住生成表与
+  `standardTagMap`/`mapTagMap` 的一致性（含 12 条本侧无链与 `map/bookmap-structural` 的例外清单）。
+- **11 个 id 全部落地**：`class-format`、`conref-class`、`domains-format`、`type-class-mismatch`、
+  `type-class-specific`、`dita-parse`、`section-title-order`、`section-title-duplicate`
+  （账本 R056–R063）；`dmv.invalid.DITA.reference` / `.uri.target` 与
+  `dmv.invalid.class.specialization` 记为 n/a，理由见 `OXYGEN-PROBLEMS.md`。
+- **语料 5 的 parity**：21 matched / 6 extension-only / 3 Oxygen-only，另有 6 条已接受差异；逐条理由见
+  `../completeness-corpus-5/README.md`。

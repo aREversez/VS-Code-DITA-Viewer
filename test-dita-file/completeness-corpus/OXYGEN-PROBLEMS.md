@@ -20,7 +20,9 @@ The **Status** column says where the extension stands:
   `PROBLEM_ID_CATEGORY` (`src/test/editor/oxygenReport.ts`). That does not mean a real
   report was seen to carry this exact id: a row says so when it did not ("mapped only"),
   and only the rows without that note are backed by an incident of that id.
-- **gap** — Oxygen reports it; the extension does not.
+- **gap** — Oxygen reports it; the extension does not. No row is *gap* after batch 4;
+  the scope note under the structure table says which family stays outside the table's reach
+  on purpose.
 - **n/a** — the extension deliberately diverges (documented below), or Oxygen reports nothing
   for the probes and the extension is silent too, so there is nothing to match (the row says
   which of the two it is).
@@ -34,8 +36,8 @@ ignored by the `(file, category)` diff.
 | --- | --- | --- |
 | `dmv.file.not.found` | a referenced file does not exist | ok (`missing-reference`) |
 | `dmv.reference.not.exist` | a reference cannot be resolved | ok (`missing-reference`) |
-| `dmv.invalid.DITA.reference` | reference is invalid DITA | gap |
-| `dmv.invalid.DITA.uri.target` | URI does not resolve to a DITA target | gap |
+| `dmv.invalid.DITA.reference` | reference is invalid DITA | n/a — no incident in five runs: the batch-4 probe (`maps/m-dita-ref-pos.ditamap`, `format="dita"` on a well-formed non-DITA XML file) drew `dmv.ref.res.as.dita`, and the non-XML boundary drew `dmv.invalid.parse.dita.content`; the extension answers both probes as `format-mismatch` / `dita-parse`, so an equivalent exists but no incident of this id |
+| `dmv.invalid.DITA.uri.target` | URI does not resolve to a DITA target | n/a — same run: the three `maps/m-uri-target-*.ditamap` probes produced `dmv.topicref.remote.no.external.scope` and, on the no-`@scope` edge, `dmv.invalid.parse.dita.content`, never this id; the extension answers `external-reference` there |
 | `dmv.folder.ref` | a reference points at a folder, not a file | ok (`folder-reference`) |
 | `dmv.absolute.ref` | an absolute reference (not portable) | ok (`reference-syntax`) |
 | `dmv.recursive.ref` | a map recursively references itself | ok (`recursive-reference`) |
@@ -64,8 +66,8 @@ ignored by the `(file, category)` diff.
 | `dmv.topicref.remote.no.external.scope` | external reference should set `@scope="external"` | ok (`external-reference`) |
 | `dmv.topicref.remote.local.scope` | external reference needs `@format` and `@scope` | ok (`external-reference`) — mapped only: the corpus-2 report has no incident with this id |
 | `dmv.topicref.ext.scope.no.format` | external-scope non-DITA ref missing `@format` | ok (`format-missing`) |
-| `dmv.ref.type.class.mismatch` | `@type` does not match the target's class | gap |
-| `dmv.ref.type.class.mismatch.specific` | `@type` less specific than the target's class | gap |
+| `dmv.ref.type.class.mismatch` | `@type` does not match the target's class | ok (`type-class-mismatch`) — the corpus-5 report carries it on `topics/l-ref-type-mismatch-pos.dita` and on the map `topicref` probe |
+| `dmv.ref.type.class.mismatch.specific` | `@type` less specific than the target's class | ok (`type-class-specific`) — the corpus-5 report carries it on `topics/l-ref-type-specific-pos.dita` |
 | `dmv.topicref.to.element` | topicref points at an element ID, not a topic ID | ok (`topicref-to-element`) — the corpus-3 report carries it on `maps/f-topicref-to-element-pos.ditamap` |
 | `dmv.topichead.no.navtitle` | `topichead` has no navigation title | ok (`missing-navtitle`) |
 | `dmv.topicref.no.navtitle` | non-local topicref has no navigation title | ok (`missing-navtitle`) |
@@ -142,21 +144,37 @@ ignored by the `(file, category)` diff.
 
 | Problem ID | Oxygen reports | Extension status |
 | --- | --- | --- |
-| `dmv.invalid.class.format` | malformed `@class` | gap |
-| `dmv.invalid.class.generalization` | `@class` is not a generalization | gap — also the id the corpus-3 report used for a `conref` that names a whole topic (batch 4 checks classes) |
-| `dmv.invalid.class.specialization` | `@class` is not a specialization | gap |
-| `dmv.invalid.domains.format` | `@domains` missing/malformed | gap |
+| `dmv.invalid.class.format` | malformed `@class` | ok (`class-format`) — the corpus-5 report carries all four message forms (not specified, no leading `-`/`+`, empty, no trailing space); a written value is checked as written, so a copy of the DTD default that lacks its trailing space is reported too |
+| `dmv.invalid.class.generalization` | `@class` is not a generalization | ok (`conref-class`) — the corpus-5 report files all four conref directions here, the legal `step`→`li` included; the id also covers the `conref` that names a whole topic (corpus 3) |
+| `dmv.invalid.class.specialization` | `@class` is not a specialization | n/a — Oxygen never emitted it: the `l-class-specialization-{pos,neg}` probes are both `dmv.invalid.class.generalization`, and the id appears in none of the five reports; the mapped category answers both directions |
+| `dmv.invalid.domains.format` | `@domains` missing/malformed | ok (`domains-format`) — the corpus-5 report carries it on the empty-`@domains` edge only; an absent `@domains` is not a finding, and the DOCTYPE-less probe drew the schema differences instead |
 | `dmv.invalid.id.syntax.2` | invalid character in an ID | ok (`invalid-id-syntax`) — the corpus-2 report files it as `IDInvalidWithNamespaces` |
 | `dmv.invalid.id.syntax.3` | ID contains whitespace | ok (`invalid-id-syntax`) — `IDInvalidWithNamespaces` in the corpus-2 report |
-| `dmv.invalid.parse.dita.content` | problem parsing DITA content | gap |
-| `dmv.section.first.title` | `<section>` title is not the first element | gap |
-| `dmv.section.no.dup.title` | `<section>` has more than one title | gap |
+| `dmv.invalid.parse.dita.content` | problem parsing DITA content | ok (`dita-parse`) — reported on the map that references the broken file, which is Oxygen's own attribution (corpus 1 and corpus 5); the only row left Oxygen-only is a remote target, which the extension never fetches |
+| `dmv.section.first.title` | `<section>` title is not the first element | ok (`section-title-order`) — the corpus-5 report carries it on the positive probe; a section nested in a section is not checked, because the DTD rejects the nesting before the order matters |
+| `dmv.section.no.dup.title` | `<section>` has more than one title | ok (`section-title-duplicate`) — the corpus-5 report carries it on the positive probe; every title after the first is its own finding |
 
-Everything marked **gap** is produced by Oxygen's DITA validation engine (the
-"batch validate" step) or by checks the extension has not implemented yet. The
-extension's `batchValidate` is only well-formedness plus root/`@id`/`<title>`
-structure, so it will not match the ~40 structure/class/conref IDs without a real
-DITA validator.
+### Outside the table on purpose: schema validation
+
+No row above is a gap any more. What stays out of reach is the DTD validation family, and that
+is a maintenance decision, not unfinished work (`BATCH-4.md`, option 3):
+
+- **Not covered:** whether elements and attributes are declared, and whether an element may
+  appear where it does (content model). Oxygen answers those from the DTD it associates with
+  the file and, with none, with Xerces' own statements. The three `MSG_*` ids carry no `dmv.*`
+  id at all, so they can only be matched by wording, and a DTD-less answer would either miss a
+  specialization or call it undeclared.
+- **Kept instead of shipping a 1.7 MB DTD subset and a validating parser.** The three ids and
+  the no-schema text are listed in `ACCEPTED_PROBLEM_IDS` / `ACCEPTED_DESCRIPTIONS`
+  (`src/test/editor/oxygenReport.ts`), so `scripts/oxygen-diff.cjs` prints them as "accepted
+  differences" and leaves them out of both the diff and the exit code (6 in the corpus-5
+  report, 3 in corpus 1, 3 in corpus 2).
+- **If it is ever wanted,** start from option 1 of `BATCH-4.md` (element and attribute
+  declarations only) and gate it on a known OASIS DOCTYPE. Without that gate a custom
+  specialization is reported as an undeclared element, which is the false positive the class
+  table avoids today. Content models need option 2 and its cost.
+- **Where schema validation belongs now:** a VS Code XML language server that knows DTDs and
+  catalogs, running beside this extension, not inside it (the README says so).
 
 ## Extension-only findings (not in Oxygen's catalog)
 
@@ -177,8 +195,11 @@ DITA validator.
 
 Two corroborated divergences from `baseline.extension.json`:
 
-1. `topics/invalid.dita` — well-formed but schema-invalid; the extension is
-   silent, Oxygen's validator is not (`dmv.*` structure/attribute problems).
+1. `topics/invalid.dita` — well-formed but schema-invalid. Its three `MSG_*` incidents are the
+   accepted schema differences of the scope note above; the remaining
+   `dmv.invalid.class.format` sits on `<notanelement>`, an element no DTD declares, so the class
+   table has no entry for it and the rule skips it. The extension is silent there and Oxygen is
+   not, deliberately — the same boundary as `l-class-format-pos-undeclared.dita` below.
 2. ~~`keydef keys="kusekey"` + two `topicref keyref="kusekey"`~~ — **fixed**:
    the crawler now resolves `@keyref` after the maps are crawled, so this is a
    `multiple-reference` (and an unresolvable key is `undefined-key`).
@@ -200,10 +221,11 @@ parity test of the completeness categories.
 
 What the two runs did settle:
 
-- `dmv.invalid.class.format` is **confirmed as a gap** — the extension emits
-  nothing for a missing/malformed `@class`. Once the corpus has a DOCTYPE the DTD
-  supplies the default `@class`, so this noise should disappear and stop masking
-  the completeness findings.
+- `dmv.invalid.class.format` **was a gap at that run** — the extension emitted nothing for a
+  missing/malformed `@class`, and the 29 map-level incidents were the missing-DTD default seen
+  by the map's own parse. Batch 4 implements it (`class-format`): the DOCTYPE-less corpus-5
+  probe reproduces four of those incidents per file, `m-not-dita.xml` adds two, and the one
+  left on `topics/invalid.dita` is an undeclared element the class table skips by design.
 - `profiling-preference` parity is decided by the **configured preference set**,
   not by a rule difference. Oxygen flagged the map's `audience="novice"` only
   because this Oxygen had empty profiling preferences; the extension checks map
@@ -216,21 +238,24 @@ What the two runs did settle:
 off; Oxygen's `audience` profiling preference already matched the harness's
 `expert novice`, so no preference change was needed) produced **30 incidents**
 (`oxygen-report.xml`). At this run the parity set (`oxygen-parity.expected.json`) locked
-**15 matched, 4 extension-only, 5 Oxygen-only** — the second run below supersedes it with
-21 matched (the 4th extension-only row, `topics/profiling-defined.dita` `profiling-conflict`, is the R022 probe the latest report confirmed Oxygen-silent — see the profiling note below). An earlier run had 7 Oxygen-only
+**15 matched, 4 extension-only, 5 Oxygen-only**; every row of that set has since been resolved
+or explained, and the second run below added the R023-R025 probes. What the file locks today is
+**22 matched, 2 extension-only, 1 Oxygen-only**: batch 4 turned the map-level parse incident into
+a match (R063), and the row left is the undeclared element of `topics/invalid.dita`, an accepted
+scope boundary. An earlier run had 7 Oxygen-only
 rows; once `outside.dita` carried a DOCTYPE and the report was regenerated, its
 two stale rows matched and the lone `oxygen:unknown` id disappeared. Every
-remaining Oxygen-only row and how it is handled:
+Oxygen-only row this corpus produced, and how it is handled:
 
 | Oxygen-only row | Report evidence | Handling |
 | --- | --- | --- |
 | `resources.dita` `missing-reference` | `dmv.file.not.found` ×2 (lines 7, 8) | **Matched by category equivalence.** Oxygen has no resource/reference split, so the same dangling href is its `missing-reference` and the extension's `missing-resource`. `CATEGORY_EQUIVALENCES` (`completenessHarness.ts`) folds the two in the parity signature only — the extension UI keeps the distinction. Locked by `oxygenParity.test.ts`. |
 | `twoidsa.dita` `duplicate-id` | `dmv.dup.topic.id` (line 3) | **Fixed.** `mapChecks` used to report one participant of a duplicate group; it now flags every topic that shares the id (as Oxygen does), each related to the others. |
 | ~~`outside.dita` no-schema (`oxygen:unknown`) + `dmv.invalid.class.format`~~ | *(gone on re-run)* | **Resolved.** With the DOCTYPE in place the regenerated report carries neither row; `outside.dita` now matches on `outside-folder` and `unreferenced-link`, and the `oxygen:unknown` id is no longer present. |
-| `corpus.ditamap` `dmv.invalid.parse.dita.content` | line 64, message names `topics/malformed.dita` | **B — attribution, not a gap.** The same malformed-topic finding the extension reports as `topics/malformed.dita validation`; Oxygen reports it on the referencing map. Kept as an understood divergence: the `(file, category)` signature cannot fold a *different* file, so it stays one extension-only + one Oxygen-only until we decide whether to redirect map-level parse errors to the target. |
+| `corpus.ditamap` `dmv.invalid.parse.dita.content` | line 64, message names `topics/malformed.dita` | **Implemented — now matched (R063).** Batch 4 reports a reference to unparsable DITA on the referring element, so the map-level incident and `dita-parse` line up; the broken file keeps its own `validation` finding, which stays one extension-only signature. |
 | `linker2.dita` `dmv.invalid.ref.topic.id` ×2 | referenced topic ID not found (lines 9, 10) | **Implemented — now matched.** New `invalid-ref-topic-id` check (`mapChecks`) fires when a `@conref` resolves to a file that exists but its topic-id segment (the part after `#`) names no topic in it. Ledger R020. |
 | `ok.dita` `unreferenced-reusable` | `dmv.not.used.reusable.component` (line 6) | **Implemented — now matched.** `unreferencedReusable` is now strict: a broken conref (its topic id does not resolve, R020) no longer counts as consuming its target, so `ok.dita`'s `p#used` (and `reuse.dita`'s `p#shared`) stay unreferenced, as Oxygen reports. |
-| `invalid.dita` `MSG_*` ×3 + `dmv.invalid.class.format` | schema/DTD + malformed `@class` | **A-class — schema validation (Phase 5).** Needs real DTD/schema validation; deferred to the DITA-OT-preprocess-reuse evaluation, not built here on guesses. |
+| `invalid.dita` `MSG_*` ×3 + `dmv.invalid.class.format` | schema/DTD + malformed `@class` | **Accepted difference (option 3) plus the table boundary.** The three `MSG_*` are the schema differences of the scope note; the `class-format` row sits on `<notanelement>`, which no DTD declares, so the class table has no entry and the rule skips it — the same row as `l-class-format-pos-undeclared.dita` in corpus 5. |
 
 Run-wide notes:
 
@@ -262,8 +287,12 @@ off), now carrying the three shape probes, produced **36 incidents** — the 30 
 first run plus 3 control paragraphs and 3 `dmv.prof.attr.innef.cond` findings. Every
 control was reported (`dmv.prof.attr.val.prefs.undef` on the `audience="admin"` paragraph
 in each file), so the run reached all three probes and is usable as evidence.
-With the alignment below, `oxygen-parity.expected.json` locks **21 matched, 2 extension-only,
-5 Oxygen-only** (`scripts/oxygen-diff.cjs` agrees: `signatures matched: 21`).
+With the alignment below, `oxygen-parity.expected.json` locked **21 matched, 2 extension-only,
+5 Oxygen-only** at that run. It now holds **22 matched, 2 extension-only, 1 Oxygen-only**
+(`scripts/oxygen-diff.cjs` agrees: `signatures matched: 22`), because batch 4 matches the
+map-level parse incident and the one row left is the accepted scope boundary above. The fourth
+extension-only row of the first run is the R022 probe the latest report confirmed Oxygen-silent
+(see the profiling note below).
 
 | Shape | Where Oxygen put `dmv.prof.attr.innef.cond` | Outcome |
 | --- | --- | --- |
@@ -378,6 +407,74 @@ Two rows stay Oxygen-only, and one extension-only row is the same scheme story:
 | `maps/j-scheme.ditamap` `undefined-key` | `dmv.key.undef` ×4 on the scheme's `subjectdef` keys | **Documented difference.** A `subjectdef` defines a key per the DITA 1.3 syntax, so Oxygen's four are its refusal to load the scheme; the extension reads the file as a map and reports the leaf subjects as defined-but-unused. |
 | `maps/j-scheme.ditamap` `unreferenced-key` | — | The other half of the same row above: the extension's five `unreferenced-key` findings where Oxygen produced none, because it never reached the scheme's contents. |
 
+### The batch 4 run (fifth corpus)
+
+*Validate and Check for Completeness* over `../completeness-corpus-5/corpus.ditamap` — that
+map as the only open root map, every option on, remote off, Oxygen XML Editor 27.1 — produced
+**34 incidents** (`../completeness-corpus-5/oxygen-report.xml`). Six of them are accepted
+schema differences, so parity compares 28 and locks **21 matched, 6 extension-only, 3
+Oxygen-only** (`scripts/oxygen-diff.cjs` agrees). The eleven batch-4 ids, grouped as their
+`RULES.md` rows group them:
+
+| Group | Oxygen ids seen | Extension | Where the report puts it |
+| --- | --- | --- | --- |
+| L class format | `dmv.invalid.class.format` ×11 | `class-format` (R056) | all four message forms: the DOCTYPE-less `l-domains-format-pos.dita` (lines 1, 6, 7, 8), `m-not-dita.xml` (1, 7), and the badvalue / empty / no-trailing-space edges |
+| L conref class | `dmv.invalid.class.generalization` ×4 | `conref-class` (R058) | `p`→`ul`, the legal `step`→`li`, `step`→`substep`, `substep`→`step`; `.specialization` never fires |
+| L `@type` | `dmv.ref.type.class.mismatch` ×2, `.specific` ×1 | `type-class-mismatch` / `type-class-specific` (R059/R060) | the xref probe, the map `topicref` probe, and `type="topic"` against a task |
+| L `@domains` | `dmv.invalid.domains.format` ×1 | `domains-format` (R057) | the empty-`@domains` edge only |
+| M DITA reference | `dmv.ref.res.as.dita` ×2 | `format-mismatch` | `maps/m-dita-ref-pos.ditamap:9` matched; `corpus.ditamap:38` stays Oxygen-only (below) |
+| M URI target | `dmv.topicref.remote.no.external.scope`, `dmv.invalid.parse.dita.content` | `external-reference`, `dita-parse` | no `dmv.invalid.DITA.uri.target` anywhere in the report |
+| N parse | `dmv.invalid.parse.dita.content` ×4 | `dita-parse` (R063) | three matched on the referring map, the remote edge Oxygen-only |
+| N structure | `dmv.section.first.title`, `dmv.section.no.dup.title` | `section-title-order` / `section-title-duplicate` (R061/R062) | the two positive probes; the nested-section edges are silent on both sides |
+
+What the run settled:
+
+- **Oxygen decides "is this DITA" by the DOCTYPE, not by the root element.** `corpus.ditamap:38`
+  references `topics/l-domains-format-pos.dita`, the probe that deliberately has no DOCTYPE to
+  ask about `@domains`; Oxygen answers `dmv.ref.res.as.dita` ("not a DITA resource") for that
+  reference, while the extension reads the root `<topic>` and says nothing. The probe's own
+  `class-format` findings *are* matched (four of them), so the row is one Oxygen-only
+  `format-mismatch` and a documented boundary, not a missing rule.
+- **A written `@class` is checked as written.** The negative probe spells `class="- topic/p"`,
+  exactly what the DTD would default, and still draws "At least one trailing space should be
+  present" (`l-class-format-neg.dita:9`, `l-class-specialization-edge.dita:9`): Oxygen accepts
+  the missing space from the DTD but not from the author, and the extension does the same.
+- **`step` to `li` is reported.** Oxygen files the general end of the source's own chain as
+  `dmv.invalid.class.generalization`, so one category serves every direction and the legal one
+  is not special-cased (the same file also carries the `conref`-names-a-topic shape of
+  corpus 3).
+- **An undeclared element stays a schema question.** `l-class-format-pos-undeclared.dita` writes
+  `<widget>`, which no DTD declares: Oxygen reports `dmv.invalid.class.format` (no class, because
+  no DTD default) plus the two `MSG_*`, and the extension is silent because the element is
+  outside the class table. That is the one Oxygen-only `class-format` row, and the same boundary
+  as `topics/invalid.dita` in corpus 1.
+- **Remote targets are not fetched.** `maps/m-uri-target-edge.ditamap:10` draws
+  `dmv.invalid.parse.dita.content` in Oxygen (the URL cannot be read) and `external-reference`
+  from the extension — one row each way, for the two reasons corpus 2 recorded.
+- **The class table covers three vocabularies.** `src/parser/ditaClassDefaults.ts` is generated
+  from the DITA-OT 1.3 DTDs of base, technicalContent and bookmap (333 topic entries, 49 map
+  entries, queried per side because `title` and friends differ between them). `learning/`,
+  `machineryIndustry/` and the foreign-namespace modules were not extracted, and no custom
+  specialization is known: an element outside the table is skipped by every class-dependent
+  rule rather than given a guessed class. `npm run check:dita-class` re-renders the module
+  offline and fails when it and the committed `scripts/dita-class-extracted.json` disagree.
+
+### All five corpora at a glance
+
+| Corpus | Written for | Incidents | Accepted differences | Parity: matched / extension-only / Oxygen-only |
+| --- | --- | --- | --- | --- |
+| `completeness-corpus` | batches 1 and the R020-R025 follow-ups | 36 | 3 `MSG_*` | 22 / 2 / 1 |
+| `completeness-corpus-2` | batch 2, reference and key forms | 108 | 3 no-schema | 70 / 6 / 17 |
+| `completeness-corpus-3` | batch 2, conref / id / link forms | 30 | – | 27 / 0 / 3 |
+| `completeness-corpus-4` | batch 3, profiling and filters | 19 | – | 13 / 1 / 2 |
+| `completeness-corpus-5` | batch 4, class / DITA validity / structure | 34 | 6 (4 `MSG_*`, 2 no-schema) | 21 / 6 / 3 |
+| **Total** | | **227** | **12** | **153 / 15 / 26** |
+
+The 15 extension-only and 26 Oxygen-only signatures are each accounted for in the batch sections
+above or in the corpus README that owns them; the largest group is corpus 2's 17, whose three
+rows per family are listed in `../completeness-corpus-2/README.md`. With this run the 11 ids of
+batch 4 are closed: 84 ids, **no gap left**.
+
 ## How to use this
 
 1. Implement a check, pick the `dmv.*` ID it corresponds to, and add it to
@@ -385,4 +482,7 @@ Two rows stay Oxygen-only, and one extension-only row is the same scheme story:
 2. Add a probe to `corpus.ditamap` (or to a topic) and lock the finding in
    `baseline.extension.json` via `npm run check:completeness -- --update`.
 3. Keep the **Status** column honest: move a row from *gap* to *ok* only when the
-   corpus proves it.
+   corpus proves it, and when Oxygen never carries an id, say that instead of marking it *ok*.
+4. When an id is a deliberate difference, list it in `ACCEPTED_PROBLEM_IDS` (or
+   `ACCEPTED_DESCRIPTIONS` for the id-less text) so `oxygen-diff` prints it as accepted and
+   keeps the two counts apart.
