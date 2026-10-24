@@ -16,6 +16,7 @@ dist/**/*.map
 dist-test/**
 dist-test-visual/**
 scripts/**
+packages/**
 .github/**
 tsconfig.json
 tsconfig.e2e.json
