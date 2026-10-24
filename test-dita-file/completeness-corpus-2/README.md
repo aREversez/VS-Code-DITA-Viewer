@@ -97,7 +97,7 @@ that two rules of one category stay distinguishable by `(file, category)`.
 | `dmv.ref.res.as.dita` | `maps/c-res-as-dita-{pos,neg,edge}.ditamap` + `topics/c-res-as-dita-*` | `format-mismatch` error (matched) |
 | `dmv.ref.res.as.map` | `maps/c-res-as-map-{pos,neg,edge}.ditamap` + `topics/c-res-as-map-*` | `format-mismatch` error (matched) |
 | `dmv.ref.topic.as.map` | `topics/c-topic-as-map-{pos,neg,edge}.dita` + `topics/c-topic-as-map-target.dita` | `format-mismatch` error (matched) |
-| `dmv.no.format.non.dita.ref` | `topics/c-no-format-nondita-{pos,neg,edge}.dita` + `topics/c-nondita-*.{pdf,bin}` | `format-missing` error (matched); Oxygen's `edge` incident carries `dmv.invalid.parse.dita.content` instead, because it tried to parse the `.bin` |
+| `dmv.no.format.non.dita.ref` | `topics/c-no-format-nondita-{pos,neg,edge}.dita` + `topics/c-nondita-*.{pdf,bin}` | `format-missing` error on `pos` and `neg` (matched); on `edge` Oxygen reports `dmv.invalid.parse.dita.content` instead, because it tried to parse the `.bin`, so the two rows do not meet (see the parity section) |
 | `dmv.topicref.remote` | `maps/c-remote-{pos,neg,edge}.ditamap` | the report produced no incident for this id; the extension's `extNoFormat` covers the same shape |
 | `dmv.topicref.remote.no.external.scope` | `maps/c-remote-no-external-{pos,neg,edge}.ditamap` | `external-reference` warning (matched) |
 | `dmv.topicref.remote.local.scope` | `maps/c-remote-local-{pos,neg,edge}.ditamap` | `external-reference` warning (matched) |
@@ -106,23 +106,27 @@ that two rules of one category stay distinguishable by `(file, category)`.
 | `dmv.topichead.no.navtitle` | `maps/d-topichead-{pos,neg,edge}.ditamap` | `missing-navtitle` warning (matched) |
 | `dmv.topicref.no.navtitle` | `maps/d-topicref-{pos,neg,edge}.ditamap` | `missing-navtitle` warning on `edge` (matched; `pos` stays silent, as Oxygen does) |
 
-## Parity after batch 1
+## Parity
 
-`oxygen-parity.expected.json` locks **59 matched, 6 extension-only, 31 Oxygen-only**
-(`scripts/oxygen-diff.cjs` agrees). Every row that does not match has a recorded reason:
+`oxygen-parity.expected.json` locks **70 matched, 6 extension-only, 17 Oxygen-only**
+(`scripts/oxygen-diff.cjs` agrees). Three of the report's incidents carry no schema association
+and are accepted differences (`ACCEPTED_DESCRIPTIONS`), so they are not counted. Every row that
+does not match has a recorded reason:
 
 **Extension-only (6).**
 
 - `maps/a-absolute-posix.ditamap reference-syntax` — the extension reports a POSIX
   root-absolute href because it cannot be portable; Oxygen resolves it and files only
   `dmv.file.not.found`.
-- `topics/c-res-as-{dita,map}-{pos.txt,edge.html} validation` — `@format="dita"` or
-  `"ditamap"` makes the extraction read the non-DITA file as DITA, so its root is
-  rejected. Oxygen reports the same files through `dmv.invalid.class.format` instead
-  (batch validation, not implemented). The `format-mismatch` finding on the map that
-  points at them is matched.
+- `topics/c-no-format-nondita-edge.dita format-missing` — the extension's actionable finding on
+  the map that forgot `@format`; Oxygen files the same reference as the parse error it hits when
+  it tries the `.bin` anyway, so the two rows do not meet.
+- `topics/c-res-as-{dita,map}-{pos.txt,edge.html} validation` — `@format="dita"` or `"ditamap"`
+  makes the extraction read the non-DITA file as DITA, so its root is rejected. The same files
+  now also match Oxygen's `dmv.invalid.class.format` through `class-format` (batch 4), but
+  `validation` itself has no Oxygen counterpart.
 
-**Oxygen-only (31).**
+**Oxygen-only (17).**
 
 - **`missing-reference` on a `file:` or drive-letter href (6):** `a-absolute-drive`,
   `a-absolute-fileurl`, the three `a-fileurl-*` probes and `a-unencoded-percent`. The
@@ -135,18 +139,22 @@ that two rules of one category stay distinguishable by `(file, category)`.
   href with the map references literally, the extension normalizes it and sees
   `ok.dita` is in the map; `c-no-format-nondita-edge` — the extension only calls a
   link "not in map" when it targets a DITA topic, and this one targets a `.bin`.
-- **`oxygen:dmv.no.link.keyref` (7):** a key definition whose target has no
-  reference; not implemented and outside batch 1.
-- **`oxygen:dmv.invalid.class.format` (7) and `oxygen:unknown` (7):** Oxygen's
-  class/format validation on the non-DITA probe files (`c-guess.html`,
-  `c-resource.*`, `c-res-as-*`), plus the incidents whose `problemID` is empty.
-  Batch validation is out of scope (same handling as corpus 1).
-- **`c-no-format-nondita-edge.dita oxygen:dmv.invalid.parse.dita.content` (1):**
-  Oxygen parses the `.bin` because `@format` is missing; the extension reports the
-  actionable finding (`format-missing`) on the same file, which is matched.
-- **`topics/ok.dita duplicate-id` (1):** Oxygen instantiates one topic per `@copy-to`
-  and sees the shared `@id` as a duplicate; the extension checks ids per file, so the
-  reused topic has one.
+- **`class-format` (3):** `c-guess.html`, `c-resource.html` and `c-resource.txt` are read as
+  DITA by Oxygen because of the map's claim (or a guessed format) and draw one
+  `dmv.invalid.class.format` per element; the extension reports the actionable
+  `format-missing` / `format-mismatch` on the map that makes the claim and does not read the
+  file as DITA, so there is no element to check. The same split batch 4 recorded for an
+  undeclared element in corpus 5.
+- **`oxygen:unknown` (4):** the HTML validator's own messages on the three `.html` probes and
+  `c-guess.html` ("Saw `<?`", "Start tag seen without seeing a doctype first", "Element `head`
+  is missing a required instance of child element `title`"). They are id-less and name no DITA
+  category. The id-less "There is no schema or DTD associated with the document" rows are the
+  accepted differences, not these.
+- **`dita-parse` (1):** `c-no-format-nondita-edge.dita`, the other half of the extension-only
+  `format-missing` row above.
+- **`duplicate-id` (1):** `topics/ok.dita`. Oxygen instantiates one topic per `@copy-to` and sees
+  the shared `@id` as a duplicate; the extension checks ids per file, so the reused topic has
+  one.
 
 
 Supporting files are not probes of their own. `topics/ok.dita` is the neutral target;

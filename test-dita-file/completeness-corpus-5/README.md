@@ -15,8 +15,9 @@ says so in its comment).
 
 ## Oxygen setup for this corpus
 
-Nothing beyond the other corpora: the `audience` preferences of corpus 1, no filter. Record in
-this README, after the run, which Oxygen product and version produced the report.
+Nothing beyond the other corpora: the `audience` preferences of corpus 1, no filter. The run
+recorded below was **Oxygen XML Editor 27.1**, `corpus.ditamap` as the only open root map, every
+option on, remote off.
 
 ## Conventions
 
@@ -92,9 +93,68 @@ the open question of the `unparsable-dita` category (`BATCH-4.md`), not a mistak
 probe.
 
 The three `MSG_*` ids are deliberately **not** probed here: corpus 1's `topics/invalid.dita`
-already draws all three (element not declared, attribute not declared, content model), and
-whether the extension validates against a DTD at all is still the maintenance decision
-written up in `BATCH-4.md`.
+already draws all three (element not declared, attribute not declared, content model), and the
+maintenance decision on DTD validation landed on option 3 of `BATCH-4.md` — keep the difference
+and record it. The run below carries four `MSG_*` incidents of its own anyway: one on the
+undeclared `<widget>` (element not declared and unexpected there) and one on each of the two
+probes that write a second `<section>` where the content model forbids it.
+
+## The run: 34 incidents, 21 signatures matched
+
+`oxygen-report.xml` carries 34 incidents. Six are the schema differences the maintenance
+decision accepts (`../completeness-corpus/BATCH-4.md`, option 3):
+`MSG_ELEMENT_NOT_DECLARED` ×1 and `MSG_CONTENT_INVALID_UNEXPECTED_ELEMENT` ×3 on the probes that
+write an element where the content model does not allow one, and two id-less "There is no schema
+or DTD associated with the document" errors on the DOCTYPE-less files. They are listed in
+`ACCEPTED_PROBLEM_IDS` / `ACCEPTED_DESCRIPTIONS` (`src/test/editor/oxygenReport.ts`), and
+`scripts/oxygen-diff.cjs` prints them as "accepted differences (not counted)".
+
+Of the other 28, parity locks **21 matched, 6 extension-only, 3 Oxygen-only**
+(`oxygen-parity.expected.json`). What Oxygen answered, probe family by probe family:
+
+| Rule | Oxygen's answer | Extension |
+| --- | --- | --- |
+| `dmv.invalid.class.format` | 11 incidents: four on the DOCTYPE-less `topics/l-domains-format-pos.dita` (lines 1, 6, 7, 8), two on `topics/m-not-dita.xml` (lines 1, 7), and one each on the badvalue, empty and no-trailing-space edges. The two probes that spell `class="- topic/p"` by hand are reported too, which settles that an authored value is checked as written even when it equals the DTD default | `class-format` on all of those; the undeclared element of the positive probe is the one row left to Oxygen (below) |
+| `dmv.invalid.class.generalization` | 4 incidents: `p`→`ul`, `step`→`li` (the legal direction), `step`→`substep`, `substep`→`step` | `conref-class` on all four, `step`→`li` included |
+| `dmv.invalid.class.specialization` | none — the specialization probes came back as `.generalization`, the same id as the other direction | nothing to match; the mapped category covers both directions |
+| `dmv.invalid.domains.format` | 1 incident, on the empty-`@domains` edge (`l-domains-format-edge.dita:6`) | `domains-format`; an absent `@domains` produced only the schema differences, which is the documented boundary |
+| `dmv.ref.type.class.mismatch` | 2 incidents: the `xref` probe and the map `topicref` probe | `type-class-mismatch` on both |
+| `dmv.ref.type.class.mismatch.specific` | 1 incident: `type="topic"` against `- topic/topic task/task` | `type-class-specific` |
+| `dmv.invalid.DITA.reference` | none — `format="dita"` on well-formed non-DITA XML is `dmv.ref.res.as.dita`, and the plain-text edge is `dmv.invalid.parse.dita.content` | `format-mismatch` on the positive map (matched), plus `dita-parse` on the plain-text edge |
+| `dmv.invalid.DITA.uri.target` | none — the remote probes are `dmv.topicref.remote.no.external.scope` (scope declared) and `dmv.invalid.parse.dita.content` (no scope), both from the `@href`, not from `@format` | `external-reference` on the no-`@scope` edge |
+| `dmv.invalid.parse.dita.content` | 4 incidents, always on the referring map: `m-dita-ref-edge:9`, `m-uri-target-edge:10`, `n-parse-content-pos:9`, `n-parse-content-edge:9` | `dita-parse` on the three local ones; the remote target is never fetched |
+| `dmv.section.first.title` | 1 incident, on the positive probe | `section-title-order`; the nested-section edge stayed silent on both sides |
+| `dmv.section.no.dup.title` | 1 incident, on the positive probe | `section-title-duplicate`; the nested-section edge stayed silent on both sides |
+
+Three rows stay Oxygen-only, each for a recorded reason:
+
+| Oxygen-only row | Report evidence | Handling |
+| --- | --- | --- |
+| `corpus.ditamap` `format-mismatch` | `dmv.ref.res.as.dita` at line 38, on the `topicref` to the DOCTYPE-less `topics/l-domains-format-pos.dita` | **Documented boundary.** Oxygen decides "is this a DITA resource" by the DOCTYPE association, and this probe has none on purpose (it asks about `@domains`); the extension reads the root `<topic>` and reports nothing. The probe's own four `class-format` incidents do match. |
+| `maps/m-uri-target-edge.ditamap` `dita-parse` | `dmv.invalid.parse.dita.content` at line 10, on the remote URL | **Documented boundary.** A remote target is never fetched (R063), so there is no parse error to report; the extension reports `external-reference` on the same line, which is extension-only for the corpus-2 reason. |
+| `topics/l-class-format-pos-undeclared.dita` `class-format` | `dmv.invalid.class.format` at line 12, on `<widget>` | **Accepted scope boundary.** No DTD declares `<widget>`, so the generated class table has no entry and every class rule skips the element; whether it is declared at all is schema validation's question (option 1 of `BATCH-4.md`). Same row as `topics/invalid.dita` in corpus 1. |
+
+And the six extension-only rows are the rules that already existed: `format-mismatch` on
+`m-dita-ref-edge.ditamap` (the plain-text edge is both "claims DITA" and "does not parse"; Oxygen
+files only the parse error), `external-reference` on `m-uri-target-edge.ditamap`, and the four
+`validation` findings on `topics/m-not-dita.xml`, `topics/m-plain.txt` and the two unparsable
+topics.
+
+## What the class table covers
+
+`src/parser/ditaClassDefaults.ts` is generated from the DITA-OT 1.3 DTDs of **base**,
+**technicalContent** and **bookmap**: 333 topic entries and 49 map entries, kept per side because
+`title`, `shortdesc`, `linktext` and `searchtitle` carry different classes in a map and in a
+topic. `learning/`, `machineryIndustry/` and the foreign-namespace modules were not extracted,
+and no custom specialization is known here: an element outside the table is skipped by every
+class-dependent rule instead of being given a guessed class. `npm run check:dita-class`
+re-renders the module offline and fails when it and the committed
+`scripts/dita-class-extracted.json` disagree; regenerating either file from the DTDs is a manual
+step and is not part of `npm run verify`.
+
+The coverage is the reason every probe here carries a DOCTYPE: without one the table has nothing
+to fall back on and each element would be reported as class-less, as the DOCTYPE-less `@domains`
+probe shows.
 
 ## Before the Oxygen run: 7 findings
 
@@ -113,7 +173,6 @@ topics/n-broken-pos.dita       11  validation         error    XML error: Unexpe
 One is the control (both sides report it), three are parse findings on the files themselves,
 and two are existing rules of the ledger firing on a probe of this batch: `format-mismatch`
 on the boundary of `dmv.invalid.DITA.reference` and `external-reference` on the boundary of
-`dmv.invalid.DITA.uri.target`. Every other probe is silent in the extension today, because no
-class, `@domains`, `@type` or section rule exists yet: for the negative and boundary probes
-that silence is already the right answer, and for the positive ones it is what the batch is
-about.
+`dmv.invalid.DITA.uri.target`. Every other probe was silent when the probes were written, because
+no class, `@domains`, `@type` or section rule existed yet; the 31 findings of the current
+baseline are that list plus the rules the report above says to implement.

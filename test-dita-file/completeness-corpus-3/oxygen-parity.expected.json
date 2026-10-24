@@ -31,7 +31,7 @@
   "extensionOnly": [],
   "oxygenOnly": [
     "topics/e-conrefend-no-conref-edge.dita  oxygen:unknown",
-    "topics/e-id-miss-conref-edge.dita  oxygen:dmv.invalid.class.generalization",
+    "topics/e-id-miss-conref-edge.dita  conref-class",
     "topics/f-bad-id-ref-empty-topic.dita  oxygen:unknown"
   ]
 }

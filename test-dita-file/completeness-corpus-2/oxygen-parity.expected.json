@@ -65,6 +65,10 @@
     "topics/b-keyref3-neg.dita  link-key-without-target",
     "topics/b-keyref3-pos.dita  invalid-key-syntax",
     "topics/c-no-format-nondita-pos.dita  format-missing",
+    "topics/c-res-as-dita-edge.html  class-format",
+    "topics/c-res-as-dita-pos.txt  class-format",
+    "topics/c-res-as-map-edge.html  class-format",
+    "topics/c-res-as-map-pos.txt  class-format",
     "topics/c-topic-as-map-pos.dita  format-mismatch"
   ],
   "extensionOnly": [
@@ -83,22 +87,15 @@
     "topics/a-fileurl-neg.dita  missing-reference",
     "topics/a-fileurl-pos.dita  missing-reference",
     "topics/a-unencoded-percent.dita  missing-reference",
-    "topics/c-guess.html  oxygen:dmv.invalid.class.format",
+    "topics/c-guess.html  class-format",
     "topics/c-guess.html  oxygen:unknown",
-    "topics/c-no-format-nondita-edge.dita  oxygen:dmv.invalid.parse.dita.content",
+    "topics/c-no-format-nondita-edge.dita  dita-parse",
     "topics/c-no-format-nondita-edge.dita  unreferenced-link",
-    "topics/c-res-as-dita-edge.html  oxygen:dmv.invalid.class.format",
     "topics/c-res-as-dita-edge.html  oxygen:unknown",
-    "topics/c-res-as-dita-pos.txt  oxygen:dmv.invalid.class.format",
-    "topics/c-res-as-dita-pos.txt  oxygen:unknown",
-    "topics/c-res-as-map-edge.html  oxygen:dmv.invalid.class.format",
     "topics/c-res-as-map-edge.html  oxygen:unknown",
-    "topics/c-res-as-map-pos.txt  oxygen:dmv.invalid.class.format",
-    "topics/c-res-as-map-pos.txt  oxygen:unknown",
-    "topics/c-resource.html  oxygen:dmv.invalid.class.format",
+    "topics/c-resource.html  class-format",
     "topics/c-resource.html  oxygen:unknown",
-    "topics/c-resource.txt  oxygen:dmv.invalid.class.format",
-    "topics/c-resource.txt  oxygen:unknown",
+    "topics/c-resource.txt  class-format",
     "topics/ok.dita  duplicate-id"
   ]
 }

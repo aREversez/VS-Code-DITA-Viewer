@@ -49,6 +49,13 @@
     "message": "Key reference \"nosuchkey\" does not match any key definition"
   },
   {
+    "category": "dita-parse",
+    "severity": "error",
+    "file": "corpus.ditamap",
+    "line": 64,
+    "message": "Problem parsing \"topics/malformed.dita\" as DITA content: Unexpected close tag"
+  },
+  {
     "category": "profiling-conflict",
     "severity": "warning",
     "file": "corpus.ditamap",

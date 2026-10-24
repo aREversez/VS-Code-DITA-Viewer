@@ -469,11 +469,39 @@
     "message": "Reference to a non-DITA resource has no @format: ../topics/c-nondita-pos.pdf"
   },
   {
+    "category": "class-format",
+    "severity": "error",
+    "file": "topics/c-res-as-dita-edge.html",
+    "line": 3,
+    "message": "Class attribute not specified on <html>; no DTD gives it a class"
+  },
+  {
     "category": "validation",
     "severity": "warning",
     "file": "topics/c-res-as-dita-edge.html",
     "line": 3,
     "message": "Root element <html> is not a DITA topic"
+  },
+  {
+    "category": "class-format",
+    "severity": "error",
+    "file": "topics/c-res-as-dita-edge.html",
+    "line": 4,
+    "message": "Class attribute not specified on <body>; no DTD gives it a class"
+  },
+  {
+    "category": "class-format",
+    "severity": "error",
+    "file": "topics/c-res-as-dita-edge.html",
+    "line": 5,
+    "message": "Class attribute not specified on <p>; no DTD gives it a class"
+  },
+  {
+    "category": "class-format",
+    "severity": "error",
+    "file": "topics/c-res-as-dita-pos.txt",
+    "line": 3,
+    "message": "Class attribute not specified on <notdita>; no DTD gives it a class"
   },
   {
     "category": "validation",
@@ -483,11 +511,39 @@
     "message": "Root element <notdita> is not a DITA topic"
   },
   {
+    "category": "class-format",
+    "severity": "error",
+    "file": "topics/c-res-as-map-edge.html",
+    "line": 3,
+    "message": "Class attribute not specified on <html>; no DTD gives it a class"
+  },
+  {
     "category": "validation",
     "severity": "warning",
     "file": "topics/c-res-as-map-edge.html",
     "line": 3,
     "message": "Root element <html> is not a DITA map"
+  },
+  {
+    "category": "class-format",
+    "severity": "error",
+    "file": "topics/c-res-as-map-edge.html",
+    "line": 4,
+    "message": "Class attribute not specified on <body>; no DTD gives it a class"
+  },
+  {
+    "category": "class-format",
+    "severity": "error",
+    "file": "topics/c-res-as-map-edge.html",
+    "line": 5,
+    "message": "Class attribute not specified on <p>; no DTD gives it a class"
+  },
+  {
+    "category": "class-format",
+    "severity": "error",
+    "file": "topics/c-res-as-map-pos.txt",
+    "line": 3,
+    "message": "Class attribute not specified on <notdita>; no DTD gives it a class"
   },
   {
     "category": "validation",
