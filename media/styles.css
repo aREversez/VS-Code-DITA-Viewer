@@ -11,6 +11,32 @@
  */
 @layer dv-base, wh-compat;
 @layer dv-base {
+/* ── Host tokens: the one place this file meets VS Code ──
+   Everything in the topic-content and outline-tree rules below reads the
+   host-neutral --dita-* tokens (the same contract the Obsidian plugin's
+   stylesheet in @dita-viewer/core uses); VS Code answers them here from its
+   own theme variables. A token VS Code leaves undefined makes the var() that
+   reads it take its inline fallback, exactly as the --vscode-* variable it
+   replaced did, so nothing changes where there is no theme (exported HTML).
+   Left on --vscode-* on purpose, because the core folds them into one token
+   and VS Code does not: the image-button, context-menu and toast colours
+   (dropdown-*, menu-*, notifications-*). Rules after the book-view marker
+   are VS Code chrome and keep --vscode-* as well. --dita-border and
+   --dita-selected-fg are defined for the shared contract but no rule below
+   reads them yet (every widget-border use is one of the above). */
+:root {
+  --dita-fg: var(--vscode-editor-foreground);
+  --dita-fg-muted: var(--vscode-descriptionForeground);
+  --dita-bg: var(--vscode-editor-background);
+  --dita-border: var(--vscode-widget-border);
+  --dita-focus: var(--vscode-focusBorder);
+  --dita-hover-bg: var(--vscode-list-hoverBackground);
+  --dita-selected-fg: var(--vscode-list-activeSelectionForeground);
+  --dita-link: var(--vscode-textLink-foreground);
+  --dita-code-bg: var(--vscode-textCodeBlock-background);
+  --dita-code-inline-bg: var(--vscode-textPreformat-background);
+  --dita-font: var(--vscode-font-family);
+}
 :root {
   --body-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --code-font: 'SF Mono', Monaco, 'Cascadia Code', 'Consolas', monospace;
@@ -32,9 +58,9 @@
      light gray if it's ever unavailable) so this always tracks the real,
      current theme instead of relying on a manually-computed .vscode-dark
      class that can go stale relative to the actual active theme. */
-  --color-code-bg: var(--vscode-textCodeBlock-background, #f8f8f8);
+  --color-code-bg: var(--dita-code-bg, #f8f8f8);
   --color-link: #2b6cb0;
-  --color-code-lang-bg: var(--vscode-textPreformat-background, #e8e8e8);
+  --color-code-lang-bg: var(--dita-code-inline-bg, #e8e8e8);
   --color-profiling-bg: #eaf7c9;
   --color-profiling-border: #b8d878;
   --color-profiling-label-bg: #8fb84e;
@@ -53,8 +79,8 @@
   --color-important-bg: #261a33;
   --color-tip-bg: #1a3326;
   --color-link: #6ab0f3;
-  --color-code-bg: var(--vscode-textCodeBlock-background, #555);
-  --color-code-lang-bg: var(--vscode-textPreformat-background, #666);
+  --color-code-bg: var(--dita-code-bg, #555);
+  --color-code-lang-bg: var(--dita-code-inline-bg, #666);
   --color-profiling-bg: #3a4a1f;
   --color-profiling-border: #5a7530;
   --color-profiling-label-bg: #6b8f39;
@@ -71,7 +97,7 @@ body {
   max-width: var(--max-width);
   margin: 0 auto;
   padding: 2rem 1.5rem;
-  color: var(--vscode-editor-foreground);
+  color: var(--dita-fg);
 }
 
 /* Every source edit swaps this div's entire innerHTML in one mutation
@@ -131,7 +157,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: var(--vscode-descriptionForeground, #999);
+  color: var(--dita-fg-muted, #999);
 }
 
 /* Topic article */
@@ -140,7 +166,7 @@ body {
 /* Short description */
 .shortdesc {
   background: var(--color-note-bg);
-  color: var(--vscode-descriptionForeground, var(--vscode-editor-foreground));
+  color: var(--dita-fg-muted, var(--dita-fg));
   padding: 0.75rem 1rem;
   border-radius: 4px;
   font-size: 1.05em;
@@ -166,7 +192,7 @@ p { margin: 0.75em 0; }
 .note {
   border-left: 4px solid var(--color-note-border);
   background: var(--color-note-bg);
-  color: var(--vscode-editor-foreground);
+  color: var(--dita-fg);
   padding: 0.75rem 1rem;
   margin: 1rem 0;
   border-radius: 0 4px 4px 0;
@@ -320,7 +346,7 @@ html.dv-conref-hot [data-conref] * {
    site-nav treatment. Negative offset keeps the ring inside the tint box so it
    never spills onto a neighbouring block. */
 [data-conref][data-conref]:focus-visible {
-  outline: 2px solid var(--vscode-focusBorder, #007fd4);
+  outline: 2px solid var(--dita-focus, #007fd4);
   outline-offset: -2px;
 }
 /* The single hidden node every reused element's aria-describedby points at
@@ -599,7 +625,7 @@ dd { margin-left: 1.5em; }
 /* Tables */
 table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.95em; border: 2px solid var(--table-border); }
 table th, table td { border: 1px solid var(--table-border); padding: 0.5rem 0.75rem; text-align: left; vertical-align: top; overflow-wrap: break-word; }
-table th { background: var(--color-code-bg); color: var(--vscode-editor-foreground); font-weight: 600; }
+table th { background: var(--color-code-bg); color: var(--dita-fg); font-weight: 600; }
 
 /* Profiling on table rows: the generic .profiled treatment below (box-
    shadow ring + padding + margin) is built for ordinary block content and
@@ -683,7 +709,7 @@ img[data-load-error] { cursor: default; }
 .dita-img-btn {
   padding: 1px 5px; border-radius: 3px; line-height: 1.5; font-size: 12px; cursor: pointer;
   border: 1px solid var(--vscode-dropdown-border, var(--vscode-widget-border, #555));
-  background: var(--vscode-editor-background, rgba(30, 30, 30, 0.85));
+  background: var(--dita-bg, rgba(30, 30, 30, 0.85));
   color: var(--vscode-dropdown-foreground, #eee);
 }
 .dita-img-btn:hover { opacity: 0.85; }
@@ -734,7 +760,7 @@ img[data-load-error] { cursor: default; }
   /* UI chrome, not document content: stays sans-serif regardless of the
      reading-font toggle (Serif is a common choice there, and a serif toast
      reads noticeably slower for a quick transient message). */
-  font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  font-family: var(--dita-font, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   max-width: 92vw;
   /* Kept to one line: a short toast that wraps to two is more disruptive
@@ -764,7 +790,7 @@ figcaption { font-style: italic; margin-top: 0.2rem; font-size: 0.95em; text-ali
 /* Code blocks */
 pre.codeblock, pre.preformatted {
   background: var(--color-code-bg);
-  color: var(--vscode-editor-foreground);
+  color: var(--dita-fg);
   border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 1rem;
@@ -790,7 +816,7 @@ pre.codeblock, pre.preformatted {
   font-family: var(--code-font);
   font-size: 0.72em;
   background: var(--color-code-lang-bg);
-  color: var(--vscode-editor-foreground);
+  color: var(--dita-fg);
   padding: 0.1em 0.5em;
   border-radius: 0 3px 0 3px;
   position: absolute;
@@ -802,7 +828,7 @@ pre.codeblock, pre.preformatted {
 code {
   font-family: var(--code-font);
   font-size: 0.9em;
-  color: var(--vscode-editor-foreground);
+  color: var(--dita-fg);
   background: var(--color-code-bg);
   padding: 0.15em 0.3em;
   border-radius: 3px;
@@ -826,12 +852,12 @@ span.ph:not(.unresolved-keyref):not(.overline) { opacity: 0.8; }
 .unresolved-keyref { opacity: 1; color: #e67e22; border: 1px dashed #e67e22; padding: 0 0.3em; border-radius: 3px; cursor: help; }
 
 /* User Interface domain */
-.uicontrol { font-weight: 500; color: var(--vscode-textLink-foreground); }
+.uicontrol { font-weight: 500; color: var(--dita-link); }
 .menucascade .uicontrol + .uicontrol::before { content: ' › '; color: var(--color-menucascade-arrow); font-weight: normal; }
 .wintitle { font-style: italic; font-weight: 600; }
-.filepath { font-family: var(--code-font); font-size: 0.9em; padding: 0.1em 0.3em; background: var(--color-code-bg); border-radius: 3px; color: var(--vscode-editor-foreground); }
-.userinput { font-family: var(--code-font); font-size: 0.9em; padding: 0.1em 0.3em; background: var(--color-code-bg); border-radius: 3px; border: 1px dashed var(--color-border); color: var(--vscode-editor-foreground); }
-.systemoutput { font-family: var(--code-font); font-size: 0.9em; padding: 0.1em 0.3em; background: var(--color-code-bg); border-radius: 3px; color: var(--vscode-editor-foreground); }
+.filepath { font-family: var(--code-font); font-size: 0.9em; padding: 0.1em 0.3em; background: var(--color-code-bg); border-radius: 3px; color: var(--dita-fg); }
+.userinput { font-family: var(--code-font); font-size: 0.9em; padding: 0.1em 0.3em; background: var(--color-code-bg); border-radius: 3px; border: 1px dashed var(--color-border); color: var(--dita-fg); }
+.systemoutput { font-family: var(--code-font); font-size: 0.9em; padding: 0.1em 0.3em; background: var(--color-code-bg); border-radius: 3px; color: var(--dita-fg); }
 .apiname { font-family: var(--code-font); font-size: 0.9em; font-weight: 500; }
 .parmname { font-family: var(--code-font); font-size: 0.9em; font-style: italic; }
 .option { font-family: var(--code-font); font-size: 0.9em; color: var(--color-link); }
@@ -845,7 +871,7 @@ span.ph:not(.unresolved-keyref):not(.overline) { opacity: 0.8; }
 .msgph { font-family: var(--code-font); font-size: 0.9em; font-style: italic; padding: 0 0.2em; color: var(--color-link); }
 
 /* Programming domain */
-.codeph { font-family: var(--code-font); font-size: 0.9em; background: var(--color-code-bg); padding: 0.1em 0.3em; border-radius: 3px; color: var(--vscode-editor-foreground); }
+.codeph { font-family: var(--code-font); font-size: 0.9em; background: var(--color-code-bg); padding: 0.1em 0.3em; border-radius: 3px; color: var(--dita-fg); }
 .synph { font-family: var(--code-font); font-size: 0.9em; }
 .kwd { font-weight: 600; font-family: var(--code-font); }
 .var { font-style: italic; font-family: var(--code-font); }
@@ -853,18 +879,18 @@ span.ph:not(.unresolved-keyref):not(.overline) { opacity: 0.8; }
 .sep { color: var(--color-border); }
 .delim { font-weight: 600; color: var(--color-link); }
 .syntaxdiagram { border: 1px solid var(--color-border); border-radius: 4px; padding: 1rem; margin: 1rem 0; overflow-x: auto; }
-.synblk { background: var(--color-code-bg); color: var(--vscode-editor-foreground); border: 1px solid var(--color-border); border-radius: 4px; padding: 0.75rem; margin: 0.5rem 0; overflow-x: auto; font-family: var(--code-font); font-size: 0.9em; }
+.synblk { background: var(--color-code-bg); color: var(--dita-fg); border: 1px solid var(--color-border); border-radius: 4px; padding: 0.75rem; margin: 0.5rem 0; overflow-x: auto; font-family: var(--code-font); font-size: 0.9em; }
 .synnote { font-size: 0.9em; margin: 0.5rem 0; padding: 0.5rem; border-left: 3px solid var(--color-border); }
 .fragment { font-family: var(--code-font); font-size: 0.9em; }
 .fragref { font-family: var(--code-font); font-size: 0.9em; color: var(--color-link); }
 
 /* Software domain */
-.screen { background: var(--color-code-bg); color: var(--vscode-editor-foreground); border: 1px solid var(--color-border); border-radius: 4px; padding: 1rem; overflow-x: auto; font-family: var(--code-font); font-size: 0.9em; line-height: 1.5; white-space: pre-wrap; }
+.screen { background: var(--color-code-bg); color: var(--dita-fg); border: 1px solid var(--color-border); border-radius: 4px; padding: 1rem; overflow-x: auto; font-family: var(--code-font); font-size: 0.9em; line-height: 1.5; white-space: pre-wrap; }
 .msgph { font-family: var(--code-font); font-size: 0.9em; }
-.msgblock { background: var(--color-code-bg); color: var(--vscode-editor-foreground); border: 1px solid var(--color-border); border-radius: 4px; padding: 0.75rem; font-family: var(--code-font); font-size: 0.9em; white-space: pre-wrap; }
+.msgblock { background: var(--color-code-bg); color: var(--dita-fg); border: 1px solid var(--color-border); border-radius: 4px; padding: 0.75rem; font-family: var(--code-font); font-size: 0.9em; white-space: pre-wrap; }
 
 /* Body elements */
-.lines { background: var(--color-code-bg); color: var(--vscode-editor-foreground); border: 1px solid var(--color-border); border-radius: 4px; padding: 0.75rem 1rem; font-family: var(--code-font); font-size: 0.9em; line-height: 1.5; white-space: pre-wrap; }
+.lines { background: var(--color-code-bg); color: var(--dita-fg); border: 1px solid var(--color-border); border-radius: 4px; padding: 0.75rem 1rem; font-family: var(--code-font); font-size: 0.9em; line-height: 1.5; white-space: pre-wrap; }
 .fn { font-size: 0.75em; vertical-align: super; cursor: help; color: var(--color-link); }
 cite { font-style: italic; }
 .boolean { font-family: var(--code-font); font-size: 0.9em; font-weight: 500; }
@@ -886,7 +912,7 @@ cite { font-style: italic; }
 .glossentry { margin: 1em 0; }
 
 /* Hazard */
-.hazardstatement { border-left: 4px solid #c0392b; background: var(--color-danger-bg); color: var(--vscode-editor-foreground); padding: 0.75rem 1rem; margin: 1rem 0; border-radius: 0 4px 4px 0; }
+.hazardstatement { border-left: 4px solid #c0392b; background: var(--color-danger-bg); color: var(--dita-fg); padding: 0.75rem 1rem; margin: 1rem 0; border-radius: 0 4px 4px 0; }
 .typeofhazard { font-weight: 600; color: #c0392b; }
 .howtoavoid { margin: 0.5rem 0; }
 .consequence { margin: 0.5rem 0; }
@@ -962,7 +988,7 @@ section, .example { margin: 1.5rem 0; }
 }
 
 .map-tree-item--nav:hover {
-  background-color: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.1));
+  background-color: var(--dita-hover-bg, rgba(128, 128, 128, 0.1));
 }
 
 .map-tree-item--keydef {
@@ -1018,7 +1044,7 @@ section, .example { margin: 1.5rem 0; }
 
 .map-tree-label--keydef {
   font-style: italic;
-  color: var(--vscode-editor-foreground);
+  color: var(--dita-fg);
 }
 
 .map-tree-label--head {
@@ -1045,7 +1071,7 @@ section, .example { margin: 1.5rem 0; }
 .relheader th {
   font-weight: 600;
   background: var(--color-code-bg);
-  color: var(--vscode-editor-foreground);
+  color: var(--dita-fg);
   padding: 0.4rem 0.6rem;
   border: 1px solid var(--color-border);
 }
