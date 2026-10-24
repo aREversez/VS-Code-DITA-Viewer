@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs'
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { renderTopicXml } from '../../editor/ditaRenderUtils';
-import { buildKeySpace } from '../../editor/keySpace';
+import { buildKeySpace } from '@dita-viewer/core';
 
 /**
  * Reference chains (A -> B -> C) resolve transitively: DITA requires it, and

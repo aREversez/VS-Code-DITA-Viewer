@@ -1,10 +1,6 @@
 import * as assert from 'assert';
 import { join, sep } from 'path';
-import {
-  collectReferenceableFiles,
-  toRelativeHref,
-} from '../../language/referenceableFiles';
-import type { ReadDir, WalkEntry } from '../../language/referenceableFiles';
+import { collectReferenceableFiles, toRelativeHref, type ReadDir, type WalkEntry } from '@dita-viewer/core';
 
 /**
  * The folder walk behind href/conref completion.

@@ -1,13 +1,17 @@
 import * as vscode from 'vscode';
-import { parseDita, preprocessEntities } from '../parser/ditaParser';
-import { renderDocument } from '../render/renderer';
+import {
+  parseDita,
+  preprocessEntities,
+  renderDocument,
+  buildRenderContext,
+  trackSourceReads,
+} from '@dita-viewer/core';
 import { dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
 import { getWebviewScript } from './webview/topicScript';
 import { MSG_OPEN_CONREF_TARGET, parseConrefJumpMessage } from './conrefJump';
 import { openConrefTarget } from './conrefJumpCommand';
 import { buildTitleMap, decodeHrefPart, openHrefTarget, clearImageDimensionsCache, clearTopicRenderCache, clearBookMembersCache } from './ditaRenderUtils';
-import { buildRenderContext } from './renderContext';
 import { clearBookSearchIndexCache } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { foldPendingRender, escalateAfterFailure, PendingRender } from './pendingRender';
@@ -15,7 +19,6 @@ import { discoverCssFiles } from './cssDiscovery';
 import { findDitamapFiles, buildKeyMap, getKeySourceMaps, clearKeyMapCache } from './keyMap';
 import { onKeyContextChanged } from './keyContext';
 import { readForDocument, writeForDocument } from './perDocumentState';
-import { trackSourceReads } from './sourceText';
 import { affectsPanel } from './sourceOverlaySync';
 
 // Test-only hook: @vscode/test-electron integration tests can't read a

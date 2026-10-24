@@ -5,8 +5,7 @@
  * content pane. Pure -- the webview-URI mapping is injected -- so it is unit
  * tested, including that nothing a template says can become markup.
  */
-import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
-import { getMapTitleText } from '../render/mapTypeMap';
+import { parseDitamap, preprocessEntities, getMapTitleText } from '@dita-viewer/core';
 import type { SiteTemplate, TemplateDom, TemplateFooter, TemplateHeader, TemplateLink } from './siteTemplates';
 import { buildWebhelpShell, escapeAttribute, escapeText } from './webhelpShell';
 

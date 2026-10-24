@@ -1,15 +1,16 @@
 // Extracts every DITA element's @class default value from the DITA-OT DTD
 // module files, derives the base type (first module/tag pair in the class
 // chain), and produces an auditable three-way diff against the hand-maintained
-// tag→baseType maps in src/parser/standardTagMap.ts and mapTagMap.ts.
+// tag→baseType maps, which live in @dita-viewer/core (parser/standardTagMap
+// and mapTagMap); the installed package's dist/ is what is read.
 //
 // Re-run this whenever DITA-OT is upgraded or a new specialization plugin is
 // installed:  node scripts/extract-dita-class.cjs
 //
 // Use --diff-only to recompute the diff against the existing
 // dita-class-extracted.json without rescanning the DTD (e.g. on a machine
-// without the DITA-OT install) after hand-editing standardTagMap.ts /
-// mapTagMap.ts:  node scripts/extract-dita-class.cjs --diff-only
+// without the DITA-OT install) after the maps in @dita-viewer/core changed
+// and a new version is installed:  node scripts/extract-dita-class.cjs --diff-only
 //
 // It writes two artifacts next to itself for review:
 //   - dita-class-extracted.json   (full table with source file:line evidence)
@@ -99,10 +100,14 @@ const SCAN_EXT = new Set(['.mod', '.ent', '.dtd']);
 const SKIP_DIR_NAMES = new Set(['mathml', 'svg']);
 
 const REPO_ROOT = path.join(__dirname, '..');
-const STANDARD_MAP_SRC = path.join(REPO_ROOT, 'src', 'parser', 'standardTagMap.ts');
-const MAP_MAP_SRC = path.join(REPO_ROOT, 'src', 'parser', 'mapTagMap.ts');
-const BASE_RENDERER_SRC = path.join(REPO_ROOT, 'src', 'render', 'baseTypeMap.ts');
-const MAP_RENDERER_SRC = path.join(REPO_ROOT, 'src', 'render', 'mapTypeMap.ts');
+// The maps and renderer tables are @dita-viewer/core's. Its package exports do
+// not reach the private renderer tables, and the regexes below read text anyway,
+// so read the published dist/*.js files (identical text for these literals).
+const CORE_DIST = path.join(REPO_ROOT, 'node_modules', '@dita-viewer', 'core', 'dist');
+const STANDARD_MAP_SRC = path.join(CORE_DIST, 'parser', 'standardTagMap.js');
+const MAP_MAP_SRC = path.join(CORE_DIST, 'parser', 'mapTagMap.js');
+const BASE_RENDERER_SRC = path.join(CORE_DIST, 'render', 'baseTypeMap.js');
+const MAP_RENDERER_SRC = path.join(CORE_DIST, 'render', 'mapTypeMap.js');
 
 const EXTRACTED_JSON = path.join(__dirname, 'dita-class-extracted.json');
 const DIFF_MD = path.join(__dirname, 'dita-class-diff.md');

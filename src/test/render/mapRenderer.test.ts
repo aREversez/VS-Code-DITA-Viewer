@@ -1,8 +1,12 @@
 import * as assert from 'assert';
-import { getMapTitleText, renderMapDocument } from '../../render/mapTypeMap';
-import { parseDitamap, preprocessEntities } from '../../parser/ditaParser';
+import {
+  getMapTitleText,
+  renderMapDocument,
+  parseDitamap,
+  preprocessEntities,
+  type DitaNode,
+} from '@dita-viewer/core';
 import { expandDitamapRefs } from '../../editor/ditaRenderUtils';
-import type { DitaNode } from '../../parser/domTypes';
 
 function parseAndRender(xml: string): string {
   const doc = parseDitamap(preprocessEntities(xml));

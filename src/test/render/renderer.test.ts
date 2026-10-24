@@ -1,9 +1,7 @@
 import * as assert from 'assert';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { renderDocument, RenderContext } from '../../render/renderer';
-import { parseDita } from '../../parser/ditaParser';
-import { DitaNode, SourceRange } from '../../parser/domTypes';
+import { renderDocument, RenderContext, parseDita, DitaNode, SourceRange } from '@dita-viewer/core';
 
 function makeText(text: string): DitaNode {
   return {

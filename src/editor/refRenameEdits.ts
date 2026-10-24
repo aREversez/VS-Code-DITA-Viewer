@@ -7,8 +7,7 @@
 
 import * as pathWin32 from 'path/win32';
 import * as pathPosix from 'path/posix';
-import { collectRefEntries, isExternalRef } from '../language/ditaLanguageUtils';
-import { decodeHrefPart } from './refResolvers';
+import { collectRefEntries, isExternalRef, decodeHrefPart } from '@dita-viewer/core';
 import { normalizePathForCompare } from './mapReferenceTools';
 
 export interface RenameEntry {

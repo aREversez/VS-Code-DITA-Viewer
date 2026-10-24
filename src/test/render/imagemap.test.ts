@@ -1,6 +1,5 @@
 import * as assert from 'assert';
-import { parseDita, preprocessEntities } from '../../parser/ditaParser';
-import { renderDocument, RenderContext } from '../../render/renderer';
+import { parseDita, preprocessEntities, renderDocument, RenderContext } from '@dita-viewer/core';
 
 const baseCtx: RenderContext = {
   headingLevel: 1,

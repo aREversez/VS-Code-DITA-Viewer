@@ -3,10 +3,14 @@
 // using LCS alignment, pairs wording-level changes as "modified", and injects
 // word-level inline diff marks into rendered HTML.
 
-import { DitaNode, DitaDocument } from '../parser/domTypes';
-import { parseDita, preprocessEntities } from '../parser/ditaParser';
+import {
+  DitaNode,
+  DitaDocument,
+  parseDita,
+  preprocessEntities,
+  findTopLevelIndextermsInSubtree,
+} from '@dita-viewer/core';
 import { collectText, escapeHtml } from './ditaRenderUtils';
-import { findTopLevelIndextermsInSubtree } from '../render/baseTypeMap';
 
 // ── Public types ──
 

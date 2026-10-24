@@ -1,10 +1,13 @@
 import { readFileSync, openSync, readSync, closeSync } from 'fs';
 import { resolve, dirname, isAbsolute } from 'path';
-import type { MapEntry } from '../render/mapTypeMap';
+import {
+  type MapEntry,
+  noteSourceDependencies,
+  renderTopicCached,
+  decodeHrefPart,
+  URL_SCHEME_RE,
+} from '@dita-viewer/core';
 import type { BookPart } from './bookPatch';
-import { noteSourceDependencies } from './sourceText';
-import { renderTopicCached } from './topicRender';
-import { decodeHrefPart, URL_SCHEME_RE } from './refResolvers';
 // Search match engine lives in the searchText leaf. Re-exported here so
 // bookSearchIndex and the preview tests keep resolving it from this module; the
 // webview overlay that injects it via .toString() now lives under ./webview/.
@@ -26,8 +29,8 @@ export {
   makeIsInCurrentBook,
   decodeHrefPart,
   expandDitamapRefs,
-} from './refResolvers';
-export type { FileReader } from './refResolvers';
+} from '@dita-viewer/core';
+export type { FileReader } from '@dita-viewer/core';
 // Webview script builders now live under ./webview/. Re-exported from here so
 // existing importers keep resolving them via this module (P5 forwarding barrel);
 // this file itself no longer references any of the moved scripts.
@@ -91,7 +94,7 @@ export {
   topicRenderCacheBytesHeld,
   setTopicRenderCacheBudgetForTesting,
   renderTopicCached,
-} from './topicRender';
+} from '@dita-viewer/core';
 // The host-side href opener moved out of topicRender (which stays host-free);
 // re-exported so providers and tests keep resolving it from this module.
 export { openHrefTarget } from './openHrefTarget';

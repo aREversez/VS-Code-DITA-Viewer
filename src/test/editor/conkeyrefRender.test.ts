@@ -1,8 +1,5 @@
 import * as assert from 'assert';
-import { DitaNode } from '../../parser/domTypes';
-import { renderElement, RenderContext } from '../../render/renderer';
-import { KeyHrefDef } from '../../editor/keySpace';
-import { resolveConkeyref } from '../../editor/conkeyref';
+import { DitaNode, renderElement, RenderContext, KeyHrefDef, resolveConkeyref } from '@dita-viewer/core';
 
 /**
  * P3 renderer wiring: conkeyref is the key-based analogue of a direct conref.

@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { parseDitamap, preprocessEntities } from '../../parser/ditaParser';
+import { parseDitamap, preprocessEntities } from '@dita-viewer/core';
 
 const TEST_MAP_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">

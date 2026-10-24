@@ -3,7 +3,7 @@
 本表审计「渲染器实际发出的 CSS 类名」与「DITA-OT `org.dita.html5` 输出类名」之间的差异，
 供 M2 系列（route B 计划 §2.4「只加不减」）逐条对齐使用。
 
-- 渲染器类名来源：`src/render/baseTypeMap.ts`
+- 渲染器类名来源：`@dita-viewer/core` 的 `render/baseTypeMap.ts`
 - html5 基准来源（两层）：
   1. 项目自带的真实 DITA-OT 输出 fixture（`src/test/editor/siteChromeContent.test.ts` 的
      `REAL_TOPIC_BODY` / `REAL_TABLE` / `REAL_CODEBLOCK`）；

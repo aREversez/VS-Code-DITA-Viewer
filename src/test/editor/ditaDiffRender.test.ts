@@ -1,8 +1,6 @@
 import * as assert from 'assert';
 import { load } from 'cheerio';
-import { parseDita } from '../../parser/ditaParser';
-import { DitaNode } from '../../parser/domTypes';
-import { RenderContext, renderElement } from '../../render/renderer';
+import { parseDita, DitaNode, RenderContext, renderElement } from '@dita-viewer/core';
 import { diffTopics, DiffTopicsInput, swapAlignedRows } from '../../editor/ditaDiffEngine';
 import { renderDiffColumns, injectFragmentAttrs } from '../../editor/ditaDiffRender';
 

@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { parseDita } from '../../parser/ditaParser';
+import { parseDita } from '@dita-viewer/core';
 
 /**
  * Specializations whose source carries @class but no DTD: the parser must pick

@@ -1,6 +1,5 @@
 import * as assert from 'assert';
-import { DitaNode } from '../../parser/domTypes';
-import { buildRenderContext } from '../../editor/renderContext';
+import { DitaNode, buildRenderContext } from '@dita-viewer/core';
 
 /**
  * P2 shared render-context factory. Three call sites (renderTopicXml for

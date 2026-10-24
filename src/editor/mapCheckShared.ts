@@ -9,7 +9,7 @@ import * as vscode from 'vscode';
 import { promises as fsp } from 'fs';
 import { CrawlHost } from './mapCrawl';
 import { getActiveDitaUri } from './exportHtml';
-import { readSourceText } from './sourceText';
+import { readSourceText } from '@dita-viewer/core';
 
 export interface MapCheckDeps {
   /** The map the navigator is showing, when the active editor gives no better answer. */

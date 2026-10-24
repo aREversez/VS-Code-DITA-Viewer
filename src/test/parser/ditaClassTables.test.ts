@@ -1,8 +1,7 @@
 import * as assert from 'assert';
 import { classChain } from '../../editor/ditaClass';
 import { MAP_CLASS_DEFAULTS, TOPIC_CLASS_DEFAULTS } from '../../parser/ditaClassDefaults';
-import { MAP_STANDARD_TAG_TO_BASETYPE } from '../../parser/mapTagMap';
-import { STANDARD_TAG_TO_BASETYPE } from '../../parser/standardTagMap';
+import { MAP_STANDARD_TAG_TO_BASETYPE, STANDARD_TAG_TO_BASETYPE } from '@dita-viewer/core';
 
 /**
  * The hand-maintained tag -> base type maps and the generated @class table hold

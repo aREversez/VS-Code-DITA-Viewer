@@ -1,7 +1,12 @@
 import * as assert from 'assert';
-import { parseDita, parseDitamap, preprocessEntities } from '../../parser/ditaParser';
-import { renderDocument, RenderContext } from '../../render/renderer';
-import { renderMapDocument } from '../../render/mapTypeMap';
+import {
+  parseDita,
+  parseDitamap,
+  preprocessEntities,
+  renderDocument,
+  RenderContext,
+  renderMapDocument,
+} from '@dita-viewer/core';
 
 const topicCtx: RenderContext = {
   headingLevel: 1,

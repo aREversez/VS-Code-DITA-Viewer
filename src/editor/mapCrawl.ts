@@ -12,12 +12,11 @@
 
 import sax from 'sax';
 import { dirname, resolve } from 'path';
-import { preprocessEntities } from '../parser/ditaParser';
+import { preprocessEntities, qualifiedNamesMulti } from '@dita-viewer/core';
 import { decodeHrefPart } from './ditaRenderUtils';
 import { normalizePathForCompare } from './mapReferenceTools';
 import { DitavalFilter } from './ditaval';
 import { Msg, msg } from './mapCheckMessages';
-import { qualifiedNamesMulti } from './keySpace';
 import {
   ClassSide,
   ClassSyntaxProblem,
@@ -1357,4 +1356,4 @@ function hasNavTitle(n: XNode): boolean {
 
 // qualifiedNames / qualifiedNamesMulti live in keySpace.ts (the preview's key
 // lookup uses the same rule); re-exported so existing importers keep working.
-export { qualifiedNames, qualifiedNamesMulti } from './keySpace';
+export { qualifiedNames, qualifiedNamesMulti } from '@dita-viewer/core';

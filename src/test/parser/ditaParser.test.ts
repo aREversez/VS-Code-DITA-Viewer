@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { parseDita, preprocessEntities } from '../../parser/ditaParser';
+import { parseDita, preprocessEntities } from '@dita-viewer/core';
 describe('ditaParser', () => {
   it('should parse a minimal topic with title and shortdesc', () => {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>

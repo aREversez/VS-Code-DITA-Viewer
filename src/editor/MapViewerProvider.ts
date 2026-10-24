@@ -1,6 +1,11 @@
 import * as vscode from 'vscode';
-import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
-import { renderMapDocument, collectMapEntries } from '../render/mapTypeMap';
+import {
+  parseDitamap,
+  preprocessEntities,
+  renderMapDocument,
+  collectMapEntries,
+  trackSourceReads,
+} from '@dita-viewer/core';
 import { openSourceBesidePreview } from './sourceEditorOpener';
 import { discoverTemplates, discoverTemplateRoots, templateDisplayName, templateWantsOutline, SiteTemplate, TemplateRoot } from './siteTemplates';
 import { buildTemplateStyleText, templateBodyAttrs, templateDataAttr } from './templateStyle';
@@ -23,7 +28,6 @@ import { formatLocalizedRole } from '../language/bookRoleL10n';
 import { basename, dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
 import { readForDocument, writeForDocument } from './perDocumentState';
-import { trackSourceReads } from './sourceText';
 import { MAP_VIEW_STATE_KEY, parseMapViewState } from './mapViewState';
 
 // Test-only hook: see the identical comment in DitaViewerProvider.ts.
@@ -430,7 +434,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
   }
 
   private buildSiteManifestFromParsedMap(
-    mapRoot: import('../parser/domTypes').DitaNode,
+    mapRoot: import('@dita-viewer/core').DitaNode,
     document: vscode.TextDocument,
     docDir: string,
   ): { keyMap: Map<string, string>; manifest: DocsiteNavEntry[]; bookMembers: ReadonlySet<string> } {
@@ -972,7 +976,7 @@ ${shell.html}
   }
 
   private collectBookParts(
-    mapRoot: import('../parser/domTypes').DitaNode,
+    mapRoot: import('@dita-viewer/core').DitaNode,
     document: vscode.TextDocument,
     webview: vscode.Webview,
     docDir: string,

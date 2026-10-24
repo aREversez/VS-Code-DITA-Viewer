@@ -141,16 +141,15 @@ function main() {
     console.log(`Generating ${TOPIC_COUNT} synthetic topics in ${tmpDir} ...`);
     const mapPath = generateFixture(tmpDir, TOPIC_COUNT);
 
-    const parserCjs = path.join(tmpDir, 'ditaParser.cjs');
     const renderUtilsCjs = path.join(tmpDir, 'ditaRenderUtils.cjs');
-    const mapTypeMapCjs = path.join(tmpDir, 'mapTypeMap.cjs');
-    bundle('src/parser/ditaParser.ts', parserCjs);
     bundle('src/editor/ditaRenderUtils.ts', renderUtilsCjs);
-    bundle('src/render/mapTypeMap.ts', mapTypeMapCjs);
 
-    const parserMod = require(parserCjs);
+    // The parser and the map helpers come from @dita-viewer/core. The bundle
+    // below carries its own copy of the core, which is as separate from this
+    // one as the three bundles used to be from each other.
+    const parserMod = require('@dita-viewer/core');
     const renderMod = require(renderUtilsCjs);
-    const mapMod = require(mapTypeMapCjs);
+    const mapMod = require('@dita-viewer/core');
 
     const docDir = tmpDir;
     // Stands in for webview.asWebviewUri, which maps an absolute path onto a

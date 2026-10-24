@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { collectMapKeys, buildKeySpace, KeyHrefDef } from '../../editor/keySpace';
+import { collectMapKeys, buildKeySpace, KeyHrefDef } from '@dita-viewer/core';
 import { renderTopicXml } from '../../editor/ditaRenderUtils';
 
 const read = (p: string, enc: 'utf-8') => readFileSync(p, enc);

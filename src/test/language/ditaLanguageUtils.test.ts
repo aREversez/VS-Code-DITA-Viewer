@@ -21,10 +21,12 @@ import {
   offsetToLineCol,
   splitRefFragment,
   stripSameDocumentFragmentPrefix,
-} from '../../language/ditaLanguageUtils';
-import { parseDita, parseDitamap } from '../../parser/ditaParser';
-import { DitaNode } from '../../parser/domTypes';
-import { collectMapEntries, createBookRoleLabeler } from '../../render/mapTypeMap';
+  parseDita,
+  parseDitamap,
+  DitaNode,
+  collectMapEntries,
+  createBookRoleLabeler,
+} from '@dita-viewer/core';
 
 describe('ditaLanguageUtils', () => {
   describe('collectRefEntries', () => {

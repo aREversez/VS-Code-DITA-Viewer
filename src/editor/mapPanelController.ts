@@ -4,7 +4,7 @@ import { diffBookParts, BookPart } from './bookPatch';
 import { foldPendingRender, foldSiteRefresh, escalateAfterFailure, PendingRender, SiteRefresh } from './pendingRender';
 import { MapMode, MapViewState, nextMapViewState } from './mapViewState';
 import { diffSiteRender, SiteRender } from './siteRender';
-import { dependsOn, trackSourceReads } from './sourceText';
+import { dependsOn, trackSourceReads } from '@dita-viewer/core';
 import { affectsPanel } from './sourceOverlaySync';
 import { MSG_PATCH_CONTENT, MSG_SWITCH_MODE, MSG_UPDATE_CONTENT, MSG_UPDATE_SIDEBAR } from './mapMessages';
 import type { GeneratedMapHtml, RenderedMapContent, SiteManifestCache } from './mapRenderTypes';

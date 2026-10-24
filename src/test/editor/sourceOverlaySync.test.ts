@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { syncDocumentToOverlay, isOverlayCandidate, isPathUnder, affectsPanel, SyncableDocument } from '../../editor/sourceOverlaySync';
-import { readSourceText, clearAllSourceOverlays, sourceOverlaySize } from '../../editor/sourceText';
+import { readSourceText, clearAllSourceOverlays, sourceOverlaySize } from '@dita-viewer/core';
 
 describe('syncDocumentToOverlay', () => {
   let dir: string;

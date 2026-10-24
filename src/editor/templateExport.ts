@@ -20,8 +20,7 @@
  */
 import { readFileSync } from 'fs';
 import { dirname, relative, resolve, sep } from 'path';
-import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
-import { collectMapEntries } from '../render/mapTypeMap';
+import { parseDitamap, preprocessEntities, collectMapEntries } from '@dita-viewer/core';
 import type { SiteTemplate } from './siteTemplates';
 import { buildTemplateStyleText, templateDataAttr } from './templateStyle';
 import { renderChrome, wrapShell } from './templateChrome';

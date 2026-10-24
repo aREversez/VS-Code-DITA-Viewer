@@ -3,9 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs'
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { renderTopicXml } from '../../editor/ditaRenderUtils';
-import { buildRenderContext } from '../../editor/renderContext';
-import { buildKeySpace, getKeyDefs } from '../../editor/keySpace';
-import { renderDocument } from '../../render/renderer';
+import { buildRenderContext, buildKeySpace, getKeyDefs, renderDocument } from '@dita-viewer/core';
 
 /**
  * P3 integration: conkeyref resolved end-to-end through the shared render

@@ -808,6 +808,9 @@
     "pretest:visual": "tsc -p tsconfig.visual.json",
     "test:visual": "mocha --config .mocharc.visual.json"
   },
+  "dependencies": {
+    "@dita-viewer/core": "0.2.0"
+  },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@types/node": "^20.17.0",

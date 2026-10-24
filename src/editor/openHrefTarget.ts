@@ -8,7 +8,7 @@
 // vscode import either and stays unit-testable.
 
 import { resolve } from 'path';
-import { decodeHrefPart } from './refResolvers';
+import { decodeHrefPart } from '@dita-viewer/core';
 
 /**
  * Resolves an imagemap hotspot href the same way the map tree's openTopic

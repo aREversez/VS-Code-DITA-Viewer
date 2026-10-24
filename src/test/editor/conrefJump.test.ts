@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync, rmSync, mkdirSync, readFileSync } from 'fs'
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { parseConrefJumpMessage, MSG_OPEN_CONREF_TARGET } from '../../editor/conrefJump';
-import { renderTopicToHtml } from '../../editor/topicRender';
+import { renderTopicToHtml } from '@dita-viewer/core';
 import { getConrefJumpScript, CONREF_JUMP_HINT_ID } from '../../editor/webview/conrefJumpScript';
 
 // The conref jump button, end to end below the webview: the renderer marks

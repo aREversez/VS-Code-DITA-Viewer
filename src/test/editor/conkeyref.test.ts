@@ -1,7 +1,5 @@
 import * as assert from 'assert';
-import { DitaNode } from '../../parser/domTypes';
-import { KeyHrefDef } from '../../editor/keySpace';
-import { resolveConkeyref } from '../../editor/conkeyref';
+import { DitaNode, KeyHrefDef, resolveConkeyref } from '@dita-viewer/core';
 
 const RANGE = { startLine: 0, startCol: 0, endLine: 0, endCol: 0 };
 

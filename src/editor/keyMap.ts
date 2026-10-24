@@ -10,10 +10,15 @@
 // file for the byte-for-byte diff against the code's previous location.
 
 import * as vscode from 'vscode';
-import { readSourceText, noteSourceDependencies } from './sourceText';
+import {
+  readSourceText,
+  noteSourceDependencies,
+  buildKeySpace,
+  keySourceMaps,
+  isKeyContextAvailable,
+} from '@dita-viewer/core';
 import { dirname } from 'path';
 import { stampFiles, collectDitamapFilesUpward } from './ditaRenderUtils';
-import { buildKeySpace, keySourceMaps, isKeyContextAvailable } from './keySpace';
 import { getKeyContextMap, reportKeyContextMissing } from './keyContext';
 import { parseDocRoot } from './docPaths';
 

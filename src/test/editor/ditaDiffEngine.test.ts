@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { DitaNode } from '../../parser/domTypes';
+import { DitaNode } from '@dita-viewer/core';
 import {
   diffTopics,
   lcsAlign,

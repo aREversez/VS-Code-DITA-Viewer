@@ -1,7 +1,6 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { parseDita } from '../parser/ditaParser';
-import { renderDocument } from '../render/renderer';
+import { parseDita, renderDocument } from '@dita-viewer/core';
 
 const sampleDir = join(__dirname, '..', '..', 'test-dita-file');
 

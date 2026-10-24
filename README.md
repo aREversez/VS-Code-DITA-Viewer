@@ -447,7 +447,7 @@ location for verification.
   files, each hop resolved relative to the file that holds it. A chain deeper
   than 10 hops, or one that loops back on itself, falls back to the first hop;
   a hop that cannot be resolved ends the chain at the last element that could.
-  (`src/render/renderer.ts`, `followConrefChain`)
+  (`@dita-viewer/core`, `render/renderer.ts`, `followConrefChain`)
 
 - **A keyref inside conref-pulled content gets no CJK spacing.** The bundled
   DITA-OT plugin (`com.dita-viewer.cjk-spacing`) runs at
@@ -466,7 +466,7 @@ location for verification.
   referencing element sits, so a bare `keyref="k"` finds the first definition of
   `k` in document order, not the one in the reference's own scope. Write the
   qualified name where two scopes define the same key.
-  (`src/editor/keySpace.ts`, `collectMapKeys`)
+  (`@dita-viewer/core`, `editor/keySpace.ts`, `collectMapKeys`)
 
 ### Custom DTDs and specialization
 
@@ -476,7 +476,7 @@ location for verification.
   are not fetched. Tags outside the built-in `standardTagMap` / `baseTypeMap`
   fall through with an empty `baseType`, so a custom domain element is rendered
   as a generic wrapper rather than a specialization of a known type.
-  (`src/parser/ditaParser.ts:204`)
+  (`@dita-viewer/core`, `parser/ditaParser.ts:204`)
 
 - **A specialized element needs `@class` in the source.** Without a DTD the
   preview has nothing but the element's own `@class` to learn its ancestry

@@ -1,7 +1,5 @@
 import * as assert from 'assert';
-import { renderDocument, RenderContext } from '../../render/renderer';
-import { needsSpace } from '../../render/cjkSpacing';
-import { DitaNode } from '../../parser/domTypes';
+import { renderDocument, RenderContext, needsSpace, DitaNode } from '@dita-viewer/core';
 
 const range = { startLine: 0, startCol: 0, endLine: 0, endCol: 0 };
 const t = (text: string): DitaNode => ({ type: 'text', text, children: [], sourceRange: range });

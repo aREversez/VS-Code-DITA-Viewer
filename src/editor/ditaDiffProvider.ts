@@ -4,8 +4,7 @@
 import * as vscode from 'vscode';
 import { randomBytes } from 'crypto';
 import { dirname, join, basename, resolve } from 'path';
-import { DitaNode } from '../parser/domTypes';
-import { renderElement, RenderContext } from '../render/renderer';
+import { DitaNode, renderElement, RenderContext, buildRenderContext } from '@dita-viewer/core';
 import {
   buildKeyMap,
 } from './DitaViewerProvider';
@@ -15,7 +14,6 @@ import {
   getImageLightboxScript,
 } from './ditaRenderUtils';
 import { sharedWebviewStrings } from './webviewL10n';
-import { buildRenderContext } from './renderContext';
 import {
   diffTopics,
   TopicDiffResult,
