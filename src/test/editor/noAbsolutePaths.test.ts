@@ -9,6 +9,7 @@ const dirs = [
   join(repoRoot, 'test-dita-file', 'completeness-corpus-2'),
   join(repoRoot, 'test-dita-file', 'completeness-corpus-3'),
   join(repoRoot, 'test-dita-file', 'completeness-corpus-4'),
+  join(repoRoot, 'test-dita-file', 'completeness-corpus-5'),
   join(repoRoot, 'test-dita-file', 'completeness-outside'),
 ];
 

@@ -56,13 +56,15 @@ export const CORPUS_ROOT_MAP = 'corpus.ditamap';
  * and oxygen-parity.expected.json. The first is the original; the second holds the
  * reference-spelling and @format/@scope probes (completeness-corpus/BATCH-1.md); the
  * third the conref, id-reference, key and link probes (completeness-corpus/BATCH-2.md);
- * the fourth the profiling-value, subject-scheme and filter probes (BATCH-3.md).
+ * the fourth the profiling-value, subject-scheme and filter probes (BATCH-3.md); the
+ * fifth the class-dependent, DITA-validity and structure probes (BATCH-4.md).
  */
 export const CORPUS_FOLDERS = [
   'completeness-corpus',
   'completeness-corpus-2',
   'completeness-corpus-3',
   'completeness-corpus-4',
+  'completeness-corpus-5',
 ] as const;
 
 /**
