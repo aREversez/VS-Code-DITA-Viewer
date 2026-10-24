@@ -94,6 +94,16 @@ async function main() {
     console.log('');
   }
 
+  // Incidents the extension deliberately does not answer (ACCEPTED_PROBLEM_IDS and
+  // ACCEPTED_DESCRIPTIONS): listed for the record, kept out of the exit code.
+  const accepted = mod.acceptedFindings(oxygenRoot, incidents);
+  if (accepted.length) {
+    console.log(`# accepted differences (not counted) [${accepted.length}]`);
+    for (const a of accepted)
+      console.log(`  ~ ${a.file}:${a.line}  ${a.problemID || '(no id)'}  ${a.reason}`);
+    console.log('');
+  }
+
   console.log(`report:     ${reportPath}`);
   console.log(`oxygen root:${oxygenRoot}`);
   console.log(`extension findings: ${extensionKept.length}   Oxygen incidents: ${oxygen.length}`);

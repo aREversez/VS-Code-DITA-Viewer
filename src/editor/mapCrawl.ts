@@ -18,6 +18,18 @@ import { normalizePathForCompare } from './mapReferenceTools';
 import { DitavalFilter } from './ditaval';
 import { Msg, msg } from './mapCheckMessages';
 import { qualifiedNamesMulti } from './keySpace';
+import {
+  ClassSide,
+  ClassSyntaxProblem,
+  Doctype,
+  chainHas,
+  classElementTag,
+  classSyntaxProblem,
+  effectiveClassOf,
+  isDitaDoctype,
+  readDoctype,
+  sideOfRoot,
+} from './ditaClass';
 
 export interface CrawlHost {
   /** Text of a file (unsaved editor text if any). Rejects when unreadable. */
@@ -70,6 +82,8 @@ export interface Reference extends Location {
   scope?: string;
   /** The @format attribute as written, if any. */
   format?: string;
+  /** The @type attribute as written, if any (the @type-vs-class check). */
+  type?: string;
   /** True when the reference was written in a map (topicref, mapref, keydef). */
   inMap: boolean;
   /** True for a reference made by resolving a @keyref: its @format is not the element's own. */
@@ -172,6 +186,8 @@ export interface ReusableCandidate extends Location {
   parentKey?: string;
   /** Position among the parent's children, compared by conref order checks. */
   order?: number;
+  /** The element's effective @class, compared with the conref target's by the class check. */
+  classValue?: string;
   /**
    * True when a strict ancestor carries `@conref`: resolving it replaces this
    * element, so a reference that addresses it points at content that is gone.
@@ -210,6 +226,8 @@ export interface ConrefShape extends Location {
   targetElementId?: string;
   endTopicId?: string;
   endElementId?: string;
+  /** The element's effective @class, compared with its target's by the conref class check. */
+  classValue?: string;
 }
 
 /** An element that carries `-dita-use-conref-target` without being a content reference. */
@@ -286,6 +304,34 @@ export interface FileIssue extends Location {
   structural: boolean;
 }
 
+/** A written @class value the DITA class syntax rejects, or an element no DTD gives a class. */
+export interface ClassIssue extends Location {
+  tag: string;
+  problem: 'not-specified' | ClassSyntaxProblem;
+}
+
+/** A root element whose @domains is written empty (Oxygen's dmv.invalid.domains.format). */
+export interface DomainsIssue extends Location {
+  tag: string;
+}
+
+/** A section whose title does not come first, or is not its only one (Oxygen's dmv.section.*). */
+export interface SectionIssue extends Location {
+  tag: string;
+  kind: 'first-title' | 'duplicate-title';
+}
+
+/** The root element of a file that parsed, with the class it actually carries. */
+export interface FileRoot extends Location {
+  tag: string;
+  /** Effective @class (written, else the DTD default); undefined when neither gives one. */
+  classValue?: string;
+  /** The vocabulary table the file was read against. */
+  side: ClassSide;
+  /** True when the root element is a DITA topic or map. */
+  dita: boolean;
+}
+
 export interface CrawlOptions {
   /** DITAVAL filters to apply; content excluded by them is not crawled. */
   filter?: DitavalFilter;
@@ -322,6 +368,14 @@ export interface CrawlResult {
   /** Elements dropped from the crawled tree by the DITAVAL filter. */
   excludedElements: ExcludedElement[];
   fileIssues: FileIssue[];
+  /** Written @class values the class syntax rejects, and elements no DTD gives a class. */
+  classIssues: ClassIssue[];
+  /** Root elements whose @domains is written empty. */
+  domainsIssues: DomainsIssue[];
+  /** Sections whose title is not first or not alone. */
+  sectionIssues: SectionIssue[];
+  /** Root element of every file that parsed, for the checks that compare against a target. */
+  fileRoots: FileRoot[];
   /** Normalized path -> original path, for every file the crawl opened. */
   visited: Map<string, string>;
   cancelled: boolean;
@@ -474,6 +528,10 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     emptyProfilingValues: [],
     excludedElements: [],
     fileIssues: [],
+    classIssues: [],
+    domainsIssues: [],
+    sectionIssues: [],
+    fileRoots: [],
     visited: new Map(),
     cancelled: false,
   };
@@ -484,7 +542,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
   const topicQueue: Array<{ path: string; inherited: Map<string, string[]> }> = [];
 
   /** Reads and scans a file, recording read/parse problems as file issues. */
-  async function load(path: string, from?: Location, prune = false): Promise<XNode | undefined> {
+  async function load(path: string, from?: Location, prune = false): Promise<{ root: XNode; doctype?: Doctype } | undefined> {
     if (host.cancelled?.()) {
       result.cancelled = true;
       return undefined;
@@ -511,7 +569,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
         if (id) result.excludedElements.push({ file: path, line: removed.line, id, tag: removed.tag, topicId: removedTopicId });
       });
     }
-    return scanned.root;
+    return scanned.root ? { root: scanned.root, doctype: readDoctype(text) } : undefined;
   }
 
   function addRef(
@@ -540,6 +598,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       tag: node.tag,
       scope,
       format,
+      type: node.attrs['type'],
       inMap: !!extra.inMap,
     };
     if (!remote && !pathPart) ref.target = undefined; // "#id" -- same-file fragment
@@ -566,9 +625,18 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     const key = norm(mapPath);
     if (seenMaps.has(key)) return;
     seenMaps.add(key);
-    const root = await load(mapPath, from);
-    if (!root) return;
+    const loaded = await load(mapPath, from);
+    if (!loaded) return;
+    const root = loaded.root;
     result.maps.add(mapPath);
+    const side = sideOfRoot(root.tag, root.attrs['class']);
+    result.fileRoots.push({
+      file: mapPath, line: root.line, tag: root.tag, side,
+      classValue: effectiveClassOf(root.tag, root.attrs['class'], side),
+      dita: isMapRootNode(root) || isTopicElement(root),
+    });
+    scanClasses(root, mapPath, loaded.doctype);
+    scanDomains(root, mapPath);
     const rootId = root.attrs['id'];
     if (rootId) result.ids.push({ file: mapPath, line: root.line, id: rootId, tag: root.tag });
     const isMapRoot = isMapRootNode(root);
@@ -756,13 +824,23 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
 
   async function crawlTopic(path: string, inherited: Map<string, string[]>): Promise<void> {
     if (host.cancelled?.()) { result.cancelled = true; return; }
-    const root = await load(path, { file: path, line: 1 }, true);
-    if (!root) {
+    const loaded = await load(path, { file: path, line: 1 }, true);
+    if (!loaded) {
       // A missing target is reported by the reference check; a parse error already recorded.
       return;
     }
+    const root = loaded.root;
     result.topics.add(path);
     const isTopic = isTopicElement(root);
+    const side = sideOfRoot(root.tag, root.attrs['class']);
+    result.fileRoots.push({
+      file: path, line: root.line, tag: root.tag, side,
+      classValue: effectiveClassOf(root.tag, root.attrs['class'], side),
+      dita: isTopic || isMapRootNode(root),
+    });
+    scanClasses(root, path, loaded.doctype);
+    scanDomains(root, path);
+    scanSections(root, path, side);
     // A map read as a topic (a @format mismatch) is reported by the reference check.
     if (!isTopic && !isMapRootNode(root)) {
       result.fileIssues.push({
@@ -784,6 +862,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
           result.reusable.push({
             file: path, line: n.line, id, tag: n.tag, topicFile: path, topicId: currentTopic,
             parentKey, order, replacedByConref: shadowed || undefined,
+            classValue: effectiveClassOf(n.tag, n.attrs['class'], side),
           });
         }
       }
@@ -819,6 +898,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
           file: path, line: n.line, tag: n.tag, conref, conrefend, conkeyref,
           targetFile: start?.file, targetTopicId: start?.topicId, targetElementId: start?.elementId,
           endTargetFile: end?.file, endTopicId: end?.topicId, endElementId: end?.elementId,
+          classValue: effectiveClassOf(n.tag, n.attrs['class'], side),
         });
       }
       // `-dita-use-conref-target` is only meaningful on an element that is a
@@ -1078,6 +1158,67 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       for (const c of n.children) visit(c, next);
     };
     visit(root, inherited);
+  }
+
+  // ── Class, domains and sections ──
+  /**
+   * The written @class values the DITA class syntax rejects, and the elements no DTD
+   * gives a class. A file without a DITA DOCTYPE has no default class at all, so every
+   * element that does not write one is reported (what Oxygen reports: one finding per
+   * element, the root included). A written value always wins: a hand-written or
+   * specialized class is taken at its word, and only its syntax is checked. An element
+   * the generated table does not know, in a file that does declare a DITA DTD, is left
+   * alone: whether that DTD declares it is schema validation's question, not this one.
+   */
+  function scanClasses(root: XNode, file: string, doctype: Doctype | undefined): void {
+    if (isDitaDoctype(doctype)) {
+      for (const n of walk(root)) {
+        const explicit = n.attrs['class'];
+        if (explicit === undefined) continue; // the DTD supplies a class, or the element is outside the table
+        const problem = classSyntaxProblem(explicit);
+        if (problem) result.classIssues.push({ file, line: n.line, tag: n.tag, problem });
+      }
+      return;
+    }
+    for (const n of walk(root)) {
+      const explicit = n.attrs['class'];
+      if (explicit !== undefined) {
+        const problem = classSyntaxProblem(explicit);
+        if (problem) result.classIssues.push({ file, line: n.line, tag: n.tag, problem });
+        continue;
+      }
+      // No DTD default is declared here (no DITA DTD at all), so the element has no class
+      // to check; that is the finding.
+      result.classIssues.push({ file, line: n.line, tag: n.tag, problem: 'not-specified' });
+    }
+  }
+
+  /** An @domains written empty claims no domain (Oxygen's dmv.invalid.domains.format). */
+  function scanDomains(root: XNode, file: string): void {
+    const domains = root.attrs['domains'];
+    if (domains !== undefined && domains.trim() === '') result.domainsIssues.push({ file, line: root.line, tag: root.tag });
+  }
+
+  /**
+   * A section's title must come first and be its only one. Only a section in a legal
+   * place is checked: one whose parent is a body, a bodydiv or a sectiondiv (the
+   * containers DITA gives a section). A section nested in another section is not valid
+   * DITA at all, so the schema answer is the one that counts and this check stays
+   * quiet, which is what the boundary probes showed.
+   */
+  function scanSections(root: XNode, file: string, side: ClassSide): void {
+    const classOfNode = (n: XNode): string | undefined => effectiveClassOf(n.tag, n.attrs['class'], side);
+    for (const n of walk(root)) {
+      if (classElementTag(classOfNode(n)) !== 'section') continue;
+      const parentClass = n.parent ? classOfNode(n.parent) : undefined;
+      if (!chainHas(parentClass, 'topic/body') && !chainHas(parentClass, 'topic/bodydiv') && !chainHas(parentClass, 'topic/sectiondiv')) continue;
+      const titles = n.children.filter((c) => classElementTag(classOfNode(c)) === 'title');
+      if (titles.length > 1) {
+        for (const t of titles.slice(1)) result.sectionIssues.push({ file, line: t.line, tag: n.tag, kind: 'duplicate-title' });
+      } else if (titles.length === 1 && n.children[0] !== titles[0]) {
+        result.sectionIssues.push({ file, line: titles[0].line, tag: n.tag, kind: 'first-title' });
+      }
+    }
   }
 
   // ── Drive ──

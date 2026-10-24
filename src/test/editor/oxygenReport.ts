@@ -305,6 +305,18 @@ export const PROBLEM_ID_CATEGORY: Record<string, string> = {
   'dmv.topicref.remote': 'external-reference',
   'dmv.topicref.remote.no.external.scope': 'external-reference',
   'dmv.topicref.remote.local.scope': 'external-reference',
+  // @class, @domains and the DITA structure that depends on them (batch 4)
+  'dmv.invalid.class.format': 'class-format',
+  // Oxygen files every differing conref class pair under this id, the legal step -> li
+  // direction included, and never used the specialization one (see the corpus 5 report)
+  'dmv.invalid.class.generalization': 'conref-class',
+  'dmv.invalid.class.specialization': 'conref-class',
+  'dmv.invalid.domains.format': 'domains-format',
+  'dmv.ref.type.class.mismatch': 'type-class-mismatch',
+  'dmv.ref.type.class.mismatch.specific': 'type-class-specific',
+  'dmv.invalid.parse.dita.content': 'dita-parse',
+  'dmv.section.first.title': 'section-title-order',
+  'dmv.section.no.dup.title': 'section-title-duplicate',
   // map structure
   'dmv.ref.topic.inside.mapref': 'ignored-mapref-content',
   'dmv.topichead.no.navtitle': 'missing-navtitle',
@@ -329,6 +341,69 @@ export const PROBLEM_ID_CATEGORY: Record<string, string> = {
 const DESCRIPTION_CATEGORY: ReadonlyArray<{ test: RegExp; category: string }> = [
   { test: /Duplicate condition in filter file/i, category: 'duplicate-filter-condition' },
 ];
+
+/**
+ * Oxygen ids the extension deliberately does not answer, with the reason. They are the
+ * schema-validation family: Oxygen validates the file against the DITA DTD (or the
+ * schema it associates), while this extension reads well-formed XML and checks DITA
+ * structure only. The maintenance decision (option 3 of BATCH-4.md) is to keep that
+ * difference instead of shipping a 1.7 MB DTD subset and a validating parser: the three
+ * messages carry no `dmv.*` id at all, they can only be matched by their wording, and a
+ * DTD-less answer would either miss a specialization or call it undeclared.
+ */
+export const ACCEPTED_PROBLEM_IDS: Readonly<Record<string, string>> = {
+  'MSG_ELEMENT_NOT_DECLARED': 'element declaration: needs DTD validation, see BATCH-4.md option 3',
+  'MSG_ATTRIBUTE_NOT_DECLARED': 'attribute declaration: needs DTD validation, see BATCH-4.md option 3',
+  'MSG_CONTENT_INVALID_UNEXPECTED_ELEMENT': 'content model: needs DTD validation, see BATCH-4.md option 3',
+};
+
+/**
+ * The same for incidents that carry no id: these are Xerces' own statements that the
+ * document has no schema or DTD, which is the absence the accepted ids above describe.
+ */
+const ACCEPTED_DESCRIPTIONS: ReadonlyArray<{ test: RegExp; reason: string }> = [
+  {
+    test: /There is no schema or DTD associated with the document/i,
+    reason: 'schema association: needs DTD validation, see BATCH-4.md option 3',
+  },
+];
+
+/** Why an incident is a known, accepted difference, or undefined when it is not one. */
+export function acceptedReason(incident: { problemID: string; description: string }): string | undefined {
+  if (incident.problemID) return ACCEPTED_PROBLEM_IDS[incident.problemID];
+  for (const d of ACCEPTED_DESCRIPTIONS) if (d.test.test(incident.description)) return d.reason;
+  return undefined;
+}
+
+/** One incident left out of parity because its answer is a known, accepted difference. */
+export interface AcceptedFinding {
+  file: string;
+  line: number;
+  problemID: string;
+  description: string;
+  reason: string;
+}
+
+/** The accepted differences of a report, as paths relative to the corpus. */
+export function acceptedFindings(
+  corpusDir: string,
+  incidents: readonly OxygenIncident[],
+): AcceptedFinding[] {
+  const out: AcceptedFinding[] = [];
+  for (const i of incidents) {
+    const reason = acceptedReason(i);
+    if (reason) {
+      out.push({
+        file: corpusRelativePath(corpusDir, i.filePath),
+        line: i.line,
+        problemID: i.problemID,
+        description: i.description,
+        reason,
+      });
+    }
+  }
+  return out.sort((a, b) => `${a.file}\t${a.problemID}`.localeCompare(`${b.file}\t${b.problemID}`));
+}
 
 export function categoryForProblemId(problemID: string, description = ''): string {
   const mapped = problemID ? PROBLEM_ID_CATEGORY[problemID] : undefined;
@@ -374,47 +449,51 @@ export function corpusRootFromReport(incidents: readonly OxygenIncident[]): stri
   return undefined;
 }
 
+/** A report's file path as a corpus-relative posix path (the harness shape). */
+function corpusRelativePath(corpusDir: string, filePath: string): string {
+  const local = oxygenPathToLocal(filePath);
+  if (WINDOWS_ABSOLUTE.test(local) && WINDOWS_ABSOLUTE.test(corpusDir)) {
+    // A report produced on Windows, read on any host: relate the two with
+    // Windows path rules, not the host's.
+    return win32.relative(win32.resolve(corpusDir), win32.resolve(local)).replace(/\\/g, '/');
+  }
+  const absCorpus = resolve(corpusDir);
+  return local && isAbsolute(local) ? toPosix(relative(absCorpus, resolve(local))) : toPosix(local);
+}
+
 /** Maps parsed incidents to the harness shape, with paths relative to the corpus. */
 export function normalizeOxygenFindings(
   corpusDir: string,
   incidents: readonly OxygenIncident[],
 ): NormalizedFinding[] {
-  const absCorpus = resolve(corpusDir);
   return incidents
-    .map((i) => {
-      const local = oxygenPathToLocal(i.filePath);
-      let file: string;
-      if (WINDOWS_ABSOLUTE.test(local) && WINDOWS_ABSOLUTE.test(corpusDir)) {
-        // A report produced on Windows, read on any host: relate the two with
-        // Windows path rules, not the host's.
-        file = win32.relative(win32.resolve(corpusDir), win32.resolve(local)).replace(/\\/g, '/');
-      } else {
-        file = local && isAbsolute(local) ? toPosix(relative(absCorpus, resolve(local))) : toPosix(local);
-      }
-      return {
-        category: categoryForProblemId(i.problemID, i.description),
-        severity: i.severity || 'warning',
-        file,
-        line: i.line,
-        message: i.description || i.problemID || i.engine,
-      };
-    })
+    .filter((i) => acceptedReason(i) === undefined)
+    .map((i) => ({
+      category: categoryForProblemId(i.problemID, i.description),
+      severity: i.severity || 'warning',
+      file: corpusRelativePath(corpusDir, i.filePath),
+      line: i.line,
+      message: i.description || i.problemID || i.engine,
+    }))
     .sort((a, b) =>
       `${a.file}\t${a.category}` < `${b.file}\t${b.category}`
         ? -1
-        : `${a.file}\t${a.category}` > `${b.file}\t${b.category}`
+        : `${a.file}\t${b.category}` > `${b.file}\t${b.category}`
           ? 1
           : 0,
     );
 }
 
-/** Problem IDs seen in a report that are not yet in PROBLEM_ID_CATEGORY. */
+/**
+ * Problem IDs seen in a report that are neither mapped nor accepted: the open parity
+ * work. Ids listed in ACCEPTED_PROBLEM_IDS are deliberate differences and are left out.
+ */
 export function unmappedProblemIds(
   incidents: readonly OxygenIncident[],
 ): string[] {
   const ids = new Set<string>();
   for (const i of incidents)
-    if (i.problemID && !PROBLEM_ID_CATEGORY[i.problemID]) ids.add(i.problemID);
+    if (i.problemID && !PROBLEM_ID_CATEGORY[i.problemID] && !ACCEPTED_PROBLEM_IDS[i.problemID]) ids.add(i.problemID);
   return [...ids].sort();
 }
 

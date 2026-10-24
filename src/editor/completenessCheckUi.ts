@@ -87,6 +87,10 @@ export function localizeMsg(m: Msg): string {
     case 'ref.extNoFormat': return vscode.l10n.t('External reference has no @format: {0}', ...a);
     case 'ref.resAsDita': return vscode.l10n.t('Non-DITA resource is referenced as a DITA topic: {0}', ...a);
     case 'ref.resAsMap': return vscode.l10n.t('Non-DITA resource is referenced as a DITA map: {0}', ...a);
+    case 'ref.notDitaDoc': return vscode.l10n.t('Reference claims DITA content, but the target is not a DITA document: {0}', ...a);
+    case 'ref.ditaParse': return vscode.l10n.t('Problem parsing "{0}" as DITA content: {1}', ...a);
+    case 'ref.typeMismatch': return vscode.l10n.t('Reference is made with @type "{0}" to a DITA resource with class "{1}"', ...a);
+    case 'ref.typeTooGeneral': return vscode.l10n.t('Reference is made with @type "{0}" to a DITA resource with a more specific type class "{1}"', ...a);
     case 'ref.mapFormat': return vscode.l10n.t('Map reference is not declared as format="ditamap": {0}', ...a);
     case 'ref.topicFormat': return vscode.l10n.t('Topic is referenced with format="{1}": {0}', ...a);
     case 'ref.topicAsMap': return vscode.l10n.t('Topic is referenced with format="ditamap": {0}', ...a);
@@ -107,6 +111,14 @@ export function localizeMsg(m: Msg): string {
     case 'prof.singleValue': return vscode.l10n.t('@{0} is single-value but has {1} values ("{2}")', ...a);
     case 'prof.emptyValue': return vscode.l10n.t('Profiling attribute @{0} on <{1}> has an empty value', ...a);
     case 'ditaval.duplicateCondition': return vscode.l10n.t('Duplicate condition in the filter file for "{0}"; only the first encountered condition is used', ...a);
+    case 'class.notSpecified': return vscode.l10n.t('Class attribute not specified on <{0}>; no DTD gives it a class', ...a);
+    case 'class.empty': return vscode.l10n.t('Empty @class value on <{0}>', ...a);
+    case 'class.noMarker': return vscode.l10n.t('@class value on <{0}> must start with "-" or "+"', ...a);
+    case 'class.noTrailingSpace': return vscode.l10n.t('@class value on <{0}> must end with a space', ...a);
+    case 'domains.missing': return vscode.l10n.t('The @domains attribute on <{0}> is empty, so the document claims no domain', ...a);
+    case 'conref.classGeneralization': return vscode.l10n.t('The source element with class value "{0}" is not a generalization of the target element with class value "{1}"', ...a);
+    case 'section.titleFirst': return vscode.l10n.t('Title must be the first element in a section', ...a);
+    case 'section.titleDuplicate': return vscode.l10n.t('Section must have only one title', ...a);
     case 'val.unreadable': return vscode.l10n.t('File could not be read', ...a);
     case 'val.xml': return vscode.l10n.t('XML error: {0}', ...a);
     case 'val.notMap': return vscode.l10n.t('Root element <{0}> is not a DITA map', ...a);
@@ -193,6 +205,14 @@ function categoryLabel(c: IssueCategory): string {
     case 'empty-profiling-value': return vscode.l10n.t('Empty profiling attribute values');
     case 'filtered-reference': return vscode.l10n.t('References into filtered content');
     case 'duplicate-filter-condition': return vscode.l10n.t('Duplicate conditions in filter files');
+    case 'class-format': return vscode.l10n.t('Invalid @class values');
+    case 'domains-format': return vscode.l10n.t('Invalid @domains values');
+    case 'conref-class': return vscode.l10n.t('Content references between incompatible classes');
+    case 'type-class-mismatch': return vscode.l10n.t('@type that contradicts the target class');
+    case 'type-class-specific': return vscode.l10n.t('@type that is too general for the target');
+    case 'section-title-order': return vscode.l10n.t('Section titles that are not first');
+    case 'section-title-duplicate': return vscode.l10n.t('Sections with more than one title');
+    case 'dita-parse': return vscode.l10n.t('References to DITA content that does not parse');
   }
 }
 

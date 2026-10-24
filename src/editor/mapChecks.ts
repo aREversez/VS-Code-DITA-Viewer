@@ -9,7 +9,8 @@
 
 import { dirname, isAbsolute, join, relative, resolve } from 'path';
 import { normalizePathForCompare } from './mapReferenceTools';
-import { CrawlHost, CrawlResult, Location, Reference } from './mapCrawl';
+import { CrawlHost, CrawlResult, FileRoot, Location, Reference } from './mapCrawl';
+import { classChain, classPairTag } from './ditaClass';
 import { parseDitavalRules } from './ditaval';
 import { Msg, MsgCode, formatMessage, msg } from './mapCheckMessages';
 
@@ -140,6 +141,15 @@ export const ISSUE_CATEGORIES = [
   'empty-profiling-value',
   'filtered-reference',
   'duplicate-filter-condition',
+  // batch 4: the class-dependent, @domains and section rules
+  'class-format',
+  'domains-format',
+  'conref-class',
+  'type-class-mismatch',
+  'type-class-specific',
+  'section-title-order',
+  'section-title-duplicate',
+  'dita-parse',
 ] as const;
 
 export type IssueCategory = (typeof ISSUE_CATEGORIES)[number];
@@ -242,6 +252,17 @@ export async function runChecks(
     issues.push({ category: 'validation', severity: fi.severity, file: fi.file, line: fi.line, msg: fi.msg });
   }
 
+  // 2a. The class-dependent rules of the DITA structure: a written @class the syntax
+  // rejects, an element no DTD gives a class, an @domains that claims nothing, and a
+  // section whose title is not first or not alone. They read the DTD defaults of the
+  // crawled files, so they belong to batch validation.
+  if (opts.batchValidate) {
+    issues.push(...classFormatIssues(crawl));
+    issues.push(...domainsFormatIssues(crawl));
+    issues.push(...sectionStructureIssues(crawl));
+    issues.push(...ditaParseIssues(crawl, norm));
+  }
+
   // 2b. A content reference (conref) that resolves to a file that exists, but whose
   // topic-id segment names no topic element there. Oxygen files this as
   // dmv.invalid.ref.topic.id; it is part of validating references, so it runs with batch validation.
@@ -285,6 +306,9 @@ export async function runChecks(
     }
     issues.push(...invalidKeySyntaxIssues(crawl));
     issues.push(...formatIssues(crawl));
+    issues.push(...referenceDocumentIssues(crawl, norm));
+    issues.push(...conrefClassIssues(crawl, norm));
+    issues.push(...typeClassIssues(crawl, norm));
     issues.push(...externalScopeIssues(crawl));
     for (const c of crawl.ignoredMaprefContent) {
       issues.push({
@@ -696,6 +720,152 @@ function formatIssues(crawl: CrawlResult): Array<Omit<Issue, 'message'>> {
       if (ref.kind === 'xref' || ref.kind === 'link') push(ref, 'format-missing', 'error', 'ref.noFormat', ref.href);
       else if (ref.kind === 'topicref') push(ref, 'format-mismatch', 'error', 'ref.resAsDita', ref.href);
     }
+  }
+  return out;
+}
+
+/**
+ * A reference that claims DITA content whose target is not a DITA document: it parsed,
+ * but its root element is neither a topic nor a map. Oxygen files this as
+ * `dmv.ref.res.as.dita`; the target's own finding ("root element is not a DITA topic")
+ * is a separate row. A target that is a topic or a map but writes no DOCTYPE is not
+ * this rule's business: its elements get no class and the class check reports that.
+ */
+function referenceDocumentIssues(crawl: CrawlResult, norm: (p: string) => string): Array<Omit<Issue, 'message'>> {
+  const out: Array<Omit<Issue, 'message'>> = [];
+  const roots = new Map<string, FileRoot>(crawl.fileRoots.map((r) => [norm(r.file), r]));
+  for (const ref of crawl.refs) {
+    if (ref.viaKeyref || ref.remote || !ref.target || !ref.dita) continue;
+    if (ref.kind !== 'topicref' && ref.kind !== 'mapref' && ref.kind !== 'xref' && ref.kind !== 'link') continue;
+    if (ref.scope === 'external' || ref.scope === 'peer') continue;
+    // A file name that says resource is the res-as-dita/res-as-map rule's business, and
+    // that rule already reports it; only a name that says nothing or says DITA gets here.
+    const p = pathPartOf(ref.href);
+    if (p && hrefTargetKind(p) === 'resource') continue;
+    const root = roots.get(norm(ref.target));
+    // Never parsed here (not a DITA target of this crawl, or unreadable): nothing to say.
+    if (!root) continue;
+    if (root.dita) continue;
+    out.push({
+      category: 'format-mismatch', severity: 'error', file: ref.file, line: ref.line,
+      msg: msg('ref.notDitaDoc', ref.href),
+      related: [{ file: root.file, line: root.line }],
+    });
+  }
+  return out;
+}
+
+/** The class-dependent rules read the @class the crawl resolved, per finding kind. */
+function classFormatIssues(crawl: CrawlResult): Array<Omit<Issue, 'message'>> {
+  const codes: Record<string, MsgCode> = {
+    'not-specified': 'class.notSpecified',
+    'empty': 'class.empty',
+    'no-marker': 'class.noMarker',
+    'no-trailing-space': 'class.noTrailingSpace',
+  };
+  return crawl.classIssues.map((c) => ({
+    category: 'class-format' as const, severity: 'error' as const, file: c.file, line: c.line,
+    msg: msg(codes[c.problem], c.tag),
+  }));
+}
+
+/** An @domains written empty (Oxygen's dmv.invalid.domains.format). */
+function domainsFormatIssues(crawl: CrawlResult): Array<Omit<Issue, 'message'>> {
+  return crawl.domainsIssues.map((d) => ({
+    category: 'domains-format' as const, severity: 'error' as const, file: d.file, line: d.line,
+    msg: msg('domains.missing', d.tag),
+  }));
+}
+
+/** A section title that does not come first, or is not the only one (Oxygen's dmv.section.*). */
+function sectionStructureIssues(crawl: CrawlResult): Array<Omit<Issue, 'message'>> {
+  return crawl.sectionIssues.map((s) => ({
+    category: (s.kind === 'first-title' ? 'section-title-order' : 'section-title-duplicate') as IssueCategory,
+    severity: 'error' as const, file: s.file, line: s.line,
+    msg: msg(s.kind === 'first-title' ? 'section.titleFirst' : 'section.titleDuplicate'),
+  }));
+}
+
+/**
+ * A conref source and target whose classes are not the same element class. Oxygen files
+ * every differing pair under `dmv.invalid.class.generalization`, the legal step -> li
+ * direction included (its four probes answer so), and never used the specialization id.
+ * A pair whose class cannot be known on either side is left alone.
+ */
+function conrefClassIssues(crawl: CrawlResult, norm: (p: string) => string): Array<Omit<Issue, 'message'>> {
+  const out: Array<Omit<Issue, 'message'>> = [];
+  const elements = new Map<string, { classValue?: string; file: string; line: number }>();
+  for (const el of crawl.reusable) {
+    if (el.topicId) elements.set(`${norm(el.topicFile)}\u0000${el.topicId}\u0000${el.id}`, el);
+  }
+  const key = (value: string) => classChain(value).join(' ');
+  for (const s of crawl.conrefShapes) {
+    if (!s.conref || s.classValue === undefined) continue;
+    if (!s.targetFile || !s.targetTopicId || !s.targetElementId) continue;
+    const target = elements.get(`${norm(s.targetFile)}\u0000${s.targetTopicId}\u0000${s.targetElementId}`);
+    if (!target?.classValue) continue;
+    if (key(s.classValue) === key(target.classValue)) continue;
+    out.push({
+      category: 'conref-class', severity: 'error', file: s.file, line: s.line,
+      msg: msg('conref.classGeneralization', s.classValue, target.classValue),
+      related: [{ file: target.file, line: target.line }],
+    });
+  }
+  return out;
+}
+
+/**
+ * `@type` names a DITA type; the target's own class chain says what it really is. The
+ * name of the most specific pair is an exact match, an earlier pair is the "too general"
+ * warning (Oxygen's dmv.ref.type.class.mismatch.specific), any other name is a mismatch.
+ * The check needs the target's root class, so a target this crawl never parsed is left
+ * alone.
+ */
+function typeClassIssues(crawl: CrawlResult, norm: (p: string) => string): Array<Omit<Issue, 'message'>> {
+  const out: Array<Omit<Issue, 'message'>> = [];
+  const roots = new Map<string, FileRoot>(crawl.fileRoots.map((r) => [norm(r.file), r]));
+  for (const ref of crawl.refs) {
+    if (!ref.type || ref.viaKeyref || ref.remote || !ref.target) continue;
+    const root = roots.get(norm(ref.target));
+    if (!root?.classValue) continue;
+    const type = ref.type.trim();
+    if (!type) continue;
+    const chain = classChain(root.classValue);
+    const own = chain.length ? classPairTag(chain[chain.length - 1]) : '';
+    if (own === type) continue;
+    const specific = chain.some((p) => classPairTag(p) === type);
+    out.push({
+      category: specific ? 'type-class-specific' : 'type-class-mismatch', severity: 'warning',
+      file: ref.file, line: ref.line,
+      msg: msg(specific ? 'ref.typeTooGeneral' : 'ref.typeMismatch', type, root.classValue),
+    });
+  }
+  return out;
+}
+
+/**
+ * A reference to DITA content that does not parse. Oxygen reports it on the map or topic
+ * that makes the reference, not on the broken file (which keeps its own XML error), so
+ * the finding names the referrer and points at the target. A remote target is never
+ * fetched by this crawl and is left alone.
+ */
+function ditaParseIssues(crawl: CrawlResult, norm: (p: string) => string): Array<Omit<Issue, 'message'>> {
+  const out: Array<Omit<Issue, 'message'>> = [];
+  const broken = new Map<string, { line: number; cause: string }>();
+  for (const fi of crawl.fileIssues) {
+    if (fi.msg.code !== 'val.xml') continue;
+    broken.set(norm(fi.file), { line: fi.line, cause: String(fi.msg.args[0] ?? '') });
+  }
+  if (broken.size === 0) return out;
+  for (const ref of crawl.refs) {
+    if (ref.remote || !ref.target || !ref.dita) continue;
+    const target = broken.get(norm(ref.target));
+    if (!target) continue;
+    out.push({
+      category: 'dita-parse', severity: 'error', file: ref.file, line: ref.line,
+      msg: msg('ref.ditaParse', ref.href, target.cause),
+      related: [{ file: ref.target, line: target.line }],
+    });
   }
   return out;
 }

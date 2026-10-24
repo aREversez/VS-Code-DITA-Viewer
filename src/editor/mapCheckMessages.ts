@@ -53,6 +53,10 @@ export const MESSAGE_TEMPLATES = {
   'ref.extNoFormat': 'External reference has no @format: {0}',
   'ref.resAsDita': 'Non-DITA resource is referenced as a DITA topic: {0}',
   'ref.resAsMap': 'Non-DITA resource is referenced as a DITA map: {0}',
+  'ref.notDitaDoc': 'Reference claims DITA content, but the target is not a DITA document: {0}',
+  'ref.ditaParse': 'Problem parsing "{0}" as DITA content: {1}',
+  'ref.typeMismatch': 'Reference is made with @type "{0}" to a DITA resource with class "{1}"',
+  'ref.typeTooGeneral': 'Reference is made with @type "{0}" to a DITA resource with a more specific type class "{1}"',
   'ref.mapFormat': 'Map reference is not declared as format="ditamap": {0}',
   'ref.topicFormat': 'Topic is referenced with format="{1}": {0}',
   'ref.topicAsMap': 'Topic is referenced with format="ditamap": {0}',
@@ -77,6 +81,15 @@ export const MESSAGE_TEMPLATES = {
   'prof.emptyValue': 'Profiling attribute @{0} on <{1}> has an empty value',
   // filter (DITAVAL) file
   'ditaval.duplicateCondition': 'Duplicate condition in the filter file for "{0}"; only the first encountered condition is used',
+  // @class, @domains and section structure (batch 4)
+  'class.notSpecified': 'Class attribute not specified on <{0}>; no DTD gives it a class',
+  'class.empty': 'Empty @class value on <{0}>',
+  'class.noMarker': '@class value on <{0}> must start with "-" or "+"',
+  'class.noTrailingSpace': '@class value on <{0}> must end with a space',
+  'domains.missing': 'The @domains attribute on <{0}> is empty, so the document claims no domain',
+  'conref.classGeneralization': 'The source element with class value "{0}" is not a generalization of the target element with class value "{1}"',
+  'section.titleFirst': 'Title must be the first element in a section',
+  'section.titleDuplicate': 'Section must have only one title',
   // validation
   'val.unreadable': 'File could not be read',
   'val.xml': 'XML error: {0}',

@@ -15,6 +15,17 @@
 //   - dita-class-extracted.json   (full table with source file:line evidence)
 //   - dita-class-diff.md          (new entries + conflicts + missing renderers)
 //
+// The same scan also writes the runtime table the completeness checks use:
+//   node scripts/extract-dita-class.cjs --emit-module
+//     -> src/parser/ditaClassDefaults.ts (plus the two JSON artifacts above)
+//
+// and verifies it without the DTDs, so `npm run verify` never needs DITA-OT:
+//   node scripts/extract-dita-class.cjs --check-module
+//     -> compares the committed module with the committed JSON, exit 1 on drift
+//        (read-only: no DTD rescan, no file is written)
+// A DTD rescan under --emit-module is the only step that needs the DTDs; it is
+// manual and deliberately outside `npm run verify`.
+//
 // The DTD root is resolved in this order (no machine-specific path is baked in):
 //   1. --dita-root <dir>  (DITA-OT install root; the v1.3 plugin lives under <dir>/plugins)
 //   2. DITA_DTD_ROOT env var (points directly at the dtd directory)
@@ -52,7 +63,8 @@ function resolveDtdRoot() {
   fail(
     'Cannot locate the DITA 1.3 DTDs. Pass --dita-root <DITA-OT install dir>,\n' +
       'set DITA_DTD_ROOT to the dtd directory, or put the `dita` launcher on PATH.\n' +
-      '(Running without the DTDs? Use --diff-only to recompute against the cached extraction.)'
+      '(Running without the DTDs? Use --diff-only to recompute the diff against the\n' +
+      ' cached extraction, or --check-module to verify the runtime table against it.)'
   );
 }
 
@@ -94,6 +106,7 @@ const MAP_RENDERER_SRC = path.join(REPO_ROOT, 'src', 'render', 'mapTypeMap.ts');
 
 const EXTRACTED_JSON = path.join(__dirname, 'dita-class-extracted.json');
 const DIFF_MD = path.join(__dirname, 'dita-class-diff.md');
+const CLASS_MODULE = path.join(REPO_ROOT, 'src', 'parser', 'ditaClassDefaults.ts');
 
 // ── 1. Walk DTD files ────────────────────────────────────────────────
 
@@ -207,7 +220,43 @@ function deriveBaseType(classValue) {
 
 // ── 4. Bucket by map vs topic side ────────────────────────────────────
 
+/**
+ * The side a class value belongs to, taken from the FIRST pair (the most
+ * generic ancestor). A tag declared on both sides (shortdesc, linktext,
+ * searchtitle) therefore lands in both tables, each with its own value.
+ */
+function classSideOf(classValue) {
+  const pairs = classValue
+    .trim()
+    .split(/\s+/)
+    .filter((t) => t !== '-' && t !== '+' && t.indexOf('/') !== -1);
+  if (pairs.length === 0) return undefined;
+  if (pairs[0].startsWith('topic/')) return 'topic';
+  if (pairs[0].startsWith('map/')) return 'map';
+  return undefined;
+}
+
+/**
+ * Records the element's DTD-default class value (trimmed) on its side. The same
+ * tag may be declared in several modules; a second declaration with a different
+ * value on the same side would make the runtime table ambiguous, so it is
+ * recorded and --emit-module refuses to write a table containing it.
+ */
+function collectClassDefault(classDefaults, conflicts, row) {
+  const side = classSideOf(row.classValue);
+  if (!side) return;
+  const classValue = row.classValue.trim();
+  const prev = classDefaults[side][row.tagName];
+  if (prev === undefined) {
+    classDefaults[side][row.tagName] = classValue;
+  } else if (prev !== classValue) {
+    conflicts.push({ side, tagName: row.tagName, a: prev, b: classValue, sourceFile: path.relative(DITA_DTD_ROOT, row.file).replace(/\\/g, '/'), sourceLine: row.line });
+  }
+}
+
 function bucketOf(baseType) {
+  // Note: bucketOf() classifies a *base type*; classSideOf() classifies a whole
+  // class chain. They agree for every element the runtime table needs.
   if (baseType.startsWith('topic/')) return 'topic';
   if (baseType.startsWith('map/')) return 'map';
   return 'other';
@@ -250,6 +299,10 @@ function readRendererKeys(file) {
 // (that file only changes on a real DTD rescan) and clearly marks the
 // diff.md header so nobody mistakes it for a fresh extraction.
 const DIFF_ONLY = process.argv.includes('--diff-only');
+// --check-module reads the same cached extraction and must work on a machine without
+// a DITA-OT install: it never resolves the DTD root and never writes a file.
+const CHECK_MODULE = process.argv.includes('--check-module');
+const READ_ONLY = DIFF_ONLY || CHECK_MODULE;
 
 function loadCachedCandidates() {
   if (!fs.existsSync(EXTRACTED_JSON)) {
@@ -257,24 +310,141 @@ function loadCachedCandidates() {
     process.exit(1);
   }
   const cached = JSON.parse(fs.readFileSync(EXTRACTED_JSON, 'utf8'));
+  if (!cached.classDefaults) {
+    console.error(`--diff-only needs classDefaults in ${path.relative(REPO_ROOT, EXTRACTED_JSON)}. Rescan the DTDs once (see --dita-root) to add them.`);
+    process.exit(1);
+  }
   return {
     topicCandidates: cached.topicEntries || {},
     mapCandidates: cached.mapEntries || {},
+    classDefaults: cached.classDefaults,
     dupConflicts: cached.duplicateConflicts || [],
     cachedGeneratedAt: cached.generatedAt,
     cachedDtdRoot: cached.ditaDtdPlugin || cached.ditaDtdRoot,
   };
 }
 
+// ── 5c. The runtime @class table ───────────────────────────────────────
+//
+// src/parser/ditaClassDefaults.ts is the only consumer: the completeness checks
+// resolve an element's class from the file's own @class when it has one, and
+// from this table when the DTD default is what applies. Everything in the file
+// below the header is generated, in sorted order, so a rescan produces the same
+// bytes for the same DTDs.
+
+const EMIT_MODULE = process.argv.includes('--emit-module');
+
+function renderClassModule(classDefaults) {
+  const header = [
+    '// AUTO-GENERATED by scripts/extract-dita-class.cjs --emit-module -- do not edit.',
+    '//',
+    '// The @class value the DITA 1.3 DTD gives each element when a file does not',
+    '// write one, per side: a topic file resolves through TOPIC_CLASS_DEFAULTS, a map',
+    '// file through MAP_CLASS_DEFAULTS (shortdesc, linktext and searchtitle are',
+    '// declared on both sides with different values). Values are the class chain,',
+    '// trimmed; comparisons split on whitespace.',
+    '//',
+    '// Vocabulary coverage: base, technicalContent and bookmap (SCAN_DIRS in the',
+    '// generator). learning/, machineryIndustry/ and the foreign-namespace modules are',
+    '// NOT scanned: an element outside these tables has no known class and the checks',
+    '// skip it rather than guess one (see completeness-corpus/OXYGEN-PROBLEMS.md).',
+    '//',
+    '// Regenerate from the DTDs:  node scripts/extract-dita-class.cjs --emit-module',
+    '// Verify, offline:           node scripts/extract-dita-class.cjs --check-module',
+    '//                            (compares this file with scripts/dita-class-extracted.json)',
+    '',
+  ].join('\n');
+  return `${header}\n${renderClassTable('TOPIC_CLASS_DEFAULTS', classDefaults.topic)}\n\n${renderClassTable('MAP_CLASS_DEFAULTS', classDefaults.map)}\n`;
+}
+
+function renderClassTable(name, table) {
+  const lines = [`export const ${name}: Readonly<Record<string, string>> = {`];
+  for (const tag of Object.keys(table).sort()) {
+    lines.push(`  '${escapeTs(tag)}': '${escapeTs(table[tag])}',`);
+  }
+  lines.push('};');
+  return lines.join('\n');
+}
+
+function escapeTs(s) {
+  return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function unescapeTs(s) {
+  return s.replace(/\\'/g, "'").replace(/\\\\/g, '\\');
+}
+
+/** Reads the two tables back out of the generated module (no TS compiler needed). */
+function parseClassModule(text) {
+  const table = (name) => {
+    const body = new RegExp(`export const ${name}: Readonly<Record<string, string>> = \\{([\\s\\S]*?)\\n\\};`).exec(text);
+    if (!body) return undefined;
+    const out = {};
+    const entry = /^\s*'((?:[^'\\]|\\.)+)': '((?:[^'\\]|\\.)*)',$/gm;
+    let m;
+    while ((m = entry.exec(body[1])) !== null) out[unescapeTs(m[1])] = unescapeTs(m[2]);
+    return out;
+  };
+  return { topic: table('TOPIC_CLASS_DEFAULTS'), map: table('MAP_CLASS_DEFAULTS') };
+}
+
+/** Per-side differences between two tag -> class tables. */
+function diffClassTables(expected, actual) {
+  const out = [];
+  for (const side of ['topic', 'map']) {
+    const e = expected[side] ?? {};
+    const a = actual[side] ?? {};
+    for (const tag of Object.keys(e)) {
+      if (!(tag in a)) out.push(`${side}: missing <${tag}> (JSON: "${e[tag]}")`);
+      else if (a[tag] !== e[tag]) out.push(`${side}: <${tag}> is "${a[tag]}" in the module, "${e[tag]}" in the JSON`);
+    }
+    for (const tag of Object.keys(a)) {
+      if (!(tag in e)) out.push(`${side}: <${tag}> is in the module but not in the JSON ("${a[tag]}")`);
+    }
+  }
+  return out;
+}
+
+/**
+ * --emit-module writes src/parser/ditaClassDefaults.ts from the table;
+ * --check-module only reports. Either way the comparison is module <-> JSON, so
+ * neither mode reads the DTDs and both run offline.
+ */
+function syncClassModule(classDefaults, conflicts) {
+  if (!classDefaults) return { ok: false, lines: ['no class table available: rescan the DTDs once'] };
+  if (conflicts.length) {
+    return {
+      ok: false,
+      lines: conflicts.map((c) => `${c.side}: <${c.tagName}> is declared as "${c.a}" and "${c.b}" (${c.sourceFile}:${c.sourceLine}); resolve before emitting`),
+    };
+  }
+  const text = renderClassModule(classDefaults);
+  if (CHECK_MODULE) {
+    if (!fs.existsSync(CLASS_MODULE)) return { ok: false, lines: [`${path.relative(REPO_ROOT, CLASS_MODULE)} does not exist; run --emit-module`] };
+    const actual = fs.readFileSync(CLASS_MODULE, 'utf8');
+    if (actual === text) return { ok: true, lines: [`${path.relative(REPO_ROOT, CLASS_MODULE)} matches the JSON (${Object.keys(classDefaults.topic).length} topic + ${Object.keys(classDefaults.map).length} map entries)`] };
+    // Report table drift when there is any; otherwise the difference is in the
+    // generated header or the entry order, so say that instead of printing nothing.
+    const diffs = diffClassTables(classDefaults, parseClassModule(actual));
+    if (diffs.length === 0) diffs.push('table contents match; the header or the entry order differs from a fresh --emit-module');
+    return { ok: false, lines: diffs };
+  }
+  fs.writeFileSync(CLASS_MODULE, text);
+  return { ok: true, lines: [`Wrote ${path.relative(REPO_ROOT, CLASS_MODULE)} (${Object.keys(classDefaults.topic).length} topic + ${Object.keys(classDefaults.map).length} map entries)`] };
+}
+
 function main() {
   let topicCandidates, mapCandidates, dupConflicts, filesScanned = 0;
   let cachedProvenance = null;
+  let classDefaults = null;
+  let classDefaultConflicts = [];
 
-  if (DIFF_ONLY) {
+  if (READ_ONLY) {
     const cached = loadCachedCandidates();
     topicCandidates = cached.topicCandidates;
     mapCandidates = cached.mapCandidates;
     dupConflicts = cached.dupConflicts;
+    classDefaults = cached.classDefaults;
     cachedProvenance = { generatedAt: cached.cachedGeneratedAt, dtdRoot: cached.cachedDtdRoot };
   } else {
     DITA_DTD_ROOT = resolveDtdRoot();
@@ -288,10 +458,15 @@ function main() {
     // extracted[tagName] = array of { baseType, bucket, file, line, classValue }
     const extracted = {};
     dupConflicts = [];
+    // Every element's DTD-default class value, base elements included: this is
+    // the table src/parser/ditaClassDefaults.ts is generated from.
+    classDefaults = { topic: {}, map: {} };
+    classDefaultConflicts = [];
 
     for (const file of files) {
       const rows = parseDtdFile(file);
       for (const row of rows) {
+        collectClassDefault(classDefaults, classDefaultConflicts, row);
         const baseType = deriveBaseType(row.classValue);
         if (!baseType) continue; // base element or unparseable
         const bucket = bucketOf(baseType);
@@ -364,18 +539,24 @@ function main() {
   const newTopicBaseTypes = collectNewBaseTypes(diff, baseRenderers, existingBaseTypes);
   const newMapBaseTypes = collectNewBaseTypes(diffMap, mapRenderers, existingBaseTypes);
 
-  // ── Write JSON (skipped in --diff-only: no fresh DTD data was read) ──
-  if (!DIFF_ONLY) {
+  // ── Write JSON (skipped when no fresh DTD data was read) ──
+  if (!READ_ONLY) {
     const jsonPayload = {
       generatedAt: new Date().toISOString(),
       ditaDtdPlugin: DITA13_PLUGIN_ID,
       scannedDirs: SCAN_DIRS,
       topicEntries: sortObj(topicCandidates),
       mapEntries: sortObj(mapCandidates),
+      // The runtime class table (base elements included), by side.
+      classDefaults: { topic: sortObj(classDefaults.topic), map: sortObj(classDefaults.map) },
+      classDefaultConflicts,
       duplicateConflicts: dupConflicts,
     };
     fs.writeFileSync(EXTRACTED_JSON, JSON.stringify(jsonPayload, null, 2) + '\n');
   }
+
+  // ── The runtime table (--emit-module / --check-module) ──
+  const moduleStatus = EMIT_MODULE || CHECK_MODULE ? syncClassModule(classDefaults, classDefaultConflicts) : null;
 
   // ── Write diff markdown ──
   const md = [];
@@ -412,11 +593,12 @@ function main() {
     md.push('');
   }
 
-  fs.writeFileSync(DIFF_MD, md.join('\n'));
+  // --check-module is read-only: it writes neither the JSON nor the diff report.
+  if (!CHECK_MODULE) fs.writeFileSync(DIFF_MD, md.join('\n'));
 
   // ── Stdout summary ──
-  if (DIFF_ONLY) {
-    console.log(`--diff-only: using cached extraction from ${cachedProvenance.generatedAt}`);
+  if (READ_ONLY) {
+    console.log(`${DIFF_ONLY ? '--diff-only' : '--check-module'}: using cached extraction from ${cachedProvenance.generatedAt}`);
   } else {
     console.log(`Scanned ${filesScanned} DTD files under ${DITA_DTD_ROOT}`);
   }
@@ -431,8 +613,13 @@ function main() {
   console.log(`  matched:   ${diffMap.matched.length}`);
   console.log(`\nNew base types without renderer: ${newTopicBaseTypes.length + newMapBaseTypes.length}`);
   if (dupConflicts.length) console.log(`Duplicate declarations: ${dupConflicts.length}`);
-  if (!DIFF_ONLY) console.log(`\nWrote ${path.relative(REPO_ROOT, EXTRACTED_JSON)}`);
-  console.log(`Wrote ${path.relative(REPO_ROOT, DIFF_MD)}`);
+  if (!READ_ONLY) console.log(`\nWrote ${path.relative(REPO_ROOT, EXTRACTED_JSON)}`);
+  if (!CHECK_MODULE) console.log(`Wrote ${path.relative(REPO_ROOT, DIFF_MD)}`);
+  if (moduleStatus) {
+    console.log('');
+    for (const line of moduleStatus.lines) console.log(line);
+    if (!moduleStatus.ok) process.exit(1);
+  }
 }
 
 function makeDiff(candidates, existing, mapName) {
