@@ -5,5 +5,47 @@
     "file": "corpus.ditamap",
     "line": 11,
     "message": "Referenced topic not found: topics/control-missing.dita"
+  },
+  {
+    "category": "format-mismatch",
+    "severity": "error",
+    "file": "maps/m-dita-ref-edge.ditamap",
+    "line": 9,
+    "message": "Non-DITA resource is referenced as a DITA topic: ../topics/m-plain.txt"
+  },
+  {
+    "category": "external-reference",
+    "severity": "warning",
+    "file": "maps/m-uri-target-edge.ditamap",
+    "line": 10,
+    "message": "Reference to a URL must declare scope=\"external\": https://example.com/corpus5/not-fetched-edge.dita"
+  },
+  {
+    "category": "validation",
+    "severity": "warning",
+    "file": "topics/m-not-dita.xml",
+    "line": 6,
+    "message": "Root element <config> is not a DITA topic"
+  },
+  {
+    "category": "validation",
+    "severity": "error",
+    "file": "topics/m-plain.txt",
+    "line": 1,
+    "message": "XML error: Non-whitespace before first tag."
+  },
+  {
+    "category": "validation",
+    "severity": "error",
+    "file": "topics/n-broken-edge.dita",
+    "line": 12,
+    "message": "XML error: Unexpected close tag"
+  },
+  {
+    "category": "validation",
+    "severity": "error",
+    "file": "topics/n-broken-pos.dita",
+    "line": 11,
+    "message": "XML error: Unexpected close tag"
   }
 ]

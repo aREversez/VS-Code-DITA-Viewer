@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Target of dmv.invalid.DITA.reference, positive: well-formed XML whose root element is
+     not a DITA topic or map. A reference with format="dita" claims DITA content; the
+     question for Oxygen is which of its ids answers here, and whether the finding lands on
+     the map or on this file. -->
+<config>
+  <entry name="corpus-5">Not a DITA document.</entry>
+</config>

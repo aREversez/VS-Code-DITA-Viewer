@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- dmv.invalid.domains.format, positive: no DOCTYPE, so no DTD supplies the default
+     @domains. This is the one probe of the corpus that drops the DOCTYPE on purpose, and
+     the question is what Oxygen reports for a topic it cannot get a default from. -->
+<topic id="l-domains-format-pos">
+  <title>No DOCTYPE at all</title>
+  <body>
+    <p>Nothing declares the domains of this topic.</p>
+  </body>
+</topic>

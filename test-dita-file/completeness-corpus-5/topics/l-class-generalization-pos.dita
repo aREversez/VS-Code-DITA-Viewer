@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.invalid.class.generalization, positive: the conref source is a paragraph
+     (- topic/p) and the target is a list (- topic/ul). Neither class is an ancestor of the
+     other, so no generalization relationship holds in either direction. -->
+<topic id="l-class-generalization-pos">
+  <title>conref between unrelated classes (positive)</title>
+  <body>
+    <p conref="l-class-target-base.dita#lctb/lctb-ul"/>
+  </body>
+</topic>

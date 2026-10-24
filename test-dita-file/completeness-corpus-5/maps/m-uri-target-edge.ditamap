@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.invalid.DITA.uri.target, boundary: the same kind of remote URI, but without
+     scope="external", so the scope is implied by the scheme instead of declared. Corpus 2
+     recorded the remote-reference answer for this spelling
+     (dmv.topicref.remote.no.external.scope); the question here is whether the DITA claim
+     draws a second finding of its own. -->
+<map>
+  <title>format="dita" on a remote URI, no @scope (boundary)</title>
+  <topicref href="https://example.com/corpus5/not-fetched-edge.dita" format="dita"/>
+</map>

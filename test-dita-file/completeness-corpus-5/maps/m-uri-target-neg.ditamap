@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.invalid.DITA.uri.target, negative: format="dita" on a local DITA topic. The URI
+     points at a real DITA target, so the claim holds and nothing is reported. -->
+<map>
+  <title>format="dita" on a local target (negative)</title>
+  <topicref href="../topics/m-valid-target-2.dita" format="dita"/>
+</map>

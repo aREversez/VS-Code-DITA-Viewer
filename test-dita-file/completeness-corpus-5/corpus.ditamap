@@ -13,5 +13,64 @@
   <topicref href="topics/ok.dita"/>
 
   <!-- Probes are added below, grouped by the batch-4 groups (L class-dependent, M DITA
-       validity of references, N parsing and structure). -->
+       validity of references, N parsing and structure). One rule per file: a probe topic
+       carries the thing under test, or a small map under maps/ does, and both are listed
+       here so the crawl reaches them. -->
+
+  <!-- Shared conref targets of the class-compatibility probes. Both are resource-only and
+       every element they hold is drawn in by a probe, so nothing here is reported as an
+       unreferenced reusable element. -->
+  <topicref href="topics/l-class-target-base.dita" processing-role="resource-only"/>
+  <topicref href="topics/l-class-target-task.dita" processing-role="resource-only"/>
+
+  <!-- L. @class (dmv.invalid.class.format, dmv.invalid.class.generalization,
+       dmv.invalid.class.specialization, dmv.invalid.domains.format). -->
+  <topicref href="topics/l-class-format-pos-undeclared.dita"/>
+  <topicref href="topics/l-class-format-neg.dita"/>
+  <topicref href="topics/l-class-format-edge-badvalue.dita"/>
+  <topicref href="topics/l-class-format-edge-empty.dita"/>
+  <topicref href="topics/l-class-generalization-pos.dita"/>
+  <topicref href="topics/l-class-generalization-neg.dita"/>
+  <topicref href="topics/l-class-generalization-edge.dita"/>
+  <topicref href="topics/l-class-specialization-pos.dita"/>
+  <topicref href="topics/l-class-specialization-neg.dita"/>
+  <topicref href="topics/l-class-specialization-edge.dita"/>
+  <topicref href="topics/l-domains-format-pos.dita"/>
+  <topicref href="topics/l-domains-format-neg.dita"/>
+  <topicref href="topics/l-domains-format-edge.dita"/>
+
+  <!-- L. @type against the target's class (dmv.ref.type.class.mismatch,
+       dmv.ref.type.class.mismatch.specific). The targets are published normally: an xref to
+       a resource-only topic would be a finding of its own, and a second topicref to one file
+       would be another. -->
+  <topicref href="topics/l-ref-task-target.dita"/>
+  <topicref href="topics/l-ref-topic-target.dita"/>
+  <topicref href="topics/l-ref-concept-target.dita"/>
+  <topicref href="topics/l-ref-type-mismatch-pos.dita"/>
+  <topicref href="topics/l-ref-type-mismatch-neg.dita"/>
+  <topicref href="topics/l-ref-type-specific-pos.dita"/>
+  <topicref href="topics/l-ref-type-specific-neg.dita"/>
+  <topicref href="topics/l-ref-type-specific-edge.dita"/>
+  <mapref href="maps/l-ref-type-mismatch-map.ditamap" format="ditamap"/>
+
+  <!-- M. DITA validity of a reference (dmv.invalid.DITA.reference,
+       dmv.invalid.DITA.uri.target). Every target is named from one map only. -->
+  <mapref href="maps/m-dita-ref-pos.ditamap" format="ditamap"/>
+  <mapref href="maps/m-dita-ref-neg.ditamap" format="ditamap"/>
+  <mapref href="maps/m-dita-ref-edge.ditamap" format="ditamap"/>
+  <mapref href="maps/m-uri-target-pos.ditamap" format="ditamap"/>
+  <mapref href="maps/m-uri-target-neg.ditamap" format="ditamap"/>
+  <mapref href="maps/m-uri-target-edge.ditamap" format="ditamap"/>
+
+  <!-- N. Parsing and structure (dmv.invalid.parse.dita.content, dmv.section.first.title,
+       dmv.section.no.dup.title). -->
+  <mapref href="maps/n-parse-content-pos.ditamap" format="ditamap"/>
+  <mapref href="maps/n-parse-content-neg.ditamap" format="ditamap"/>
+  <mapref href="maps/n-parse-content-edge.ditamap" format="ditamap"/>
+  <topicref href="topics/n-section-first-title-pos.dita"/>
+  <topicref href="topics/n-section-first-title-neg.dita"/>
+  <topicref href="topics/n-section-first-title-edge.dita"/>
+  <topicref href="topics/n-section-no-dup-title-pos.dita"/>
+  <topicref href="topics/n-section-no-dup-title-neg.dita"/>
+  <topicref href="topics/n-section-no-dup-title-edge.dita"/>
 </map>

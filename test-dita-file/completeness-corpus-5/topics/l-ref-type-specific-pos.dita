@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.type.class.mismatch.specific, positive: @type is topic, the target's class is
+     - topic/topic task/task. The name is a general one against a specific target: the other
+     id of the pair, if the pair really is split by direction. -->
+<topic id="l-ref-type-specific-pos">
+  <title>@type too general (positive)</title>
+  <body>
+    <p><xref href="l-ref-task-target.dita" type="topic">A task, called a topic.</xref></p>
+  </body>
+</topic>

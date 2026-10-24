@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- Second valid DITA target, kept apart from m-valid-target.dita so the two negative
+     maps of the M group do not both point at one file (that would be dmv.dup.topic). -->
+<topic id="mv2">
+  <title>Another valid DITA target</title>
+  <body>
+    <p>Valid DITA, referenced with format="dita" from a map of its own.</p>
+  </body>
+</topic>

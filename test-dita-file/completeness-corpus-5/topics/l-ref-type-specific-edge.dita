@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.type.class.mismatch.specific, boundary: @type names a specialization exactly
+     (concept against a concept, - topic/topic concept/concept). Nothing is too general and
+     nothing mismatches; the probe checks the exact-match case for a name other than topic. -->
+<topic id="l-ref-type-specific-edge">
+  <title>@type names a specialization exactly (boundary)</title>
+  <body>
+    <p><xref href="l-ref-concept-target.dita" type="concept">A concept, as promised.</xref></p>
+  </body>
+</topic>

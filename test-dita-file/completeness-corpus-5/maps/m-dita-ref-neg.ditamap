@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.invalid.DITA.reference, negative: format="dita" on a file that really is a DITA
+     topic. The claim holds, so nothing is reported. -->
+<map>
+  <title>format="dita" on a DITA topic (negative)</title>
+  <topicref href="../topics/m-valid-target.dita" format="dita"/>
+</map>

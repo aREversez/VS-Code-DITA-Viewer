@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.type.class.mismatch.specific, negative: @type is topic and the target is a
+     plain topic. The general name is the target's own class, which is always allowed. -->
+<topic id="l-ref-type-specific-neg">
+  <title>@type is the target's own class (negative)</title>
+  <body>
+    <p><xref href="l-ref-topic-target.dita" type="topic">A topic, as promised.</xref></p>
+  </body>
+</topic>

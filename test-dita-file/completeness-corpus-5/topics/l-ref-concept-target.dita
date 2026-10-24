@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<!-- Target of the @type probes: class - topic/topic concept/concept, so type="concept"
+     names it exactly and type="topic" names its general end. -->
+<concept id="lrc">
+  <title>A concept</title>
+  <conbody>
+    <p>Nothing special: - topic/topic concept/concept.</p>
+  </conbody>
+</concept>

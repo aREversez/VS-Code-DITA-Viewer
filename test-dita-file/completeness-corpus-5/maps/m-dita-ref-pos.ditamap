@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.invalid.DITA.reference, positive: format="dita" claims the target is DITA, and the
+     target is well-formed XML that is not a DITA document (its root is config). Corpus 2
+     showed which ids a non-XML resource draws; this one asks which id a readable but
+     non-DITA XML file draws, and whether the finding names the map or the file. -->
+<map>
+  <title>format="dita" on a non-DITA document (positive)</title>
+  <topicref href="../topics/m-not-dita.xml" format="dita"/>
+</map>

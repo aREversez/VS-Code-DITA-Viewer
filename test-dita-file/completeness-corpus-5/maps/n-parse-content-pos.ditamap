@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.invalid.parse.dita.content, positive: the topicref names a topic that is not
+     well-formed XML. Corpus 1 recorded that Oxygen puts this finding on the map that
+     references the file and not on the file; the probe asks whether a plain topicref of a
+     map of its own gets the same treatment. -->
+<map>
+  <title>A topicref to an unparsable topic (positive)</title>
+  <topicref href="../topics/n-broken-pos.dita"/>
+</map>

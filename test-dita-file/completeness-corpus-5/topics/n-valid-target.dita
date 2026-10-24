@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- Target of the dmv.invalid.parse.dita.content negative: a topic that parses, referenced
+     from a map of its own. -->
+<topic id="nv">
+  <title>Parses cleanly</title>
+  <body>
+    <p>Nothing here to parse badly.</p>
+  </body>
+</topic>

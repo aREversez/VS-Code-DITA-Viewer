@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<!-- dmv.invalid.class.generalization, boundary: the source is a step
+     (- topic/li task/step) and the target an item (- topic/li), so the target is the
+     general end of the source's own chain. DITA allows this direction; the probe asks
+     whether Oxygen stays silent or answers with one of the two class ids. -->
+<task id="l-class-generalization-edge">
+  <title>conref to the general end (boundary)</title>
+  <taskbody>
+    <steps>
+      <step conref="l-class-target-base.dita#lctb/lctb-li">
+        <cmd>Replaced by the conref.</cmd>
+      </step>
+    </steps>
+  </taskbody>
+</task>

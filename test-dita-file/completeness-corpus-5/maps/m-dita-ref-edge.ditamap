@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.invalid.DITA.reference, boundary: format="dita" on a plain text file. No parser
+     could read it as DITA, and corpus 2 already recorded that such a file draws
+     class.format and parse.dita.content; the question is whether this check adds an id of
+     its own or stays silent because the parse failure gets there first. -->
+<map>
+  <title>format="dita" on a text file (boundary)</title>
+  <topicref href="../topics/m-plain.txt" format="dita"/>
+</map>

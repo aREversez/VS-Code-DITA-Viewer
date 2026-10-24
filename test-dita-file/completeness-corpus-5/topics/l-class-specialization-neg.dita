@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<!-- dmv.invalid.class.specialization, negative: a substep drawing in a step, one level
+     above it in the same chain (- topic/li task/step is the base of
+     - topic/li task/step task/substep). Allowed, and the probe asks whether the middle of a
+     chain is answered the same way as its base (see the generalization boundary). -->
+<task id="l-class-specialization-neg">
+  <title>conref one level up (negative)</title>
+  <taskbody>
+    <steps>
+      <step>
+        <cmd>One step.</cmd>
+        <substeps>
+          <substep conref="l-class-target-task.dita#lctt/lctt-step">
+            <cmd>Replaced by the conref.</cmd>
+          </substep>
+        </substeps>
+      </step>
+    </steps>
+  </taskbody>
+</task>
