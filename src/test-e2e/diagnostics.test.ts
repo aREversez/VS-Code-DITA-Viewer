@@ -21,7 +21,7 @@ async function waitFor(check: () => boolean, timeoutMs = 8000, intervalMs = 150)
  *
  * The classification rule itself (which elements count as unknown, and why
  * <mathml>'s own content does not) is unit-tested against collectUnknownElements()
- * in src/test/language/ditaLanguageUtils.test.ts, against a synthetic parsed
+ * in packages/core/test/language/ditaLanguageUtils.test.ts, against a synthetic parsed
  * tree, because it needs no VS Code API at all. What is pinned here is the
  * part those tests cannot reach: that validateDocument() actually calls it
  * and turns the result into a real published Diagnostic with the expected

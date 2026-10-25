@@ -20,7 +20,7 @@ import { renderDiffColumns, injectFragmentAttrs } from '../../editor/ditaDiffRen
  * that class of breakage, which is why this file exists next to the engine's.
  */
 
-// The minimum the renderers actually read (renderer.test.ts uses the same
+// The minimum the renderers actually read (packages/core/test/render/renderer.test.ts uses the same
 // shape): heading level, asset URIs, the document directory.
 const ctx0: RenderContext = {
   headingLevel: 1,

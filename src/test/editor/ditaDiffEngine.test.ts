@@ -22,7 +22,7 @@ import {
  *  deliberately close to what DitaViewerProvider's own renderer produces
  *  (headings wrapped, escaped text) but simplified, since the point of
  *  these tests is diffTopics' own alignment/diffing behavior, not
- *  full-fidelity HTML rendering (that's covered by renderer.test.ts). */
+ *  full-fidelity HTML rendering (that's covered by packages/core/test/render/renderer.test.ts). */
 function testRenderBlockFactory(root: DitaNode, _docDir: string) {
   // The factory receiving `root` at all -- and being able to use it -- is
   // the actual regression this test file exists to guard: the diff view
