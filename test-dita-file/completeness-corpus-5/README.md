@@ -61,7 +61,7 @@ the run below records what Oxygen answered.
 | Rule | Probes | What the probes hold |
 | --- | --- | --- |
 | `dmv.invalid.class.format` | `topics/l-class-format-{pos-undeclared,neg,edge-badvalue,edge-empty}.dita` | an element the DTD does not declare; declared elements only, one with the class written as the DTD defaults it; class without the scope prefix (`topic/p`); empty class |
-| `dmv.invalid.class.generalization` | `topics/l-class-generalization-{pos,neg,edge}.dita` | `p` to `ul` (unrelated classes); `p` to `p`; `step` to `li` (the general end of the source's own chain) |
+| `dmv.invalid.class.generalization` | `topics/l-class-generalization-{pos,neg,edge}.dita` | `p` to `ul` (unrelated classes); `p` to `p`; `step` to `li` (the target is the general end of the source's own chain, so the source is the more specific one) |
 | `dmv.invalid.class.specialization` | `topics/l-class-specialization-{pos,neg,edge}.dita` | `step` to `substep` (target more specific than source); `substep` to `step`; authored class spelled exactly as the default |
 | `dmv.ref.type.class.mismatch` | `topics/l-ref-type-mismatch-{pos,neg}.dita`, `maps/l-ref-type-mismatch-map.ditamap` | `type="concept"` to a task; `type="task"` to a task; the same mismatch on a map `topicref` |
 | `dmv.ref.type.class.mismatch.specific` | `topics/l-ref-type-specific-{pos,neg,edge}.dita` | `type="topic"` to a task; `type="topic"` to a topic; `type="concept"` to a concept |
@@ -72,10 +72,13 @@ the run below records what Oxygen answered.
 | `dmv.section.first.title` | `topics/n-section-first-title-{pos,neg,edge}.dita` | title after a paragraph; title first; only the nested section out of order |
 | `dmv.section.no.dup.title` | `topics/n-section-no-dup-title-{pos,neg,edge}.dita` | two titles in one section; one title; one title per nested section |
 
-`topics/l-class-target-base.dita` and `topics/l-class-target-task.dita` are the shared conref
-targets of the class-compatibility probes. Both are `processing-role="resource-only"`, and
-every element with an `@id` in them is drawn in by a probe, so the corpus raises no
-`unreferenced-reusable` of its own. The `@type` targets are published normally instead, and
+`topics/l-class-target-base.dita`, `topics/l-class-target-task.dita` and
+`topics/l-class-target-ph.dita` are the shared conref targets of the class-compatibility
+probes. All three are `processing-role="resource-only"`, and every element with an `@id` in
+them is drawn in by a probe, so the corpus raises no `unreferenced-reusable` of its own. The
+third one is there for the direction the other probes leave out: a `ph` drawing in its
+`uicontrol` makes the source the general end of the target's chain (R064), and neither tool
+reports it. The `@type` targets are published normally instead, and
 each of them is named by one `topicref` only: a second `topicref` to one file would be
 `multiple-reference`, and an `xref` to a resource-only topic would be `resource-only-target`.
 
@@ -110,12 +113,15 @@ or DTD associated with the document" errors on the DOCTYPE-less files. They are 
 `scripts/oxygen-diff.cjs` prints them as "accepted differences (not counted)".
 
 Of the other 28, parity locks **21 matched, 6 extension-only, 3 Oxygen-only**
-(`oxygen-parity.expected.json`). What Oxygen answered, probe family by probe family:
+(`oxygen-parity.expected.json`). The report was rerun once, after the source-general probe and
+its target were added: Oxygen files nothing for either, so every number here is unchanged, and
+the only line that moved is the `corpus.ditamap` reference below (38 to 40). What Oxygen
+answered, probe family by probe family:
 
 | Rule | Oxygen's answer | Extension |
 | --- | --- | --- |
 | `dmv.invalid.class.format` | 11 incidents: four on the DOCTYPE-less `topics/l-domains-format-pos.dita` (lines 1, 6, 7, 8), two on `topics/m-not-dita.xml` (lines 1, 7), and one each on the badvalue, empty and no-trailing-space edges. The two probes that spell `class="- topic/p"` by hand are reported too, which settles that an authored value is checked as written even when it equals the DTD default | `class-format` on all of those; the undeclared element of the positive probe is the one row left to Oxygen (below) |
-| `dmv.invalid.class.generalization` | 4 incidents: `p`→`ul`, `step`→`li` (the legal direction), `step`→`substep`, `substep`→`step` | `conref-class` on all four, `step`→`li` included |
+| `dmv.invalid.class.generalization` | 4 incidents: `p`→`ul`, `step`→`li` (a more specific source), `step`→`substep`, `substep`→`step`; the source-general probe draws nothing | `conref-class` on all four, `step`→`li` included; a general source is allowed, so that probe is silent here too (R064) |
 | `dmv.invalid.class.specialization` | none — the specialization probes came back as `.generalization`, the same id as the other direction | nothing to match; the mapped category covers both directions |
 | `dmv.invalid.domains.format` | 1 incident, on the empty-`@domains` edge (`l-domains-format-edge.dita:6`) | `domains-format`; an absent `@domains` produced only the schema differences, which is the documented boundary |
 | `dmv.ref.type.class.mismatch` | 2 incidents: the `xref` probe and the map `topicref` probe | `type-class-mismatch` on both |
@@ -130,7 +136,7 @@ Three rows stay Oxygen-only, each for a recorded reason:
 
 | Oxygen-only row | Report evidence | Handling |
 | --- | --- | --- |
-| `corpus.ditamap` `format-mismatch` | `dmv.ref.res.as.dita` at line 38, on the `topicref` to the DOCTYPE-less `topics/l-domains-format-pos.dita` | **Documented boundary.** Oxygen decides "is this a DITA resource" by the DOCTYPE association, and this probe has none on purpose (it asks about `@domains`); the extension reads the root `<topic>` and reports nothing. The probe's own four `class-format` incidents do match. |
+| `corpus.ditamap` `format-mismatch` | `dmv.ref.res.as.dita` at line 40, on the `topicref` to the DOCTYPE-less `topics/l-domains-format-pos.dita` | **Documented boundary.** Oxygen decides "is this a DITA resource" by the DOCTYPE association, and this probe has none on purpose (it asks about `@domains`); the extension reads the root `<topic>` and reports nothing. The probe's own four `class-format` incidents do match. |
 | `maps/m-uri-target-edge.ditamap` `dita-parse` | `dmv.invalid.parse.dita.content` at line 10, on the remote URL | **Documented boundary.** A remote target is never fetched (R063), so there is no parse error to report; the extension reports `external-reference` on the same line, which is extension-only for the corpus-2 reason. |
 | `topics/l-class-format-pos-undeclared.dita` `class-format` | `dmv.invalid.class.format` at line 12, on `<widget>` | **Accepted scope boundary.** No DTD declares `<widget>`, so the generated class table has no entry and every class rule skips the element; whether it is declared at all is schema validation's question (option 1 of `BATCH-4.md`). Same row as `topics/invalid.dita` in corpus 1. |
 

@@ -145,7 +145,7 @@ ignored by the `(file, category)` diff.
 | Problem ID | Oxygen reports | Extension status |
 | --- | --- | --- |
 | `dmv.invalid.class.format` | malformed `@class` | ok (`class-format`) — the corpus-5 report carries all four message forms (not specified, no leading `-`/`+`, empty, no trailing space); a written value is checked as written, so a copy of the DTD default that lacks its trailing space is reported too |
-| `dmv.invalid.class.generalization` | `@class` is not a generalization | ok (`conref-class`) — the corpus-5 report files all four conref directions here, the legal `step`→`li` included; the id also covers the `conref` that names a whole topic (corpus 3) |
+| `dmv.invalid.class.generalization` | `@class` is not a generalization | ok (`conref-class`) — the corpus-5 report files four conref pairs here: unrelated classes, a more specific source (`step`→`li`), and both specialization directions; a source on the general end is not filed, which is the `source-general` probe of R064, silent in the same report; the id also covers the `conref` that names a whole topic (corpus 3) |
 | `dmv.invalid.class.specialization` | `@class` is not a specialization | n/a — Oxygen never emitted it: the `l-class-specialization-{pos,neg}` probes are both `dmv.invalid.class.generalization`, and the id appears in none of the five reports; the mapped category answers both directions |
 | `dmv.invalid.domains.format` | `@domains` missing/malformed | ok (`domains-format`) — the corpus-5 report carries it on the empty-`@domains` edge only; an absent `@domains` is not a finding, and the DOCTYPE-less probe drew the schema differences instead |
 | `dmv.invalid.id.syntax.2` | invalid character in an ID | ok (`invalid-id-syntax`) — the corpus-2 report files it as `IDInvalidWithNamespaces` |
@@ -411,25 +411,27 @@ Two rows stay Oxygen-only, and one extension-only row is the same scheme story:
 
 *Validate and Check for Completeness* over `../completeness-corpus-5/corpus.ditamap` — that
 map as the only open root map, every option on, remote off, Oxygen XML Editor 27.1 — produced
-**34 incidents** (`../completeness-corpus-5/oxygen-report.xml`). Six of them are accepted
-schema differences, so parity compares 28 and locks **21 matched, 6 extension-only, 3
-Oxygen-only** (`scripts/oxygen-diff.cjs` agrees). The eleven batch-4 ids, grouped as their
-`RULES.md` rows group them:
+**34 incidents** (`../completeness-corpus-5/oxygen-report.xml`). The report was rerun once,
+after the `source-general` probe of R064 and its target were added: the count did not change,
+neither file appears in it, and the only line that moved is the `corpus.ditamap` reference
+below (38 to 40). Six of the incidents are accepted schema differences, so parity compares 28
+and locks **21 matched, 6 extension-only, 3 Oxygen-only** (`scripts/oxygen-diff.cjs` agrees).
+The eleven batch-4 ids, grouped as their `RULES.md` rows group them:
 
 | Group | Oxygen ids seen | Extension | Where the report puts it |
 | --- | --- | --- | --- |
 | L class format | `dmv.invalid.class.format` ×11 | `class-format` (R056) | all four message forms: the DOCTYPE-less `l-domains-format-pos.dita` (lines 1, 6, 7, 8), `m-not-dita.xml` (1, 7), and the badvalue / empty / no-trailing-space edges |
-| L conref class | `dmv.invalid.class.generalization` ×4 | `conref-class` (R058) | `p`→`ul`, the legal `step`→`li`, `step`→`substep`, `substep`→`step`; `.specialization` never fires |
+| L conref class | `dmv.invalid.class.generalization` ×4 | `conref-class` (R058) | `p`→`ul`, `step`→`li` (a more specific source), `step`→`substep`, `substep`→`step`; `.specialization` never fires, and the general-source probe draws nothing (R064) |
 | L `@type` | `dmv.ref.type.class.mismatch` ×2, `.specific` ×1 | `type-class-mismatch` / `type-class-specific` (R059/R060) | the xref probe, the map `topicref` probe, and `type="topic"` against a task |
 | L `@domains` | `dmv.invalid.domains.format` ×1 | `domains-format` (R057) | the empty-`@domains` edge only |
-| M DITA reference | `dmv.ref.res.as.dita` ×2 | `format-mismatch` | `maps/m-dita-ref-pos.ditamap:9` matched; `corpus.ditamap:38` stays Oxygen-only (below) |
+| M DITA reference | `dmv.ref.res.as.dita` ×2 | `format-mismatch` | `maps/m-dita-ref-pos.ditamap:9` matched; `corpus.ditamap:40` stays Oxygen-only (below) |
 | M URI target | `dmv.topicref.remote.no.external.scope`, `dmv.invalid.parse.dita.content` | `external-reference`, `dita-parse` | no `dmv.invalid.DITA.uri.target` anywhere in the report |
 | N parse | `dmv.invalid.parse.dita.content` ×4 | `dita-parse` (R063) | three matched on the referring map, the remote edge Oxygen-only |
 | N structure | `dmv.section.first.title`, `dmv.section.no.dup.title` | `section-title-order` / `section-title-duplicate` (R061/R062) | the two positive probes; the nested-section edges are silent on both sides |
 
 What the run settled:
 
-- **Oxygen decides "is this DITA" by the DOCTYPE, not by the root element.** `corpus.ditamap:38`
+- **Oxygen decides "is this DITA" by the DOCTYPE, not by the root element.** `corpus.ditamap:40`
   references `topics/l-domains-format-pos.dita`, the probe that deliberately has no DOCTYPE to
   ask about `@domains`; Oxygen answers `dmv.ref.res.as.dita` ("not a DITA resource") for that
   reference, while the extension reads the root `<topic>` and says nothing. The probe's own
@@ -439,10 +441,12 @@ What the run settled:
   exactly what the DTD would default, and still draws "At least one trailing space should be
   present" (`l-class-format-neg.dita:9`, `l-class-specialization-edge.dita:9`): Oxygen accepts
   the missing space from the DTD but not from the author, and the extension does the same.
-- **`step` to `li` is reported.** Oxygen files the general end of the source's own chain as
-  `dmv.invalid.class.generalization`, so one category serves every direction and the legal one
-  is not special-cased (the same file also carries the `conref`-names-a-topic shape of
-  corpus 3).
+- **A more specific source is reported, a source on the general end is not.** Oxygen files
+  `l-class-generalization-edge.dita`, where a `step` draws in an `li`, as
+  `dmv.invalid.class.generalization`; the `source-general` probe added after the first run — a
+  `ph` drawing in a `uicontrol` — draws nothing at all. One category therefore serves every
+  reported direction, and R064 records the one that is allowed (the id also carries the
+  `conref`-names-a-topic shape of corpus 3).
 - **An undeclared element stays a schema question.** `l-class-format-pos-undeclared.dita` writes
   `<widget>`, which no DTD declares: Oxygen reports `dmv.invalid.class.format` (no class, because
   no DTD default) plus the two `MSG_*`, and the extension is silent because the element is
