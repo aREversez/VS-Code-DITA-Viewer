@@ -8,10 +8,14 @@
  *     so the sheet no longer knows which application is hosting it;
  *   - :root / .vscode-dark selectors also match a Shadow DOM host
  *     (:host / :host([data-scheme="dark"]));
- *   - `body` rules became `.dita-body`, `html.dv-conref-hot` became
- *     `:host(.dv-conref-hot)`;
- *   - the two #c0392b literals in .hazardstatement now use
- *     --color-danger-border (identical value by default).
+ *   - `body` rules also match `.dita-body`, `html.dv-conref-hot` also
+ *     matches `:host(.dv-conref-hot)` (the extra selector matches nothing in
+ *     the other kind of host, so one sheet serves both);
+ *   - the image button, context menu and toast read finer tokens
+ *     (--dita-btn-*, --dita-menu-*, --dita-toast-*) that fall back to the
+ *     shared ones, so a host that defines only the shared tokens is unchanged;
+ *   - the two #c0392b literals in .hazardstatement use --color-danger-border
+ *     (identical value by default; the extension now does the same).
  * A host supplies colours, fonts and sizes by defining the --dita-* tokens
  * (and may override the --color-* palette); it never edits this file.
  */
@@ -70,7 +74,7 @@
   --color-menucascade-arrow: #aaaaaa;
 }
 
-.dita-body {
+body, .dita-body {
   font-family: var(--body-font);
   font-size: 1em;
   line-height: var(--line-height);
@@ -182,6 +186,7 @@ p { margin: 0.75em 0; }
 /* The note text sits in .note__body for the benefit of WebHelp-style css. In
    the own shell it stays inline, so the label and the text share a line as
    they always did (a block here pushes the text onto its own line). */
+body:not(.wh_topic_page) .note__body,
 .dita-body:not(.wh_topic_page) .note__body { display: inline; }
 .note--warning { border-left-color: var(--color-warning-border); background: var(--color-warning-bg); }
 .note--danger { border-left-color: var(--color-danger-border); background: var(--color-danger-bg); }
@@ -315,6 +320,8 @@ ol[data-conref="block"][data-conref],
 }
 /* Set by the hover hit-test in conrefJumpScript.ts while the pointer is over
    the icon (a background cannot take its own cursor). */
+html.dv-conref-hot [data-conref],
+html.dv-conref-hot [data-conref] *,
 :host(.dv-conref-hot) [data-conref],
 :host(.dv-conref-hot) [data-conref] * {
   cursor: pointer;
@@ -549,6 +556,7 @@ ol[data-conref="block"][data-conref],
 }
 .indexterm-chip--ref { font-style: italic; }
 .indexterm-chip__see { font-style: italic; opacity: 0.85; }
+body.hide-profiling .profiled,
 .dita-body.hide-profiling .profiled {
   background: none;
   box-shadow: none;
@@ -562,11 +570,15 @@ ol[data-conref="block"][data-conref],
    restoring it here, turning Flags off would silently break nested-list
    indentation for exactly the same reason it broke with the box visible,
    just conditionally instead of always. */
+body.hide-profiling ul.profiled,
+body.hide-profiling ol.profiled,
 .dita-body.hide-profiling ul.profiled,
 .dita-body.hide-profiling ol.profiled {
   padding-left: 1.5em;
 }
+body.hide-profiling .profiled--inline,
 .dita-body.hide-profiling .profiled--inline { display: inline; }
+body.hide-profiling .profiling-label,
 .dita-body.hide-profiling .profiling-label { display: none; }
 
 /* Phase 2 (the filter panel): actually hides content, unlike the toggle
@@ -630,6 +642,8 @@ tr.profiled > td,
 tr.profiled > th {
   border-color: var(--color-profiling-border);
 }
+body.hide-profiling tr.profiled > td,
+body.hide-profiling tr.profiled > th,
 .dita-body.hide-profiling tr.profiled > td,
 .dita-body.hide-profiling tr.profiled > th {
   border-color: var(--table-border);
@@ -688,9 +702,9 @@ img[data-load-error] { cursor: default; }
 }
 .dita-img-btn {
   padding: 1px 5px; border-radius: 3px; line-height: 1.5; font-size: 12px; cursor: pointer;
-  border: 1px solid var(--dita-border, #555);
+  border: 1px solid var(--dita-btn-border, var(--dita-border, #555));
   background: var(--dita-bg, rgba(30, 30, 30, 0.85));
-  color: var(--dita-fg, #eee);
+  color: var(--dita-btn-fg, var(--dita-fg, #eee));
 }
 .dita-img-btn:hover { opacity: 0.85; }
 
@@ -700,8 +714,8 @@ img[data-load-error] { cursor: default; }
    available consistently across every host this extension runs in. */
 .dita-img-ctxmenu {
   position: fixed; z-index: 100000;
-  background: var(--dita-bg-elevated, var(--dita-bg, #1e1e1e));
-  border: 1px solid var(--dita-border, #454545);
+  background: var(--dita-menu-bg, var(--dita-bg-elevated, var(--dita-bg, #1e1e1e)));
+  border: 1px solid var(--dita-menu-border, var(--dita-border, #454545));
   border-radius: 4px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   padding: 2px;
@@ -712,12 +726,12 @@ img[data-load-error] { cursor: default; }
   padding: 4px 10px; border: none; border-radius: 3px;
   font-size: 13px; cursor: pointer;
   background: transparent;
-  color: var(--dita-fg, #ccc);
+  color: var(--dita-menu-fg, var(--dita-fg, #ccc));
 }
 .dita-img-ctxmenu-item:hover,
 .dita-img-ctxmenu-item:focus {
-  background: var(--dita-hover-bg, #2a2d2e);
-  color: var(--dita-selected-fg, var(--dita-fg, #ccc));
+  background: var(--dita-menu-hover-bg, var(--dita-hover-bg, #2a2d2e));
+  color: var(--dita-menu-hover-fg, var(--dita-selected-fg, var(--dita-fg, #ccc)));
   outline: none;
 }
 .dita-img-ctxmenu-item:disabled { cursor: default; opacity: 0.7; }
@@ -725,7 +739,7 @@ img[data-load-error] { cursor: default; }
    getSiteOpenSourceScript), matching how a native menu separates groups. */
 .dita-img-ctxmenu-sep {
   height: 1px; margin: 2px 4px;
-  background: var(--dita-border, #454545);
+  background: var(--dita-menu-sep, var(--dita-border, #454545));
 }
 
 /* Transient feedback pill for the lightbox's Ctrl+C copy path, which has
@@ -733,9 +747,9 @@ img[data-load-error] { cursor: default; }
 .dita-img-toast {
   position: fixed; left: 50%; bottom: 48px; transform: translateX(-50%);
   z-index: 100001;
-  background: var(--dita-bg-elevated, var(--dita-bg, #1e1e1e));
-  border: 1px solid var(--dita-border, #454545);
-  color: var(--dita-fg, #ccc);
+  background: var(--dita-toast-bg, var(--dita-bg-elevated, var(--dita-bg, #1e1e1e)));
+  border: 1px solid var(--dita-toast-border, var(--dita-border, #454545));
+  color: var(--dita-toast-fg, var(--dita-fg, #ccc));
   padding: 6px 14px; border-radius: 4px; font-size: 13px;
   /* UI chrome, not document content: stays sans-serif regardless of the
      reading-font toggle (Serif is a common choice there, and a serif toast
@@ -1089,7 +1103,7 @@ section, .example { margin: 1.5rem 0; }
   font-weight: 600;
   letter-spacing: 0.03em;
   text-transform: uppercase;
-  color: var(--color-link);
+  color: var(--color-link, #4a76c9);
   border: 1px solid currentColor;
   opacity: 0.85;
   vertical-align: 0.1em;

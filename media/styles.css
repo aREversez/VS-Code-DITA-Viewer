@@ -18,12 +18,12 @@
    own theme variables. A token VS Code leaves undefined makes the var() that
    reads it take its inline fallback, exactly as the --vscode-* variable it
    replaced did, so nothing changes where there is no theme (exported HTML).
-   Left on --vscode-* on purpose, because the core folds them into one token
-   and VS Code does not: the image-button, context-menu and toast colours
-   (dropdown-*, menu-*, notifications-*). Rules after the book-view marker
-   are VS Code chrome and keep --vscode-* as well. --dita-border and
-   --dita-selected-fg are defined for the shared contract but no rule below
-   reads them yet (every widget-border use is one of the above). */
+   The image button, context menu and toast have tokens of their own
+   (--dita-btn-*, --dita-menu-*, --dita-toast-*), because VS Code colours them
+   from dropdown-*, menu-* and notifications-*, not from the shared ones; where
+   one of those is undefined the rule falls back to the shared token, which is
+   the --vscode-* variable the original declaration fell back to. Rules after
+   the book-view marker are VS Code chrome and keep --vscode-* as well. */
 :root {
   --dita-fg: var(--vscode-editor-foreground);
   --dita-fg-muted: var(--vscode-descriptionForeground);
@@ -36,6 +36,17 @@
   --dita-code-bg: var(--vscode-textCodeBlock-background);
   --dita-code-inline-bg: var(--vscode-textPreformat-background);
   --dita-font: var(--vscode-font-family);
+  --dita-btn-border: var(--vscode-dropdown-border);
+  --dita-btn-fg: var(--vscode-dropdown-foreground);
+  --dita-menu-bg: var(--vscode-menu-background);
+  --dita-menu-border: var(--vscode-menu-border);
+  --dita-menu-fg: var(--vscode-menu-foreground);
+  --dita-menu-hover-bg: var(--vscode-menu-selectionBackground);
+  --dita-menu-hover-fg: var(--vscode-menu-selectionForeground, var(--vscode-menu-foreground));
+  --dita-menu-sep: var(--vscode-menu-separatorBackground);
+  --dita-toast-bg: var(--vscode-notifications-background);
+  --dita-toast-border: var(--vscode-notifications-border);
+  --dita-toast-fg: var(--vscode-notifications-foreground);
 }
 :root {
   --body-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -708,9 +719,9 @@ img[data-load-error] { cursor: default; }
 }
 .dita-img-btn {
   padding: 1px 5px; border-radius: 3px; line-height: 1.5; font-size: 12px; cursor: pointer;
-  border: 1px solid var(--vscode-dropdown-border, var(--vscode-widget-border, #555));
+  border: 1px solid var(--dita-btn-border, var(--dita-border, #555));
   background: var(--dita-bg, rgba(30, 30, 30, 0.85));
-  color: var(--vscode-dropdown-foreground, #eee);
+  color: var(--dita-btn-fg, var(--dita-fg, #eee));
 }
 .dita-img-btn:hover { opacity: 0.85; }
 
@@ -720,8 +731,8 @@ img[data-load-error] { cursor: default; }
    available consistently across every host this extension runs in. */
 .dita-img-ctxmenu {
   position: fixed; z-index: 100000;
-  background: var(--vscode-menu-background, var(--vscode-editor-background, #1e1e1e));
-  border: 1px solid var(--vscode-menu-border, var(--vscode-widget-border, #454545));
+  background: var(--dita-menu-bg, var(--dita-bg-elevated, var(--dita-bg, #1e1e1e)));
+  border: 1px solid var(--dita-menu-border, var(--dita-border, #454545));
   border-radius: 4px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   padding: 2px;
@@ -732,12 +743,12 @@ img[data-load-error] { cursor: default; }
   padding: 4px 10px; border: none; border-radius: 3px;
   font-size: 13px; cursor: pointer;
   background: transparent;
-  color: var(--vscode-menu-foreground, var(--vscode-editor-foreground, #ccc));
+  color: var(--dita-menu-fg, var(--dita-fg, #ccc));
 }
 .dita-img-ctxmenu-item:hover,
 .dita-img-ctxmenu-item:focus {
-  background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground, #2a2d2e));
-  color: var(--vscode-menu-selectionForeground, var(--vscode-menu-foreground, #ccc));
+  background: var(--dita-menu-hover-bg, var(--dita-hover-bg, #2a2d2e));
+  color: var(--dita-menu-hover-fg, var(--dita-selected-fg, var(--dita-fg, #ccc)));
   outline: none;
 }
 .dita-img-ctxmenu-item:disabled { cursor: default; opacity: 0.7; }
@@ -745,7 +756,7 @@ img[data-load-error] { cursor: default; }
    getSiteOpenSourceScript), matching how a native menu separates groups. */
 .dita-img-ctxmenu-sep {
   height: 1px; margin: 2px 4px;
-  background: var(--vscode-menu-separatorBackground, var(--vscode-widget-border, #454545));
+  background: var(--dita-menu-sep, var(--dita-border, #454545));
 }
 
 /* Transient feedback pill for the lightbox's Ctrl+C copy path, which has
@@ -753,9 +764,9 @@ img[data-load-error] { cursor: default; }
 .dita-img-toast {
   position: fixed; left: 50%; bottom: 48px; transform: translateX(-50%);
   z-index: 100001;
-  background: var(--vscode-notifications-background, var(--vscode-editor-background, #1e1e1e));
-  border: 1px solid var(--vscode-notifications-border, var(--vscode-widget-border, #454545));
-  color: var(--vscode-notifications-foreground, var(--vscode-editor-foreground, #ccc));
+  background: var(--dita-toast-bg, var(--dita-bg-elevated, var(--dita-bg, #1e1e1e)));
+  border: 1px solid var(--dita-toast-border, var(--dita-border, #454545));
+  color: var(--dita-toast-fg, var(--dita-fg, #ccc));
   padding: 6px 14px; border-radius: 4px; font-size: 13px;
   /* UI chrome, not document content: stays sans-serif regardless of the
      reading-font toggle (Serif is a common choice there, and a serif toast
@@ -912,8 +923,8 @@ cite { font-style: italic; }
 .glossentry { margin: 1em 0; }
 
 /* Hazard */
-.hazardstatement { border-left: 4px solid #c0392b; background: var(--color-danger-bg); color: var(--dita-fg); padding: 0.75rem 1rem; margin: 1rem 0; border-radius: 0 4px 4px 0; }
-.typeofhazard { font-weight: 600; color: #c0392b; }
+.hazardstatement { border-left: 4px solid var(--color-danger-border); background: var(--color-danger-bg); color: var(--dita-fg); padding: 0.75rem 1rem; margin: 1rem 0; border-radius: 0 4px 4px 0; }
+.typeofhazard { font-weight: 600; color: var(--color-danger-border); }
 .howtoavoid { margin: 0.5rem 0; }
 .consequence { margin: 0.5rem 0; }
 

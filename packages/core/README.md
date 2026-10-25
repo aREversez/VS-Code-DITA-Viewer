@@ -36,13 +36,13 @@ extension reads its `dist/`. `npm run verify` also runs this package's own
 tests. `npm run watch` compiles it once, at the start; after editing it while
 watching, run `npm run build:core`.
 
-What is not shared yet is the stylesheet. The extension's `media/styles.css`
-reads these `--dita-*` tokens in its content and outline rules, answered from
-VS Code's theme in one `:root` block, with rendering unchanged, but it is not
-yet interchangeable with `styles/dita-content.css`. The open differences
-(selectors, three colour families this package folds into one token, two
-tokens nothing in the extension reads yet) are listed in obsidian-dita's
-`ROADMAP.md`.
+The stylesheet is the same in both places apart from the host. The
+extension's `media/styles.css` reads the same `--dita-*` tokens as
+`styles/dita-content.css` in its content and outline rules, answered from VS
+Code's theme in one `:root` block, and `src/test/media/hostTokens.test.ts`
+fails when the set of tokens the two read drifts apart. What remains is that
+the extension keeps its own copy of the rules; `dita-content.css` also holds the
+Obsidian-only book and site rules the extension does not need.
 
 ## Two builds
 

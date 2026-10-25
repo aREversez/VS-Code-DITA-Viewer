@@ -22,6 +22,27 @@ carries the content (`:host` for a Shadow DOM, `:root` for a document).
 Every use inside the stylesheet carries a fallback, so a host that defines only
 some tokens still renders legibly.
 
+## Optional tokens for floating chrome
+
+The image button, the right-click menu and the copy toast can be coloured
+separately from the rest. A host that has no separate colours defines none of
+these: each one falls back to the token in the last column, which is what the
+stylesheet used before they existed.
+
+| Token | Meaning | Falls back to |
+| --- | --- | --- |
+| `--dita-btn-border` | Border of the image toolbar buttons | `--dita-border` |
+| `--dita-btn-fg` | Text of the image toolbar buttons | `--dita-fg` |
+| `--dita-menu-bg` | Context menu background | `--dita-bg-elevated`, then `--dita-bg` |
+| `--dita-menu-border` | Context menu border | `--dita-border` |
+| `--dita-menu-fg` | Context menu item text | `--dita-fg` |
+| `--dita-menu-hover-bg` | Hovered or focused menu item background | `--dita-hover-bg` |
+| `--dita-menu-hover-fg` | Hovered or focused menu item text | `--dita-selected-fg`, then `--dita-fg` |
+| `--dita-menu-sep` | Divider between menu groups | `--dita-border` |
+| `--dita-toast-bg` | Copy toast background | `--dita-bg-elevated`, then `--dita-bg` |
+| `--dita-toast-border` | Copy toast border | `--dita-border` |
+| `--dita-toast-fg` | Copy toast text | `--dita-fg` |
+
 ## The palette
 
 Callouts, profiling highlights, index chips and conref tints use `--color-*`
