@@ -22,6 +22,7 @@
        unreferenced reusable element. -->
   <topicref href="topics/l-class-target-base.dita" processing-role="resource-only"/>
   <topicref href="topics/l-class-target-task.dita" processing-role="resource-only"/>
+  <topicref href="topics/l-class-target-ph.dita" processing-role="resource-only"/>
 
   <!-- L. @class (dmv.invalid.class.format, dmv.invalid.class.generalization,
        dmv.invalid.class.specialization, dmv.invalid.domains.format). -->
@@ -32,6 +33,7 @@
   <topicref href="topics/l-class-generalization-pos.dita"/>
   <topicref href="topics/l-class-generalization-neg.dita"/>
   <topicref href="topics/l-class-generalization-edge.dita"/>
+  <topicref href="topics/l-class-generalization-source-general-neg.dita"/>
   <topicref href="topics/l-class-specialization-pos.dita"/>
   <topicref href="topics/l-class-specialization-neg.dita"/>
   <topicref href="topics/l-class-specialization-edge.dita"/>

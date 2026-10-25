@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- Target for the source-general probe of dmv.invalid.class.generalization: a ui control,
+     whose class is - topic/ph ui-d/uicontrol, so a phrase is the general end of its chain.
+     The element is drawn in by the probe, so it is not an unreferenced reusable element. -->
+<topic id="lctp">
+  <title>Class-compatibility target (ui control)</title>
+  <body>
+    <p><uicontrol id="lctp-uc">Save</uicontrol></p>
+  </body>
+</topic>

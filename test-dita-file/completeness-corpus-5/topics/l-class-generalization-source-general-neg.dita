@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.invalid.class.generalization, source on the general end: the conref source is a
+     phrase (- topic/ph) and the target a ui control (- topic/ph ui-d/uicontrol), so the
+     source's class is an ancestor of the target's. Oxygen's wording, "the source element is
+     not a generalization of the target element", makes this the allowed direction, and the
+     other probes of this rule (step drawing in li, sibling classes) are the reported ones.
+     Expected: no finding from either tool; the next real run confirms it. -->
+<topic id="l-class-generalization-source-general-neg">
+  <title>conref from the general end (negative)</title>
+  <body>
+    <p><ph conref="l-class-target-ph.dita#lctp/lctp-uc"/></p>
+  </body>
+</topic>

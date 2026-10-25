@@ -787,9 +787,14 @@ function sectionStructureIssues(crawl: CrawlResult): Array<Omit<Issue, 'message'
 }
 
 /**
- * A conref source and target whose classes are not the same element class. Oxygen files
- * every differing pair under `dmv.invalid.class.generalization`, the legal step -> li
- * direction included (its four probes answer so), and never used the specialization id.
+ * A conref source whose class is neither the target's class nor an ancestor of it. Oxygen's
+ * wording is "the source element ... is not a generalization of the target element", so a
+ * source that is the general end of the target's chain (an item drawing in a step, a phrase
+ * drawing in a ui control) is allowed, while a more specific source (a step drawing in an
+ * item) and two sibling classes are reported; the four corpus-5 probes of the reported
+ * shapes all answer with `dmv.invalid.class.generalization`, and Oxygen never used the
+ * specialization id. The allowed direction is probed by
+ * `l-class-generalization-source-general-neg.dita` and confirmed by the next real run.
  * A pair whose class cannot be known on either side is left alone.
  */
 function conrefClassIssues(crawl: CrawlResult, norm: (p: string) => string): Array<Omit<Issue, 'message'>> {
@@ -798,13 +803,18 @@ function conrefClassIssues(crawl: CrawlResult, norm: (p: string) => string): Arr
   for (const el of crawl.reusable) {
     if (el.topicId) elements.set(`${norm(el.topicFile)}\u0000${el.topicId}\u0000${el.id}`, el);
   }
-  const key = (value: string) => classChain(value).join(' ');
+  // The class chain lists the ancestors first, so a generalization is a prefix of it.
+  const isGeneralization = (source: string, target: string): boolean => {
+    const s = classChain(source);
+    const t = classChain(target);
+    return s.length > 0 && s.length <= t.length && s.every((pair, i) => pair === t[i]);
+  };
   for (const s of crawl.conrefShapes) {
     if (!s.conref || s.classValue === undefined) continue;
     if (!s.targetFile || !s.targetTopicId || !s.targetElementId) continue;
     const target = elements.get(`${norm(s.targetFile)}\u0000${s.targetTopicId}\u0000${s.targetElementId}`);
     if (!target?.classValue) continue;
-    if (key(s.classValue) === key(target.classValue)) continue;
+    if (isGeneralization(s.classValue, target.classValue)) continue;
     out.push({
       category: 'conref-class', severity: 'error', file: s.file, line: s.line,
       msg: msg('conref.classGeneralization', s.classValue, target.classValue),

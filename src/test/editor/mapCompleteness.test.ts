@@ -401,6 +401,51 @@ describe('completeness: invalid referenced topic ids', () => {
   });
 });
 
+describe('completeness: conref class compatibility', () => {
+  // A source is allowed to draw in a target when its class is the target's own class or an
+  // ancestor of it (Oxygen: "the source ... is not a generalization of the target"). Written
+  // class values keep these cases independent of the DTD table.
+  const files = (sourceClass: string, targetClass: string, sourceTag = 'li', targetTag = 'li'): Record<string, string> => ({
+    'root.ditamap': '<map><topicref href="a.dita"/><topicref href="lib.dita" processing-role="resource-only"/></map>',
+    'a.dita': `<topic id="a"><title>A</title><body><ul><${sourceTag} class="${sourceClass}" conref="lib.dita#lib/x"/></ul></body></topic>`,
+    'lib.dita': `<topic id="lib"><title>L</title><body><ul><${targetTag} class="${targetClass}" id="x">t</${targetTag}></ul></body></topic>`,
+  });
+  const conrefClass = (issues: Issue[]) => issues.filter((i) => i.category === 'conref-class');
+
+  it('allows a source that is the general end of the target\'s class chain', async () => {
+    const issues = await check(files('- topic/li ', '- topic/li task/step ', 'li', 'step'), { checkNonDita: true });
+    assert.deepStrictEqual(conrefClass(issues), []);
+  });
+
+  it('allows a source with the same class as the target', async () => {
+    const issues = await check(files('- topic/li ', '- topic/li '), { checkNonDita: true });
+    assert.deepStrictEqual(conrefClass(issues), []);
+  });
+
+  it('reports a source that is more specific than the target (Oxygen reports step drawing in li)', async () => {
+    const issues = await check(files('- topic/li task/step ', '- topic/li ', 'step', 'li'), { checkNonDita: true });
+    assert.strictEqual(conrefClass(issues).length, 1);
+  });
+
+  it('reports two classes where neither is an ancestor of the other', async () => {
+    const issues = await check(files('- topic/li task/step ', '- topic/li task/substep ', 'step', 'substep'), { checkNonDita: true });
+    assert.strictEqual(conrefClass(issues).length, 1);
+  });
+
+  it('allows a phrase drawing in a domain specialization of it, with classes from the DTD table', async () => {
+    const doctype = '<?xml version="1.0"?>\n<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">\n';
+    const issues = await check(
+      {
+        'root.ditamap': '<map><topicref href="a.dita"/><topicref href="lib.dita" processing-role="resource-only"/></map>',
+        'a.dita': `${doctype}<topic id="a"><title>A</title><body><p><ph conref="lib.dita#lib/x"/></p></body></topic>`,
+        'lib.dita': `${doctype}<topic id="lib"><title>L</title><body><p><uicontrol id="x">OK</uicontrol></p></body></topic>`,
+      },
+      { checkNonDita: true },
+    );
+    assert.deepStrictEqual(conrefClass(issues), []);
+  });
+});
+
 describe('completeness: tables', () => {
   const cals = (cols: string, rows: string, colspecs = '') =>
     topic('t', `<table><tgroup cols="${cols}">${colspecs}<tbody>${rows}</tbody></tgroup></table>`);
