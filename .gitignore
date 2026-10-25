@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-esm/
 dist-test/
 dist-test-visual/
 test-visual/__screenshots__/

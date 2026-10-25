@@ -44,6 +44,19 @@ yet interchangeable with `styles/dita-content.css`. The open differences
 tokens nothing in the extension reads yet) are listed in obsidian-dita's
 `ROADMAP.md`.
 
+## Two builds
+
+`npm run build` writes `dist/` (CommonJS, with the type declarations) and
+`dist-esm/` (the same modules as ES modules). `package.json` offers `dist-esm`
+under the `module` condition of `exports`, which bundlers such as esbuild take
+and Node ignores; Node, `require` and TypeScript get `dist/`. The point is size:
+a bundler can leave out what the host does not import, which took about 43 KB
+out of the extension's bundle (the site and book renderers, diagnostics and
+completion, none of which it uses). `npm run check:core-pack` checks all three
+paths: a Node `require`, a Node ES module `import`, and a bundler dropping the
+modules it does not use. `dist-esm` is not meant for Node to load directly: its
+relative imports have no file extensions.
+
 ## Publishing to npm
 
 Releases are made by `.github/workflows/release-core.yml`, which publishes with

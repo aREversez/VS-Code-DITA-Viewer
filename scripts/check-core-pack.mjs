@@ -8,6 +8,7 @@
 // on sax), so it needs the network. Run it before every publish.
 
 import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -48,6 +49,7 @@ try {
   check(has('LICENSE'), 'tarball has LICENSE');
   check(has('README.md') && has('package.json'), 'tarball has README.md and package.json');
   check(has('dist/index.js') && has('dist/index.d.ts'), 'tarball has dist/index.js and dist/index.d.ts');
+  check(has('dist-esm/index.js') && has('dist-esm/package.json'), 'tarball has dist-esm/index.js, the ES module build for bundlers');
   check(has('styles/dita-content.css') && has('styles/TOKENS.md'), 'tarball has the stylesheet and the token contract');
   check(!files.some((f) => f.endsWith('.map')), 'tarball has no source maps');
   check(!files.some((f) => f.startsWith('src/') || f.startsWith('test/') || f.startsWith('dist-test/')), 'tarball has no src, test or dist-test');
@@ -73,6 +75,28 @@ console.log(Object.keys(core).length);`,
     check(false, `a CommonJS consumer can require it and render: ${e.stderr || e.message}`);
   }
   check(readdirSync(join(consumer, 'node_modules', '@dita-viewer', 'core', 'styles')).includes('dita-content.css'), 'the stylesheet is installed');
+
+  // Node ignores the "module" condition, so a plain Node ES module import must still
+  // land on the CommonJS build.
+  try {
+    const out = run(process.execPath, ['--input-type=module', '-e', "import { parseDita } from '@dita-viewer/core'; console.log(typeof parseDita);"], consumer).trim();
+    check(out === 'function', 'a Node ES module consumer can import it');
+  } catch (e) {
+    check(false, `a Node ES module consumer can import it: ${e.stderr || e.message}`);
+  }
+
+  // A bundler takes dist-esm through the "module" condition and can drop what is not used:
+  // importing only the parser must leave out the site renderer and the diagnostics.
+  try {
+    const esbuild = createRequire(join(root, 'package.json'))('esbuild');
+    const bundled = esbuild.buildSync({
+      stdin: { contents: "import { parseDita } from '@dita-viewer/core'; console.log(typeof parseDita);", resolveDir: consumer, loader: 'js' },
+      bundle: true, write: false, platform: 'node', format: 'cjs', logLevel: 'silent',
+    }).outputFiles[0].text;
+    check(!bundled.includes('renderSiteXml') && !bundled.includes('collectDiagnostics'), `a bundler drops the modules it does not use (${Math.round(bundled.length / 1024)} KB for the parser alone)`);
+  } catch (e) {
+    check(false, `a bundler drops the modules it does not use: ${e.message}`);
+  }
 
   writeFileSync(
     join(consumer, 'use.ts'),

@@ -27,6 +27,7 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "module": "./dist-esm/index.js",
       "default": "./dist/index.js"
     },
     "./styles/dita-content.css": "./styles/dita-content.css",
@@ -34,12 +35,13 @@
   },
   "files": [
     "dist",
+    "dist-esm",
     "styles",
     "!dist/**/*.map"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.esm.json && node scripts/mark-esm.cjs",
     "pretest": "node -e \"require('fs').rmSync('dist-test',{recursive:true,force:true})\" && tsc -p tsconfig.test.json",
     "test": "mocha --config .mocharc.json",
     "prepublishOnly": "npm run build"
