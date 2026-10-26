@@ -25,7 +25,7 @@ import {
   classElementTag,
   classSyntaxProblem,
   effectiveClassOf,
-  isDitaDoctype,
+  declaresGrammar,
   readDoctype,
   sideOfRoot,
 } from './ditaClass';
@@ -541,7 +541,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
   const topicQueue: Array<{ path: string; inherited: Map<string, string[]> }> = [];
 
   /** Reads and scans a file, recording read/parse problems as file issues. */
-  async function load(path: string, from?: Location, prune = false): Promise<{ root: XNode; doctype?: Doctype } | undefined> {
+  async function load(path: string, from?: Location, prune = false): Promise<{ root: XNode; doctype?: Doctype; grammar: boolean } | undefined> {
     if (host.cancelled?.()) {
       result.cancelled = true;
       return undefined;
@@ -568,7 +568,9 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
         if (id) result.excludedElements.push({ file: path, line: removed.line, id, tag: removed.tag, topicId: removedTopicId });
       });
     }
-    return scanned.root ? { root: scanned.root, doctype: readDoctype(text) } : undefined;
+    return scanned.root
+      ? { root: scanned.root, doctype: readDoctype(text), grammar: declaresGrammar(text, scanned.root.attrs) }
+      : undefined;
   }
 
   function addRef(
@@ -634,7 +636,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       classValue: effectiveClassOf(root.tag, root.attrs['class'], side),
       dita: isMapRootNode(root) || isTopicElement(root),
     });
-    scanClasses(root, mapPath, loaded.doctype);
+    scanClasses(root, mapPath, loaded.doctype, loaded.grammar);
     scanDomains(root, mapPath);
     const rootId = root.attrs['id'];
     if (rootId) result.ids.push({ file: mapPath, line: root.line, id: rootId, tag: root.tag });
@@ -837,7 +839,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       classValue: effectiveClassOf(root.tag, root.attrs['class'], side),
       dita: isTopic || isMapRootNode(root),
     });
-    scanClasses(root, path, loaded.doctype);
+    scanClasses(root, path, loaded.doctype, loaded.grammar);
     scanDomains(root, path);
     scanSections(root, path, side);
     // A map read as a topic (a @format mismatch) is reported by the reference check.
@@ -1162,15 +1164,17 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
   // ── Class, domains and sections ──
   /**
    * The written @class values the DITA class syntax rejects, and the elements no DTD
-   * gives a class. A file without a DITA DOCTYPE has no default class at all, so every
+   * gives a class. A file with no DOCTYPE and no schema has no default class at all, so every
    * element that does not write one is reported (what Oxygen reports: one finding per
    * element, the root included). A written value always wins: a hand-written or
    * specialized class is taken at its word, and only its syntax is checked. An element
    * the generated table does not know, in a file that does declare a DITA DTD, is left
    * alone: whether that DTD declares it is schema validation's question, not this one.
    */
-  function scanClasses(root: XNode, file: string, doctype: Doctype | undefined): void {
-    if (isDitaDoctype(doctype)) {
+  function scanClasses(root: XNode, file: string, doctype: Doctype | undefined, grammar: boolean): void {
+    // A DOCTYPE of any kind or a schema association may supply the class defaults (a specialization
+    // ships its own DTD); only a file that declares neither has no source of a class at all.
+    if (doctype !== undefined || grammar) {
       for (const n of walk(root)) {
         const explicit = n.attrs['class'];
         if (explicit === undefined) continue; // the DTD supplies a class, or the element is outside the table
@@ -1186,7 +1190,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
         if (problem) result.classIssues.push({ file, line: n.line, tag: n.tag, problem });
         continue;
       }
-      // No DTD default is declared here (no DITA DTD at all), so the element has no class
+      // No DTD or schema is declared here at all, so the element has no class
       // to check; that is the finding.
       result.classIssues.push({ file, line: n.line, tag: n.tag, problem: 'not-specified' });
     }

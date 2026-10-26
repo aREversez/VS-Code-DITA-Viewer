@@ -152,6 +152,17 @@ export function readDoctype(raw: string): Doctype | undefined {
 }
 
 /** The OASIS DITA vocabularies whose root DTDs a DOCTYPE can name. */
+/**
+ * Whether the file points at a grammar of its own that could supply class defaults other than a
+ * DOCTYPE: a RELAX NG or Schematron association (`<?xml-model ...?>`) or an XML Schema location on
+ * the root element. DITA's RNG and XSD vocabularies define `@class` defaults the way the DTDs do,
+ * so a file that declares one is not "a file nothing gives a class to".
+ */
+export function declaresGrammar(raw: string, rootAttrs: Readonly<Record<string, string>>): boolean {
+  if (/<\?xml-model\b/.test(raw)) return true;
+  return Object.keys(rootAttrs).some((name) => /(^|:)(?:noNamespaceSchemaLocation|schemaLocation)$/.test(name));
+}
+
 const DITA_ROOT_DTDS = new Set([
   'topic.dtd', 'concept.dtd', 'task.dtd', 'reference.dtd', 'ditabase.dtd',
   'glossary.dtd', 'troubleshooting.dtd', 'map.dtd', 'bookmap.dtd',

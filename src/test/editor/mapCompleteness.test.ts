@@ -446,6 +446,41 @@ describe('completeness: conref class compatibility', () => {
   });
 });
 
+describe('completeness: class format and files without a DTD', () => {
+  // The map declares the OASIS DOCTYPE, so only the topic under test can be reported.
+  const MAP = '<?xml version="1.0"?>\n<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">\n<map><topicref href="a.dita"/></map>';
+  const BODY = '<topic id="a"><title>A</title><body><p>x</p></body></topic>';
+  const classFormat = (issues: Issue[]) => issues.filter((i) => i.category === 'class-format');
+  const run = async (doc: string) =>
+    classFormat(await check({ 'root.ditamap': MAP, 'a.dita': doc }, { batchValidate: true, checkNonDita: true }));
+
+  it('reports every element of a file with no DOCTYPE and no grammar (nothing supplies a class)', async () => {
+    assert.strictEqual((await run(`<?xml version="1.0"?>\n${BODY}`)).length, 4);
+  });
+
+  it('does not report a file that declares a DOCTYPE of its own (its DTD may supply the class)', async () => {
+    const doc = `<?xml version="1.0"?>\n<!DOCTYPE topic PUBLIC "-//ACME//DTD DITA Special Topic//EN" "special.dtd">\n${BODY}`;
+    assert.deepStrictEqual(await run(doc), []);
+  });
+
+  it('does not report a file that points at a RELAX NG grammar (it supplies the class defaults)', async () => {
+    const doc = `<?xml version="1.0"?>\n<?xml-model href="urn:oasis:names:tc:dita:rng:topic.rng" schematypens="http://relaxng.org/ns/structure/1.0"?>\n${BODY}`;
+    assert.deepStrictEqual(await run(doc), []);
+  });
+
+  it('does not report a file that points at an XML Schema (it supplies the class defaults)', async () => {
+    const doc =
+      '<?xml version="1.0"?>\n<topic id="a" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" ' +
+      'xsi:noNamespaceSchemaLocation="urn:oasis:names:tc:dita:xsd:topic.xsd"><title>A</title><body><p>x</p></body></topic>';
+    assert.deepStrictEqual(await run(doc), []);
+  });
+
+  it('still checks the syntax of a class that is written, whatever declares the grammar', async () => {
+    const doc = `<?xml version="1.0"?>\n<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">\n<topic id="a" class="topic/topic"><title>A</title><body/></topic>`;
+    assert.strictEqual((await run(doc)).length, 1);
+  });
+});
+
 describe('completeness: tables', () => {
   const cals = (cols: string, rows: string, colspecs = '') =>
     topic('t', `<table><tgroup cols="${cols}">${colspecs}<tbody>${rows}</tbody></tgroup></table>`);

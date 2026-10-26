@@ -34,6 +34,8 @@
   <topicref href="topics/l-class-generalization-neg.dita"/>
   <topicref href="topics/l-class-generalization-edge.dita"/>
   <topicref href="topics/l-class-generalization-source-general-neg.dita"/>
+  <topicref href="topics/l-class-format-rng-neg.dita"/>
+  <topicref href="topics/l-class-format-xsd-neg.dita"/>
   <topicref href="topics/l-class-specialization-pos.dita"/>
   <topicref href="topics/l-class-specialization-neg.dita"/>
   <topicref href="topics/l-class-specialization-edge.dita"/>
