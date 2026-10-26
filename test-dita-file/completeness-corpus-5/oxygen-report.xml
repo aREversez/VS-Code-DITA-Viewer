@@ -578,11 +578,11 @@ Cause: The element type &quot;section&quot; must be terminated by the matching e
 <type>Reference</type>
 <location>
 <start>
-<line>40</line>
+<line>42</line>
 <column>18</column>
 </start>
 <end>
-<line>40</line>
+<line>42</line>
 <column>52</column>
 </end>
 <length>34</length>
