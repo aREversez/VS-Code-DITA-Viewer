@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- dmv.invalid.class.format, a grammar other than a DOCTYPE: this file has no DOCTYPE but names
      the DITA XML Schema, which defines the @class defaults. Expected: no finding from either
-     tool; the next real run confirms it for Oxygen (R065). -->
+     tool; the corpus-5 run files nothing here, so Oxygen reads the default from the schema. -->
 <topic id="l-class-format-xsd-neg"
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
        xmlns:ditaarch="http://dita.oasis-open.org/architecture/2005/"
