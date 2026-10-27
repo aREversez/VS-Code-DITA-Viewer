@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.topicref.remote.no.external.scope, positive: a URL with no @scope. -->
+<map>
+  <title>URL without an external scope</title>
+  <topicref href="http://example.invalid/a.html" format="html"/>
+</map>

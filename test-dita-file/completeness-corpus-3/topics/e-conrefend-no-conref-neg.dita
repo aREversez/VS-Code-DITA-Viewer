@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.conrefend.no.conref, negative: @conref and @conrefend on the same element. -->
+<topic id="e-conrefend-no-conref-neg">
+  <title>conref and conrefend together (negative)</title>
+  <body>
+    <p conref="lib.dita#lib3/p1" conrefend="lib.dita#lib3/p3"/>
+  </body>
+</topic>

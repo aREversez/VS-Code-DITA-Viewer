@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.circular.keyref, negative: a link through the first key of a linear redirect
+     chain (a -> b -> c -> topics/ok.dita). Holding the chain's entry point keeps every
+     key of the chain used. -->
+<topic id="g-circular-keyref-chain">
+  <title>Link through a key chain (negative)</title>
+  <body>
+    <p><xref keyref="k-circ-chain-a">chain start</xref></p>
+  </body>
+</topic>

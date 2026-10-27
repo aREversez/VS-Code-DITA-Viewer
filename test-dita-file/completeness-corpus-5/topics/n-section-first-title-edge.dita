@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.section.first.title, boundary: the outer section is in order and the nested one is
+     not. The question is whether a nested section is checked at all, and if so whether the
+     finding names the section that is wrong. -->
+<topic id="n-section-first-title-edge">
+  <title>Only the nested section is out of order (boundary)</title>
+  <body>
+    <section>
+      <title>The outer title, first</title>
+      <p>Content of the outer section.</p>
+      <section>
+        <p>Content of the nested section, before its title.</p>
+        <title>The nested title, late</title>
+      </section>
+    </section>
+  </body>
+</topic>

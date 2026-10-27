@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.folder.ref, positive: the href names the topics folder itself, with no
+     trailing slash and no file. It exists, so it is not a missing reference. -->
+<topic id="a-folder-pos">
+  <title>Reference to a folder (positive)</title>
+  <body>
+    <p><xref href="../topics">folder without a trailing slash</xref></p>
+  </body>
+</topic>

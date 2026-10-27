@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- Second differential corpus: reference spelling and @format/@scope probes
+     (batch 1, see ../completeness-corpus/BATCH-1.md and README.md here).
+     Oxygen must be run with THIS map as the only root map.
+
+     One rule per file: a probe topic carries the reference under test, or a
+     small map under maps/ does, and both are listed here so the crawl reaches
+     them. Every topicref that shares a target with another one carries a unique
+     @copy-to, which models separate published topics and keeps the duplicate
+     reference check quiet. -->
+<map id="corpus2">
+  <title>Completeness Check Corpus 2</title>
+
+  <!-- Control, kept in every run: a reference to a file that does not exist. Both the
+       extension and Oxygen report it, so a run that lacks it did not look at this map. -->
+  <topicref href="topics/control-missing.dita"/>
+
+  <!-- Neutral target. Probes that only need "a topic that resolves" point here. -->
+  <topicref href="topics/ok.dita" copy-to="corpus-ok"/>
+
+  <!-- Keys for the B group. They are text-only (no href), so a keyref that
+       resolves produces no reference of its own and only the syntax is at issue. -->
+  <keydef keys="a"/>
+  <keydef keys="a$b"/>
+  <keydef keys="a.b"/>
+  <keydef keys="a-b"/>
+
+  <!-- A. Reference spelling (dmv.win.seps.ref .. dmv.recursive.ref). -->
+  <topicref href="topics/a-win-seps-pos.dita"/>
+  <topicref href="topics/a-win-seps-neg.dita"/>
+  <topicref href="topics/a-win-seps-edge.dita"/>
+  <topicref href="topics/a-extra-slash-pos.dita"/>
+  <topicref href="topics/a-extra-slash-neg.dita"/>
+  <topicref href="topics/a-extra-slash-edge.dita"/>
+  <topicref href="topics/a-ref-extra-slash-pos.dita"/>
+  <topicref href="topics/a-ref-extra-slash-neg.dita"/>
+  <topicref href="topics/a-ref-extra-slash-edge.dita"/>
+  <topicref href="topics/a-fileurl-pos.dita"/>
+  <topicref href="topics/a-fileurl-neg.dita"/>
+  <topicref href="topics/a-fileurl-edge.dita"/>
+  <topicref href="topics/a-unencoded-space.dita"/>
+  <topicref href="topics/a-unencoded-chinese.dita"/>
+  <topicref href="topics/a-unencoded-brackets.dita"/>
+  <topicref href="topics/a-unencoded-hash.dita"/>
+  <topicref href="topics/a-unencoded-percent.dita"/>
+  <topicref href="topics/a-unencoded-encoded.dita"/>
+  <topicref href="topics/a-case-pos.dita"/>
+  <topicref href="topics/a-case-neg.dita"/>
+  <topicref href="topics/a-case-edge.dita"/>
+  <topicref href="topics/a-folder-pos.dita"/>
+  <topicref href="topics/a-folder-neg.dita"/>
+  <topicref href="topics/a-folder-edge.dita"/>
+
+  <!-- A. Targets of the unencoded probes. They are published here under their
+       encoded hrefs so the raw-href xrefs can resolve and are not also reported
+       as links to a topic that no map publishes. -->
+  <topicref href="topics/ok%20file.dita"/>
+  <topicref href="topics/%E4%B8%AD%E6%96%87.dita"/>
+  <topicref href="topics/ok%5B1%5D.dita"/>
+  <topicref href="topics/ok%231.dita"/>
+  <topicref href="topics/100%25.dita"/>
+
+  <!-- A. Map-level probes. -->
+  <mapref href="maps/a-absolute-posix.ditamap" format="ditamap"/>
+  <mapref href="maps/a-absolute-drive.ditamap" format="ditamap"/>
+  <mapref href="maps/a-absolute-neg.ditamap" format="ditamap"/>
+  <mapref href="maps/a-absolute-fileurl.ditamap" format="ditamap"/>
+  <mapref href="maps/a-recursive-loopa.ditamap" format="ditamap"/>
+  <mapref href="maps/a-recursive-self.ditamap" format="ditamap"/>
+  <mapref href="maps/a-recursive-neg.ditamap" format="ditamap"/>
+
+  <!-- B. keyref and @id syntax. -->
+  <topicref href="topics/b-keyref1-pos.dita"/>
+  <topicref href="topics/b-keyref1-neg.dita"/>
+  <topicref href="topics/b-keyref1-edge.dita"/>
+  <topicref href="topics/b-keyref2-pos.dita"/>
+  <topicref href="topics/b-keyref2-neg.dita"/>
+  <topicref href="topics/b-keyref2-edge.dita"/>
+  <topicref href="topics/b-keyref3-pos.dita"/>
+  <topicref href="topics/b-keyref3-neg.dita"/>
+  <topicref href="topics/b-keyref3-edge.dita"/>
+  <topicref href="topics/b-id2-colon.dita"/>
+  <topicref href="topics/b-id2-digit.dita"/>
+  <topicref href="topics/b-id2-valid.dita"/>
+  <topicref href="topics/b-id3-space.dita"/>
+  <topicref href="topics/b-id3-neg.dita"/>
+  <mapref href="maps/b-id3-map.ditamap" format="ditamap"/>
+
+  <!-- C. @format and @scope. Map-level probes first. -->
+  <mapref href="maps/c-topicref-no-format-pos.ditamap" format="ditamap"/>
+  <mapref href="maps/c-topicref-no-format-neg.ditamap" format="ditamap"/>
+  <mapref href="maps/c-topicref-no-format-edge.ditamap" format="ditamap"/>
+  <mapref href="maps/c-map-no-format-pos.ditamap" format="ditamap"/>
+  <mapref href="maps/c-map-no-format-neg.ditamap" format="ditamap"/>
+  <mapref href="maps/c-map-no-format-edge.ditamap" format="ditamap"/>
+  <mapref href="maps/c-topic-no-format-pos.ditamap" format="ditamap"/>
+  <mapref href="maps/c-topic-no-format-neg.ditamap" format="ditamap"/>
+  <mapref href="maps/c-topic-no-format-edge.ditamap" format="ditamap"/>
+  <mapref href="maps/c-mapref-format-pos.ditamap" format="ditamap"/>
+  <mapref href="maps/c-mapref-format-neg.ditamap" format="ditamap"/>
+  <mapref href="maps/c-mapref-format-edge.ditamap" format="ditamap"/>
+  <mapref href="maps/c-res-as-dita-pos.ditamap" format="ditamap"/>
+  <mapref href="maps/c-res-as-dita-neg.ditamap" format="ditamap"/>
+  <mapref href="maps/c-res-as-dita-edge.ditamap" format="ditamap"/>
+  <mapref href="maps/c-res-as-map-pos.ditamap" format="ditamap"/>
+  <mapref href="maps/c-res-as-map-neg.ditamap" format="ditamap"/>
+  <mapref href="maps/c-res-as-map-edge.ditamap" format="ditamap"/>
+  <mapref href="maps/c-remote-pos.ditamap" format="ditamap"/>
+  <mapref href="maps/c-remote-neg.ditamap" format="ditamap"/>
+  <mapref href="maps/c-remote-edge.ditamap" format="ditamap"/>
+  <mapref href="maps/c-remote-no-external-pos.ditamap" format="ditamap"/>
+  <mapref href="maps/c-remote-no-external-neg.ditamap" format="ditamap"/>
+  <mapref href="maps/c-remote-no-external-edge.ditamap" format="ditamap"/>
+  <mapref href="maps/c-remote-local-pos.ditamap" format="ditamap"/>
+  <mapref href="maps/c-remote-local-neg.ditamap" format="ditamap"/>
+  <mapref href="maps/c-remote-local-edge.ditamap" format="ditamap"/>
+  <mapref href="maps/c-ext-scope-pos.ditamap" format="ditamap"/>
+  <mapref href="maps/c-ext-scope-neg.ditamap" format="ditamap"/>
+  <mapref href="maps/c-ext-scope-edge.ditamap" format="ditamap"/>
+  <mapref href="maps/c-mapref-children-pos.ditamap" format="ditamap"/>
+  <mapref href="maps/c-mapref-children-neg.ditamap" format="ditamap"/>
+  <mapref href="maps/c-mapref-children-edge.ditamap" format="ditamap"/>
+  <mapref href="maps/c-guess-dita.ditamap" format="ditamap"/>
+  <mapref href="maps/c-guess-xml.ditamap" format="ditamap"/>
+  <mapref href="maps/c-guess-html.ditamap" format="ditamap"/>
+  <mapref href="maps/c-guess-noext.ditamap" format="ditamap"/>
+
+  <!-- C. Topic-level probes. -->
+  <topicref href="topics/c-topic-as-map-pos.dita"/>
+  <topicref href="topics/c-topic-as-map-neg.dita"/>
+  <topicref href="topics/c-topic-as-map-edge.dita"/>
+  <topicref href="topics/c-topic-as-map-target.dita" copy-to="c-corpus-tam"/>
+  <topicref href="topics/c-no-format-nondita-pos.dita"/>
+  <topicref href="topics/c-no-format-nondita-neg.dita"/>
+  <topicref href="topics/c-no-format-nondita-edge.dita"/>
+  <topicref href="topics/c-mapref-parent.dita" copy-to="c-corpus-parent"/>
+  <topicref href="topics/c-mapref-child.dita" copy-to="c-corpus-child"/>
+
+  <!-- D. Navigation titles. -->
+  <mapref href="maps/d-topichead-pos.ditamap" format="ditamap"/>
+  <mapref href="maps/d-topichead-neg.ditamap" format="ditamap"/>
+  <mapref href="maps/d-topichead-edge.ditamap" format="ditamap"/>
+  <mapref href="maps/d-topicref-pos.ditamap" format="ditamap"/>
+  <mapref href="maps/d-topicref-neg.ditamap" format="ditamap"/>
+  <mapref href="maps/d-topicref-edge.ditamap" format="ditamap"/>
+</map>

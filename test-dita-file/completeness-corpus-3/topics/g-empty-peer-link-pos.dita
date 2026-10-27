@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.empty.link.peer.target, positive: a peer-scope xref with no link text. -->
+<topic id="g-empty-peer-link-pos">
+  <title>Peer link without text (positive)</title>
+  <body>
+    <p><xref scope="peer" href="peer.dita#peer3"/></p>
+  </body>
+</topic>

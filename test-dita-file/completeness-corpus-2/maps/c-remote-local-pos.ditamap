@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.topicref.remote.local.scope, positive: a URL with scope="local". -->
+<map>
+  <title>URL with a local scope</title>
+  <topicref href="http://example.invalid/a.html" scope="local" format="html"/>
+</map>

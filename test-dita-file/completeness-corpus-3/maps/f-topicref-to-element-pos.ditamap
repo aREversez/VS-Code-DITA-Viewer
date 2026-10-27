@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.topicref.to.element, positive: the topicref names an element id instead of the
+     topic id. It points at its own target file, so the negative map does not create a
+     second reference to the same topic. -->
+<map>
+  <title>topicref to an element id</title>
+  <topicref href="../topics/lib2-pos.dita#lib2p/lib2p-p1"/>
+</map>

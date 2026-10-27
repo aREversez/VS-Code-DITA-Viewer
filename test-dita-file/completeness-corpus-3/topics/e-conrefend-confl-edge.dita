@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.conrefend.confl.conref, boundary: both ends resolve into the same topic, but it
+     is the nested topic rather than the referencing one. -->
+<topic id="e-conrefend-confl-edge">
+  <title>Range inside the nested topic (boundary)</title>
+  <body>
+    <p conref="lib.dita#libinner3/p4" conrefend="lib.dita#libinner3/p6"/>
+  </body>
+</topic>

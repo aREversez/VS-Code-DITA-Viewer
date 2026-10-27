@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.empty.link.peer.target, boundary: a local xref without link text. A local target
+     has a title to take the text from, so the rule must key on the peer scope, not on the
+     missing text alone. -->
+<topic id="g-empty-peer-link-edge">
+  <title>Local link without text (boundary)</title>
+  <body>
+    <p><xref href="ok.dita"/></p>
+  </body>
+</topic>

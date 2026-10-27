@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.conref.siblings, negative: both ends are sibling paragraphs of one body. -->
+<topic id="e-conref-siblings-neg">
+  <title>Range across siblings (negative)</title>
+  <body>
+    <p conref="lib.dita#lib3/p1" conrefend="lib.dita#lib3/p3"/>
+  </body>
+</topic>

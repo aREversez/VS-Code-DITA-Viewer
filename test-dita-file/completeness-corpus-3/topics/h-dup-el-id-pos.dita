@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.dup.el.id, positive: two elements with the same @id in one topic. -->
+<topic id="h-dup-el-id-pos">
+  <title>Duplicate element id (positive)</title>
+  <body>
+    <p id="dup-el">First paragraph.</p>
+    <p id="dup-el">Second paragraph, same @id in the same topic.</p>
+  </body>
+</topic>

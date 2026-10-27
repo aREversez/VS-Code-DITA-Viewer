@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- Targets for dmv.topicref.to.element. Each probe points at its own file, so the two
+     maps do not also produce a multiple-reference finding for one shared target. -->
+<topic id="lib2p">
+  <title>Element reference target, positive</title>
+  <body>
+    <p id="lib2p-p1">Paragraph an element-id reference can name.</p>
+  </body>
+</topic>

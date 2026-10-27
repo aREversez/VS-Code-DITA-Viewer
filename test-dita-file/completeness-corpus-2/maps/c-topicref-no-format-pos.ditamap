@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.topicref.no.format, positive: a .txt target and no @format. -->
+<map>
+  <title>Topicref to a non-DITA resource, no format</title>
+  <topicref href="../topics/c-resource.txt"/>
+</map>

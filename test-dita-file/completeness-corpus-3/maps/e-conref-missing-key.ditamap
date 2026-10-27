@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- The key of the conkeyref edge of R019: its file does not exist, so the conkeyref that
+     uses it cannot be resolved. Keys are kept to this map so no other probe sees it. -->
+<map>
+  <title>Key whose file is missing</title>
+  <keydef keys="k-conref-missing-file" href="../topics/e-no-such-key-target.dita"/>
+  <topicref href="../topics/e-conref-missing-file-edge.dita"/>
+</map>

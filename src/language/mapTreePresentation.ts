@@ -5,8 +5,7 @@
  * tables worth pinning down -- which name a row answers to, and which icon
  * marks its DITA type -- can be unit-tested against parsed fixtures.
  */
-import { DitaNode } from '../parser/domTypes';
-import { getDisplayNameInfo, getMapTitleText, isDitamapRef } from '../render/mapTypeMap';
+import { DitaNode, getDisplayNameInfo, getMapTitleText, isDitamapRef } from '@dita-viewer/core';
 
 export interface MapTreeLabelContext {
   /** True for the root row: the main map itself rather than one of its references. */

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- R025: the topic root says expert, the referencing topicref says novice -->
+<topic id="shaperoot" audience="expert">
+  <title>Profiling shape: topic root against the map</title>
+  <body>
+    <!-- control: see profiling-shape-map.dita -->
+    <p audience="novice admin">control</p>
+  </body>
+</topic>

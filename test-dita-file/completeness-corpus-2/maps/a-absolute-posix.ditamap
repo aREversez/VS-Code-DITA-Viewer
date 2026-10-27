@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.absolute.ref, positive: a POSIX absolute path. It is outside the corpus
+     folder and does not exist, so the extension also reports those two facts. -->
+<map>
+  <title>Absolute reference, POSIX form</title>
+  <topicref href="/probe/x.dita"/>
+</map>

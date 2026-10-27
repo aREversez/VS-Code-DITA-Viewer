@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- The peer map of dmv.conkeyref.peer.map. A peer map is not crawled: its keys belong to
+     another bundle, so the probe asks Oxygen whether a conkeyref may reach into it. -->
+<map>
+  <title>Peer map with a key</title>
+  <keydef keys="k-conkeyref-peer" href="../topics/lib.dita#lib3"/>
+</map>

@@ -42,7 +42,7 @@ describe('renderTemplateHeader / renderTemplateFooter', () => {
 
   it('renderChrome gives nothing without a template, and only the parts a template has', () => {
     assert.deepStrictEqual(renderChrome(undefined, ctx, toUri), {});
-    const c = renderChrome({ id: 'x', names: {}, defaultDark: false, outline: false, css: [], dir: '/t', builtin: false, footer: { links: [] } }, ctx, toUri);
+    const c = renderChrome({ id: 'x', names: {}, dom: 'own', defaultDark: false, outline: false, css: [], dir: '/t', builtin: false, footer: { links: [] } }, ctx, toUri);
     assert.strictEqual(c.headerHtml, undefined);
     assert.ok(c.footerHtml?.startsWith('<footer'));
   });

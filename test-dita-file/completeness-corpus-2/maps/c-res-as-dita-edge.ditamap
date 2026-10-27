@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.ref.res.as.dita, boundary: an HTML file declared as DITA. -->
+<map>
+  <title>HTML resource declared as dita</title>
+  <topicref href="../topics/c-res-as-dita-edge.html" format="dita"/>
+</map>

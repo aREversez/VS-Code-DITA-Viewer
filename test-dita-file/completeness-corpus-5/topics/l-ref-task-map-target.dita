@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<!-- Target of the map-level @type probe, kept apart from l-ref-task-target.dita because a
+     second topicref to one file is itself a finding (dmv.dup.topic). Class
+     - topic/topic task/task. -->
+<task id="lrtm">
+  <title>A task, for the topicref probe</title>
+  <taskbody>
+    <steps>
+      <step><cmd>Do it.</cmd></step>
+    </steps>
+  </taskbody>
+</task>

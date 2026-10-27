@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="multi2">
+  <title>Multi2</title>
+  <body>
+    <p>Referenced twice, the second time with a unique copy-to attribute.</p>
+  </body>
+</topic>

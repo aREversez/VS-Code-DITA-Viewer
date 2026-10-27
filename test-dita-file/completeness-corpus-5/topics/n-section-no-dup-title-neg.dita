@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.section.no.dup.title, negative: one section with one title. Nothing to report. -->
+<topic id="n-section-no-dup-title-neg">
+  <title>One title in one section (negative)</title>
+  <body>
+    <section>
+      <title>The only title</title>
+      <p>Content of the section.</p>
+    </section>
+  </body>
+</topic>

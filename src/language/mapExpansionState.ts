@@ -17,7 +17,7 @@
  * persisted per map in workspaceState, and keyed by structural node ids
  * built here.
  */
-import { DitaNode } from '../parser/domTypes';
+import { DitaNode } from '@dita-viewer/core';
 
 /**
  * The main map row is expanded by default (so a fresh tree shows the map's

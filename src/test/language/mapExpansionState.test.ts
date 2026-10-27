@@ -13,8 +13,7 @@ import {
   pruneExpansionDeviations,
   treeItemId,
 } from '../../language/mapExpansionState';
-import { parseDitamap } from '../../parser/ditaParser';
-import { DitaNode } from '../../parser/domTypes';
+import { parseDitamap, DitaNode } from '@dita-viewer/core';
 
 /**
  * The Explorer map tree's expansion state, keyed by structural node ids.

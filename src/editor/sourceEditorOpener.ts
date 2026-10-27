@@ -22,9 +22,14 @@ export function registerSourceEditorTracker(context: vscode.ExtensionContext): v
  * Opens `uri` in the plain text editor, in a tab group other than the
  * preview's (`previewColumn` is the preview panel's own column).
  * Explicitly the 'default' editor -- a plain showTextDocument could be routed
- * back into the preview custom editor.
+ * back into the preview custom editor. `selection`, when given, is where the
+ * cursor lands and what is revealed.
  */
-export async function openSourceBesidePreview(uri: vscode.Uri, previewColumn: vscode.ViewColumn | undefined): Promise<void> {
+export async function openSourceBesidePreview(
+  uri: vscode.Uri,
+  previewColumn: vscode.ViewColumn | undefined,
+  selection?: vscode.Range,
+): Promise<void> {
   const groups = vscode.window.tabGroups.all;
   const previewGroup = groups.find((g) => g.viewColumn === previewColumn);
   const placement = chooseSourcePlacement(
@@ -38,7 +43,7 @@ export async function openSourceBesidePreview(uri: vscode.Uri, previewColumn: vs
   );
   const viewColumn = placement.kind === 'group' ? placement.key.viewColumn : vscode.ViewColumn.Beside;
   try {
-    await vscode.commands.executeCommand('vscode.openWith', uri, 'default', { viewColumn, preview: false });
+    await vscode.commands.executeCommand('vscode.openWith', uri, 'default', { viewColumn, preview: false, selection });
   } catch (err) {
     void vscode.window.showErrorMessage(vscode.l10n.t('Could not open {0}: {1}', uri.fsPath, String(err)));
   }

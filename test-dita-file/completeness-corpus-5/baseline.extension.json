@@ -1,0 +1,219 @@
+[
+  {
+    "category": "missing-reference",
+    "severity": "error",
+    "file": "corpus.ditamap",
+    "line": 11,
+    "message": "Referenced topic not found: topics/control-missing.dita"
+  },
+  {
+    "category": "type-class-mismatch",
+    "severity": "warning",
+    "file": "maps/l-ref-type-mismatch-map.ditamap",
+    "line": 8,
+    "message": "Reference is made with @type \"concept\" to a DITA resource with class \"- topic/topic task/task\""
+  },
+  {
+    "category": "dita-parse",
+    "severity": "error",
+    "file": "maps/m-dita-ref-edge.ditamap",
+    "line": 9,
+    "message": "Problem parsing \"../topics/m-plain.txt\" as DITA content: Non-whitespace before first tag."
+  },
+  {
+    "category": "format-mismatch",
+    "severity": "error",
+    "file": "maps/m-dita-ref-edge.ditamap",
+    "line": 9,
+    "message": "Non-DITA resource is referenced as a DITA topic: ../topics/m-plain.txt"
+  },
+  {
+    "category": "format-mismatch",
+    "severity": "error",
+    "file": "maps/m-dita-ref-pos.ditamap",
+    "line": 9,
+    "message": "Reference claims DITA content, but the target is not a DITA document: ../topics/m-not-dita.xml"
+  },
+  {
+    "category": "external-reference",
+    "severity": "warning",
+    "file": "maps/m-uri-target-edge.ditamap",
+    "line": 10,
+    "message": "Reference to a URL must declare scope=\"external\": https://example.com/corpus5/not-fetched-edge.dita"
+  },
+  {
+    "category": "dita-parse",
+    "severity": "error",
+    "file": "maps/n-parse-content-edge.ditamap",
+    "line": 9,
+    "message": "Problem parsing \"../topics/n-broken-edge.dita\" as DITA content: Unexpected close tag"
+  },
+  {
+    "category": "dita-parse",
+    "severity": "error",
+    "file": "maps/n-parse-content-pos.ditamap",
+    "line": 9,
+    "message": "Problem parsing \"../topics/n-broken-pos.dita\" as DITA content: Unexpected close tag"
+  },
+  {
+    "category": "class-format",
+    "severity": "error",
+    "file": "topics/l-class-format-edge-badvalue.dita",
+    "line": 10,
+    "message": "@class value on <p> must start with \"-\" or \"+\""
+  },
+  {
+    "category": "class-format",
+    "severity": "error",
+    "file": "topics/l-class-format-edge-empty.dita",
+    "line": 9,
+    "message": "Empty @class value on <p>"
+  },
+  {
+    "category": "class-format",
+    "severity": "error",
+    "file": "topics/l-class-format-neg.dita",
+    "line": 9,
+    "message": "@class value on <p> must end with a space"
+  },
+  {
+    "category": "conref-class",
+    "severity": "error",
+    "file": "topics/l-class-generalization-edge.dita",
+    "line": 11,
+    "message": "The source element with class value \"- topic/li task/step\" is not a generalization of the target element with class value \"- topic/li\""
+  },
+  {
+    "category": "conref-class",
+    "severity": "error",
+    "file": "topics/l-class-generalization-pos.dita",
+    "line": 9,
+    "message": "The source element with class value \"- topic/p\" is not a generalization of the target element with class value \"- topic/ul\""
+  },
+  {
+    "category": "class-format",
+    "severity": "error",
+    "file": "topics/l-class-specialization-edge.dita",
+    "line": 9,
+    "message": "@class value on <p> must end with a space"
+  },
+  {
+    "category": "conref-class",
+    "severity": "error",
+    "file": "topics/l-class-specialization-neg.dita",
+    "line": 14,
+    "message": "The source element with class value \"- topic/li task/substep\" is not a generalization of the target element with class value \"- topic/li task/step\""
+  },
+  {
+    "category": "conref-class",
+    "severity": "error",
+    "file": "topics/l-class-specialization-pos.dita",
+    "line": 11,
+    "message": "The source element with class value \"- topic/li task/step\" is not a generalization of the target element with class value \"- topic/li task/substep\""
+  },
+  {
+    "category": "domains-format",
+    "severity": "error",
+    "file": "topics/l-domains-format-edge.dita",
+    "line": 6,
+    "message": "The @domains attribute on <topic> is empty, so the document claims no domain"
+  },
+  {
+    "category": "class-format",
+    "severity": "error",
+    "file": "topics/l-domains-format-pos.dita",
+    "line": 5,
+    "message": "Class attribute not specified on <topic>; no DTD gives it a class"
+  },
+  {
+    "category": "class-format",
+    "severity": "error",
+    "file": "topics/l-domains-format-pos.dita",
+    "line": 6,
+    "message": "Class attribute not specified on <title>; no DTD gives it a class"
+  },
+  {
+    "category": "class-format",
+    "severity": "error",
+    "file": "topics/l-domains-format-pos.dita",
+    "line": 7,
+    "message": "Class attribute not specified on <body>; no DTD gives it a class"
+  },
+  {
+    "category": "class-format",
+    "severity": "error",
+    "file": "topics/l-domains-format-pos.dita",
+    "line": 8,
+    "message": "Class attribute not specified on <p>; no DTD gives it a class"
+  },
+  {
+    "category": "type-class-mismatch",
+    "severity": "warning",
+    "file": "topics/l-ref-type-mismatch-pos.dita",
+    "line": 8,
+    "message": "Reference is made with @type \"concept\" to a DITA resource with class \"- topic/topic task/task\""
+  },
+  {
+    "category": "type-class-specific",
+    "severity": "warning",
+    "file": "topics/l-ref-type-specific-pos.dita",
+    "line": 9,
+    "message": "Reference is made with @type \"topic\" to a DITA resource with a more specific type class \"- topic/topic task/task\""
+  },
+  {
+    "category": "class-format",
+    "severity": "error",
+    "file": "topics/m-not-dita.xml",
+    "line": 6,
+    "message": "Class attribute not specified on <config>; no DTD gives it a class"
+  },
+  {
+    "category": "validation",
+    "severity": "warning",
+    "file": "topics/m-not-dita.xml",
+    "line": 6,
+    "message": "Root element <config> is not a DITA topic"
+  },
+  {
+    "category": "class-format",
+    "severity": "error",
+    "file": "topics/m-not-dita.xml",
+    "line": 7,
+    "message": "Class attribute not specified on <entry>; no DTD gives it a class"
+  },
+  {
+    "category": "validation",
+    "severity": "error",
+    "file": "topics/m-plain.txt",
+    "line": 1,
+    "message": "XML error: Non-whitespace before first tag."
+  },
+  {
+    "category": "validation",
+    "severity": "error",
+    "file": "topics/n-broken-edge.dita",
+    "line": 12,
+    "message": "XML error: Unexpected close tag"
+  },
+  {
+    "category": "validation",
+    "severity": "error",
+    "file": "topics/n-broken-pos.dita",
+    "line": 11,
+    "message": "XML error: Unexpected close tag"
+  },
+  {
+    "category": "section-title-order",
+    "severity": "error",
+    "file": "topics/n-section-first-title-pos.dita",
+    "line": 12,
+    "message": "Title must be the first element in a section"
+  },
+  {
+    "category": "section-title-duplicate",
+    "severity": "error",
+    "file": "topics/n-section-no-dup-title-pos.dita",
+    "line": 12,
+    "message": "Section must have only one title"
+  }
+]

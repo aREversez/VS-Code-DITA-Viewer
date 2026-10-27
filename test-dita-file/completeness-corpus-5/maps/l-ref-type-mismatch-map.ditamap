@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.ref.type.class.mismatch, boundary: @type on a topicref rather than an xref. The
+     target is a task and @type says concept; whether Oxygen checks the map side of the
+     reference at all is what the report answers. -->
+<map>
+  <title>@type on a topicref (boundary)</title>
+  <topicref href="../topics/l-ref-task-map-target.dita" type="concept"/>
+</map>

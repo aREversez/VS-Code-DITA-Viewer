@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-model href="urn:oasis:names:tc:dita:rng:topic.rng" schematypens="http://relaxng.org/ns/structure/1.0"?>
+<?xml-model href="urn:oasis:names:tc:dita:rng:topic.rng" schematypens="http://purl.oclc.org/dsdl/schematron"?>
+<!-- dmv.invalid.class.format, a grammar other than a DOCTYPE: this file has no DOCTYPE but points
+     at the DITA RELAX NG grammar, which defines the @class defaults. The extension treats it as a
+     file whose class comes from its grammar. Expected: no finding from either tool; the corpus-5
+     run files nothing here, so Oxygen reads the default from the grammar too (R065). -->
+<topic id="l-class-format-rng-neg" xmlns:ditaarch="http://dita.oasis-open.org/architecture/2005/" ditaarch:DITAArchVersion="1.3">
+  <title>class format, RELAX NG grammar (negative)</title>
+  <body>
+    <p>No element writes a class; the grammar supplies it.</p>
+  </body>
+</topic>

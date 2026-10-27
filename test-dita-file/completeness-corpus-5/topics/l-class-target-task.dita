@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<!-- Targets for the two directions across a specialization boundary: step is
+     - topic/li task/step and substep is - topic/li task/step task/substep, so an item is
+     the general end of the chain and a substep the specific end. Both ids are drawn in. -->
+<task id="lctt">
+  <title>Class-compatibility targets (task)</title>
+  <taskbody>
+    <steps>
+      <step id="lctt-step">
+        <cmd>One step.</cmd>
+        <substeps>
+          <substep id="lctt-substep"><cmd>One substep.</cmd></substep>
+        </substeps>
+      </step>
+    </steps>
+  </taskbody>
+</task>

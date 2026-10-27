@@ -29,15 +29,18 @@ import {
   isExternalRef,
   offsetToLineCol,
   splitRefFragment,
-} from './ditaLanguageUtils';
-import { collectReferenceableFiles, WalkEntry } from './referenceableFiles';
+  collectReferenceableFiles,
+  WalkEntry,
+  parseDita,
+  parseDitamap,
+  preprocessEntities,
+  DitaNode,
+  STANDARD_TAG_TO_BASETYPE,
+  MAP_STANDARD_TAG_TO_BASETYPE,
+} from '@dita-viewer/core';
 import { buildKeyMap, getKeySourceMaps } from '../editor/DitaViewerProvider';
 import { onKeyContextChanged } from '../editor/keyContext';
 import { decodeHrefPart } from '../editor/ditaRenderUtils';
-import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
-import { DitaNode } from '../parser/domTypes';
-import { STANDARD_TAG_TO_BASETYPE } from '../parser/standardTagMap';
-import { MAP_STANDARD_TAG_TO_BASETYPE } from '../parser/mapTagMap';
 import { scanMarkup } from './xmlTagBalance';
 
 const DITA_SELECTOR: vscode.DocumentSelector = [

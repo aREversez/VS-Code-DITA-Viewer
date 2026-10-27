@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.invalid.ref.id.path, negative: a single element id after the topic id. -->
+<topic id="f-ref-id-path-neg">
+  <title>Single id segment (negative)</title>
+  <body>
+    <p conref="lib.dita#lib3/p1"/>
+  </body>
+</topic>

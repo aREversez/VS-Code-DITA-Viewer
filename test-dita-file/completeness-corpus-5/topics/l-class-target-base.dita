@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- Targets for the class-compatibility probes (dmv.invalid.class.generalization and
+     dmv.invalid.class.specialization). Each of the three elements is drawn in by at least
+     one conref, so none is reported as an unreferenced reusable element. -->
+<topic id="lctb">
+  <title>Class-compatibility targets (base)</title>
+  <body>
+    <p id="lctb-p">A paragraph, whose class is the - topic/p the DTD defaults to.</p>
+    <ul id="lctb-ul">
+      <li id="lctb-li">An item, - topic/li, which topic/p is unrelated to.</li>
+    </ul>
+  </body>
+</topic>

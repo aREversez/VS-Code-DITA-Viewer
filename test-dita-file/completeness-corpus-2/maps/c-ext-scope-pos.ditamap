@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.topicref.ext.scope.no.format, positive: scope="external" with no
+     @format. -->
+<map>
+  <title>External scope without a format</title>
+  <topicref href="http://example.invalid/a.html" scope="external"/>
+</map>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.folder.ref, boundary: the same folder with a trailing slash. It must be
+     told apart from dmv.ref.extra.slash, whose positive probe ends in a file. -->
+<topic id="a-folder-edge">
+  <title>Reference to a folder (boundary)</title>
+  <body>
+    <p><xref href="../topics/">folder with a trailing slash</xref></p>
+  </body>
+</topic>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.invalid.class.format, boundary: a declared element whose class is written but
+     empty. It is not "not specified" in the literal sense; whether Oxygen counts an empty
+     value as missing is what this probe asks. -->
+<topic id="l-class-format-edge-empty">
+  <title>Class written empty</title>
+  <body>
+    <p class="">An empty class, written on purpose.</p>
+  </body>
+</topic>

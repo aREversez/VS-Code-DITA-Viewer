@@ -1,7 +1,7 @@
 # DITA @class → baseType extraction diff
 
-Diff recomputed: 2026-08-01T12:01:56.011Z (--diff-only: no DTD rescan)
-Candidates from cached extraction: 2026-07-30T02:06:37.921Z (`E:\Software\dita-ot\plugins\org.oasis-open.dita.v1_3\dtd`)
+Diff recomputed: 2026-10-24T11:32:39.645Z (--diff-only: no DTD rescan)
+Candidates from cached extraction: 2026-10-24T11:32:36.973Z (`org.oasis-open.dita.v1_3/dtd`)
 
 ## Topic-side (`STANDARD_TAG_TO_BASETYPE`)
 
@@ -10,18 +10,20 @@ Candidates from cached extraction: 2026-07-30T02:06:37.921Z (`E:\Software\dita-o
 _None_
 
 
-### Conflicts (both present, baseType differs) — 57
+### Conflicts (both present, baseType differs) — 61
 
 - `abbreviated-form`: DTD says `topic/term` (technicalContent/dtd/abbreviateDomain.mod:67) vs code `topic/abbreviated-form`  — _needs manual verification_
 - `anchorid`: DTD says `topic/keyword` (base/dtd/delayResolutionDomain.mod:95) vs code `topic/anchorid`  — _needs manual verification_
 - `anchorkey`: DTD says `topic/keyword` (base/dtd/delayResolutionDomain.mod:96) vs code `topic/anchorkey`  — _needs manual verification_
 - `apiname`: DTD says `topic/keyword` (technicalContent/dtd/programmingDomain.mod:670) vs code `topic/apiname`  — _needs manual verification_
+- `area`: DTD says `topic/figgroup` (base/dtd/utilitiesDomain.mod:152) vs code `topic/area`  — _needs manual verification_
 - `b`: DTD says `topic/ph` (base/dtd/highlightDomain.mod:191) vs code `topic/b`  — _needs manual verification_
 - `cmdname`: DTD says `topic/keyword` (technicalContent/dtd/softwareDomain.mod:195) vs code `topic/cmdname`  — _needs manual verification_
 - `codeblock`: DTD says `topic/pre` (technicalContent/dtd/programmingDomain.mod:671) vs code `topic/codeblock`  — _needs manual verification_
 - `codeph`: DTD says `topic/ph` (technicalContent/dtd/programmingDomain.mod:672) vs code `topic/codeph`  — _needs manual verification_
 - `coderef`: DTD says `topic/xref` (technicalContent/dtd/programmingDomain.mod:673) vs code `topic/coderef`  — _needs manual verification_
 - `consequence`: DTD says `topic/li` (base/dtd/hazardstatementDomain.mod:236) vs code `topic/consequence`  — _needs manual verification_
+- `coords`: DTD says `topic/ph` (base/dtd/utilitiesDomain.mod:154) vs code `topic/coords`  — _needs manual verification_
 - `delim`: DTD says `topic/ph` (technicalContent/dtd/programmingDomain.mod:674) vs code `topic/delim`  — _needs manual verification_
 - `filepath`: DTD says `topic/ph` (technicalContent/dtd/softwareDomain.mod:196) vs code `topic/filepath`  — _needs manual verification_
 - `fragment`: DTD says `topic/figgroup` (technicalContent/dtd/programmingDomain.mod:675) vs code `topic/fragment`  — _needs manual verification_
@@ -34,6 +36,7 @@ _None_
 - `hazardsymbol`: DTD says `topic/image` (base/dtd/hazardstatementDomain.mod:234) vs code `topic/hazardsymbol`  — _needs manual verification_
 - `howtoavoid`: DTD says `topic/li` (base/dtd/hazardstatementDomain.mod:237) vs code `topic/howtoavoid`  — _needs manual verification_
 - `i`: DTD says `topic/ph` (base/dtd/highlightDomain.mod:192) vs code `topic/i`  — _needs manual verification_
+- `imagemap`: DTD says `topic/fig` (base/dtd/utilitiesDomain.mod:151) vs code `topic/imagemap`  — _needs manual verification_
 - `index-see`: DTD says `topic/index-base` (base/dtd/indexingDomain.mod:100) vs code `topic/index-see`  — _needs manual verification_
 - `index-see-also`: DTD says `topic/index-base` (base/dtd/indexingDomain.mod:101) vs code `topic/index-see-also`  — _needs manual verification_
 - `index-sort-as`: DTD says `topic/index-base` (base/dtd/indexingDomain.mod:102) vs code `topic/index-sort-as`  — _needs manual verification_
@@ -53,6 +56,7 @@ _None_
 - `pt`: DTD says `topic/dt` (technicalContent/dtd/programmingDomain.mod:687) vs code `topic/pt`  — _needs manual verification_
 - `screen`: DTD says `topic/pre` (technicalContent/dtd/uiDomain.mod:157) vs code `topic/screen`  — _needs manual verification_
 - `sep`: DTD says `topic/ph` (technicalContent/dtd/programmingDomain.mod:689) vs code `topic/sep`  — _needs manual verification_
+- `shape`: DTD says `topic/keyword` (base/dtd/utilitiesDomain.mod:153) vs code `topic/shape`  — _needs manual verification_
 - `sub`: DTD says `topic/ph` (base/dtd/highlightDomain.mod:195) vs code `topic/sub`  — _needs manual verification_
 - `sup`: DTD says `topic/ph` (base/dtd/highlightDomain.mod:196) vs code `topic/sup`  — _needs manual verification_
 - `synblk`: DTD says `topic/figgroup` (technicalContent/dtd/programmingDomain.mod:690) vs code `topic/synblk`  — _needs manual verification_
@@ -70,7 +74,7 @@ _None_
 - `varname`: DTD says `topic/keyword` (technicalContent/dtd/softwareDomain.mod:202) vs code `topic/varname`  — _needs manual verification_
 - `wintitle`: DTD says `topic/keyword` (technicalContent/dtd/uiDomain.mod:160) vs code `topic/wintitle`  — _needs manual verification_
 
-### Matched (code agrees with DTD) — 171
+### Matched (code agrees with DTD) — 167
 
 _Verified; no change needed._
 
@@ -198,3 +202,4 @@ _Verified; no change needed._
 ## New base types lacking a renderer
 
 _None — every newly introduced base type already has a renderer._
+

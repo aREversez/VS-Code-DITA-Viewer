@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.to.resource.only target, positive side: published only by a topicref with
+     processing-role="resource-only". A cross-reference to it cannot be resolved in
+     output. No element ids, so it adds nothing to unreferenced-reusable. -->
+<topic id="resource-only3">
+  <title>Resource-only topic</title>
+  <body>
+    <p>Only a resource-only topicref publishes this topic.</p>
+  </body>
+</topic>

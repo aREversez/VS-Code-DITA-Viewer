@@ -2,9 +2,7 @@ import * as assert from 'assert';
 import { mkdirSync, mkdtempSync, rmSync, statSync, utimesSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { collectMapEntries } from '../../render/mapTypeMap';
-import type { MapEntry } from '../../render/mapTypeMap';
-import { parseDitamap, preprocessEntities } from '../../parser/ditaParser';
+import { collectMapEntries, type MapEntry, parseDitamap, preprocessEntities } from '@dita-viewer/core';
 import {
   renderBookPlaceholder,
   renderBookError,

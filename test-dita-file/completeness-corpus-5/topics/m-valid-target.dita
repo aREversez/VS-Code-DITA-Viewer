@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- Target of the dmv.invalid.DITA.reference negative: a DITA topic referenced with
+     format="dita", the case that must stay quiet. -->
+<topic id="mv1">
+  <title>A valid DITA target</title>
+  <body>
+    <p>Valid DITA, referenced with format="dita".</p>
+  </body>
+</topic>

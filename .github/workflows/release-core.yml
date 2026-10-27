@@ -1,0 +1,68 @@
+# Publish @dita-viewer/core to npm when a core-<version> tag is pushed.
+#
+#   # raise "version" in packages/core/package.json, commit, then:
+#   git tag core-0.2.1 && git push --follow-tags
+#
+# Publishing uses npm's OIDC trusted publishing: no NODE_AUTH_TOKEN is stored
+# anywhere. The package must already exist on npm and carry a trusted publisher
+# for aREversez/VS-Code-DITA-Viewer + release-core.yml (see
+# packages/core/README.md). The extension itself is released separately.
+
+name: Release core
+
+on:
+  push:
+    tags:
+      - 'core-[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: read
+  # Lets npm exchange a short-lived GitHub OIDC token for publish rights, and
+  # signs the provenance statement.
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - run: npm ci
+
+      # Typecheck, tests and the pack check of the core. The extension's own
+      # gates run in CI on every push and are not repeated here.
+      - run: npm run typecheck:core
+      - run: npm run test:core
+      - run: npm run check:core-pack
+
+      # verify cannot know the tag; this is what stops "core-0.2.2" shipping 0.2.1.
+      - name: Check the tag matches packages/core/package.json
+        run: |
+          version=$(node -p "require('./packages/core/package.json').version")
+          if [ "$GITHUB_REF_NAME" != "core-$version" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match packages/core/package.json version $version" >&2
+            exit 1
+          fi
+
+      # Trusted publishing needs npm 11.5.1+; the npm bundled with Node 22 is
+      # still 10.x.
+      - name: Upgrade npm for OIDC publishing
+        run: npm install --global npm@^11.15.0
+
+      # npm refuses to overwrite a version, so a rerun of a published tag must
+      # not turn the job red.
+      - name: Publish @dita-viewer/core to npm
+        working-directory: packages/core
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if npm view "@dita-viewer/core@$version" version > /dev/null 2>&1; then
+            echo "@dita-viewer/core@$version is already on the registry; skipping."
+            exit 0
+          fi
+          npm publish --provenance --access public

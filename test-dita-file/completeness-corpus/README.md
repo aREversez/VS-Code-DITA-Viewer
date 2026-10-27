@@ -1,0 +1,140 @@
+# Completeness-check differential corpus
+
+This folder is the first of five differential corpora for the "Validate and Check for
+Completeness" parity effort: **run both tools over the same map and diff their findings**, so
+a divergence is a test failure rather than a user report.
+
+| Folder | Holds | Plan |
+| --- | --- | --- |
+| `completeness-corpus/` (this one) | the original probes: references, keys, duplicates, tables, profiling | — |
+| `completeness-corpus-2/` | reference spelling, `@format`/`@scope`, navigation titles | `BATCH-1.md` |
+| `completeness-corpus-3/` | conref shape, id references, keys and links, element ids | `BATCH-2.md` |
+| `completeness-corpus-4/` | profiling values and preferences, subject schemes, filters | `BATCH-3.md` |
+| `completeness-corpus-5/` | class-dependent rules, DITA validity, structure | `BATCH-4.md` |
+
+Where to read what: **[RULES.md](RULES.md)** is the ledger (every rule and what it rests on),
+**[OXYGEN-PROBLEMS.md](OXYGEN-PROBLEMS.md)** the parity specification (every Oxygen problem id
+and the extension's status for it, with the wrap-up notes), **[CLEAN-ROOM.md](CLEAN-ROOM.md)**
+the rules for where a rule may come from, and **[OXYGEN.md](OXYGEN.md)** how to run Oxygen and
+make a report safe to commit. The problem catalog behind the specification is a data file of
+the installed editor; no license is required to read it.
+
+- `corpus.ditamap` — the root map. Every child is a deliberate probe.
+- `topics/` — the referenced topics.
+- Every file carries a DITA 1.3 `<!DOCTYPE …PUBLIC "-//OASIS//DTD DITA …">`. The
+  extension strips it (`ditaParser.stripDoctype`, findings unchanged); Oxygen
+  needs it to recognise the map and run the completeness crawl at all.
+- `../completeness-outside/outside.dita` — a sibling folder, to probe the
+  "outside the map folder" check.
+- `baseline.extension.json` — the extension's current findings, locked by
+  `src/test/editor/completenessBaseline.test.ts`.
+
+## Findings format
+
+Both sides are normalized to a JSON array of:
+
+```json
+{ "category": "missing-reference", "severity": "error",
+  "file": "corpus.ditamap", "line": 12,
+  "message": "Referenced topic not found: topics/missing.dita" }
+```
+
+`file` is relative to this folder with `/` separators; `line` is 1-based. The
+extension's `category` values are the `IssueCategory` union in
+`src/editor/mapChecks.ts`. When normalizing Oxygen's output, map its messages to
+those categories where they line up, and keep Oxygen's own wording in `message`
+(then the diff is about *which* problems are found, not how they are phrased).
+
+## Running the extension side
+
+```sh
+node scripts/completeness-baseline.cjs                 # list findings
+node scripts/completeness-baseline.cjs --update        # rewrite the baseline
+node scripts/completeness-baseline.cjs --diff oxygen.findings.json   # diff
+```
+
+or set `UPDATE_COMPLETENESS_BASELINE=1` and run the mocha test. The script
+bundles the harness with esbuild, so it needs no build step.
+
+## Producing the Oxygen side
+
+See **[OXYGEN.md](OXYGEN.md)**. The practical route on this machine is the GUI:
+open `corpus.ditamap` in the **DITA Maps Manager**, run **DITA Maps → Validate and
+Check for Completeness** (every option except *Include remote resources*), and
+**Save Results as XML…** to the git-ignored `oxygen-report.raw.xml`, then run
+`node scripts/sanitize-oxygen-report.cjs` on it to produce the committable
+`oxygen-report.xml` (relative paths; see OXYGEN.md). The adapter
+(`src/test/editor/oxygenReport.ts`) normalizes it and
+`node scripts/oxygen-diff.cjs <report.xml>` prints the parity diff (non-zero exit
+on any difference). The scripted route (`validateCheckDITA`) is the same check
+but needs the paid *all-platforms* Oxygen install plus a scripting license — the
+Windows editor has neither. `oxygen-report.sample.xml` is a hand-built stand-in
+for testing the parser without any Oxygen.
+
+## What the corpus probes
+
+| Probe | File | Expected extension finding |
+| --- | --- | --- |
+| missing topic | `topics/missing.dita` (absent) | `missing-reference` |
+| topic referenced twice | `topics/multi.dita` ×2 | `multiple-reference` |
+| twice with unique `@copy-to` | `topics/multi2.dita` | *(none — control)* |
+| duplicate topic id | `topics/twoidsa/b.dita` | `duplicate-id` |
+| duplicate key | `keydef keys="dupkey"` ×2 | `duplicate-key` |
+| unused key | `keydef keys="unusedkey"` | `unreferenced-key` |
+| topic reached twice through a key | `keydef keys="kusekey"` + 2× `topicref keyref` | `multiple-reference` |
+| keyref to an undefined key | `topicref keyref="nosuchkey"` | `undefined-key` |
+| keyref to a key that is already referenced by `@href` | `<topicref keyref="dupkey"/>` (also `topics/ok.dita`) | `multiple-reference` |
+| unreferenced reusable | `topics/reuse.dita#orphan` | `unreferenced-reusable` |
+| CALS/simple table problems | `topics/tables.dita` | `table-layout` ×2 |
+| body paragraph against a topicref value (not compared; the root is) | `topics/profiling.dita` | *(none — Oxygen agrees)* |
+| profiling preference | `topics/profiling.dita` | `profiling-preference` ×3 |
+| missing local resource | `topics/resources.dita` → `img/no-such-image.png`, `media/no-such-video.mp4` | `missing-resource` ×2 |
+| existing local resource | `topics/resources.dita` → `img/used.png` | *(none — control)* |
+| unreachable remote resource | `topics/remote.dita` | *(none here; `remote-resource` only with "include remote" on, which the harness keeps off)* |
+| outside the map folder | `topics/outside.dita` | `outside-folder` |
+| link to a topic no map references | `topics/linker.dita` | `unreferenced-link` |
+| in-map link | `topics/linker2.dita` | *(none — control)* |
+| same-topic conref forms `#topicID/elem`, `#./elem` | `topics/conref-forms.dita` | *(none — control)* |
+| body paragraph with defined values against a topicref value (`expert` in `novice`) | `topics/profiling-defined.dita` | *(none — Oxygen agrees)* |
+| profiling conflict between two map elements (topicgroup `novice` > topicref `expert`) | `topics/profiling-shape-map.dita` | `profiling-conflict` on `corpus.ditamap`, plus `profiling-preference` (control) |
+| profiling conflict between two elements of one topic (`ul` `novice` > `li` `expert`) | `topics/profiling-shape-inner.dita` | `profiling-conflict`, plus `profiling-preference` (control) |
+| profiling conflict between the topic root and its topicref | `topics/profiling-shape-root.dita` | `profiling-conflict`, plus `profiling-preference` (control) |
+| malformed XML | `topics/malformed.dita` | `validation` |
+
+## Known divergence probes (confirm against Oxygen)
+
+These files exist so the first Oxygen run *proves* each suspected gap. They are
+expected to show up as `onlyInBaseline`/`onlyInRun` differences:
+
+1. **DTD/schema validation** — `topics/invalid.dita` is well-formed but invalid
+   (`bogus` attribute, `<notanelement>`). The extension has no DTD/RNG check and
+   stays silent; Oxygen's validator should flag it.
+2. **Key-based references** — *(fixed)* the crawler now resolves `@keyref` to
+   the key definition after the maps are crawled, so a topic reached twice
+   through a key is a `multiple-reference`, an unresolvable keyref is an
+   `undefined-key`, and a keyref to a missing file is a `missing-reference`.
+   Recursion into a submap reached *only* through a keyref is still not done.
+3. **Partial profiling overlap** — `topics/profiling.dita`'s `audience="admin
+   novice"` under a cascaded `novice` overlaps, so the extension reports no
+   conflict; Oxygen's "values not found in parent" rule may treat it
+   differently.
+4. **Remote resources** — `topics/ok.dita` and `topics/remote.dita` reference
+   `https://` images; the harness disables remote probing, so neither existence
+   nor a `remote-resource` note appears. Enable `includeRemote` to exercise it
+   (`remote.dita` is the ledger probe for rule R005).
+5. **Non-DITA resources** — `topics/resources.dita` points at two files that do
+   not exist; Oxygen's catalog has no id for this (the closest is the schema-level
+   `dmv.file.not.found`), so the first Oxygen run should tell us whether it is
+   extension-only.
+6. **Table rules** — the extension emits `colspecCount`/simple-row findings; some
+   Oxygen table complaints are schema-level and will only appear on the Oxygen
+   side.
+7. **Text-only keyrefs** — a `<ph keyref="undefined">` is an `undefined-key` for
+   the extension, because every `@keyref` goes through the same resolution. The
+   spec says such elements only borrow the key's text and cannot form a link
+   (`archSpec/base/processing-keyref-for-text` rule 2), so Oxygen may well stay
+   silent. No corpus file exercises this yet; add one when the answer is known.
+
+When a difference is a *legitimate* extension gap, fix the check; when it is an
+intentional scope difference, record it here and in the accepted-divergence list
+so the next diff is not re-litigated.

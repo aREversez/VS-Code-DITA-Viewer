@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- Shared conref source for the batch 2 probes. Each reusable element (p1, p2, p3,
+     sect3, p5, xref1, p4, p6) is consumed by a valid conref in
+     topics/e-conref-control.dita, so pointing probes at this file does not also
+     produce unreferenced-reusable findings for it. -->
+<topic id="lib3">
+  <title>Reusable fragments</title>
+  <body>
+    <p id="p1">First reusable paragraph.</p>
+    <p id="p2">Second reusable paragraph.</p>
+    <p id="p3">Third reusable paragraph.</p>
+    <section id="sect3">
+      <title>Section with a reusable paragraph</title>
+      <p id="p5">Paragraph inside the section.</p>
+    </section>
+    <p><xref href="ok.dita" id="xref1">Neutral target</xref></p>
+  </body>
+  <topic id="libinner3">
+    <title>Nested topic</title>
+    <body>
+      <p id="p4">First paragraph of the nested topic.</p>
+      <p id="p6">Second paragraph of the nested topic.</p>
+    </body>
+  </topic>
+</topic>

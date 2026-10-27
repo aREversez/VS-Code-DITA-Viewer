@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.invalid.ref.id.path.keyref.elemid, boundary: an xref keyref with the same
+     element-id suffix, instead of a conkeyref. Ask Oxygen whether a plain keyref is
+     checked the same way. -->
+<topic id="f-keyref-elemid-edge">
+  <title>Missing element id through an xref keyref (boundary)</title>
+  <body>
+    <p><xref keyref="k-f-elemid/nope">missing element</xref></p>
+  </body>
+</topic>

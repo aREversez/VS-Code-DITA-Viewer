@@ -1,0 +1,7 @@
+A plain text file, not XML at all.
+
+Target of dmv.invalid.DITA.reference, boundary: a reference with format="dita" that names a
+file no parser could read as DITA. Corpus 2 already showed that such a file also draws a
+class finding (dmv.invalid.class.format) and a parse finding
+(dmv.invalid.parse.dita.content, dmv.ref.res.as.dita); this probe asks whether the DITA
+reference check adds an id of its own on top.

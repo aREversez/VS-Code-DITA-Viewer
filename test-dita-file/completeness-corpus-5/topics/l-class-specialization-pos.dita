@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<!-- dmv.invalid.class.specialization, positive: the source is a step
+     (- topic/li task/step) and the target a substep (- topic/li task/step task/substep).
+     The target is more specialized than the source, the direction conref forbids. The
+     report answers which of the two class ids this direction belongs to. -->
+<task id="l-class-specialization-pos">
+  <title>conref to a more specific element (positive)</title>
+  <taskbody>
+    <steps>
+      <step conref="l-class-target-task.dita#lctt/lctt-substep">
+        <cmd>Replaced by the conref.</cmd>
+      </step>
+    </steps>
+  </taskbody>
+</task>

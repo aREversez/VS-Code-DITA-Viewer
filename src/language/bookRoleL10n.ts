@@ -3,7 +3,7 @@
 // translated display text ("第 1 章", "附录 A", …) through this formatter.
 
 import * as vscode from 'vscode';
-import { RoleLabelInfo } from '../render/mapTypeMap';
+import { RoleLabelInfo } from '@dita-viewer/core';
 
 export function formatLocalizedRole(info: RoleLabelInfo): string {
   if (info.ordinal) {

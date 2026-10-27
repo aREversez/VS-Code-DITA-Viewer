@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.invalid.keyref.syntax.3, negative: no whitespace. -->
+<topic id="b-keyref3-neg">
+  <title>Whitespace in a keyref (negative)</title>
+  <body>
+    <p><xref keyref="a">clean key</xref></p>
+  </body>
+</topic>

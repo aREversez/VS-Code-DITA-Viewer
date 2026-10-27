@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Target for dmv.ref.res.as.dita, negative: the same kind of file declared
+     with its real format. -->
+<notdita/>

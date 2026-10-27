@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- Target for dmv.unencoded.ref: a non-ASCII (Chinese) file name. -->
+<topic id="okzh">
+  <title>Chinese file name target</title>
+  <body>
+    <p>Reached through an encoded or a raw href, depending on the probe.</p>
+  </body>
+</topic>

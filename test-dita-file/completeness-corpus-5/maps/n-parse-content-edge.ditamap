@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.invalid.parse.dita.content, boundary: the same kind of unparsable target, reached
+     by a topicref that publishes it under another name (@copy-to). The question is whether
+     a reference that renames the topic moves the finding with it or drops it. Kept apart
+     from n-broken-pos.dita so neither map points at the other's file. -->
+<map>
+  <title>A topicref with @copy-to to an unparsable topic (boundary)</title>
+  <topicref href="../topics/n-broken-edge.dita" copy-to="n-broken-edge-copy"/>
+</map>

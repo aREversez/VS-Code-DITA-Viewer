@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.section.no.dup.title, positive: one section, two titles. The DTD rejects the second
+     title as well (a section takes at most one), so a schema-checking Oxygen also reports
+     MSG_CONTENT_INVALID_UNEXPECTED_ELEMENT here; the README keeps the two apart. -->
+<topic id="n-section-no-dup-title-pos">
+  <title>Two titles in one section (positive)</title>
+  <body>
+    <section>
+      <title>The first title</title>
+      <p>Content between the titles.</p>
+      <title>The second title</title>
+    </section>
+  </body>
+</topic>

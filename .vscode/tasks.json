@@ -9,6 +9,12 @@
         "isDefault": true
       },
       "problemMatcher": []
+    },
+    {
+      "label": "vsix: build + package + install",
+      "type": "npm",
+      "script": "package:install",
+      "problemMatcher": []
     }
   ]
 }

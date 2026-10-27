@@ -16,11 +16,13 @@ import * as vscode from 'vscode';
 // The two value shapes below are not interchangeable, and the grouping is
 // load-bearing rather than cosmetic:
 //   - JSON.stringify(...) for strings interpolated straight into the script
-//     template, where quotes and escaping have to arrive as a JS literal;
+//     template, where quotes and escaping have to arrive as a JS literal.
+//     Nothing in this table needs that any more; a provider's own local
+//     entries (selectThemeCss, the map's mode labels) still do;
 //   - bare vscode.l10n.t(...) for values handed to a helper function that
 //     quotes them itself: getSearchOverlayScript(), getProfilingFilterScript(),
-//     getToolbarScaffoldScript(), getToolbarFontWidthTagTooltipsButtonsScript()
-//     and getRefreshButtonScript().
+//     getProfilingToggleScript(), getToolbarScaffoldScript(),
+//     getToolbarFontWidthTagTooltipsButtonsScript() and getRefreshButtonScript().
 // Moving an entry between the groups double-quotes one and leaves the other
 // unquoted, and both failures show up as mangled text in the toolbar rather
 // than as an error.
@@ -58,11 +60,15 @@ export function sharedWebviewStrings() {
     widthNarrow: vscode.l10n.t('Narrow'),
     widthTooNarrow: vscode.l10n.t('Too narrow for "{0}" width -- try widening the window.'),
     reloadContent: vscode.l10n.t('Reload DITA content'),
-    // ── toolbar, still interpolated straight into each provider's own
-    // inline script (profiling toggle) ──
-    profilingLabel: JSON.stringify(vscode.l10n.t('Flags')),
-    profilingOnTitle: JSON.stringify(vscode.l10n.t('Profiling attributes (props/otherprops/audience/...) are highlighted. Click to hide the highlighting.')),
-    profilingOffTitle: JSON.stringify(vscode.l10n.t('Profiling attribute highlighting is hidden. Click to show which content is flagged and with what.')),
+    // ── conref jump button, passed to getConrefJumpScript as a value ──
+    conrefJumpTitle: vscode.l10n.t('Open the referenced content in its source file'),
+    // The hidden description every reused element's aria-describedby points at,
+    // read aloud when it takes keyboard focus (passed to getConrefJumpScript too).
+    conrefJumpHint: vscode.l10n.t('Reusable content. Press Enter to open the referenced content in its source file.'),
+    // ── Flags toggle, passed to getProfilingToggleScript as values ──
+    profilingLabel: vscode.l10n.t('Flags'),
+    profilingOnTitle: vscode.l10n.t('Profiling attributes (props/otherprops/audience/...) are highlighted. Click to hide the highlighting.'),
+    profilingOffTitle: vscode.l10n.t('Profiling attribute highlighting is hidden. Click to show which content is flagged and with what.'),
     // ── search overlay, passed to getSearchOverlayScript as values ──
     searchPlaceholder: vscode.l10n.t('Search'),
     searchNext: vscode.l10n.t('Next match'),
@@ -76,6 +82,12 @@ export function sharedWebviewStrings() {
     filterTitle: vscode.l10n.t('Show/hide content by profiling attribute value (actually hides matching content, unlike the Flags toggle which only shows/hides the highlight)'),
     filterClose: vscode.l10n.t('Close'),
     filterEmpty: vscode.l10n.t('No profiling attributes in this document'),
+    // The DITAVAL row at the top of the Filter panel.
+    ditavalNone: vscode.l10n.t('None'),
+    ditavalChoose: vscode.l10n.t('Choose…'),
+    ditavalChange: vscode.l10n.t('Change…'),
+    ditavalClear: vscode.l10n.t('Clear'),
+    ditavalByFile: vscode.l10n.t('Left out by the DITAVAL file'),
     // ── image lightbox + copy menu, passed to getImageLightboxScript as
     // values ──
     // Both previews keep styles.css's cursor:zoom-in promise on every

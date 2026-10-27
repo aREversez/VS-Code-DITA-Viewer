@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="outside">
+  <title>Outside</title>
+  <body>
+    <p>Points at a topic that lives outside the map folder:
+      <xref href="../../completeness-outside/outside.dita" format="dita">outside topic</xref>.
+    </p>
+  </body>
+</topic>

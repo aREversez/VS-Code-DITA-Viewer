@@ -52,13 +52,57 @@ export function localizeMsg(m: Msg): string {
     case 'ref.missingTopic': return vscode.l10n.t('Referenced topic not found: {0}', ...a);
     case 'ref.missingMap': return vscode.l10n.t('Referenced map not found: {0}', ...a);
     case 'ref.missingConref': return vscode.l10n.t('Referenced conref target not found: {0}', ...a);
+    case 'ref.missingConkeyref': return vscode.l10n.t('Referenced conkeyref target not found: {0}', ...a);
     case 'ref.missingResource': return vscode.l10n.t('Referenced resource not found: {0}', ...a);
     case 'ref.remoteUnreachable': return vscode.l10n.t('Remote resource could not be reached: {0}', ...a);
     case 'ref.outsideFolder': return vscode.l10n.t('Reference points outside the map folder: {0}', ...a);
     case 'ref.linkNotInMap': return vscode.l10n.t('Link target is not referenced in any map: {0}', ...a);
     case 'ref.multiple': return vscode.l10n.t('Topic referenced more than once ({1} times): {0}', ...a);
+    case 'ref.invalidTopicId': return vscode.l10n.t('Referenced topic id "{0}" not found', ...a);
+    case 'ref.filteredTarget': return vscode.l10n.t('Referenced ID path "{0}" is located in content excluded by the profiling filters', ...a);
+    case 'ref.filteredByConref': return vscode.l10n.t('Referenced ID path "{0}" is located in content a content reference replaces', ...a);
+    case 'conref.missingId': return vscode.l10n.t('Content reference has no "#id" part: {0}', ...a);
+    case 'conref.endNoStart': return vscode.l10n.t('conrefend is used without conref: {0}', ...a);
+    case 'conref.endOtherFile': return vscode.l10n.t('conrefend "{0}" points to a different file than conref "{1}"', ...a);
+    case 'conref.siblings': return vscode.l10n.t('conref and conrefend do not refer to sibling elements: {0} → {1}', ...a);
+    case 'conref.order': return vscode.l10n.t('The conref target must come before the conrefend target: {0} → {1}', ...a);
+    case 'conref.targetValue': return vscode.l10n.t('Element <{0}> has no conref or conkeyref but @{1} is "{2}"', ...a);
+    case 'id.badReference': return vscode.l10n.t('Bad ID reference (trailing slash): {0}', ...a);
+    case 'id.pathNotFound': return vscode.l10n.t('Referenced ID path "{0}" not found', ...a);
+    case 'topicref.element': return vscode.l10n.t('Topic reference names an element id, not a topic id: {0}', ...a);
+    case 'key.linkNoTarget': return vscode.l10n.t('Key "{0}" defines no target, so the reference will not appear as a link: {1}', ...a);
+    case 'link.noTarget': return vscode.l10n.t('<{0}> has neither @href nor @keyref', ...a);
+    case 'link.resourceOnly': return vscode.l10n.t('Topic "{0}" is published only as resource-only; the cross-reference will break', ...a);
+    case 'ref.winSeparators': return vscode.l10n.t('Reference uses backslashes instead of forward slashes: {0}', ...a);
+    case 'ref.absolute': return vscode.l10n.t('Reference is an absolute path; DITA references should be relative to the map', ...a);
+    case 'ref.doubleSlash': return vscode.l10n.t('Reference contains a doubled path separator ("//"): {0}', ...a);
+    case 'ref.trailingSlash': return vscode.l10n.t('Reference ends with a slash: {0}', ...a);
+    case 'ref.unencoded': return vscode.l10n.t('Reference contains characters that must be percent-encoded: {0}', ...a);
+    case 'ref.wrongCase': return vscode.l10n.t('File name capitalization does not match the file on disk ("{1}"): {0}', ...a);
+    case 'ref.folder': return vscode.l10n.t('Reference points to a folder, not a file: {0}', ...a);
+    case 'ref.recursiveMap': return vscode.l10n.t('Map reference closes a cycle; this map is already being processed: {0}', ...a);
+    case 'key.invalidSlash': return vscode.l10n.t('Key reference has more than one "/" (expected key/element): {0}', ...a);
+    case 'key.invalidWhitespace': return vscode.l10n.t('Key reference contains whitespace: {0}', ...a);
+    case 'id.invalid': return vscode.l10n.t('ID "{0}" is not a valid DITA ID (XML NCName)', ...a);
+    case 'ref.noFormat': return vscode.l10n.t('Reference to a non-DITA resource has no @format: {0}', ...a);
+    case 'ref.extNoFormat': return vscode.l10n.t('External reference has no @format: {0}', ...a);
+    case 'ref.resAsDita': return vscode.l10n.t('Non-DITA resource is referenced as a DITA topic: {0}', ...a);
+    case 'ref.resAsMap': return vscode.l10n.t('Non-DITA resource is referenced as a DITA map: {0}', ...a);
+    case 'ref.notDitaDoc': return vscode.l10n.t('Reference claims DITA content, but the target is not a DITA document: {0}', ...a);
+    case 'ref.ditaParse': return vscode.l10n.t('Problem parsing "{0}" as DITA content: {1}', ...a);
+    case 'ref.typeMismatch': return vscode.l10n.t('Reference is made with @type "{0}" to a DITA resource with class "{1}"', ...a);
+    case 'ref.typeTooGeneral': return vscode.l10n.t('Reference is made with @type "{0}" to a DITA resource with a more specific type class "{1}"', ...a);
+    case 'ref.mapFormat': return vscode.l10n.t('Map reference is not declared as format="ditamap": {0}', ...a);
+    case 'ref.topicFormat': return vscode.l10n.t('Topic is referenced with format="{1}": {0}', ...a);
+    case 'ref.topicAsMap': return vscode.l10n.t('Topic is referenced with format="ditamap": {0}', ...a);
+    case 'ref.needsExternalScope': return vscode.l10n.t('Reference to a URL must declare scope="external": {0}', ...a);
+    case 'ref.maprefContent': return vscode.l10n.t('Content inside a map reference is ignored', ...a);
+    case 'nav.topichead': return vscode.l10n.t('Topichead has no navigation title', ...a);
+    case 'nav.topicref': return vscode.l10n.t('External reference has no navigation title: {0}', ...a);
     case 'id.duplicate': return vscode.l10n.t('Duplicate topic id "{0}" ({1} topics share it)', ...a);
+    case 'id.duplicateElement': return vscode.l10n.t('Duplicate element id "{0}" in the same topic', ...a);
     case 'key.duplicate': return vscode.l10n.t('Key "{0}" is already defined; this definition is ignored', ...a);
+    case 'key.undefined': return vscode.l10n.t('Key reference "{0}" does not match any key definition', ...a);
     case 'key.unreferenced': return vscode.l10n.t('Key "{0}" is defined but never referenced', ...a);
     case 'reuse.unreferenced': return vscode.l10n.t('Reusable element <{0} id="{1}"> is never referenced by a conref or conkeyref', ...a);
     case 'prof.conflict': return vscode.l10n.t('@{0}="{1}" on <{2}> shares no value with the enclosing "{3}"; the content is overshadowed in profiled output', ...a);
@@ -66,6 +110,16 @@ export function localizeMsg(m: Msg): string {
     case 'prof.attrUndefined': return vscode.l10n.t('Profiling attribute @{0} on <{1}> is not defined in the profiling preferences', ...a);
     case 'prof.valueUndefined': return vscode.l10n.t('@{0} value "{1}" is not defined in the profiling preferences', ...a);
     case 'prof.singleValue': return vscode.l10n.t('@{0} is single-value but has {1} values ("{2}")', ...a);
+    case 'prof.emptyValue': return vscode.l10n.t('Profiling attribute @{0} on <{1}> has an empty value', ...a);
+    case 'ditaval.duplicateCondition': return vscode.l10n.t('Duplicate condition in the filter file for "{0}"; only the first encountered condition is used', ...a);
+    case 'class.notSpecified': return vscode.l10n.t('Class attribute not specified on <{0}>; no DTD gives it a class', ...a);
+    case 'class.empty': return vscode.l10n.t('Empty @class value on <{0}>', ...a);
+    case 'class.noMarker': return vscode.l10n.t('@class value on <{0}> must start with "-" or "+"', ...a);
+    case 'class.noTrailingSpace': return vscode.l10n.t('@class value on <{0}> must end with a space', ...a);
+    case 'domains.missing': return vscode.l10n.t('The @domains attribute on <{0}> is empty, so the document claims no domain', ...a);
+    case 'conref.classGeneralization': return vscode.l10n.t('The source element with class value "{0}" is not a generalization of the target element with class value "{1}"', ...a);
+    case 'section.titleFirst': return vscode.l10n.t('Title must be the first element in a section', ...a);
+    case 'section.titleDuplicate': return vscode.l10n.t('Section must have only one title', ...a);
     case 'val.unreadable': return vscode.l10n.t('File could not be read', ...a);
     case 'val.xml': return vscode.l10n.t('XML error: {0}', ...a);
     case 'val.notMap': return vscode.l10n.t('Root element <{0}> is not a DITA map', ...a);
@@ -117,9 +171,22 @@ function categoryLabel(c: IssueCategory): string {
   switch (c) {
     case 'validation': return vscode.l10n.t('Validation');
     case 'missing-reference': return vscode.l10n.t('Missing topics and maps');
+    case 'invalid-ref-topic-id': return vscode.l10n.t('References to a missing topic id');
+    case 'undefined-key': return vscode.l10n.t('Undefined key references');
     case 'missing-resource': return vscode.l10n.t('Missing resources');
     case 'remote-resource': return vscode.l10n.t('Unreachable remote resources');
     case 'outside-folder': return vscode.l10n.t('References outside the map folder');
+    case 'reference-syntax': return vscode.l10n.t('Reference syntax');
+    case 'incorrect-case-reference': return vscode.l10n.t('Incorrect file name capitalization');
+    case 'folder-reference': return vscode.l10n.t('References to folders');
+    case 'recursive-reference': return vscode.l10n.t('Recursive map references');
+    case 'invalid-key-syntax': return vscode.l10n.t('Invalid key reference syntax');
+    case 'invalid-id-syntax': return vscode.l10n.t('Invalid ID syntax');
+    case 'format-missing': return vscode.l10n.t('References missing @format');
+    case 'format-mismatch': return vscode.l10n.t('Mismatched @format');
+    case 'external-reference': return vscode.l10n.t('External references');
+    case 'ignored-mapref-content': return vscode.l10n.t('Content ignored inside map references');
+    case 'missing-navtitle': return vscode.l10n.t('Missing navigation titles');
     case 'unreferenced-link': return vscode.l10n.t('Links to topics not referenced in maps');
     case 'multiple-reference': return vscode.l10n.t('Multiple references to the same topic');
     case 'duplicate-id': return vscode.l10n.t('Duplicate topic IDs');
@@ -129,6 +196,24 @@ function categoryLabel(c: IssueCategory): string {
     case 'table-layout': return vscode.l10n.t('Table layout problems');
     case 'profiling-conflict': return vscode.l10n.t('Profiling attribute conflicts');
     case 'profiling-preference': return vscode.l10n.t('Profiling preferences conflicts');
+    case 'invalid-conref-form': return vscode.l10n.t('Invalid content reference forms');
+    case 'invalid-id-reference': return vscode.l10n.t('References to a missing element id');
+    case 'topicref-to-element': return vscode.l10n.t('Topic references to element ids');
+    case 'link-key-without-target': return vscode.l10n.t('Links through keys without a target');
+    case 'link-no-target': return vscode.l10n.t('Links without a target');
+    case 'resource-only-target': return vscode.l10n.t('Cross references to resource-only topics');
+    case 'duplicate-element-id': return vscode.l10n.t('Duplicate element ids');
+    case 'empty-profiling-value': return vscode.l10n.t('Empty profiling attribute values');
+    case 'filtered-reference': return vscode.l10n.t('References into filtered content');
+    case 'duplicate-filter-condition': return vscode.l10n.t('Duplicate conditions in filter files');
+    case 'class-format': return vscode.l10n.t('Invalid @class values');
+    case 'domains-format': return vscode.l10n.t('Invalid @domains values');
+    case 'conref-class': return vscode.l10n.t('Content references between incompatible classes');
+    case 'type-class-mismatch': return vscode.l10n.t('@type that contradicts the target class');
+    case 'type-class-specific': return vscode.l10n.t('@type that is too general for the target');
+    case 'section-title-order': return vscode.l10n.t('Section titles that are not first');
+    case 'section-title-duplicate': return vscode.l10n.t('Sections with more than one title');
+    case 'dita-parse': return vscode.l10n.t('References to DITA content that does not parse');
   }
 }
 
@@ -171,7 +256,9 @@ export async function runCompleteness(map: string, options: CompletenessOptions,
   const all: Issue[] = [];
   const seen = new Set<string>();
   const prefs = readProfilingPreferences();
-  const extra = Object.keys(prefs.attributes).filter((a) => !['audience', 'platform', 'product', 'otherprops', 'props', 'rev'].includes(a));
+  // Must match the crawl's own built-in list (mapCrawl.ts PROFILING_ATTRS):
+  // anything here counts as known even when the preferences never name it.
+  const extra = Object.keys(prefs.attributes).filter((a) => !['audience', 'platform', 'product', 'otherprops', 'deliveryTarget', 'props', 'rev'].includes(a));
   for (const filter of filters) {
     if (token?.isCancellationRequested) break;
     const crawl = await crawlMaps([map], host, { filter, extraProfilingAttributes: extra });
@@ -206,19 +293,15 @@ interface CheckItem extends vscode.QuickPickItem {
   id?: CheckId;
 }
 
-function checkItems(picked: Set<string>, ditavalCount: number): CheckItem[] {
+function checkItems(picked: Set<string>): CheckItem[] {
   const it = (id: CheckId, label: string, description?: string): CheckItem => ({ id, label, description, picked: picked.has(id) });
   const sep = (label: string): CheckItem => ({ label, kind: vscode.QuickPickItemKind.Separator });
   return [
     sep(vscode.l10n.t('Files and resources')),
-    it('batchValidate', vscode.l10n.t('Validate referenced DITA files'), vscode.l10n.t('XML errors; topic id, title and root element')),
-    it('checkNonDita', vscode.l10n.t('Check that referenced images and other files exist')),
+    it('batchValidate', vscode.l10n.t('Validate referenced DITA files'), vscode.l10n.t('XML errors; id syntax, title and root element')),
+    it('checkNonDita', vscode.l10n.t('Check references and linked files'), vscode.l10n.t('existence, spelling, @format and @scope')),
     it('includeRemote', vscode.l10n.t('Also check remote (http/https) resources'), vscode.l10n.t('needs the check above')),
-    it(
-      'useDitaval',
-      vscode.l10n.t('Filter with DITAVAL files'),
-      ditavalCount > 0 ? vscode.l10n.t('{0} file(s) — check runs once per file', String(ditavalCount)) : vscode.l10n.t('choose files after accepting'),
-    ),
+    it('useDitaval', vscode.l10n.t('Filter with DITAVAL files'), vscode.l10n.t('choose files after accepting')),
     sep(vscode.l10n.t('References')),
     it('reportOutsideMapFolder', vscode.l10n.t('References to resources outside the map folder')),
     it('reportUnreferencedLinks', vscode.l10n.t('Links to topics not referenced in any map')),
@@ -237,7 +320,7 @@ function checkItems(picked: Set<string>, ditavalCount: number): CheckItem[] {
 
 type PickResult = { picked: CheckId[]; map: string } | undefined;
 
-function pickChecks(map: string, ditavalCount: number): Promise<PickResult> {
+function pickChecks(map: string): Promise<PickResult> {
   return new Promise((resolve) => {
     let currentMap = map;
     const qp = vscode.window.createQuickPick<CheckItem>();
@@ -247,7 +330,7 @@ function pickChecks(map: string, ditavalCount: number): Promise<PickResult> {
     const setTitle = () => (qp.title = vscode.l10n.t('Validate and Check for Completeness — {0}', basename(currentMap)));
     setTitle();
     qp.placeholder = vscode.l10n.t('Choose the checks to run, then press Enter');
-    const items = checkItems(new Set(readEnabled()), ditavalCount);
+    const items = checkItems(new Set(readEnabled()));
     qp.items = items;
     qp.selectedItems = items.filter((i) => i.picked);
     const btn = (icon: string, tooltip: string): vscode.QuickInputButton => ({ iconPath: new vscode.ThemeIcon(icon), tooltip });
@@ -319,16 +402,23 @@ async function announce(map: string, issues: Issue[]): Promise<void> {
   if (pick === show) await vscode.commands.executeCommand('workbench.actions.view.problems');
 }
 
-/** Asks which checks to run (remembering the answer in settings), then runs them. */
+/**
+ * Asks which checks to run (remembering the answer in settings), then runs them.
+ * When "Filter with DITAVAL files" is on, the files are always asked for: a
+ * DITAVAL is rarely next to the map, so neither a remembered path nor the map's
+ * folder is trusted. The dialog opens at the previous choice (or the map's
+ * folder) and its selection becomes the new remembered value.
+ */
 async function chooseAndRun(map: string): Promise<void> {
-  const ditavalCount = readDitavalFiles(dirname(map)).length;
-  const res = await pickChecks(map, ditavalCount);
+  const res = await pickChecks(map);
   if (!res) return;
-  let picked = normalizeEnabled(res.picked);
-  if (picked.includes('useDitaval') && readDitavalFiles(dirname(res.map)).length === 0) {
-    const files = await browseFiles(vscode.l10n.t('DITAVAL Filter Files'), ['ditaval'], true);
-    if (files.length === 0) picked = picked.filter((id) => id !== 'useDitaval');
-    else await updateSetting(SETTINGS, 'ditavalFiles', files.map((f) => toStoredPath(dirname(res.map), f)));
+  const picked = normalizeEnabled(res.picked);
+  const mapDir = dirname(res.map);
+  if (picked.includes('useDitaval')) {
+    const previous = readDitavalFiles(mapDir)[0];
+    const files = await browseFiles(vscode.l10n.t('DITAVAL Filter Files'), ['ditaval'], true, previous ?? mapDir);
+    if (files.length === 0) return; // dialog dismissed: cancel the run rather than silently run unfiltered
+    await updateSetting(SETTINGS, 'ditavalFiles', files.map((f) => toStoredPath(mapDir, f)));
   }
   await updateSetting(SETTINGS, 'enabledChecks', picked);
   await run(res.map);

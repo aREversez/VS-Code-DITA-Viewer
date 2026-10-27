@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.ref.map.no.proper.format, positive: a mapref whose @format is dita. -->
+<map>
+  <title>Mapref with format dita</title>
+  <mapref href="c-mapref-format-sub.ditamap" format="dita"/>
+</map>

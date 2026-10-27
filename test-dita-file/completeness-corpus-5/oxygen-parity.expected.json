@@ -1,0 +1,38 @@
+{
+  "matched": [
+    "corpus.ditamap  missing-reference",
+    "maps/l-ref-type-mismatch-map.ditamap  type-class-mismatch",
+    "maps/m-dita-ref-edge.ditamap  dita-parse",
+    "maps/m-dita-ref-pos.ditamap  format-mismatch",
+    "maps/n-parse-content-edge.ditamap  dita-parse",
+    "maps/n-parse-content-pos.ditamap  dita-parse",
+    "topics/l-class-format-edge-badvalue.dita  class-format",
+    "topics/l-class-format-edge-empty.dita  class-format",
+    "topics/l-class-format-neg.dita  class-format",
+    "topics/l-class-generalization-edge.dita  conref-class",
+    "topics/l-class-generalization-pos.dita  conref-class",
+    "topics/l-class-specialization-edge.dita  class-format",
+    "topics/l-class-specialization-neg.dita  conref-class",
+    "topics/l-class-specialization-pos.dita  conref-class",
+    "topics/l-domains-format-edge.dita  domains-format",
+    "topics/l-domains-format-pos.dita  class-format",
+    "topics/l-ref-type-mismatch-pos.dita  type-class-mismatch",
+    "topics/l-ref-type-specific-pos.dita  type-class-specific",
+    "topics/m-not-dita.xml  class-format",
+    "topics/n-section-first-title-pos.dita  section-title-order",
+    "topics/n-section-no-dup-title-pos.dita  section-title-duplicate"
+  ],
+  "extensionOnly": [
+    "maps/m-dita-ref-edge.ditamap  format-mismatch",
+    "maps/m-uri-target-edge.ditamap  external-reference",
+    "topics/m-not-dita.xml  validation",
+    "topics/m-plain.txt  validation",
+    "topics/n-broken-edge.dita  validation",
+    "topics/n-broken-pos.dita  validation"
+  ],
+  "oxygenOnly": [
+    "corpus.ditamap  format-mismatch",
+    "maps/m-uri-target-edge.ditamap  dita-parse",
+    "topics/l-class-format-pos-undeclared.dita  class-format"
+  ]
+}

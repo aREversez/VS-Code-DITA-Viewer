@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.prof.sbj.attr.mult.val.confl: edge probe; a second value that the scheme does not allow. -->
+<topic id="jme">
+  <title>Two values, one outside the scheme</title>
+  <body>
+    <p product="desktop mobile">The scheme allows desktop only; mobile is a second value.</p>
+  </body>
+</topic>

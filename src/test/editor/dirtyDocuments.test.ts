@@ -15,8 +15,14 @@ import {
   clearBookSearchIndexCache,
   extractBookSearchEntry,
 } from '../../editor/bookSearchIndex';
-import { setSourceOverlay, clearSourceOverlay, clearAllSourceOverlays, trackSourceReads, dependsOn } from '../../editor/sourceText';
-import { parseDitamap } from '../../parser/ditaParser';
+import {
+  setSourceOverlay,
+  clearSourceOverlay,
+  clearAllSourceOverlays,
+  trackSourceReads,
+  dependsOn,
+  parseDitamap,
+} from '@dita-viewer/core';
 
 /**
  * A topic that is open and modified in an editor but not saved. Everything

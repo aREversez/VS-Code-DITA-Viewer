@@ -19,16 +19,22 @@ interface Rule {
   action: string;
 }
 
+/** A `<prop>` of a filter file, with the line it is written on (1-based). */
+export interface DitavalRule extends Rule {
+  line: number;
+}
+
 const NO_FILTER: DitavalFilter = { excludes: () => false };
 
-export function parseDitaval(xml: string): DitavalFilter {
-  const rules: Rule[] = [];
+/** Every `<prop att= val= action=>` of a filter file, in document order. */
+export function parseDitavalRules(xml: string): DitavalRule[] {
+  const rules: DitavalRule[] = [];
   const parser = sax.parser(true, { trim: true });
   parser.onopentag = (node) => {
     if (node.name !== 'prop') return;
     const a = node.attributes as Record<string, string>;
     if (!a.att || !a.action) return;
-    rules.push({ att: a.att, val: a.val, action: a.action });
+    rules.push({ att: a.att, val: a.val, action: a.action, line: parser.line + 1 });
   };
   parser.onerror = () => {
     parser.error = null as unknown as Error;
@@ -38,6 +44,11 @@ export function parseDitaval(xml: string): DitavalFilter {
   } catch {
     // Keep whatever rules were read before the error.
   }
+  return rules;
+}
+
+export function parseDitaval(xml: string): DitavalFilter {
+  const rules: Rule[] = parseDitavalRules(xml);
   if (rules.every((r) => r.action !== 'exclude')) return NO_FILTER;
 
   const actionFor = (att: string, value: string): string => {

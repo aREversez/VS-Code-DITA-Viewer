@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="dup">
+  <title>Duplicate id B</title>
+  <body>
+    <p>Shares its id with twoidsa.dita.</p>
+  </body>
+</topic>

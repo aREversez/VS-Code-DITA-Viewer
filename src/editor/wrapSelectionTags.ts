@@ -3,8 +3,7 @@
 // this can be unit-tested directly; the vscode glue lives in
 // wrapSelectionCommand.ts.
 
-import { STANDARD_TAG_TO_BASETYPE } from '../parser/standardTagMap';
-import { MAP_STANDARD_TAG_TO_BASETYPE } from '../parser/mapTagMap';
+import { STANDARD_TAG_TO_BASETYPE, MAP_STANDARD_TAG_TO_BASETYPE } from '@dita-viewer/core';
 
 export interface WrapTagCandidate {
   tag: string;

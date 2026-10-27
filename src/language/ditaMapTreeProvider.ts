@@ -21,14 +21,17 @@
 import * as vscode from 'vscode';
 import { existsSync, readFileSync } from 'fs';
 import { basename, dirname, resolve } from 'path';
-import { DitaNode } from '../parser/domTypes';
-import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
+import {
+  DitaNode,
+  parseDitamap,
+  preprocessEntities,
+  createBookRoleLabeler,
+  isDitamapRef,
+} from '@dita-viewer/core';
 import { expandDitamapRefs, decodeHrefPart, makeFileTitleResolver, makeFileTopicTypeResolver } from '../editor/ditaRenderUtils';
 import { acquireDitaFileWatcher, ditaWatchBase } from '../editor/ditaFileWatcher';
 import { onKeyContextChanged } from '../editor/keyContext';
 import { buildKeyMap, findDitamapFiles } from '../editor/DitaViewerProvider';
-import { createBookRoleLabeler } from '../render/mapTypeMap';
-import { isDitamapRef } from '../render/mapTypeMap';
 import { formatLocalizedRole } from './bookRoleL10n';
 import { shouldRefreshMapTree } from './mapTreeRefresh';
 import { decideMapFollow } from './mapTreeFollow';

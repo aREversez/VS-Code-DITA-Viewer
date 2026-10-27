@@ -1,8 +1,7 @@
 import * as assert from 'assert';
 import { mapTreeLabel, mapTreeIconId, TOPIC_TYPE_ICON_IDS } from '../../language/mapTreePresentation';
-import { parseDitamap, preprocessEntities } from '../../parser/ditaParser';
+import { parseDitamap, preprocessEntities, DitaNode } from '@dita-viewer/core';
 import { expandDitamapRefs } from '../../editor/ditaRenderUtils';
-import { DitaNode } from '../../parser/domTypes';
 
 /**
  * What a row of the Explorer map tree says and which icon it carries. The

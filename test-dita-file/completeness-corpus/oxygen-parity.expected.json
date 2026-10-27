@@ -1,0 +1,33 @@
+{
+  "matched": [
+    "corpus.ditamap  dita-parse",
+    "corpus.ditamap  duplicate-key",
+    "corpus.ditamap  missing-reference",
+    "corpus.ditamap  multiple-reference",
+    "corpus.ditamap  profiling-conflict",
+    "corpus.ditamap  undefined-key",
+    "corpus.ditamap  unreferenced-key",
+    "topics/linker.dita  unreferenced-link",
+    "topics/linker2.dita  invalid-ref-topic-id",
+    "topics/ok.dita  unreferenced-reusable",
+    "topics/outside.dita  outside-folder",
+    "topics/outside.dita  unreferenced-link",
+    "topics/profiling-shape-inner.dita  profiling-conflict",
+    "topics/profiling-shape-inner.dita  profiling-preference",
+    "topics/profiling-shape-map.dita  profiling-preference",
+    "topics/profiling-shape-root.dita  profiling-conflict",
+    "topics/profiling-shape-root.dita  profiling-preference",
+    "topics/profiling.dita  profiling-preference",
+    "topics/resources.dita  missing-reference",
+    "topics/reuse.dita  unreferenced-reusable",
+    "topics/twoidsa.dita  duplicate-id",
+    "topics/twoidsb.dita  duplicate-id"
+  ],
+  "extensionOnly": [
+    "topics/malformed.dita  validation",
+    "topics/tables.dita  table-layout"
+  ],
+  "oxygenOnly": [
+    "topics/invalid.dita  class-format"
+  ]
+}

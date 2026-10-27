@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.invalid.DITA.uri.target, positive: the reference names a URI that is not a local
+     file, and format="dita" claims it holds DITA. Remote checking is off for this corpus,
+     so nothing is fetched; the question is which id Oxygen uses for a DITA claim it cannot
+     verify, and how that differs from the remote-reference family of corpus 2. A navtitle
+     is given so the file carries no missing-navtitle finding of its own, which the ledger
+     already accounts for (R036). -->
+<map>
+  <title>format="dita" on a remote URI (positive)</title>
+  <topicref href="https://example.com/corpus5/not-fetched.dita" format="dita"
+            scope="external" navtitle="Not fetched"/>
+</map>

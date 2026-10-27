@@ -5,8 +5,7 @@
 import * as vscode from 'vscode';
 import { readFileSync, writeFileSync } from 'fs';
 import { basename, dirname, join, resolve } from 'path';
-import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
-import { collectMapEntries, getMapTitleText } from '../render/mapTypeMap';
+import { parseDitamap, preprocessEntities, collectMapEntries, getMapTitleText } from '@dita-viewer/core';
 import { formatLocalizedRole } from '../language/bookRoleL10n';
 import { expandDitamapRefs, renderTopicToHtml, decodeHrefPart } from './ditaRenderUtils';
 import { buildKeyMap } from './DitaViewerProvider';

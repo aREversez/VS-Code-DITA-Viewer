@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.extra.slash, positive: a trailing slash after the topic file name.
+     The filesystem resolves it to the file, so it is a spelling problem. -->
+<topic id="a-ref-extra-slash-pos">
+  <title>Trailing slash after a file (positive)</title>
+  <body>
+    <p><xref href="../topics/ok.dita/">trailing slash</xref></p>
+  </body>
+</topic>

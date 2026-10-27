@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Contract logo">
+  <!-- Hand-drawn for the webhelp-contract acceptance template only: a square
+       with three stripes, so the .wh_logo hook has an <img> to size in the
+       visual check. Not derived from any third-party asset. -->
+  <rect x="2" y="2" width="60" height="60" rx="8" fill="#7c1d6f"/>
+  <rect x="12" y="14" width="40" height="8" fill="#ffe9a8"/>
+  <rect x="12" y="28" width="40" height="8" fill="#f3e8ff"/>
+  <rect x="12" y="42" width="26" height="8" fill="#ffe9a8"/>
+</svg>

@@ -21,10 +21,14 @@
 // per book and cached, not rebuilt per keystroke.
 
 import { existsSync } from 'fs';
-import { readSourceText } from './sourceText';
-import { DitaNode } from '../parser/domTypes';
-import { parseDita, preprocessEntities } from '../parser/ditaParser';
-import { findTopLevelIndextermsInSubtree, collectIndextermChips } from '../render/baseTypeMap';
+import {
+  readSourceText,
+  DitaNode,
+  parseDita,
+  preprocessEntities,
+  findTopLevelIndextermsInSubtree,
+  collectIndextermChips,
+} from '@dita-viewer/core';
 import { stampFiles, findTextMatches } from './ditaRenderUtils';
 import type { DocsiteNavEntry } from './ditaRenderUtils';
 

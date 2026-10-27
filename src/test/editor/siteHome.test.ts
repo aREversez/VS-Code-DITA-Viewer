@@ -138,4 +138,52 @@ describe('renderSiteHomeHtml', () => {
     assert.doesNotMatch(html, /<script>alert/);
     assert.doesNotMatch(html, /target="\/w\/"quote"\.dita"/, 'an unescaped quote would break out of the attribute');
   });
+
+  describe('webhelp dom (route B M3-10, purely additive)', () => {
+    const tiles: SiteHomeTile[] = [{ title: 'Getting Started', target: '/w/a.dita', topicCount: 3 }];
+
+    it('the grid, the tile, its title and its text carry the contract hook names next to the own ones', () => {
+      const html = renderSiteHomeHtml(tiles, { heading: 'Book', topicCountLabel: label, webhelp: true });
+      assert.ok(html.includes('class="site-home-grid wh_tiles"'), html);
+      assert.ok(html.includes('class="site-home-tile wh_tile"'), html);
+      assert.ok(html.includes('class="site-home-tile-title wh_tile_title"'), html);
+      assert.ok(html.includes('class="site-home-tile-meta wh_tile_text"'), html);
+    });
+
+    it('kill test: without webhelp the html5 tokens are absent (route A DOM unchanged)', () => {
+      const html = renderSiteHomeHtml(tiles, { heading: 'Book', topicCountLabel: label });
+      assert.ok(!/wh_tile/.test(html), html);
+    });
+
+    it('the own classes stay the whole class value when webhelp is off, so dv-base rules and the click delegation are untouched', () => {
+      // The tile click delegation queries '.site-home-tile[data-site-target]'
+      // (siteNavScripts.ts) and prev/next/history key off the same node; a
+      // token that slipped in unconditionally would change what a route A
+      // template's own css matches, and a dropped own class would break the
+      // delegation.
+      const own = renderSiteHomeHtml(tiles, { heading: 'Book', topicCountLabel: label });
+      const wh = renderSiteHomeHtml(tiles, { heading: 'Book', topicCountLabel: label, webhelp: true });
+      for (const cls of ['site-home', 'site-home-title', 'site-home-tile', 'site-home-tile-title', 'site-home-tile-meta', 'data-site-target="/w/a.dita"']) {
+        assert.ok(own.includes(cls) && wh.includes(cls), cls);
+      }
+    });
+
+    it('the heading-less no-tiles page keeps its own markup even with webhelp on', () => {
+      // wh_welcome / wh_main_page_toc are optional contract hooks with nothing
+      // to fill them yet (a welcome text no .opt-derived map data supplies; a
+      // tree gallery this page deliberately is not). An empty grid is not a
+      // reason to emit an empty wh_tiles container.
+      const html = renderSiteHomeHtml([], { heading: 'Book', topicCountLabel: label, webhelp: true });
+      assert.strictEqual(html, '<div class="site-home"><h1 class="site-home-title">Book</h1></div>');
+    });
+
+    it('chips keep the shared site-nav-chip classes with webhelp on', () => {
+      const html = renderSiteHomeHtml(
+        [{ title: 'A', target: '/w/a.dita', role: 'Chapter 1', topicType: 'Concept', topicCount: 1 }],
+        { heading: 'Book', topicCountLabel: label, webhelp: true },
+      );
+      assert.ok(html.includes('site-nav-chip--role">Chapter 1<'), html);
+      assert.ok(html.includes('site-nav-chip--type">Concept<'), html);
+    });
+  });
 });

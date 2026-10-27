@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.invalid.keyref.syntax.1, boundary: a bare key, no slash. -->
+<topic id="b-keyref1-edge">
+  <title>Two slashes in a keyref (boundary)</title>
+  <body>
+    <p><xref keyref="a">bare key</xref></p>
+  </body>
+</topic>

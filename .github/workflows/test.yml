@@ -11,7 +11,10 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        node: [18, 20, 22]
+        # No 18: it is EOL (Apr 2025), and the test-time cheerio pulls undici,
+        # which needs the File global that first landed in Node 20 -- loading a
+        # cheerio test file on 18 dies with "ReferenceError: File is not defined".
+        node: [20, 22]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +30,9 @@ jobs:
       # that typechecks all of src/
       - run: npm run typecheck
       - run: npm test
+      # the shared core in packages/core has its own typecheck and tests
+      - run: npm run typecheck:core
+      - run: npm run test:core
       - run: npm run lint
       # l10n consistency guard (source strings vs l10n/package.nls catalogs);
       # a pure source scan, so it needs neither a build nor a display server
@@ -59,6 +65,8 @@ jobs:
       # keeping the zero-runtime-dependency footprint); package --no-dependencies
       # mirrors what a real publish would ship.
       - run: npm run check:package
+      # packs @dita-viewer/core and uses the tarball the way a consumer would
+      - run: npm run check:core-pack
 
   # Real-browser check for the site/book template feature: loads the same
   # template snapshot HTML the preview builds into headless Chromium and asserts

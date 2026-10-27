@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.topic.as.map, negative: the same xref with format="dita". -->
+<topic id="c-topic-as-map-neg">
+  <title>Topic as map, xref (negative)</title>
+  <body>
+    <p><xref href="../topics/c-topic-as-map-target.dita" format="dita">xref to a topic declared as a topic</xref></p>
+  </body>
+</topic>

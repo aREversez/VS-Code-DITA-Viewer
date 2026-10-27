@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.filtered: target of the negative probe; the referenced element is kept. -->
+<topic id="kctn">
+  <title>Kept conref target</title>
+  <body>
+    <p>A neutral paragraph.</p>
+    <p id="kept" audience="novice">The element the conref points at.</p>
+  </body>
+</topic>

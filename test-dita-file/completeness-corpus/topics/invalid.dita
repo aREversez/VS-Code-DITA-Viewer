@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="invalid">
+  <title>Schema-invalid</title>
+  <body>
+    <!-- Well-formed XML that a DITA DTD/schema would reject: unknown attribute
+         and unknown element. The extension has no DTD/RNG validation and is
+         expected to stay silent here, which is the divergence probe. -->
+    <p bogus="x"><notanelement>oops</notanelement></p>
+  </body>
+</topic>

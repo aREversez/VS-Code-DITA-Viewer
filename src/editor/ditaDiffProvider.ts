@@ -4,25 +4,25 @@
 import * as vscode from 'vscode';
 import { randomBytes } from 'crypto';
 import { dirname, join, basename, resolve } from 'path';
-import { DitaNode } from '../parser/domTypes';
-import { renderElement, RenderContext } from '../render/renderer';
+import { DitaNode, renderElement, RenderContext, buildRenderContext } from '@dita-viewer/core';
 import {
   buildKeyMap,
 } from './DitaViewerProvider';
 import {
   decodeHrefPart,
   escapeHtml,
+  getImageLightboxScript,
 } from './ditaRenderUtils';
-import { buildRenderContext } from './renderContext';
+import { sharedWebviewStrings } from './webviewL10n';
 import {
   diffTopics,
-  AlignedRow,
   TopicDiffResult,
-  applyInlineMarksToHtml,
   swapAlignedRows,
+  computeRowStats,
   buildQuickCommitChoices,
   arrangeByRecency,
 } from './ditaDiffEngine';
+import { renderDiffColumns } from './ditaDiffRender';
 import {
   getRepoRoot,
   toRepoRelPath,
@@ -34,8 +34,22 @@ import {
 } from './ditaGitUtils';
 import { getActiveDitaUri } from './exportHtml';
 import { ensureCommandAllowed } from './workspaceTrustGate';
+import { ensureDitaDiffVirtualDocuments, DITA_DIFF_SCHEME } from './ditaDiffVirtualDoc';
 
 const DIFF_PANELS = new Map<string, vscode.WebviewPanel>();
+
+// Test hook, same idea as getLastRenderedHtmlForTesting in DitaViewerProvider:
+// VS Code gives a test no handle on a webview panel's HTML, so each diff render
+// records its output here, keyed by the compared document's URI.
+const lastDiffHtmlByUri = new Map<string, string>();
+
+export function getLastDiffHtmlForTesting(uriString: string): string | undefined {
+  return lastDiffHtmlByUri.get(uriString);
+}
+
+function recordDiffHtml(panel: vscode.WebviewPanel, html: string): void {
+  for (const [key, p] of DIFF_PANELS) if (p === panel) lastDiffHtmlByUri.set(key, html);
+}
 
 // Holds whatever the panel should currently render. A single message
 // listener (registered once per panel, in getOrCreateDiffPanel) reads
@@ -45,7 +59,19 @@ const DIFF_PANELS = new Map<string, vscode.WebviewPanel>();
 // getOrCreateDiffPanel), and a naive listener-per-render-call would leave
 // old listeners (closed over stale results) stacking up alongside the
 // new one, firing the swap handler multiple times per click.
-const DIFF_STATE = new WeakMap<vscode.WebviewPanel, { result: TopicDiffResult; leftLabel: string; rightLabel: string }>();
+//
+// The raw left/right XML is kept alongside the structured rows purely so the
+// toolbar can hand the exact same two versions to VS Code's native diff editor
+// on demand (see openSourceDiff) -- the rendered view never needs it.
+type DiffPanelState = {
+  result: TopicDiffResult;
+  leftXml: string;
+  rightXml: string;
+  leftLabel: string;
+  rightLabel: string;
+  docUri: vscode.Uri;
+};
+const DIFF_STATE = new WeakMap<vscode.WebviewPanel, DiffPanelState>();
 
 export function registerCompareCommand(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
@@ -167,7 +193,14 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
         async () => {
           try {
             const result = computeDiff(finalLeft.xml, finalRight.xml, docDir, uri, panel.webview);
-            renderDiffPanel(context, panel, result, finalLeft.label, finalRight.label);
+            renderDiffPanel(context, panel, {
+              result,
+              leftXml: finalLeft.xml,
+              rightXml: finalRight.xml,
+              leftLabel: finalLeft.label,
+              rightLabel: finalRight.label,
+              docUri: uri,
+            });
           } catch (err) {
             // Defense-in-depth, not a substitute for fixing known failure
             // causes at their source: computeDiff/openDiffPanel are pure
@@ -185,6 +218,8 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
       );
     }),
   );
+
+  registerShowRenderedDiffFromSource(context);
 }
 
 async function pickCommit(commits: GitCommitInfo[]): Promise<GitCommitInfo | undefined> {
@@ -296,32 +331,136 @@ function getOrCreateDiffPanel(
   panel.onDidDispose(() => {
     DIFF_PANELS.delete(key);
     DIFF_STATE.delete(panel);
+    lastDiffHtmlByUri.delete(key);
   });
 
   panel.webview.onDidReceiveMessage((msg) => {
+    const state = DIFF_STATE.get(panel);
+    if (!state) return;
     if (msg.type === 'swapSides') {
-      const state = DIFF_STATE.get(panel);
-      if (!state) return;
-      const swapped = swapAlignedRows(state.result.rows);
-      const swappedResult = { ...state.result, rows: swapped };
-      const swappedLabels = { leftLabel: state.rightLabel, rightLabel: state.leftLabel };
-      DIFF_STATE.set(panel, { result: swappedResult, ...swappedLabels });
-      panel.webview.html = buildDiffHtml(context, panel.webview, swappedResult, swappedLabels.leftLabel, swappedLabels.rightLabel);
+      // Swap is a whole-state flip: the rows, the labels, AND the raw XML both
+      // turn around, so the native source diff (openSourceDiff below) always
+      // reflects whatever the rendered view is currently showing.
+      //
+      // The stats chip has to be RECOUNTED, not reused. swapAlignedRows flips
+      // every row's changeType (added <-> removed), so carrying the old numbers
+      // over left the chip contradicting the view it sits on top of: an
+      // insertion-only diff showed "+1 −0" while the only changed block was on
+      // the left (a deletion) after the swap.
+      const rows = swapAlignedRows(state.result.rows);
+      const swapped: DiffPanelState = {
+        result: { ...state.result, rows, stats: computeRowStats(rows) },
+        leftXml: state.rightXml,
+        rightXml: state.leftXml,
+        leftLabel: state.rightLabel,
+        rightLabel: state.leftLabel,
+        docUri: state.docUri,
+      };
+      renderDiffPanel(context, panel, swapped);
+    } else if (msg.type === 'openSourceDiff') {
+      void openSourceDiff(context, state);
     }
   });
 
   return panel;
 }
 
+// Publish the two versions as in-memory documents and open VS Code's native
+// diff editor over them. Reused URIs (keyed by document + side) mean repeated
+// clicks refresh the same tab rather than stacking new ones; the query carries
+// the original document URI so the native side can offer a way back here (see
+// registerShowRenderedDiffFromSource).
+async function openSourceDiff(context: vscode.ExtensionContext, state: DiffPanelState): Promise<void> {
+  const docs = ensureDitaDiffVirtualDocuments(context);
+  const docKey = state.docUri.toString();
+  // No encodeURIComponent here: Uri.from treats `path` as an already-decoded
+  // path, so a pre-encoded name is stored literally and then percent-encoded a
+  // SECOND time on toString() -- `泵坏了.left.dita` reached the tab label as
+  // `%25E6%25B3%25B5...`. Uri/URI-tools escape the separators (`/`, `#`, `?`)
+  // themselves, once.
+  const stem = `${basename(state.docUri.fsPath)}-${shortId(docKey)}`;
+  const query = `doc=${encodeURIComponent(docKey)}`;
+  const leftUri = vscode.Uri.from({ scheme: DITA_DIFF_SCHEME, path: `/${stem}.left.dita`, query });
+  const rightUri = vscode.Uri.from({ scheme: DITA_DIFF_SCHEME, path: `/${stem}.right.dita`, query });
+  docs.setContent(leftUri, state.leftXml);
+  docs.setContent(rightUri, state.rightXml);
+  const title = `${basename(state.docUri.fsPath)}: ${state.leftLabel} ↔ ${state.rightLabel}`;
+  await vscode.commands.executeCommand('vscode.diff', leftUri, rightUri, title);
+}
+
+// Test seam: drive openSourceDiff directly from the integration suite so it can
+// verify that vscode.diff on the virtual .dita URIs actually opens the native
+// text diff editor and is NOT hijacked by the ditaViewer.preview custom editor.
+// The @vscode/test-electron harness cannot click a webview toolbar button, so
+// this is the only way to exercise the end-to-end source-diff path in a real
+// VS Code instance. openSourceDiff reads only leftXml/rightXml/labels/docUri
+// from state (never result), so we construct a minimal state just for it.
+export async function openSourceDiffForTesting(
+  context: vscode.ExtensionContext,
+  input: { leftXml: string; rightXml: string; leftLabel: string; rightLabel: string; docUri: vscode.Uri },
+): Promise<void> {
+  const state = { ...input, result: undefined! } as unknown as DiffPanelState;
+  await openSourceDiff(context, state);
+}
+
+// A compact, collision-resistant identity for a document URI, used to namespace
+// its two virtual source files so two different .dita files never share a path.
+function shortId(s: string): string {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  }
+  return (h >>> 0).toString(36);
+}
+
+// Reverse of openSourceDiff: from VS Code's native source-diff editor, jump
+// back to this extension's rendered diff panel for the same comparison. The
+// bridge is the `doc=` query openSourceDiff stamps on both virtual URIs -- it
+// carries the compared document's URI, which is exactly the key DIFF_PANELS is
+// indexed by, so the panel is still alive we simply reveal it.
+function registerShowRenderedDiffFromSource(context: vscode.ExtensionContext): void {
+  context.subscriptions.push(
+    vscode.commands.registerCommand('ditaViewer.showRenderedDiffFromSource', async () => {
+      const docKey = docKeyFromSourceDiffUri();
+      const panel = docKey ? DIFF_PANELS.get(docKey) : undefined;
+      if (panel) {
+        panel.reveal();
+        return;
+      }
+      // Panel closed since the source diff was opened (or this native diff was
+      // not one of ours): re-run the compare command rather than dead-end.
+      await vscode.commands.executeCommand('ditaViewer.compareWithGit');
+    }),
+  );
+}
+
+// Resolve the compared document's key from whichever source-diff side currently
+// has focus. A diff editor exposes its panes several ways depending on where the
+// caret is, so check the active text editor and, failing that, the active tab's
+// diff input (either pane carries the same `doc=` query).
+function docKeyFromSourceDiffUri(): string | undefined {
+  const candidates: vscode.Uri[] = [];
+  const editorUri = vscode.window.activeTextEditor?.document.uri;
+  if (editorUri) candidates.push(editorUri);
+  const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+  if (input instanceof vscode.TabInputTextDiff) candidates.push(input.modified, input.original);
+  else if (input instanceof vscode.TabInputText) candidates.push(input.uri);
+  for (const uri of candidates) {
+    if (uri.scheme === DITA_DIFF_SCHEME) {
+      return new URLSearchParams(uri.query).get('doc') ?? undefined;
+    }
+  }
+  return undefined;
+}
+
 function renderDiffPanel(
   context: vscode.ExtensionContext,
   panel: vscode.WebviewPanel,
-  result: TopicDiffResult,
-  leftLabel: string,
-  rightLabel: string,
+  state: DiffPanelState,
 ): void {
-  DIFF_STATE.set(panel, { result, leftLabel, rightLabel });
-  panel.webview.html = buildDiffHtml(context, panel.webview, result, leftLabel, rightLabel);
+  DIFF_STATE.set(panel, state);
+  panel.webview.html = buildDiffHtml(context, panel.webview, state.result, state.leftLabel, state.rightLabel);
+  recordDiffHtml(panel, panel.webview.html);
 }
 
 function buildDiffHtml(
@@ -353,7 +492,24 @@ function buildDiffHtml(
   const theme = vscode.window.activeColorTheme;
   const isDark = theme.kind === vscode.ColorThemeKind.Dark || theme.kind === vscode.ColorThemeKind.HighContrast;
 
-  const rowsHtml = renderRows(result.rows);
+  // Click-to-enlarge lightbox + image copy menu -- the same script the topic
+  // and map previews embed. styles.css gives every rendered image cursor:zoom-in
+  // in this webview too (it links the shared styles.css), so a diff-view image
+  // showed the magnifying-glass cursor but clicking did nothing until now.
+  // Injected inline (not merged into diff-webview.js) because it interpolates
+  // the six localized copy strings; every listener is document-level delegation
+  // so it needs no wiring to the panel's own script. See getImageLightboxScript.
+  const L = sharedWebviewStrings();
+  const lightboxScript = getImageLightboxScript({
+    copyMenuItem: L.imgCopyMenuItem,
+    copyDoneLabel: L.imgCopyDoneLabel,
+    copyFailedLabel: L.imgCopyFailedLabel,
+    copyUnsupportedLabel: L.imgCopyUnsupportedLabel,
+    copyToastDone: L.imgCopyToastDone,
+    copyToastFailed: L.imgCopyToastFailed,
+  });
+
+  const cols = renderDiffColumns(result.rows);
   const statsHtml = renderStats(result.stats);
 
   const labels = {
@@ -361,6 +517,8 @@ function buildDiffHtml(
     prevChange: vscode.l10n.t('Previous change'),
     nextChange: vscode.l10n.t('Next change'),
     toggleInline: vscode.l10n.t('Show word-level changes'),
+    navCounter: vscode.l10n.t('Jump to change (type a number and press Enter)'),
+    sourceToggle: vscode.l10n.t('Open source diff'),
   };
 
   return `<!DOCTYPE html>
@@ -368,7 +526,7 @@ function buildDiffHtml(
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; base-uri 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src ${webview.cspSource} data:; base-uri 'none';">
 <link rel="stylesheet" href="${stylesUri}">
 <link rel="stylesheet" href="${diffStylesUri}">
 <title>Diff — ${escapeHtml(leftLabel)} ↔ ${escapeHtml(rightLabel)}</title>
@@ -379,52 +537,26 @@ function buildDiffHtml(
   <span class="diff-stats">${statsHtml}</span>
   <span class="diff-label" id="lbl-right">${escapeHtml(rightLabel)}</span>
   <span class="diff-spacer"></span>
-  <span class="diff-nav-counter" id="nav-counter"></span>
+  <input class="diff-nav-counter" id="nav-counter" type="text" inputmode="numeric" size="7" autocomplete="off" spellcheck="false" title="${escapeHtml(labels.navCounter)}" aria-label="${escapeHtml(labels.navCounter)}">
   <button id="btn-prev" title="${escapeHtml(labels.prevChange)}" aria-label="${escapeHtml(labels.prevChange)}">↑</button>
   <button id="btn-next" title="${escapeHtml(labels.nextChange)}" aria-label="${escapeHtml(labels.nextChange)}">↓</button>
   <button id="btn-swap" title="${escapeHtml(labels.swapTitle)}" aria-label="${escapeHtml(labels.swapTitle)}">⇄</button>
   <button id="btn-inline" title="${escapeHtml(labels.toggleInline)}" aria-label="${escapeHtml(labels.toggleInline)}" aria-pressed="true">Aa</button>
+  <button id="btn-source" title="${escapeHtml(labels.sourceToggle)}" aria-label="${escapeHtml(labels.sourceToggle)}">&lt;/&gt;</button>
 </div>
 <div id="diff-scroll">
 ${result.errorLeft ? `<div class="diff-error">${escapeHtml(result.errorLeft)}</div>` : ''}
 ${result.errorRight ? `<div class="diff-error">${escapeHtml(result.errorRight)}</div>` : ''}
-${rowsHtml}
+<div class="diff-columns">
+  <div class="diff-col diff-col--left">${cols.left}</div>
+  <div class="diff-gutter" id="diff-gutter"><svg id="align-svg" class="align-svg" xmlns="http://www.w3.org/2000/svg"></svg></div>
+  <div class="diff-col diff-col--right">${cols.right}</div>
+</div>
 </div>
 <script nonce="${nonce}" src="${diffScriptUri}"></script>
+<script nonce="${nonce}">${lightboxScript}</script>
 </body>
 </html>`;
-}
-
-function renderRows(rows: AlignedRow[]): string {
-  return rows.map((row) => renderRow(row)).join('\n');
-}
-
-function renderRow(row: AlignedRow): string {
-  const cls = `diff-row diff-row--${row.changeType}`;
-  const leftHtml = row.left ? applyInlineDiff(row.left.html, row, 'left') : emptyCell();
-  const rightHtml = row.right ? applyInlineDiff(row.right.html, row, 'right') : emptyCell();
-
-  const hasSectionChildren = row.children && row.children.length > 0;
-  if (hasSectionChildren) {
-    const nestedRows = row.children!.map((child) => renderRow(child)).join('\n');
-    return `<div class="${cls} diff-row--section">
-  <div class="diff-rows-nested">${nestedRows}</div>
-</div>`;
-  }
-
-  return `<div class="${cls}">
-  <div class="diff-cell diff-cell--left">${leftHtml}</div>
-  <div class="diff-cell diff-cell--right">${rightHtml}</div>
-</div>`;
-}
-
-function applyInlineDiff(html: string, row: AlignedRow, side: 'left' | 'right'): string {
-  if (row.changeType !== 'modified' || !row.inlineDiff) return html;
-  return applyInlineMarksToHtml(html, row.inlineDiff, side);
-}
-
-function emptyCell(): string {
-  return `<div class="diff-cell diff-cell--empty">—</div>`;
 }
 
 function renderStats(stats: { added: number; removed: number; modified: number }): string {

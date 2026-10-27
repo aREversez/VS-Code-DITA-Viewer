@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.prof.sbj.attr.val.rej.all: negative probe; another attribute has values in the scheme. -->
+<topic id="jran">
+  <title>Not every attribute is rejected</title>
+  <body>
+    <p platform="linux">The scheme allows linux for platform.</p>
+  </body>
+</topic>

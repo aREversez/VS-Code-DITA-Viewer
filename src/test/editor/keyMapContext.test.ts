@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, rmSync, unlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, basename } from 'path';
 import { setKeyContextMap, onKeyContextMissing } from '../../editor/keyContext';
-import { getKeyDefs } from '../../editor/keySpace';
+import { getKeyDefs } from '@dita-viewer/core';
 
 // keyMap.ts imports vscode at module scope (parseDocRoot / Uri), which the
 // mocha process does not have. This loads the REAL keyMap.ts against a

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.file.url.two.slashes, positive: a file: URL with two slashes and a
+     non-empty authority ("topics"), which RFC 8089 does not allow for a local path. -->
+<topic id="a-fileurl-pos">
+  <title>file: URL with two slashes (positive)</title>
+  <body>
+    <p><xref href="file://topics/ok.dita">file URL, two slashes</xref></p>
+  </body>
+</topic>

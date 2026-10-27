@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.prof.sbj.attr.val.rej.all: edge probe; several values, all outside the empty enumeration. -->
+<topic id="jrae">
+  <title>Several values, all rejected</title>
+  <body>
+    <p deliveryTarget="pdf html">The scheme defines no deliveryTarget value, so both are rejected.</p>
+  </body>
+</topic>

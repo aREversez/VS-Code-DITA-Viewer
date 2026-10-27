@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- Target for dmv.topicref.topic.no.format, boundary: a topic declared with
+     format="xml", which names neither of DITA's two formats. -->
+<topic id="c-topic-no-format-edge">
+  <title>Topic target declared as XML</title>
+  <body>
+    <p>The reference, not the file, carries the format.</p>
+  </body>
+</topic>

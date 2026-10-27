@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.type.class.mismatch, negative: the xref says task and the target is a task.
+     @type and the target class agree, so nothing is wrong. -->
+<topic id="l-ref-type-mismatch-neg">
+  <title>@type names the target's own type (negative)</title>
+  <body>
+    <p><xref href="l-ref-task-target.dita" type="task">A task, as promised.</xref></p>
+  </body>
+</topic>

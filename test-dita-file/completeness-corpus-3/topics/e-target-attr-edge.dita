@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.no.conref.has.target.attr.value, boundary: @conkeyref instead of @conref. Ask
+     Oxygen whether a content reference through a key allows the value as well. -->
+<topic id="e-target-attr-edge">
+  <title>Target value with conkeyref (boundary)</title>
+  <body>
+    <p><xref conkeyref="k-e-target-attr/xref1" scope="-dita-use-conref-target"/></p>
+  </body>
+</topic>

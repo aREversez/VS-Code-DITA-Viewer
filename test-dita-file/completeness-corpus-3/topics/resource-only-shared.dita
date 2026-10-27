@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.to.resource.only, boundary target: published by a resource-only topicref with
+     a copy-to and by a normal topicref (see maps/g-resource-only-edge.ditamap). It must
+     count as published, not as resource-only. No element ids, so it adds nothing to
+     unreferenced-reusable. -->
+<topic id="resource-only-shared">
+  <title>Published both ways</title>
+  <body>
+    <p>One resource-only reference with a copy-to, one normal reference.</p>
+  </body>
+</topic>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.extra.slash.ref, positive: an empty path segment ("//") inside a local
+     href. The target still resolves through normal path normalization. -->
+<topic id="a-extra-slash-pos">
+  <title>Double slash in a path (positive)</title>
+  <body>
+    <p><xref href="../topics//ok.dita">double slash</xref></p>
+  </body>
+</topic>

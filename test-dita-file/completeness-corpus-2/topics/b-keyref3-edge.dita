@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.invalid.keyref.syntax.3, boundary: leading whitespace only. -->
+<topic id="b-keyref3-edge">
+  <title>Whitespace in a keyref (boundary)</title>
+  <body>
+    <p><xref keyref=" a">leading space in key</xref></p>
+  </body>
+</topic>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- L1 dmv.invalid.class.format, edge: the element is declared but its class is written
+     without the scope prefix the DITA class syntax requires ("topic/p" instead of
+     "- topic/p"). The DTD declares class as fixed, so a validator sees a wrong attribute
+     value; whether the class check itself also fires here is what the report answers. -->
+<topic id="l-class-format-edge-badvalue">
+  <title>Class written without a scope</title>
+  <body>
+    <p class="topic/p">A paragraph whose class value drops the leading scope and separator.</p>
+  </body>
+</topic>

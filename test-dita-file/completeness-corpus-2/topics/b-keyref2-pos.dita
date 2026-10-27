@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.invalid.keyref.syntax.2, positive: "$" in a key name. The key is
+     defined literally as "a$b" so only the syntax rule is in play. -->
+<topic id="b-keyref2-pos">
+  <title>Invalid character in a keyref (positive)</title>
+  <body>
+    <p><xref keyref="a$b">dollar in key</xref></p>
+  </body>
+</topic>

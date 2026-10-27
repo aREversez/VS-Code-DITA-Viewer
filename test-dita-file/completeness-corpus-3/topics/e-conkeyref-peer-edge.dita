@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.conkeyref.peer.map, boundary: the key is defined in a submap of the same bundle,
+     which is local, not peer. -->
+<topic id="e-conkeyref-peer-edge">
+  <title>conkeyref into a submap (boundary)</title>
+  <body>
+    <p conkeyref="k-conkeyref-sub/p2"/>
+  </body>
+</topic>

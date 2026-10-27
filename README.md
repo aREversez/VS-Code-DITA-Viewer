@@ -17,7 +17,7 @@ A VS Code extension that renders **`.dita`** and **`.ditamap`** files as a forma
 - **BookMap semantics** — chapter/part/appendix entries carry numbered role badges in document order (Chapter 1, Part I, Appendix A …, localized in zh-CN as 第 1 章 / 第 I 部分 / 附录 A); `<booktitle>` renders as a title page with the main title elevated and alternate titles as subtitles
 - **Writing assistance** — Go to Definition for `keyref`/`conref`/`href` (Ctrl+Click), Find All References for the reverse direction (right-click an `id`, a keydef's `keys`, or any reference itself → Find All References / Shift+F12, to see everywhere a topic, element id, or key is used across the workspace), context-aware IntelliSense (tags, attributes, defined keys, workspace files, target ids), HTML-style auto-closing tags, broken-reference diagnostics in the Problems panel, document outline/breadcrumbs, and ready-made DITA snippets
 - **Find Unreferenced Resources** — like Oxygen's DITA Maps Manager check: pick the folders to check (the folders your map's images live in are ticked for you, with per-folder counts) and the file types, and the files no map, or topic reachable from it, references are listed in the Problems panel and marked in the Explorer. In the Map Navigator toolbar, the `.ditamap` context menu and the Command Palette
-- **Validate and Check for Completeness** — Oxygen's DITA Map Completeness Check over a map and everything it references: missing topics, images and other resources, references outside the map folder, links to topics not in any map, multiple references, duplicate topic IDs and keys, unreferenced keys and reusable elements, table layout, profiling conflicts, optional DITAVAL filtering. Pick the checks in a quick pick; the findings, labelled by category, go to the Problems panel
+- **Validate and Check for Completeness** — Oxygen's DITA Map Completeness Check over a map and everything it references: missing topics, images and other resources, references outside the map folder, links to topics not in any map, multiple references, duplicate topic IDs and keys, unreferenced keys and reusable elements, table layout, profiling conflicts, optional DITAVAL filtering, and the rules that read `@class`: `@class` syntax, an empty `@domains`, a `conref` whose source element is more specific than its target, `@type` against the target's class, section title structure, and a reference to DITA content that does not parse. Element classes come from a generated table of the DITA-OT 1.3 DTD defaults (base, technical content and bookmap), so a file that leaves `@class` to the DTD is checked too; a written value always wins; an element outside the table is skipped rather than given a guessed class; and only a file that declares neither a DOCTYPE nor a schema (a RELAX NG association or a schema location) is asked to write `@class` on every element, since its grammar may supply the defaults. What it deliberately does not do is DTD validation — undeclared elements or attributes, and content models — which is a good fit for a VS Code XML language server that knows DTDs and catalogs. Pick the checks in a quick pick; the findings, labelled by category, go to the Problems panel
 - **DITA Map Explorer** — sidebar tree of the map associated with the active editor, laid out like Oxygen's DITA Maps Manager: the main map is the root row (its own `<title>`/`<mainbooktitle>`, keyrefs resolved — version numbers in titles show the key's value), submaps are named by the referenced map's title rather than its file name, and rows carry type icons (map, submap, key definition, topic group, task, concept, reference, troubleshooting, glossary). Every branch starts collapsed (frontmatter and keydef entries are listed again — one collapsed line each), **Expand All** / **Collapse All** sit next to each other in the title bar and act on the selected node — expanding its subtree, or folding that subtree together with the selected row itself (the main map row stays open, so collapsing from the root leaves the one-level outline; a chapter `topichead` over leaf topics has nothing below it to fold, which is why the row itself is part of the collapse) — also from a row's context menu, with the main map as the target when nothing is selected; and what you expand survives map edits, reloads and VS Code restarts, per map.
 - **Export as HTML** — render any topic or full map to a single self-contained `.html` file (styles inlined, images embedded) without DITA-OT
 - **Full DITA element coverage** — topic, sections, notes (all types), lists, tables, figures, code blocks with language labels, images, cross-references (with title resolution), quotes, related links, inline formatting, keydef/keyword display; specialization modules (task/concept/reference, troubleshooting, glossary, taskreq, highlight/programming/software/UI domains) are audited against the DITA-OT 1.3 DTDs and render correctly even without explicit `@class` attributes in the source
@@ -97,7 +97,7 @@ Duplicate topics (same file referenced multiple times) are shown with a skip mes
 Content carrying DITA's `select-atts` group (`props`, `platform`, `product`, `audience`, `otherprops`, `base`, `importance`, `rev`, `status`) is highlighted with a small label naming the attribute/value that matched, mirroring Oxygen's own conditional-processing display. Two toolbar buttons control this, available in both topic and map/book preview:
 
 - **Flags** (on by default) — toggles the highlighting on/off without a re-render.
-- **Filter** — opens a panel listing every attribute/value combination found in the document as checkboxes; unchecking one actually hides the matching content, for previewing what a given build/audience would see.
+- **Filter** — opens a panel listing every attribute/value combination found in the document as checkboxes; unchecking one actually hides the matching content, for previewing what a given build/audience would see. The panel's **DITAVAL** row loads a `.ditaval` file (**Choose…** / **Change…** / **Clear**): the values it excludes are unticked and greyed out and their content is hidden, exactly as a DITA-OT build with that file would leave it out; hand-picked boxes stay as they were underneath, so clearing the file restores them. The chosen file is remembered per document.
 
 In map/book view, a `topicref`'s own profiling attributes (set directly in the ditamap source) cascade down to every descendant `topicref` that doesn't set its own value for the same attribute — a child's own value replaces, rather than merges with, an inherited one. This is a separate scope from a topic's own inline profiling: opening a `.dita` file directly only ever reads that file's own markup, regardless of what any ditamap referencing it says.
 
@@ -204,6 +204,8 @@ Press `Ctrl+Shift+P` → search **"DITA Viewer"** to find all settings including
 }
 ```
 
+`dita-viewer.cssDirectory` and `dita-viewer.customCss` are **resource-scoped**: a value in a workspace folder's `settings.json` applies to the documents inside that folder, which is what you want in a multi-root window where each product keeps its own themes. Set them at the user or workspace level to cover the whole window; a document outside every workspace folder has no folder value to pick up and falls back to those.
+
 ### What you can override
 
 Custom CSS is injected **after** the default `media/styles.css` and can override any rule. The default stylesheet defines these CSS variables for easy theming:
@@ -261,7 +263,7 @@ Open a DITA preview, then use the **Theme dropdown** to cycle through these and 
 
 #### Templates for Docsite and Book view
 
-The **Template** dropdown in the toolbar (Docsite and Book view) restyles the sidebar and the page of a map and can add a header and a footer around it. The choice is remembered per map, separately for each view. Three templates are built in: **Classic Docs**, **Aurora** (banner header) and **Reader** (serif, book-like); each has a light and a dark palette and follows VS Code's colour theme.
+The **Template** dropdown in the toolbar (Docsite and Book view) restyles the sidebar and the page of a map and can add a header and a footer around it. The choice is remembered per map. Docsite and Book view can each have their own; until you choose in a view, it follows the other one, and choosing **Default look** in a view keeps that view without a template. Three templates are built in: **Classic Docs**, **Aurora** (banner header) and **Reader** (serif, book-like); each has a light and a dark palette and follows VS Code's colour theme.
 
 To add your own, list one or more folders in `dita-viewer.templatesDirectory`; every sub-folder is a template:
 
@@ -291,13 +293,45 @@ my-templates/
 ```
 
 - `header` and `footer` are optional and are **data, not HTML**: the extension renders them, so a template cannot add elements or scripts. Text may use `{title}` (the map's title) and `{year}`; links must be `http(s)` or `mailto` (at most 8 each). The header's `banner` becomes its background image.
-- A folder with a `<publishing-template>` `.opt` file instead of `template.json` also works for the name, the colour tag, the preview image and the css list; its `webhelp.*` parameters are ignored, and it has no header or footer.
+- A folder with a `<publishing-template>` `.opt` file instead of `template.json` also works for the name, the description, the colour tag, the preview image, the `<logo>` / `<favicon>` and the css list; its `webhelp.*` parameters, `<html-fragments>` and `<html-page-layout-files>` are ignored, and it has no header or footer of the kind above. An `.opt` is taken to be written for the WebHelp-style DOM (see the next section), because that is what an Oxygen publishing template's css is written against; a `template.json` in the same folder wins and can say `"dom": "own"` to keep this extension's own markup.
 - The toolbar is not part of the header: in Docsite and Book view it is the page's top bar (`#__topbar`), above the header, so the header can use its whole width.
 - Everything a template names must stay inside its own folder.
 - Scope your css with `body[data-template="<folder name>"]`. Use `html.vscode-dark body[data-template="…"]` for the dark palette, or mark a dark-only template by using `body[data-template="…"].template-dark` (the class is added when `template.json` sets `"defaultDark": true`). The page structure to target is the extension's own — `.site-nav`, `.site-nav-link`, `#dita-content-root`, `.tpl-header`, `.tpl-footer` — and re-pointing the `--vscode-*` and `--color-*` custom properties on `body` recolours the toolbar, sidebar, notes and code blocks in one go. `media/templates/classic-docs/classic-docs.css` is a complete example. Do not override `content-visibility` rules: Book view relies on them for large maps.
 - Changing `dita-viewer.templatesDirectory` needs the preview reopened before a template's fonts and images load.
+- `dita-viewer.templatesDirectory` is resource-scoped like the CSS settings above: a folder's `settings.json` lists templates for the maps inside that folder, so in a multi-root window a folder can carry its own templates without affecting the others.
 
 Sample templates for manual testing are in `test-dita-file/manual/templates/`.
+
+#### WebHelp-style templates (`"dom": "webhelp"`)
+
+A template can declare that its css was written for the WebHelp page structure instead of this extension's own: add `"dom": "webhelp"` to `template.json`, or use an `.opt` descriptor, which implies it. Such a template gets a different page skeleton — top bar, tool bar, three columns (publication toc / topic / on-this-page), page footer — carrying the class and id names a WebHelp template's css reaches for, with the sidebar rows and landing-page tiles carrying both name sets on the same nodes. This is an interface-name compatibility layer written from scratch: no Oxygen css, js, layout file or image is involved, and the extension still renders and owns the page.
+
+The names it emits:
+
+| Region | On every page | When there is something to show |
+|---|---|---|
+| Page | `body.wh_topic_page`, `#wh_topic_container`, `.wh_content_area` | — |
+| Top bar | `header.wh_header`, `.wh_header_flex_container`, `.wh_publication_title`, `.wh_top_menu` | `.wh_logo` (the `.opt`'s `<logo>`) |
+| Tool bar | `nav.wh_tools`, `.wh_breadcrumb`, `.wh_right_tools`, `.wh_navigation_links` (`.navprev` / `.navnext`) | — |
+| Publication toc | `nav#wh_publication_toc`, `#wh_publication_toc_content`, `li.topicref` | `li.topicref.has-children` / `.active` / `.expanded` |
+| Topic | `#wh_topic_body`, `.wh_topic_content` (also carries `.body`) | — |
+| On this page | `nav#wh_topic_toc`, `#wh_topic_toc_content` | — |
+| Footer | `footer.wh_footer` | — |
+| Docsite landing page | — | `body.wh_main_page`, `.wh_tiles`, `.wh_tile`, `.wh_tile_title`, `.wh_tile_text` |
+
+The body text carries the `org.dita.html5` class names: `title topictitle1`…`topictitle6`, `title sectiontitle`, `shortdesc`, `p`, `note note_{type}` with `.note__title` / `.note__body`, `section`, `fig`, `image`, `ul` / `ol` / `li`, `dl` / `dlentry` / `dt dlterm` / `dd`, `q` / `lq` / `cite`, the `hi-d` runs as `ph b` / `ph i` / `ph u` / `ph tt` / `ph sup` / `ph sub` / `ph line-through` / `ph overline`, `table` / `cals-table` / `thead` / `tbody` / `row` / `entry`, the simple-table family `simpletable` / `sthead` / `strow` / `stentry`, `sl` / `sli`, `div` / `bodydiv` / `sectiondiv` / `object`, and `pre codeblock` / `pre screen` / `pre lines` / `pre preformatted` / `pre msgblock` / `figgroup synblk`. Where this extension already had its own token the html5 name is added next to it (`simple-table simpletable`, `body-div bodydiv`, …) rather than replacing it, so existing templates and the built-in stylesheets keep working. [`scripts/webhelp-body-class-diff.md`](scripts/webhelp-body-class-diff.md) is the item-by-item audit against the DITA-OT rule and lists what is still open: the specialisation classes on `body` (`conbody`, …), which depend on the map's root element, the `compact="no"` default tokens (`dltermexpand`, `sliexpand`), and the numbered `fig--title-label` / `table--title-label` caption spans.
+
+Never emitted, whatever the page: `.wh_print_link`, `#wh_toc_button`, `.wh_child_links`, `.wh_related_links` (related links render as `aside.related-links`), `.wh_welcome`, `.wh_tile_shortdesc`, `.wh_main_page_toc`, and the search hooks (`.wh_search_input`, `#searchForm`, …) — there is no search page, index page or print button in the preview to hang them on. `#go2top` is the one exception: the shell emits the button, and `webhelp-compat.css` keeps it `display: none` because nothing wires up the scroll behaviour yet. `webhelp.*` parameters and a template's own js are not implemented either.
+
+`body.wh_main_page` is **additive**: the landing page carries it next to `wh_topic_page`, not instead of it, so the shell rules keep working there. A template that tests the two apart (`body:not(.wh_topic_page)`, say) reads the landing page as a topic page.
+
+Theme and cascade:
+
+- `media/webhelp-compat.css` gives those names a working default layout and is loaded on every map preview. Its theme surface is the 28 custom properties a WebHelp template uses (`--primary-color`, `--header-bg-color`, `--toc-bg-color`, `--tile-bg-color`, `--elevation-shadow`, …), with light and `html.vscode-dark` values — setting only those is enough to recolour the whole shell.
+- Cascade order is by `@layer`: `styles.css` in `dv-base`, `webhelp-compat.css` in `wh-compat`, your template css **unlayered**, so it beats both without a single `!important`. Two `styles.css` rules are `!important` deliberately and a template cannot override them: `#wh_topic_body` must not become a scroller, and an empty on-this-page column stays hidden.
+- A template's css stays data-safe: `@import` is dropped and `url(…)` is rewritten only when it resolves inside the template folder.
+
+The repository checks this contract from both ends: `src/test/editor/webhelpContract.test.ts` and the shell tests pin the names, and `test-dita-file/manual/templates/webhelp-contract/` is an acceptance template whose css styles the contract by name — `src/test/editor/webhelpContractTemplate.test.ts` asserts every one of its selectors matches markup the real renderer emits, and `npm run test:visual` lays it out in a real Chromium and reads the computed styles back.
 
 #### Dark mode overrides
 
@@ -408,13 +442,12 @@ location for verification.
 
 ### Content reuse
 
-- **conref / conkeyref chains resolve one hop only.** When the target of a
-  `conref` (or `conkeyref`) carries its own `conref`/`conkeyref` (A → B → C),
-  the merge pulls in B's literal children but does not follow B's reference to
-  C. Conrefs nested *inside* the resolved content are still walked normally.
-  The DITA specification requires transitive resolution; this extension does
-  one hop as a design choice.
-  (`src/render/renderer.ts:318`, `mergeConrefTarget`)
+- **conref / conkeyref chains stop at 10 hops.** A `conref` or `conkeyref` whose
+  target carries its own reference (A → B → C) is followed to the end, across
+  files, each hop resolved relative to the file that holds it. A chain deeper
+  than 10 hops, or one that loops back on itself, falls back to the first hop;
+  a hop that cannot be resolved ends the chain at the last element that could.
+  (`@dita-viewer/core`, `render/renderer.ts`, `followConrefChain`)
 
 - **A keyref inside conref-pulled content gets no CJK spacing.** The bundled
   DITA-OT plugin (`com.dita-viewer.cjk-spacing`) runs at
@@ -426,10 +459,14 @@ location for verification.
 
 ### Key scope
 
-- **`keyscope` reads only the first token.** A DITA `keyscope="a b c"` means
-  the element belongs to all three scopes; the crawler currently takes the
-  first whitespace-delimited value only (`scopeChain.concat(...split(/\s+/)[0])`).
-  (`src/editor/mapCrawl.ts:363`)
+- **A bare key name ignores which scope the reference sits in.** A key defined
+  inside `keyscope="a"` answers to `a.k` (and, nested, `x.a.k` and `a.k`) as
+  well as `k`, so a qualified `keyref="a.k"` is substituted in the preview. But
+  the preview looks keys up in one flat table and does not know where the
+  referencing element sits, so a bare `keyref="k"` finds the first definition of
+  `k` in document order, not the one in the reference's own scope. Write the
+  qualified name where two scopes define the same key.
+  (`@dita-viewer/core`, `editor/keySpace.ts`, `collectMapKeys`)
 
 ### Custom DTDs and specialization
 
@@ -439,7 +476,14 @@ location for verification.
   are not fetched. Tags outside the built-in `standardTagMap` / `baseTypeMap`
   fall through with an empty `baseType`, so a custom domain element is rendered
   as a generic wrapper rather than a specialization of a known type.
-  (`src/parser/ditaParser.ts:204`)
+  (`@dita-viewer/core`, `parser/ditaParser.ts:204`)
+
+- **A specialized element needs `@class` in the source.** Without a DTD the
+  preview has nothing but the element's own `@class` to learn its ancestry
+  from. When `@class` is there (`class="- topic/ph hi-d/b my-d/mybold "`), the
+  element renders like the most specific standard element it names; a
+  specialization that omits `@class` (relying on a DTD to supply it) is not
+  supported and renders as a generic wrapper.
 
 - **`subjectScheme` classification is not used for rendering.** The preview
   resolves `baseType` from the `class` attribute against a fixed hierarchy
@@ -474,11 +518,23 @@ location for verification.
 
 ### Templates
 
-- **Template CSS targets the extension's own DOM, not Oxygen WebHelp.** The
-  page structure the extension emits (`.site-nav`, `.site-nav-link`,
-  `#dita-content-root`, `body[data-template="…"]`, …) is not Oxygen's
-  WebHelp markup. A template written for WebHelp selectors will not apply.
+- **A WebHelp-style template is matched by interface names, not by output
+  equality.** With `"dom": "webhelp"` the page carries the class and id names a
+  WebHelp template's css reaches for, but it is not Oxygen's output: no Oxygen
+  css, js, layout file or image is involved, the search and index pages, the
+  `webhelp.*` parameters and a template's own js are not implemented, and some
+  hooks are never emitted (see WebHelp-style templates above). Expect a real
+  Oxygen template's css to apply where it names those hooks and to be silent
+  elsewhere, not to reproduce a WebHelp build pixel for pixel.
+- **A template's css without `"dom": "webhelp"` targets this extension's own
+  DOM** (`.site-nav`, `.site-nav-link`, `#dita-content-root`,
+  `body[data-template="…"]`, …), which is not WebHelp markup; a template written
+  for WebHelp selectors needs the flag.
   (see Custom CSS → Quick start above, and `package.json` templatesDirectory docs)
+
+### Rename / reference updates
+
+- **Reference updates on rename only work for renames initiated within VS Code.** External renames (e.g. `git mv`, terminal `mv`) are not detected.
 
 ## Localization
 
@@ -518,7 +574,7 @@ npm install
 npm run build
 ```
 
-Then press `F5` in VS Code to launch the Extension Development Host.
+Then press `F5` in VS Code to launch the Extension Development Host, which loads `dist/` straight from this checkout. To install the build into the VS Code you actually use, see [Installing the package into a local VS Code](#installing-the-package-into-a-local-vs-code).
 
 ## Development
 
@@ -531,15 +587,62 @@ npm run test:e2e       # Run end-to-end tests
 npm run lint           # Lint source
 npm run format         # Format with Prettier
 npm run check:l10n     # Verify i18n catalogs match strings used in source
+npm run verify         # typecheck + lint + build + the checks above + npm test
+npm run package        # Package the built extension to output/<name>-<version>.vsix
+npm run vsix:install   # Install the newest output/*.vsix into the local VS Code
+npm run package:install  # build + package + install, for checking a real install
+npm run playwright:install  # Download Chromium for the visual check (once)
+npm run test:visual    # Render each template in a real Chromium, assert computed
+                       # style and write test-visual/__screenshots__/*.png
 ```
+
+`npm run test:visual` is deliberately outside `npm test` and `npm run verify`: it
+needs the downloaded browser and is slower. It loads the same HTML the preview
+builds (via `buildTemplateSnapshotHtml`) into a plain Chromium page, because the
+`@vscode/test-electron` harness can only read what the extension handed the
+webview, not a live computed style. It is not a pixel diff — the screenshots are
+for a person to look at, and the assertions are the automated part, including the
+WebHelp-style contract (see WebHelp-style templates above).
+
+### Manual testing in the development host
+
+Press `F5` (**Run Extension**) and the development host opens on the repository folder, because `.vscode/launch.json` passes `${workspaceFolder}`. That is what makes the repository's own `.vscode/settings.json` apply: it points `dita-viewer.templatesDirectory` at `test-dita-file/manual/templates` and `dita-viewer.customCss` at `test-dita-file/fixture/custom.css`, so the smoke-test templates and themes show up in the preview toolbars.
+
+Both are workspace-folder-level values, so a host opened on a subfolder (say `test-dita-file/manual`) reads them as empty — and then the Template dropdown lists only the built-ins, silently. Nothing is logged in that case: the diagnostic for a template folder reports an entry that resolves to no folder, and there is no entry at all. If templates or CSS you configured do not appear, check the host is opened on the repository root, or move the value to your user settings as an absolute path.
 
 ### Packaging
 
 ```bash
-npx @vscode/vsce package --out output/
+npm run package        # mkdir output, then vsce package --no-dependencies --out output/
 ```
 
-The `.vsix` file name is derived from the `name` and `version` fields in `package.json` (e.g. `output/dita-viewer-1.0.5.vsix`).
+The `.vsix` file name is derived from the `name` and `version` fields in `package.json` (e.g. `output/dita-viewer-1.0.9.vsix`). `npm run check:package` packages again and asserts the archive's contents (required assets present, `src/**` and the fixtures absent), which is the gate to trust before publishing a build.
+
+#### Installing the package into a local VS Code
+
+`npm run package:install` builds, packages and installs in one step. `npm run vsix:install` installs the newest `output/*.vsix` as it stands — no rebuild, no repackage — which is what you want after a packaging run, or when re-checking an archive someone sent you.
+
+The install does not trust `code` on `PATH`. On a machine where another VS Code-derived IDE sits earlier on `PATH` (its own bundled `code.cmd`), that shim installs the extension into the wrong application without failing, so `scripts/install-vsix.cjs` probes the standard Microsoft VS Code locations first — `%LOCALAPPDATA%\Programs`, `%ProgramFiles%`, `%ProgramFiles(x86)%` on Windows; `/Applications/Visual Studio Code.app/Contents/Resources/app/bin` on macOS; `/usr/share/code`, `/usr/bin/code`, `/snap/bin/code` on Linux — and only falls back to `PATH` with a warning. The CLI it picked is printed as the first line, so the target is verifiable at a glance. Point it at another installation with `VSCODE_CLI`:
+
+```powershell
+$env:VSCODE_CLI = "$env:LOCALAPPDATA\Programs\Microsoft VS Code Insiders\bin\code-insiders.cmd"
+npm run vsix:install
+```
+
+`VSIX_PROFILE` installs into a named [profile](https://code.visualstudio.com/docs/configure/profiles) instead of the default one, so a test build does not touch your everyday settings:
+
+```powershell
+$env:VSIX_PROFILE = "dita-dev"
+npm run package:install
+```
+
+`node scripts/install-vsix.cjs --dry-run` prints the CLI path and the vsix it would install, then stops — worth a look when the target matters and before anything changes.
+
+Installation passes `--force`, so a rebuild at an unchanged version replaces the installed copy instead of being refused as already installed; iterating does not require a version bump. The script then reads the version back with `--list-extensions --show-versions` and prints it, so the reported line is the installed state rather than `code`'s exit code.
+
+One step stays manual, because VS Code exposes no CLI to reload a window: run **Developer: Reload Window** in the target window to load the new build. A same-version reinstall can also hit a locked file while that window is open on Windows — close VS Code and run the install again if that happens.
+
+The same flow is available from the command palette as the `vsix: build + package + install` task in `.vscode/tasks.json`.
 
 ## Project Structure
 
@@ -561,15 +664,18 @@ src/
 │   ├── baseTypeMap.ts        # Rendering functions per DITA base type
 │   └── mapTypeMap.ts         # Map tree renderer (renderMapDocument, collectMapEntries)
 ├── test/                     # Unit tests (parser, render, editor utilities)
-└── test-e2e/                 # End-to-end tests (@vscode/test-electron)
+├── test-e2e/                 # End-to-end tests (@vscode/test-electron)
+└── test-visual/              # Real-Chromium template checks (npm run test:visual)
 media/
-├── styles.css                # Default preview stylesheet (included in VSIX)
+├── styles.css                # Default preview stylesheet (@layer dv-base; included in VSIX)
+├── webhelp-compat.css        # WebHelp-style DOM base sheet (@layer wh-compat)
 ├── icons/                    # Editor title bar + extension icons
 └── transform-assets/         # Site-chrome JS/CSS injected into DITA-OT output
 l10n/                         # Runtime translations (en + zh-cn)
 test-dita-file/               # Sample DITA project used for manual testing and e2e fixtures
 ├── fixture/                   #   generic DITA-element/keyref/conref smoke-test set + custom CSS theme examples
 └── manual/                    #   realistic multi-topic user-manual fixture (docsite mode, keyref rebrand, etc.)
+    └── templates/             #   manual-test templates, incl. the WebHelp contract acceptance template
 ```
 
 ## License

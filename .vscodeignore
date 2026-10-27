@@ -4,11 +4,19 @@ test-dita-file/**
 test/**
 test-visual/**
 src/**
+# dist/e2e/ is the e2e spec output (tsconfig.e2e.json). dist/test/ and
+# dist/test-e2e/ are what plain `tsc -p tsconfig.json` (rootDir src) wrote before
+# that config became noEmit -- no build produces them any more, but a stale tree
+# can still sit on an existing checkout, and a stale one ships if not ignored.
+# All dev-only.
+dist/e2e/**
 dist/test/**
+dist/test-e2e/**
 dist/**/*.map
 dist-test/**
 dist-test-visual/**
 scripts/**
+packages/**
 .github/**
 tsconfig.json
 tsconfig.e2e.json

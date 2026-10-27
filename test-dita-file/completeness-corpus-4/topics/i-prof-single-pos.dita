@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.prof.attr.val.prefs.confl: positive probe; platform is single-valued in the preferences. -->
+<topic id="ipsp">
+  <title>Two values for a single-valued attribute</title>
+  <body>
+    <p platform="linux windows">The platform attribute carries two values.</p>
+  </body>
+</topic>

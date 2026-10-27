@@ -1,3 +1,53 @@
+/*
+ * Base stylesheet for every DITA preview (topic, map, diff, export).
+ *
+ * Route B (webhelp-compat-plan.md §2.3) wraps the whole sheet in `@layer
+ * dv-base`, so a template's UNLAYERED css -- and `webhelp-compat.css` in
+ * `@layer wh-compat` -- outrank it without any `!important`. The order
+ * statement below fixes dv-base < wh-compat no matter which file the browser
+ * parses first. The book-mode content-visibility rules are the exception:
+ * they are `!important` and sit OUTSIDE the layer (see the `end @layer` note
+ * at the rule), so template css cannot switch the optimisation off.
+ */
+@layer dv-base, wh-compat;
+@layer dv-base {
+/* ── Host tokens: the one place this file meets VS Code ──
+   Everything in the topic-content and outline-tree rules below reads the
+   host-neutral --dita-* tokens (the same contract the Obsidian plugin's
+   stylesheet in @dita-viewer/core uses); VS Code answers them here from its
+   own theme variables. A token VS Code leaves undefined makes the var() that
+   reads it take its inline fallback, exactly as the --vscode-* variable it
+   replaced did, so nothing changes where there is no theme (exported HTML).
+   The image button, context menu and toast have tokens of their own
+   (--dita-btn-*, --dita-menu-*, --dita-toast-*), because VS Code colours them
+   from dropdown-*, menu-* and notifications-*, not from the shared ones; where
+   one of those is undefined the rule falls back to the shared token, which is
+   the --vscode-* variable the original declaration fell back to. Rules after
+   the book-view marker are VS Code chrome and keep --vscode-* as well. */
+:root {
+  --dita-fg: var(--vscode-editor-foreground);
+  --dita-fg-muted: var(--vscode-descriptionForeground);
+  --dita-bg: var(--vscode-editor-background);
+  --dita-border: var(--vscode-widget-border);
+  --dita-focus: var(--vscode-focusBorder);
+  --dita-hover-bg: var(--vscode-list-hoverBackground);
+  --dita-selected-fg: var(--vscode-list-activeSelectionForeground);
+  --dita-link: var(--vscode-textLink-foreground);
+  --dita-code-bg: var(--vscode-textCodeBlock-background);
+  --dita-code-inline-bg: var(--vscode-textPreformat-background);
+  --dita-font: var(--vscode-font-family);
+  --dita-btn-border: var(--vscode-dropdown-border);
+  --dita-btn-fg: var(--vscode-dropdown-foreground);
+  --dita-menu-bg: var(--vscode-menu-background);
+  --dita-menu-border: var(--vscode-menu-border);
+  --dita-menu-fg: var(--vscode-menu-foreground);
+  --dita-menu-hover-bg: var(--vscode-menu-selectionBackground);
+  --dita-menu-hover-fg: var(--vscode-menu-selectionForeground, var(--vscode-menu-foreground));
+  --dita-menu-sep: var(--vscode-menu-separatorBackground);
+  --dita-toast-bg: var(--vscode-notifications-background);
+  --dita-toast-border: var(--vscode-notifications-border);
+  --dita-toast-fg: var(--vscode-notifications-foreground);
+}
 :root {
   --body-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --code-font: 'SF Mono', Monaco, 'Cascadia Code', 'Consolas', monospace;
@@ -19,9 +69,9 @@
      light gray if it's ever unavailable) so this always tracks the real,
      current theme instead of relying on a manually-computed .vscode-dark
      class that can go stale relative to the actual active theme. */
-  --color-code-bg: var(--vscode-textCodeBlock-background, #f8f8f8);
+  --color-code-bg: var(--dita-code-bg, #f8f8f8);
   --color-link: #2b6cb0;
-  --color-code-lang-bg: var(--vscode-textPreformat-background, #e8e8e8);
+  --color-code-lang-bg: var(--dita-code-inline-bg, #e8e8e8);
   --color-profiling-bg: #eaf7c9;
   --color-profiling-border: #b8d878;
   --color-profiling-label-bg: #8fb84e;
@@ -40,8 +90,8 @@
   --color-important-bg: #261a33;
   --color-tip-bg: #1a3326;
   --color-link: #6ab0f3;
-  --color-code-bg: var(--vscode-textCodeBlock-background, #555);
-  --color-code-lang-bg: var(--vscode-textPreformat-background, #666);
+  --color-code-bg: var(--dita-code-bg, #555);
+  --color-code-lang-bg: var(--dita-code-inline-bg, #666);
   --color-profiling-bg: #3a4a1f;
   --color-profiling-border: #5a7530;
   --color-profiling-label-bg: #6b8f39;
@@ -58,7 +108,7 @@ body {
   max-width: var(--max-width);
   margin: 0 auto;
   padding: 2rem 1.5rem;
-  color: var(--vscode-editor-foreground);
+  color: var(--dita-fg);
 }
 
 /* Every source edit swaps this div's entire innerHTML in one mutation
@@ -118,7 +168,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: var(--vscode-descriptionForeground, #999);
+  color: var(--dita-fg-muted, #999);
 }
 
 /* Topic article */
@@ -127,7 +177,7 @@ body {
 /* Short description */
 .shortdesc {
   background: var(--color-note-bg);
-  color: var(--vscode-descriptionForeground, var(--vscode-editor-foreground));
+  color: var(--dita-fg-muted, var(--dita-fg));
   padding: 0.75rem 1rem;
   border-radius: 4px;
   font-size: 1.05em;
@@ -153,17 +203,180 @@ p { margin: 0.75em 0; }
 .note {
   border-left: 4px solid var(--color-note-border);
   background: var(--color-note-bg);
-  color: var(--vscode-editor-foreground);
+  color: var(--dita-fg);
   padding: 0.75rem 1rem;
   margin: 1rem 0;
   border-radius: 0 4px 4px 0;
 }
 
 .note__label { font-weight: 600; text-transform: capitalize; }
+/* The note text sits in .note__body for the benefit of WebHelp-style css. In
+   the own shell it stays inline, so the label and the text share a line as
+   they always did (a block here pushes the text onto its own line). */
+body:not(.wh_topic_page) .note__body { display: inline; }
 .note--warning { border-left-color: var(--color-warning-border); background: var(--color-warning-bg); }
 .note--danger { border-left-color: var(--color-danger-border); background: var(--color-danger-bg); }
 .note--important { border-left-color: var(--color-important-border); background: var(--color-important-bg); }
 .note--tip { border-left-color: var(--color-tip-border); background: var(--color-tip-bg); }
+
+/* Conref'd content: anything pulled in by conref / conkeyref / conrefend.
+   Oxygen's Author mode paints it with a gray background and puts a jump
+   button in the top-left corner; a flat opaque gray fights VS Code's themes
+   (and the note/section tints underneath), so this is a translucent neutral
+   that composes with whatever is behind it, plus a thin leading bar that
+   stays visible on dark themes where a faint tint nearly vanishes.
+   All of it is drawn as background layers on the element itself -- no
+   ::before/::after (profiling already owns those on li/ul/ol and the
+   non-inline elements) and no wrapper element. The renderer only emits
+   data-conref when the preview opts in, so "Export as HTML" and the diff
+   view never carry it. The jump icon is a background too, so it has no DOM
+   of its own: the click zone is recomputed from the SAME custom properties
+   below in conrefJumpScript.ts (getComputedStyle().getPropertyValue())
+   -- the vars are the single source of truth, do not re-hardcode the
+   numbers on either side. Padding on the block/inline variants gives the
+   tint some air on both sides (so it reads as a chunk around the content
+   rather than a tight underline) and keeps the leading bar (flush with
+   the inner-border edge) clear of the first glyph. */
+:root {
+  --color-conref-bg: rgba(128, 128, 128, 0.13);
+  --color-conref-bar: rgba(128, 128, 128, 0.55);
+  /* Oxygen paints the reuse badge as a few OPEN horizontal strokes (lines of
+     text), not a filled/closed page rectangle -- strokes read as airy chrome on
+     the translucent tint, whereas a solid glyph competes with content and, on
+     dark themes, a white fill glowed. Three lines (not four) keep it lighter;
+     the last runs a touch longer and gets a small right arrowhead so the same
+     gesture means "jump to source". Light-mode grays below; .vscode-dark
+     (after this block) lifts them so the strokes stay legible on dark. */
+  --conref-jump-icon: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2016%2016'%3E%3Cg%20fill='none'%20stroke='%239c9c9c'%20stroke-width='1'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M2%204h7M2%208h7M2%2012h9'/%3E%3Cpath%20d='M9.5%2010.5l1.8%201.5-1.8%201.5'%20stroke='%23808080'/%3E%3C/g%3E%3C/svg%3E");
+  /* Geometry read by both the paint rules below and the webview hit-test
+     in conrefJumpScript.ts. Change here, both sides move together. */
+  --conref-bar-width: 3px;
+  --conref-icon-block-size: 16px;
+  --conref-icon-block-offset: 3px;
+  --conref-icon-cell-size: 15px;
+  --conref-icon-cell-offset: 2px;
+  --conref-icon-inline-size: 11px;
+  --conref-icon-inline-offset: 1px;
+  /* Inline slot: the padding-right reserved on the element so the icon
+     sits clear of the trailing glyph. Derives as
+     offset + size + 1px visual gap, but kept as a flat token so the
+     script's hit-test reads the exact same number. */
+  --conref-icon-inline-slot: 13px;
+}
+/* Dark-mode badge: same open-line glyph, lifted to light grays so the strokes
+   stay legible over a dark canvas without glowing. Must sit AFTER the :root
+   block -- .vscode-dark is on <html>, the same element :root targets, so it
+   wins on source order, not specificity. */
+.vscode-dark {
+  --conref-jump-icon: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2016%2016'%3E%3Cg%20fill='none'%20stroke='%238a8a8a'%20stroke-width='1'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M2%204h7M2%208h7M2%2012h9'/%3E%3Cpath%20d='M9.5%2010.5l1.8%201.5-1.8%201.5'%20stroke='%23a0a0a0'/%3E%3C/g%3E%3C/svg%3E");
+}
+[data-conref][data-conref] {
+  background-repeat: no-repeat;
+}
+[data-conref="block"][data-conref] {
+  /* top clears the icon (offset 3 + size 16 + a small gap, hardcoded to match
+     the tokens above); left/right symmetric so the leading bar sits at
+     the same distance from the first glyph as the right padding does
+     from the last; bottom gives the tint some air under the text. */
+  padding-top: 22px;
+  padding-right: 10px;
+  padding-bottom: 6px;
+  padding-left: 10px;
+  background-image:
+    var(--conref-jump-icon),
+    linear-gradient(var(--color-conref-bar), var(--color-conref-bar)),
+    linear-gradient(var(--color-conref-bg), var(--color-conref-bg));
+  background-position:
+    var(--conref-icon-block-offset) var(--conref-icon-block-offset),
+    left top,
+    0 0;
+  background-size:
+    var(--conref-icon-block-size) var(--conref-icon-block-size),
+    var(--conref-bar-width) 100%,
+    auto;
+}
+/* A list's indent IS its padding-left (ul, ol { padding-left: 1.5em }); the
+   longhand above would flatten it to 10px and push the markers out under the
+   bar. Keep the indent and add the same 10px of air on top. */
+ul[data-conref="block"][data-conref],
+ol[data-conref="block"][data-conref],
+.simple-list[data-conref="block"][data-conref] {
+  padding-left: calc(1.5em + 10px);
+}
+/* A whole <note> reused: the generic block padding would replace .note's own
+   0.75rem 1rem. Keep its horizontal padding (1rem already clears the 3px bar
+   and the icon) and bottom; only the top yields, to the icon line. */
+.note[data-conref="block"][data-conref] {
+  padding: 22px 1rem 0.75rem 1rem;
+}
+[data-conref="inline"][data-conref] {
+  /* left padding mirrors the block treatment on a smaller scale; slice
+     (the default box-decoration-break) means only the very first line of
+     a wrapped run gets the leading gap, which is what Oxygen shows too.
+     padding-right is the slot; the icon hugs the right edge inside it. */
+  padding: 0 var(--conref-icon-inline-slot) 0 3px;
+  border-radius: 2px;
+  background-image:
+    var(--conref-jump-icon),
+    linear-gradient(var(--color-conref-bg), var(--color-conref-bg));
+  background-position:
+    right var(--conref-icon-inline-offset) center,
+    0 0;
+  background-size:
+    var(--conref-icon-inline-size) var(--conref-icon-inline-size),
+    auto;
+}
+[data-conref="cell"][data-conref] {
+  /* Reserve a left gutter so the top-left badge never sits on the first
+     glyph -- a <td>'s default 0.75rem left padding is shorter than the
+     16px icon, which is why the cell badge was overlapping "Cell A".
+     Only padding-left is overridden; top/right/bottom keep the table's
+     own 0.5rem/0.75rem so rows stay the same height and text tops stay
+     aligned with non-reused sibling cells. */
+  padding-left: calc(var(--conref-icon-cell-offset) + var(--conref-icon-cell-size) + 2px);
+  background-image:
+    var(--conref-jump-icon),
+    linear-gradient(var(--color-conref-bg), var(--color-conref-bg));
+  background-position:
+    var(--conref-icon-cell-offset) var(--conref-icon-cell-offset),
+    0 0;
+  background-size:
+    var(--conref-icon-cell-size) var(--conref-icon-cell-size),
+    auto;
+}
+/* Set by the hover hit-test in conrefJumpScript.ts while the pointer is over
+   the icon (a background cannot take its own cursor). */
+html.dv-conref-hot [data-conref],
+html.dv-conref-hot [data-conref] * {
+  cursor: pointer;
+}
+/* Keyboard / screen-reader focus for the jump badge (see conrefJumpScript.ts:
+   renderer.ts makes every mark focusable). The badge is a background, so the
+   ring is drawn on the element that carries it. :focus-visible, not :focus, so
+   a pointer click that lands on the element doesn't ring it -- matching the
+   site-nav treatment. Negative offset keeps the ring inside the tint box so it
+   never spills onto a neighbouring block. */
+[data-conref][data-conref]:focus-visible {
+  outline: 2px solid var(--dita-focus, #007fd4);
+  outline-offset: -2px;
+}
+/* The single hidden node every reused element's aria-describedby points at
+   (injected by conrefJumpScript.ts). It must be gone from the layout yet still
+   present in the accessibility tree, so it is clipped rather than display:none
+   -- display:none would remove the description screen readers announce on
+   focus, defeating the whole affordance. */
+.dv-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
 
 /* Profiling / conditional-processing attribute highlighting (props,
    otherprops, audience, platform, product, base, importance, rev, status).
@@ -423,7 +636,7 @@ dd { margin-left: 1.5em; }
 /* Tables */
 table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.95em; border: 2px solid var(--table-border); }
 table th, table td { border: 1px solid var(--table-border); padding: 0.5rem 0.75rem; text-align: left; vertical-align: top; overflow-wrap: break-word; }
-table th { background: var(--color-code-bg); color: var(--vscode-editor-foreground); font-weight: 600; }
+table th { background: var(--color-code-bg); color: var(--dita-fg); font-weight: 600; }
 
 /* Profiling on table rows: the generic .profiled treatment below (box-
    shadow ring + padding + margin) is built for ordinary block content and
@@ -506,9 +719,9 @@ img[data-load-error] { cursor: default; }
 }
 .dita-img-btn {
   padding: 1px 5px; border-radius: 3px; line-height: 1.5; font-size: 12px; cursor: pointer;
-  border: 1px solid var(--vscode-dropdown-border, var(--vscode-widget-border, #555));
-  background: var(--vscode-editor-background, rgba(30, 30, 30, 0.85));
-  color: var(--vscode-dropdown-foreground, #eee);
+  border: 1px solid var(--dita-btn-border, var(--dita-border, #555));
+  background: var(--dita-bg, rgba(30, 30, 30, 0.85));
+  color: var(--dita-btn-fg, var(--dita-fg, #eee));
 }
 .dita-img-btn:hover { opacity: 0.85; }
 
@@ -518,8 +731,8 @@ img[data-load-error] { cursor: default; }
    available consistently across every host this extension runs in. */
 .dita-img-ctxmenu {
   position: fixed; z-index: 100000;
-  background: var(--vscode-menu-background, var(--vscode-editor-background, #1e1e1e));
-  border: 1px solid var(--vscode-menu-border, var(--vscode-widget-border, #454545));
+  background: var(--dita-menu-bg, var(--dita-bg-elevated, var(--dita-bg, #1e1e1e)));
+  border: 1px solid var(--dita-menu-border, var(--dita-border, #454545));
   border-radius: 4px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   padding: 2px;
@@ -530,12 +743,12 @@ img[data-load-error] { cursor: default; }
   padding: 4px 10px; border: none; border-radius: 3px;
   font-size: 13px; cursor: pointer;
   background: transparent;
-  color: var(--vscode-menu-foreground, var(--vscode-editor-foreground, #ccc));
+  color: var(--dita-menu-fg, var(--dita-fg, #ccc));
 }
 .dita-img-ctxmenu-item:hover,
 .dita-img-ctxmenu-item:focus {
-  background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground, #2a2d2e));
-  color: var(--vscode-menu-selectionForeground, var(--vscode-menu-foreground, #ccc));
+  background: var(--dita-menu-hover-bg, var(--dita-hover-bg, #2a2d2e));
+  color: var(--dita-menu-hover-fg, var(--dita-selected-fg, var(--dita-fg, #ccc)));
   outline: none;
 }
 .dita-img-ctxmenu-item:disabled { cursor: default; opacity: 0.7; }
@@ -543,7 +756,7 @@ img[data-load-error] { cursor: default; }
    getSiteOpenSourceScript), matching how a native menu separates groups. */
 .dita-img-ctxmenu-sep {
   height: 1px; margin: 2px 4px;
-  background: var(--vscode-menu-separatorBackground, var(--vscode-widget-border, #454545));
+  background: var(--dita-menu-sep, var(--dita-border, #454545));
 }
 
 /* Transient feedback pill for the lightbox's Ctrl+C copy path, which has
@@ -551,14 +764,14 @@ img[data-load-error] { cursor: default; }
 .dita-img-toast {
   position: fixed; left: 50%; bottom: 48px; transform: translateX(-50%);
   z-index: 100001;
-  background: var(--vscode-notifications-background, var(--vscode-editor-background, #1e1e1e));
-  border: 1px solid var(--vscode-notifications-border, var(--vscode-widget-border, #454545));
-  color: var(--vscode-notifications-foreground, var(--vscode-editor-foreground, #ccc));
+  background: var(--dita-toast-bg, var(--dita-bg-elevated, var(--dita-bg, #1e1e1e)));
+  border: 1px solid var(--dita-toast-border, var(--dita-border, #454545));
+  color: var(--dita-toast-fg, var(--dita-fg, #ccc));
   padding: 6px 14px; border-radius: 4px; font-size: 13px;
   /* UI chrome, not document content: stays sans-serif regardless of the
      reading-font toggle (Serif is a common choice there, and a serif toast
      reads noticeably slower for a quick transient message). */
-  font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  font-family: var(--dita-font, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   max-width: 92vw;
   /* Kept to one line: a short toast that wraps to two is more disruptive
@@ -588,7 +801,7 @@ figcaption { font-style: italic; margin-top: 0.2rem; font-size: 0.95em; text-ali
 /* Code blocks */
 pre.codeblock, pre.preformatted {
   background: var(--color-code-bg);
-  color: var(--vscode-editor-foreground);
+  color: var(--dita-fg);
   border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 1rem;
@@ -614,7 +827,7 @@ pre.codeblock, pre.preformatted {
   font-family: var(--code-font);
   font-size: 0.72em;
   background: var(--color-code-lang-bg);
-  color: var(--vscode-editor-foreground);
+  color: var(--dita-fg);
   padding: 0.1em 0.5em;
   border-radius: 0 3px 0 3px;
   position: absolute;
@@ -626,7 +839,7 @@ pre.codeblock, pre.preformatted {
 code {
   font-family: var(--code-font);
   font-size: 0.9em;
-  color: var(--vscode-editor-foreground);
+  color: var(--dita-fg);
   background: var(--color-code-bg);
   padding: 0.15em 0.3em;
   border-radius: 3px;
@@ -644,17 +857,18 @@ pre code { background: none; padding: 0; border-radius: 0; }
 /* Inline formatting */
 .keyword { font-weight: 500; }
 .term { font-style: italic; border-bottom: 1px dotted; }
-.ph { opacity: 0.8; }
+/* Phrase span only: the highlight domain (b/i/u/tt/sup/sub/line-through/overline) now also carries the html5 `ph` token and must not be dimmed. overline is the one hi-d member rendered as a <span>, so it is excluded here too. */
+span.ph:not(.unresolved-keyref):not(.overline) { opacity: 0.8; }
 .overline { text-decoration: overline; }
 .unresolved-keyref { opacity: 1; color: #e67e22; border: 1px dashed #e67e22; padding: 0 0.3em; border-radius: 3px; cursor: help; }
 
 /* User Interface domain */
-.uicontrol { font-weight: 500; color: var(--vscode-textLink-foreground); }
+.uicontrol { font-weight: 500; color: var(--dita-link); }
 .menucascade .uicontrol + .uicontrol::before { content: ' › '; color: var(--color-menucascade-arrow); font-weight: normal; }
 .wintitle { font-style: italic; font-weight: 600; }
-.filepath { font-family: var(--code-font); font-size: 0.9em; padding: 0.1em 0.3em; background: var(--color-code-bg); border-radius: 3px; color: var(--vscode-editor-foreground); }
-.userinput { font-family: var(--code-font); font-size: 0.9em; padding: 0.1em 0.3em; background: var(--color-code-bg); border-radius: 3px; border: 1px dashed var(--color-border); color: var(--vscode-editor-foreground); }
-.systemoutput { font-family: var(--code-font); font-size: 0.9em; padding: 0.1em 0.3em; background: var(--color-code-bg); border-radius: 3px; color: var(--vscode-editor-foreground); }
+.filepath { font-family: var(--code-font); font-size: 0.9em; padding: 0.1em 0.3em; background: var(--color-code-bg); border-radius: 3px; color: var(--dita-fg); }
+.userinput { font-family: var(--code-font); font-size: 0.9em; padding: 0.1em 0.3em; background: var(--color-code-bg); border-radius: 3px; border: 1px dashed var(--color-border); color: var(--dita-fg); }
+.systemoutput { font-family: var(--code-font); font-size: 0.9em; padding: 0.1em 0.3em; background: var(--color-code-bg); border-radius: 3px; color: var(--dita-fg); }
 .apiname { font-family: var(--code-font); font-size: 0.9em; font-weight: 500; }
 .parmname { font-family: var(--code-font); font-size: 0.9em; font-style: italic; }
 .option { font-family: var(--code-font); font-size: 0.9em; color: var(--color-link); }
@@ -668,7 +882,7 @@ pre code { background: none; padding: 0; border-radius: 0; }
 .msgph { font-family: var(--code-font); font-size: 0.9em; font-style: italic; padding: 0 0.2em; color: var(--color-link); }
 
 /* Programming domain */
-.codeph { font-family: var(--code-font); font-size: 0.9em; background: var(--color-code-bg); padding: 0.1em 0.3em; border-radius: 3px; color: var(--vscode-editor-foreground); }
+.codeph { font-family: var(--code-font); font-size: 0.9em; background: var(--color-code-bg); padding: 0.1em 0.3em; border-radius: 3px; color: var(--dita-fg); }
 .synph { font-family: var(--code-font); font-size: 0.9em; }
 .kwd { font-weight: 600; font-family: var(--code-font); }
 .var { font-style: italic; font-family: var(--code-font); }
@@ -676,18 +890,18 @@ pre code { background: none; padding: 0; border-radius: 0; }
 .sep { color: var(--color-border); }
 .delim { font-weight: 600; color: var(--color-link); }
 .syntaxdiagram { border: 1px solid var(--color-border); border-radius: 4px; padding: 1rem; margin: 1rem 0; overflow-x: auto; }
-.synblk { background: var(--color-code-bg); color: var(--vscode-editor-foreground); border: 1px solid var(--color-border); border-radius: 4px; padding: 0.75rem; margin: 0.5rem 0; overflow-x: auto; font-family: var(--code-font); font-size: 0.9em; }
+.synblk { background: var(--color-code-bg); color: var(--dita-fg); border: 1px solid var(--color-border); border-radius: 4px; padding: 0.75rem; margin: 0.5rem 0; overflow-x: auto; font-family: var(--code-font); font-size: 0.9em; }
 .synnote { font-size: 0.9em; margin: 0.5rem 0; padding: 0.5rem; border-left: 3px solid var(--color-border); }
 .fragment { font-family: var(--code-font); font-size: 0.9em; }
 .fragref { font-family: var(--code-font); font-size: 0.9em; color: var(--color-link); }
 
 /* Software domain */
-.screen { background: var(--color-code-bg); color: var(--vscode-editor-foreground); border: 1px solid var(--color-border); border-radius: 4px; padding: 1rem; overflow-x: auto; font-family: var(--code-font); font-size: 0.9em; line-height: 1.5; white-space: pre-wrap; }
+.screen { background: var(--color-code-bg); color: var(--dita-fg); border: 1px solid var(--color-border); border-radius: 4px; padding: 1rem; overflow-x: auto; font-family: var(--code-font); font-size: 0.9em; line-height: 1.5; white-space: pre-wrap; }
 .msgph { font-family: var(--code-font); font-size: 0.9em; }
-.msgblock { background: var(--color-code-bg); color: var(--vscode-editor-foreground); border: 1px solid var(--color-border); border-radius: 4px; padding: 0.75rem; font-family: var(--code-font); font-size: 0.9em; white-space: pre-wrap; }
+.msgblock { background: var(--color-code-bg); color: var(--dita-fg); border: 1px solid var(--color-border); border-radius: 4px; padding: 0.75rem; font-family: var(--code-font); font-size: 0.9em; white-space: pre-wrap; }
 
 /* Body elements */
-.lines { background: var(--color-code-bg); color: var(--vscode-editor-foreground); border: 1px solid var(--color-border); border-radius: 4px; padding: 0.75rem 1rem; font-family: var(--code-font); font-size: 0.9em; line-height: 1.5; white-space: pre-wrap; }
+.lines { background: var(--color-code-bg); color: var(--dita-fg); border: 1px solid var(--color-border); border-radius: 4px; padding: 0.75rem 1rem; font-family: var(--code-font); font-size: 0.9em; line-height: 1.5; white-space: pre-wrap; }
 .fn { font-size: 0.75em; vertical-align: super; cursor: help; color: var(--color-link); }
 cite { font-style: italic; }
 .boolean { font-family: var(--code-font); font-size: 0.9em; font-weight: 500; }
@@ -709,8 +923,8 @@ cite { font-style: italic; }
 .glossentry { margin: 1em 0; }
 
 /* Hazard */
-.hazardstatement { border-left: 4px solid #c0392b; background: var(--color-danger-bg); color: var(--vscode-editor-foreground); padding: 0.75rem 1rem; margin: 1rem 0; border-radius: 0 4px 4px 0; }
-.typeofhazard { font-weight: 600; color: #c0392b; }
+.hazardstatement { border-left: 4px solid var(--color-danger-border); background: var(--color-danger-bg); color: var(--dita-fg); padding: 0.75rem 1rem; margin: 1rem 0; border-radius: 0 4px 4px 0; }
+.typeofhazard { font-weight: 600; color: var(--color-danger-border); }
 .howtoavoid { margin: 0.5rem 0; }
 .consequence { margin: 0.5rem 0; }
 
@@ -785,7 +999,7 @@ section, .example { margin: 1.5rem 0; }
 }
 
 .map-tree-item--nav:hover {
-  background-color: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.1));
+  background-color: var(--dita-hover-bg, rgba(128, 128, 128, 0.1));
 }
 
 .map-tree-item--keydef {
@@ -841,7 +1055,7 @@ section, .example { margin: 1.5rem 0; }
 
 .map-tree-label--keydef {
   font-style: italic;
-  color: var(--vscode-editor-foreground);
+  color: var(--dita-fg);
 }
 
 .map-tree-label--head {
@@ -868,7 +1082,7 @@ section, .example { margin: 1.5rem 0; }
 .relheader th {
   font-weight: 600;
   background: var(--color-code-bg);
-  color: var(--vscode-editor-foreground);
+  color: var(--dita-fg);
   padding: 0.4rem 0.6rem;
   border: 1px solid var(--color-border);
 }
@@ -980,8 +1194,14 @@ section, .example { margin: 1.5rem 0; }
    entry's last child's bottom margin from collapsing out of the entry, so
    the gap between two topics can grow by that margin. Bounded, and confined
    to entry boundaries. */
+} /* end @layer dv-base: the two book-entry rules below stay UNLAYERED and !important.
+     A template's css is unlayered, and an unlayered rule beats a layered normal
+     declaration at any specificity, so a template's `.book-entry { content-visibility:
+     visible }` would otherwise switch the optimisation off on a large map. Layered
+     or unlayered, !important is decided by specificity (and layer order) the old way:
+     this selector's four classes are not casually out-ranked. */
 .ditamap-book > .book-entry:not(.book-entry--placeholder):not(.book-entry--error) {
-  content-visibility: auto;
+  content-visibility: auto !important;
   contain-intrinsic-size: 600px;
   contain-intrinsic-size: auto 600px;
 }
@@ -997,10 +1217,11 @@ section, .example { margin: 1.5rem 0; }
    source order the decider, and this comes last. */
 @media print {
   .ditamap-book > .book-entry:not(.book-entry--placeholder):not(.book-entry--error) {
-    content-visibility: visible;
+    content-visibility: visible !important;
   }
 }
 
+@layer dv-base { /* re-enter the layer for the rest of the sheet */
 /* Responsive */
 @media (max-width: 600px) { body { padding: 1rem; } }
 
@@ -1567,3 +1788,19 @@ body.mode-book #__site-next-btn,
 body.mode-book #__site-open-source-btn {
   display: none !important;
 }
+
+/* The webhelp shell's body column must never be the scrolling element:
+   #dita-content-root is (see webhelp-compat.css), because the scroll-sync,
+   outline, history and search scripts all treat it as the scroller. !important
+   so a template's own css (unlayered, so it would otherwise win) cannot turn
+   this column into a scroller and freeze them. */
+body.wh_topic_page #wh_topic_body { overflow: hidden !important; }
+
+/* The webhelp shell's on-this-page column is hidden whenever it holds no
+   visible outline: book mode (no outline there by design) and pages with
+   fewer than two headings (getOutlineSyncScript marks those
+   tpl-outline--empty). !important for the same reason as above: a template
+   styles #wh_topic_toc itself, with a `display` that would otherwise keep an
+   empty column on screen. */
+body.wh_topic_page nav#wh_topic_toc:not(:has(#__site-outline:not(.tpl-outline--empty))) { display: none !important; }
+} /* @layer dv-base */

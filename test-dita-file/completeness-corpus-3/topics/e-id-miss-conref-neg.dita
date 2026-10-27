@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.id.miss.conref, negative: the fragment names both a topic and an element. -->
+<topic id="e-id-miss-conref-neg">
+  <title>conref with a full fragment (negative)</title>
+  <body>
+    <p conref="lib.dita#lib3/p1"/>
+  </body>
+</topic>

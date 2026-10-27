@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.section.first.title, negative: the title is the first child of the section, which
+     is the order the content model asks for. -->
+<topic id="n-section-first-title-neg">
+  <title>Section title first (negative)</title>
+  <body>
+    <section>
+      <title>A title where it belongs</title>
+      <p>Content after the title.</p>
+    </section>
+  </body>
+</topic>

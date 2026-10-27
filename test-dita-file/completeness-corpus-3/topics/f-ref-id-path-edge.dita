@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.invalid.ref.id.path, boundary: a two-segment path whose elements both exist
+     (the section id, then the paragraph inside it). -->
+<topic id="f-ref-id-path-edge">
+  <title>Existing id path (boundary)</title>
+  <body>
+    <p conref="lib.dita#lib3/sect3/p5"/>
+  </body>
+</topic>

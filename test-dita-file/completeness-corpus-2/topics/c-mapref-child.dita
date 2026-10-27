@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- Nested topic target for dmv.ref.topic.inside.mapref. -->
+<topic id="c-mapref-child">
+  <title>Topic nested below a reference</title>
+  <body>
+    <p>Reached only through the nested topicref.</p>
+  </body>
+</topic>

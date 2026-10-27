@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.invalid.domains.format, negative: @domains is not written and the DOCTYPE supplies
+     the default from topic.dtd. The ordinary case, which must stay quiet. -->
+<topic id="l-domains-format-neg">
+  <title>Domains from the DOCTYPE</title>
+  <body>
+    <p>The DTD supplies @domains; nothing is written here.</p>
+  </body>
+</topic>

@@ -1,0 +1,3 @@
+/* Intentionally empty: this template adds no styling so webhelp-compat.css
+   (@layer wh-compat) is the only thing laying out the page. A comment keeps the
+   descriptor's css list non-empty, which is what discovery requires. */

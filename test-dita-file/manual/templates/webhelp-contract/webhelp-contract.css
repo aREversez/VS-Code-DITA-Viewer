@@ -1,0 +1,253 @@
+/*
+ * Route B milestone 3 step 11 (webhelp-compat-plan.md §3): the "WebHelp-style
+ * test template" the plan asks for as the repository's automated acceptance
+ * surface, because a real Oxygen template css cannot be shipped here.
+ *
+ * Its one job is to reach for the DOM contract BY NAME. Every selector below is
+ * either a hook listed in src/editor/webhelpContract.ts or a body-content class
+ * the renderer actually emits today (scripts/webhelp-body-class-diff.md, the
+ * A/B-level rows). Nothing in this file is copied from Oxygen or from any
+ * third-party output -- it is written against the name list only.
+ *
+ * Two things this buys:
+ *  - a renamed or dropped hook stops being a no-op and becomes a visibly
+ *    different screenshot, and the computed-style assertions in
+ *    src/test-visual/visual.test.ts fail outright;
+ *  - it is the check for §2.3's cascade promise from the template side: this
+ *    sheet is emitted UNLAYERED, so every rule here must beat both
+ *    styles.css (@layer dv-base) and webhelp-compat.css (@layer wh-compat)
+ *    without one !important.
+ *
+ * Each region gets a distinct border colour so a screenshot shows, at a glance,
+ * which hooks were reached: blue header, orange tools, purple toc, green topic,
+ * teal outline, red footer, yellow tiles. Dark variants sit under
+ * html.vscode-dark so the dark screenshot proves the same thing.
+ */
+
+/* --- Theme surface: the contract's 28 custom properties. ------------------
+   A template is supposed to be able to restyle the base sheet by setting these
+   and nothing else, so override a few to values the base sheet would never
+   produce, and let the assertions read them back off elements the BASE sheet
+   styles (the header background, the toc background) -- that is what proves a
+   template can drive wh-compat without touching a single selector. */
+body.wh_topic_page {
+  --primary-color: #7c1d6f;
+  --header-bg-color: #14304d;
+  --header-color: #ffe9a8;
+  --toc-bg-color: #f3e8ff;
+  --toc-color: #3b1a55;
+  --tile-bg-color: #fff3cd;
+  --tile-color: #6b4e00;
+  --border-color: #b48ad1;
+  --elevation-shadow: 0 4px 10px rgba(80, 0, 80, 0.35);
+}
+
+html.vscode-dark body.wh_topic_page {
+  --primary-color: #f0a6ff;
+  --header-bg-color: #1d0b26;
+  --header-color: #f0a6ff;
+  --toc-bg-color: #241031;
+  --toc-color: #e2c8f2;
+  --tile-bg-color: #33240c;
+  --tile-color: #ffe0a3;
+}
+
+/* --- Page frame. --------------------------------------------------------- */
+body.wh_topic_page {
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+body.wh_topic_page #wh_topic_container {
+  outline: 2px dashed #2f855a;
+  outline-offset: -2px;
+}
+
+/* --- 1. Top bar. --------------------------------------------------------- */
+body.wh_topic_page header.wh_header {
+  border-bottom: 4px solid #1a5fb4;
+}
+
+body.wh_topic_page .wh_header_flex_container {
+  letter-spacing: 0.04em;
+}
+
+body.wh_topic_page .wh_logo img {
+  max-height: 34px;
+}
+
+body.wh_topic_page .wh_publication_title {
+  font-style: italic;
+}
+
+body.wh_topic_page .wh_top_menu {
+  font-size: 0.95rem;
+}
+
+body.wh_topic_page .wh_top_menu a {
+  border-bottom: 2px solid #1a5fb4;
+}
+
+body.wh_topic_page .wh_top_menu li.active > a {
+  background: #14304d;
+}
+
+/* --- 2. Tool bar. -------------------------------------------------------- */
+body.wh_topic_page nav.wh_tools {
+  border-bottom: 4px solid #c1662b;
+}
+
+body.wh_topic_page .wh_breadcrumb {
+  text-transform: uppercase;
+}
+
+body.wh_topic_page .wh_right_tools {
+  gap: 0.75rem;
+}
+
+body.wh_topic_page .wh_navigation_links a {
+  border: 1px solid #c1662b;
+}
+
+/* --- 3. Publication toc (the sidebar). ----------------------------------
+   The rows carry both class sets (route B §2.2): the behaviour JS keys off
+   .site-nav-*, the template css is expected to key off li.topicref, which is
+   what these rules use. */
+body.wh_topic_page nav#wh_publication_toc {
+  border-right: 4px solid #613583;
+}
+
+body.wh_topic_page li.topicref {
+  font-size: 0.92rem;
+}
+
+body.wh_topic_page li.topicref.has-children > .site-nav-link {
+  font-weight: 600;
+}
+
+body.wh_topic_page li.topicref.active > .site-nav-link {
+  color: #613583;
+}
+
+body.wh_topic_page li.topicref.expanded {
+  background: #f7f2fb;
+}
+
+html.vscode-dark body.wh_topic_page li.topicref.expanded {
+  background: #2a1735;
+}
+
+/* --- 4. Topic body. ------------------------------------------------------ */
+body.wh_topic_page #wh_topic_body {
+  border-left: 4px solid #2f6b3f;
+  border-right: 4px solid #2f6b3f;
+}
+
+/* The content column also carries .body (the DITA element), so a template can
+   style it without naming the shell id. */
+body.wh_topic_page .wh_topic_content.body {
+  line-height: 1.65;
+}
+
+/* Body-content classes the renderer emits today. A template written against
+   these is what makes the M2 alignment worth having; the diff table's not-yet
+   -aligned rows (dl/dt/dd, q/lq, the hi-d runs, synblk/msgblock) are
+   deliberately absent, so this sheet only claims what is real. */
+body.wh_topic_page .topic .title.topictitle1 {
+  color: #14304d;
+  border-bottom: 3px double #14304d;
+}
+
+body.wh_topic_page .title.sectiontitle {
+  color: #2f6b3f;
+}
+
+body.wh_topic_page p.shortdesc {
+  font-size: 1.08rem;
+  font-style: italic;
+}
+
+/* The label is a child of the note (`<span class="note__label note__title">`),
+   not the same node, which is why this is a descendant selector. */
+body.wh_topic_page .note .note__title {
+  letter-spacing: 0.05em;
+}
+
+body.wh_topic_page .note .note__body {
+  font-size: 0.97rem;
+}
+
+body.wh_topic_page .section {
+  padding-left: 0.5rem;
+  border-left: 2px solid #d5dbe3;
+}
+
+body.wh_topic_page ul.ul > li.li::marker,
+body.wh_topic_page ol.ol > li.li::marker {
+  color: #7c1d6f;
+}
+
+body.wh_topic_page .image {
+  border: 2px solid #2f6b3f;
+}
+
+body.wh_topic_page .table.cals-table thead .row .entry {
+  background: #e8f2e8;
+}
+
+html.vscode-dark body.wh_topic_page .table.cals-table thead .row .entry {
+  background: #23362a;
+}
+
+body.wh_topic_page pre.pre.codeblock {
+  border-left: 4px solid #7c1d6f;
+}
+
+/* --- 5. On-this-page outline. ------------------------------------------- */
+body.wh_topic_page nav#wh_topic_toc {
+  border-left: 4px solid #0f7c7c;
+}
+
+/* --- 6. Footer / page end. ---------------------------------------------- */
+body.wh_topic_page footer.wh_footer {
+  border-top: 4px solid #a03030;
+}
+
+/* --- 7. Landing page (M3-10). ------------------------------------------
+   The tile gallery reaches the contract's home hooks by name. wh_main_page is
+   the ADDITIVE body token (webhelpShell.ts): a landing page carries it next to
+   wh_topic_page, which is what lets the shell rules above keep working here.
+   wh_welcome / wh_tile_shortdesc / wh_main_page_toc are contract hooks with
+   nothing emitting them yet (no .opt-derived welcome text; a shortdesc would
+   mean reading every topic file for the home page, which it deliberately does
+   not do), so they are not styled rather than styled against a node that never
+   appears. */
+/* The heading's own class is site-home-title (renderSiteHomeHtml); the
+   contract has no wh_ name for it -- wh_welcome would be the hook for a
+   template's own welcome text, and nothing emits that yet. */
+body.wh_topic_page.wh_main_page .site-home-title {
+  color: #6b4e00;
+  border-bottom: 3px double #6b4e00;
+}
+
+body.wh_topic_page.wh_main_page .wh_tiles {
+  gap: 1.5rem;
+}
+
+body.wh_topic_page.wh_main_page .wh_tile {
+  border: 2px solid #b8860b;
+  border-radius: 0;
+}
+
+body.wh_topic_page.wh_main_page .wh_tile:hover {
+  border-color: #6b4e00;
+}
+
+body.wh_topic_page.wh_main_page .wh_tile_title {
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+}
+
+body.wh_topic_page.wh_main_page .wh_tile_text {
+  text-transform: uppercase;
+  opacity: 1;
+}

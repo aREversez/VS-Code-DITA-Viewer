@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.invalid.id.syntax.3, boundary: the same whitespace, now on the map's
+     own @id. The question is whether Oxygen checks map ids too. -->
+<map id="a b">
+  <title>Whitespace in a map id (boundary)</title>
+</map>

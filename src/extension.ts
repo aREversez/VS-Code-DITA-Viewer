@@ -41,13 +41,14 @@ import { registerLanguageFeatures } from './language/ditaLanguageFeatures';
 import { registerMapTreeView } from './language/ditaMapTreeProvider';
 import { ditaFileWatcherCounts } from './editor/ditaFileWatcher';
 import { registerExportHtmlCommand, getActiveDitaUri } from './editor/exportHtml';
-import { registerCompareCommand } from './editor/ditaDiffProvider';
+import { registerCompareCommand, getLastDiffHtmlForTesting, openSourceDiffForTesting } from './editor/ditaDiffProvider';
 import { resolveOxygenLaunch, buildOxygenSpawnArgs } from './editor/oxygenLauncher';
 import { registerWrapSelectionCommand } from './editor/wrapSelectionCommand';
 import { registerFindReferencingMapsCommand } from './editor/findDitaReferences';
 import { registerKeyContextCommand } from './editor/keyContextCommand';
 import { registerUnreferencedResourcesCommand } from './editor/unreferencedResourcesUi';
 import { registerCompletenessCommand } from './editor/completenessCheckUi';
+import { registerRefRenameParticipant, computeRenameEditsForTesting } from './editor/refRenameParticipant';
 import { ensureCommandAllowed } from './editor/workspaceTrustGate';
 
 const TRANSFORM_CMD = 'ditaViewer.transformWithDitaOt';
@@ -133,6 +134,9 @@ export function activate(context: vscode.ExtensionContext) {
   // Language features: go-to-definition, completion, outline symbols,
   // broken-reference diagnostics (items shared by .dita and .ditamap)
   registerLanguageFeatures(context);
+
+  // Update href/conref references when DITA files are renamed or moved
+  registerRefRenameParticipant(context);
 
   // Explorer sidebar tree view of the active DITA map
   const mapTree = registerMapTreeView(context);
@@ -457,7 +461,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (transtype === 'html5' || transtype === 'xhtml') {
         const roots = discoverTemplateRoots({
           extensionPath,
-          configuredDirs: vscode.workspace.getConfiguration('dita-viewer').get<string[]>('templatesDirectory') ?? [],
+          configuredDirs: vscode.workspace.getConfiguration('dita-viewer', mapUri).get<string[]>('templatesDirectory') ?? [],
           refDir: mapDir,
           workspaceRoots: (vscode.workspace.workspaceFolders || []).map((f) => f.uri.fsPath),
         });
@@ -840,6 +844,7 @@ export function activate(context: vscode.ExtensionContext) {
     _test: {
       getLastRenderedHtml: getLastRenderedHtmlForTesting,
       getLastRenderedMapHtml: getLastRenderedMapHtmlForTesting,
+      getLastDiffHtml: getLastDiffHtmlForTesting,
       ditaFileWatcherCounts,
       // Font-size/typeface and page-width preferences are read from
       // globalState at render time (FONT_PREFS_KEY, WIDTH_SELECTION_KEY in
@@ -850,6 +855,20 @@ export function activate(context: vscode.ExtensionContext) {
       // preview to check the bootstrap script it renders, rather than only
       // being able to assert the default.
       globalState: context.globalState,
+      // The rename participant's edits are only ever applied by VS Code for a
+      // user-initiated Explorer rename (fs.rename fires no participant event and
+      // applyEdit drops its returned edits), so the integration suite cannot
+      // drive the full apply path headlessly. This seam runs the participant's
+      // real candidate gathering (findFiles + disk) and edit computation for a
+      // given rename and returns each affected file's post-edit content, which
+      // is what the suite asserts against.
+      computeRenameEdits: computeRenameEditsForTesting,
+      // Reproduces the webview "Open source diff" button's exact production
+      // path (register the virtual-doc provider, then vscode.diff over two
+      // .dita-scheme URIs) so the integration suite can confirm the native
+      // diff editor opens instead of the ditaViewer.preview custom editor.
+      openSourceDiffForTesting: (input: { leftXml: string; rightXml: string; leftLabel: string; rightLabel: string; docUri: vscode.Uri }) =>
+        openSourceDiffForTesting(context, input),
     },
   };
 }
@@ -1046,6 +1065,8 @@ function injectTemplateChrome(
         nav.manifest,
         pageKeys.has(rel) ? '_root_/' + rel : '',
         sidebarLabels,
+        new Set(),
+        template.dom === 'webhelp',
       );
       const headInjectHtml = buildHeadInjectHtml(
         {
@@ -1089,7 +1110,7 @@ function scanCssFiles(mapDir: string): string[] {
 
   try {
     const cfgDirs: string[] | undefined =
-      vscode.workspace.getConfiguration('dita-viewer').get('cssDirectory');
+      vscode.workspace.getConfiguration('dita-viewer', vscode.Uri.file(mapDir)).get('cssDirectory');
     if (cfgDirs) {
       for (const d of cfgDirs) {
         const abs = isAbsolute(d) ? d : resolve(mapDir, d);
@@ -1114,7 +1135,7 @@ function scanCssFiles(mapDir: string): string[] {
 
   try {
     const customPaths: string[] | undefined =
-      vscode.workspace.getConfiguration('dita-viewer').get('customCss');
+      vscode.workspace.getConfiguration('dita-viewer', vscode.Uri.file(mapDir)).get('customCss');
     if (customPaths) {
       for (const p of customPaths) {
         const abs = isAbsolute(p) ? p : resolve(mapDir, p);

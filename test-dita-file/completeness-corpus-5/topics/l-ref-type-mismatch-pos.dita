@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.type.class.mismatch, positive: the xref says concept, the target is a task
+     (- topic/topic task/task). Typical @type probe: the two names are not related. -->
+<topic id="l-ref-type-mismatch-pos">
+  <title>@type names another type (positive)</title>
+  <body>
+    <p><xref href="l-ref-task-target.dita" type="concept">A concept, allegedly.</xref></p>
+  </body>
+</topic>

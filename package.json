@@ -132,6 +132,11 @@
         "icon": "$(diff)"
       },
       {
+        "command": "ditaViewer.showRenderedDiffFromSource",
+        "title": "%command.showRenderedDiffFromSource.title%",
+        "icon": "$(open-preview)"
+      },
+      {
         "command": "ditaViewer.mapExplorer.refresh",
         "title": "%command.mapExplorerRefresh.title%",
         "icon": "$(refresh)"
@@ -438,6 +443,11 @@
           "command": "ditaViewer.transformWithDitaOt",
           "when": "resourceExtname == .ditamap",
           "group": "navigation"
+        },
+        {
+          "command": "ditaViewer.showRenderedDiffFromSource",
+          "when": "resourceScheme == dita-diff",
+          "group": "navigation"
         }
       ],
       "editor/context": [
@@ -648,6 +658,7 @@
             "type": "string"
           },
           "default": [],
+          "scope": "resource",
           "description": "%config.customCss.description%"
         },
         "dita-viewer.cssDirectory": {
@@ -656,6 +667,7 @@
             "type": "string"
           },
           "default": [],
+          "scope": "resource",
           "description": "%config.cssDirectory.description%"
         },
         "dita-viewer.templatesDirectory": {
@@ -664,6 +676,7 @@
             "type": "string"
           },
           "default": [],
+          "scope": "resource",
           "description": "%config.templatesDirectory.description%"
         },
         "dita-viewer.ditaOtPath": {
@@ -753,29 +766,62 @@
           },
           "default": [],
           "description": "%config.completenessDitavalFiles.description%"
+        },
+        "dita-viewer.updateReferencesOnRename": {
+          "type": "string",
+          "enum": ["always", "never"],
+          "default": "always",
+          "description": "%config.updateReferencesOnRename.description%",
+          "enumDescriptions": [
+            "%config.updateReferencesOnRename.always%",
+            "%config.updateReferencesOnRename.never%"
+          ]
         }
       }
     }
   },
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
+    "build:core": "npm run build -w @dita-viewer/core",
+    "prepare": "npm run build:core",
+    "prebuild": "npm run build:core",
     "build": "node esbuild.config.js",
+    "prebuild:dev": "npm run build:core",
     "build:dev": "node esbuild.config.js --dev",
+    "prewatch": "npm run build:core",
     "watch": "node esbuild.config.js --watch",
     "lint": "eslint src/ --max-warnings 0",
     "lint:fix": "eslint src/ --fix",
+    "pretypecheck": "npm run build:core",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "verify": "npm run typecheck && tsc --noEmit -p tsconfig.e2e.json && npm run lint && npm run build && npm run check:l10n && npm test",
+    "typecheck:core": "npm run typecheck -w @dita-viewer/core",
+    "verify": "npm run typecheck && npm run typecheck:core && tsc --noEmit -p tsconfig.e2e.json && npm run lint && npm run build && npm run check:l10n && npm run check:webview && npm run check:dita-class && npm test && npm run test:core",
     "check:l10n": "node scripts/check-l10n.cjs",
+    "check:webview": "node scripts/check-webview-scope.cjs && node scripts/check-map-message-parity.cjs",
+    "check:dita-class": "node scripts/extract-dita-class.cjs --check-module",
+    "check:core-pack": "node scripts/check-core-pack.mjs",
     "check:package": "npx --yes @vscode/vsce@4.0.0 package --no-dependencies --allow-missing-repository && node scripts/check-package.cjs",
+    "check:completeness": "node scripts/completeness-baseline.cjs",
+    "check:completeness:oxygen": "node scripts/oxygen-diff.cjs",
+    "check:completeness:run": "node scripts/run-oxygen-completeness.cjs",
+    "package": "node -e \"require('fs').mkdirSync('output',{recursive:true})\" && npx --yes @vscode/vsce@4.0.0 package --no-dependencies --out output/",
+    "vsix:install": "node scripts/install-vsix.cjs",
+    "package:install": "npm run build && npm run package && npm run vsix:install",
   "bench:book-render": "node scripts/bench-book-render.js",
     "build:icons": "node scripts/build-icon-font.js",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
-    "pretest": "tsc -p tsconfig.test.json",
+    "pretest": "npm run build:core && node -e \"require('fs').rmSync('dist-test',{recursive:true,force:true})\" && tsc -p tsconfig.test.json",
     "test": "mocha --config .mocharc.json",
-    "test:e2e": "node esbuild.config.js && tsc -p tsconfig.e2e.json && node test-runner.cjs",
+    "test:core": "npm test -w @dita-viewer/core",
+    "test:e2e": "npm run build:core && node esbuild.config.js && tsc -p tsconfig.e2e.json && node test-runner.cjs",
     "playwright:install": "playwright install chromium",
-    "pretest:visual": "tsc -p tsconfig.visual.json",
+    "pretest:visual": "npm run build:core && tsc -p tsconfig.visual.json",
     "test:visual": "mocha --config .mocharc.visual.json"
+  },
+  "dependencies": {
+    "@dita-viewer/core": "*"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",

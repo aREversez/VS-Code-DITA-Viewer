@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.invalid.domains.format, boundary: @domains is written and empty, which overrides
+     the DTD default with nothing. A declared-but-empty attribute is the case that separates
+     "missing" from "malformed". -->
+<topic id="l-domains-format-edge" domains="">
+  <title>Domains written empty</title>
+  <body>
+    <p>An empty @domains, written on purpose.</p>
+  </body>
+</topic>

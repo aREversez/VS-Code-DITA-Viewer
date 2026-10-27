@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.invalid.ref.id.path.keyref.elemid, negative: the element id exists under the
+     key's topic. -->
+<topic id="f-keyref-elemid-neg">
+  <title>Existing element id under a key (negative)</title>
+  <body>
+    <p conkeyref="k-f-elemid/p1"/>
+  </body>
+</topic>

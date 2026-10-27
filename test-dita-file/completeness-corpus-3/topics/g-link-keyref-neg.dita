@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.no.link.keyref, negative: the key defines a target. -->
+<topic id="g-link-keyref-neg">
+  <title>Link through a key with a target (negative)</title>
+  <body>
+    <p><xref keyref="k-g-link-target">key with a target</xref></p>
+  </body>
+</topic>

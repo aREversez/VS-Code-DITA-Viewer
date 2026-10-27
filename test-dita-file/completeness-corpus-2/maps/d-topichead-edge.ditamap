@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.topichead.no.navtitle, boundary: a topicmeta without a navtitle, which
+     still leaves the navigation entry without a title. -->
+<map>
+  <title>Topichead with an empty topicmeta</title>
+  <topichead>
+    <topicmeta/>
+    <topicref href="../topics/ok.dita" copy-to="d1-edge-child"/>
+  </topichead>
+</map>

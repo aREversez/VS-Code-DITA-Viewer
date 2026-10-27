@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="reuse">
+  <title>Reuse</title>
+  <body>
+    <p id="orphan">Never cited by a conref or conkeyref.</p>
+    <p id="shared">Reused by linker2.dita through conref.</p>
+  </body>
+</topic>

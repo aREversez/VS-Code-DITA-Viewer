@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.filtered: target of the negative probe; its topicref carries audience="novice". -->
+<topic id="kftn">
+  <title>Published reference target</title>
+  <body>
+    <p>The map reference to this topic is not excluded by the filter.</p>
+  </body>
+</topic>

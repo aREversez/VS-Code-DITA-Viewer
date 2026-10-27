@@ -1,0 +1,233 @@
+[
+  {
+    "category": "missing-reference",
+    "severity": "error",
+    "file": "corpus.ditamap",
+    "line": 13,
+    "message": "Referenced topic not found: topics/missing.dita"
+  },
+  {
+    "category": "multiple-reference",
+    "severity": "warning",
+    "file": "corpus.ditamap",
+    "line": 17,
+    "message": "Topic referenced more than once (2 times): topics/multi.dita"
+  },
+  {
+    "category": "duplicate-key",
+    "severity": "warning",
+    "file": "corpus.ditamap",
+    "line": 29,
+    "message": "Key \"dupkey\" is already defined; this definition is ignored"
+  },
+  {
+    "category": "unreferenced-key",
+    "severity": "warning",
+    "file": "corpus.ditamap",
+    "line": 30,
+    "message": "Key \"unusedkey\" is defined but never referenced"
+  },
+  {
+    "category": "multiple-reference",
+    "severity": "warning",
+    "file": "corpus.ditamap",
+    "line": 31,
+    "message": "Topic referenced more than once (2 times): topics/ok.dita"
+  },
+  {
+    "category": "multiple-reference",
+    "severity": "warning",
+    "file": "corpus.ditamap",
+    "line": 36,
+    "message": "Topic referenced more than once (2 times): topics/keytopic.dita"
+  },
+  {
+    "category": "undefined-key",
+    "severity": "error",
+    "file": "corpus.ditamap",
+    "line": 39,
+    "message": "Key reference \"nosuchkey\" does not match any key definition"
+  },
+  {
+    "category": "dita-parse",
+    "severity": "error",
+    "file": "corpus.ditamap",
+    "line": 64,
+    "message": "Problem parsing \"topics/malformed.dita\" as DITA content: Unexpected close tag"
+  },
+  {
+    "category": "profiling-conflict",
+    "severity": "warning",
+    "file": "corpus.ditamap",
+    "line": 81,
+    "message": "@audience=\"expert\" on <topicref> shares no value with the enclosing \"novice\"; the content is overshadowed in profiled output"
+  },
+  {
+    "category": "unreferenced-link",
+    "severity": "warning",
+    "file": "topics/linker.dita",
+    "line": 6,
+    "message": "Link target is not referenced in any map: linktarget.dita"
+  },
+  {
+    "category": "invalid-ref-topic-id",
+    "severity": "error",
+    "file": "topics/linker2.dita",
+    "line": 10,
+    "message": "Referenced topic id \"shared\" not found"
+  },
+  {
+    "category": "invalid-ref-topic-id",
+    "severity": "error",
+    "file": "topics/linker2.dita",
+    "line": 9,
+    "message": "Referenced topic id \"used\" not found"
+  },
+  {
+    "category": "validation",
+    "severity": "error",
+    "file": "topics/malformed.dita",
+    "line": 5,
+    "message": "XML error: Unexpected close tag"
+  },
+  {
+    "category": "unreferenced-reusable",
+    "severity": "warning",
+    "file": "topics/ok.dita",
+    "line": 6,
+    "message": "Reusable element <p id=\"used\"> is never referenced by a conref or conkeyref"
+  },
+  {
+    "category": "outside-folder",
+    "severity": "warning",
+    "file": "topics/outside.dita",
+    "line": 7,
+    "message": "Reference points outside the map folder: ../../completeness-outside/outside.dita"
+  },
+  {
+    "category": "unreferenced-link",
+    "severity": "warning",
+    "file": "topics/outside.dita",
+    "line": 7,
+    "message": "Link target is not referenced in any map: ../../completeness-outside/outside.dita"
+  },
+  {
+    "category": "profiling-preference",
+    "severity": "warning",
+    "file": "topics/profiling-shape-inner.dita",
+    "line": 11,
+    "message": "@audience value \"admin\" is not defined in the profiling preferences"
+  },
+  {
+    "category": "profiling-conflict",
+    "severity": "warning",
+    "file": "topics/profiling-shape-inner.dita",
+    "line": 8,
+    "message": "@audience=\"expert\" on <li> shares no value with the enclosing \"novice\"; the content is overshadowed in profiled output"
+  },
+  {
+    "category": "profiling-preference",
+    "severity": "warning",
+    "file": "topics/profiling-shape-map.dita",
+    "line": 10,
+    "message": "@audience value \"admin\" is not defined in the profiling preferences"
+  },
+  {
+    "category": "profiling-conflict",
+    "severity": "warning",
+    "file": "topics/profiling-shape-root.dita",
+    "line": 4,
+    "message": "@audience=\"expert\" on <topic> shares no value with the enclosing \"novice\"; the content is overshadowed in profiled output"
+  },
+  {
+    "category": "profiling-conflict",
+    "severity": "warning",
+    "file": "topics/profiling-shape-root.dita",
+    "line": 8,
+    "message": "@audience=\"novice admin\" on <p> shares no value with the enclosing \"expert\"; the content is overshadowed in profiled output"
+  },
+  {
+    "category": "profiling-preference",
+    "severity": "warning",
+    "file": "topics/profiling-shape-root.dita",
+    "line": 8,
+    "message": "@audience value \"admin\" is not defined in the profiling preferences"
+  },
+  {
+    "category": "profiling-preference",
+    "severity": "warning",
+    "file": "topics/profiling.dita",
+    "line": 11,
+    "message": "Profiling attribute @platform on <p> is not defined in the profiling preferences"
+  },
+  {
+    "category": "profiling-preference",
+    "severity": "warning",
+    "file": "topics/profiling.dita",
+    "line": 7,
+    "message": "@audience value \"admin\" is not defined in the profiling preferences"
+  },
+  {
+    "category": "profiling-preference",
+    "severity": "warning",
+    "file": "topics/profiling.dita",
+    "line": 9,
+    "message": "@audience value \"admin\" is not defined in the profiling preferences"
+  },
+  {
+    "category": "missing-resource",
+    "severity": "error",
+    "file": "topics/resources.dita",
+    "line": 7,
+    "message": "Referenced resource not found: img/no-such-image.png"
+  },
+  {
+    "category": "missing-resource",
+    "severity": "error",
+    "file": "topics/resources.dita",
+    "line": 8,
+    "message": "Referenced resource not found: media/no-such-video.mp4"
+  },
+  {
+    "category": "unreferenced-reusable",
+    "severity": "warning",
+    "file": "topics/reuse.dita",
+    "line": 6,
+    "message": "Reusable element <p id=\"orphan\"> is never referenced by a conref or conkeyref"
+  },
+  {
+    "category": "unreferenced-reusable",
+    "severity": "warning",
+    "file": "topics/reuse.dita",
+    "line": 7,
+    "message": "Reusable element <p id=\"shared\"> is never referenced by a conref or conkeyref"
+  },
+  {
+    "category": "table-layout",
+    "severity": "warning",
+    "file": "topics/tables.dita",
+    "line": 19,
+    "message": "Simple table: row 2 has 1 cell(s); expected 2"
+  },
+  {
+    "category": "table-layout",
+    "severity": "warning",
+    "file": "topics/tables.dita",
+    "line": 8,
+    "message": "CALS table: 2 <colspec> element(s) but @cols is 3"
+  },
+  {
+    "category": "duplicate-id",
+    "severity": "error",
+    "file": "topics/twoidsa.dita",
+    "line": 3,
+    "message": "Duplicate topic id \"dup\" (2 topics share it)"
+  },
+  {
+    "category": "duplicate-id",
+    "severity": "error",
+    "file": "topics/twoidsb.dita",
+    "line": 3,
+    "message": "Duplicate topic id \"dup\" (2 topics share it)"
+  }
+]

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.invalid.class.specialization, boundary: the class is written out by hand, spelled
+     exactly as the DTD would default it. If an authored value and a default one are treated
+     alike, this stays quiet; if the check only looks at what is written, it does not. -->
+<topic id="l-class-specialization-edge">
+  <title>Class written out by hand (boundary)</title>
+  <body>
+    <p class="- topic/p" conref="l-class-target-base.dita#lctb/lctb-p"/>
+  </body>
+</topic>

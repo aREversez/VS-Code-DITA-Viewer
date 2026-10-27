@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.invalid.keyref.syntax.2, boundary: a hyphen, which XML names allow. -->
+<topic id="b-keyref2-edge">
+  <title>Invalid character in a keyref (boundary)</title>
+  <body>
+    <p><xref keyref="a-b">hyphen in key</xref></p>
+  </body>
+</topic>

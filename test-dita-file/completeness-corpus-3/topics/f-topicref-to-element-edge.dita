@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.topicref.to.element, boundary: the same element id reached through an xref,
+     whose target file a topicref in the map publishes. -->
+<topic id="f-topicref-to-element-edge">
+  <title>Element id through an xref (boundary)</title>
+  <body>
+    <p><xref href="lib2-pos.dita#lib2p/lib2p-p1">element target</xref></p>
+  </body>
+</topic>

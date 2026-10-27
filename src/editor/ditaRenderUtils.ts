@@ -1,10 +1,13 @@
 import { readFileSync, openSync, readSync, closeSync } from 'fs';
 import { resolve, dirname, isAbsolute } from 'path';
-import type { MapEntry } from '../render/mapTypeMap';
+import {
+  type MapEntry,
+  noteSourceDependencies,
+  renderTopicCached,
+  decodeHrefPart,
+  URL_SCHEME_RE,
+} from '@dita-viewer/core';
 import type { BookPart } from './bookPatch';
-import { noteSourceDependencies } from './sourceText';
-import { renderTopicCached } from './topicRender';
-import { decodeHrefPart, URL_SCHEME_RE } from './refResolvers';
 // Search match engine lives in the searchText leaf. Re-exported here so
 // bookSearchIndex and the preview tests keep resolving it from this module; the
 // webview overlay that injects it via .toString() now lives under ./webview/.
@@ -26,8 +29,8 @@ export {
   makeIsInCurrentBook,
   decodeHrefPart,
   expandDitamapRefs,
-} from './refResolvers';
-export type { FileReader } from './refResolvers';
+} from '@dita-viewer/core';
+export type { FileReader } from '@dita-viewer/core';
 // Webview script builders now live under ./webview/. Re-exported from here so
 // existing importers keep resolving them via this module (P5 forwarding barrel);
 // this file itself no longer references any of the moved scripts.
@@ -81,7 +84,6 @@ export {
   TopicRenderResult,
   TopicXmlRenderInput,
   ParsedTopicResult,
-  openHrefTarget,
   renderTopicXml,
   renderTopicToHtml,
   stampFiles,
@@ -92,7 +94,10 @@ export {
   topicRenderCacheBytesHeld,
   setTopicRenderCacheBudgetForTesting,
   renderTopicCached,
-} from './topicRender';
+} from '@dita-viewer/core';
+// The host-side href opener moved out of topicRender (which stays host-free);
+// re-exported so providers and tests keep resolving it from this module.
+export { openHrefTarget } from './openHrefTarget';
 
 /**
  * Default topic-type labeler used when no localized labeler is injected.
@@ -717,8 +722,20 @@ const SITE_HOME_TILE_ICON_SVG =
  */
 export function renderSiteHomeHtml(
   tiles: SiteHomeTile[],
-  opts: { heading: string; topicCountLabel: (count: number) => string },
+  opts: { heading: string; topicCountLabel: (count: number) => string; webhelp?: boolean },
 ): string {
+  // Route B M3-10, §2.2: a webhelp-DOM page puts the same nodes under the
+  // wh_* landing-page names of the contract (webhelpContract.ts, the 'home'
+  // region) -- tile container/tile/title/text get a second class token, the
+  // site-home-* classes every dv-base rule and the tile click delegation key
+  // on stay exactly as they are. Purely additive, like the body-class and
+  // sidebar-tree alignments before it. wh_welcome (a template's welcome text,
+  // which no .opt-derived map data supplies yet) and wh_tile_shortdesc (needs
+  // each topic file read for its shortdesc -- deferred with its own note
+  // below) are optional contract hooks and simply not emitted until there is
+  // something to put in them.
+  const wh = (own: string, webhelpName: string): string =>
+    opts.webhelp ? `${own} ${webhelpName}` : own;
   const heading = `<h1 class="site-home-title">${escapeHtml(opts.heading)}</h1>`;
   if (tiles.length === 0) return `<div class="site-home">${heading}</div>`;
   const cards = tiles
@@ -726,17 +743,17 @@ export function renderSiteHomeHtml(
       const roleChip = tile.role ? `<span class="site-nav-chip site-nav-chip--role">${escapeHtml(tile.role)}</span>` : '';
       const typeChip = tile.topicType ? `<span class="site-nav-chip site-nav-chip--type">${escapeHtml(tile.topicType)}</span>` : '';
       return (
-        `<a href="#" class="site-home-tile" data-site-target="${escapeAttr(tile.target)}" title="${escapeAttr(tile.title)}">` +
+        `<a href="#" class="${wh('site-home-tile', 'wh_tile')}" data-site-target="${escapeAttr(tile.target)}" title="${escapeAttr(tile.title)}">` +
         `<span class="site-home-tile-icon">${SITE_HOME_TILE_ICON_SVG}</span>` +
         `<span class="site-home-tile-body">` +
         `<span class="site-home-tile-chips">${roleChip}${typeChip}</span>` +
-        `<span class="site-home-tile-title">${escapeHtml(tile.title)}</span>` +
-        `<span class="site-home-tile-meta">${escapeHtml(opts.topicCountLabel(tile.topicCount))}</span>` +
+        `<span class="${wh('site-home-tile-title', 'wh_tile_title')}">${escapeHtml(tile.title)}</span>` +
+        `<span class="${wh('site-home-tile-meta', 'wh_tile_text')}">${escapeHtml(opts.topicCountLabel(tile.topicCount))}</span>` +
         `</span></a>`
       );
     })
     .join('');
-  return `<div class="site-home">${heading}<div class="site-home-grid" role="list">${cards}</div></div>`;
+  return `<div class="site-home">${heading}<div class="${wh('site-home-grid', 'wh_tiles')}" role="list">${cards}</div></div>`;
 }
 
 /** One manifest entry plus the direct children nested under it, built by
@@ -854,6 +871,7 @@ export function renderSiteNavTreeHtml(
   toggleLabels: { expand: string; collapse: string } = { expand: 'Expand', collapse: 'Collapse' },
   collapsedIds: ReadonlySet<string> = new Set(),
   revealActive = false,
+  webhelp = false,
 ): string {
   const expandLabel = escapeAttr(toggleLabels.expand);
   const collapseLabel = escapeAttr(toggleLabels.collapse);
@@ -940,6 +958,13 @@ export function renderSiteNavTreeHtml(
       ? `<ul class="site-nav-children" role="group">${node.children.map(renderNode).join('')}</ul>`
       : '';
     const itemClass = hasChildren ? (isCollapsed ? ' has-children collapsed' : ' has-children') : '';
+    // Webhelp mode (route B, step 4) doubles the tree classes onto the same
+    // node: the WebHelp names a template's css reads (topicref / expanded /
+    // active) sit alongside our own site-nav-* classes, which our behaviour JS
+    // keeps driving. has-children is already ours; expanded is added only for
+    // an open parent, active only for the row that is the current page. In own
+    // mode this is the empty string, so the markup is byte-for-byte unchanged.
+    const whClass = webhelp ? ` topicref${hasChildren && !isCollapsed ? ' expanded' : ''}` : '';
     const itemAriaExpanded = hasChildren ? ` aria-expanded="${isCollapsed ? 'false' : 'true'}"` : '';
     // A group entry (DocsiteNavEntry.isGroup -- a <topichead> or a bare
     // key-only topicref, see that field's own comment) has no topic file
@@ -953,12 +978,12 @@ export function renderSiteNavTreeHtml(
     // plain section heading (renderBookParts's own `struct:` branch).
     if (entry.isGroup) {
       const label = `<span class="site-nav-group-label" tabindex="${rowTabindex}" style="padding-left:${indent}px" title="${escapeAttr(entry.title)}">${roleChip}<span class="site-nav-link-text">${escapeHtml(entry.title)}</span></span>`;
-      return `<li class="site-nav-item site-nav-item--group${itemClass}" role="treeitem"${itemAriaExpanded}${navIdAttr}>${toggleHtml}${label}${childrenHtml}</li>`;
+      return `<li class="site-nav-item site-nav-item--group${itemClass}${whClass}" role="treeitem"${itemAriaExpanded}${navIdAttr}>${toggleHtml}${label}${childrenHtml}</li>`;
     }
     const activeClass = entry.absPath === currentAbsPath ? ' active' : '';
     const currentAttr = activeClass ? ' aria-current="page"' : '';
     const link = `<a href="#" class="site-nav-link${activeClass}"${currentAttr} tabindex="${rowTabindex}" data-site-target="${escapeAttr(entry.absPath as string)}" style="padding-left:${indent}px" title="${escapeAttr(entry.title)}">${roleChip}${typeChip}<span class="site-nav-link-text">${escapeHtml(entry.title)}</span></a>`;
-    return `<li class="site-nav-item${itemClass}" role="treeitem"${itemAriaExpanded}${navIdAttr}>${toggleHtml}${link}${childrenHtml}</li>`;
+    return `<li class="site-nav-item${itemClass}${whClass}${webhelp && activeClass ? ' active' : ''}" role="treeitem"${itemAriaExpanded}${navIdAttr}>${toggleHtml}${link}${childrenHtml}</li>`;
   };
 
   const items = tree.map(renderNode).join('');
@@ -972,8 +997,9 @@ export function renderSiteNavHtml(
   toggleLabels: { expand: string; collapse: string } = { expand: 'Expand', collapse: 'Collapse' },
   collapsedIds: ReadonlySet<string> = new Set(),
   revealActive = false,
+  webhelp = false,
 ): string {
-  return wrapSiteNavTreeHtml(renderSiteNavTreeHtml(manifest, currentAbsPath, toggleLabels, collapsedIds, revealActive), navLabel);
+  return wrapSiteNavTreeHtml(renderSiteNavTreeHtml(manifest, currentAbsPath, toggleLabels, collapsedIds, revealActive, webhelp), navLabel);
 }
 
 /**

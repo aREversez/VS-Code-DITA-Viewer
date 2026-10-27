@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.section.first.title, positive: the section title comes after a paragraph. The DTD
+     also rejects this order (a title must come first), so a schema-checking Oxygen reports
+     MSG_CONTENT_INVALID_UNEXPECTED_ELEMENT here as well; the completeness check is expected
+     to answer with the section id, and the two are kept apart in the README. -->
+<topic id="n-section-first-title-pos">
+  <title>Section title after content (positive)</title>
+  <body>
+    <section>
+      <p>Content written before the title.</p>
+      <title>A title that came too late</title>
+      <p>More content.</p>
+    </section>
+  </body>
+</topic>

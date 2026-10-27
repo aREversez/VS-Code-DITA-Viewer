@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.unencoded.ref, positive: a literal space in a local href. URI syntax
+     requires %20; the file itself does exist, with the space in its name. -->
+<topic id="a-unencoded-space">
+  <title>Unencoded space (positive)</title>
+  <body>
+    <p><xref href="../topics/ok file.dita">literal space</xref></p>
+  </body>
+</topic>

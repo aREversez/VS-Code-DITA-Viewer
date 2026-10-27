@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE subjectScheme PUBLIC "-//OASIS//DTD DITA Subject Scheme Map//EN" "subjectScheme.dtd">
+<!-- The subject scheme of the fourth corpus (batch 3, J group: dmv.prof.sbj.attr.mult.val.confl,
+     dmv.prof.sbj.attr.val.rej, dmv.prof.sbj.attr.val.rej.all). It is merged into ../corpus.ditamap
+     by a topicref with @format="ditamap".
+
+     platform is bound to a category with two subjects, otherprops to a category with two,
+     product to a category with one subject - a one-subject category is how a scheme spells
+     "single value" (the scheme itself has no single-value flag) - and deliveryTarget to
+     j-target, a category with no subjects, so the set of values the scheme allows for
+     deliveryTarget is empty. An enumerationdef with no subjectdef at all is not valid per
+     the DTD (subjectScheme.mod requires a subjectdef there), so the empty set is spelled as
+     a category with no children instead.
+
+     The @class values are the DTD's own defaults, written out so a tool can see the
+     specialization without resolving the external DTD subset.
+
+     Oxygen 27.1 does not report any subject-scheme finding for these probes in any of the
+     five configurations recorded in ../README.md; see the ledger row for the J group. -->
+<subjectScheme id="j-scheme" class="- map/map subjectScheme/subjectScheme ">
+  <title>J. Subject scheme for the profiling attributes</title>
+  <subjectdef class="- map/topicref subjectScheme/subjectdef " keys="j-os">
+    <subjectdef class="- map/topicref subjectScheme/subjectdef " keys="linux"/>
+    <subjectdef class="- map/topicref subjectScheme/subjectdef " keys="windows"/>
+  </subjectdef>
+  <subjectdef class="- map/topicref subjectScheme/subjectdef " keys="j-app">
+    <subjectdef class="- map/topicref subjectScheme/subjectdef " keys="alpha"/>
+    <subjectdef class="- map/topicref subjectScheme/subjectdef " keys="beta"/>
+  </subjectdef>
+  <subjectdef class="- map/topicref subjectScheme/subjectdef " keys="j-product">
+    <subjectdef class="- map/topicref subjectScheme/subjectdef " keys="desktop"/>
+  </subjectdef>
+  <subjectdef class="- map/topicref subjectScheme/subjectdef " keys="j-target"/>
+  <enumerationdef class="- map/topicref subjectScheme/enumerationdef ">
+    <attributedef class="- topic/data subjectScheme/attributedef " name="platform"/>
+    <subjectdef class="- map/topicref subjectScheme/subjectdef " keyref="j-os"/>
+  </enumerationdef>
+  <enumerationdef class="- map/topicref subjectScheme/enumerationdef ">
+    <attributedef class="- topic/data subjectScheme/attributedef " name="otherprops"/>
+    <subjectdef class="- map/topicref subjectScheme/subjectdef " keyref="j-app"/>
+  </enumerationdef>
+  <enumerationdef class="- map/topicref subjectScheme/enumerationdef ">
+    <attributedef class="- topic/data subjectScheme/attributedef " name="product"/>
+    <subjectdef class="- map/topicref subjectScheme/subjectdef " keyref="j-product"/>
+  </enumerationdef>
+  <enumerationdef class="- map/topicref subjectScheme/enumerationdef ">
+    <attributedef class="- topic/data subjectScheme/attributedef " name="deliveryTarget"/>
+    <subjectdef class="- map/topicref subjectScheme/subjectdef " keyref="j-target"/>
+  </enumerationdef>
+</subjectScheme>

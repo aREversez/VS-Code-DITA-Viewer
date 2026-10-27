@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.filtered at topic level: positive probe; the target topic is published by a
+     filtered topicref. The report answers on this xref with dmv.not.topic.ref.in.map, not
+     with dmv.ref.filtered: a reference to a topic whose map branch the filter drops is
+     treated as a reference to something the map does not publish. -->
+<topic id="kfrp">
+  <title>Reference to a filtered topic</title>
+  <body>
+    <p><xref href="k-filtered-target-pos.dita#kftp"/></p>
+  </body>
+</topic>

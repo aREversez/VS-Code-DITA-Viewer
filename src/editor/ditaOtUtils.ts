@@ -1,8 +1,7 @@
 import { readFileSync, realpathSync } from 'fs';
 import { homedir } from 'os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'path';
-import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
-import { collectMapEntries } from '../render/mapTypeMap';
+import { parseDitamap, preprocessEntities, collectMapEntries } from '@dita-viewer/core';
 import { expandDitamapRefs, decodeHrefPart } from './ditaRenderUtils';
 
 export interface NavManifestEntry {

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.ref.topic.inside.mapref, positive: a topicref nested inside a map
+     reference. DITA ignores that content, so this topic must not be published
+     through it. -->
+<map>
+  <title>Topic inside a map reference</title>
+  <topicref href="c-mapref-children-sub.ditamap" format="ditamap">
+    <topicref href="../topics/c-mapref-child.dita" copy-to="c-mapref-pos-child"/>
+  </topicref>
+</map>

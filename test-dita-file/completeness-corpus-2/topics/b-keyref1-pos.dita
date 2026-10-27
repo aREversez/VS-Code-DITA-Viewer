@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.invalid.keyref.syntax.1, positive: two slashes in a keyref. The key
+     itself ("a") is defined, so this must not also be an undefined key. -->
+<topic id="b-keyref1-pos">
+  <title>Two slashes in a keyref (positive)</title>
+  <body>
+    <p><xref keyref="a/b/c">key with two slashes</xref></p>
+  </body>
+</topic>

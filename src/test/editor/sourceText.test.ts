@@ -12,7 +12,7 @@ import {
   trackSourceReads,
   noteSourceDependencies,
   dependsOn,
-} from '../../editor/sourceText';
+} from '@dita-viewer/core';
 import { stampFiles } from '../../editor/ditaRenderUtils';
 
 describe('source stamps (disk)', () => {

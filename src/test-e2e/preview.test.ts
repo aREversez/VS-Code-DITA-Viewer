@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 
 const EXTENSION_ID = 'dita-viewer.dita-viewer';
 
-// dist/test/preview.test.js -> repo root is two levels up.
+// dist/e2e/preview.test.js -> repo root is two levels up.
 const repoRoot = path.resolve(__dirname, '..', '..');
 const fixturesDir = path.join(repoRoot, 'test-dita-file');
 // test-dita-file/fixture holds the generic DITA-element/keyref/conref smoke-test
@@ -13,13 +13,56 @@ const fixturesDir = path.join(repoRoot, 'test-dita-file');
 // fixture. Every test below exercises the smoke-test set specifically.
 const legacyFixturesDir = path.join(fixturesDir, 'fixture');
 
-async function waitFor(check: () => boolean, timeoutMs = 8000, intervalMs = 150): Promise<void> {
+async function waitFor(check: () => boolean, timeoutMs = 8000, intervalMs = 150, givesUp = 'Timed out waiting for the preview to render.'): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     if (check()) return;
     await new Promise((r) => setTimeout(r, intervalMs));
   }
-  throw new Error('Timed out waiting for the preview to render.');
+  throw new Error(givesUp);
+}
+
+/**
+ * Closes the reading view open on `uri`/`viewType` and waits until the panel is
+ * actually gone, reported by its own cleanup: both providers delete the render
+ * cache entry (`cached` reads it) from the webview's onDidDispose hook, so the
+ * entry disappearing is the only thing observable from here that proves the
+ * dispose ran.
+ *
+ * This is what makes "close a preview, then reopen the same document and read
+ * what the new render carried" a test rather than a race. `vscode.openWith` on a
+ * document whose custom editor still exists does not resolve a second panel --
+ * it reveals the live one, and no render happens at all -- so reopening straight
+ * after a close polls for a value that nothing is going to write. The dispose
+ * lands asynchronously, later than `workbench.action.closeActiveEditor`
+ * resolves, and losing that race is not a slow test but a stuck one: the reveal
+ * already happened, so the value never arrives and the poll runs to its
+ * timeout -- which is how this file's tag-tooltip case failed on a loaded CI
+ * runner while passing locally, where the dispose wins by a few ms. Closing by
+ * tab handle rather than by "active editor" takes a second dependency of the
+ * same kind -- which tab the host thinks is active -- out of it as well.
+ */
+async function closePreview(uri: vscode.Uri, viewType: string, cached: () => string | undefined): Promise<void> {
+  for (const group of vscode.window.tabGroups.all) {
+    for (const tab of group.tabs) {
+      if (
+        tab.input instanceof vscode.TabInputCustom &&
+        tab.input.viewType === viewType &&
+        tab.input.uri.toString() === uri.toString()
+      ) {
+        await vscode.window.tabGroups.close(tab);
+      }
+    }
+  }
+  // Shorter than the render polls on purpose: two of these plus two polls must
+  // stay inside mocha's per-test budget, so a stall here reports the disposal
+  // that actually failed rather than a generic test timeout.
+  await waitFor(
+    () => cached() === undefined,
+    4000,
+    25,
+    `The ${viewType} panel on ${uri.toString()} never released its render-cache entry, so its webview did not finish disposing.`,
+  );
 }
 
 describe('DITA/DITAMAP preview rendering', () => {
@@ -44,7 +87,7 @@ describe('DITA/DITAMAP preview rendering', () => {
       'expected rendered HTML to include the topic title text',
     );
 
-    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+    await closePreview(uri, 'ditaViewer.preview', getHtml);
   });
 
   it('renders a .ditamap outline and includes a referenced topic label', async () => {
@@ -66,7 +109,7 @@ describe('DITA/DITAMAP preview rendering', () => {
       'expected rendered outline HTML to include a label derived from the referenced topic file',
     );
 
-    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+    await closePreview(uri, 'ditaViewer.mapPreview', getHtml);
   });
 
   it('ships a webview script whose content-update message names match the ones the provider posts', async () => {
@@ -104,7 +147,7 @@ describe('DITA/DITAMAP preview rendering', () => {
       assert.ok(page.includes(handler), `expected the shipped script to handle ${handler}`);
     }
 
-    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+    await closePreview(uri, 'ditaViewer.mapPreview', getHtml);
   });
 
   it('ships the search overlay with its injected match-finding function inlined, not referenced', async () => {
@@ -134,7 +177,7 @@ describe('DITA/DITAMAP preview rendering', () => {
       'expected the shipped overlay to inline the function body, not a reference to it',
     );
 
-    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+    await closePreview(uri, 'ditaViewer.mapPreview', getHtml);
   });
 
   it('renders a map preview with the same font/width preferences the topic viewer persisted', async () => {
@@ -164,14 +207,12 @@ describe('DITA/DITAMAP preview rendering', () => {
 
       const getHtml = () => ext.exports._test.getLastRenderedMapHtml(uri.toString());
       // Waits for the render to actually carry the preference just set above,
-      // not merely for *a* cached entry to exist -- an earlier test in this
-      // file already rendered this same test.ditamap once (with whatever
-      // preferences were live then) and MapViewerProvider only deletes that
-      // entry from its cache on webview dispose, which fires asynchronously
-      // relative to `workbench.action.closeActiveEditor` resolving. A plain
-      // `!!getHtml()` check can observe the still-live, stale entry from the
-      // previous test on its very first (synchronous) poll and return before
-      // the fresh render lands, reading yesterday's preferences.
+      // not merely for *a* cached entry to exist: reading yesterday's
+      // preferences would pass this test silently. The entry it finds is the
+      // fresh render's because the test before this one closed its panel with
+      // closePreview, which waits for the dispose -- reopening straight after
+      // an unwrapped close can instead just reveal the live panel, and then no
+      // render happens and this poll has nothing to wait for.
       await waitFor(() => (getHtml() || '').includes('window.__fontPrefs={"size":140,"serif":true}'));
 
       const page = getHtml();
@@ -195,7 +236,7 @@ describe('DITA/DITAMAP preview rendering', () => {
       assert.ok(page.includes("type: 'setWidthSelection'"), 'expected the toolbar to persist width changes back');
       assert.ok(!page.includes('${MSG_'), 'an un-interpolated MSG_ constant would leave the message type unmatched');
 
-      await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+      await closePreview(uri, 'ditaViewer.mapPreview', getHtml);
     } finally {
       await globalState.update('ditaViewer.fontPrefs', previousFontPrefs);
       await globalState.update('ditaViewer.widthSelectionByUri', previousWidthMap);
@@ -213,37 +254,33 @@ describe('DITA/DITAMAP preview rendering', () => {
       await globalState.update('ditaViewer.tagTooltips', true);
 
       const topicUri = vscode.Uri.file(path.join(legacyFixturesDir, 'topics', 'db_overview.dita'));
+      const getTopicHtml = () => ext.exports._test.getLastRenderedHtml(topicUri.toString());
       await vscode.commands.executeCommand('vscode.openWith', topicUri, 'ditaViewer.preview');
-      // See the font/width test's comment on why this polls for the actual
-      // expected value rather than `!!getLastRenderedHtml(...)` -- this same
-      // topicUri was already rendered (with tagTooltips off) by the very
-      // first test in this file, and that stale cache entry is not
-      // guaranteed to be gone by the time this test's openWith resolves.
-      await waitFor(() => (ext.exports._test.getLastRenderedHtml(topicUri.toString()) || '').includes('window.__tagTooltips=true'));
-      const topicPage: string = ext.exports._test.getLastRenderedHtml(topicUri.toString());
+      // Polls for the value this test set rather than for any cached entry, and
+      // closes with closePreview so the reopen below is a real re-render -- see
+      // the font/width test above for both halves of that.
+      await waitFor(() => (getTopicHtml() || '').includes('window.__tagTooltips=true'));
+      const topicPage: string = getTopicHtml();
       assert.ok(
         topicPage.includes('window.__tagTooltips=true'),
         'expected the topic preview to bootstrap from the persisted tag-tooltips preference',
       );
       assert.ok(topicPage.includes('data-dita-tagname='), 'expected the generic fallback to use the data attribute, not a bare title=');
       assert.ok(topicPage.includes("type: 'setTagTooltips'"), 'expected the toolbar to persist toggling this back');
-      await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+      await closePreview(topicUri, 'ditaViewer.preview', getTopicHtml);
 
       const mapUri = vscode.Uri.file(path.join(legacyFixturesDir, 'test.ditamap'));
+      const getMapHtml = () => ext.exports._test.getLastRenderedMapHtml(mapUri.toString());
       await vscode.commands.executeCommand('vscode.openWith', mapUri, 'ditaViewer.mapPreview');
-      // Same rationale: test.ditamap was already rendered (tagTooltips off)
-      // by several earlier tests in this file, most recently the font/width
-      // test right above -- poll for the value this test actually set, not
-      // just for any cached entry to reappear.
-      await waitFor(() => (ext.exports._test.getLastRenderedMapHtml(mapUri.toString()) || '').includes('window.__tagTooltips=true'));
-      const mapPage: string = ext.exports._test.getLastRenderedMapHtml(mapUri.toString());
+      await waitFor(() => (getMapHtml() || '').includes('window.__tagTooltips=true'));
+      const mapPage: string = getMapHtml();
       assert.ok(
         mapPage.includes('window.__tagTooltips=true'),
         'expected the map preview to bootstrap from the same, shared preference',
       );
       assert.ok(mapPage.includes("type: 'setTagTooltips'"), 'expected the map toolbar to persist toggling this back too');
       assert.ok(!mapPage.includes('${MSG_'), 'an un-interpolated MSG_ constant would leave the message type unmatched');
-      await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+      await closePreview(mapUri, 'ditaViewer.mapPreview', getMapHtml);
     } finally {
       await globalState.update('ditaViewer.tagTooltips', previous);
     }

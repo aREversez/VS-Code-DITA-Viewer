@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.link.no.target, boundary: an xref with no @href but a @conref. A content
+     reference supplies the content, so it must not be reported as a link without a
+     target (a shape earlier probes got wrong). -->
+<topic id="g-link-no-target-edge">
+  <title>xref through conref (boundary)</title>
+  <body>
+    <p><xref conref="lib.dita#lib3/xref1"/></p>
+  </body>
+</topic>

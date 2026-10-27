@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.conref.siblings, positive: the range ends in a different parent (p1 is in the
+     body, p5 inside a section). -->
+<topic id="e-conref-siblings-pos">
+  <title>Range across parents (positive)</title>
+  <body>
+    <p conref="lib.dita#lib3/p1" conrefend="lib.dita#lib3/p5"/>
+  </body>
+</topic>

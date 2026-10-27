@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- Fourth differential corpus: profiling values and preferences, subject schemes and
+     filters (batch 3, see ../completeness-corpus/BATCH-3.md and README.md here).
+     Oxygen must be run with THIS map as the only root map, with the preferences and
+     the filter file this README lists.
+     The subject scheme lives in maps/j-scheme.ditamap and is merged in below. Five
+     Oxygen runs (see README.md) showed that it never loads a scheme in any spelling
+     that is valid per the DTD, so the J-group rules have no Oxygen evidence; the
+     scheme stays referenced because the probes are only reachable through this map. -->
+<map id="corpus4">
+  <title>Completeness Check Corpus 4</title>
+
+  <!-- Control, kept in every run: a reference to a file that does not exist. Both the
+       extension and Oxygen report it, so a run that lacks it did not look at this map. -->
+  <topicref href="topics/control-missing.dita"/>
+
+  <topicref href="topics/ok.dita"/>
+
+  <!-- I. Profiling values and preferences: dmv.prof.attr.empty.value,
+       dmv.prof.attr.val.prefs.confl and dmv.prof.group.val.prefs.undef. -->
+  <topicref href="topics/i-prof-empty-pos.dita"/>
+  <topicref href="topics/i-prof-empty-neg.dita"/>
+  <topicref href="topics/i-prof-empty-edge.dita"/>
+  <topicref href="topics/i-prof-single-pos.dita"/>
+  <topicref href="topics/i-prof-single-neg.dita"/>
+  <topicref href="topics/i-prof-single-edge.dita"/>
+  <topicref href="topics/i-prof-group-pos.dita"/>
+  <topicref href="topics/i-prof-group-neg.dita"/>
+  <topicref href="topics/i-prof-group-edge.dita"/>
+
+  <!-- J. Subject scheme: dmv.prof.sbj.attr.mult.val.confl, dmv.prof.sbj.attr.val.rej
+       and dmv.prof.sbj.attr.val.rej.all. The enumerations are in the submap below; see
+       README.md for the five ways of attaching a scheme that Oxygen was asked to load. -->
+  <topicref href="maps/j-scheme.ditamap" format="ditamap"/>
+  <topicref href="topics/j-sbj-mult-pos.dita"/>
+  <topicref href="topics/j-sbj-mult-neg.dita"/>
+  <topicref href="topics/j-sbj-mult-edge.dita"/>
+  <topicref href="topics/j-sbj-rej-pos.dita"/>
+  <topicref href="topics/j-sbj-rej-neg.dita"/>
+  <topicref href="topics/j-sbj-rej-edge.dita"/>
+  <topicref href="topics/j-sbj-rej-all-pos.dita"/>
+  <topicref href="topics/j-sbj-rej-all-neg.dita"/>
+  <topicref href="topics/j-sbj-rej-all-edge.dita"/>
+
+  <!-- K. Filters: dmv.ref.filtered, dmv.ref.filtered.conref and dmv.dup.cond.filter.
+       The shared filter is filters/probe.ditaval; the condition on a target topicref
+       below is part of the probe, not a publication preference. -->
+  <topicref href="topics/k-ref-filtered-pos.dita"/>
+  <topicref href="topics/k-ref-filtered-neg.dita"/>
+  <topicref href="topics/k-ref-filtered-edge.dita"/>
+  <topicref href="topics/k-conref-filtered-pos.dita"/>
+  <topicref href="topics/k-conref-filtered-neg.dita"/>
+  <topicref href="topics/k-conref-filtered-edge.dita"/>
+  <topicref href="topics/k-filtered-target-pos.dita" audience="expert"/>
+  <topicref href="topics/k-filtered-target-neg.dita" audience="novice"/>
+  <topicref href="topics/k-filtered-target-edge.dita" audience="novice expert"/>
+  <topicref href="topics/k-conref-target-pos.dita"/>
+  <topicref href="topics/k-conref-target-neg.dita"/>
+  <topicref href="topics/k-conref-target-edge.dita"/>
+  <!-- dmv.ref.filtered.conref: a reference into content that conref processing drops.
+       The first run showed that a conref to a filtered element is dmv.ref.filtered, so
+       this id needs its own spelling. -->
+  <topicref href="topics/k-conref-ignored-src.dita"/>
+  <topicref href="topics/k-conref-ignored-pos.dita"/>
+  <topicref href="topics/k-conref-ignored-neg.dita"/>
+  <topicref href="topics/k-conref-ignored-edge.dita"/>
+</map>

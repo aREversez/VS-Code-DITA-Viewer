@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.ref.topic.inside.mapref, boundary: a normal topicref with a nested
+     topicref. That content is published; only a mapref ignores it. -->
+<map>
+  <title>Topic with a nested topicref</title>
+  <topicref href="../topics/c-mapref-parent.dita" copy-to="c-mapref-parent">
+    <topicref href="../topics/c-mapref-child.dita" copy-to="c-mapref-edge-child"/>
+  </topicref>
+</map>

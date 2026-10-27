@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- Target for dmv.unencoded.ref: a "#" in the file name. Only the encoded
+     topicref in corpus.ditamap can reach it; the raw href splits at the "#". -->
+<topic id="okhash">
+  <title>File name with a hash</title>
+  <body>
+    <p>Reached through an encoded href.</p>
+  </body>
+</topic>

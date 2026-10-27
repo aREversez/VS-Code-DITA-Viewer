@@ -9,7 +9,7 @@ import * as vscode from 'vscode';
 import { promises as fsp } from 'fs';
 import { CrawlHost } from './mapCrawl';
 import { getActiveDitaUri } from './exportHtml';
-import { readSourceText } from './sourceText';
+import { readSourceText } from '@dita-viewer/core';
 
 export interface MapCheckDeps {
   /** The map the navigator is showing, when the active editor gives no better answer. */
@@ -26,6 +26,20 @@ export function makeHost(token?: vscode.CancellationToken): CrawlHost {
         return true;
       } catch {
         return false;
+      }
+    },
+    isDirectory: async (p) => {
+      try {
+        return (await fsp.stat(p)).isDirectory();
+      } catch {
+        return false;
+      }
+    },
+    readDir: async (p) => {
+      try {
+        return await fsp.readdir(p);
+      } catch {
+        return undefined;
       }
     },
     cancelled: () => !!token?.isCancellationRequested,
@@ -51,8 +65,9 @@ export function mapFromArg(arg: unknown): string | undefined {
   return arg instanceof vscode.Uri && /\.ditamap$/i.test(arg.fsPath) ? arg.fsPath : undefined;
 }
 
-export async function browseFiles(title: string, extensions: string[], many: boolean): Promise<string[]> {
+export async function browseFiles(title: string, extensions: string[], many: boolean, defaultPath?: string): Promise<string[]> {
   const uris = await vscode.window.showOpenDialog({
+    defaultUri: defaultPath ? vscode.Uri.file(defaultPath) : undefined,
     canSelectMany: many,
     canSelectFiles: true,
     canSelectFolders: false,

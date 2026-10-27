@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.unencoded.ref, boundary: a non-ASCII (Chinese) file name written raw.
+     Whether this needs percent-encoding is the open question the report answers. -->
+<topic id="a-unencoded-chinese">
+  <title>Unencoded non-ASCII name (boundary)</title>
+  <body>
+    <p><xref href="../topics/中文.dita">raw Chinese file name</xref></p>
+  </body>
+</topic>

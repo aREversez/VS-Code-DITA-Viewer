@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.topicref.no.format, extension-guess probe: a real topic behind a .xml
+     name, referenced with no @format. -->
+<topic id="c-guess-xml">
+  <title>Guess by the .xml extension</title>
+  <body>
+    <p>A valid DITA topic with a generic XML extension.</p>
+  </body>
+</topic>

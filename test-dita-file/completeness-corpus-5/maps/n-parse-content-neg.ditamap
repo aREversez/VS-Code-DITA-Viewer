@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.invalid.parse.dita.content, negative: the topicref names a topic that parses.
+     Nothing to report, on the map or on the file. -->
+<map>
+  <title>A topicref to a topic that parses (negative)</title>
+  <topicref href="../topics/n-valid-target.dita"/>
+</map>

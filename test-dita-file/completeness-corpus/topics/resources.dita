@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="resources">
+  <title>Local resources</title>
+  <body>
+    <!-- missing non-DITA resources: reported when "check non-DITA references" is on -->
+    <p><image href="img/no-such-image.png"/></p>
+    <p><object data="media/no-such-video.mp4"/></p>
+    <!-- control: a resource that exists is not reported -->
+    <p><image href="img/used.png"/></p>
+  </body>
+</topic>

@@ -9,7 +9,7 @@ import {
   reportKeyContextMissing,
   onKeyContextMissing,
 } from '../../editor/keyContext';
-import { keySourceMaps, isKeyContextAvailable } from '../../editor/keySpace';
+import { keySourceMaps, isKeyContextAvailable } from '@dita-viewer/core';
 
 describe('keyContext state', () => {
   afterEach(() => {

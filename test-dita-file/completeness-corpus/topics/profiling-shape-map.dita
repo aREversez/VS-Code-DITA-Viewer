@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="shapemap">
+  <title>Profiling shape: nested map references</title>
+  <body>
+    <p>The conflict is in the map: this topic is referenced with audience="expert"
+      inside a group that is audience="novice" (R023).</p>
+    <!-- control: "admin" is not in the preference list, so Oxygen reports it; the value
+         also overlaps the cascaded "novice", so it is no conflict -->
+    <p audience="novice admin">control</p>
+  </body>
+</topic>

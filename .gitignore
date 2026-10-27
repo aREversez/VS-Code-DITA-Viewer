@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-esm/
 dist-test/
 dist-test-visual/
 test-visual/__screenshots__/
@@ -9,3 +10,10 @@ output/
 REQUIREMENTS.md
 ROADMAP.md
 test-dita-file/out/
+# Scratch tree created under the workspace by the rename e2e suite (removed on
+# exit; ignored so a crashed run can never leave it staged).
+test-dita-file/__rename-e2e/
+test-dita-file/__providers-e2e/
+
+# raw Oxygen reports name files by absolute machine paths; commit the sanitized one
+test-dita-file/completeness-corpus*/*.raw.xml

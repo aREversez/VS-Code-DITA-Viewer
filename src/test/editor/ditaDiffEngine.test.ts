@@ -1,15 +1,18 @@
 import * as assert from 'assert';
-import { DitaNode } from '../../parser/domTypes';
+import { DitaNode } from '@dita-viewer/core';
 import {
   diffTopics,
   lcsAlign,
   normalizeText,
   tokenizeForDiff,
   diffTokens,
+  coalesceDiffParts,
   applyInlineMarksToHtml,
   swapAlignedRows,
+  computeRowStats,
   buildQuickCommitChoices,
   arrangeByRecency,
+  AlignedRow,
   DiffTopicsInput,
 } from '../../editor/ditaDiffEngine';
 
@@ -19,7 +22,7 @@ import {
  *  deliberately close to what DitaViewerProvider's own renderer produces
  *  (headings wrapped, escaped text) but simplified, since the point of
  *  these tests is diffTopics' own alignment/diffing behavior, not
- *  full-fidelity HTML rendering (that's covered by renderer.test.ts). */
+ *  full-fidelity HTML rendering (that's covered by packages/core/test/render/renderer.test.ts). */
 function testRenderBlockFactory(root: DitaNode, _docDir: string) {
   // The factory receiving `root` at all -- and being able to use it -- is
   // the actual regression this test file exists to guard: the diff view
@@ -100,6 +103,209 @@ describe('ditaDiffEngine', () => {
       assert.strictEqual(result.stats.added, 1);
       assert.strictEqual(result.stats.modified, 1);
       assert.strictEqual(result.stats.removed, 0);
+    });
+
+    it('pairs a same-baseType cross-lingual rewrite as one modified row, not a removed+added split (regression: the similarity gate split an English paragraph replaced by a Chinese one into two independent one-sided rows, since the two scripts share almost no tokens or character bigrams -- flooding the gutter with one-sided stubs and doubling the navigation counter on large diffs)', () => {
+      const left = `<?xml version="1.0"?><topic id="t"><title>T</title><body><p>Deploy the application to a Kubernetes cluster using Helm</p></body></topic>`;
+      const right = `<?xml version="1.0"?><topic id="t"><title>T</title><body><p>使用容器编排技术将应用部署到本地测试环境</p></body></topic>`;
+      const result = runDiff(left, right);
+      const pRow = result.rows.find((r) => (r.left || r.right)?.baseType === 'topic/p');
+      assert.ok(pRow, 'expected a <p> row');
+      assert.strictEqual(pRow!.changeType, 'modified', `a same-type replacement must pair as one modified row, got: ${pRow!.changeType}`);
+      assert.ok(pRow!.left && pRow!.right, 'the modified row must carry both sides');
+      assert.strictEqual(result.stats.removed, 0, 'a cross-lingual replacement must not surface as a removal');
+      assert.strictEqual(result.stats.added, 0, 'a cross-lingual replacement must not surface as an insertion');
+    });
+
+    it('omits word-level inline marks for a wholesale cross-lingual replacement (the block border + connector already say "this changed"; a full strike-through-plus-highlight wall is noise, not signal)', () => {
+      const left = `<?xml version="1.0"?><topic id="t"><title>T</title><body><p>Deploy the application to a Kubernetes cluster using Helm</p></body></topic>`;
+      const right = `<?xml version="1.0"?><topic id="t"><title>T</title><body><p>使用容器编排技术将应用部署到本地测试环境</p></body></topic>`;
+      const result = runDiff(left, right);
+      const pRow = result.rows.find((r) => r.changeType === 'modified' && r.left?.baseType === 'topic/p');
+      assert.ok(pRow, 'expected the cross-lingual <p> to be modified');
+      assert.deepStrictEqual(pRow!.inlineDiff, [], 'expected no word-level marks for a full replacement');
+    });
+
+    it('keeps every edited paragraph paired with its own counterpart when one new paragraph is inserted in the middle of the run (regression: pairing was purely positional within a change run, so one insertion shifted every later pair by one -- each old paragraph was drawn against the NEXT new paragraph, a cascade of wrong connectors that read as a total rewrite)', () => {
+      const mk = (ps: string[]) =>
+        `<?xml version="1.0"?><topic id="t"><title>T</title><body>${ps.map((t) => `<p>${t}</p>`).join('')}</body></topic>`;
+      const leftPs = Array.from({ length: 8 }, (_, i) => `Step ${i + 1}: configure the alpha${i} service on the server now.`);
+      const rightPs = leftPs.map((t) => t.replace('configure', 'set up'));
+      rightPs.splice(4, 0, 'Brand new unrelated paragraph about backups and restore.');
+
+      const result = runDiff(mk(leftPs), mk(rightPs));
+      const pRows = result.rows.filter((r) => (r.left || r.right)?.baseType === 'topic/p');
+      const modified = pRows.filter((r) => r.changeType === 'modified');
+      assert.strictEqual(modified.length, 8, `all 8 edited paragraphs must pair, got ${modified.length}`);
+      for (const r of modified) {
+        const ln = /Step (\d+):/.exec(r.left!.text)![1];
+        const rn = /Step (\d+):/.exec(r.right!.text)![1];
+        assert.strictEqual(ln, rn, `"${r.left!.text}" was paired with "${r.right!.text}"`);
+      }
+      const added = pRows.filter((r) => r.changeType === 'added');
+      assert.strictEqual(added.length, 1);
+      assert.ok(added[0].right!.text.startsWith('Brand new'), 'the inserted paragraph must be the lone added row');
+      assert.strictEqual(result.stats.added, 1);
+      assert.strictEqual(result.stats.removed, 0);
+    });
+
+    it('shows a deleted paragraph between two rewritten neighbours as removed, and pairs the neighbours with their own rewrites (regression: positional pairing matched the deleted middle paragraph with the last rewrite and left the last original orphaned)', () => {
+      const mk = (ps: string[]) =>
+        `<?xml version="1.0"?><topic id="t"><title>T</title><body>${ps.map((t) => `<p>${t}</p>`).join('')}</body></topic>`;
+      const result = runDiff(
+        mk(['Alpha one original text here.', 'Beta two will be deleted entirely.', 'Gamma three original text here.']),
+        mk(['Alpha one rewritten wording there.', 'Gamma three rewritten wording there.']),
+      );
+      const pRows = result.rows.filter((r) => (r.left || r.right)?.baseType === 'topic/p');
+      const removed = pRows.filter((r) => r.changeType === 'removed');
+      assert.strictEqual(removed.length, 1);
+      assert.ok(removed[0].left!.text.startsWith('Beta'), `expected Beta to be the removed row, got: ${removed[0].left!.text}`);
+      const gamma = pRows.find((r) => r.changeType === 'modified' && r.left!.text.startsWith('Gamma'));
+      assert.ok(gamma, 'Gamma must pair as modified');
+      assert.ok(gamma!.right!.text.startsWith('Gamma'), `Gamma was paired with: ${gamma!.right!.text}`);
+    });
+
+    describe('large id-less change runs', () => {
+      const mk = (ps: string[]) =>
+        `<?xml version="1.0"?><topic id="t"><title>T</title><body>${ps.map((t) => `<p>${t}</p>`).join('')}</body></topic>`;
+      const steps = (n: number) =>
+        Array.from({ length: n }, (_, i) => `Step ${i + 1}: configure the alpha${i} service on the server now.`);
+      const stepOf = (t: string) => /Step (\d+):/.exec(t)?.[1];
+
+      it('keeps every pair right when 300 un-id\'d paragraphs are all edited and one is inserted (regression: above the DP limit the fallback paired by index for blocks without ids, so one insertion put 150 of 300 pairs against the wrong neighbour)', () => {
+        const left = steps(300);
+        const right = left.map((t) => t.replace('configure', 'set up'));
+        right.splice(150, 0, 'Brand new unrelated paragraph about backups and restore.');
+        const result = runDiff(mk(left), mk(right));
+        const paired = result.rows.filter((r) => r.changeType === 'modified' && r.left && r.right);
+        assert.strictEqual(paired.length, 300);
+        const wrong = paired.filter((r) => stepOf(r.left!.text) !== stepOf(r.right!.text));
+        assert.strictEqual(wrong.length, 0, `${wrong.length} of 300 pairs drawn against the wrong paragraph`);
+        assert.deepStrictEqual(result.stats, { added: 1, removed: 0, modified: 300 });
+      });
+
+      it('keeps every pair right when one of 300 edited paragraphs is deleted', () => {
+        const left = steps(300);
+        const right = left.map((t) => t.replace('configure', 'set up'));
+        right.splice(80, 1);
+        const result = runDiff(mk(left), mk(right));
+        const paired = result.rows.filter((r) => r.changeType === 'modified' && r.left && r.right);
+        assert.strictEqual(paired.length, 299);
+        assert.ok(paired.every((r) => stepOf(r.left!.text) === stepOf(r.right!.text)));
+        const removed = result.rows.filter((r) => r.changeType === 'removed');
+        assert.strictEqual(removed.length, 1);
+        assert.strictEqual(stepOf(removed[0].left!.text), '81');
+      });
+    });
+
+    describe('moved blocks, wholesale replacements, anchors', () => {
+      const mk = (ps: string[]) =>
+        `<?xml version="1.0"?><topic id="t"><title>T</title><body>${ps.join('')}</body></topic>`;
+      const para = (t: string, attrs = '') => `<p${attrs ? ' ' + attrs : ''}>${t}</p>`;
+      const pRows = (rows: AlignedRow[]) => rows.filter((r) => (r.left || r.right)?.baseType === 'topic/p');
+      // Distinct three-letter nonsense words from a given alphabet: shares no
+      // token and almost no character bigram with words from another alphabet.
+      const gib = (alpha: string, n: number): string => {
+        const out: string[] = [];
+        for (const a of alpha) for (const b of alpha) for (const c of alpha) {
+          if (out.length < n) out.push(a + b + c);
+        }
+        return out.join(' ');
+      };
+
+      it('pairs a block that moved unchanged as one move: one change, not a removal plus an insertion (regression: a moved block showed as a removed row and an unrelated added row -- two navigation stops, two gutter stubs)', () => {
+        const a = para('Alpha block that moves to the end of the topic.');
+        const b = para('Bravo block that stays in place for the whole time.');
+        const c = para('Charlie block that also stays right where it is.');
+        const result = runDiff(mk([a, b, c]), mk([b, c, a]));
+        const rows = pRows(result.rows).filter((r) => r.changeType !== 'unchanged');
+        assert.strictEqual(rows.length, 2, 'expected the removed + added halves of the move');
+        assert.ok(rows[0].moveId !== undefined && rows[0].moveId === rows[1].moveId, 'both halves must share one moveId');
+        assert.deepStrictEqual(result.stats, { added: 0, removed: 0, modified: 1 }, 'a move counts as a single change');
+      });
+
+      it('pairs a block that moved AND was edited, matched by its id, and gives it a word-level diff (regression: an id-keyed block with edited text and a new position landed in two different change runs and was never re-paired)', () => {
+        const moved = (t: string) => para(t, 'id="mv"');
+        const b = para('Bravo block that stays in place for the whole time.');
+        const c = para('Charlie block that also stays right where it is.');
+        const result = runDiff(
+          mk([moved('Alpha text before the edit was made here.'), b, c]),
+          mk([b, c, moved('Alpha text after the edit was made here.')]),
+        );
+        const rows = pRows(result.rows).filter((r) => r.changeType !== 'unchanged');
+        assert.strictEqual(rows.length, 2);
+        assert.ok(rows[0].moveId !== undefined && rows[0].moveId === rows[1].moveId);
+        assert.ok((rows[0].inlineDiff || []).some((p) => p.removed), 'expected word-level marks on the moved+edited block');
+        assert.strictEqual(result.stats.modified, 1);
+        assert.strictEqual(result.stats.added + result.stats.removed, 0);
+      });
+
+      it('does not treat two different images with no text as a moved block (identical keys, different html)', () => {
+        // The shared test renderer drops attributes; this one keeps href, like the real renderer.
+        const result = diffTopics({
+          leftXml: mk(['<image href="a.png"/>', para('Keep this paragraph exactly as it is.')]),
+          rightXml: mk([para('Keep this paragraph exactly as it is.'), '<image href="b.png"/>']),
+          leftDocDir: '/tmp/left',
+          rightDocDir: '/tmp/right',
+          renderBlockFactory: () => (node: DitaNode) =>
+            `<div data-src="${node.attributes?.href ?? ''}">${collectPlainText(node)}</div>`,
+        });
+        assert.ok(result.rows.every((r) => r.moveId === undefined));
+      });
+
+      it('flags a wholesale replacement so it can be drawn differently from an edit, and leaves a light edit unflagged (regression: both rendered as the same amber block)', () => {
+        const rewrite = runDiff(
+          mk([para('Deploy the application to a Kubernetes cluster using Helm')]),
+          mk([para('使用容器编排技术将应用部署到本地测试环境')]),
+        ).rows.find((r) => r.changeType === 'modified');
+        assert.strictEqual(rewrite?.replaced, true);
+        const edit = runDiff(
+          mk([para('Restart the service before continuing with the next step.')]),
+          mk([para('Restart the service before proceeding with the next step.')]),
+        ).rows.find((r) => r.changeType === 'modified');
+        assert.ok(edit && !edit.replaced);
+      });
+
+      it('keeps phrase-level marks when a long phrase survives inside an otherwise rewritten paragraph (regression: below the similarity threshold the marks were dropped entirely, hiding the one thing the two versions share)', () => {
+        const shared = 'the system configuration guide describes every supported deployment option';
+        const left = para(`${gib('zxqjkvw', 28)} ${shared}`);
+        const right = para(`${gib('plmnbhg', 28)} ${shared}`);
+        const row = runDiff(mk([left]), mk([right])).rows.find((r) => r.changeType === 'modified');
+        assert.ok(row, 'expected a modified row');
+        assert.ok(!row!.replaced, 'a shared phrase of this size is not a wholesale replacement');
+        const kept = (row!.inlineDiff || []).filter((p) => !p.added && !p.removed).map((p) => p.value).join('|');
+        assert.ok(kept.includes('configuration guide describes'), `shared phrase must stay unmarked, got: ${kept}`);
+      });
+
+      it('pairs by a shared href when the wording shares nothing (regression: the link target is the one thing a rewrite leaves intact, and no text score can see it, so the tie broke toward the wrong block)', () => {
+        const link = (href: string, t: string) => para(`${t} <xref href="${href}">x</xref>`);
+        const result = runDiff(
+          mk([link('first.dita', 'Aaa bbb ccc'), link('second.dita', 'Ddd eee fff')]),
+          mk([link('first.dita', '这是完全不同的语言')]),
+        );
+        const mod = pRows(result.rows).find((r) => r.changeType === 'modified');
+        assert.ok(mod && mod.left!.text.startsWith('Aaa'), `paired with: ${mod?.left?.text}`);
+      });
+
+      it('keeps the move link and flips the marks when the two sides are swapped', () => {
+        const a = para('Alpha text before the edit was made here.', 'id="mv"');
+        const a2 = para('Alpha text after the edit was made here.', 'id="mv"');
+        const b = para('Bravo block that stays in place for the whole time.');
+        const result = runDiff(mk([a, b]), mk([b, a2]));
+        const swapped = pRows(swapAlignedRows(result.rows)).filter((r) => r.moveId !== undefined);
+        assert.strictEqual(swapped.length, 2);
+        assert.strictEqual(swapped[0].moveId, swapped[1].moveId);
+        assert.ok((swapped[0].inlineDiff || []).some((p) => p.added), 'swapping must flip removed/added in the marks');
+      });
+    });
+
+    it('keeps a genuine baseType change (paragraph replaced by a note) split into a separate removed + added pair', () => {
+      const left = `<?xml version="1.0"?><topic id="t"><title>T</title><body><p>Some paragraph of prose content.</p></body></topic>`;
+      const right = `<?xml version="1.0"?><topic id="t"><title>T</title><body><note>Some note of prose content.</note></body></topic>`;
+      const result = runDiff(left, right);
+      const types = result.rows.map((r) => r.changeType);
+      assert.ok(types.includes('removed'), `a <p>-><note> change must keep a removed side, got: ${types.join(',')}`);
+      assert.ok(types.includes('added'), `a <p>-><note> change must keep an added side, got: ${types.join(',')}`);
     });
 
     it('reports a per-side parse error without throwing when one side is malformed', () => {
@@ -290,6 +496,122 @@ describe('ditaDiffEngine', () => {
       assert.deepStrictEqual(plentryTypes, ['unchanged', 'modified', 'unchanged'], `expected only the middle plentry to be modified, got: ${plentryTypes.join(',')}`);
     });
 
+    it('splits two far-apart edits inside one <dl> into independent changed blocks rather than one merged "modified" container (regression: <dl>/<dlentry> were not diffable containers, so two edits landing in different entries collapsed into a single modified row -- one giant marker plus one connector drawn across the whole screen; recursing the list lets each edit become its own data-diff-idx)', () => {
+      const left = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
+        <dl>
+          <dlentry><dt>Term A</dt><dd>First definition, will change here.</dd></dlentry>
+          <dlentry><dt>Term B</dt><dd>Second definition, unchanged.</dd></dlentry>
+          <dlentry><dt>Term C</dt><dd>Third definition, also changes here.</dd></dlentry>
+        </dl>
+      </body></topic>`;
+      const right = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
+        <dl>
+          <dlentry><dt>Term A</dt><dd>First definition, changed here.</dd></dlentry>
+          <dlentry><dt>Term B</dt><dd>Second definition, unchanged.</dd></dlentry>
+          <dlentry><dt>Term C</dt><dd>Third definition, also changed here.</dd></dlentry>
+        </dl>
+      </body></topic>`;
+
+      const result = runDiff(left, right);
+      const dlRow = result.rows.find((r) => r.left?.baseType === 'topic/dl');
+      assert.ok(dlRow, 'expected a dl row');
+      assert.strictEqual(dlRow!.changeType, 'modified');
+      const entryTypes = (dlRow!.children || []).map((r) => r.changeType);
+      assert.deepStrictEqual(entryTypes, ['modified', 'unchanged', 'modified'], `expected the two edited entries to be individually modified and the middle left unchanged, got: ${entryTypes.join(',')}`);
+      // The two far-apart edits must count as two separate changes, not one
+      // merged container modification.
+      assert.strictEqual(result.stats.modified, 2, `expected the two edits to split into 2 counted changes, got: ${JSON.stringify(result.stats)}`);
+    });
+
+    it('pairs a same-id section whose bulk was deleted as one modified row that recurses, not a removed+added pair (regression: deleting most of a section dropped its dice similarity below the threshold, so the whole section split into a full-height removed block plus a separate added block -- a huge red-then-green slab that also pushed the following sections out of left/right alignment)', () => {
+      const left = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
+        <section id="sec-a"><title>Alpha</title><p>A long paragraph of body text that carries the majority of this section's content and similarity weight, describing several things at some length.</p></section>
+        <section id="sec-b"><title>Beta</title><p>An unchanged section that must stay aligned on both sides.</p></section>
+      </body></topic>`;
+      const right = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
+        <section id="sec-a"><title>Alpha</title></section>
+        <section id="sec-b"><title>Beta</title><p>An unchanged section that must stay aligned on both sides.</p></section>
+      </body></topic>`;
+
+      const result = runDiff(left, right);
+      const secARow = result.rows.find((r) => r.left?.key === 'id:sec-a' || r.right?.key === 'id:sec-a');
+      assert.ok(secARow, 'expected sec-a to remain a single paired row');
+      assert.strictEqual(secARow!.changeType, 'modified', 'same-id section must pair as modified even when its text moved past the similarity threshold');
+      assert.ok(secARow!.left && secARow!.right, 'the modified sec-a row must carry both sides');
+      const childTypes = (secARow!.children || []).map((r) => r.changeType);
+      assert.ok(childTypes.includes('removed'), `expected the deleted paragraph to surface as a removed child, got: ${childTypes.join(',')}`);
+      // Alignment: sec-b must stay a single unchanged row, not be pushed
+      // beside one half of a split sec-a.
+      const secBRow = result.rows.find((r) => r.left?.key === 'id:sec-b' || r.right?.key === 'id:sec-b');
+      assert.strictEqual(secBRow!.changeType, 'unchanged');
+    });
+
+    it('pairs a single-token value change (5000 -> 8000) inside a table cell as modified, not a delete + insert (regression: token-based dice similarity scores two short values sharing no whole word as 0%, splitting a one-number edit into a removed block plus an added block)', () => {
+      const left = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
+        <simpletable><strow><stentry>timeout_ms</stentry><stentry>5000</stentry></strow></simpletable>
+      </body></topic>`;
+      const right = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
+        <simpletable><strow><stentry>timeout_ms</stentry><stentry>8000</stentry></strow></simpletable>
+      </body></topic>`;
+
+      const flatten = (rows: AlignedRow[]): AlignedRow[] => {
+        const out: AlignedRow[] = [];
+        for (const r of rows) {
+          out.push(r);
+          if (r.children) out.push(...flatten(r.children));
+        }
+        return out;
+      };
+
+      const result = runDiff(left, right);
+      const all = flatten(result.rows);
+      const valueCell = all.find((r) => r.changeType === 'modified' && (r.left?.text === '5000' || r.right?.text === '5000'));
+      assert.ok(
+        valueCell,
+        `expected the 5000/8000 cell to pair as modified, got types: ${JSON.stringify(all.map((r) => [r.changeType, r.left?.text || r.right?.text]))}`,
+      );
+      assert.strictEqual(result.stats.removed, 0, 'a one-number edit must not surface as a removal');
+      assert.strictEqual(result.stats.added, 0, 'a one-number edit must not surface as an insertion');
+    });
+
+    it('surfaces a recursed section\'s own <title> as an unchanged child row so a changed section keeps its heading (regression: SKIP_BASETYPES drops topic/title from extractChildBlocks, so a modified section rendered its changed body but silently lost its heading, reading as orphaned content)', () => {
+      const left = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
+        <section id="sec-h"><title>Widget Setup</title><p>Turn the widget dial to the left before use.</p></section>
+      </body></topic>`;
+      const right = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
+        <section id="sec-h"><title>Widget Setup</title><p>Turn the widget dial to the right before use.</p></section>
+      </body></topic>`;
+
+      const result = runDiff(left, right);
+      const secRow = result.rows.find((r) => r.left?.key === 'id:sec-h' || r.right?.key === 'id:sec-h');
+      assert.ok(secRow, 'expected the section row');
+      assert.strictEqual(secRow!.changeType, 'modified');
+      const titleRow = (secRow!.children || []).find(
+        (r) => r.left?.baseType === 'topic/title' || r.right?.baseType === 'topic/title',
+      );
+      assert.ok(
+        titleRow,
+        `expected the recursed section to carry its title as a child row, got: ${JSON.stringify(
+          (secRow!.children || []).map((r) => r.left?.baseType || r.right?.baseType),
+        )}`,
+      );
+      assert.strictEqual(titleRow!.changeType, 'unchanged', 'an identical heading should pair unchanged, not modified');
+    });
+
+    it('counts only the leaf changes the view actually draws, not the recursed container row as well (regression: a section with one edited paragraph reported ~2 -- the section row plus its child -- while the view shows, and next/prev navigates, exactly one change)', () => {
+      const left = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
+        <section id="s"><title>Widget Setup</title><p>Turn the widget dial to the left before use.</p></section>
+      </body></topic>`;
+      const right = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
+        <section id="s"><title>Widget Setup</title><p>Turn the widget dial to the right before use.</p></section>
+      </body></topic>`;
+
+      const result = runDiff(left, right);
+      assert.strictEqual(result.stats.modified, 1, 'one edited paragraph is one modification');
+      assert.strictEqual(result.stats.added, 0);
+      assert.strictEqual(result.stats.removed, 0);
+    });
+
     it('recurses into matched sections with their own per-side render calls (regression: alignSectionChildren used to share one side\'s renderBlock for both sides)', () => {
       const left = `<?xml version="1.0"?><topic id="t"><title>T</title><body>
         <section><title>Sec</title><p>the quick brown fox jumps over left-marker-AAA the lazy dog</p></section>
@@ -326,6 +648,43 @@ describe('ditaDiffEngine', () => {
   describe('normalizeText', () => {
     it('collapses whitespace and trims', () => {
       assert.strictEqual(normalizeText('  a   b\n\tc  '), 'a b c');
+    });
+  });
+
+  describe('lcsAlign over the DP cell limit', () => {
+    it('keeps the id-only fallback in document order, putting each unmatched run where it sits (regression: all unmatched left items were emitted first and all unmatched right items last, so the pairing pass matched unrelated blocks by index)', () => {
+      const n = 2100;
+      const a = Array.from({ length: n }, (_, i) => `x${i}`);
+      const b = a.slice();
+      a[0] = 'oldHead';
+      b[0] = 'newHead';
+      a[n - 1] = 'oldTail';
+      b[n - 1] = 'newTail';
+      const ops = lcsAlign(a, b, (x, y) => x === y, (x) => x);
+      assert.deepStrictEqual(
+        ops.slice(0, 2).map((o) => `${o.op}:${o.left ?? o.right}`),
+        ['removed:oldHead', 'added:newHead'],
+      );
+      const tail = ops.slice(-2).map((o) => `${o.op}:${o.left ?? o.right}`);
+      assert.deepStrictEqual(tail, ['removed:oldTail', 'added:newTail']);
+    });
+  });
+
+  describe('coalesceDiffParts', () => {
+    it('folds a tiny unchanged run between two changes into them and leaves both texts intact, so marks read as phrases', () => {
+      const parts = coalesceDiffParts([
+        { value: 'red', removed: true },
+        { value: 'blue', added: true },
+        { value: ' a ' },
+        { value: 'cat', removed: true },
+        { value: 'dog', added: true },
+        { value: ' sat on the mat today' },
+      ]);
+      const left = parts.filter((p) => !p.added).map((p) => p.value).join('');
+      const right = parts.filter((p) => !p.removed).map((p) => p.value).join('');
+      assert.strictEqual(left, 'red a cat sat on the mat today');
+      assert.strictEqual(right, 'blue a dog sat on the mat today');
+      assert.strictEqual(parts.filter((p) => !p.added && !p.removed).length, 1, 'only the long unchanged tail stays unmarked');
     });
   });
 
@@ -434,8 +793,7 @@ describe('ditaDiffEngine', () => {
   });
 
   describe('swapAlignedRows', () => {
-    it('swaps left and right on every row', () => {
-      const result = runDiff(TOPIC_A, TOPIC_B);
+    it('swaps left and right on every row', () => {      const result = runDiff(TOPIC_A, TOPIC_B);
       const swapped = swapAlignedRows(result.rows);
       for (let i = 0; i < result.rows.length; i++) {
         assert.strictEqual(swapped[i].left, result.rows[i].right);
@@ -453,6 +811,179 @@ describe('ditaDiffEngine', () => {
         else if (original === 'removed') assert.strictEqual(flipped, 'added');
         else assert.strictEqual(flipped, original);
       }
+    });
+  });
+
+  describe('large change runs beyond the pairing DP ceiling', () => {
+    /** n paragraphs, all rewritten on the right (so none matches by content),
+     *  optionally with a brand-new paragraph inserted at `insertAt`. With ids,
+     *  identity survives the rewrite; without, only position does. */
+    function mkRun(n: number, verb: string, ids: boolean, insertAt = -1): string {
+      const ps: string[] = [];
+      for (let i = 0; i < n; i++) {
+        if (insertAt === i) {
+          ps.push('<p id="inserted">An entirely new paragraph that shares no wording with anything in the rewritten run of documentation.</p>');
+        }
+        ps.push(
+          `<p${ids ? ` id="p${i}"` : ''}>The quick brown ${verb} ${i} jumps over the lazy dog and then the sleepy cat ${verb}s again while the reviewer reads the whole paragraph of technical documentation about DITA topics and maps.</p>`,
+        );
+      }
+      return `<?xml version="1.0"?>\n<topic id="t"><title>Title</title><body>\n${ps.join('\n')}\n</body></topic>`;
+    }
+
+    // 201 x 202 cells is already past PAIR_DP_CELL_LIMIT (40_000), which is
+    // where the id-anchored fallback takes over from the scored DP.
+    const N = 201;
+
+    it('pairs an over-sized rewritten run by id, so one insertion shifts nothing (regression: above the ceiling the fallback paired purely by index, so a single inserted paragraph mis-aligned EVERY later pair -- measured 299 of 600 pairs drawn against their neighbour\'s replacement, hundreds of wrong connectors, on documents whose ids were perfectly stable)', () => {
+      const result = runDiff(mkRun(N, 'fox', true), mkRun(N, 'cat', true, Math.floor(N / 2)));
+      const flat: AlignedRow[] = [];
+      const walk = (rows: AlignedRow[]): void => {
+        for (const r of rows) {
+          flat.push(r);
+          if (r.children) walk(r.children);
+        }
+      };
+      walk(result.rows);
+
+      const paired = flat.filter((r) => r.changeType === 'modified' && r.left && r.right);
+      assert.strictEqual(paired.length, N, 'every paragraph must pair with its own replacement');
+      const misPairs = paired.filter((r) => r.left!.key !== r.right!.key);
+      assert.deepStrictEqual(
+        misPairs.slice(0, 3).map((r) => [r.left!.key, r.right!.key]),
+        [],
+        'an id-anchored fallback must never pair p<i> against p<j>, j != i',
+      );
+      assert.strictEqual(result.stats.added, 1, 'the inserted paragraph is the only addition');
+      assert.strictEqual(result.stats.removed, 0, 'nothing was deleted, so nothing may read as deleted');
+    });
+
+    it('stays fast enough to run synchronously in the extension host (regression: the scored DP cost ~1.5s for a 250k-cell run -- every keystroke-level refresh of a large document blocked the extension host on it)', () => {
+      const started = Date.now();
+      runDiff(mkRun(1000, 'fox', true), mkRun(1000, 'cat', true, 500));
+      const elapsed = Date.now() - started;
+      // Generous ceiling (CI machines vary); the point is it is milliseconds,
+      // not the multi-second stall the old ceiling allowed.
+      assert.ok(elapsed < 2000, `expected a 1000-paragraph rewritten run to diff in well under a second, took ${elapsed}ms`);
+    });
+
+    it('keeps the pairing monotonic and duplicate-free when ids arrive out of order (regression: pairing leftovers globally by index after the anchors could reuse an index an anchor already holds, and alignChangeRun emits rows assuming a strictly increasing match, so an already-consumed block was re-emitted as a second row)', () => {
+      const n = 300;
+      const seq: number[] = Array.from({ length: n }, (_, i) => i);
+      const para = (i: number, verb: string) =>
+        `<p id="p${i}">The quick brown ${verb} ${i} jumps over the lazy dog and then the sleepy cat ${verb}s again while the reviewer reads the whole paragraph of technical documentation about DITA topics and maps.</p>`;
+      // Left: 0..n-1. Right: the LAST block moved to the front -- out of order,
+      // so it cannot be an anchor, and everything else must still pair in order.
+      const left = `<?xml version="1.0"?>\n<topic id="t"><title>T</title><body>\n${seq.map((i) => para(i, 'fox')).join('\n')}\n</body></topic>`;
+      const rightOrder = [n - 1, ...seq.slice(0, n - 1)];
+      const right = `<?xml version="1.0"?>\n<topic id="t"><title>T</title><body>\n${rightOrder.map((i) => para(i, 'cat')).join('\n')}\n</body></topic>`;
+
+      const result = runDiff(left, right);
+      const seenRight = new Set<string>();
+      let duplicates = 0;
+      for (const r of result.rows) {
+        if (!r.right) continue;
+        if (seenRight.has(r.right.key)) duplicates++;
+        seenRight.add(r.right.key);
+      }
+      assert.strictEqual(duplicates, 0, 'a block may not be emitted twice as two rows');
+
+      const pairedOrder = result.rows
+        .filter((r) => r.changeType === 'modified' && r.left && r.right)
+        .map((r) => rightOrder.indexOf(Number(r.right!.key.slice('id:'.length).replace(/^p/, ''))));
+      assert.ok(pairedOrder.every((i) => i >= 0), 'every paired right block should be one of the numbered paragraphs');
+      for (let i = 1; i < pairedOrder.length; i++) {
+        assert.ok(pairedOrder[i] > pairedOrder[i - 1], `paired right-side positions must increase, got ${pairedOrder.slice(0, i + 1).join(',')}`);
+      }
+      // The move itself is still recognized as a move, not as a hundred edits.
+      assert.ok(result.rows.some((r) => r.moveId !== undefined), 'the relocated block should be flagged as moved');
+    });
+
+    it('still pairs a run with no ids by position, so the fallback does not lose the behaviour it replaced', () => {
+      const result = runDiff(mkRun(N, 'fox', false), mkRun(N, 'cat', false));
+      assert.strictEqual(result.stats.removed, 0);
+      assert.strictEqual(result.stats.added, 0);
+      assert.strictEqual(result.stats.modified, N, 'id-less equal-length runs must still line up one-to-one');
+    });
+  });
+
+  describe('computeRowStats', () => {
+    it('recounts a swapped result so the toolbar chip matches the view (regression: swapSides flipped every row\'s changeType but reused the old stats, so an insertion-only diff showed "+1 −0" while the only changed block sat on the left as a deletion)', () => {
+      const left = `<?xml version="1.0"?><topic id="t"><body><p id="a">one</p></body></topic>`;
+      const right = `<?xml version="1.0"?><topic id="t"><body><p id="a">one</p><p id="b">two</p></body></topic>`;
+      const result = runDiff(left, right);
+      assert.deepStrictEqual(result.stats, { added: 1, removed: 0, modified: 0 });
+
+      const swapped = swapAlignedRows(result.rows);
+      assert.deepStrictEqual(
+        swapped.map((r) => r.changeType),
+        ['unchanged', 'removed'],
+        'the swap must put the change on the left as a deletion',
+      );
+      assert.deepStrictEqual(
+        computeRowStats(swapped),
+        { added: 0, removed: 1, modified: 0 },
+        'stats have to be recomputed from the swapped rows, not carried over',
+      );
+    });
+
+    it('counts a move once, as a modification, on either side (each half is a different changeType, so a hand-swapped added/removed pair would double-count it)', () => {
+      const mk = (order: number[]) =>
+        `<?xml version="1.0"?><topic id="t"><body>\n${order.map((i) => `<p id="p${i}">Paragraph ${i}, unchanged text that travels with it.</p>`).join('\n')}\n</body></topic>`;
+      const result = runDiff(mk([1, 2, 3]), mk([2, 1, 3]));
+      const moved = result.rows.filter((r) => r.moveId !== undefined);
+      assert.strictEqual(moved.length, 2, 'both halves of the move carry a moveId');
+
+      const forward = computeRowStats(result.rows);
+      const backward = computeRowStats(swapAlignedRows(result.rows));
+      assert.deepStrictEqual(forward, backward, 'swapping sides must not change how many changes there are');
+      assert.ok(forward.modified >= 1, 'a move counts as one modification');
+      assert.strictEqual(forward.added + forward.removed, 0, 'a move must not also read as an insertion and a deletion');
+    });
+
+    it('counts the drawn leaves of a recursed container, not the container as well', () => {
+      const mk = (cell: string) => `<?xml version="1.0"?><topic id="t"><body><table id="tb"><tgroup cols="1"><tbody>
+        <row><entry>${cell}</entry></row>
+        </tbody></tgroup></table></body></topic>`;
+      const result = runDiff(mk('Old value'), mk('New value'));
+      assert.deepStrictEqual(result.stats, computeRowStats(result.rows), 'the reported stats must equal a recount of the rows');
+      assert.strictEqual(result.stats.modified, 1, 'one changed cell is one change, not one per ancestor level');
+    });
+  });
+
+  describe('blocks that render nothing', () => {
+    it('are not turned into blocks at all (regression: elements whose renderer emits an empty string -- colspec, area/shape/coords, the index-* keywords, param, publisher -- each became an empty `<div class="dv-block">`, a visible ghost row in the column)', () => {
+      const mk = (extra: string) =>
+        `<?xml version="1.0"?><topic id="t"><title>T</title><body>\n${extra}<p id="p1">A paragraph that changes.</p></body></topic>`;
+      const renderBlock = (node: DitaNode): string => {
+        const text = collectPlainText(node);
+        // Stands in for the real renderers that emit '' for authoring-only
+        // elements and for anything a filter suppresses.
+        return text === '' ? '' : `<p>${text}</p>`;
+      };
+      const input: DiffTopicsInput = {
+        leftXml: mk(''),
+        rightXml: mk(''),
+        leftDocDir: '/tmp',
+        rightDocDir: '/tmp',
+        renderBlockFactory: () => renderBlock,
+      };
+      const withEmpty = (body: string) => ({ ...input, leftXml: mk(body) });
+
+      const clean = diffTopics(input);
+      const noisy = diffTopics(withEmpty('   '));
+      assert.strictEqual(
+        noisy.rows.length,
+        clean.rows.length,
+        'an element that renders nothing must not add a row',
+      );
+      for (const r of noisy.rows) {
+        for (const side of ['left', 'right'] as const) {
+          const b = r[side];
+          if (b) assert.ok(b.html.trim() !== '', `a ${side} block rendered empty markup: ${JSON.stringify(b.text)}`);
+        }
+      }
+      assert.deepStrictEqual(noisy.stats, clean.stats, 'and must not change the change counts either');
     });
   });
 

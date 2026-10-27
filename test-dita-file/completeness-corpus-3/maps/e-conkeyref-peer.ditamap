@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.conkeyref.peer.map: one map holding all three probes. The key under test lives
+     in the peer map (referenced with scope="peer"), in this map, or in a local submap. -->
+<map>
+  <title>conkeyref and peer maps</title>
+  <mapref href="e-conkeyref-peer-keys.ditamap" scope="peer"/>
+  <mapref href="e-conkeyref-peer-sub.ditamap" format="ditamap"/>
+  <keydef keys="k-conkeyref-local" href="../topics/lib.dita#lib3"/>
+  <topicref href="../topics/e-conkeyref-peer-pos.dita"/>
+  <topicref href="../topics/e-conkeyref-peer-neg.dita"/>
+  <topicref href="../topics/e-conkeyref-peer-edge.dita"/>
+</map>

@@ -1,8 +1,7 @@
 // End-to-end sanity check: parse + render the OASIS spec's imagemap example
 // exactly the way DitaViewerProvider does (same RenderContext shape), and
 // print the resulting HTML for manual inspection.
-const { parseDita, preprocessEntities } = require('../dist-test/parser/ditaParser');
-const { renderDocument } = require('../dist-test/render/renderer');
+const { parseDita, preprocessEntities, renderDocument } = require('@dita-viewer/core');
 
 const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- L1 dmv.invalid.class.format, positive: an element the DTD does not declare, so nothing
+     gives it a class. Expect the class finding on the element itself. If the DTD-message
+     option (1 or 2) is chosen, the same element is also MSG_ELEMENT_NOT_DECLARED; with
+     option 3 that second message stays unmodelled and this file carries the class finding
+     alone. -->
+<topic id="l-class-format-pos-undeclared">
+  <title>Undeclared element</title>
+  <body>
+    <p>Before the probe element.</p>
+    <widget>No DTD declaration, therefore no class.</widget>
+    <p>After the probe element.</p>
+  </body>
+</topic>

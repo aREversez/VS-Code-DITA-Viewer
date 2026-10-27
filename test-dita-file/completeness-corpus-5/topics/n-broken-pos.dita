@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- Target of dmv.invalid.parse.dita.content, positive: well-formed in intent, not
+     well-formed XML (the paragraph is never closed). Oxygen reports this on the map that
+     references the file, not on this file; the probe asks whether that still holds when the
+     file is reached by a plain topicref. -->
+<topic id="n-broken-pos">
+  <title>Unclosed paragraph</title>
+  <body>
+    <p>This paragraph never ends.
+  </body>
+</topic>

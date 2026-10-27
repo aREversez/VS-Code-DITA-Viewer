@@ -12,17 +12,33 @@
 
 import sax from 'sax';
 import { dirname, resolve } from 'path';
-import { preprocessEntities } from '../parser/ditaParser';
+import { preprocessEntities, qualifiedNamesMulti } from '@dita-viewer/core';
 import { decodeHrefPart } from './ditaRenderUtils';
 import { normalizePathForCompare } from './mapReferenceTools';
 import { DitavalFilter } from './ditaval';
 import { Msg, msg } from './mapCheckMessages';
+import {
+  ClassSide,
+  ClassSyntaxProblem,
+  Doctype,
+  chainHas,
+  classElementTag,
+  classSyntaxProblem,
+  effectiveClassOf,
+  declaresGrammar,
+  readDoctype,
+  sideOfRoot,
+} from './ditaClass';
 
 export interface CrawlHost {
   /** Text of a file (unsaved editor text if any). Rejects when unreadable. */
   readFile(absPath: string): Promise<string>;
   exists(absPath: string): Promise<boolean>;
   platform: NodeJS.Platform;
+  /** Whether an existing path is a folder (folder-reference check). */
+  isDirectory?(absPath: string): Promise<boolean>;
+  /** Entry names of a folder, or undefined when it cannot be listed (capitalization check). */
+  readDir?(absPath: string): Promise<string[] | undefined>;
   /** Polled between files; returning true stops the crawl early. */
   cancelled?(): boolean;
 }
@@ -59,20 +75,71 @@ export interface Reference extends Location {
   copyTo?: string;
   /** Where the reference sits: inside a relationship table. */
   inReltable: boolean;
+  /** The element that carries the reference. */
+  tag: string;
+  /** The @scope attribute as written, if any. */
+  scope?: string;
+  /** The @format attribute as written, if any. */
+  format?: string;
+  /** The @type attribute as written, if any (the @type-vs-class check). */
+  type?: string;
+  /** True when the reference was written in a map (topicref, mapref, keydef). */
+  inMap: boolean;
+  /** True for a reference made by resolving a @keyref: its @format is not the element's own. */
+  viaKeyref?: boolean;
 }
 
 export interface KeyDef extends Location {
   key: string; // bare key name
   /** Fully-qualified names this definition answers to (scope prefixes). */
   qualified: string[];
-  /** The key scope chain this definition lives in ('' = root scope). */
+  /** The key scope chain this definition lives in ('' = root scope); the first of `scopeIds`. */
   scopeId: string;
+  /**
+   * Every scope chain this definition lives in. More than one when a `keyscope`
+   * lists several names ("a b") on it or an ancestor: the key then belongs to all of them.
+   */
+  scopeIds: string[];
   href?: string;
   target?: string;
+  /**
+   * A key definition that redirects to another key (`<keydef keyref=...>`). The
+   * crawl does not follow redirect chains, so such a definition has no target.
+   */
+  keyref?: string;
+  /** The @format attribute on the defining element, if any. */
+  format?: string;
 }
 
 export interface KeyUse extends Location {
+  /** Bare key name (the part before any `/`). */
   key: string;
+  /** The attribute value as written (a keyref may carry a `/elementid`). */
+  value?: string;
+  /** Which attribute used the key. Only `keyref` is resolved to a target. */
+  attribute?: 'keyref' | 'conkeyref';
+  /** The element that used the key. */
+  tag?: string;
+  /** For a keyref on a resource reference: the kind the element implies. */
+  kind?: RefKind;
+  /** Key scopes in effect where the key was used (map keyrefs only). */
+  scopeChains?: string[][];
+  /** Why the key name cannot be parsed, when it cannot (Oxygen's invalid.keyref.syntax.1/.3). */
+  keySyntax?: 'slash' | 'whitespace';
+  resourceOnly?: boolean;
+  inReltable?: boolean;
+  copyTo?: string;
+  /**
+   * The reference made from the element's own @href. DITA uses it as a fallback
+   * only when the key is undefined, so it is dropped once the key resolves.
+   */
+  fallbackRef?: Reference;
+}
+
+/** A keyref that matches no key definition (Oxygen's `dmv.undef.key`). */
+export interface UndefinedKey extends Location {
+  key: string;
+  value: string;
 }
 
 export interface TopicId extends Location {
@@ -80,19 +147,132 @@ export interface TopicId extends Location {
   topicFile: string;
 }
 
+/** An @id attribute, on any element of a crawled map or topic (id-syntax check). */
+export interface IdUse extends Location {
+  id: string;
+  tag: string;
+  /** The nearest enclosing topic element's id (topic files only). */
+  topicId?: string;
+}
+
+/** A map reference whose target is already being crawled: a cycle (Oxygen's dmv.recursive.ref). */
+export interface RecursiveRef extends Location {
+  /** The map reference as written. */
+  href: string;
+}
+
+/** A topicref/keydef that sits inside a reference to a map, where DITA ignores it. */
+export interface IgnoredMaprefContent extends Location {
+  tag: string;
+}
+
+/** A map element that carries, or needs, a navigation title. */
+export interface MapEntry extends Location {
+  tag: string;
+  href?: string;
+  keyref?: string;
+  scope?: string;
+  navTitle: boolean;
+}
+
 export interface ReusableCandidate extends Location {
   id: string;
   tag: string;
   topicFile: string;
+  /** The nearest enclosing topic element's id. */
+  topicId?: string;
+  /** Stable path of the parent element, compared by conref sibling checks. */
+  parentKey?: string;
+  /** Position among the parent's children, compared by conref order checks. */
+  order?: number;
+  /** The element's effective @class, compared with the conref target's by the class check. */
+  classValue?: string;
+  /**
+   * True when a strict ancestor carries `@conref`: resolving it replaces this
+   * element, so a reference that addresses it points at content that is gone.
+   */
+  replacedByConref?: boolean;
 }
 
 export interface ConrefUse {
   /** Absolute path of the conref target file (own file for `#…`), if resolvable. */
   targetFile?: string;
-  /** Element id targeted (last path segment of the fragment), if any. */
+  /** Last fragment segment: the element id for `#topic/elem`, the topic id for a bare `#topic`. */
   targetId?: string;
+  /** The topic-id segment (the part right after `#`), if the value carried a fragment. */
+  topicId?: string;
+  /** The element-id segment after the topic id (`#topic/elem`), if any. */
+  elemId?: string;
+  /** Where the conref is written, so an unresolvable topic id can be reported on it. */
+  sourceFile?: string;
+  sourceLine?: number;
   /** Key name for a conkeyref. */
   key?: string;
+}
+
+/** The conref/conrefend/conkeyref attributes of one element, with their resolved ends. */
+export interface ConrefShape extends Location {
+  tag: string;
+  /** The attribute as written; undefined when it is absent (an empty value stays ""). */
+  conref?: string;
+  conrefend?: string;
+  conkeyref?: string;
+  /** Absolute local file @conref names (own file for `#elem`), if it names one. */
+  targetFile?: string;
+  endTargetFile?: string;
+  /** Fragment parts of @conref / @conrefend. */
+  targetTopicId?: string;
+  targetElementId?: string;
+  endTopicId?: string;
+  endElementId?: string;
+  /** The element's effective @class, compared with its target's by the conref class check. */
+  classValue?: string;
+}
+
+/** An element that carries `-dita-use-conref-target` without being a content reference. */
+export interface ConrefTargetValue extends Location {
+  tag: string;
+  attribute: string;
+  value: string;
+}
+
+/** An xref/link with no @href, @keyref, @conref or @conkeyref (Oxygen's dmv.link.no.target). */
+export interface LinkWithoutTarget extends Location {
+  tag: string;
+}
+
+/** An xref/link whose keyref names a key that is defined without a target. */
+export interface KeyLinkWithoutTarget extends Location {
+  key: string;
+  value: string;
+  tag?: string;
+}
+
+/**
+ * A `@conkeyref` whose key resolves to a file: the content reference that reaches it.
+ * A content reference replaces content instead of linking, so it never becomes a
+ * `Reference`; the file behind its key still has to exist, and Oxygen files that at
+ * both ends (the keydef and the element that reaches it through the key).
+ */
+export interface ConkeyrefTarget extends Location {
+  /** The key definition's @href as written. */
+  href: string;
+  /** Absolute local file that @href resolves to. */
+  target: string;
+  /** Whether the target is a DITA file; a resource key is not a content reference. */
+  dita: boolean;
+}
+
+/** The element-id part a keyref/conkeyref appends to its key, with the key's own target. */
+export interface KeyElementPath extends Location {
+  /** The attribute value as written. */
+  value: string;
+  /** The path after the key: `elem` or `elem/child`. */
+  elementPath: string;
+  /** Absolute file the key definition's @href resolves to, if it has one. */
+  targetFile?: string;
+  /** Topic id from the key definition's @href fragment, if any. */
+  topicId?: string;
 }
 
 export interface TableInfo extends Location {
@@ -114,11 +294,56 @@ export interface ProfilingValueUse extends Location {
   tag: string;
 }
 
+/** A profiling attribute present with no value at all (Oxygen's dmv.prof.attr.empty.value). */
+export interface EmptyProfilingValue extends Location {
+  attribute: string;
+  tag: string;
+}
+
+/**
+ * An element the active DITAVAL filter drops (Oxygen's dmv.ref.filtered): its id is
+ * gone from the output, while the topic that holds it stays.
+ */
+export interface ExcludedElement extends Location {
+  id: string;
+  tag: string;
+  /** The nearest enclosing topic element's id, as `#topic/elem` addresses it. */
+  topicId?: string;
+}
+
 export interface FileIssue extends Location {
   severity: 'error' | 'warning';
   msg: Msg;
   /** True for DITA-structure findings (root element, id, title); false for XML errors. */
   structural: boolean;
+}
+
+/** A written @class value the DITA class syntax rejects, or an element no DTD gives a class. */
+export interface ClassIssue extends Location {
+  tag: string;
+  problem: 'not-specified' | ClassSyntaxProblem;
+}
+
+/** A root element whose @domains is written empty (Oxygen's dmv.invalid.domains.format). */
+export interface DomainsIssue extends Location {
+  tag: string;
+}
+
+/** A section whose title does not come first, or is not its only one (Oxygen's dmv.section.*). */
+export interface SectionIssue extends Location {
+  tag: string;
+  kind: 'first-title' | 'duplicate-title';
+}
+
+/** The root element of a file that parsed, with the class it actually carries. */
+export interface FileRoot extends Location {
+  tag: string;
+  /** Effective @class (written, else the DTD default); undefined when neither gives one. */
+  classValue?: string;
+  /** The vocabulary table the file was read against. */
+  side: ClassSide;
+  /** True when the root element is a DITA topic or map. */
+  dita: boolean;
 }
 
 export interface CrawlOptions {
@@ -135,13 +360,37 @@ export interface CrawlResult {
   refs: Reference[];
   keyDefs: KeyDef[];
   keyUses: KeyUse[];
+  undefinedKeys: UndefinedKey[];
   topicIds: TopicId[];
+  /** Every @id attribute seen, in maps and topics. */
+  ids: IdUse[];
+  recursiveRefs: RecursiveRef[];
+  ignoredMaprefContent: IgnoredMaprefContent[];
+  mapEntries: MapEntry[];
   reusable: ReusableCandidate[];
   conrefUses: ConrefUse[];
+  conrefShapes: ConrefShape[];
+  conrefTargetValues: ConrefTargetValue[];
+  linksWithoutTarget: LinkWithoutTarget[];
+  keyLinksWithoutTarget: KeyLinkWithoutTarget[];
+  conkeyrefTargets: ConkeyrefTarget[];
+  keyElementPaths: KeyElementPath[];
   tables: TableInfo[];
   profilingConflicts: ProfilingConflict[];
   profilingValues: ProfilingValueUse[];
+  /** Profiling attributes whose value is empty or whitespace only. */
+  emptyProfilingValues: EmptyProfilingValue[];
+  /** Elements dropped from the crawled tree by the DITAVAL filter. */
+  excludedElements: ExcludedElement[];
   fileIssues: FileIssue[];
+  /** Written @class values the class syntax rejects, and elements no DTD gives a class. */
+  classIssues: ClassIssue[];
+  /** Root elements whose @domains is written empty. */
+  domainsIssues: DomainsIssue[];
+  /** Sections whose title is not first or not alone. */
+  sectionIssues: SectionIssue[];
+  /** Root element of every file that parsed, for the checks that compare against a target. */
+  fileRoots: FileRoot[];
   /** Normalized path -> original path, for every file the crawl opened. */
   visited: Map<string, string>;
   cancelled: boolean;
@@ -158,7 +407,10 @@ interface XNode {
   text: string; // direct text (for <title> presence etc.)
 }
 
-const PROFILING_ATTRS = ['audience', 'platform', 'product', 'otherprops', 'props', 'rev'];
+// deliveryTarget is a DITA 1.3 filter-atts member (it replaces the deprecated
+// DITA 1.2 @print): DITA-OT cascades and filters it on topicrefs like the
+// rest of the group, so the map-level profiling checks must know it too.
+const PROFILING_ATTRS = ['audience', 'platform', 'product', 'otherprops', 'deliveryTarget', 'props', 'rev'];
 
 /** Parses XML with sax into a light tree carrying 1-based line numbers. */
 export function scanXml(raw: string): { root?: XNode; error?: { line: number; message: string } } {
@@ -211,9 +463,29 @@ function countNewlines(s: string): number {
 }
 
 /** Removes (in place) every descendant the DITAVAL filter would drop from the output. */
-function pruneExcluded(n: XNode, filter: DitavalFilter): void {
-  n.children = n.children.filter((c) => !filter.excludes(c.attrs));
-  for (const c of n.children) pruneExcluded(c, filter);
+function pruneExcluded(
+  n: XNode,
+  filter: DitavalFilter,
+  topicId: string | undefined,
+  topicIdOf: (n: XNode) => string | undefined,
+  onRemove: (removed: XNode, topicId: string | undefined) => void,
+): void {
+  const keep: XNode[] = [];
+  for (const c of n.children) {
+    if (filter.excludes(c.attrs)) {
+      // The whole subtree goes with it, so every id inside is gone from the output.
+      const below = (d: XNode, tid: string | undefined): void => {
+        const here = topicIdOf(d) ?? tid;
+        onRemove(d, here);
+        for (const k of d.children) below(k, here);
+      };
+      below(c, topicId);
+    } else {
+      keep.push(c);
+      pruneExcluded(c, filter, topicIdOf(c) ?? topicId, topicIdOf, onRemove);
+    }
+  }
+  n.children = keep;
 }
 
 function* walk(n: XNode): Generator<XNode> {
@@ -255,13 +527,30 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     refs: [],
     keyDefs: [],
     keyUses: [],
+    undefinedKeys: [],
     topicIds: [],
+    ids: [],
+    recursiveRefs: [],
+    ignoredMaprefContent: [],
+    mapEntries: [],
     reusable: [],
     conrefUses: [],
+    conrefShapes: [],
+    conrefTargetValues: [],
+    linksWithoutTarget: [],
+    keyLinksWithoutTarget: [],
+    conkeyrefTargets: [],
+    keyElementPaths: [],
     tables: [],
     profilingConflicts: [],
     profilingValues: [],
+    emptyProfilingValues: [],
+    excludedElements: [],
     fileIssues: [],
+    classIssues: [],
+    domainsIssues: [],
+    sectionIssues: [],
+    fileRoots: [],
     visited: new Map(),
     cancelled: false,
   };
@@ -272,7 +561,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
   const topicQueue: Array<{ path: string; inherited: Map<string, string[]> }> = [];
 
   /** Reads and scans a file, recording read/parse problems as file issues. */
-  async function load(path: string, from?: Location, prune = false): Promise<XNode | undefined> {
+  async function load(path: string, from?: Location, prune = false): Promise<{ root: XNode; doctype?: Doctype; grammar: boolean } | undefined> {
     if (host.cancelled?.()) {
       result.cancelled = true;
       return undefined;
@@ -291,8 +580,17 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       result.fileIssues.push({ file: path, line: scanned.error.line, severity: 'error', msg: msg('val.xml', scanned.error.message), structural: false });
       return undefined;
     }
-    if (prune && opts.filter && scanned.root) pruneExcluded(scanned.root, opts.filter);
-    return scanned.root;
+    if (prune && opts.filter && scanned.root) {
+      const root = scanned.root;
+      const topicIdOf = (n: XNode): string | undefined => (isTopicElement(n) ? n.attrs['id'] : undefined);
+      pruneExcluded(root, opts.filter, topicIdOf(root), topicIdOf, (removed, removedTopicId) => {
+        const id = removed.attrs['id'];
+        if (id) result.excludedElements.push({ file: path, line: removed.line, id, tag: removed.tag, topicId: removedTopicId });
+      });
+    }
+    return scanned.root
+      ? { root: scanned.root, doctype: readDoctype(text), grammar: declaresGrammar(text, scanned.root.attrs) }
+      : undefined;
   }
 
   function addRef(
@@ -300,7 +598,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     node: XNode,
     kind: RefKind,
     href: string,
-    extra: { resourceOnly?: boolean; inReltable?: boolean } = {},
+    extra: { resourceOnly?: boolean; inReltable?: boolean; inMap?: boolean } = {},
   ): Reference {
     const scope = node.attrs['scope'];
     const format = node.attrs['format'];
@@ -318,10 +616,29 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       resourceOnly: !!extra.resourceOnly,
       copyTo: node.attrs['copy-to'],
       inReltable: !!extra.inReltable,
+      tag: node.tag,
+      scope,
+      format,
+      type: node.attrs['type'],
+      inMap: !!extra.inMap,
     };
     if (!remote && !pathPart) ref.target = undefined; // "#id" -- same-file fragment
     result.refs.push(ref);
     return ref;
+  }
+
+  /** The file, topic id and element id a conref/conrefend value names. */
+  function contentTarget(value: string, sourceFile: string): { file?: string; topicId?: string; elementId?: string } {
+    const hash = value.indexOf('#');
+    const pathPart = hash >= 0 ? value.slice(0, hash) : value;
+    const frag = hash >= 0 ? value.slice(hash + 1) : '';
+    const segs = frag ? frag.split('/') : [];
+    const sameTopic = segs[0] === '.';
+    return {
+      file: URL_RE.test(value) ? undefined : pathPart ? resolve(dirname(sourceFile), decodeHrefPart(pathPart)) : sourceFile,
+      topicId: segs[0] && !sameTopic ? segs[0] : undefined,
+      elementId: segs.length && !(sameTopic && segs.length === 1) ? segs[segs.length - 1] || undefined : undefined,
+    };
   }
 
   // ── Maps ──
@@ -329,23 +646,37 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     const key = norm(mapPath);
     if (seenMaps.has(key)) return;
     seenMaps.add(key);
-    const root = await load(mapPath, from);
-    if (!root) return;
+    const loaded = await load(mapPath, from);
+    if (!loaded) return;
+    const root = loaded.root;
     result.maps.add(mapPath);
-    const isMapRoot = /\bmap\/map\b/.test(classOf(root)) || /map$/i.test(root.tag) || root.tag === 'bookmap';
-    if (!isMapRoot) {
+    const side = sideOfRoot(root.tag, root.attrs['class']);
+    result.fileRoots.push({
+      file: mapPath, line: root.line, tag: root.tag, side,
+      classValue: effectiveClassOf(root.tag, root.attrs['class'], side),
+      dita: isMapRootNode(root) || isTopicElement(root),
+    });
+    scanClasses(root, mapPath, loaded.doctype, loaded.grammar);
+    scanDomains(root, mapPath);
+    const rootId = root.attrs['id'];
+    if (rootId) result.ids.push({ file: mapPath, line: root.line, id: rootId, tag: root.tag });
+    const isMapRoot = isMapRootNode(root);
+    // A topic read as a map (a @format mismatch) is reported by the reference check,
+    // not as a structural problem of the target; only a root that is neither is a warning.
+    if (!isMapRoot && !isTopicElement(root)) {
       result.fileIssues.push({
         file: mapPath, line: root.line, severity: 'warning',
         msg: msg('val.notMap', root.tag), structural: true,
       });
     }
-    const ctx: MapCtx = { file: mapPath, scopeChain: [], resourceOnly: false, inReltable: false, profile: new Map() };
+    const ctx: MapCtx = { file: mapPath, scopeChains: [[]], resourceOnly: false, inReltable: false, profile: new Map() };
     for (const c of root.children) await walkMapNode(c, ctx, chain.concat(key));
   }
 
   interface MapCtx {
     file: string;
-    scopeChain: string[]; // key scope names, outermost first
+    /** Key scope chains (names outermost first); several when keyscope lists several names. */
+    scopeChains: string[][];
     resourceOnly: boolean;
     inReltable: boolean;
     /** Cascaded profiling values from topicref ancestors: attribute -> allowed value set. */
@@ -357,25 +688,52 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     // Branch filtering
     if (opts.filter && opts.filter.excludes(n.attrs)) return;
 
-    // Key scopes
-    let scopeChain = ctx.scopeChain;
-    const keyscope = n.attrs['keyscope'];
-    if (keyscope) scopeChain = scopeChain.concat(keyscope.trim().split(/\s+/)[0]);
-    const localCtx: MapCtx = { ...ctx, scopeChain };
-
     const tag = n.tag;
+    const id = n.attrs['id'];
+    if (id) result.ids.push({ file: ctx.file, line: n.line, id, tag });
+    if (tag === 'topichead' || TOPICREF_TAGS.has(tag)) {
+      result.mapEntries.push({
+        file: ctx.file, line: n.line, tag, href: n.attrs['href'],
+        keyref: n.attrs['keyref'], scope: n.attrs['scope'], navTitle: hasNavTitle(n),
+      });
+    }
+
+    // Key scopes
+    let scopeChains = ctx.scopeChains;
+    const keyscope = n.attrs['keyscope'];
+    if (keyscope) {
+      const names = keyscope.trim().split(/\s+/).filter(Boolean);
+      if (names.length) scopeChains = scopeChains.flatMap((chain) => names.map((nm) => chain.concat(nm)));
+    }
+    const localCtx: MapCtx = { ...ctx, scopeChains };
+
     if (tag === 'reltable') localCtx.inReltable = true;
 
-    // Uses of keys within the map itself (keyref on topicrefs etc.)
-    const keyref = n.attrs['keyref'];
-    if (keyref) result.keyUses.push({ file: ctx.file, line: n.line, key: keyref.split('/')[0] });
-
     const href = n.attrs['href'];
+    const keyref = n.attrs['keyref'];
     const keys = n.attrs['keys'];
     const isKeydef = tag === 'keydef' || /\bmap\/keydef\b/.test(classOf(n));
     const procRole = n.attrs['processing-role'];
     const resourceOnly = procRole === 'resource-only' || (isKeydef && procRole !== 'normal') || ctx.resourceOnly;
     localCtx.resourceOnly = procRole === 'normal' ? false : resourceOnly;
+
+    // A keyref on a map element is a reference to whatever the key resolves
+    // to. Resolution happens once every map is crawled (a definition may live
+    // in a submap or after the use), so the context is recorded here.
+    let mapKeyUse: KeyUse | undefined;
+    if (keyref) {
+      const keyName = keyref.trim();
+      const isMap = tag === 'mapref' || /\bmap\/mapref\b/.test(classOf(n));
+      mapKeyUse = {
+        file: ctx.file, line: n.line, key: keyName.split('/')[0],
+        value: keyref, attribute: 'keyref', tag,
+        keySyntax: keyrefSyntax(keyName),
+        kind: isKeydef ? 'keydef' : isMap ? 'mapref' : 'topicref',
+        scopeChains, resourceOnly: localCtx.resourceOnly,
+        inReltable: localCtx.inReltable, copyTo: n.attrs['copy-to'],
+      };
+      result.keyUses.push(mapKeyUse);
+    }
 
     // Cascade profiling attributes from this topicref to descendants and to its topic.
     const cascaded = new Map(ctx.profile);
@@ -383,9 +741,16 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       for (const a of profilingAttrs) {
         const v = n.attrs[a];
         if (v === undefined) continue;
-        const values = splitValues(v);
-        if (values.length === 0) continue;
-        result.profilingValues.push({ file: ctx.file, line: n.line, attribute: a, values, tag });
+        const value = profileValueOf(v);
+        if (value.emptyValue) {
+          result.emptyProfilingValues.push({ file: ctx.file, line: n.line, attribute: a, tag });
+          continue;
+        }
+        result.profilingValues.push({ file: ctx.file, line: n.line, attribute: a, values: value.values, tag });
+        // An empty group carries no value: it reaches the preferences as its own text
+        // (Oxygen's dmv.prof.group.val.prefs.undef) but cascades nothing.
+        if (value.groupOnly) continue;
+        const values = value.values;
         const prev = cascaded.get(a);
         if (prev) {
           const inter = values.filter((x) => prev.includes(x));
@@ -402,11 +767,13 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
 
     if (keys) {
       const names = keys.trim().split(/\s+/).filter(Boolean);
-      const scopeId = scopeChain.join('/');
+      const scopeIds = [...new Set(scopeChains.map((c) => c.join('/')))];
       for (const name of names) {
-        const qualified = qualifiedNames(name, scopeChain);
+        const qualified = qualifiedNamesMulti(name, scopeChains);
         const def: KeyDef = {
-          file: ctx.file, line: n.line, key: name, qualified, scopeId, href,
+          file: ctx.file, line: n.line, key: name, qualified, scopeId: scopeIds[0], scopeIds, href,
+          keyref: keyref?.trim(),
+          format: n.attrs['format'],
         };
         if (href && !URL_RE.test(href) && n.attrs['scope'] !== 'external') {
           const p = href.split('#')[0];
@@ -416,21 +783,43 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       }
     }
 
+    // DITA: @keyref takes precedence over @href, but @href is the fallback when
+    // the key is undefined. The href is recorded as usual and the key resolution
+    // below drops it again if the key turns out to be defined.
+    let followedMap = false;
     if (href !== undefined && href !== '' && (isMapTag(n) || tag === 'linkref' || n.attrs['href'])) {
       const isRelInner = ctx.inReltable && !isMapTag(n);
       const kind: RefKind = isKeydef ? 'keydef' : isMapHref(n, href) ? 'mapref' : 'topicref';
       if (!isRelInner || isMapTag(n)) {
-        const ref = addRef(ctx.file, n, kind, href, { resourceOnly: localCtx.resourceOnly, inReltable: localCtx.inReltable });
+        const ref = addRef(ctx.file, n, kind, href, {
+          resourceOnly: localCtx.resourceOnly, inReltable: localCtx.inReltable, inMap: true,
+        });
+        if (mapKeyUse) mapKeyUse.fallbackRef = ref;
         if (ref.target && !ref.remote) {
           const tkey = norm(ref.target);
           if (kind === 'mapref') {
-            if (!chain.includes(tkey)) await crawlMap(ref.target, chain, ref);
+            // A target already on the crawl path closes a cycle: report it where it
+            // closes (Oxygen names the map that points back, not every member).
+            if (chain.includes(tkey)) result.recursiveRefs.push({ file: ctx.file, line: n.line, href });
+            else await crawlMap(ref.target, chain, ref);
+            followedMap = true;
           } else if (ref.dita && !seenTopics.has(tkey) && n.attrs['format'] !== 'ditamap') {
             seenTopics.add(tkey);
             topicQueue.push({ path: ref.target, inherited: cascaded });
           }
+        } else if (kind === 'mapref') {
+          followedMap = true;
         }
       }
+    }
+    // The content of a reference to a map is ignored by DITA (dmv.ref.topic.inside.mapref).
+    if (followedMap) {
+      for (const c of n.children) {
+        if (c.tag !== 'topicmeta' && (isMapTag(c) || TOPICREF_TAGS.has(c.tag))) {
+          result.ignoredMaprefContent.push({ file: ctx.file, line: c.line, tag: c.tag });
+        }
+      }
+      return;
     }
     for (const c of n.children) await walkMapNode(c, localCtx, chain);
   }
@@ -456,19 +845,55 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
 
   async function crawlTopic(path: string, inherited: Map<string, string[]>): Promise<void> {
     if (host.cancelled?.()) { result.cancelled = true; return; }
-    const root = await load(path, { file: path, line: 1 }, true);
-    if (!root) {
+    const loaded = await load(path, { file: path, line: 1 }, true);
+    if (!loaded) {
       // A missing target is reported by the reference check; a parse error already recorded.
       return;
     }
+    const root = loaded.root;
     result.topics.add(path);
-    const isTopic = /\btopic\/topic\b/.test(classOf(root)) || TOPIC_ROOTS.has(root.tag);
-    if (!isTopic && !/\bmap\/map\b/.test(classOf(root))) {
+    const isTopic = isTopicElement(root);
+    const side = sideOfRoot(root.tag, root.attrs['class']);
+    result.fileRoots.push({
+      file: path, line: root.line, tag: root.tag, side,
+      classValue: effectiveClassOf(root.tag, root.attrs['class'], side),
+      dita: isTopic || isMapRootNode(root),
+    });
+    scanClasses(root, path, loaded.doctype, loaded.grammar);
+    scanDomains(root, path);
+    scanSections(root, path, side);
+    // A map read as a topic (a @format mismatch) is reported by the reference check.
+    if (!isTopic && !isMapRootNode(root)) {
       result.fileIssues.push({
         file: path, line: root.line, severity: 'warning',
         msg: msg('val.notTopic', root.tag), structural: true,
       });
     }
+
+    // Every @id (id syntax, duplicate element ids) and every reusable element
+    // (unreferenced-reusable, conref range checks), with the enclosing topic id
+    // and the element's place among its parent's children.
+    const visitIds = (n: XNode, topicId: string | undefined, parentKey: string, order: number, shadowed: boolean): void => {
+      const isTopic = isTopicElement(n);
+      const currentTopic = isTopic ? (n.attrs['id'] ?? topicId) : topicId;
+      const id = n.attrs['id'];
+      if (id) {
+        result.ids.push({ file: path, line: n.line, id, tag: n.tag, topicId: currentTopic });
+        if (!isTopic) {
+          result.reusable.push({
+            file: path, line: n.line, id, tag: n.tag, topicFile: path, topicId: currentTopic,
+            parentKey, order, replacedByConref: shadowed || undefined,
+            classValue: effectiveClassOf(n.tag, n.attrs['class'], side),
+          });
+        }
+      }
+      const key = `${parentKey}/${n.tag}${id ? `#${id}` : `[${order}]`}`;
+      // The element's own @conref replaces what is written inside it (Oxygen's
+      // dmv.ref.filtered.conref); the element itself survives the resolution.
+      const childShadowed = shadowed || n.attrs['conref'] !== undefined;
+      n.children.forEach((c, i) => visitIds(c, currentTopic, key, i, childShadowed));
+    };
+    visitIds(root, undefined, '', 0, false);
 
     // Topic ids (root and nested)
     for (const n of walk(root)) {
@@ -482,36 +907,70 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       }
     }
 
-    // Local-topic-only scan
-    const usedElementIds = new Set<string>();
+    // Local-topic-only scan.
     for (const n of walk(root)) {
-      for (const a of ['conref', 'conrefend', 'conkeyref']) {
-        const v = n.attrs[a];
-        if (!v) continue;
-        if (a === 'conkeyref') {
-          const key = v.split('/')[0];
-          result.keyUses.push({ file: path, line: n.line, key });
-          result.conrefUses.push({ key, targetId: v.includes('/') ? v.split('/').pop() : undefined });
-        } else if (a === 'conref') {
-          const ref = addRef(path, n, 'conref', v);
-          if (ref.dita && ref.target) {
-            const ck = norm(ref.target);
-            if (!seenTopics.has(ck) && !ref.target.toLowerCase().endsWith('.ditamap')) {
-              seenTopics.add(ck);
-              topicQueue.push({ path: ref.target, inherited: new Map() });
-            }
+      const conref = n.attrs['conref'];
+      const conrefend = n.attrs['conrefend'];
+      const conkeyref = n.attrs['conkeyref'];
+      if (conref !== undefined || conrefend !== undefined || conkeyref !== undefined) {
+        const start = conref ? contentTarget(conref, path) : undefined;
+        const end = conrefend ? contentTarget(conrefend, path) : undefined;
+        result.conrefShapes.push({
+          file: path, line: n.line, tag: n.tag, conref, conrefend, conkeyref,
+          targetFile: start?.file, targetTopicId: start?.topicId, targetElementId: start?.elementId,
+          endTargetFile: end?.file, endTopicId: end?.topicId, endElementId: end?.elementId,
+          classValue: effectiveClassOf(n.tag, n.attrs['class'], side),
+        });
+      }
+      // `-dita-use-conref-target` is only meaningful on an element that is a
+      // content reference; without @conref or @conkeyref the value is a mistake.
+      if (conref === undefined && conkeyref === undefined) {
+        for (const [attribute, value] of Object.entries(n.attrs)) {
+          if (/(^|\s)-dita-use-conref-target(\s|$)/.test(value)) {
+            result.conrefTargetValues.push({ file: path, line: n.line, tag: n.tag, attribute, value });
           }
-          const frag = v.includes('#') ? v.split('#')[1] : '';
-          result.conrefUses.push({
-            targetFile: ref.target ?? path,
-            targetId: frag ? frag.split('/').pop() : undefined,
-          });
-          if (!ref.target && !ref.remote && frag) usedElementIds.add(frag.split('/').pop() ?? '');
         }
       }
-      for (const a of ['keyref']) {
-        const v = n.attrs[a];
-        if (v) result.keyUses.push({ file: path, line: n.line, key: v.split('/')[0] });
+      if ((n.tag === 'xref' || n.tag === 'link') && !n.attrs['href'] && !n.attrs['keyref'] && !conref && !conkeyref) {
+        result.linksWithoutTarget.push({ file: path, line: n.line, tag: n.tag });
+      }
+      if (conkeyref) {
+        const key = conkeyref.trim().split('/')[0];
+        result.keyUses.push({ file: path, line: n.line, key, value: conkeyref, attribute: 'conkeyref', tag: n.tag });
+        result.conrefUses.push({ key, targetId: conkeyref.includes('/') ? conkeyref.split('/').pop() : undefined });
+      }
+      if (conref) {
+        const ref = addRef(path, n, 'conref', conref);
+        if (ref.dita && ref.target) {
+          const ck = norm(ref.target);
+          if (!seenTopics.has(ck) && !ref.target.toLowerCase().endsWith('.ditamap')) {
+            seenTopics.add(ck);
+            topicQueue.push({ path: ref.target, inherited: new Map() });
+          }
+        }
+        const frag = conref.includes('#') ? conref.split('#')[1] : '';
+        // "." is DITA's same-topic fragment (`#.`, `#./elem`): it names no topic id to look up.
+        const segs = frag ? frag.split('/') : [];
+        const sameTopic = segs[0] === '.';
+        result.conrefUses.push({
+          targetFile: ref.target ?? path,
+          targetId: segs.length && !(sameTopic && segs.length === 1) ? segs[segs.length - 1] : undefined,
+          topicId: segs[0] && !sameTopic ? segs[0] : undefined,
+          elemId: segs.length > 1 ? segs.slice(1).join('/') : undefined,
+          sourceFile: path,
+          sourceLine: n.line,
+        });
+      }
+      const keyrefValue = n.attrs['keyref'];
+      let topicKeyUse: KeyUse | undefined;
+      if (keyrefValue) {
+        const keyName = keyrefValue.trim();
+        topicKeyUse = {
+          file: path, line: n.line, key: keyName.split('/')[0],
+          value: keyrefValue, attribute: 'keyref', tag: n.tag, kind: hrefAttrKind(n),
+          keySyntax: keyrefSyntax(keyName),
+        };
+        result.keyUses.push(topicKeyUse);
       }
       for (const a of ['href', 'data']) {
         const href = n.attrs[a];
@@ -520,6 +979,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
         const kind = hrefAttrKind(n);
         if (!kind) continue;
         const ref = addRef(path, n, kind, href);
+        if (topicKeyUse) topicKeyUse.fallbackRef = ref; // dropped if the key resolves
         if (ref.dita && ref.target) {
           const tkey = norm(ref.target);
           if (!seenTopics.has(tkey) && !ref.target.toLowerCase().endsWith('.ditamap')) {
@@ -529,13 +989,6 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
         }
       }
       // <image keyref> etc. resolve through the key space (see resolveKeyRefs below).
-    }
-
-    // Reusable-element candidates: any element with an id that is not a topic/body/section container.
-    for (const n of walk(root)) {
-      const id = n.attrs['id'];
-      if (!id || isTopicElement(n)) continue;
-      result.reusable.push({ file: path, line: n.line, id, tag: n.tag, topicFile: path });
     }
 
     checkTables(root, path);
@@ -551,6 +1004,10 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
   function isTopicElement(n: XNode): boolean {
     if (/\btopic\/topic\b/.test(classOf(n))) return true;
     return TOPIC_ROOTS.has(n.tag);
+  }
+
+  function isMapRootNode(n: XNode): boolean {
+    return /\bmap\/map\b/.test(classOf(n)) || n.tag === 'map' || n.tag === 'bookmap';
   }
 
   // ── Tables ──
@@ -685,15 +1142,25 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
 
   // ── Profiling ──
   function checkProfiling(root: XNode, path: string, inherited: Map<string, string[]>): void {
+    // The values a topicref passes down are compared with the topic root only, as Oxygen
+    // does (real report: nothing for a body element against the map value, a conflict for
+    // the root). Below the root an element is compared with its ancestors in this file.
     const visit = (n: XNode, eff: Map<string, string[]>): void => {
-      let next = eff;
+      const isRoot = n === root;
+      const against = isRoot ? inherited : eff;
+      let next = isRoot ? new Map<string, string[]>() : eff;
       for (const a of profilingAttrs) {
         const v = n.attrs[a];
         if (v === undefined) continue;
-        const values = splitValues(v);
-        if (values.length === 0) continue;
+        const value = profileValueOf(v);
+        if (value.emptyValue) {
+          result.emptyProfilingValues.push({ file: path, line: n.line, attribute: a, tag: n.tag });
+          continue;
+        }
+        const values = value.values;
         result.profilingValues.push({ file: path, line: n.line, attribute: a, values, tag: n.tag });
-        const prev = next.get(a);
+        if (value.groupOnly) continue; // an empty group compares, but cascades nothing
+        const prev = against.get(a);
         if (prev) {
           const inter = values.filter((x) => prev.includes(x));
           if (inter.length === 0) {
@@ -702,7 +1169,8 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
             });
           }
           if (next === eff) next = new Map(eff);
-          next.set(a, inter.length ? inter : prev);
+          // The root hands its own values on; elsewhere the overlap (or the ancestor's set).
+          next.set(a, isRoot ? values : inter.length ? inter : prev);
         } else {
           if (next === eff) next = new Map(eff);
           next.set(a, values);
@@ -711,6 +1179,69 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       for (const c of n.children) visit(c, next);
     };
     visit(root, inherited);
+  }
+
+  // ── Class, domains and sections ──
+  /**
+   * The written @class values the DITA class syntax rejects, and the elements no DTD
+   * gives a class. A file with no DOCTYPE and no schema has no default class at all, so every
+   * element that does not write one is reported (what Oxygen reports: one finding per
+   * element, the root included). A written value always wins: a hand-written or
+   * specialized class is taken at its word, and only its syntax is checked. An element
+   * the generated table does not know, in a file that does declare a DITA DTD, is left
+   * alone: whether that DTD declares it is schema validation's question, not this one.
+   */
+  function scanClasses(root: XNode, file: string, doctype: Doctype | undefined, grammar: boolean): void {
+    // A DOCTYPE of any kind or a schema association may supply the class defaults (a specialization
+    // ships its own DTD); only a file that declares neither has no source of a class at all.
+    if (doctype !== undefined || grammar) {
+      for (const n of walk(root)) {
+        const explicit = n.attrs['class'];
+        if (explicit === undefined) continue; // the DTD supplies a class, or the element is outside the table
+        const problem = classSyntaxProblem(explicit);
+        if (problem) result.classIssues.push({ file, line: n.line, tag: n.tag, problem });
+      }
+      return;
+    }
+    for (const n of walk(root)) {
+      const explicit = n.attrs['class'];
+      if (explicit !== undefined) {
+        const problem = classSyntaxProblem(explicit);
+        if (problem) result.classIssues.push({ file, line: n.line, tag: n.tag, problem });
+        continue;
+      }
+      // No DTD or schema is declared here at all, so the element has no class
+      // to check; that is the finding.
+      result.classIssues.push({ file, line: n.line, tag: n.tag, problem: 'not-specified' });
+    }
+  }
+
+  /** An @domains written empty claims no domain (Oxygen's dmv.invalid.domains.format). */
+  function scanDomains(root: XNode, file: string): void {
+    const domains = root.attrs['domains'];
+    if (domains !== undefined && domains.trim() === '') result.domainsIssues.push({ file, line: root.line, tag: root.tag });
+  }
+
+  /**
+   * A section's title must come first and be its only one. Only a section in a legal
+   * place is checked: one whose parent is a body, a bodydiv or a sectiondiv (the
+   * containers DITA gives a section). A section nested in another section is not valid
+   * DITA at all, so the schema answer is the one that counts and this check stays
+   * quiet, which is what the boundary probes showed.
+   */
+  function scanSections(root: XNode, file: string, side: ClassSide): void {
+    const classOfNode = (n: XNode): string | undefined => effectiveClassOf(n.tag, n.attrs['class'], side);
+    for (const n of walk(root)) {
+      if (classElementTag(classOfNode(n)) !== 'section') continue;
+      const parentClass = n.parent ? classOfNode(n.parent) : undefined;
+      if (!chainHas(parentClass, 'topic/body') && !chainHas(parentClass, 'topic/bodydiv') && !chainHas(parentClass, 'topic/sectiondiv')) continue;
+      const titles = n.children.filter((c) => classElementTag(classOfNode(c)) === 'title');
+      if (titles.length > 1) {
+        for (const t of titles.slice(1)) result.sectionIssues.push({ file, line: t.line, tag: n.tag, kind: 'duplicate-title' });
+      } else if (titles.length === 1 && n.children[0] !== titles[0]) {
+        result.sectionIssues.push({ file, line: titles[0].line, tag: n.tag, kind: 'first-title' });
+      }
+    }
   }
 
   // ── Drive ──
@@ -723,15 +1254,99 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     await crawlTopic(t.path, t.inherited);
   }
 
-  // ── Key-based references: <image keyref>, <xref keyref>, ... ──
-  // A key whose definition has an href is a reference to that resource from
-  // wherever it is used; count each such definition target once as a
-  // reference so the resource is not reported as unreferenced.
+  // ── Key resolution ──
+  // Every @keyref use is resolved against the keys the maps define. This runs
+  // after both loops because a definition may live in a submap or after the
+  // use. A keyref that resolves to a resource becomes a reference, so the
+  // ordinary existence / duplicate / link checks see it; a keyref that resolves
+  // to nothing is reported as an undefined key (Oxygen's `dmv.undef.key`).
+  const keyIndex = new Map<string, KeyDef>();
   for (const def of result.keyDefs) {
-    if (!def.target) continue;
-    // already recorded as a 'keydef'/'topicref' Reference via addRef; nothing more to add
+    for (const q of def.qualified) if (!keyIndex.has(q)) keyIndex.set(q, def);
   }
+  const droppedFallbacks = new Set<Reference>();
+  for (const use of result.keyUses) {
+    if (use.keySyntax) continue; // reported as invalid key syntax, not as an undefined key
+    const def = resolveKeyUse(use, keyIndex);
+    if (!def) {
+      result.undefinedKeys.push({ file: use.file, line: use.line, key: use.key, value: use.value ?? use.key });
+      continue;
+    }
+    // A keyref may append an element id (`key/element`): the key resolves to a
+    // file and a topic, so the appended id is checked against that topic later.
+    const suffix = use.value?.split('/').slice(1).join('/');
+    const keyHref = def.href ?? '';
+    const keyHash = keyHref.indexOf('#');
+    const keyTopic = keyHash >= 0 ? keyHref.slice(keyHash + 1).split('/')[0] : '';
+    if (suffix && !use.scopeChains) {
+      result.keyElementPaths.push({
+        file: use.file, line: use.line, value: use.value ?? use.key,
+        elementPath: suffix, targetFile: def.target, topicId: keyTopic || undefined,
+      });
+    }
+    // The key is defined, so the element's own @href is not used.
+    if (use.fallbackRef) droppedFallbacks.add(use.fallbackRef);
+    if (use.attribute === 'conkeyref') {
+      // Content references never become References here, but the file behind the key
+      // is one the element depends on: recorded so the checks can report it missing.
+      if (def.target) {
+        result.conkeyrefTargets.push({
+          file: use.file, line: use.line,
+          href: def.href ?? use.value ?? use.key,
+          target: def.target,
+          dita: isDitaHref((def.href ?? '').split('#')[0], def.format),
+        });
+      }
+      continue;
+    }
+    if (!def.target) {
+      // A text-only key: defined, but there is no resource to link to. A key that
+      // redirects to another key is left alone: this crawl does not follow
+      // redirect chains, so it cannot tell where the chain ends.
+      if (!def.keyref && (use.kind === 'xref' || use.kind === 'link')) {
+        result.keyLinksWithoutTarget.push({
+          file: use.file, line: use.line, key: use.key, value: use.value ?? use.key, tag: use.tag,
+        });
+      }
+      continue;
+    }
+    // Only elements that make a link (xref, image, topicref, ...) are references;
+    // a <ph keyref> or <keyword keyref> merely borrows the key's text.
+    if (!use.kind) continue;
+    const pathPart = (def.href ?? '').split('#')[0];
+    result.refs.push({
+      file: use.file,
+      line: use.line,
+      kind: use.kind,
+      href: def.href ?? use.value ?? use.key,
+      target: def.target,
+      remote: false,
+      dita: isDitaHref(pathPart, def.format),
+      resourceOnly: !!use.resourceOnly,
+      copyTo: use.copyTo,
+      inReltable: !!use.inReltable,
+      tag: use.tag ?? '',
+      format: def.format,
+      inMap: !!use.scopeChains,
+      viaKeyref: true,
+    });
+  }
+  if (droppedFallbacks.size) result.refs = result.refs.filter((r) => !droppedFallbacks.has(r));
   return result;
+}
+
+/**
+ * Resolves a keyref use against the key index: the most-qualified name first,
+ * so a key inside a key scope wins over a same-named key at an outer scope
+ * (DITA's nearest-scope precedence).
+ */
+function resolveKeyUse(use: KeyUse, index: ReadonlyMap<string, KeyDef>): KeyDef | undefined {
+  const candidates = qualifiedNamesMulti(use.key, use.scopeChains ?? [[]]).reverse();
+  for (const c of candidates) {
+    const def = index.get(c);
+    if (def) return def;
+  }
+  return undefined;
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────
@@ -744,11 +1359,37 @@ function splitValues(v: string): string[] {
   return out;
 }
 
-/** All names a key defined under the given scope chain answers to: bare plus each qualified form. */
-export function qualifiedNames(name: string, scopeChain: string[]): string[] {
-  const out = [name];
-  for (let i = 0; i < scopeChain.length; i++) {
-    out.push(scopeChain.slice(i).join('.') + '.' + name);
-  }
-  return out;
+/**
+ * What a profiling attribute value means for the checks. Three shapes are told
+ * apart, because the Oxygen report treats them differently:
+ * - values: the tokens a group expands to, as splitValues finds them;
+ * - emptyValue: the attribute is written with no value at all, empty or spaces
+ *   only (dmv.prof.attr.empty.value);
+ * - groupOnly: the value is nothing but an empty condition group, `audience()`
+ *   (dmv.prof.group.val.prefs.undef), which names no value but is a group the
+ *   preferences can be missing.
+ */
+function profileValueOf(v: string): { values: string[]; emptyValue: boolean; groupOnly: boolean } {
+  const values = splitValues(v);
+  if (values.length > 0) return { values, emptyValue: false, groupOnly: false };
+  const groups = v.match(/[A-Za-z_][\w.-]*\(\s*\)/g);
+  if (groups && groups.length > 0) return { values: groups, emptyValue: false, groupOnly: true };
+  return { values: [], emptyValue: true, groupOnly: false };
 }
+
+/** Why a key name cannot be parsed, if it cannot (Oxygen's invalid.keyref.syntax.1/.3). */
+function keyrefSyntax(key: string): 'slash' | 'whitespace' | undefined {
+  if (!key) return 'whitespace';
+  if (key.split('/').length > 2) return 'slash';
+  return /\s/.test(key) ? 'whitespace' : undefined;
+}
+
+/** Whether a map element carries a navigation title (a @navtitle or topicmeta/navtitle). */
+function hasNavTitle(n: XNode): boolean {
+  if (n.attrs['navtitle'] !== undefined) return true;
+  return n.children.some((c) => c.tag === 'topicmeta' && c.children.some((t) => t.tag === 'navtitle'));
+}
+
+// qualifiedNames / qualifiedNamesMulti live in keySpace.ts (the preview's key
+// lookup uses the same rule); re-exported so existing importers keep working.
+export { qualifiedNames, qualifiedNamesMulti } from '@dita-viewer/core';

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.invalid.class.generalization, negative: a paragraph drawing in a paragraph. The
+     two classes are equal, the one relationship conref always allows. -->
+<topic id="l-class-generalization-neg">
+  <title>conref between equal classes (negative)</title>
+  <body>
+    <p conref="l-class-target-base.dita#lctb/lctb-p"/>
+  </body>
+</topic>

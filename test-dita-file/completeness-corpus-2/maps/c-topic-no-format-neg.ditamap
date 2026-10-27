@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- dmv.topicref.topic.no.format, negative: the same target with format="dita". -->
+<map>
+  <title>Topicref to a topic, correct format</title>
+  <topicref href="../topics/c-topic-no-format-target-neg.dita" format="dita"/>
+</map>

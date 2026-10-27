@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.conkeyref.peer.map, positive: the key is defined in a map referenced with
+     scope="peer", so its content is not part of this bundle. -->
+<topic id="e-conkeyref-peer-pos">
+  <title>conkeyref into a peer map (positive)</title>
+  <body>
+    <p conkeyref="k-conkeyref-peer/p2"/>
+  </body>
+</topic>

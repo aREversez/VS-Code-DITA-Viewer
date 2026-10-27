@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.win.seps.ref, boundary: backslashes in the path and a normal topic
+     fragment. The fragment must not be mistaken for another separator. -->
+<topic id="a-win-seps-edge">
+  <title>Backslash separators (boundary)</title>
+  <body>
+    <p><xref href="..\topics\ok.dita#ok2">backslash path with a fragment</xref></p>
+  </body>
+</topic>

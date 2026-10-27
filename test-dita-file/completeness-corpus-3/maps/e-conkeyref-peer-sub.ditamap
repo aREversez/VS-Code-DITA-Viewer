@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- The local submap of dmv.conkeyref.peer.map: a key from the same bundle must stay
+     usable by a conkeyref. -->
+<map>
+  <title>Sub map with a key</title>
+  <keydef keys="k-conkeyref-sub" href="../topics/lib.dita#lib3"/>
+</map>

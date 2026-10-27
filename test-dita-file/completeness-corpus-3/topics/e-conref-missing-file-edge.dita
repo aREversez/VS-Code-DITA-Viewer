@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- R019, edge: a conkeyref through a key whose target file is missing. The reference to the
+     missing file is the keydef's, in maps/e-conref-missing-key.ditamap; whether Oxygen also
+     files the conkeyref itself is the question. -->
+<topic id="e-conref-missing-file-edge">
+  <title>conkeyref through a key with a missing file (edge)</title>
+  <body>
+    <p conkeyref="k-conref-missing-file/x"/>
+  </body>
+</topic>

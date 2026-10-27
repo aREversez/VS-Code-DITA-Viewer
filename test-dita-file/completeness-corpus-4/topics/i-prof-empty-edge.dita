@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.prof.attr.empty.value: edge probes; whitespace only and an empty group value. -->
+<topic id="ipee">
+  <title>Empty values in two spellings</title>
+  <body>
+    <p audience="   ">The audience value is whitespace only.</p>
+    <p props="audience()">The group value is empty.</p>
+  </body>
+</topic>

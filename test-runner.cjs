@@ -4,13 +4,24 @@ const { runTests } = require('@vscode/test-electron');
 async function main() {
   try {
     const extensionDevelopmentPath = path.resolve(__dirname);
-    const extensionTestsPath = path.resolve(__dirname, 'dist/test');
+    // dist/e2e, and not dist/test: `tsc -p tsconfig.json` (rootDir src, outDir
+    // dist) used to emit the UNIT tests to dist/test/<subdir>/*.test.js as a side
+    // effect (it is noEmit now, but stale trees remain), and index.ts collects the e2e specs by walking its own directory
+    // recursively. Sharing one directory therefore made a stale unit-test build
+    // run inside the real VS Code host, against the esbuild output in
+    // dist/editor -- where src/test's imports resolve differently and the
+    // vscode-API-free assumptions do not hold. Keeping the two outputs apart is
+    // what makes "the e2e run tested what I just wrote" true again.
+    const extensionTestsPath = path.resolve(__dirname, 'dist/e2e');
     const testWorkspace = path.resolve(__dirname, 'test-dita-file');
 
     await runTests({
       extensionDevelopmentPath,
       extensionTestsPath,
-      launchArgs: [testWorkspace, '--disable-extensions'],
+      // Trust is off by default for a fresh profile; commands that shell out
+      // (Compare with Git) stop at the trust gate, which would fail a suite
+      // that has nothing to do with trust.
+      launchArgs: [testWorkspace, '--disable-extensions', '--disable-workspace-trust'],
     });
   } catch (err) {
     console.error('Test run failed:', err);

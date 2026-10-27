@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- L1 dmv.invalid.class.format, negative: every element is one the DTD declares, and one of
+     them spells the class the DTD would have defaulted to. Nothing to report. -->
+<topic id="l-class-format-neg">
+  <title>Declared elements only</title>
+  <body>
+    <p>Implicit class, from the DTD default.</p>
+    <p class="- topic/p">Explicit class, the same value the DTD declares as fixed.</p>
+    <ul>
+      <li>An item.</li>
+    </ul>
+  </body>
+</topic>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.invalid.ref.id, boundary: the same missing element id reached through an xref
+     instead of a conref. Ask Oxygen whether both attribute families share the check. -->
+<topic id="f-invalid-ref-id-edge">
+  <title>Missing element id through an xref (boundary)</title>
+  <body>
+    <p><xref href="lib.dita#lib3/nope">missing element</xref></p>
+  </body>
+</topic>

@@ -1,0 +1,409 @@
+import * as assert from 'assert';
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync, readFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { parseConrefJumpMessage, MSG_OPEN_CONREF_TARGET } from '../../editor/conrefJump';
+import { renderTopicToHtml } from '@dita-viewer/core';
+import { getConrefJumpScript, CONREF_JUMP_HINT_ID } from '../../editor/webview/conrefJumpScript';
+
+// The conref jump button, end to end below the webview: the renderer marks
+// conref'd content (only when the preview opts in), and the host validates
+// the click message. The in-webview hit-testing is exercised separately at
+// the bottom against a minimal fake DOM.
+
+describe('parseConrefJumpMessage', () => {
+  const file = process.platform === 'win32' ? 'C:\\proj\\reuse.dita' : '/proj/reuse.dita';
+
+  it('accepts an absolute DITA path with a position', () => {
+    assert.deepStrictEqual(parseConrefJumpMessage({ type: MSG_OPEN_CONREF_TARGET, file, line: 4, col: 2 }), { file, line: 4, col: 2 });
+  });
+
+  it('defaults a missing or bad column to 0', () => {
+    assert.strictEqual(parseConrefJumpMessage({ file, line: 4 })?.col, 0);
+    assert.strictEqual(parseConrefJumpMessage({ file, line: 4, col: -3 })?.col, 0);
+  });
+
+  it('rejects what the webview must not be able to make the host open', () => {
+    assert.strictEqual(parseConrefJumpMessage({ file: 'reuse.dita', line: 1 }), undefined, 'relative path');
+    assert.strictEqual(parseConrefJumpMessage({ file: file.replace(/\.dita$/, '.exe'), line: 1 }), undefined, 'not a DITA source');
+    assert.strictEqual(parseConrefJumpMessage({ file, line: -1 }), undefined, 'negative line');
+    assert.strictEqual(parseConrefJumpMessage({ file, line: 1.5 }), undefined, 'fractional line');
+    assert.strictEqual(parseConrefJumpMessage({ file, line: '1' }), undefined, 'non-numeric line');
+    assert.strictEqual(parseConrefJumpMessage({ file: 42, line: 1 }), undefined, 'non-string file');
+  });
+});
+
+describe('conref marking in a real render', () => {
+  let dir: string;
+  let mainFile: string;
+  let reuseFile: string;
+
+  const reuse = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<topic id="r">',
+    '  <title>Reuse</title>',
+    '  <body>',
+    '    <p id="para">Shared paragraph</p>', // line 4
+    '    <p id="a">First of run</p>', // line 5
+    '    <p id="b">Second of run</p>', // line 6
+    '    <p><ph id="phrase">shared phrase</ph></p>', // ph starts line 7
+    '  </body>',
+    '</topic>',
+    '',
+  ].join('\n');
+
+  const main = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<topic id="m">',
+    '  <title>Main</title>',
+    '  <body>',
+    '    <p conref="reuse.dita#r/para"/>',
+    '    <p conref="reuse.dita#r/a" conrefend="reuse.dita#r/b"/>',
+    '    <p>Before <ph conref="reuse.dita#r/phrase"/> after</p>',
+    '    <p id="local">Local source</p>',
+    '    <p conref="#m/local"/>',
+    '    <p>Plain, not conref\'d</p>',
+    '  </body>',
+    '</topic>',
+    '',
+  ].join('\n');
+
+  before(() => {
+    dir = mkdtempSync(join(tmpdir(), 'conref-jump-'));
+    mkdirSync(dir, { recursive: true });
+    mainFile = join(dir, 'main.dita');
+    reuseFile = join(dir, 'reuse.dita');
+    writeFileSync(mainFile, main);
+    writeFileSync(reuseFile, reuse);
+  });
+  after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const render = (markConrefs: boolean) => {
+    const r = renderTopicToHtml({
+      filePath: mainFile,
+      keyMap: new Map(),
+      asWebviewUri: (p) => p,
+      headingLevel: 1,
+      markConrefs,
+    });
+    assert.strictEqual(r.error, undefined);
+    return r.html;
+  };
+
+  const marksOf = (html: string) =>
+    [...html.matchAll(/data-conref="(\w+)" data-conref-file="([^"]*)" data-conref-line="(\d+)" data-conref-col="(\d+)"/g)].map((m) => ({
+      kind: m[1], file: m[2], line: Number(m[3]), col: Number(m[4]),
+    }));
+
+  it('emits no data-conref at all unless the caller opts in (export and diff stay plain)', () => {
+    const plain = render(false);
+    assert.ok(!plain.includes('data-conref'));
+    assert.ok(!plain.includes(`aria-describedby="${CONREF_JUMP_HINT_ID}"`), 'no dangling description reference either');
+  });
+
+  it('marks each kind of conref with the TARGET\'s file and position, not the referencing tag\'s', () => {
+    const marks = marksOf(render(true));
+    // single-target block, 2-member conrefend run, inline ph, same-file conref
+    assert.strictEqual(marks.length, 5, JSON.stringify(marks));
+
+    const [para, runA, runB, phrase, local] = marks;
+    assert.deepStrictEqual([para.kind, para.file, para.line], ['block', reuseFile, 4]);
+    assert.deepStrictEqual([runA.kind, runA.file, runA.line], ['block', reuseFile, 5]);
+    assert.deepStrictEqual([runB.kind, runB.file, runB.line], ['block', reuseFile, 6]);
+    assert.deepStrictEqual([phrase.kind, phrase.file, phrase.line], ['inline', reuseFile, 7]);
+    // Same-document target lives in the file being rendered.
+    assert.deepStrictEqual([local.kind, local.file, local.line], ['block', mainFile, 7]);
+  });
+
+  it('keeps the source-sync range on the referencing tag (data-line is untouched by the mark)', () => {
+    const html = render(true);
+    // <p conref="reuse.dita#r/para"/> is on 0-based line 4 of main.dita too, so
+    // pick a case where the two files disagree: the ph (main line 6, reuse line 7).
+    const m = /<span[^>]*data-conref="inline"[^>]*>/.exec(html);
+    assert.ok(m, 'inline conref element present');
+    assert.ok(/data-line="6"/.test(m[0]), m[0]);
+    assert.ok(/data-conref-line="7"/.test(m[0]), m[0]);
+  });
+
+  it('does not mark plain content', () => {
+    const html = render(true);
+    const plain = /<p[^>]*>Plain, not conref'd/.exec(html);
+    assert.ok(plain && !plain[0].includes('data-conref'));
+  });
+
+  it('makes every mark focusable and points it at the shared jump hint (accessibility)', () => {
+    const html = render(true);
+    for (const kind of ['block', 'inline']) {
+      const re = new RegExp(`data-conref="${kind}"[^>]*tabindex="0" aria-describedby="${CONREF_JUMP_HINT_ID}"`);
+      assert.ok(re.test(html), `${kind} mark carries tabindex + aria-describedby`);
+    }
+    // the id the renderer emits is the exact id the webview script injects
+    assert.ok(html.includes(`aria-describedby="${CONREF_JUMP_HINT_ID}"`), 'renderer id === CONREF_JUMP_HINT_ID');
+    assert.ok(!/tabindex="0"/.test(render(false)), 'the export path stays free of the a11y attrs');
+  });
+});
+
+// ── the webview half ──
+
+interface Rect { left: number; top: number; right: number; bottom: number }
+interface FakeEl {
+  attrs: Record<string, string>;
+  parent: FakeEl | null;
+  rects: Rect[];
+  style: { borderLeftWidth: string; borderTopWidth: string };
+  title: string | null;
+  getAttribute(n: string): string | null;
+  setAttribute(n: string, v: string): void;
+  removeAttribute(n: string): void;
+  getClientRects(): Rect[];
+  closest(sel: string): FakeEl | null;
+  parentElement: FakeEl | null;
+}
+
+function runScript() {
+  const handlers: Record<string, (e: unknown) => void> = {};
+  const posted: unknown[] = [];
+  const hot = new Set<string>();
+  const docEl = { classList: { toggle: (c: string, on: boolean) => void (on ? hot.add(c) : hot.delete(c)), remove: (c: string) => void hot.delete(c) } };
+
+  function el(attrs: Record<string, string>, rects: Rect[], parent: FakeEl | null = null): FakeEl {
+    const e: FakeEl = {
+      attrs: { ...attrs },
+      parent,
+      parentElement: parent,
+      rects,
+      style: { borderLeftWidth: '0px', borderTopWidth: '0px' },
+      title: null,
+      getAttribute(n) { return n in e.attrs ? e.attrs[n] : null; },
+      setAttribute(n, v) { e.attrs[n] = v; },
+      removeAttribute(n) { delete e.attrs[n]; },
+      getClientRects() { return e.rects; },
+      closest(sel) {
+        assert.strictEqual(sel, '[data-conref]');
+        for (let cur: FakeEl | null = e; cur; cur = cur.parent) if ('data-conref' in cur.attrs) return cur;
+        return null;
+      },
+    };
+    return e;
+  }
+
+  // A body the script can append its shared aria-describedby hint node to.
+  type HintNode = { id: string; className: string; textContent: string };
+  const body = { children: [] as HintNode[], appendChild(n: HintNode) { body.children.push(n); } };
+  const fakeDocument = {
+    documentElement: docEl,
+    body,
+    addEventListener: (t: string, h: (e: unknown) => void) => void (handlers[t] = h),
+    getElementById: (id: string) => body.children.find((c) => c.id === id) || null,
+    createElement: () => ({ id: '', className: '', textContent: '' }),
+  };
+  const src = getConrefJumpScript({ openMsgType: MSG_OPEN_CONREF_TARGET, title: 'Open it', hint: 'Reusable content. Press Enter to jump.' });
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval
+  new Function('document', 'vscode', 'getComputedStyle', src)(
+    fakeDocument,
+    { postMessage: (m: unknown) => posted.push(m) },
+    (e: FakeEl) => e.style,
+  );
+
+  const click = (target: FakeEl, x: number, y: number) => {
+    let prevented = false;
+    handlers.click({ target, clientX: x, clientY: y, button: 0, preventDefault: () => { prevented = true; }, stopPropagation: () => undefined });
+    return prevented;
+  };
+  const move = (target: FakeEl, x: number, y: number) => handlers.mousemove({ target, clientX: x, clientY: y });
+  const press = (target: FakeEl, key: string, mods: { alt?: boolean; ctrl?: boolean; meta?: boolean } = {}) => {
+    let prevented = false;
+    handlers.keydown({ target, key, altKey: !!mods.alt, ctrlKey: !!mods.ctrl, metaKey: !!mods.meta, preventDefault: () => { prevented = true; }, stopPropagation: () => undefined });
+    return prevented;
+  };
+  return { el, click, move, press, posted, hot, body };
+}
+
+describe('conrefJumpScript (webview hit-testing)', () => {
+  const attrs = (kind: string, line = 4) => ({ 'data-conref': kind, 'data-conref-file': '/p/reuse.dita', 'data-conref-line': String(line), 'data-conref-col': '4' });
+
+  it('a click on a block conref\'s top-left icon posts the target; a click on its text does not', () => {
+    const t = runScript();
+    const block = t.el(attrs('block'), [{ left: 100, top: 200, right: 700, bottom: 260 }]);
+    assert.strictEqual(t.click(block, 110, 210), true, 'icon click is claimed');
+    assert.deepStrictEqual(t.posted, [{ type: MSG_OPEN_CONREF_TARGET, file: '/p/reuse.dita', line: 4, col: 4 }]);
+
+    t.posted.length = 0;
+    assert.strictEqual(t.click(block, 300, 240), false, 'text area is left alone');
+    assert.strictEqual(t.click(block, 110, 240), false, 'below the icon line is left alone');
+    assert.deepStrictEqual(t.posted, []);
+  });
+
+  it('an inline conref\'s icon is at the right end of its LAST line box', () => {
+    const t = runScript();
+    // wrapped across two lines
+    const inl = t.el(attrs('inline', 7), [
+      { left: 400, top: 100, right: 800, bottom: 120 },
+      { left: 100, top: 120, right: 200, bottom: 140 },
+    ]);
+    t.click(inl, 500, 110); // end of the first line: not the icon
+    assert.deepStrictEqual(t.posted, []);
+    t.click(inl, 195, 130); // end of the last line
+    assert.strictEqual((t.posted[0] as { line: number }).line, 7);
+  });
+
+  it('inside a nested conref, the outer icon still works when the point is not on the inner one', () => {
+    const t = runScript();
+    const outer = t.el(attrs('block', 4), [{ left: 100, top: 200, right: 700, bottom: 400 }]);
+    const inner = t.el(attrs('block', 9), [{ left: 100, top: 250, right: 700, bottom: 300 }], outer);
+    t.click(inner, 110, 210); // on outer's icon (pointer is over the outer element's own box)
+    assert.strictEqual((t.posted[0] as { line: number }).line, 4);
+    t.posted.length = 0;
+    t.click(inner, 110, 260); // on inner's icon
+    assert.strictEqual((t.posted[0] as { line: number }).line, 9);
+  });
+
+  it('hovering the icon lights the pointer cursor and borrows then restores the title', () => {
+    const t = runScript();
+    const block = t.el({ ...attrs('block'), title: 'tag-name' }, [{ left: 100, top: 200, right: 700, bottom: 260 }]);
+    t.move(block, 110, 210);
+    assert.ok(t.hot.has('dv-conref-hot'));
+    assert.strictEqual(block.attrs.title, 'Open it');
+    t.move(block, 300, 240);
+    assert.ok(!t.hot.has('dv-conref-hot'));
+    assert.strictEqual(block.attrs.title, 'tag-name', 'the Tags toggle\'s title is given back');
+  });
+
+  it('injects the one hidden hint node every aria-describedby names', () => {
+    const t = runScript();
+    assert.strictEqual(t.body.children.length, 1, 'exactly one hint node appended to <body>');
+    const hint = t.body.children[0];
+    assert.strictEqual(hint.id, CONREF_JUMP_HINT_ID, 'its id is the one the renderer points at');
+    assert.strictEqual(hint.className, 'dv-visually-hidden');
+    assert.strictEqual(hint.textContent, 'Reusable content. Press Enter to jump.', 'carries the localized hint');
+  });
+
+  it('Enter on a focused mark posts the jump, mirroring the icon click', () => {
+    const t = runScript();
+    const block = t.el(attrs('block', 5), [{ left: 100, top: 200, right: 700, bottom: 260 }]);
+    assert.strictEqual(t.press(block, 'Enter'), true);
+    assert.deepStrictEqual(t.posted, [{ type: MSG_OPEN_CONREF_TARGET, file: '/p/reuse.dita', line: 5, col: 4 }]);
+  });
+
+  it('leaves Space and a modified Enter to the page', () => {
+    const t = runScript();
+    const block = t.el(attrs('block'), [{ left: 100, top: 200, right: 700, bottom: 260 }]);
+    assert.strictEqual(t.press(block, ' '), false, 'Space must not jump (it still scrolls)');
+    assert.strictEqual(t.press(block, 'Enter', { ctrl: true }), false, 'Ctrl+Enter is left alone');
+    assert.deepStrictEqual(t.posted, []);
+  });
+
+  it('leaves Enter on a link INSIDE reused content to the link', () => {
+    const t = runScript();
+    const block = t.el(attrs('block', 5), [{ left: 100, top: 200, right: 700, bottom: 260 }]);
+    const link = t.el({}, [{ left: 120, top: 230, right: 180, bottom: 250 }], block);
+    assert.strictEqual(t.press(link, 'Enter'), false, 'the link keeps its own Enter');
+    assert.deepStrictEqual(t.posted, []);
+  });
+
+  it('ignores Enter when the focused element is not reused content', () => {
+    const t = runScript();
+    const plain = t.el({}, [{ left: 0, top: 0, right: 10, bottom: 10 }]);
+    assert.strictEqual(t.press(plain, 'Enter'), false);
+    assert.deepStrictEqual(t.posted, []);
+  });
+});
+
+describe('conref marks: keyboard stops and list indent', () => {
+  let dir: string;
+  before(() => {
+    dir = mkdtempSync(join(tmpdir(), 'conref-nest-'));
+    writeFileSync(join(dir, 'lib.dita'), [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<topic id="l"><title>L</title><body>',
+      // refs inside reused content resolve against the rendering document's
+      // directory, so the nested target lives in its own file there
+      '<p id="outer">Outer <ph conref="lib2.dita#l2/inner"/></p>',
+      '<ul id="list"><li>one</li></ul>',
+      '</body></topic>',
+    ].join('\n'));
+    writeFileSync(join(dir, 'lib2.dita'), '<?xml version="1.0" encoding="UTF-8"?>\n<topic id="l2"><title>L2</title><body><ph id="inner">Inner</ph></body></topic>');
+    writeFileSync(join(dir, 'main.dita'), [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<topic id="m"><title>M</title><body>',
+      '<p conref="lib.dita#l/outer"/>',
+      '<ul conref="lib.dita#l/list"/>',
+      '</body></topic>',
+    ].join('\n'));
+  });
+  after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const html = () => {
+    const r = renderTopicToHtml({ filePath: join(dir, 'main.dita'), keyMap: new Map(), asWebviewUri: (p) => p, headingLevel: 1, markConrefs: true });
+    assert.strictEqual(r.error, undefined);
+    return r.html;
+  };
+
+  it('only the outermost mark is a Tab stop; a mark nested inside reused content is tabindex -1', () => {
+    const tags = [...html().matchAll(/<[a-z]+ [^>]*data-conref="[^"]+"[^>]*>/g)].map((m) => m[0]);
+    const outer = tags.find((t) => t.includes('data-conref="block"') && !t.includes('<ul'));
+    const nested = tags.find((t) => t.includes('data-conref="inline"'));
+    assert.ok(outer && nested, tags.join('\n'));
+    assert.ok(/tabindex="0"/.test(outer), outer);
+    assert.ok(/tabindex="-1"/.test(nested), nested);
+  });
+
+  it('a reused list is marked as a block <ul>, which the stylesheet gives its indent back', () => {
+    assert.ok(/<ul [^>]*data-conref="block"/.test(html()));
+    const css = readFileSync(join(__dirname, '../../../media/styles.css'), 'utf8');
+    assert.ok(/ul\[data-conref="block"\]\[data-conref\][^{]*\{[^}]*padding-left:\s*calc\(1\.5em \+ 10px\)/.test(css));
+    // anchored to a line start, so the dedicated .note rule (which keeps the
+    // note's own padding) is not what this matches
+    assert.ok(!/^\[data-conref="block"\]\[data-conref\] \{[^}]*padding:\s*22px/m.test(css), 'no padding shorthand on the generic block rule that would flatten a list');
+  });
+});
+
+describe('conref marks: whole notes and table structure', () => {
+  let dir: string;
+  before(() => {
+    dir = mkdtempSync(join(tmpdir(), 'conref-struct-'));
+    writeFileSync(join(dir, 'lib.dita'), [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<topic id="l"><title>L</title><body>',
+      '<note id="n">Careful</note>',
+      '<table id="t"><tgroup cols="1"><colspec colname="c"/><thead><row><entry>H</entry></row></thead>',
+      '<tbody><row id="r"><entry id="e">Cell</entry></row></tbody></tgroup></table>',
+      '</body></topic>',
+    ].join('\n'));
+    writeFileSync(join(dir, 'main.dita'), [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<topic id="m"><title>M</title><body>',
+      '<note conref="lib.dita#l/n"/>',
+      '<table conref="lib.dita#l/t"/>',
+      '<table><tgroup cols="1"><tbody><row conref="lib.dita#l/r"/></tbody></tgroup></table>',
+      '<table><tgroup cols="1"><tbody><row><entry conref="lib.dita#l/e"/></row></tbody></tgroup></table>',
+      '</body></topic>',
+    ].join('\n'));
+  });
+  after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const tags = () => {
+    const r = renderTopicToHtml({ filePath: join(dir, 'main.dita'), keyMap: new Map(), asWebviewUri: (p) => p, headingLevel: 1, markConrefs: true });
+    assert.strictEqual(r.error, undefined);
+    return [...r.html.matchAll(/<([a-z]+) [^>]*data-conref="[^"]+"[^>]*>/g)].map((m) => ({ tag: m[1], open: m[0] }));
+  };
+
+  it('table structure keeps the icon but is not a keyboard stop; cells are', () => {
+    const marked = tags();
+    const structural = marked.filter((m) => ['table', 'tr', 'thead', 'tbody', 'colgroup'].includes(m.tag));
+    assert.ok(structural.length >= 2, JSON.stringify(marked.map((m) => m.tag)));
+    for (const m of structural) {
+      assert.ok(m.open.includes('data-conref="cell"'), m.open);
+      assert.ok(!/tabindex|aria-describedby/.test(m.open), `${m.tag} must not be a Tab stop: ${m.open}`);
+    }
+    const cells = marked.filter((m) => m.tag === 'td' || m.tag === 'th');
+    assert.ok(cells.length >= 1, 'a reused entry is marked');
+    for (const m of cells) assert.ok(/tabindex="0"/.test(m.open) && /aria-describedby=/.test(m.open), m.open);
+  });
+
+  it('a reused <note> keeps its own horizontal padding; only the top yields to the icon', () => {
+    const css = readFileSync(join(__dirname, '../../../media/styles.css'), 'utf8');
+    assert.ok(/\.note\[data-conref="block"\]\[data-conref\]\s*\{[^}]*padding:\s*22px 1rem 0\.75rem 1rem/.test(css));
+    assert.ok(tags().some((m) => /class="note/.test(m.open) && m.open.includes('data-conref="block"')), 'the note is marked as a block');
+  });
+});

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="profilingdefined">
+  <title>Profiling with defined values</title>
+  <body>
+    <!-- every value is in the preference list, yet disjoint from the cascaded map value (novice) -->
+    <p audience="expert">only expert</p>
+    <p>plain</p>
+  </body>
+</topic>

@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SAMPLE ONLY - a hand-trimmed excerpt, not the full corpus run.
+
+  It now mirrors the *real* "Save Results as XML" structure, confirmed against
+  oxygen-report.xml (a genuine Oxygen 27 report): a flat <report> whose direct
+  children are <incident> elements, each naming its file in <systemID> and its
+  position in <location><start><line>. (The earlier version of this file guessed
+  a <file filePath><incidents> grouping that Oxygen does not actually emit.)
+
+  The problem IDs here are chosen to exercise the parser and the mapper, not to
+  reproduce the corpus exactly. Keep it in the documented grouped shape too by
+  way of the ancestor-<file> fallback in parseOxygenReport.
+-->
+<report xmlns="http://www.oxygenxml.com/ns/report">
+  <incident>
+    <engine>oXygen</engine>
+    <severity>error</severity>
+    <problemID>dmv.file.not.found</problemID>
+    <description>File not found: "topics/missing.dita".</description>
+    <systemID>D:\corpus\corpus.ditamap</systemID>
+    <type>Reference</type>
+    <location>
+      <start>
+        <line>12</line>
+        <column>24</column>
+      </start>
+    </location>
+  </incident>
+  <incident>
+    <engine>oXygen</engine>
+    <severity>error</severity>
+    <problemID>dtd.attribute.not.allowed</problemID>
+    <description>Attribute "bogus" is not allowed on element "p".</description>
+    <systemID>D:\corpus\topics\invalid.dita</systemID>
+    <type>DITA specification</type>
+    <location>
+      <start>
+        <line>6</line>
+        <column>8</column>
+      </start>
+    </location>
+  </incident>
+  <incident>
+    <engine>oXygen</engine>
+    <severity>error</severity>
+    <problemID>dtd.element.not.allowed</problemID>
+    <description>Element "notanelement" is not allowed at this location.</description>
+    <systemID>D:\corpus\topics\invalid.dita</systemID>
+    <type>DITA specification</type>
+    <location>
+      <start>
+        <line>6</line>
+        <column>22</column>
+      </start>
+    </location>
+  </incident>
+  <incident>
+    <engine>oXygen</engine>
+    <severity>warning</severity>
+    <problemID>dmv.profiling.conflict</problemID>
+    <description>Profiling value "admin" is not found in the parent profiling attributes.</description>
+    <systemID>D:\corpus\topics\profiling.dita</systemID>
+    <type>Profile</type>
+    <location>
+      <start>
+        <line>6</line>
+        <column>8</column>
+      </start>
+    </location>
+  </incident>
+</report>

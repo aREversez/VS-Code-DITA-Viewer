@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- Target of dmv.invalid.parse.dita.content, boundary: unparsable like n-broken-pos.dita,
+     but reached by a topicref that also carries @copy-to. The question is whether a
+     reference that publishes the topic under another name moves or drops the finding.
+     Kept apart from n-broken-pos.dita so neither map points at the other's file. -->
+<topic id="n-broken-edge">
+  <title>Unclosed section</title>
+  <body>
+    <section>
+      <title>Never closed</title>
+  </body>
+</topic>

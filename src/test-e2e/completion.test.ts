@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 
 const EXTENSION_ID = 'dita-viewer.dita-viewer';
 
-// dist/test/completion.test.js -> repo root is two levels up.
+// dist/e2e/completion.test.js -> repo root is two levels up.
 const repoRoot = path.resolve(__dirname, '..', '..');
 const fixturesDir = path.join(repoRoot, 'test-dita-file');
 
@@ -12,7 +12,7 @@ const fixturesDir = path.join(repoRoot, 'test-dita-file');
  * Completion, driven through VS Code against the real fixture set.
  *
  * The walk's rules (depth limit, pruned folder names, extension matching, the
- * soft result cap) are unit-tested in src/test/language/referenceableFiles.test.ts
+ * soft result cap) are unit-tested in packages/core/test/language/referenceableFiles.test.ts
  * against a synthetic tree, because they cannot be observed from here -- the
  * fixture has no folder four levels deep and its `out/` is a gitignored build
  * artifact holding no .dita at all, so on CI it does not even exist.

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.prof.group.val.prefs.undef: edge probe; a group for an attribute the preferences do not define. -->
+<topic id="ipge">
+  <title>Group for an undefined attribute</title>
+  <body>
+    <p props="color(red)">The props attribute uses a group the preferences do not define.</p>
+  </body>
+</topic>

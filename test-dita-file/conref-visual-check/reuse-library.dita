@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="reuse-library" xml:lang="en-US">
+    <title>Conref Visual Check · Reuse Source</title>
+    <shortdesc>Holds the conref and conrefend targets that <codeph>visual-check.dita</codeph> pulls in. Each reusable element carries a short note on the exact geometry it should show once reused.</shortdesc>
+    <body>
+        <p id="block-short">A one-line paragraph. What to look for: the 3px left bar sits about 7px clear of the first character; the tint adds 10px on each side; the bottom leaves 6px of air under the baseline; the jump icon is 16x16 in the top-left corner.</p>
+
+        <p id="block-long">A deliberately long reused paragraph, to check that the tint's horizontal padding holds steady as the text wraps. It runs on past the first line so the text breaks onto a second and even a third. Through all of them the 3px bar should run the full height of the padding box with no gaps, while the jump icon shows up once, in the top-left of the first line, and never repeats down the paragraph.</p>
+
+        <p id="block-run-a">conrefend member A. Three block conrefs packed together, to check that the 6px bottom padding on the previous block and the 22px top padding on the next meet cleanly -- you want a gray gap of roughly 28px between blocks (6 + 22), not one collapsed to zero.</p>
+        <p id="block-run-b">conrefend member B, right after A. All three share the same tint and icon layout, so any single one out of line is easy to spot.</p>
+        <p id="block-run-c">conrefend member C, the last in the range.</p>
+
+        <p><ph id="inline-phrase">a reused phrase</ph></p>
+
+        <p id="inline-long-target"><ph id="inline-long-phrase">a reused phrase deliberately long enough to force the inline tint to wrap across lines on its own inside the host paragraph; since the default box-decoration-break is slice, the 3px left padding shows only at the start of the first line, and the 13px icon slot with its 11x11 jump icon only at the end of the last line</ph></p>
+
+        <p id="cjk-block">A medium-length paragraph that wraps again, this one to double-check the left bar's gap from the first character and to confirm that the 10px side padding, the 6px bottom air, and the 16px icon all hold up once the text runs onto a second line.</p>
+
+        <table id="cell-table">
+            <title>Cell reuse table (pulled in by entry conrefs)</title>
+            <tgroup cols="3">
+                <thead>
+                    <row>
+                        <entry>Column A</entry>
+                        <entry>Column B</entry>
+                        <entry>Column C</entry>
+                    </row>
+                </thead>
+                <tbody>
+                    <row>
+                        <entry id="cell-a">Cell A</entry>
+                        <entry id="cell-b">Cell B</entry>
+                        <entry id="cell-c">Cell C</entry>
+                    </row>
+                </tbody>
+            </tgroup>
+        </table>
+    </body>
+</topic>

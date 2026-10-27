@@ -5,7 +5,7 @@
  * this from the real editor events.
  */
 import { normalize } from 'path';
-import { setSourceOverlay, clearSourceOverlay, sourceStamp, dependsOn } from './sourceText';
+import { setSourceOverlay, clearSourceOverlay, sourceStamp, dependsOn } from '@dita-viewer/core';
 
 export interface SyncableDocument {
   fsPath: string;

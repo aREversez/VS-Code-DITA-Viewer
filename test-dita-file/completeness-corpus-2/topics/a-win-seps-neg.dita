@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.win.seps.ref, negative: the same target with forward slashes. -->
+<topic id="a-win-seps-neg">
+  <title>Backslash separators (negative)</title>
+  <body>
+    <p><xref href="../topics/ok.dita">forward-slash path</xref></p>
+  </body>
+</topic>

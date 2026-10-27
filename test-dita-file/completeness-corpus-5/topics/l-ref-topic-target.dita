@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- Target of the @type probes: a plain topic, class - topic/topic, which is what
+     type="topic" names. -->
+<topic id="lrtt">
+  <title>A plain topic</title>
+  <body>
+    <p>Nothing special: - topic/topic.</p>
+  </body>
+</topic>

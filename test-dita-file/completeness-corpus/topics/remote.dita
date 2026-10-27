@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="remote">
+  <title>Remote resources</title>
+  <body>
+    <!-- unreachable remote images: reported only when "include remote resources"
+         is on, which is why the harness (and the committed baseline) stays silent -->
+    <p><image href="https://example.invalid/missing-a.png" scope="external" format="png"/></p>
+    <p><image href="https://example.invalid/missing-b.png" scope="external" format="png"/></p>
+    <!-- control: an existing local image next door, never a remote probe -->
+    <p><image href="img/used.png"/></p>
+  </body>
+</topic>

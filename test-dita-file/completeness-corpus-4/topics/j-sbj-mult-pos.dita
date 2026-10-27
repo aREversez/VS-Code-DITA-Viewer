@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.prof.sbj.attr.mult.val.confl: positive probe; product is single-valued in the scheme. -->
+<topic id="jmp">
+  <title>Two values for a scheme-single-valued attribute</title>
+  <body>
+    <p product="desktop desktop">The scheme allows only desktop, and the attribute repeats it.</p>
+  </body>
+</topic>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.invalid.keyref.syntax.3, positive: whitespace inside a keyref. No key
+     can have this name, so the crawler also reports it as undefined. -->
+<topic id="b-keyref3-pos">
+  <title>Whitespace in a keyref (positive)</title>
+  <body>
+    <p><xref keyref="a b">space in key</xref></p>
+  </body>
+</topic>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- dmv.ref.filtered: target of the edge probe; the range ends at a filtered element.
+     The report also says p[@id='last'] is an unreferenced reusable element, so a filtered
+     range endpoint does not count as a use of its target. -->
+<topic id="kcte">
+  <title>Conref range target</title>
+  <body>
+    <p>A neutral paragraph.</p>
+    <p id="first">The first element of the range.</p>
+    <p id="last" audience="expert">The last element of the range, excluded by the filter.</p>
+  </body>
+</topic>

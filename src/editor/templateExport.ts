@@ -20,8 +20,7 @@
  */
 import { readFileSync } from 'fs';
 import { dirname, relative, resolve, sep } from 'path';
-import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
-import { collectMapEntries } from '../render/mapTypeMap';
+import { parseDitamap, preprocessEntities, collectMapEntries } from '@dita-viewer/core';
 import type { SiteTemplate } from './siteTemplates';
 import { buildTemplateStyleText, templateDataAttr } from './templateStyle';
 import { renderChrome, wrapShell } from './templateChrome';
@@ -111,6 +110,7 @@ export function renderSidebarHtml(
   currentAbsPath: string,
   labels: { nav: string; expand: string; collapse: string },
   collapsedIds: ReadonlySet<string> = new Set(),
+  webhelp = false,
 ): string {
   if (manifest.length === 0) return '';
   const tree = renderSiteNavTreeHtml(
@@ -119,6 +119,7 @@ export function renderSidebarHtml(
     { expand: labels.expand, collapse: labels.collapse },
     collapsedIds,
     true,
+    webhelp,
   );
   return wrapSiteNavTreeHtml(tree, labels.nav);
 }
@@ -280,6 +281,11 @@ export function buildShellPageHtml(input: ShellPageInput): string {
     outlineHtml: outline || undefined,
     headerHtml: chrome.headerHtml,
     footerHtml: chrome.footerHtml,
+    // Route B: same dom branch as the live preview, so an exported webhelp
+    // template page carries the same hooks (webhelpShell.ts).
+    dom: input.template.dom,
+    publicationTitle: input.mapTitle,
+    logoUri: input.template.logo ? input.toRelative(input.template.logo) : undefined,
   });
 
   let bodyAttrs = mergeClass(bodyMatch[1], `mode-site${shell.bodyClass}`);

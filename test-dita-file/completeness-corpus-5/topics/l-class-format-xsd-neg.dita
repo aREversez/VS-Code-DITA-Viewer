@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- dmv.invalid.class.format, a grammar other than a DOCTYPE: this file has no DOCTYPE but names
+     the DITA XML Schema, which defines the @class defaults. Expected: no finding from either
+     tool; the corpus-5 run files nothing here, so Oxygen reads the default from the schema. -->
+<topic id="l-class-format-xsd-neg"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:ditaarch="http://dita.oasis-open.org/architecture/2005/"
+       ditaarch:DITAArchVersion="1.3"
+       xsi:noNamespaceSchemaLocation="urn:oasis:names:tc:dita:xsd:topic.xsd">
+  <title>class format, XML Schema grammar (negative)</title>
+  <body>
+    <p>No element writes a class; the schema supplies it.</p>
+  </body>
+</topic>

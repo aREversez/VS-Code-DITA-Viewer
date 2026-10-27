@@ -497,7 +497,11 @@ export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: stri
     var target = link.getAttribute('data-site-target');
     if (!target) return;
     var prevActive = document.querySelector('.site-nav-link.active');
-    if (prevActive) prevActive.classList.remove('active');
+    if (prevActive) {
+      prevActive.classList.remove('active');
+      var prevItem = prevActive.closest ? prevActive.closest('.site-nav-item') : null;
+      if (prevItem && prevItem.classList.contains('topicref')) prevItem.classList.remove('active');
+    }
     link.classList.add('active');
     // Reveal the row: prev/next and xref jumps can land inside a collapsed
     // branch, leaving the active highlight on an invisible row. DOM-only, not
@@ -505,6 +509,7 @@ export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: stri
     // to unfold those branches, and the next render keeps the path to the
     // active page open by itself (renderSiteNavTreeHtml's revealActive).
     var navItem = link.closest ? link.closest('.site-nav-item') : null;
+    if (navItem && navItem.classList.contains('topicref')) navItem.classList.add('active');
     if (navItem && typeof expandSiteNavAncestorsOf === 'function') expandSiteNavAncestorsOf(navItem);
     if (link.scrollIntoView) link.scrollIntoView({ block: 'nearest' });
     updatePrevNextButtons();
@@ -586,6 +591,28 @@ export function getSiteNavClickHandlerScript(opts: { switchSitePageMsgType: stri
     var homeBtn = document.getElementById('__site-home-btn');
     if (homeBtn) homeBtn.disabled = !!document.querySelector('#dita-content-root .site-home');
   }
+
+  // In-page anchor xrefs inside rendered content (book and site alike): the
+  // content pane (#dita-content-root) is what scrolls, so the same smooth
+  // scroll the single-topic preview applies to a.xref clicks applies here --
+  // otherwise the click falls through to the browser's own fragment
+  // navigation, which fights the content pane's scroll handling. Only the
+  // "#..." form is claimed: book-internal cross-topic xrefs carry
+  // data-dita-book-xref and href="#" (its own listeners own those clicks),
+  // and anything else is left to the webview's built-in link handling.
+  document.addEventListener('click', function(e) {
+    var a = e.target.closest ? e.target.closest('a.xref') : null;
+    if (!a) return;
+    var href = a.getAttribute('href');
+    if (!href || href.charAt(0) !== '#') return;
+    e.preventDefault();
+    var id = href.slice(1);
+    // href="#" alone (book-xref placeholder) has no id to scroll to;
+    // the data-dita-book-xref listener owns that click.
+    if (!id) return;
+    var el = document.getElementById(id);
+    if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
 
   document.addEventListener('click', function(e) {
     if (typeof currentMode !== 'undefined' && currentMode !== 'site') return;
@@ -726,9 +753,60 @@ export function getBookNavClickHandlerScript(): string {
     var el = findBookAnchor(target);
     if (!el) return;
     var prevActive = document.querySelector('.site-nav-link.active');
-    if (prevActive) prevActive.classList.remove('active');
+    if (prevActive) {
+      prevActive.classList.remove('active');
+      var prevItem = prevActive.closest ? prevActive.closest('.site-nav-item') : null;
+      if (prevItem && prevItem.classList.contains('topicref')) prevItem.classList.remove('active');
+    }
     link.classList.add('active');
+    var clickedItem = link.closest ? link.closest('.site-nav-item') : null;
+    if (clickedItem && clickedItem.classList.contains('topicref')) clickedItem.classList.add('active');
     if (el.scrollIntoView) el.scrollIntoView();
+  });
+
+  // Book-internal cross-topic xref: the site-mode listener below only acts
+  // while site mode is showing, so in book mode a data-dita-book-xref click
+  // used to fall through to the link's href="#" placeholder -- the page
+  // jumped to the top and the promised navigation never happened. The
+  // renderer only ever emits the attribute for a target it already confirmed
+  // is part of this book (RenderContext.isInCurrentBook), and book mode
+  // holds every topic's content in the DOM, so a click only needs to scroll:
+  // to the target topic's [data-book-anchor] part first, then to the exact
+  // element inside it when the xref carried an id fragment. The sidebar's
+  // active highlight follows the same treatment a sidebar click gets above,
+  // so the tree keeps pointing at the topic the reader just jumped into.
+  document.addEventListener('click', function(e) {
+    if (typeof currentMode !== 'undefined' && currentMode !== 'book') return;
+    var xrefLink = e.target.closest ? e.target.closest('[data-dita-book-xref]') : null;
+    if (!xrefLink) return;
+    e.preventDefault();
+    var raw = xrefLink.getAttribute('data-dita-book-xref');
+    if (!raw) return;
+    var hashIdx = raw.indexOf('#');
+    var targetPath = hashIdx >= 0 ? raw.slice(0, hashIdx) : raw;
+    var anchorId = hashIdx >= 0 ? raw.slice(hashIdx + 1) : '';
+    var el = findBookAnchor(targetPath);
+    if (!el) return; // the manifest and the render pass disagree; do nothing rather than throw
+    if (el.scrollIntoView) el.scrollIntoView();
+    if (anchorId) {
+      var anchorEl = document.getElementById(anchorId);
+      if (anchorEl && anchorEl.scrollIntoView) anchorEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    // Flip the sidebar's active row, the way a click on that row would.
+    var navLinks = document.querySelectorAll('.site-nav-link');
+    for (var j = 0; j < navLinks.length; j++) {
+      if (navLinks[j].getAttribute('data-site-target') !== targetPath) continue;
+      var prevActive = document.querySelector('.site-nav-link.active');
+      if (prevActive) {
+        prevActive.classList.remove('active');
+        var prevItem = prevActive.closest ? prevActive.closest('.site-nav-item') : null;
+        if (prevItem && prevItem.classList.contains('topicref')) prevItem.classList.remove('active');
+      }
+      navLinks[j].classList.add('active');
+      var navItem = navLinks[j].closest ? navLinks[j].closest('.site-nav-item') : null;
+      if (navItem && navItem.classList.contains('topicref')) navItem.classList.add('active');
+      break;
+    }
   });
 `;
 }
@@ -869,9 +947,14 @@ export function getBookScrollSyncScript(): string {
       if (!navLink) return;
       currentActiveId = id;
       var prevActive = document.querySelector('.site-nav-link.active');
-      if (prevActive) prevActive.classList.remove('active');
+      if (prevActive) {
+        prevActive.classList.remove('active');
+        var prevItem = prevActive.closest ? prevActive.closest('.site-nav-item') : null;
+        if (prevItem && prevItem.classList.contains('topicref')) prevItem.classList.remove('active');
+      }
       navLink.classList.add('active');
       var navItem = navLink.closest ? navLink.closest('.site-nav-item') : null;
+      if (navItem && navItem.classList.contains('topicref')) navItem.classList.add('active');
       // DOM-only: see this function's doc comment (getBookScrollSyncScript).
       if (navItem) expandSiteNavAncestorsOf(navItem);
     }
@@ -1264,6 +1347,14 @@ export function getSiteNavCollapseStateHelperScript(opts: { reportCollapseMsgTyp
     else item.classList.remove('collapsed');
     if (autoExpanded && !collapsed) item.classList.add('nav-auto-expanded');
     else item.classList.remove('nav-auto-expanded');
+    // Webhelp mode: mirror the fold state onto the tree class a template's css
+    // reads. topicref is only ever present on a webhelp-rendered row, so in
+    // own mode this is a no-op -- our collapse still rides on .collapsed and
+    // aria-expanded. (webhelp-compat-plan.md §2.2: one node, one JS.)
+    if (item.classList.contains('topicref')) {
+      if (collapsed) item.classList.remove('expanded');
+      else item.classList.add('expanded');
+    }
     item.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
     var toggle = item.querySelector(':scope > .site-nav-toggle');
     if (!toggle) return;
