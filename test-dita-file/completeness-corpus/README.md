@@ -1,12 +1,23 @@
 # Completeness-check differential corpus
 
-This folder is the fixed input for Phase 0 of the "Validate and Check for
-Completeness" parity effort: **run both tools over the same map and diff their
-findings**, so a divergence is a test failure rather than a user report.
+This folder is the first of five differential corpora for the "Validate and Check for
+Completeness" parity effort: **run both tools over the same map and diff their findings**, so
+a divergence is a test failure rather than a user report.
 
-The parity *specification* (what Oxygen can report) is
-**[OXYGEN-PROBLEMS.md](OXYGEN-PROBLEMS.md)** — read from the installed editor's
-own DITA-validation resources, no license required.
+| Folder | Holds | Plan |
+| --- | --- | --- |
+| `completeness-corpus/` (this one) | the original probes: references, keys, duplicates, tables, profiling | — |
+| `completeness-corpus-2/` | reference spelling, `@format`/`@scope`, navigation titles | `BATCH-1.md` |
+| `completeness-corpus-3/` | conref shape, id references, keys and links, element ids | `BATCH-2.md` |
+| `completeness-corpus-4/` | profiling values and preferences, subject schemes, filters | `BATCH-3.md` |
+| `completeness-corpus-5/` | class-dependent rules, DITA validity, structure | `BATCH-4.md` |
+
+Where to read what: **[RULES.md](RULES.md)** is the ledger (every rule and what it rests on),
+**[OXYGEN-PROBLEMS.md](OXYGEN-PROBLEMS.md)** the parity specification (every Oxygen problem id
+and the extension's status for it, with the wrap-up notes), **[CLEAN-ROOM.md](CLEAN-ROOM.md)**
+the rules for where a rule may come from, and **[OXYGEN.md](OXYGEN.md)** how to run Oxygen and
+make a report safe to commit. The problem catalog behind the specification is a data file of
+the installed editor; no license is required to read it.
 
 - `corpus.ditamap` — the root map. Every child is a deliberate probe.
 - `topics/` — the referenced topics.
