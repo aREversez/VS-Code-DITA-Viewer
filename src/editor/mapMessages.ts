@@ -80,3 +80,12 @@ export const MSG_SWITCH_MODE = 'applyModeStage';
 // parity check (scripts/check-map-message-parity.cjs) resolves MSG_ constants
 // from here only.
 export const MSG_OPEN_CONREF_TARGET = 'openConrefTarget';
+// The Filter panel's DITAVAL row, shared by both previews like
+// MSG_OPEN_CONREF_TARGET above. The two requests go webview -> host (the host
+// owns the file dialog and the disk read); the host answers with one
+// MSG_SET_DITAVAL carrying the parsed rules, or null for "cleared". A typo on
+// either side is silent -- the button just does nothing -- so one constant is
+// interpolated into both.
+export const MSG_CHOOSE_DITAVAL = 'chooseDitaval';
+export const MSG_CLEAR_DITAVAL = 'clearDitaval';
+export const MSG_SET_DITAVAL = 'setDitaval';

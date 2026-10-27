@@ -82,6 +82,12 @@ export function sharedWebviewStrings() {
     filterTitle: vscode.l10n.t('Show/hide content by profiling attribute value (actually hides matching content, unlike the Flags toggle which only shows/hides the highlight)'),
     filterClose: vscode.l10n.t('Close'),
     filterEmpty: vscode.l10n.t('No profiling attributes in this document'),
+    // The DITAVAL row at the top of the Filter panel.
+    ditavalNone: vscode.l10n.t('None'),
+    ditavalChoose: vscode.l10n.t('Choose…'),
+    ditavalChange: vscode.l10n.t('Change…'),
+    ditavalClear: vscode.l10n.t('Clear'),
+    ditavalByFile: vscode.l10n.t('Left out by the DITAVAL file'),
     // ── image lightbox + copy menu, passed to getImageLightboxScript as
     // values ──
     // Both previews keep styles.css's cursor:zoom-in promise on every

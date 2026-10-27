@@ -10,7 +10,7 @@ import * as vscode from 'vscode';
 import { getContentSwapRefreshScript } from './contentSwapScript';
 import { getHighlightRunScript } from './highlightRunScript';
 import { getConrefJumpScript } from './conrefJumpScript';
-import { MSG_OPEN_CONREF_TARGET } from '../mapMessages';
+import { MSG_CHOOSE_DITAVAL, MSG_CLEAR_DITAVAL, MSG_OPEN_CONREF_TARGET, MSG_SET_DITAVAL } from '../mapMessages';
 import { getProfilingToggleScript } from './profilingToggleScript';
 import { getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getImageMapSupportScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getRefreshButtonScript } from '../ditaRenderUtils';
 import { sharedWebviewStrings } from '../webviewL10n';
@@ -604,6 +604,14 @@ export function getWebviewScript(): string {
     buttonTitle: L.filterTitle,
     closeLabel: L.filterClose,
     emptyLabel: L.filterEmpty,
+    ditavalNone: L.ditavalNone,
+    ditavalChoose: L.ditavalChoose,
+    ditavalChange: L.ditavalChange,
+    ditavalClear: L.ditavalClear,
+    ditavalByFile: L.ditavalByFile,
+    chooseMsgType: MSG_CHOOSE_DITAVAL,
+    clearMsgType: MSG_CLEAR_DITAVAL,
+    setMsgType: MSG_SET_DITAVAL,
   })}
 
   toolbar.appendChild(wSel);

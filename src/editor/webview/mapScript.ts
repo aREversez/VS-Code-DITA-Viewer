@@ -15,7 +15,7 @@ import { getBookSearchScript } from '../bookSearchIndex';
 import { sharedWebviewStrings } from '../webviewL10n';
 import { getConrefJumpScript } from './conrefJumpScript';
 import { getContentSwapRefreshScript } from './contentSwapScript';
-import { MSG_BOOK_SEARCH, MSG_BOOK_SEARCH_RESULTS, MSG_NAV_CONTEXT, MSG_OPEN_CONREF_TARGET, MSG_OPEN_TOPIC_SOURCE, MSG_PATCH_CONTENT, MSG_REQUEST_FULL_RENDER, MSG_SET_FONT_PREFS, MSG_SET_NAV_COLLAPSED, MSG_SET_TAG_TOOLTIPS, MSG_SET_TEMPLATE, MSG_SET_WIDTH_SELECTION, MSG_SWITCH_MODE, MSG_SWITCH_SITE_PAGE, MSG_UPDATE_CONTENT, MSG_UPDATE_SIDEBAR } from '../mapMessages';
+import { MSG_BOOK_SEARCH, MSG_BOOK_SEARCH_RESULTS, MSG_CHOOSE_DITAVAL, MSG_CLEAR_DITAVAL, MSG_NAV_CONTEXT, MSG_OPEN_CONREF_TARGET, MSG_OPEN_TOPIC_SOURCE, MSG_PATCH_CONTENT, MSG_REQUEST_FULL_RENDER, MSG_SET_DITAVAL, MSG_SET_FONT_PREFS, MSG_SET_NAV_COLLAPSED, MSG_SET_TAG_TOOLTIPS, MSG_SET_TEMPLATE, MSG_SET_WIDTH_SELECTION, MSG_SWITCH_MODE, MSG_SWITCH_SITE_PAGE, MSG_UPDATE_CONTENT, MSG_UPDATE_SIDEBAR } from '../mapMessages';
 
 export function getMapWebviewScript(
   templateOptions: ReadonlyArray<{ value: string; label: string }>,
@@ -317,6 +317,14 @@ export function getMapWebviewScript(
     buttonTitle: L.filterTitle,
     closeLabel: L.filterClose,
     emptyLabel: L.filterEmpty,
+    ditavalNone: L.ditavalNone,
+    ditavalChoose: L.ditavalChoose,
+    ditavalChange: L.ditavalChange,
+    ditavalClear: L.ditavalClear,
+    ditavalByFile: L.ditavalByFile,
+    chooseMsgType: MSG_CHOOSE_DITAVAL,
+    clearMsgType: MSG_CLEAR_DITAVAL,
+    setMsgType: MSG_SET_DITAVAL,
   })}
 
   ${getRefreshButtonScript({ title: L.reloadContent })}

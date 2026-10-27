@@ -13,7 +13,7 @@ import { mapTitleFromXml, renderChrome, wrapShell } from './templateChrome';
 import { TEMPLATE_SELECTION_KEY, parseTemplateSelection, withTemplate, pickTemplate } from './templateSelection';
 import { readFileSync } from 'fs';
 import { getMapWebviewScript } from './webview/mapScript';
-import { MSG_BOOK_SEARCH, MSG_BOOK_SEARCH_RESULTS, MSG_NAV_CONTEXT, MSG_OPEN_TOPIC_SOURCE, MSG_REQUEST_FULL_RENDER, MSG_SET_FONT_PREFS, MSG_SET_NAV_COLLAPSED, MSG_SET_TAG_TOOLTIPS, MSG_SET_TEMPLATE, MSG_SET_WIDTH_SELECTION, MSG_SWITCH_SITE_PAGE } from './mapMessages';
+import { MSG_BOOK_SEARCH, MSG_BOOK_SEARCH_RESULTS, MSG_CHOOSE_DITAVAL, MSG_CLEAR_DITAVAL, MSG_NAV_CONTEXT, MSG_OPEN_TOPIC_SOURCE, MSG_REQUEST_FULL_RENDER, MSG_SET_DITAVAL, MSG_SET_FONT_PREFS, MSG_SET_NAV_COLLAPSED, MSG_SET_TAG_TOOLTIPS, MSG_SET_TEMPLATE, MSG_SET_WIDTH_SELECTION, MSG_SWITCH_SITE_PAGE } from './mapMessages';
 import { MSG_OPEN_CONREF_TARGET, parseConrefJumpMessage } from './conrefJump';
 import { openConrefTarget } from './conrefJumpCommand';
 import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, decodeHrefPart, openHrefTarget, buildBookNavManifest, siteNavigableEntries, renderSiteNavTreeHtml, wrapSiteNavTreeHtml, getInitialSidebarBodyClass, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry, SITE_HOME_TARGET, buildSiteHomeTiles, renderSiteHomeHtml } from './ditaRenderUtils';
@@ -29,6 +29,7 @@ import { basename, dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
 import { readForDocument, writeForDocument } from './perDocumentState';
 import { MAP_VIEW_STATE_KEY, parseMapViewState } from './mapViewState';
+import { ditavalForDocument, handleDitavalRequest, isDitavalRequest } from './profilingDitaval';
 
 // Test-only hook: see the identical comment in DitaViewerProvider.ts.
 const lastRenderedHtmlByUri = new Map<string, string>();
@@ -244,6 +245,10 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       case MSG_BOOK_SEARCH:
         this.handleBookSearch(message, document, webviewPanel, panel);
         return;
+      case MSG_CHOOSE_DITAVAL:
+      case MSG_CLEAR_DITAVAL:
+        void this.handleDitaval(message.type, document, webviewPanel);
+        return;
       case MSG_REQUEST_FULL_RENDER:
         // The webview declined a patch: its DOM does not match the baseline
         // the indices were computed against. Straight to a full render rather
@@ -255,6 +260,22 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         return;
       default:
         this.handlePreferenceMessage(message, document);
+    }
+  }
+
+  /**
+   * The Filter panel's DITAVAL row: ask for (or drop) the file, remember it for
+   * this map, and tell the webview what to apply. A post rather than a render,
+   * so the panel keeps its place in Outline, Book and Docsite view alike.
+   */
+  private async handleDitaval(type: string, document: vscode.TextDocument, webviewPanel: vscode.WebviewPanel): Promise<void> {
+    if (!isDitavalRequest(type)) return;
+    const outcome = await handleDitavalRequest(type, this.context.globalState, document);
+    if (!outcome) return;
+    try {
+      void webviewPanel.webview.postMessage({ type: MSG_SET_DITAVAL, ditaval: outcome.ditaval });
+    } catch {
+      // The panel was closed while the file dialog was open.
     }
   }
 
@@ -858,6 +879,9 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     const widthSelectionJson = escapeJson(JSON.stringify(widthSelection));
     const tagTooltips = this.context.globalState.get(TAG_TOOLTIPS_KEY, DEFAULT_TAG_TOOLTIPS);
     const tagTooltipsJson = escapeJson(JSON.stringify(tagTooltips));
+    // The .ditaval this map filters by (per map, read afresh on every full
+    // render so the reload button picks up an edit to the file itself).
+    const ditavalJson = escapeJson(JSON.stringify(ditavalForDocument(this.context.globalState, document.uri)));
 
     // The sidebar shell below (nav + resizer + the content pane's own
     // .site-main class) is keyed on whether a sidebar was actually
@@ -891,7 +915,7 @@ ${templateStyle}
 </head>
 <body class="${bodyClass}"${templateBody.attrs}>
 ${shell.html}
-<script nonce="${nonce}">window.__fontPrefs=${fontPrefsJson};window.__widthSelection=${widthSelectionJson};window.__tagTooltips=${tagTooltipsJson};window.__mapTitle=${mapTitleJson};</script>
+<script nonce="${nonce}">window.__fontPrefs=${fontPrefsJson};window.__widthSelection=${widthSelectionJson};window.__tagTooltips=${tagTooltipsJson};window.__ditaval=${ditavalJson};window.__mapTitle=${mapTitleJson};</script>
 <script nonce="${nonce}">${script}</script>
 </body>
 </html>`,

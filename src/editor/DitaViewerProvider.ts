@@ -20,6 +20,8 @@ import { findDitamapFiles, buildKeyMap, getKeySourceMaps, clearKeyMapCache } fro
 import { onKeyContextChanged } from './keyContext';
 import { readForDocument, writeForDocument } from './perDocumentState';
 import { affectsPanel } from './sourceOverlaySync';
+import { MSG_CHOOSE_DITAVAL, MSG_CLEAR_DITAVAL, MSG_SET_DITAVAL } from './mapMessages';
+import { ditavalForDocument, handleDitavalRequest } from './profilingDitaval';
 
 // Test-only hook: @vscode/test-electron integration tests can't read a
 // webview's rendered HTML directly (VS Code doesn't expose the WebviewPanel
@@ -211,6 +213,13 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
         if (typeof message.value === 'string') {
           writeForDocument(this.context.globalState, WIDTH_SELECTION_KEY, document.uri, message.value);
         }
+      } else if (message.type === MSG_CHOOSE_DITAVAL || message.type === MSG_CLEAR_DITAVAL) {
+        // The Filter panel's DITAVAL row: the dialog and the disk read are
+        // here, the ticking and hiding stay in the webview. The reply is a
+        // post, not a re-render, so the panel keeps its scroll and tick state.
+        void handleDitavalRequest(message.type, this.context.globalState, document).then((outcome) => {
+          if (outcome && !disposed) webviewPanel.webview.postMessage({ type: MSG_SET_DITAVAL, ditaval: outcome.ditaval });
+        });
       }
     });
 
@@ -554,6 +563,9 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       const fontPrefsJson = escapeJson(JSON.stringify(fontPrefs));
       const tagTooltips = this.context.globalState.get(TAG_TOOLTIPS_KEY, DEFAULT_TAG_TOOLTIPS);
       const tagTooltipsJson = escapeJson(JSON.stringify(tagTooltips));
+      // The .ditaval this document filters by, read afresh on every full
+      // render so the reload button picks up an edit to the file itself.
+      const ditavalJson = escapeJson(JSON.stringify(ditavalForDocument(this.context.globalState, document.uri)));
       const initialScrollLineJs = typeof initialScrollLine === 'number' && Number.isFinite(initialScrollLine)
         ? String(Math.max(0, Math.floor(initialScrollLine)))
         : 'null';
@@ -570,7 +582,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
 <link rel="stylesheet" href="${stylesUri}">
 ${defaultContent ? `<style>\n${defaultContent}\n</style>` : ''}
 <title>${escapeHtml(document.fileName)}</title>
-<script nonce="${nonce}">window.__cssFiles=${cssFilesJson};window.__defaultCss=${defaultNameJson};window.__widthSelection=${widthSelectionJson};window.__fontPrefs=${fontPrefsJson};window.__tagTooltips=${tagTooltipsJson};window.__initialScrollLine=${initialScrollLineJs};</script>
+<script nonce="${nonce}">window.__cssFiles=${cssFilesJson};window.__defaultCss=${defaultNameJson};window.__widthSelection=${widthSelectionJson};window.__fontPrefs=${fontPrefsJson};window.__tagTooltips=${tagTooltipsJson};window.__ditaval=${ditavalJson};window.__initialScrollLine=${initialScrollLineJs};</script>
 </head>
 <body>
 <div id="dita-content-root">${content}</div>

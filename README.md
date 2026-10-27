@@ -97,7 +97,7 @@ Duplicate topics (same file referenced multiple times) are shown with a skip mes
 Content carrying DITA's `select-atts` group (`props`, `platform`, `product`, `audience`, `otherprops`, `base`, `importance`, `rev`, `status`) is highlighted with a small label naming the attribute/value that matched, mirroring Oxygen's own conditional-processing display. Two toolbar buttons control this, available in both topic and map/book preview:
 
 - **Flags** (on by default) — toggles the highlighting on/off without a re-render.
-- **Filter** — opens a panel listing every attribute/value combination found in the document as checkboxes; unchecking one actually hides the matching content, for previewing what a given build/audience would see.
+- **Filter** — opens a panel listing every attribute/value combination found in the document as checkboxes; unchecking one actually hides the matching content, for previewing what a given build/audience would see. The panel's **DITAVAL** row loads a `.ditaval` file (**Choose…** / **Change…** / **Clear**): the values it excludes are unticked and greyed out and their content is hidden, exactly as a DITA-OT build with that file would leave it out; hand-picked boxes stay as they were underneath, so clearing the file restores them. The chosen file is remembered per document.
 
 In map/book view, a `topicref`'s own profiling attributes (set directly in the ditamap source) cascade down to every descendant `topicref` that doesn't set its own value for the same attribute — a child's own value replaces, rather than merges with, an inherited one. This is a separate scope from a topic's own inline profiling: opening a `.dita` file directly only ever reads that file's own markup, regardless of what any ditamap referencing it says.
 

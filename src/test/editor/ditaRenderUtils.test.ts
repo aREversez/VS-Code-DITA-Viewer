@@ -5,6 +5,18 @@ import { join, resolve } from 'path';
 import { expandDitamapRefs, FileReader, makeConrefResolver, makeConrefRangeResolver, makeFileTitleResolver, makeFileTopicTypeResolver, findTextMatches, getSearchOverlayScript, getProfilingFilterScript, getRefreshButtonScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getSiteNavClickHandlerScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getOutlineSyncScript, getInitialSidebarBodyClass, getSiteNavToggleScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteSidebarToggleScript, getSiteOpenSourceScript, getSiteHomeButtonScript, getTemplateSelectScript, getToolbarPlacementScript, PREV_TOPIC_ICON_SVG, NEXT_TOPIC_ICON_SVG, getModeToggleScript, clampSidebarWidth, getSiteSidebarResizerScript, getImageLightboxScript, decodeHrefPart, detectNoteLabels, DEFAULT_NOTE_LABELS, ZH_NOTE_LABELS, readImageDimensions, clearImageDimensionsCache, IMAGE_DIMENSIONS_CACHE_MAX, renderTopicCached, clearTopicRenderCache, topicRenderCacheSize, topicRenderCacheBytesHeld, setTopicRenderCacheBudgetForTesting } from '../../editor/ditaRenderUtils';
 import { parseDita, preprocessEntities, renderDocument, type DitaNode } from '@dita-viewer/core';
 
+// The DITAVAL row's strings and message types, which getProfilingFilterScript now requires.
+const ditavalOpts = {
+  ditavalNone: 'None',
+  ditavalChoose: 'Choose',
+  ditavalChange: 'Change',
+  ditavalClear: 'Clear',
+  ditavalByFile: 'By file',
+  chooseMsgType: 'chooseDitaval',
+  clearMsgType: 'clearDitaval',
+  setMsgType: 'setDitaval',
+};
+
 function makeEl(baseType: string, attrs: Record<string, string>, children: DitaNode[] = []): DitaNode {
   return {
     type: 'element',
@@ -1808,7 +1820,7 @@ describe('getSearchOverlayScript', () => {
   });
 
   it('re-runs the page search when a profiling-filter checkbox changes what is displayed', () => {
-    const script = getProfilingFilterScript({ buttonLabel: 'Filter', buttonTitle: 'Filter', closeLabel: 'Close', emptyLabel: 'None' });
+    const script = getProfilingFilterScript({ buttonLabel: 'Filter', buttonTitle: 'Filter', closeLabel: 'Close', emptyLabel: 'None', ...ditavalOpts });
     assert.ok(
       /addEventListener\('change'[\s\S]{0,300}pfApplyFilter\(\);[\s\S]{0,250}refreshSearchAfterDomChange/.test(script),
       'the checkbox change handler must refresh the page search after pfApplyFilter: hidden/shown content changes the match set',
@@ -2248,7 +2260,7 @@ describe('toolbar scaffold/font-prefs/font-width-tag-tooltips scripts (a3\' extr
       getSiteSidebarToggleScript({ toggleTitle: 'T' }),
       getModeToggleScript({ switchModeTitle: 'T', modeOutline: 'O', modeBook: 'B', modeSite: 'S', switchModeMsgType: 'switchMode', switchingLabel: 'Switching…' }),
       getSiteOpenSourceScript({ openSourceMsgType: 'm', navContextMsgType: 'nav', menuLabel: 'M', openMapLabel: 'OM', oxygenLabel: 'OX', revealLabel: 'RV', findUnreferencedLabel: 'FU', exportLabel: 'EX', copyTitleLabel: 'CT', copyHrefLabel: 'CH', expandAllLabel: 'EA', collapseAllLabel: 'CA', buttonLabel: 'B', buttonTitle: 'T' }),
-      getProfilingFilterScript({ buttonLabel: 'F', buttonTitle: 'T', closeLabel: 'C', emptyLabel: 'E' }),
+      getProfilingFilterScript({ buttonLabel: 'F', buttonTitle: 'T', closeLabel: 'C', emptyLabel: 'E', ...ditavalOpts }),
       getSiteNavExpandCollapseAllButtonsScript({ expandAllTitle: 'E', collapseAllTitle: 'C' }),
       getSiteHistoryButtonsScript({ backLabel: 'B', backTitle: 'B', forwardLabel: 'F', forwardTitle: 'F' }),
       getSitePrevNextButtonsScript({ prevLabel: 'P', prevTitle: 'P', nextLabel: 'N', nextTitle: 'N' }),
