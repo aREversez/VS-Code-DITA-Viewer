@@ -52,7 +52,7 @@ sanitizer writes no such element for them and `oxygen-diff` prints them as `(no 
 
 | Problem ID | Oxygen reports | Extension status |
 | --- | --- | --- |
-| `dmv.file.not.found` | a referenced file does not exist | ok (`missing-reference`) — 18 incidents across the five reports, including (corpus 3, R019) a `@conref` at an absent file and, for the `@conkeyref` that reaches such a key, both the broken keydef and the referring element |
+| `dmv.file.not.found` | a referenced file does not exist | ok (`missing-reference`) — 18 incidents across the five reports, including (corpus 3, R019) a `@conref` at an absent file and, for the `@conkeyref` that reaches such a key, both the broken keydef and the referring element, which the extension reports the same way |
 | `dmv.reference.not.exist` | a reference cannot be resolved | ok (`missing-reference`) — mapped only: no report carries this id, every dangling reference arriving as `dmv.file.not.found`. The corpus-3 probes added for R019 put a `@conref` at an absent file and a `@conkeyref` through a key whose file is absent, and their run also filed both as `dmv.file.not.found`, so the catalog id stays unobserved (a `@conref` whose topic id or element id does not resolve is `dmv.id.miss.conref` or `dmv.invalid.ref.id.path`) |
 | `dmv.invalid.DITA.reference` | reference is invalid DITA | n/a — no incident in five runs: the batch-4 probe (`maps/m-dita-ref-pos.ditamap`, `format="dita"` on a well-formed non-DITA XML file) drew `dmv.ref.res.as.dita`, and the non-XML boundary drew `dmv.invalid.parse.dita.content`; the extension answers both probes as `format-mismatch` / `dita-parse`, so an equivalent exists but no incident of this id |
 | `dmv.invalid.DITA.uri.target` | URI does not resolve to a DITA target | n/a — same run: the three `maps/m-uri-target-*.ditamap` probes produced `dmv.topicref.remote.no.external.scope` and, on the no-`@scope` edge, `dmv.invalid.parse.dita.content`, never this id; the extension answers `external-reference` there |
@@ -342,7 +342,7 @@ first run. The report says `Keys are gathered from: corpus.ditamap`, and the con
 0 extension-only, 3 Oxygen-only** there. The map was then rerun for the two R019 probes of a
 conref and a conkeyref to a file that does not exist; that run, the one committed as
 `../completeness-corpus-3/oxygen-report.xml`, produced **34 incidents** and
-**29 extension findings, 34 incidents, 29 matched, 0 extension-only, 5 Oxygen-only**, which
+**30 extension findings, 34 incidents, 30 matched, 0 extension-only, 4 Oxygen-only**, which
 `oxygen-parity.expected.json` locks. The 18 batch-2 ids:
 
 | Group | Oxygen ids seen | Extension |
@@ -369,15 +369,21 @@ parity is by category:
   ordinary dangling reference: the rerun's three new incidents, so R019's catalog id
   `dmv.reference.not.exist` is still unobserved.
 
-Five rows stay Oxygen-only:
+Four rows stay Oxygen-only:
 
 | Oxygen-only row | Report evidence | Handling |
 | --- | --- | --- |
 | `topics/e-conrefend-no-conref-edge.dita` `oxygen:unknown` | "Empty reference value." — no `problemID` in the raw report | **Understood.** The same element also carries `dmv.conrefend.confl.conref`, which matches as `invalid-conref-form`; the id-less row names no category to map. The extension reports the element once, not twice. |
 | `topics/e-id-miss-conref-edge.dita` `dmv.invalid.class.generalization` | the `<p>` conref names a whole topic (`lib.dita#lib`) | **Batch 4.** Oxygen calls that an element-class mismatch; the extension reports only a conref with no `#` at all (`e-id-miss-conref-pos.dita`). Whole-topic conref stays the documented boundary of `dmv.id.miss.conref`. |
 | `topics/f-bad-id-ref-empty-topic.dita` `oxygen:unknown` | "Invalid anchor `lib.dita#/p1`." — no `problemID` | **Understood.** The empty topic segment is the one `dmv.bad.id.ref` shape the catalog does not id; the trailing-slash probe matches on `f-bad-id-ref-pos.dita`. A finding for the empty segment would be extension-only. |
-| `topics/e-conref-missing-file-edge.dita` `missing-reference` | `dmv.file.not.found` at line 9, on the conkeyref itself, beside the matching one on `maps/e-conref-missing-key.ditamap:7` | **Open: one finding or two.** The extension keeps a broken href at the element that writes it, so a key-based reference to an absent file is reported on the keydef only. Reporting it at the conkeyref site as well is the change that would close the row; it belongs to the reference passes, not to a new rule. |
 | `maps/e-conref-missing-key.ditamap` `unreferenced-key` | `dmv.not.used.key.defs` at line 7 for `k-conref-missing-file`, whose `@href` names an absent file | **Documented difference.** The conkeyref `k-conref-missing-file/x` names the key, so the extension counts it as used; Oxygen treats a definition with no retrievable target as nothing usable and reports it as unreferenced. The extension keeps its reading. |
+
+One difference closed after the rerun: a `@conkeyref` whose key names an absent file is now
+reported at both ends. A content reference never becomes a `Reference` in the crawl, so the file
+its key resolves to is recorded on its own (`conkeyrefTargets`) and probed like any other
+reference; the finding lands on the keydef, where the href is written, and on the element that
+reaches it, which is where the report puts its second incident. That is why the count above is
+30 extension findings with four rows Oxygen-only.
 
 Two ids are *n/a* after this run: `dmv.circular.keyref` (no incident on the loop,
 self-redirect or linear-chain probes) and `dmv.empty.link.peer.target` (no incident on the
@@ -502,17 +508,19 @@ What the run settled:
 | --- | --- | --- | --- | --- |
 | `completeness-corpus` | batches 1 and the R020-R025 follow-ups | 36 | 3 `MSG_*` | 22 / 2 / 1 |
 | `completeness-corpus-2` | batch 2, reference and key forms | 108 | 3 no-schema | 70 / 6 / 17 |
-| `completeness-corpus-3` | batch 2, conref / id / link forms | 34 | – | 29 / 0 / 5 |
+| `completeness-corpus-3` | batch 2, conref / id / link forms | 34 | – | 30 / 0 / 4 |
 | `completeness-corpus-4` | batch 3, profiling and filters | 19 | – | 13 / 1 / 2 |
 | `completeness-corpus-5` | batch 4, class / DITA validity / structure | 34 | 6 (4 `MSG_*`, 2 no-schema) | 21 / 6 / 3 |
-| **Total** | | **231** | **12** | **155 / 15 / 28** |
+| **Total** | | **231** | **12** | **156 / 15 / 27** |
 
-The 15 extension-only and 28 Oxygen-only signatures are each accounted for in the batch sections
+The 15 extension-only and 27 Oxygen-only signatures are each accounted for in the batch sections
 above or in the corpus README that owns them; the largest group is corpus 2's 17, whose three
 rows per family are listed in `../completeness-corpus-2/README.md`. The table is current as of
 the last run: corpus 5 has been validated twice since its first report, once for the R064 probe
 and once for the two R065 probes, and no number in it moved; corpus 3 was rerun for the two
-R019 probes of batch 2, which moved it from 30 incidents and 27 / 0 / 3 to the row above. With
+R019 probes of batch 2, which moved it from 30 incidents and 27 / 0 / 3 to 30 / 0 / 4, and once
+more when the conkeyref site joined the reference passes, which left the report alone and moved
+one row from Oxygen-only into the matched set. With
 this run the 11 ids of batch 4 are closed: 84 ids, **no gap left**. Eighteen of the 75 *ok*
 rows are *mapped only* — no incident of that exact id in any of the five reports — and each of
 them says in its own row which id the reports carry instead, so the number is worth re-checking

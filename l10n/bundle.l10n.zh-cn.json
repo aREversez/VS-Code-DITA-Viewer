@@ -215,6 +215,7 @@
   "Referenced topic not found: {0}": "找不到引用的主题：{0}",
   "Referenced map not found: {0}": "找不到引用的 Map：{0}",
   "Referenced conref target not found: {0}": "找不到 conref 引用的目标：{0}",
+  "Referenced conkeyref target not found: {0}": "找不到 conkeyref 引用的目标：{0}",
   "Referenced resource not found: {0}": "找不到引用的资源：{0}",
   "Remote resource could not be reached: {0}": "无法访问远程资源：{0}",
   "Reference points outside the map folder: {0}": "引用指向 Map 文件夹之外：{0}",

@@ -4,6 +4,7 @@
     "maps/e-conref-missing-key.ditamap  missing-reference",
     "maps/f-topicref-to-element-pos.ditamap  topicref-to-element",
     "topics/e-conkeyref-peer-pos.dita  undefined-key",
+    "topics/e-conref-missing-file-edge.dita  missing-reference",
     "topics/e-conref-missing-file-pos.dita  missing-reference",
     "topics/e-conref-order-edge.dita  invalid-conref-form",
     "topics/e-conref-order-pos.dita  invalid-conref-form",
@@ -33,7 +34,6 @@
   "extensionOnly": [],
   "oxygenOnly": [
     "maps/e-conref-missing-key.ditamap  unreferenced-key",
-    "topics/e-conref-missing-file-edge.dita  missing-reference",
     "topics/e-conrefend-no-conref-edge.dita  oxygen:unknown",
     "topics/e-id-miss-conref-edge.dita  conref-class",
     "topics/f-bad-id-ref-empty-topic.dita  oxygen:unknown"

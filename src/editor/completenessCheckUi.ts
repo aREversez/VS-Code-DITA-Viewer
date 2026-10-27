@@ -52,6 +52,7 @@ export function localizeMsg(m: Msg): string {
     case 'ref.missingTopic': return vscode.l10n.t('Referenced topic not found: {0}', ...a);
     case 'ref.missingMap': return vscode.l10n.t('Referenced map not found: {0}', ...a);
     case 'ref.missingConref': return vscode.l10n.t('Referenced conref target not found: {0}', ...a);
+    case 'ref.missingConkeyref': return vscode.l10n.t('Referenced conkeyref target not found: {0}', ...a);
     case 'ref.missingResource': return vscode.l10n.t('Referenced resource not found: {0}', ...a);
     case 'ref.remoteUnreachable': return vscode.l10n.t('Remote resource could not be reached: {0}', ...a);
     case 'ref.outsideFolder': return vscode.l10n.t('Reference points outside the map folder: {0}', ...a);

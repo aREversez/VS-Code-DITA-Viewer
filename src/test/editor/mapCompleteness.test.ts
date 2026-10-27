@@ -223,6 +223,34 @@ describe('completeness: key references', () => {
     );
     assert.ok(issues.some((i) => i.category === 'missing-reference' && i.message.includes('gone.dita')));
   });
+
+  it('reports a missing file behind a conkeyref on the element that reaches it', async () => {
+    // Oxygen files the unresolvable target twice: once on the keydef that writes the
+    // href and once on the element that reaches it through the key (corpus 3, R019).
+    const issues = await check(
+      {
+        'root.ditamap': '<map><topicref href="a.dita"/><keydef keys="k" href="gone.dita"/></map>',
+        'a.dita': topic('a', '<p conkeyref="k/x"/>'),
+      },
+      {},
+    );
+    const miss = issues.filter((i) => i.category === 'missing-reference');
+    assert.strictEqual(miss.length, 2, miss.map((i) => `${i.file}:${i.line}`).join('\n'));
+    assert.ok(miss.some((i) => i.file.endsWith('root.ditamap') && i.message.includes('gone.dita')));
+    assert.ok(miss.some((i) => i.file.endsWith('a.dita') && i.message.includes('gone.dita')), JSON.stringify(miss.map((i) => i.message)));
+  });
+
+  it('does not report a conkeyref whose key target exists', async () => {
+    const issues = await check(
+      {
+        'root.ditamap': '<map><topicref href="a.dita"/><keydef keys="k" href="lib.dita"/></map>',
+        'a.dita': topic('a', '<p conkeyref="k/x"/>'),
+        'lib.dita': topic('lib', '<p id="x">x</p>'),
+      },
+      {},
+    );
+    assert.deepStrictEqual(issues.filter((i) => i.category === 'missing-reference'), []);
+  });
 });
 
 describe('completeness: multiple references', () => {

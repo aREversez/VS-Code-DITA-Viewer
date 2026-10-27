@@ -228,6 +228,20 @@ export async function runChecks(
     });
   }
 
+  // 1c. A conkeyref whose key resolves to a file that does not exist. The keydef's
+  // own href is reported in step 1; Oxygen files the reference twice, once there and
+  // once on the element that reaches the file through the key.
+  for (const c of crawl.conkeyrefTargets) {
+    if (env.host.cancelled?.()) break;
+    if (!c.dita) continue;
+    if (!(await exists(c.target))) {
+      issues.push({
+        category: 'missing-reference', severity: 'error', file: c.file, line: c.line,
+        msg: msg('ref.missingConkeyref', c.href),
+      });
+    }
+  }
+
   if (opts.checkNonDita && opts.includeRemote && env.checkRemote) {
     const remote = crawl.refs.filter(
       (r) => r.remote && /^https?:/i.test(r.href) && ['image', 'object', 'data', 'other'].includes(r.kind),

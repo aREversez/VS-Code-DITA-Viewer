@@ -30,6 +30,13 @@
   {
     "category": "missing-reference",
     "severity": "error",
+    "file": "topics/e-conref-missing-file-edge.dita",
+    "line": 9,
+    "message": "Referenced conkeyref target not found: ../topics/e-no-such-key-target.dita"
+  },
+  {
+    "category": "missing-reference",
+    "severity": "error",
     "file": "topics/e-conref-missing-file-pos.dita",
     "line": 9,
     "message": "Referenced conref target not found: e-no-such-file.dita#nsf/x"

@@ -248,6 +248,21 @@ export interface KeyLinkWithoutTarget extends Location {
   tag?: string;
 }
 
+/**
+ * A `@conkeyref` whose key resolves to a file: the content reference that reaches it.
+ * A content reference replaces content instead of linking, so it never becomes a
+ * `Reference`; the file behind its key still has to exist, and Oxygen files that at
+ * both ends (the keydef and the element that reaches it through the key).
+ */
+export interface ConkeyrefTarget extends Location {
+  /** The key definition's @href as written. */
+  href: string;
+  /** Absolute local file that @href resolves to. */
+  target: string;
+  /** Whether the target is a DITA file; a resource key is not a content reference. */
+  dita: boolean;
+}
+
 /** The element-id part a keyref/conkeyref appends to its key, with the key's own target. */
 export interface KeyElementPath extends Location {
   /** The attribute value as written. */
@@ -358,6 +373,7 @@ export interface CrawlResult {
   conrefTargetValues: ConrefTargetValue[];
   linksWithoutTarget: LinkWithoutTarget[];
   keyLinksWithoutTarget: KeyLinkWithoutTarget[];
+  conkeyrefTargets: ConkeyrefTarget[];
   keyElementPaths: KeyElementPath[];
   tables: TableInfo[];
   profilingConflicts: ProfilingConflict[];
@@ -520,6 +536,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     conrefTargetValues: [],
     linksWithoutTarget: [],
     keyLinksWithoutTarget: [],
+    conkeyrefTargets: [],
     keyElementPaths: [],
     tables: [],
     profilingConflicts: [],
@@ -1266,7 +1283,19 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     }
     // The key is defined, so the element's own @href is not used.
     if (use.fallbackRef) droppedFallbacks.add(use.fallbackRef);
-    if (use.attribute === 'conkeyref') continue; // content references never become References here
+    if (use.attribute === 'conkeyref') {
+      // Content references never become References here, but the file behind the key
+      // is one the element depends on: recorded so the checks can report it missing.
+      if (def.target) {
+        result.conkeyrefTargets.push({
+          file: use.file, line: use.line,
+          href: def.href ?? use.value ?? use.key,
+          target: def.target,
+          dita: isDitaHref((def.href ?? '').split('#')[0], def.format),
+        });
+      }
+      continue;
+    }
     if (!def.target) {
       // A text-only key: defined, but there is no resource to link to. A key that
       // redirects to another key is left alone: this crawl does not follow

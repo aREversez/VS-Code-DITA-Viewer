@@ -13,6 +13,7 @@ export const MESSAGE_TEMPLATES = {
   'ref.missingTopic': 'Referenced topic not found: {0}',
   'ref.missingMap': 'Referenced map not found: {0}',
   'ref.missingConref': 'Referenced conref target not found: {0}',
+  'ref.missingConkeyref': 'Referenced conkeyref target not found: {0}',
   'ref.missingResource': 'Referenced resource not found: {0}',
   'ref.remoteUnreachable': 'Remote resource could not be reached: {0}',
   'ref.outsideFolder': 'Reference points outside the map folder: {0}',
