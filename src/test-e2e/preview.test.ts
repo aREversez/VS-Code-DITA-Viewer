@@ -13,7 +13,17 @@ const fixturesDir = path.join(repoRoot, 'test-dita-file');
 // fixture. Every test below exercises the smoke-test set specifically.
 const legacyFixturesDir = path.join(fixturesDir, 'fixture');
 
-async function waitFor(check: () => boolean, timeoutMs = 8000, intervalMs = 150, givesUp = 'Timed out waiting for the preview to render.'): Promise<void> {
+// The render polls wait for a value a real render is guaranteed to write: every
+// reopen in this file goes through closePreview first, which blocks until the
+// panel's onDidDispose has dropped the cache entry -- and that entry is only ever
+// deleted there -- so by the time openWith runs again there is no live panel to
+// merely reveal, and the fresh resolve renders. That closes the dispose-vs-reveal
+// race (a value that would never arrive), leaving slow renders on a loaded CI
+// runner as the only thing that can still make a poll wait long. 20s covers the
+// heaviest case -- the tag-tooltip test, which renders a topic and a map back to
+// back in one test -- without turning a genuinely stuck test green; the e2e mocha
+// timeout in test-e2e/index.ts is raised to sit above the worst-case sum.
+async function waitFor(check: () => boolean, timeoutMs = 20000, intervalMs = 150, givesUp = 'Timed out waiting for the preview to render.'): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     if (check()) return;

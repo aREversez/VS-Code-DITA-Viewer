@@ -22,7 +22,7 @@ A VS Code extension that renders **`.dita`** and **`.ditamap`** files as a forma
 - **Export as HTML** — render any topic or full map to a single self-contained `.html` file (styles inlined, images embedded) without DITA-OT
 - **Full DITA element coverage** — topic, sections, notes (all types), lists, tables, figures, code blocks with language labels, images, cross-references (with title resolution), quotes, related links, inline formatting, keydef/keyword display; specialization modules (task/concept/reference, troubleshooting, glossary, taskreq, highlight/programming/software/UI domains) are audited against the DITA-OT 1.3 DTDs and render correctly even without explicit `@class` attributes in the source
 - **Index term visibility** — `<indexterm>` (including nested primary/secondary/… levels, sibling sub-entries, and `index-see`/`index-see-also` cross-references) and `<indextermref>` render as small inline chips right where they're authored, in both topic preview and book mode. This is intentionally not a compiled, alphabetically-sorted back-of-book index page — sort order only makes sense for scripts with a stable alphabetic/stroke ordering, so a generated index would be meaningless for e.g. Chinese content; seeing each term inline works the same way regardless of language.
-- **Profiling / conditional-processing support** — content carrying `props`/`platform`/`product`/`audience`/`otherprops`/`base`/`importance`/`rev`/`status` is highlighted (toggleable via **Flags**) and can be hidden by value (**Filter**), matching Oxygen's own conditional-processing display; available both within topic content and, independently, at the ditamap `topicref` level in map/book view, where a topicref's profiling attributes cascade down to its descendant topicrefs
+- **Profiling / conditional-processing support** — content carrying `props`/`platform`/`product`/`audience`/`otherprops`/`deliveryTarget`/`base`/`importance`/`rev`/`status` is highlighted (toggleable via **Flags**) and can be hidden by value (**Filter**), matching Oxygen's own conditional-processing display; available both within topic content and, independently, at the ditamap `topicref` level in map/book view, where a topicref's profiling attributes cascade down to its descendant topicrefs
 - **Reltable and topicgroup support** — reltables are skipped from the tree; topicgroups render children without adding their own entry
 - **Compare with Git Version** — a rendered diff (not a raw text diff) between the working copy and any git revision (HEAD/HEAD~1 shortcuts or a picked revision), with word-level highlighting across paragraphs, lists, and full tables
 - **MathML rendering** — `<mathml>`/`<foreign>` formulas render natively in the preview, including an `<mfenced>` compatibility shim so bracket/absolute-value notation from Oxygen's equation editor displays correctly
@@ -94,7 +94,7 @@ Duplicate topics (same file referenced multiple times) are shown with a skip mes
 
 ### Profiling / Conditional Content
 
-Content carrying DITA's `select-atts` group (`props`, `platform`, `product`, `audience`, `otherprops`, `base`, `importance`, `rev`, `status`) is highlighted with a small label naming the attribute/value that matched, mirroring Oxygen's own conditional-processing display. Two toolbar buttons control this, available in both topic and map/book preview:
+Content carrying DITA's `select-atts` group (`props`, `platform`, `product`, `audience`, `otherprops`, `deliveryTarget` — the `filter-atts` member DITA 1.3 added, deprecating the DITA 1.2 `@print` — `base`, `importance`, `rev`, `status`) is highlighted with a small label naming the attribute/value that matched, mirroring Oxygen's own conditional-processing display. Two toolbar buttons control this, available in both topic and map/book preview:
 
 - **Flags** (on by default) — toggles the highlighting on/off without a re-render.
 - **Filter** — opens a panel listing every attribute/value combination found in the document as checkboxes; unchecking one actually hides the matching content, for previewing what a given build/audience would see. The panel's **DITAVAL** row loads a `.ditaval` file (**Choose…** / **Change…** / **Clear**): the values it excludes are unticked and greyed out and their content is hidden, exactly as a DITA-OT build with that file would leave it out; hand-picked boxes stay as they were underneath, so clearing the file restores them. The chosen file is remembered per document.
@@ -616,7 +616,7 @@ Both are workspace-folder-level values, so a host opened on a subfolder (say `te
 npm run package        # mkdir output, then vsce package --no-dependencies --out output/
 ```
 
-The `.vsix` file name is derived from the `name` and `version` fields in `package.json` (e.g. `output/dita-viewer-1.0.9.vsix`). `npm run check:package` packages again and asserts the archive's contents (required assets present, `src/**` and the fixtures absent), which is the gate to trust before publishing a build.
+The `.vsix` file name is derived from the `name` and `version` fields in `package.json` (e.g. `output/dita-viewer-1.0.10.vsix`). `npm run check:package` packages again and asserts the archive's contents (required assets present, `src/**` and the fixtures absent), which is the gate to trust before publishing a build.
 
 #### Installing the package into a local VS Code
 

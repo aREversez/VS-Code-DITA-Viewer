@@ -1,0 +1,110 @@
+# Publish the extension when a <version> tag is pushed — the extension's side
+# of the release-core.yml pattern (that one publishes @dita-viewer/core to npm).
+#
+#   # raise "version" in package.json, commit the release prep (version +
+#   # CHANGELOG section + README), get it onto main, then from main:
+#   git tag V1.0.10 && git push origin V1.0.10
+#
+# The job re-runs the whole gate on the tagged commit (CI on every push has
+# already run it; a release is worth repeating), packages the vsix, opens a
+# GitHub Release carrying the vsix and the release notes, and — only if the
+# VSCE_PAT secret exists — pushes the same vsix to the Marketplace.
+#
+# The notes are not written by hand per release: the section of CHANGELOG.md
+# whose heading carries the tagged version becomes the release body, so the
+# release note and the changelog cannot drift apart. Editing the body in the
+# GitHub UI works until the same tag is re-run, which rewrites it from the
+# CHANGELOG again — the CHANGELOG is the source of the notes.
+
+name: Release extension
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+      - 'V[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write # create the GitHub Release and upload its asset
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # 22: @vscode/test-electron 3.x (the e2e gate below) requires it, and
+          # it is what release-core.yml and the CI package job pin to.
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # verify cannot know the tag; this is what stops "V1.0.11" shipping 1.0.10.
+      - name: Check the tag matches package.json
+        run: |
+          version=$(node -p "require('./package.json').version")
+          tag=${GITHUB_REF_NAME#V}
+          if [ "$tag" != "$version" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $version" >&2
+            exit 1
+          fi
+
+      # The same gates CI runs on every push, on the exact commit being shipped:
+      # typecheck (all of src) + lint + build + the parity/l10n/class checks +
+      # unit tests + core tests, then the e2e suite under a display server and
+      # the real-Chromium visual check.
+      - run: npm run verify
+      - run: xvfb-run -a npm run test:e2e
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:visual
+
+      # The vsix contents gate (it packages to the repo root and opens the
+      # archive); the release build below goes to output/ like npm run package.
+      - run: npm run check:package
+
+      - name: Package the vsix for release
+        run: |
+          mkdir -p output
+          npx --yes @vscode/vsce@4.0.0 package --no-dependencies \
+            --allow-missing-repository --out output/
+
+      # The CHANGELOG section for this version, from its heading (matched on
+      # the version as a whole token, so the "(2026-10-27)" date suffix fits)
+      # to the next "## <digits>" heading, which opens the previous release.
+      - name: Collect the release notes
+        run: |
+          version=$(node -p "require('./package.json').version")
+          awk -v v="$version" '
+            !inSection && index($0, "## ") == 1 && index(" " $0 " ", " " v ") > 0 { inSection = 1; next }
+            inSection && /^## [0-9]/ { inSection = 0 }
+            inSection { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "CHANGELOG.md has no '## $version' section; the release body will be empty." >&2
+          fi
+
+      - name: Create the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: output/*.vsix
+          body_path: release-notes.md
+
+      # Off by default: the Marketplace needs a Personal Access Token stored as
+      # the VSCE_PAT repository secret (vsce has no OIDC path, unlike npm
+      # trusted publishing). Add the secret to turn this step on; until then it
+      # skips and the vsix on the release is the artifact to install from.
+      - name: Publish to the Marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        if: ${{ env.VSCE_PAT != '' }}
+        run: |
+          npx --yes @vscode/vsce@4.0.0 publish --no-dependencies \
+            --packagePath output/dita-viewer-$(node -p "require('./package.json').version").vsix

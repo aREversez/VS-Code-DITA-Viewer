@@ -26,7 +26,16 @@ export function run(): Promise<void> {
   const mocha = new Mocha({
     ui: 'bdd',
     color: true,
-    timeout: 20000,
+    // 90s, not the mocha default and not the old 20s: the preview tests poll
+    // for a value a real render writes (waitFor's own 20s budget), and the
+    // heaviest one runs two render legs plus two closePreview dispose waits in a
+    // single test. The dispose-before-reopen race is closed by closePreview, so
+    // a value is guaranteed to arrive once its render lands -- the only reason a
+    // poll can still fail is a genuinely slow render on a loaded runner, which
+    // needs a larger budget than a stuck test would ever satisfy. Keep this
+    // above the worst-case sum of one test's polls so the failure that reports
+    // is waitFor's named message, not a bare mocha timeout.
+    timeout: 90000,
   });
 
   const testsRoot = __dirname;
