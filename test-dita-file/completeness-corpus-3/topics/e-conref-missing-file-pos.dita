@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<!-- Oxygen's treatment of a conref whose file does not exist (R019): the extension reports
+     it as missing-reference on this file; which id Oxygen uses, and on which file, is what
+     this probe asks. The file named below is absent on purpose. -->
+<topic id="e-conref-missing-file-pos">
+  <title>conref to a file that does not exist (positive)</title>
+  <body>
+    <p conref="e-no-such-file.dita#nsf/x"/>
+  </body>
+</topic>

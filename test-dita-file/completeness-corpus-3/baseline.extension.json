@@ -7,6 +7,13 @@
     "message": "Referenced topic not found: topics/control-missing.dita"
   },
   {
+    "category": "missing-reference",
+    "severity": "error",
+    "file": "maps/e-conref-missing-key.ditamap",
+    "line": 7,
+    "message": "Referenced topic not found: ../topics/e-no-such-key-target.dita"
+  },
+  {
     "category": "topicref-to-element",
     "severity": "error",
     "file": "maps/f-topicref-to-element-pos.ditamap",
@@ -19,6 +26,13 @@
     "file": "topics/e-conkeyref-peer-pos.dita",
     "line": 8,
     "message": "Key reference \"k-conkeyref-peer/p2\" does not match any key definition"
+  },
+  {
+    "category": "missing-reference",
+    "severity": "error",
+    "file": "topics/e-conref-missing-file-pos.dita",
+    "line": 9,
+    "message": "Referenced conref target not found: e-no-such-file.dita#nsf/x"
   },
   {
     "category": "invalid-conref-form",

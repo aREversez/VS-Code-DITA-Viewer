@@ -45,6 +45,8 @@
   <topicref href="topics/e-target-attr-neg.dita"/>
   <topicref href="topics/e-target-attr-edge.dita"/>
   <mapref href="maps/e-conkeyref-peer.ditamap" format="ditamap"/>
+  <topicref href="topics/e-conref-missing-file-pos.dita"/>
+  <mapref href="maps/e-conref-missing-key.ditamap" format="ditamap"/>
   <mapref href="maps/e-target-attr.ditamap" format="ditamap"/>
 
   <!-- F. id references (dmv.invalid.ref.id, dmv.invalid.ref.id.path,

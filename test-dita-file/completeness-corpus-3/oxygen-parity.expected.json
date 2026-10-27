@@ -28,7 +28,10 @@
     "topics/g-resource-only-pos.dita  resource-only-target",
     "topics/h-dup-el-id-pos.dita  duplicate-element-id"
   ],
-  "extensionOnly": [],
+  "extensionOnly": [
+    "maps/e-conref-missing-key.ditamap  missing-reference",
+    "topics/e-conref-missing-file-pos.dita  missing-reference"
+  ],
   "oxygenOnly": [
     "topics/e-conrefend-no-conref-edge.dita  oxygen:unknown",
     "topics/e-id-miss-conref-edge.dita  conref-class",

@@ -60,6 +60,7 @@ the existing `undefined-key` (a key from a peer map is undefined in this build),
 | `dmv.conrefend.confl.conref` | `topics/e-conrefend-confl-{pos,neg,edge}.dita` | root topic to nested topic; both in one topic; both in the nested topic |
 | `dmv.no.conref.has.target.attr.value` | `topics/e-target-attr-{pos,neg,edge}.dita`, `maps/e-target-attr.ditamap` | value without `conref`; with `conref`; with `conkeyref` |
 | `dmv.conkeyref.peer.map` | `topics/e-conkeyref-peer-{pos,neg,edge}.dita`, `maps/e-conkeyref-peer{,-keys,-sub}.ditamap` | key in a `scope="peer"` map; in the same map; in a local submap |
+| (R019) a conref or conkeyref to a file that does not exist | `topics/e-conref-missing-file-{pos,edge}.dita`, `maps/e-conref-missing-key.ditamap` | a conref to an absent file; a conkeyref through a key whose file is absent | `missing-reference` on the topic (pos) and on the map that defines the key (edge); Oxygen's id is what the next run shows |
 | `dmv.invalid.ref.id` | `topics/f-invalid-ref-id-{pos,neg,edge}.dita` | missing element via conref; existing; missing element via xref |
 | `dmv.invalid.ref.id.path` | `topics/f-ref-id-path-{pos,neg,edge}.dita` | missing id path; single element id; existing two-segment path (section then paragraph) |
 | `dmv.invalid.ref.id.path.keyref.elemid` | `topics/f-keyref-elemid-{pos,neg,edge}.dita`, `maps/f-keyref-elemid.ditamap` | conkeyref to a missing element; existing; xref keyref with the same suffix |
