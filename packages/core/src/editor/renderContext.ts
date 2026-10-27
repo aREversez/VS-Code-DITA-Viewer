@@ -21,7 +21,7 @@
 //     collectDependencies also folds image reads into the dependency set.
 //   - suppressIndexterm: only the export path sets it.
 
-import { resolve } from 'path';
+import { resolve, relative, isAbsolute } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { RenderContext } from '../render/renderer';
 import {
@@ -34,6 +34,7 @@ import {
   detectIndexLabel,
   readImageDimensions,
   decodeHrefPart,
+  URL_SCHEME_RE,
 } from './refResolvers';
 import { getKeyDefs, KeyHrefDef } from './keySpace';
 import { resolveConkeyref } from './conkeyref';
@@ -76,6 +77,13 @@ export interface BuildRenderContextInput {
   suppressIndexterm?: boolean;
   /** Book / docsite only: the set of files that make up the current book. */
   bookMembers?: ReadonlySet<string>;
+  /**
+   * Standalone preview only: render non-book cross-file xrefs as real links
+   * carrying data-dita-href for the webview to hand to the host (see
+   * RenderContext.clickableExternalXrefs). Every other render path leaves it
+   * unset and keeps the historical non-clickable hint span.
+   */
+  clickableExternalXrefs?: boolean;
   /** Book / site only: sink that records every file the render read. */
   collectDependencies?: Set<string>;
 }
@@ -133,6 +141,7 @@ export function buildRenderContext(input: BuildRenderContextInput): BuiltRenderC
 
   if (input.includeIndexLabel) ctx.indexLabel = detectIndexLabel(ownRoot, uiLanguage);
   if (input.bookMembers) ctx.isInCurrentBook = makeIsInCurrentBook(docDir, input.bookMembers);
+  if (input.clickableExternalXrefs) ctx.clickableExternalXrefs = true;
 
   // conkeyref rides on the same file cache: a key's href resolves against the
   // map that defined it (baseDir), not the topic being rendered, so it needs
@@ -141,6 +150,25 @@ export function buildRenderContext(input: BuildRenderContextInput): BuiltRenderC
   let lastLoaded: { file?: string; root: DitaNode } | undefined;
   const keyDefs = input.keyDefs ?? getKeyDefs(keyMap);
   if (keyDefs && keyDefs.size > 0) {
+    // A keyref on a link-shaped element (topic/xref) resolves to the key's
+    // resource target as its effective href. The keydef's href is relative
+    // to the map that defined it, but every href the renderer consumes
+    // (isInCurrentBook, resolveTitle, the preview's own open-by-href) is
+    // relative to the DOCUMENT's folder -- so rebase here, preserving any
+    // element-id fragment, and hand through the shapes that are not
+    // filesystem paths (URL schemes, absolute paths) untouched.
+    ctx.resolveKeyHref = (key: string): string | undefined => {
+      const def = keyDefs.get(key);
+      if (!def?.href) return undefined;
+      const raw = def.href;
+      if (URL_SCHEME_RE.test(raw) || isAbsolute(raw)) return raw;
+      const hashIdx = raw.indexOf('#');
+      const pathPart = hashIdx >= 0 ? raw.slice(0, hashIdx) : raw;
+      const fragment = hashIdx >= 0 ? raw.slice(hashIdx) : '';
+      if (!pathPart) return fragment || undefined;
+      const abs = resolve(def.baseDir, decodeHrefPart(pathPart));
+      return relative(docDir, abs).replace(/\\/g, '/') + fragment;
+    };
     const loadTopic = (baseDir: string, href: string): DitaNode | undefined => {
       const absPath = resolve(baseDir, decodeHrefPart(href.split('#')[0]));
       // A conkeyref target is a real dependency of the rendered HTML, exactly

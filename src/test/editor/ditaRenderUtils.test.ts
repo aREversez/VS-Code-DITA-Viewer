@@ -2511,6 +2511,9 @@ describe('getSiteNavClickHandlerScript (docsite mode)', () => {
           const attr = selector.slice(1, -1);
           return attr in attrs ? el : null;
         }
+        // The in-page anchor handler narrows on 'a.xref'; the fakes that reach
+        // it carry the xref class on the element a real <a> would be.
+        if (selector === 'a.xref') return classes.has('xref') ? el : null;
         return null;
       },
     };
@@ -2594,6 +2597,37 @@ describe('getSiteNavClickHandlerScript (docsite mode)', () => {
     click(xrefLink);
 
     assert.strictEqual(bTopic.classList.contains('active'), true);
+  });
+
+  // In-page anchor xrefs inside rendered content (book and site alike): the
+  // same smooth scroll the single-topic preview applies, scoped to the "#..."
+  // form so the book-xref placeholder (href="#") keeps belonging to its own
+  // listener above.
+  it('scrolls smoothly to the element an in-page anchor xref names', () => {
+    const scrolled: string[] = [];
+    const { document, click } = makeFakeSiteDocument([], {
+      'section-1': { scrollIntoView: () => scrolled.push('section-1') },
+    });
+    const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
+    new Function('document', 'window', 'vscode', script)(document, fakeWindow, { postMessage: () => {} });
+
+    const anchor = makeFakeElement({ classes: ['xref'], attrs: { href: '#section-1' } });
+    click(anchor);
+
+    assert.deepStrictEqual(scrolled, ['section-1'], 'the anchor element was scrolled to');
+  });
+
+  it('leaves a bare href="#" xref placeholder to the data-dita-book-xref listener instead of scrolling nowhere', () => {
+    const scrolled: string[] = [];
+    const { document, click } = makeFakeSiteDocument([], {
+      '': { scrollIntoView: () => scrolled.push('') },
+    });
+    const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
+    new Function('document', 'window', 'vscode', script)(document, fakeWindow, { postMessage: () => {} });
+
+    const placeholder = makeFakeElement({ classes: ['xref'], attrs: { href: '#', 'data-dita-book-xref': '/book/b.dita' } });
+    assert.doesNotThrow(() => click(placeholder));
+    assert.deepStrictEqual(scrolled, []);
   });
 
   // --- revealing the newly-active row inside collapsed branches ---
@@ -2784,6 +2818,92 @@ describe('getBookNavClickHandlerScript (book mode sidebar, nested-fold-and-highl
 
     const outsideEl = makeFakeElement({});
     assert.doesNotThrow(() => click(outsideEl));
+    assert.deepStrictEqual(scrolled, []);
+  });
+
+  // Book-internal cross-topic xrefs (data-dita-book-xref): the whole book is
+  // already in the DOM, so a click only scrolls -- to the target topic's
+  // [data-book-anchor] part, then to the exact element inside it when the
+  // xref carried an id fragment -- and the sidebar's active row follows.
+  // These fakes model the attribute-form closest('[data-dita-book-xref]')
+  // and the getElementById anchor lookup, which the .site-nav-link fakes
+  // above don't carry.
+  function makeFakeXrefElement(opts: { classes?: string[]; attrs?: Record<string, string>; scrollIntoView?: () => void }) {
+    const el = makeFakeElement(opts);
+    if (opts.scrollIntoView) (el as { scrollIntoView?: () => void }).scrollIntoView = opts.scrollIntoView;
+    (el as { closest: (selector: string) => unknown }).closest = (selector: string) => {
+      if (selector.startsWith('.')) return el.classList.contains(selector.slice(1)) ? el : null;
+      if (selector.startsWith('[') && selector.endsWith(']')) {
+        const attr = selector.slice(1, -1);
+        return (opts.attrs || {})[attr] !== undefined ? el : null;
+      }
+      return null;
+    };
+    return el;
+  }
+
+  function makeFakeBookDocumentForXref(navLinks: ReturnType<typeof makeFakeElement>[], anchors: ReturnType<typeof makeFakeAnchor>[], elementsById: Record<string, { scrollIntoView?: () => void }>) {
+    const listeners: Array<(e: unknown) => void> = [];
+    const document = {
+      addEventListener: (evt: string, fn: (e: unknown) => void) => {
+        if (evt === 'click') listeners.push(fn);
+      },
+      querySelectorAll: (sel: string) => (sel === '.site-nav-link' || sel === '[data-book-anchor]' ? (sel === '.site-nav-link' ? navLinks : anchors) : []),
+      querySelector: (sel: string) =>
+        sel === '.site-nav-link.active' ? navLinks.find((l) => l.classList.contains('active')) ?? null : null,
+      getElementById: (id: string) => elementsById[id] ?? null,
+    };
+    return {
+      document,
+      click(target: ReturnType<typeof makeFakeXrefElement>) {
+        for (const fn of listeners) fn({ target, preventDefault: () => {} });
+      },
+    };
+  }
+
+  it('scrolls to the target topic\'s book anchor and marks its sidebar row active when a book-xref is clicked', () => {
+    const scrolled: string[] = [];
+    const bLink = makeFakeElement({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/book/b.dita' } });
+    const aLink = makeFakeElement({ classes: ['site-nav-link', 'active'], attrs: { 'data-site-target': '/book/a.dita' } });
+    const bAnchor = makeFakeAnchor('/book/b.dita', scrolled);
+    const xref = makeFakeXrefElement({ attrs: { 'data-dita-book-xref': '/book/b.dita' } });
+    const { document, click } = makeFakeBookDocumentForXref([aLink, bLink], [makeFakeAnchor('/book/a.dita', scrolled), bAnchor], {});
+    const script = getBookNavClickHandlerScript();
+    new Function('document', script)(document);
+
+    click(xref);
+
+    assert.deepStrictEqual(scrolled, ['/book/b.dita'], 'the click lands on the target topic\'s own anchor');
+    assert.strictEqual(bLink.classList.contains('active'), true, 'the sidebar follows the jump');
+    assert.strictEqual(aLink.classList.contains('active'), false);
+  });
+
+  it('scrolls on to the exact element inside the target topic when the book-xref carries an id fragment', () => {
+    const scrolled: string[] = [];
+    const anchorScrolled: string[] = [];
+    const bLink = makeFakeElement({ classes: ['site-nav-link'], attrs: { 'data-site-target': '/book/b.dita' } });
+    const bAnchor = makeFakeAnchor('/book/b.dita', scrolled);
+    const xref = makeFakeXrefElement({ attrs: { 'data-dita-book-xref': '/book/b.dita#sec2' } });
+    const { document, click } = makeFakeBookDocumentForXref([bLink], [bAnchor], {
+      'sec2': { scrollIntoView: () => anchorScrolled.push('sec2') },
+    });
+    const script = getBookNavClickHandlerScript();
+    new Function('document', script)(document);
+
+    click(xref);
+
+    assert.deepStrictEqual(scrolled, ['/book/b.dita'], 'the topic part scrolls first');
+    assert.deepStrictEqual(anchorScrolled, ['sec2'], 'then the element the fragment names');
+  });
+
+  it('does nothing when a book-xref\'s target has no book anchor in the DOM, rather than throwing', () => {
+    const scrolled: string[] = [];
+    const xref = makeFakeXrefElement({ attrs: { 'data-dita-book-xref': '/book/nowhere.dita#sec' } });
+    const { document, click } = makeFakeBookDocumentForXref([], [], {});
+    const script = getBookNavClickHandlerScript();
+    new Function('document', script)(document);
+
+    assert.doesNotThrow(() => click(xref));
     assert.deepStrictEqual(scrolled, []);
   });
 });

@@ -75,4 +75,60 @@ describe('buildRenderContext (P2 shared factory)', () => {
     assert.ok(withLabel.ctx.indexLabel, 'indexLabel present when asked');
     assert.strictEqual(without.ctx.indexLabel, undefined, 'indexLabel absent for diff');
   });
+
+  describe('resolveKeyHref', () => {
+    // Hand-built defs, the same shape buildKeySpace records: href relative to
+    // the map that defined the key (baseDir), fragment included.
+    const keyMap = new Map<string, string>([
+      ['sibling', 'Sibling'],
+      ['sub', 'Sub'],
+      ['site', 'Site'],
+      ['textonly', 'Text only'],
+    ]);
+    const keyDefs = new Map<string, { href?: string; baseDir: string }>([
+      ['sibling', { href: 'other.dita#sec', baseDir: '/proj' }],
+      ['sub', { href: '../topics/sub.dita', baseDir: '/proj/maps' }],
+      ['site', { href: 'https://example.com/x', baseDir: '/proj' }],
+      ['textonly', { baseDir: '/proj' }],
+    ]);
+
+    function input() {
+      return baseInput({ keyDefs });
+    }
+
+    it('rebases a keydef href from its defining map\'s folder to the document\'s folder, keeping the fragment', () => {
+      const { ctx } = buildRenderContext(input());
+      assert.strictEqual(ctx.resolveKeyHref!('sibling'), 'other.dita#sec');
+    });
+
+    it('rebases a key defined in a subdirectory map (baseDir != docDir)', () => {
+      const { ctx } = buildRenderContext(input());
+      // /proj/maps + ../topics/sub.dita -> /proj/topics/sub.dita, which from
+      // the document's own folder (/proj) is simply topics/sub.dita.
+      assert.strictEqual(ctx.resolveKeyHref!('sub'), 'topics/sub.dita');
+    });
+
+    it('hands URL-scheme targets through untouched', () => {
+      const { ctx } = buildRenderContext(input());
+      assert.strictEqual(ctx.resolveKeyHref!('site'), 'https://example.com/x');
+    });
+
+    it('returns undefined for a key that defines no resource (text-only) or is unknown', () => {
+      const { ctx } = buildRenderContext(input());
+      assert.strictEqual(ctx.resolveKeyHref!('textonly'), undefined);
+      assert.strictEqual(ctx.resolveKeyHref!('no-such-key'), undefined);
+    });
+
+    it('is only wired when defs exist; absent for a keyMap without registered defs', () => {
+      const withoutDefs = buildRenderContext(baseInput());
+      assert.strictEqual(withoutDefs.ctx.resolveKeyHref, undefined, 'a hand-built keyMap carries no defs');
+    });
+  });
+
+  it('passes clickableExternalXrefs through to the context only when asked', () => {
+    const flagged = buildRenderContext(baseInput({ clickableExternalXrefs: true }));
+    assert.strictEqual(flagged.ctx.clickableExternalXrefs, true);
+    const plain = buildRenderContext(baseInput());
+    assert.strictEqual(plain.ctx.clickableExternalXrefs, undefined);
+  });
 });

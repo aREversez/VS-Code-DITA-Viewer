@@ -32,7 +32,7 @@ export function openHrefTarget(
 ): void {
   const raw = (href || '').trim();
   if (!raw) return;
-  if (/^https?:\/\//i.test(raw)) {
+  if (/^(https?:\/\/|mailto:)/i.test(raw)) {
     void vscode.env.openExternal(vscode.Uri.parse(raw));
     return;
   }

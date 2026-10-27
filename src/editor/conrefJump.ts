@@ -9,6 +9,7 @@
 import { isAbsolute } from 'path';
 
 export { MSG_OPEN_CONREF_TARGET } from './mapMessages';
+export { MSG_OPEN_XREF_TARGET } from './mapMessages';
 
 export interface ConrefJumpTarget {
   file: string;

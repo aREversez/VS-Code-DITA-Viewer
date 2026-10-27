@@ -1002,6 +1002,115 @@ describe('renderer', () => {
     assert.ok(!html.includes('data-dita-book-xref'));
   });
 
+  it('should render a non-book cross-file xref as a real link carrying data-dita-href when clickableExternalXrefs is set (standalone preview)', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      clickableExternalXrefs: true,
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/xref', [makeText('other')], { href: 'other.dita#sec' }),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('data-dita-href="other.dita#sec"'), 'the raw href must ride along for the host to open');
+    assert.ok(html.includes('class="xref"'), 'a real link, not the dead hint span');
+    assert.ok(!html.includes('xref-external'), 'no non-clickable hint span once the opt-in is on');
+  });
+
+  it('should keep the non-clickable hint span without clickableExternalXrefs, unchanged from before (export / diff / book-site)', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/xref', [makeText('other')], { href: 'other.dita' }),
+    ]);
+    const withFlag = renderDocument(doc, { ...defaultCtx, clickableExternalXrefs: true });
+    assert.ok(withFlag.includes('data-dita-href="other.dita"'));
+    // The flag is what makes the difference: same input, no flag, old shape.
+    const withoutFlag = renderDocument(doc, defaultCtx);
+    assert.ok(withoutFlag.includes('xref-external'));
+    assert.ok(withoutFlag.includes('→ other'));
+    assert.ok(!withoutFlag.includes('data-dita-href'));
+  });
+
+  it('should resolve a keyref xref to the key\'s resource href and render a book link', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveKey: (key) => (key === 'install-guide' ? 'Install guide' : undefined),
+      resolveKeyHref: (key) => (key === 'install-guide' ? 'install.dita#setup' : undefined),
+      isInCurrentBook: (href) => (href === 'install.dita#setup' ? '/book/install.dita' : undefined),
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/xref', [], { keyref: 'install-guide' }),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('data-dita-book-xref="/book/install.dita#setup"'), 'the key\'s target becomes the link target');
+    assert.ok(html.includes('Install guide'), 'the key\'s text value becomes the link text');
+    assert.ok(!html.includes('unresolved-keyref'));
+  });
+
+  it('should resolve a keyref xref with local content to the key\'s target while keeping the authored text', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveKey: (key) => (key === 'k' ? 'Key text' : undefined),
+      resolveKeyHref: (key) => (key === 'k' ? 'install.dita' : undefined),
+      clickableExternalXrefs: true,
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/xref', [makeText('authored text')], { keyref: 'k' }),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('authored text'), 'local content wins for the visible text');
+    assert.ok(html.includes('data-dita-href="install.dita"'), 'and the link still points at the key\'s target');
+  });
+
+  it('should fall back to the clickableExternalXrefs shape for a keyref xref outside any book', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveKey: (key) => (key === 'k' ? 'Key text' : undefined),
+      resolveKeyHref: (key) => (key === 'k' ? 'install.dita' : undefined),
+      clickableExternalXrefs: true,
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/xref', [], { keyref: 'k' }),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('data-dita-href="install.dita"'));
+    assert.ok(html.includes('>Key text<'));
+  });
+
+  it('should keep a keyref xref whose key has no href visible (unresolved-key hint), not drop it', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveKey: (key) => (key === 'k' ? 'A text-only key' : undefined),
+      resolveKeyHref: () => undefined,
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/xref', [], { keyref: 'k' }),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('unresolved-keyref'), 'the element must stay visible');
+    assert.ok(html.includes('A text-only key'), 'the resolved key text is still worth showing');
+  });
+
+  it('should keep a keyref xref whose key does not resolve visible as [key] instead of silently vanishing', () => {
+    const ctx: RenderContext = {
+      ...defaultCtx,
+      resolveKey: () => undefined,
+    };
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/xref', [], { keyref: 'missing-key' }),
+    ]);
+    const html = renderDocument(doc, ctx);
+    assert.ok(html.includes('unresolved-keyref'), 'the element must stay visible');
+    assert.ok(html.includes('[missing-key]'), 'the unresolvable key is named, the same way an unresolved ph is');
+  });
+
+  it('should keep an href-less, keyref-less xref\'s own content visible instead of dropping it', () => {
+    const doc = makeEl('topic/topic', [
+      makeEl('topic/xref', [makeText('bare text')], {}),
+    ]);
+    const html = renderDocument(doc, defaultCtx);
+    assert.ok(html.includes('bare text'), 'an xref with no target still shows its text');
+    assert.ok(!html.includes('<a '), 'but it is not a link');
+  });
+
   it('should prefer xref text content over resolveTitle', () => {
     const ctx: RenderContext = {
       ...defaultCtx,

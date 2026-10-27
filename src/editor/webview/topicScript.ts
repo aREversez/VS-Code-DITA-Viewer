@@ -10,7 +10,7 @@ import * as vscode from 'vscode';
 import { getContentSwapRefreshScript } from './contentSwapScript';
 import { getHighlightRunScript } from './highlightRunScript';
 import { getConrefJumpScript } from './conrefJumpScript';
-import { MSG_CHOOSE_DITAVAL, MSG_CLEAR_DITAVAL, MSG_OPEN_CONREF_TARGET, MSG_SET_DITAVAL } from '../mapMessages';
+import { MSG_CHOOSE_DITAVAL, MSG_CLEAR_DITAVAL, MSG_OPEN_CONREF_TARGET, MSG_OPEN_XREF_TARGET, MSG_SET_DITAVAL } from '../mapMessages';
 import { getProfilingToggleScript } from './profilingToggleScript';
 import { getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getImageMapSupportScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getRefreshButtonScript } from '../ditaRenderUtils';
 import { sharedWebviewStrings } from '../webviewL10n';
@@ -429,6 +429,31 @@ export function getWebviewScript(): string {
     if (!id) return;
     var el = document.getElementById(id);
     if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  });
+
+  // Cross-file xrefs and related links (the renderer emits data-dita-href
+  // under RenderContext.clickableExternalXrefs, which this preview turns
+  // on): the webview must not navigate itself to a relative vscode-webview://
+  // URL (that is the white page), so the click is handed to the extension
+  // host, which opens a .dita/.xml target in its own preview, a .ditamap in
+  // the map preview, and anything else in the right place (openHrefTarget).
+  // The same guard catches related links (<a class="link">) whose author-
+  // written href points at a local file -- they rendered raw hrefs before
+  // this and clicking one white-paged the preview the same way. Fragment
+  // (#...) hrefs stay with the handler above. An xref's data-dita-href is
+  // always routed to the host, scheme URLs included (its href attribute is
+  // only the "#" placeholder, so the webview could not follow it itself);
+  // a related link's own scheme hrefs (https:, mailto:) stay with the
+  // webview's link handling.
+  window.addEventListener('click', function(e) {
+    var a = e.target.closest ? e.target.closest('a[data-dita-href], a.link[href]') : null;
+    if (!a) return;
+    var viaData = a.getAttribute('data-dita-href');
+    var href = viaData || a.getAttribute('href') || '';
+    if (!href || href.charAt(0) === '#') return;
+    if (!viaData && /^[a-z][a-z0-9+.-]*:/i.test(href)) return;
+    e.preventDefault();
+    vscode.postMessage({ type: '${MSG_OPEN_XREF_TARGET}', href: href });
   });
 
   window.addEventListener('dblclick', function(e) {

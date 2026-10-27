@@ -72,6 +72,8 @@ export interface TopicRenderInput {
   collectDependencies?: Set<string>;
   /** See TopicXmlRenderInput.bookMembers below; passed through untouched. */
   bookMembers?: ReadonlySet<string>;
+  /** See TopicXmlRenderInput.clickableExternalXrefs below; passed through untouched. */
+  clickableExternalXrefs?: boolean;
   /**
    * Mark conref'd content for the preview's tint and jump button (see
    * RenderContext.conrefSource). Off for "Export as HTML"; renderTopicCached,
@@ -114,6 +116,13 @@ export interface TopicXmlRenderInput {
    */
   bookMembers?: ReadonlySet<string>;
   /**
+   * Standalone preview only: render non-book cross-file xrefs as real links
+   * carrying data-dita-href for the webview to hand to the host (see
+   * RenderContext.clickableExternalXrefs). Undefined for book/site rendering
+   * and "Export as HTML", which keep the non-clickable xref-external hint.
+   */
+  clickableExternalXrefs?: boolean;
+  /**
    * Absolute path of the topic being rendered, and the opt-in that uses it:
    * together they let the renderer mark conref'd content (same-file targets
    * included). See RenderContext.conrefSource.
@@ -131,7 +140,7 @@ export interface ParsedTopicResult {
 
 
 export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
-  const { xml, docDir, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, collectDependencies, bookMembers, docFile, markConrefs } = input;
+  const { xml, docDir, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, collectDependencies, bookMembers, clickableExternalXrefs, docFile, markConrefs } = input;
   try {
     const preprocessedXml = preprocessEntities(xml);
     const ditaDoc = parseDita(preprocessedXml);
@@ -152,6 +161,7 @@ export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
       includeIndexLabel: true,
       suppressIndexterm,
       bookMembers,
+      clickableExternalXrefs,
       collectDependencies,
       docFile,
       markConrefs,
@@ -175,7 +185,7 @@ export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
 }
 
 export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
-  const { filePath, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, collectDependencies, bookMembers, markConrefs } = input;
+  const { filePath, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, collectDependencies, bookMembers, clickableExternalXrefs, markConrefs } = input;
   try {
     if (!existsSync(filePath)) {
       return { html: '', error: `File not found: ${filePath}` };
@@ -194,6 +204,7 @@ export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
       suppressIndexterm,
       collectDependencies,
       bookMembers,
+      clickableExternalXrefs,
       docFile: filePath,
       markConrefs,
     });

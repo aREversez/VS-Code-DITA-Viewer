@@ -886,7 +886,25 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
   'topic/xref': (node, ctx, renderChildren) => {
     const href = getAttr(node, 'href') || '';
-    if (!href) return '';
+
+    // No target at all: an xref with neither @href nor a keyref that
+    // resolves to one. Dropping the element silently (the old behaviour)
+    // hid both the author's text and the broken reference; keeping it
+    // visible -- its own content when it has any, an unresolved-key hint
+    // when it does not (the same treatment topic/ph gives an unresolved
+    // keyref) -- means a broken xref reads as one instead of vanishing.
+    if (!href) {
+      if (node.children.length > 0) {
+        const content = renderChildren(node, ctx);
+        const keyref = getAttr(node, 'keyref');
+        return keyref
+          ? `<span class="xref unresolved-keyref" title="Unresolved key: ${escapeAttr(keyref)}">${content}</span>`
+          : `<span class="xref">${content}</span>`;
+      }
+      const keyref = getAttr(node, 'keyref');
+      if (!keyref) return '';
+      return `<span class="xref unresolved-keyref" title="Unresolved key: ${escapeAttr(keyref)}">[${escapeAttr(keyref)}]</span>`;
+    }
 
     let content: string;
     if (node.children.length > 0) {
@@ -922,6 +940,16 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
       const anchorId = idPart ? (idPart.includes('/') ? idPart.split('/').pop()! : idPart) : '';
       const target = bookTarget + (anchorId ? '#' + anchorId : '');
       return `<a href="#" class="xref" data-dita-book-xref="${escapeAttr(target)}">${content}</a>`;
+    }
+
+    // Standalone preview opt-in (clickableExternalXrefs, no book context):
+    // keep the target's own href and let the webview hand it to the host,
+    // which opens DITA targets in their preview and everything else in the
+    // right place (see openHrefTarget) -- instead of the dead hint span.
+    // Without the opt-in (export, diff, book/site, the second host) the
+    // historical non-clickable hint below is kept exactly as it was.
+    if (ctx.clickableExternalXrefs) {
+      return `<a href="#" class="xref" data-dita-href="${escapeAttr(href)}">${content}</a>`;
     }
 
     return `<span class="xref-external">→ ${content}</span>`;

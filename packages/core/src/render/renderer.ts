@@ -87,6 +87,30 @@ export interface RenderContext {
    */
   suppressIndexterm?: boolean;
   /**
+   * Resolves a @keyref to the key's resource href ("other.dita#topic"),
+   * relative to the document being rendered, or undefined when the key
+   * defines no resource (a text-only key) or is not defined at all. Only
+   * link-shaped elements consume it (topic/xref): resolveKeyrefForNode
+   * copies the key's target onto the element's effective @href so
+   * `<xref keyref="k"/>` renders as a real link, exactly as DITA-OT
+   * resolves the same markup. The href is the caller's responsibility to
+   * make document-relative -- a keydef's href is relative to the map that
+   * defined it, and only the caller building this closure knows that
+   * directory (see buildRenderContext).
+   */
+  resolveKeyHref?: (key: string) => string | undefined;
+  /**
+   * Opt-in for the standalone single-topic preview: cross-file xrefs whose
+   * target is NOT part of a book (no isInCurrentBook context) render as a
+   * real <a> carrying the raw href in data-dita-href, which the preview's
+   * webview script hands to the extension host to open (another topic's
+   * preview, a ditamap, a web page). Without this flag the renderer keeps
+   * the historical non-clickable <span class="xref-external"> hint --
+   * "Export as HTML", the diff view, book/site rendering and the second
+   * host all stay byte-identical (a test locks each of those shapes).
+   */
+  clickableExternalXrefs?: boolean;
+  /**
    * Resolves a cross-file xref's raw href to an absolute path IF the
    * referenced topic is part of the book/docsite this topic is itself
    * being rendered as part of, and undefined otherwise (target isn't in
@@ -516,6 +540,31 @@ function resolveConrefForNode(
   return { node: mergeConrefTarget(node, end), chainKey: conref, mark: conrefMarkFor(end, context) };
 }
 
+/**
+ * Per DITA keyref semantics, the key's resource target becomes the
+ * referencing element's effective href when the element carries no href of
+ * its own -- this is what turns `<xref keyref="k"/>` into a link to the
+ * key's target. Applies to link-shaped elements only (topic/xref): other
+ * keyref consumers (ph, keyword, term) never link, and handing topic/link
+ * a href would change its rendered shape without the webview-side handling
+ * to click it safely, so the gate stays on the element's base type.
+ * Resolved for local content too: `<xref keyref="k">text</xref>` keeps its
+ * text and still links to the key's target.
+ */
+function withResolvedKeyHref(node: DitaNode, keyref: string, context: RenderContext): DitaNode {
+  if (node.baseType !== 'topic/xref') return node;
+  if (!context.resolveKeyHref || node.attributes?.href) return node;
+  const keyHref = context.resolveKeyHref(keyref);
+  if (!keyHref) {
+    // The key resolves to text but names no resource (or the caller wired no
+    // defs): keep the keyref so the xref renderer can mark the element as an
+    // unlinkable keyref (unresolved-keyref) instead of a bare span that
+    // gives no hint anything is missing.
+    return { ...node, attributes: { ...node.attributes, keyref } };
+  }
+  return { ...node, attributes: { ...node.attributes, href: keyHref } };
+}
+
 function resolveKeyrefForNode(node: DitaNode, context: RenderContext): DitaNode {
   const keyref = node.attributes?.keyref;
   if (!keyref || !context.resolveKey) return node;
@@ -524,7 +573,7 @@ function resolveKeyrefForNode(node: DitaNode, context: RenderContext): DitaNode 
   const hasLocalContent = (node.children || []).some(
     (c) => c.type === 'element' || (c.text || '').trim() !== '',
   );
-  if (hasLocalContent) return node;
+  if (hasLocalContent) return withResolvedKeyHref(node, keyref, context);
   const resolved = context.resolveKey(keyref);
   if (!resolved) return node;
   // Strip keyref after resolving, replace children with resolved text
@@ -532,9 +581,8 @@ function resolveKeyrefForNode(node: DitaNode, context: RenderContext): DitaNode 
     Object.entries(node.attributes || {}).filter(([k]) => k !== 'keyref')
   );
   return {
-    ...node,
+    ...withResolvedKeyHref({ ...node, attributes: restAttrs }, keyref, context),
     children: [{ type: 'text', text: resolved, children: [], sourceRange: node.sourceRange }],
-    attributes: restAttrs,
   };
 }
 

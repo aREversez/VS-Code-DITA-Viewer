@@ -9,7 +9,7 @@ import {
 import { dirname, join, resolve } from 'path';
 import { randomBytes } from 'crypto';
 import { getWebviewScript } from './webview/topicScript';
-import { MSG_OPEN_CONREF_TARGET, parseConrefJumpMessage } from './conrefJump';
+import { MSG_OPEN_CONREF_TARGET, MSG_OPEN_XREF_TARGET, parseConrefJumpMessage } from './conrefJump';
 import { openConrefTarget } from './conrefJumpCommand';
 import { buildTitleMap, decodeHrefPart, openHrefTarget, clearImageDimensionsCache, clearTopicRenderCache, clearBookMembersCache } from './ditaRenderUtils';
 import { clearBookSearchIndexCache } from './bookSearchIndex';
@@ -191,6 +191,12 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
         // href; resolve it against THIS topic's folder and open it in the
         // right place (preview editor for DITA sources, system handler
         // for html/pdf/external URLs).
+        const href = typeof message.href === 'string' ? message.href : '';
+        if (href) openHrefTarget(vscode, href, dirname(document.uri.fsPath));
+      } else if (message.type === MSG_OPEN_XREF_TARGET) {
+        // Cross-file xref / related-link click (topicScript.ts): same
+        // open-in-the-right-place treatment as the image-map hotspots
+        // above, against the same base directory.
         const href = typeof message.href === 'string' ? message.href : '';
         if (href) openHrefTarget(vscode, href, dirname(document.uri.fsPath));
       } else if (message.type === 'setFontPrefs') {
@@ -502,6 +508,11 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
         includeIndexLabel: true,
         docFile: document.uri.fsPath,
         markConrefs: true,
+        // Standalone preview: cross-file xrefs and related links become
+        // real links the webview routes back here (openHrefTarget), instead
+        // of the dead xref-external hint. Book/site rendering (which needs
+        // page switching, not file opening) and export keep their own shapes.
+        clickableExternalXrefs: true,
       });
 
       const content = renderDocument(ditaDoc.root, ctx);

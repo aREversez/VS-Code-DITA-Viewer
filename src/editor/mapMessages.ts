@@ -89,3 +89,10 @@ export const MSG_OPEN_CONREF_TARGET = 'openConrefTarget';
 export const MSG_CHOOSE_DITAVAL = 'chooseDitaval';
 export const MSG_CLEAR_DITAVAL = 'clearDitaval';
 export const MSG_SET_DITAVAL = 'setDitaval';
+// webview -> host, topic preview only: a cross-file xref or related link the
+// webview must not navigate to itself (a relative href would white-page the
+// webview). The host resolves the href against the previewed topic's folder
+// and opens it in the right place (openHrefTarget). Interpolated into the
+// topic webview script from this one constant for the same typo-safety the
+// MSG_OPEN_CONREF_TARGET pair gets.
+export const MSG_OPEN_XREF_TARGET = 'openXrefTarget';
