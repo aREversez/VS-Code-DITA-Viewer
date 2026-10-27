@@ -131,6 +131,7 @@ describe('profileValuesOfKeys', () => {
       product: 'pro',
       audience: 'admin',
       otherprops: 'beta',
+      deliveryTarget: 'pdf',
       base: 'core',
       importance: 'high',
       rev: '2',

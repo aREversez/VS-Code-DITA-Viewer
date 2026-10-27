@@ -11,8 +11,8 @@
 // The rules follow DITA-OT's filtering, which is what a .ditaval is written
 // for:
 //   - an element is judged attribute by attribute (audience, platform,
-//     product, otherprops, props, and any attribute generalised through
-//     `props="name(value ...)"`);
+//     product, otherprops, deliveryTarget, props, and any attribute
+//     generalised through `props="name(value ...)"`);
 //   - for one attribute it is left out only when EVERY one of its values is
 //     excluded -- `audience="internal admin"` stays if admin is not excluded;
 //   - it is left out when ANY attribute leaves it out;
@@ -52,8 +52,14 @@ export interface ProfileFilter {
  * The attributes the renderer records in data-profile-keys, in its order.
  * Kept in step with PROFILING_ATTRS in render/renderer.ts (not exported from
  * there); a test renders each one to catch drift.
+ *
+ * deliveryTarget joins the filter-atts group: DITA 1.3 added it to the
+ * select-atts (it replaces the deprecated DITA 1.2 @print), and DITA-OT
+ * filters on it exactly like the rest of the group, so an element carrying
+ * it must show up highlighted, in the filter panel, and in .ditaval
+ * filtering like any other profiling attribute.
  */
-export const PROFILE_ATTRS = ['props', 'platform', 'product', 'audience', 'otherprops', 'base', 'importance', 'rev', 'status'] as const;
+export const PROFILE_ATTRS = ['props', 'platform', 'product', 'audience', 'otherprops', 'deliveryTarget', 'base', 'importance', 'rev', 'status'] as const;
 
 /**
  * Attributes a .ditaval never acts on: DITA-OT filters on audience, platform,

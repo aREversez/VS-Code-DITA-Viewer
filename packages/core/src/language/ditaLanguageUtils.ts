@@ -441,6 +441,8 @@ const UNIVERSAL_ATTRS = [
   'audience',
   'platform',
   'product',
+  'otherprops',
+  'deliveryTarget',
   'rev',
   'importance',
   'translate',

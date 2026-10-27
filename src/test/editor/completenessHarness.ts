@@ -43,9 +43,10 @@ export const CORPUS_PREFERENCES: ProfilingPreferences = {
   singleValue: [],
 };
 
-/** Profiling attributes the crawl knows without the preferences; the UI adds the rest per corpus. */
+/** Profiling attributes the crawl knows without the preferences; the UI adds the rest per corpus.
+ *  Mirrors mapCrawl.ts's PROFILING_ATTRS and completenessCheckUi.ts's filter list. */
 const BUILT_IN_PROFILING_ATTRIBUTES = [
-  'audience', 'platform', 'product', 'otherprops', 'props', 'rev',
+  'audience', 'platform', 'product', 'otherprops', 'deliveryTarget', 'props', 'rev',
 ] as const;
 
 export const CORPUS_ROOT_MAP = 'corpus.ditamap';

@@ -130,12 +130,14 @@ function isContainerBaseType(baseType: string): boolean {
 // Per the OASIS DITA 1.3 select-atts entity (commonElements.mod): the full
 // set of attributes conditional-processing tools (Oxygen's "Conditional
 // Text" / DITA-OT's .ditaval) act on is props, platform, product, audience,
-// otherprops (the filter-atts subgroup), plus base, importance, rev, and
-// status. This only *highlights* profiled content (matches it visually, the
-// way Oxygen shows profiling by default) — it does not hide anything; that
-// would be a real conditional-processing engine (a .ditaval-driven filter),
-// which is a separate, larger feature this doesn't attempt.
-const PROFILING_ATTRS = ['props', 'platform', 'product', 'audience', 'otherprops', 'base', 'importance', 'rev', 'status'];
+// otherprops, deliveryTarget (the filter-atts subgroup -- DITA 1.3 added
+// deliveryTarget, deprecating the DITA 1.2 @print), plus base, importance,
+// rev, and status. This only *highlights* profiled content (matches it
+// visually, the way Oxygen shows profiling by default) — it does not hide
+// anything; that would be a real conditional-processing engine (a
+// .ditaval-driven filter), which is a separate, larger feature this doesn't
+// attempt.
+const PROFILING_ATTRS = ['props', 'platform', 'product', 'audience', 'otherprops', 'deliveryTarget', 'base', 'importance', 'rev', 'status'];
 
 const PROFILING_ATTR_LABELS: Record<string, string> = {
   otherprops: 'Other',

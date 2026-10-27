@@ -256,7 +256,9 @@ export async function runCompleteness(map: string, options: CompletenessOptions,
   const all: Issue[] = [];
   const seen = new Set<string>();
   const prefs = readProfilingPreferences();
-  const extra = Object.keys(prefs.attributes).filter((a) => !['audience', 'platform', 'product', 'otherprops', 'props', 'rev'].includes(a));
+  // Must match the crawl's own built-in list (mapCrawl.ts PROFILING_ATTRS):
+  // anything here counts as known even when the preferences never name it.
+  const extra = Object.keys(prefs.attributes).filter((a) => !['audience', 'platform', 'product', 'otherprops', 'deliveryTarget', 'props', 'rev'].includes(a));
   for (const filter of filters) {
     if (token?.isCancellationRequested) break;
     const crawl = await crawlMaps([map], host, { filter, extraProfilingAttributes: extra });

@@ -407,7 +407,10 @@ interface XNode {
   text: string; // direct text (for <title> presence etc.)
 }
 
-const PROFILING_ATTRS = ['audience', 'platform', 'product', 'otherprops', 'props', 'rev'];
+// deliveryTarget is a DITA 1.3 filter-atts member (it replaces the deprecated
+// DITA 1.2 @print): DITA-OT cascades and filters it on topicrefs like the
+// rest of the group, so the map-level profiling checks must know it too.
+const PROFILING_ATTRS = ['audience', 'platform', 'product', 'otherprops', 'deliveryTarget', 'props', 'rev'];
 
 /** Parses XML with sax into a light tree carrying 1-based line numbers. */
 export function scanXml(raw: string): { root?: XNode; error?: { line: number; message: string } } {
