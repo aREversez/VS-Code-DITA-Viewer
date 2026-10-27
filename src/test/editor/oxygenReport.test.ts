@@ -124,6 +124,16 @@ describe('Oxygen completeness report adapter', () => {
     assert.ok(res.xml.includes('&quot;topics/x.dita&quot;'), res.xml);
   });
 
+  it('folds the report to LF, whatever line endings Oxygen wrote', () => {
+    // The window's Oxygen writes CRLF; every committed text file here is LF, so a
+    // report that kept its endings would show up as a whole-file diff.
+    const raw = '<report>\r\n<systemID>H:\\w\\corpus\\topics\\a.dita</systemID>\r\n</report>\r\n';
+    const res = sanitizeOxygenReport(raw, 'H:\\w\\corpus');
+    assert.deepStrictEqual(res.leftovers, []);
+    assert.ok(!res.xml.includes('\r'), JSON.stringify(res.xml));
+    assert.ok(res.xml.includes('<systemID>topics/a.dita</systemID>'), res.xml);
+  });
+
   it('sanitizes file: URLs with escapes and POSIX roots', () => {
     const raw = '<systemID>file:///home/me/my%20work/corpus/topics/a.dita</systemID>';
     const res = sanitizeOxygenReport(raw, '/home/me/my work/corpus');

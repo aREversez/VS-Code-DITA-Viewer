@@ -60,7 +60,7 @@ the existing `undefined-key` (a key from a peer map is undefined in this build),
 | `dmv.conrefend.confl.conref` | `topics/e-conrefend-confl-{pos,neg,edge}.dita` | root topic to nested topic; both in one topic; both in the nested topic |
 | `dmv.no.conref.has.target.attr.value` | `topics/e-target-attr-{pos,neg,edge}.dita`, `maps/e-target-attr.ditamap` | value without `conref`; with `conref`; with `conkeyref` |
 | `dmv.conkeyref.peer.map` | `topics/e-conkeyref-peer-{pos,neg,edge}.dita`, `maps/e-conkeyref-peer{,-keys,-sub}.ditamap` | key in a `scope="peer"` map; in the same map; in a local submap |
-| (R019) a conref or conkeyref to a file that does not exist | `topics/e-conref-missing-file-{pos,edge}.dita`, `maps/e-conref-missing-key.ditamap` | a conref to an absent file; a conkeyref through a key whose file is absent | `missing-reference` on the topic (pos) and on the map that defines the key (edge); Oxygen's id is what the next run shows |
+| (R019) a conref or conkeyref to a file that does not exist | `topics/e-conref-missing-file-{pos,edge}.dita`, `maps/e-conref-missing-key.ditamap` | a conref to an absent file; a conkeyref through a key whose file is absent | `missing-reference` on the topic (pos) and on the map that defines the key (edge); the run below files both as `dmv.file.not.found`, and adds a third incident on the conkeyref's own element (Oxygen-only) |
 | `dmv.invalid.ref.id` | `topics/f-invalid-ref-id-{pos,neg,edge}.dita` | missing element via conref; existing; missing element via xref |
 | `dmv.invalid.ref.id.path` | `topics/f-ref-id-path-{pos,neg,edge}.dita` | missing id path; single element id; existing two-segment path (section then paragraph) |
 | `dmv.invalid.ref.id.path.keyref.elemid` | `topics/f-keyref-elemid-{pos,neg,edge}.dita`, `maps/f-keyref-elemid.ditamap` | conkeyref to a missing element; existing; xref keyref with the same suffix |
@@ -86,15 +86,16 @@ entry.
 *Validate and Check for Completeness* ran with `corpus.ditamap` as the only open root map
 (every option on, remote off). The report says `Keys are gathered from: corpus.ditamap`, and
 the control `topics/control-missing.dita` at line 11 is present, so it is a run of this map.
-It produced 30 incidents, saved as `oxygen-report.raw.xml` and sanitized to
+It was then rerun once, for the two R019 probes of a conref and a conkeyref to a file that does
+not exist; the rerun produced 34 incidents, saved as `oxygen-report.raw.xml` and sanitized to
 `oxygen-report.xml`. `node scripts/oxygen-diff.cjs --corpus completeness-corpus-3
 test-dita-file/completeness-corpus-3/oxygen-report.xml` reports:
 
 ```
-27 extension findings, 30 incidents, 27 matched, 0 extension-only, 3 Oxygen-only
+29 extension findings, 34 incidents, 29 matched, 0 extension-only, 5 Oxygen-only
 ```
 
-and names the three Oxygen-only rows, each with its reason in
+The three Oxygen-only rows of the first run are unchanged, each with its reason in
 `../completeness-corpus/OXYGEN-PROBLEMS.md`:
 
 - `topics/e-conrefend-no-conref-edge.dita` `oxygen:unknown` — "Empty reference value." has
@@ -104,13 +105,28 @@ and names the three Oxygen-only rows, each with its reason in
 - `topics/f-bad-id-ref-empty-topic.dita` `oxygen:unknown` — "Invalid anchor" has no problem
   id; the trailing-slash probe matches.
 
+The rerun answers R019 and adds two rows:
+
+- A conref or conkeyref to a file that does not exist is `dmv.file.not.found` — the id of an
+  ordinary dangling reference, never the `dmv.reference.not.exist` the catalog lists. That is
+  what moves both new extension findings into the matched set.
+- `topics/e-conref-missing-file-edge.dita` `missing-reference` — the edge probe draws a second
+  incident, on the conkeyref's own element, beside the matching one on the keydef
+  (`maps/e-conref-missing-key.ditamap:7`). The extension keeps a broken href at the element
+  that writes it, so a key-based reference to an absent file is one finding, not two; this row
+  is the open parity work.
+- `maps/e-conref-missing-key.ditamap` `unreferenced-key` — Oxygen also calls the key whose
+  target file is missing an unreferenced definition, although
+  `topics/e-conref-missing-file-edge.dita` names it; the extension counts that use, so the key
+  is referenced.
+
 The same file records two ids as *n/a*: `dmv.circular.keyref` and
 `dmv.empty.link.peer.target` produced no incident on their probes, and the extension is
 silent on the same files.
 
 ## Baseline and parity
 
-`baseline.extension.json` holds the 27 findings the extension produces on this corpus (the
-control plus the 26 probe findings). `oxygen-parity.expected.json` locks the parity state
+`baseline.extension.json` holds the 29 findings the extension produces on this corpus (the
+control plus the 28 probe findings). `oxygen-parity.expected.json` locks the parity state
 above. Refresh them with `--update` and `UPDATE_OXYGEN_PARITY=1` as described under
 "Running it".

@@ -117,6 +117,63 @@
 <incident>
 <engine>oXygen</engine>
 <severity>error</severity>
+<problemID>dmv.file.not.found</problemID>
+<description>File not found: &quot;topics/e-no-such-file.dita&quot;.</description>
+<systemID>topics/e-conref-missing-file-pos.dita</systemID>
+<type>Content reference</type>
+<location>
+<start>
+<line>9</line>
+<column>15</column>
+</start>
+<end>
+<line>9</line>
+<column>42</column>
+</end>
+<length>27</length>
+</location>
+</incident>
+<incident>
+<engine>oXygen</engine>
+<severity>error</severity>
+<problemID>dmv.file.not.found</problemID>
+<description>File not found: &quot;topics/e-no-such-key-target.dita&quot;.</description>
+<systemID>maps/e-conref-missing-key.ditamap</systemID>
+<type>Reference</type>
+<location>
+<start>
+<line>7</line>
+<column>45</column>
+</start>
+<end>
+<line>7</line>
+<column>82</column>
+</end>
+<length>37</length>
+</location>
+</incident>
+<incident>
+<engine>oXygen</engine>
+<severity>error</severity>
+<problemID>dmv.file.not.found</problemID>
+<description>File not found: &quot;topics/e-no-such-key-target.dita&quot;.</description>
+<systemID>topics/e-conref-missing-file-edge.dita</systemID>
+<type>Content reference</type>
+<location>
+<start>
+<line>9</line>
+<column>18</column>
+</start>
+<end>
+<line>9</line>
+<column>43</column>
+</end>
+<length>25</length>
+</location>
+</incident>
+<incident>
+<engine>oXygen</engine>
+<severity>error</severity>
 <description>Invalid anchor &quot;lib.dita#/p1&quot;.</description>
 <systemID>topics/f-bad-id-ref-empty-topic.dita</systemID>
 <type>Content reference</type>
@@ -574,6 +631,25 @@
 <column>49</column>
 </end>
 <length>30</length>
+</location>
+</incident>
+<incident>
+<engine>oXygen</engine>
+<severity>warning</severity>
+<problemID>dmv.not.used.key.defs</problemID>
+<description>Unreferenced key definition: &quot;k-conref-missing-file&quot;.</description>
+<systemID>maps/e-conref-missing-key.ditamap</systemID>
+<type>Key definition</type>
+<location>
+<start>
+<line>7</line>
+<column>16</column>
+</start>
+<end>
+<line>7</line>
+<column>39</column>
+</end>
+<length>23</length>
 </location>
 </incident>
 </report>

@@ -530,6 +530,10 @@ export function foreignKeySources(xml: string): string[] {
  * becomes relative to it, paths under the folder above it become `../...`, and
  * what is left of a machine-specific absolute path (an install folder in a
  * message, say) is returned in `leftovers` so the caller can refuse to write it.
+ *
+ * Line endings are folded to LF as well: Oxygen writes the report with the
+ * platform's own endings, and a CRLF file would put the whole report into the diff
+ * of a repo whose every text file is LF (`.gitattributes`).
  */
 export function sanitizeOxygenReport(xml: string, corpusRoot: string): { xml: string; leftovers: string[] } {
   const fwd = corpusRoot.replace(/\\/g, '/').replace(/\/+$/, '');
@@ -556,7 +560,7 @@ export function sanitizeOxygenReport(xml: string, corpusRoot: string): { xml: st
     }
     return out;
   };
-  let out = replaceDir(xml, fwd, '', '.');
+  let out = replaceDir(xml.replace(/\r\n?/g, '\n'), fwd, '', '.');
   if (parent) out = replaceDir(out, parent, '../', '..');
   out = out.replace(/<systemID>([^<]*)<\/systemID>/g, (_m, p: string) => `<systemID>${p.replace(/\\/g, '/')}</systemID>`);
   // Xerces incidents carry `<operationDescription><schemas><schema>` pointing at
