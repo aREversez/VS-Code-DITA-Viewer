@@ -83,7 +83,7 @@ jobs:
         run: |
           version=$(node -p "require('./package.json').version")
           awk -v v="$version" '
-            !inSection && index($0, "## ") == 1 && index(" " $0 " ", " " v ") > 0 { inSection = 1; next }
+            !inSection && index($0, "## ") == 1 && index(" " $0 " ", " " v " ") > 0 { inSection = 1; next }
             inSection && /^## [0-9]/ { inSection = 0 }
             inSection { print }
           ' CHANGELOG.md > release-notes.md
