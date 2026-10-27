@@ -105,6 +105,10 @@ export const CORPUS_SETTINGS: Readonly<Record<string, CorpusSettings>> = {
  * file only in case resolves only on a case-insensitive file system. Their reports
  * come from a Windows Oxygen run, so off Windows their findings are left out of both
  * sides of a comparison; every other file in the corpus is locked on every platform.
+ * The three `ok.dita` spellings are one file on Windows, where the id is unique; on a
+ * case-sensitive file system the `OK.dita` and `Ok.dita` href spellings (the `a-case-*`
+ * probes) crawl as further topics, so the shared id reads as a duplicate there -- the
+ * same file-system dependency, listed for the findings it produces as well.
  */
 export const PLATFORM_DEPENDENT_FILES: Readonly<Record<string, readonly string[]>> = {
   'completeness-corpus-2': [
@@ -112,6 +116,9 @@ export const PLATFORM_DEPENDENT_FILES: Readonly<Record<string, readonly string[]
     'topics/a-case-pos.dita',
     'topics/a-win-seps-edge.dita',
     'topics/a-win-seps-pos.dita',
+    'topics/OK.dita',
+    'topics/Ok.dita',
+    'topics/ok.dita',
   ],
 };
 

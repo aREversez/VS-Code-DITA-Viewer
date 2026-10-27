@@ -23,12 +23,14 @@ Oxygen has been run on it, its own `oxygen-report.xml` and
   and let the next real report say what Oxygen does; do not guess.
 - **Root map:** run Oxygen with `corpus.ditamap` of this folder as the only open root
   map (`Keys are gathered from:` in a report must name it).
-- **Windows only.** The probes rely on Windows file-system behaviour: `topics\ok.dita`
-  resolves, `topics/OK.dita` finds `ok.dita`, and a target that differs only in case is
-  not a missing reference. On a case-sensitive file system the same lines would become
-  missing references, so both the baseline and the parity lock describe one Windows run.
-  `src/test/editor/completenessBaseline.test.ts` and `oxygenParity.test.ts` skip this
-  folder elsewhere (`WINDOWS_ONLY_CORPORA`).
+- **Windows-leaning file system.** The probes rely on Windows file-system behaviour:
+  `topics\ok.dita` resolves, `topics/OK.dita` finds `ok.dita`, and a target that differs
+  only in case is not a missing reference. On a case-sensitive file system the same
+  lines would become missing references, and the `OK.dita`/`Ok.dita`/`ok.dita` spellings
+  would crawl as three topics sharing one id (duplicate-id). The committed baseline and
+  parity state come from a Windows run; off Windows the platform-dependent files below
+  are left out of both sides of every comparison
+  (`PLATFORM_DEPENDENT_FILES` in `src/test/editor/completenessHarness.ts`).
 - **Fabricated probe targets.** `maps/a-absolute-drive.ditamap` and
   `maps/a-absolute-fileurl.ditamap` need a literal absolute href, so they use the drive
   this corpus made up, `Z:`, with the folder `/probe`. That line carries the marker
@@ -45,12 +47,17 @@ Oxygen has been run on it, its own `oxygen-report.xml` and
 Four probe files give a different result off Windows: `topics/a-win-seps-pos.dita` and
 `topics/a-win-seps-edge.dita` (a backslash is a separator only on Windows) and
 `topics/a-case-pos.dita` and `topics/a-case-edge.dita` (a path that differs from the
-real file only in case resolves only on a case-insensitive file system). Their Oxygen
-report comes from a Windows run, so on macOS and Linux the baseline and parity tests leave
-those four files out of **both** sides and still lock everything else
+real file only in case resolves only on a case-insensitive file system). The three
+spellings of the neutral target — `topics/ok.dita`, `topics/OK.dita`, `topics/Ok.dita`
+— belong with them: one file on Windows, where its id is unique, but on a case-sensitive
+file system the two capitalised href spellings crawl as further topics and all three
+report the shared id as duplicate-id (the Oxygen report, per Windows, has the single
+`topics/ok.dita` row in the parity's Oxygen-only list). Their Oxygen report comes from a
+Windows run, so on macOS and Linux the baseline and parity tests leave those seven files
+out of **both** sides and still lock everything else
 (`PLATFORM_DEPENDENT_FILES` in `src/test/editor/completenessHarness.ts`). The two refresh
 commands below must be run on Windows; elsewhere they refuse for this corpus, because they
-would write the other platform's answer for those four files. A new probe whose result
+would write the other platform's answer for those files. A new probe whose result
 depends on the file system or the OS goes into that list.
 
 ## Running it

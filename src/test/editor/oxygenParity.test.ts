@@ -79,20 +79,23 @@ describe('Oxygen parity on the corpus (real report)', () => {
 
   it('leaves platform-dependent probe files out of a comparison off Windows only', () => {
     const f = (file: string) => ({ file, category: 'missing-reference' });
-    const both = [f('topics/a-case-pos.dita'), f('topics/ok.dita')];
+    // The ok.dita spellings are in the list too: on a case-sensitive file system
+    // the `OK.dita`/`Ok.dita` hrefs crawl as separate topics and the shared id
+    // reports duplicate-id there, where Windows sees one file and no duplicate.
+    const both = [f('topics/a-case-pos.dita'), f('topics/ok.dita'), f('topics/OK.dita')];
     assert.deepStrictEqual(
       dropPlatformDependent('completeness-corpus-2', both, 'linux').map((x) => x.file),
-      ['topics/ok.dita'],
+      [],
     );
-    assert.strictEqual(dropPlatformDependent('completeness-corpus-2', both, 'win32').length, 2);
-    assert.strictEqual(dropPlatformDependent('completeness-corpus', both, 'linux').length, 2);
+    assert.strictEqual(dropPlatformDependent('completeness-corpus-2', both, 'win32').length, 3);
+    assert.strictEqual(dropPlatformDependent('completeness-corpus', both, 'linux').length, 3);
     assert.deepStrictEqual(
       dropPlatformDependentSignatures(
         'completeness-corpus-2',
-        ['topics/a-win-seps-pos.dita  missing-reference', 'topics/ok.dita\tduplicate-id'],
+        ['topics/a-win-seps-pos.dita  missing-reference', 'topics/ok.dita\tduplicate-id', 'topics/Ok.dita\tduplicate-id'],
         'darwin',
       ),
-      ['topics/ok.dita\tduplicate-id'],
+      [],
     );
   });
 
