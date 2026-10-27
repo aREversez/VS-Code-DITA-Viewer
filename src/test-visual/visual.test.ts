@@ -189,7 +189,13 @@ describe('site/book template visual check (real Chromium)', function () {
       dir: '/virtual',
       builtin: false,
     };
-    const badReadFile = () => '.book-entry { content-visibility: visible !important; }';
+    // The selector mirrors the base rule's (media/styles.css): it is
+    // `!important` at four classes, so since e6e50d3 a plain one-class
+    // `.book-entry { visible !important }` loses on specificity and the kill
+    // test silently stops killing. Match the specificity, and win by source
+    // order -- the template's <style> comes after the base sheet's.
+    const badReadFile = () =>
+      '.ditamap-book > .book-entry:not(.book-entry--placeholder):not(.book-entry--error) { content-visibility: visible !important; }';
     const html = buildTemplateSnapshotHtml({ baseCss, template: badTemplate, readFile: badReadFile, toUri, mode: 'book', dark: false });
 
     const page = await browser.newPage();
