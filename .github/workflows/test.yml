@@ -11,7 +11,10 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        node: [18, 20, 22]
+        # No 18: it is EOL (Apr 2025), and the test-time cheerio pulls undici,
+        # which needs the File global that first landed in Node 20 -- loading a
+        # cheerio test file on 18 dies with "ReferenceError: File is not defined".
+        node: [20, 22]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
