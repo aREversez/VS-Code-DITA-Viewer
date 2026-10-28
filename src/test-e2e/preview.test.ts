@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { updateAndSettle } from './updateAndSettle';
 
 const EXTENSION_ID = 'dita-viewer.dita-viewer';
 
@@ -207,8 +208,8 @@ describe('DITA/DITAMAP preview rendering', () => {
     const previousFontPrefs = globalState.get('ditaViewer.fontPrefs');
     const previousWidthMap = globalState.get<Record<string, string>>('ditaViewer.widthSelectionByUri', {});
     try {
-      await globalState.update('ditaViewer.fontPrefs', { size: 140, serif: true });
-      await globalState.update('ditaViewer.widthSelectionByUri', {
+      await updateAndSettle(globalState, 'ditaViewer.fontPrefs', { size: 140, serif: true });
+      await updateAndSettle(globalState, 'ditaViewer.widthSelectionByUri', {
         ...previousWidthMap,
         [uri.toString()]: '1280px',
       });
@@ -248,8 +249,8 @@ describe('DITA/DITAMAP preview rendering', () => {
 
       await closePreview(uri, 'ditaViewer.mapPreview', getHtml);
     } finally {
-      await globalState.update('ditaViewer.fontPrefs', previousFontPrefs);
-      await globalState.update('ditaViewer.widthSelectionByUri', previousWidthMap);
+      await updateAndSettle(globalState, 'ditaViewer.fontPrefs', previousFontPrefs);
+      await updateAndSettle(globalState, 'ditaViewer.widthSelectionByUri', previousWidthMap);
     }
   });
 
@@ -261,7 +262,7 @@ describe('DITA/DITAMAP preview rendering', () => {
     const globalState = ext.exports._test.globalState as vscode.Memento;
     const previous = globalState.get('ditaViewer.tagTooltips');
     try {
-      await globalState.update('ditaViewer.tagTooltips', true);
+      await updateAndSettle(globalState, 'ditaViewer.tagTooltips', true);
 
       const topicUri = vscode.Uri.file(path.join(legacyFixturesDir, 'topics', 'db_overview.dita'));
       const getTopicHtml = () => ext.exports._test.getLastRenderedHtml(topicUri.toString());
@@ -292,7 +293,7 @@ describe('DITA/DITAMAP preview rendering', () => {
       assert.ok(!mapPage.includes('${MSG_'), 'an un-interpolated MSG_ constant would leave the message type unmatched');
       await closePreview(mapUri, 'ditaViewer.mapPreview', getMapHtml);
     } finally {
-      await globalState.update('ditaViewer.tagTooltips', previous);
+      await updateAndSettle(globalState, 'ditaViewer.tagTooltips', previous);
     }
   });
 
