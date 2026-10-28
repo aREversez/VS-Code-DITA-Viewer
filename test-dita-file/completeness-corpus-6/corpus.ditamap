@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- Sixth differential corpus: key scope resolution (R066, see README.md here).
+     No Oxygen report exists for it yet: the rows it feeds cite the DITA spec, and the
+     parity lock arrives with the first real run. Run Oxygen with THIS map as the only
+     root map. -->
+<map id="corpus6">
+  <title>Completeness Check Corpus 6</title>
+
+  <!-- Control, kept in every run: a reference to a file that does not exist. -->
+  <topicref href="topics/control-missing.dita"/>
+
+  <topicgroup keyscope="s1">
+    <keydef keys="k-scoped" href="topics/t-target.dita"/>
+    <topicref href="topics/o-scope-inside-neg.dita"/>
+    <topicref href="topics/o-scope-shared-edge.dita"/>
+  </topicgroup>
+  <topicgroup keyscope="s2">
+    <topicref href="topics/o-scope-shared-edge.dita"/>
+  </topicgroup>
+  <topicref href="topics/o-scope-outside-pos.dita"/>
+  <topicref href="topics/o-scope-qualified-neg.dita"/>
+</map>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="o-scope-shared-edge">
+  <title>o-scope-shared-edge</title>
+  <body>
+    <!-- R066 edge: published in s1 (key defined) and in s2 (not defined): undefined in s2. -->
+    <p><xref keyref="k-scoped"/></p>
+  </body>
+</topic>

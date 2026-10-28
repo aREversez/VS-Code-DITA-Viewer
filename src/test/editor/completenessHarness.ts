@@ -66,6 +66,7 @@ export const CORPUS_FOLDERS = [
   'completeness-corpus-3',
   'completeness-corpus-4',
   'completeness-corpus-5',
+  'completeness-corpus-6',
 ] as const;
 
 /**

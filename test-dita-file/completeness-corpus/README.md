@@ -1,6 +1,6 @@
 # Completeness-check differential corpus
 
-This folder is the first of five differential corpora for the "Validate and Check for
+This folder is the first of six differential corpora for the "Validate and Check for
 Completeness" parity effort: **run both tools over the same map and diff their findings**, so
 a divergence is a test failure rather than a user report.
 
@@ -11,6 +11,7 @@ a divergence is a test failure rather than a user report.
 | `completeness-corpus-3/` | conref shape, id references, keys and links, element ids | `BATCH-2.md` |
 | `completeness-corpus-4/` | profiling values and preferences, subject schemes, filters | `BATCH-3.md` |
 | `completeness-corpus-5/` | class-dependent rules, DITA validity, structure | `BATCH-4.md` |
+| `completeness-corpus-6/` | key scope resolution (no Oxygen report yet) | R066 |
 
 Where to read what: **[RULES.md](RULES.md)** is the ledger (every rule and what it rests on),
 **[OXYGEN-PROBLEMS.md](OXYGEN-PROBLEMS.md)** the parity specification (every Oxygen problem id

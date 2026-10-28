@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="o-scope-qualified-neg">
+  <title>o-scope-qualified-neg</title>
+  <body>
+    <!-- R066 negative: from outside, the qualified name s1.k-scoped reaches the key. -->
+    <p><xref keyref="s1.k-scoped"/></p>
+  </body>
+</topic>

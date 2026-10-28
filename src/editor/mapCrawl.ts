@@ -559,6 +559,19 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
   const seenTopics = new Set<string>();
   const profilingAttrs = [...PROFILING_ATTRS, ...(opts.extraProfilingAttributes ?? [])];
   const topicQueue: Array<{ path: string; inherited: Map<string, string[]> }> = [];
+  /**
+   * The key scopes a topic is published in: every topicref that points at it adds the
+   * scope chains in effect there (R066). A topic crawled once can sit in several scopes,
+   * and its keyrefs are resolved in each. A topic no topicref publishes has no entry
+   * and resolves in the root scope.
+   */
+  const topicScopes = new Map<string, Map<string, string[][]>>();
+  const noteTopicScope = (target: string, chains: string[][]): void => {
+    const k = norm(target);
+    let m = topicScopes.get(k);
+    if (!m) topicScopes.set(k, (m = new Map()));
+    m.set(JSON.stringify(chains), chains);
+  };
 
   /** Reads and scans a file, recording read/parse problems as file issues. */
   async function load(path: string, from?: Location, prune = false): Promise<{ root: XNode; doctype?: Doctype; grammar: boolean } | undefined> {
@@ -642,7 +655,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
   }
 
   // ── Maps ──
-  async function crawlMap(mapPath: string, chain: string[], from?: Location): Promise<void> {
+  async function crawlMap(mapPath: string, chain: string[], from?: Location, scopeChains: string[][] = [[]]): Promise<void> {
     const key = norm(mapPath);
     if (seenMaps.has(key)) return;
     seenMaps.add(key);
@@ -669,7 +682,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
         msg: msg('val.notMap', root.tag), structural: true,
       });
     }
-    const ctx: MapCtx = { file: mapPath, scopeChains: [[]], resourceOnly: false, inReltable: false, profile: new Map() };
+    const ctx: MapCtx = { file: mapPath, scopeChains, resourceOnly: false, inReltable: false, profile: new Map() };
     for (const c of root.children) await walkMapNode(c, ctx, chain.concat(key));
   }
 
@@ -801,11 +814,14 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
             // A target already on the crawl path closes a cycle: report it where it
             // closes (Oxygen names the map that points back, not every member).
             if (chain.includes(tkey)) result.recursiveRefs.push({ file: ctx.file, line: n.line, href });
-            else await crawlMap(ref.target, chain, ref);
+            else await crawlMap(ref.target, chain, ref, scopeChains);
             followedMap = true;
-          } else if (ref.dita && !seenTopics.has(tkey) && n.attrs['format'] !== 'ditamap') {
-            seenTopics.add(tkey);
-            topicQueue.push({ path: ref.target, inherited: cascaded });
+          } else if (ref.dita && n.attrs['format'] !== 'ditamap') {
+            if (kind === 'topicref') noteTopicScope(ref.target, scopeChains);
+            if (!seenTopics.has(tkey)) {
+              seenTopics.add(tkey);
+              topicQueue.push({ path: ref.target, inherited: cascaded });
+            }
           }
         } else if (kind === 'mapref') {
           followedMap = true;
@@ -1260,91 +1276,118 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
   // use. A keyref that resolves to a resource becomes a reference, so the
   // ordinary existence / duplicate / link checks see it; a keyref that resolves
   // to nothing is reported as an undefined key (Oxygen's `dmv.undef.key`).
+  // A key lives in a scope (`scopeIds`) and is found by (scope, name): R066. A use
+  // looks in its own scope first, then each enclosing one; a name written with
+  // scope qualifiers (`s1.k`) is looked up below the scope it starts from.
   const keyIndex = new Map<string, KeyDef>();
   for (const def of result.keyDefs) {
-    for (const q of def.qualified) if (!keyIndex.has(q)) keyIndex.set(q, def);
+    for (const sid of def.scopeIds) {
+      const k = `${sid}\u0000${def.key}`;
+      if (!keyIndex.has(k)) keyIndex.set(k, def);
+    }
   }
   const droppedFallbacks = new Set<Reference>();
   for (const use of result.keyUses) {
     if (use.keySyntax) continue; // reported as invalid key syntax, not as an undefined key
-    const def = resolveKeyUse(use, keyIndex);
-    if (!def) {
-      result.undefinedKeys.push({ file: use.file, line: use.line, key: use.key, value: use.value ?? use.key });
-      continue;
+    // A map element carries the scopes it sits in; a topic takes those of every topicref
+    // that publishes it (or the root scope when none does).
+    const contexts = use.scopeChains
+      ? [use.scopeChains]
+      : [...(topicScopes.get(norm(use.file))?.values() ?? [[[]]])];
+    const defs = new Set<KeyDef>();
+    let missing = false;
+    for (const chains of contexts) {
+      const def = resolveKeyUse(use, chains, keyIndex);
+      if (def) defs.add(def);
+      else missing = true;
     }
-    // A keyref may append an element id (`key/element`): the key resolves to a
-    // file and a topic, so the appended id is checked against that topic later.
-    const suffix = use.value?.split('/').slice(1).join('/');
-    const keyHref = def.href ?? '';
-    const keyHash = keyHref.indexOf('#');
-    const keyTopic = keyHash >= 0 ? keyHref.slice(keyHash + 1).split('/')[0] : '';
-    if (suffix && !use.scopeChains) {
-      result.keyElementPaths.push({
-        file: use.file, line: use.line, value: use.value ?? use.key,
-        elementPath: suffix, targetFile: def.target, topicId: keyTopic || undefined,
+    if (missing) {
+      result.undefinedKeys.push({ file: use.file, line: use.line, key: use.key, value: use.value ?? use.key });
+    }
+    for (const def of defs) {
+      // A keyref may append an element id (`key/element`): the key resolves to a
+      // file and a topic, so the appended id is checked against that topic later.
+      const suffix = use.value?.split('/').slice(1).join('/');
+      const keyHref = def.href ?? '';
+      const keyHash = keyHref.indexOf('#');
+      const keyTopic = keyHash >= 0 ? keyHref.slice(keyHash + 1).split('/')[0] : '';
+      if (suffix && !use.scopeChains) {
+        result.keyElementPaths.push({
+          file: use.file, line: use.line, value: use.value ?? use.key,
+          elementPath: suffix, targetFile: def.target, topicId: keyTopic || undefined,
+        });
+      }
+      // The key is defined, so the element's own @href is not used.
+      if (use.fallbackRef) droppedFallbacks.add(use.fallbackRef);
+      if (use.attribute === 'conkeyref') {
+        // Content references never become References here, but the file behind the key
+        // is one the element depends on: recorded so the checks can report it missing.
+        if (def.target) {
+          result.conkeyrefTargets.push({
+            file: use.file, line: use.line,
+            href: def.href ?? use.value ?? use.key,
+            target: def.target,
+            dita: isDitaHref((def.href ?? '').split('#')[0], def.format),
+          });
+        }
+        continue;
+      }
+      if (!def.target) {
+        // A text-only key: defined, but there is no resource to link to. A key that
+        // redirects to another key is left alone: this crawl does not follow
+        // redirect chains, so it cannot tell where the chain ends.
+        if (!def.keyref && (use.kind === 'xref' || use.kind === 'link')) {
+          result.keyLinksWithoutTarget.push({
+            file: use.file, line: use.line, key: use.key, value: use.value ?? use.key, tag: use.tag,
+          });
+        }
+        continue;
+      }
+      // Only elements that make a link (xref, image, topicref, ...) are references;
+      // a <ph keyref> or <keyword keyref> merely borrows the key's text.
+      if (!use.kind) continue;
+      const pathPart = (def.href ?? '').split('#')[0];
+      result.refs.push({
+        file: use.file,
+        line: use.line,
+        kind: use.kind,
+        href: def.href ?? use.value ?? use.key,
+        target: def.target,
+        remote: false,
+        dita: isDitaHref(pathPart, def.format),
+        resourceOnly: !!use.resourceOnly,
+        copyTo: use.copyTo,
+        inReltable: !!use.inReltable,
+        tag: use.tag ?? '',
+        format: def.format,
+        inMap: !!use.scopeChains,
+        viaKeyref: true,
       });
     }
-    // The key is defined, so the element's own @href is not used.
-    if (use.fallbackRef) droppedFallbacks.add(use.fallbackRef);
-    if (use.attribute === 'conkeyref') {
-      // Content references never become References here, but the file behind the key
-      // is one the element depends on: recorded so the checks can report it missing.
-      if (def.target) {
-        result.conkeyrefTargets.push({
-          file: use.file, line: use.line,
-          href: def.href ?? use.value ?? use.key,
-          target: def.target,
-          dita: isDitaHref((def.href ?? '').split('#')[0], def.format),
-        });
-      }
-      continue;
-    }
-    if (!def.target) {
-      // A text-only key: defined, but there is no resource to link to. A key that
-      // redirects to another key is left alone: this crawl does not follow
-      // redirect chains, so it cannot tell where the chain ends.
-      if (!def.keyref && (use.kind === 'xref' || use.kind === 'link')) {
-        result.keyLinksWithoutTarget.push({
-          file: use.file, line: use.line, key: use.key, value: use.value ?? use.key, tag: use.tag,
-        });
-      }
-      continue;
-    }
-    // Only elements that make a link (xref, image, topicref, ...) are references;
-    // a <ph keyref> or <keyword keyref> merely borrows the key's text.
-    if (!use.kind) continue;
-    const pathPart = (def.href ?? '').split('#')[0];
-    result.refs.push({
-      file: use.file,
-      line: use.line,
-      kind: use.kind,
-      href: def.href ?? use.value ?? use.key,
-      target: def.target,
-      remote: false,
-      dita: isDitaHref(pathPart, def.format),
-      resourceOnly: !!use.resourceOnly,
-      copyTo: use.copyTo,
-      inReltable: !!use.inReltable,
-      tag: use.tag ?? '',
-      format: def.format,
-      inMap: !!use.scopeChains,
-      viaKeyref: true,
-    });
   }
   if (droppedFallbacks.size) result.refs = result.refs.filter((r) => !droppedFallbacks.has(r));
   return result;
 }
 
 /**
- * Resolves a keyref use against the key index: the most-qualified name first,
- * so a key inside a key scope wins over a same-named key at an outer scope
- * (DITA's nearest-scope precedence).
+ * Resolves a keyref use in the key scope it sits in: its own scope first, then each
+ * enclosing one, the nearest definition winning (DITA's scope precedence). A name with
+ * scope qualifiers (`a.k`, or `x.a.k` for nested scopes) is looked up below the scope
+ * the search starts from, so a key defined inside a scope is bare only within it and
+ * reachable from outside only by its qualified name. A use in several chains (a
+ * `keyscope` listing several names) resolves in the first that finds the key.
  */
-function resolveKeyUse(use: KeyUse, index: ReadonlyMap<string, KeyDef>): KeyDef | undefined {
-  const candidates = qualifiedNamesMulti(use.key, use.scopeChains ?? [[]]).reverse();
-  for (const c of candidates) {
-    const def = index.get(c);
-    if (def) return def;
+function resolveKeyUse(use: KeyUse, chains: string[][], index: ReadonlyMap<string, KeyDef>): KeyDef | undefined {
+  const parts = use.key.split('.');
+  for (const chain of chains) {
+    for (let depth = chain.length; depth >= 0; depth--) {
+      const prefix = chain.slice(0, depth);
+      for (let j = 0; j < parts.length; j++) {
+        const scope = prefix.concat(parts.slice(0, j)).join('/');
+        const def = index.get(`${scope}\u0000${parts.slice(j).join('.')}`);
+        if (def) return def;
+      }
+    }
   }
   return undefined;
 }

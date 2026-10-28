@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="o-scope-inside-neg">
+  <title>o-scope-inside-neg</title>
+  <body>
+    <!-- R066 negative: the same bare key, from a topic published inside keyscope "s1". -->
+    <p><xref keyref="k-scoped"/></p>
+  </body>
+</topic>
