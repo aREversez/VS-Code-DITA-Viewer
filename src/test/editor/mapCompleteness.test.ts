@@ -958,19 +958,31 @@ describe('completeness: links', () => {
         'root.ditamap':
           '<map><topicref href="lib.dita" processing-role="resource-only"/>' +
           '<topicref href="pub.dita"/><topicref href="shared.dita" processing-role="resource-only" copy-to="shared-copy.dita"/>' +
-          '<topicref href="shared.dita"/><topicref href="a.dita"/><topicref href="b.dita"/><topicref href="c.dita"/></map>',
+          '<topicref href="shared.dita"/><topicref href="a.dita"/><topicref href="b.dita"/><topicref href="c.dita"/>' +
+          '<keydef keys="kk" href="keyed.dita"/><keydef keys="kn" href="keynormal.dita" processing-role="normal"/>' +
+          '<topicref href="d.dita"/><topicref href="e.dita"/></map>',
         'a.dita': topic('a', '<p><xref href="lib.dita">broken</xref></p>'),
         'b.dita': topic('b', '<p><xref href="pub.dita">ok</xref></p>'),
         'c.dita': topic('c', '<related-links><link href="shared.dita"/></related-links>'),
+        'd.dita': topic('d', '<p><xref href="keyed.dita">broken</xref></p>'),
+        'e.dita': topic('e', '<p><xref href="keynormal.dita">ok</xref></p>'),
         'lib.dita': topic('lib'),
         'pub.dita': topic('pub'),
         'shared.dita': topic('shared'),
+        'keyed.dita': topic('keyed'),
+        'keynormal.dita': topic('keynormal'),
       },
       { checkNonDita: true },
     );
+    // A keydef publishes resource-only by DITA default (corpus 6: Oxygen files the
+    // same warning for it), and only an explicit @processing-role="normal" publishes.
     const found = issues.filter((i) => i.category === 'resource-only-target');
-    assert.strictEqual(found.length, 1, JSON.stringify(issues, null, 2));
-    assert.ok(found[0].file.endsWith('a.dita'), found[0].file);
+    assert.strictEqual(found.length, 2, JSON.stringify(issues, null, 2));
+    assert.deepStrictEqual(
+      found.map((i) => i.file.replace(/\\/g, '/').split('/').pop()).sort(),
+      ['a.dita', 'd.dita'],
+      JSON.stringify(found, null, 2),
+    );
   });
 });
 

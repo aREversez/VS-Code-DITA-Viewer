@@ -1290,15 +1290,17 @@ function linkTargetIssues(crawl: CrawlResult): Array<Omit<Issue, 'message'>> {
 }
 
 /**
- * An xref/link to a topic that only resource-only topicrefs publish: the topic is
- * not in the output, so the link breaks. A normal topicref for the same file (an
+ * An xref/link to a topic that only resource-only map references publish: the topic is
+ * not in the output, so the link breaks. A keydef counts as a publication — DITA gives it
+ * `resource-only` by default — and a normal topicref or keydef for the same file (an
  * @copy-to instance included) keeps it published and silences the finding.
  */
 function resourceOnlyTargetIssues(crawl: CrawlResult, norm: (p: string) => string): Array<Omit<Issue, 'message'>> {
   const resourceOnly = new Set<string>();
   const normal = new Set<string>();
   for (const ref of crawl.refs) {
-    if (ref.kind !== 'topicref' || ref.inReltable || ref.remote || !ref.dita || !ref.target) continue;
+    if (ref.kind !== 'topicref' && ref.kind !== 'keydef') continue;
+    if (ref.inReltable || ref.remote || !ref.dita || !ref.target) continue;
     (ref.resourceOnly ? resourceOnly : normal).add(norm(ref.target));
   }
   const out: Array<Omit<Issue, 'message'>> = [];

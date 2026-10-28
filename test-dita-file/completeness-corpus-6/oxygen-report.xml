@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<report xmlns="http://www.oxygenxml.com/ns/report">
+<incident>
+<engine>oXygen</engine>
+<severity>error</severity>
+<problemID>dmv.file.not.found</problemID>
+<description>File not found: &quot;topics/control-missing.dita&quot;.</description>
+<systemID>corpus.ditamap</systemID>
+<type>Reference</type>
+<location>
+<start>
+<line>11</line>
+<column>18</column>
+</start>
+<end>
+<line>11</line>
+<column>47</column>
+</end>
+<length>29</length>
+</location>
+</incident>
+<incident>
+<engine>oXygen</engine>
+<severity>error</severity>
+<problemID>dmv.key.undef</problemID>
+<description>Cannot find definition for key &quot;k-scoped&quot;. Key Scopes:[[s2]]. Keys are gathered from: corpus.ditamap.</description>
+<systemID>topics/o-scope-shared-edge.dita</systemID>
+<type>Key reference</type>
+<location>
+<start>
+<line>7</line>
+<column>21</column>
+</start>
+<end>
+<line>7</line>
+<column>31</column>
+</end>
+<length>10</length>
+</location>
+</incident>
+<incident>
+<engine>oXygen</engine>
+<severity>error</severity>
+<problemID>dmv.key.undef</problemID>
+<description>Cannot find definition for key &quot;k-scoped&quot;. Keys are gathered from: corpus.ditamap.</description>
+<systemID>topics/o-scope-outside-pos.dita</systemID>
+<type>Key reference</type>
+<location>
+<start>
+<line>7</line>
+<column>21</column>
+</start>
+<end>
+<line>7</line>
+<column>31</column>
+</end>
+<length>10</length>
+</location>
+</incident>
+<incident>
+<engine>oXygen</engine>
+<severity>warning</severity>
+<problemID>dmv.ref.to.resource.only</problemID>
+<description>Topic &quot;t-target.dita&quot; is referenced in the DITA map as &quot;resource-only&quot;. Any cross reference to it will result in a broken link.</description>
+<systemID>topics/o-scope-inside-neg.dita</systemID>
+<type>Reference</type>
+<location>
+<start>
+<line>7</line>
+<column>21</column>
+</start>
+<end>
+<line>7</line>
+<column>31</column>
+</end>
+<length>10</length>
+</location>
+</incident>
+<incident>
+<engine>oXygen</engine>
+<severity>warning</severity>
+<problemID>dmv.ref.to.resource.only</problemID>
+<description>Topic &quot;t-target.dita&quot; is referenced in the DITA map as &quot;resource-only&quot;. Any cross reference to it will result in a broken link.</description>
+<systemID>topics/o-scope-shared-edge.dita</systemID>
+<type>Reference</type>
+<location>
+<start>
+<line>7</line>
+<column>21</column>
+</start>
+<end>
+<line>7</line>
+<column>31</column>
+</end>
+<length>10</length>
+</location>
+</incident>
+<incident>
+<engine>oXygen</engine>
+<severity>warning</severity>
+<problemID>dmv.ref.to.resource.only</problemID>
+<description>Topic &quot;t-target.dita&quot; is referenced in the DITA map as &quot;resource-only&quot;. Any cross reference to it will result in a broken link.</description>
+<systemID>topics/o-scope-qualified-neg.dita</systemID>
+<type>Reference</type>
+<location>
+<start>
+<line>7</line>
+<column>21</column>
+</start>
+<end>
+<line>7</line>
+<column>34</column>
+</end>
+<length>13</length>
+</location>
+</incident>
+</report>

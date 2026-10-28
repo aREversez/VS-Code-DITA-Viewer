@@ -1,0 +1,14 @@
+{
+  "matched": [
+    "corpus.ditamap  missing-reference",
+    "topics/o-scope-inside-neg.dita  resource-only-target",
+    "topics/o-scope-outside-pos.dita  undefined-key",
+    "topics/o-scope-qualified-neg.dita  resource-only-target",
+    "topics/o-scope-shared-edge.dita  resource-only-target",
+    "topics/o-scope-shared-edge.dita  undefined-key"
+  ],
+  "extensionOnly": [
+    "corpus.ditamap  multiple-reference"
+  ],
+  "oxygenOnly": []
+}
