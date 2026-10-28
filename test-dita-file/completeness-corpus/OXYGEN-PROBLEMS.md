@@ -532,6 +532,8 @@ What the run settled:
   locked extension-only, and it is the one open question of this corpus: no probe separates
   "different scope, so intentional" from "duplicates are simply not counted inside a
   `topicgroup`", so the rule (R008) keeps the spec's answer until a run does.
+  Six probes that separate the readings now sit in corpus 6 (`maps/p-dup-*.ditamap`, see its
+  README); the counts in the table below are those of the last run and do not include them.
 
 ### All six corpora at a glance
 

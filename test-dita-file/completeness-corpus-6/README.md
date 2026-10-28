@@ -59,9 +59,37 @@ What the run settled beyond R066:
 - **The same topic in two key scopes is not a duplicate to Oxygen** (R008).
   `topics/o-scope-shared-edge.dita` is referenced twice, once per scope; the extension files
   `multiple-reference` on the second reference and Oxygen files nothing, so the row is locked
-  extension-only. This corpus has no probe that separates "different scope, so intentional" from
-  "duplicates are simply not counted inside a `topicgroup`", so R008 keeps the spec's answer
-  until a run with such a pair decides it.
+  extension-only. That pair could not tell "different scope, so intentional" from "duplicates are
+  simply not counted inside a `topicgroup`", so R008 keeps the spec's answer until a run of the
+  duplicate probes below decides it.
+
+## The duplicate probes (R008) — not yet run in Oxygen
+
+Six maps under `maps/`, each referencing its own topic twice, added to settle the open row
+above. They are referenced from the end of `corpus.ditamap` (so the lines the report cites
+did not move) and each sits on a map of its own, because parity compares `(file, category)` and
+every probe files its `multiple-reference` on the map that holds the pair.
+
+| Map | Layout | Asks |
+| --- | --- | --- |
+| `maps/p-dup-a-root.ditamap` | two sibling `topicref`s at the root | control: corpus 1 already shows `dmv.dup.topic` here |
+| `maps/p-dup-b-group.ditamap` | both inside one `topicgroup`, no keyscope | does a container stop duplicates counting? |
+| `maps/p-dup-c-two-groups.ditamap` | one in each of two `topicgroup`s, no keyscope | does a different parent stop them counting? |
+| `maps/p-dup-d-same-scope.ditamap` | both inside one `keyscope="s1"` group | is a duplicate within one scope counted? |
+| `maps/p-dup-e-two-scopes.ditamap` | one in `s1`, one in `s2` (the shared-edge shape, isolated) | reproduces the open row on its own map |
+| `maps/p-dup-f-topicref-scope.ditamap` | `keyscope` on the two `topicref`s, no container | separates the scope from the container |
+
+The extension files `multiple-reference` on all six today. **No Oxygen answer exists yet**, so
+until a rerun the parity lock carries six extension-only rows that are *unknown*, not
+disagreements. After the rerun, read it so:
+
+- B, C and D reported, E not: the scope decides. Count a reference by `(target, scope chain)` in R008, in step with R066.
+- B and C not reported: Oxygen does not count duplicates inside a `topicgroup`, whatever the scope; narrow R008 to references that share one container level, and E is a by-product.
+- B reported, C not: duplicates count only between siblings of one parent.
+- D not reported while B is: a `keyscope` by itself ends the count, even inside one scope.
+
+Rerun with `corpus.ditamap` as the only open root map, then `sanitize-oxygen-report.cjs` and
+`UPDATE_OXYGEN_PARITY=1` for this folder. Do not change R008 before that.
 
 ## Running it
 

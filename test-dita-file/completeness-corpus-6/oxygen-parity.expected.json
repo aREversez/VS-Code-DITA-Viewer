@@ -8,7 +8,13 @@
     "topics/o-scope-shared-edge.dita  undefined-key"
   ],
   "extensionOnly": [
-    "corpus.ditamap  multiple-reference"
+    "corpus.ditamap  multiple-reference",
+    "maps/p-dup-a-root.ditamap  multiple-reference",
+    "maps/p-dup-b-group.ditamap  multiple-reference",
+    "maps/p-dup-c-two-groups.ditamap  multiple-reference",
+    "maps/p-dup-d-same-scope.ditamap  multiple-reference",
+    "maps/p-dup-e-two-scopes.ditamap  multiple-reference",
+    "maps/p-dup-f-topicref-scope.ditamap  multiple-reference"
   ],
   "oxygenOnly": []
 }

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- R008 probe: the topic twice as plain sibling topicrefs at the root, no container (control: corpus 1 already shows Oxygen files dmv.dup.topic here).
+     One probe per map, because parity compares (file, category) and every probe files
+     its multiple-reference on its own map. See README.md, "The duplicate probes". -->
+<map id="p-dup-a-root">
+  <title>p-dup-a-root</title>
+  <topicref href="../topics/p-dup-a-root.dita"/>
+  <topicref href="../topics/p-dup-a-root.dita"/>
+</map>

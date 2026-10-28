@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- R008 probe: the topic twice inside ONE topicgroup, no keyscope: does a container stop duplicates counting?
+     One probe per map, because parity compares (file, category) and every probe files
+     its multiple-reference on its own map. See README.md, "The duplicate probes". -->
+<map id="p-dup-b-group">
+  <title>p-dup-b-group</title>
+  <topicgroup>
+    <topicref href="../topics/p-dup-b-group.dita"/>
+    <topicref href="../topics/p-dup-b-group.dita"/>
+  </topicgroup>
+</map>

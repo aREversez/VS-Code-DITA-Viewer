@@ -20,4 +20,12 @@
   </topicgroup>
   <topicref href="topics/o-scope-outside-pos.dita"/>
   <topicref href="topics/o-scope-qualified-neg.dita"/>
+
+  <!-- R008 duplicate probes (README.md, "The duplicate probes"): one map each. -->
+  <mapref href="maps/p-dup-a-root.ditamap"/>
+  <mapref href="maps/p-dup-b-group.ditamap"/>
+  <mapref href="maps/p-dup-c-two-groups.ditamap"/>
+  <mapref href="maps/p-dup-d-same-scope.ditamap"/>
+  <mapref href="maps/p-dup-e-two-scopes.ditamap"/>
+  <mapref href="maps/p-dup-f-topicref-scope.ditamap"/>
 </map>

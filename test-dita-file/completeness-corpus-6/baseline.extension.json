@@ -14,6 +14,48 @@
     "message": "Topic referenced more than once (2 times): topics/o-scope-shared-edge.dita"
   },
   {
+    "category": "multiple-reference",
+    "severity": "warning",
+    "file": "maps/p-dup-a-root.ditamap",
+    "line": 9,
+    "message": "Topic referenced more than once (2 times): ../topics/p-dup-a-root.dita"
+  },
+  {
+    "category": "multiple-reference",
+    "severity": "warning",
+    "file": "maps/p-dup-b-group.ditamap",
+    "line": 10,
+    "message": "Topic referenced more than once (2 times): ../topics/p-dup-b-group.dita"
+  },
+  {
+    "category": "multiple-reference",
+    "severity": "warning",
+    "file": "maps/p-dup-c-two-groups.ditamap",
+    "line": 12,
+    "message": "Topic referenced more than once (2 times): ../topics/p-dup-c-two-groups.dita"
+  },
+  {
+    "category": "multiple-reference",
+    "severity": "warning",
+    "file": "maps/p-dup-d-same-scope.ditamap",
+    "line": 10,
+    "message": "Topic referenced more than once (2 times): ../topics/p-dup-d-same-scope.dita"
+  },
+  {
+    "category": "multiple-reference",
+    "severity": "warning",
+    "file": "maps/p-dup-e-two-scopes.ditamap",
+    "line": 12,
+    "message": "Topic referenced more than once (2 times): ../topics/p-dup-e-two-scopes.dita"
+  },
+  {
+    "category": "multiple-reference",
+    "severity": "warning",
+    "file": "maps/p-dup-f-topicref-scope.ditamap",
+    "line": 9,
+    "message": "Topic referenced more than once (2 times): ../topics/p-dup-f-topicref-scope.dita"
+  },
+  {
     "category": "resource-only-target",
     "severity": "warning",
     "file": "topics/o-scope-inside-neg.dita",
