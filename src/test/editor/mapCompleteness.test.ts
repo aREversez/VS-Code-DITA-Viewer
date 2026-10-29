@@ -280,6 +280,52 @@ describe('completeness: multiple references', () => {
     );
     assert.strictEqual(issues.filter((i) => i.category === 'multiple-reference').length, 1);
   });
+  // Corpus 6's six probes (its README, "The duplicate probes"): Oxygen files
+  // dmv.dup.topic by (target, scope chain), so a container changes nothing and a
+  // different key scope is what separates two publications of one topic (R008).
+  it('counts a duplicate across two topicgroups, so a container is not the boundary', async () => {
+    const issues = await check(
+      {
+        'root.ditamap':
+          '<map><topicgroup><topicref href="t.dita"/></topicgroup><topicgroup><topicref href="t.dita"/></topicgroup></map>',
+        't.dita': topic('t'),
+      },
+      { reportMultipleRefs: true },
+    );
+    assert.strictEqual(issues.filter((i) => i.category === 'multiple-reference').length, 1);
+  });
+  it('counts a duplicate inside one keyscope, so a scope is not the boundary either', async () => {
+    const issues = await check(
+      {
+        'root.ditamap':
+          '<map><topicgroup keyscope="s1"><topicref href="t.dita"/><topicref href="t.dita"/></topicgroup></map>',
+        't.dita': topic('t'),
+      },
+      { reportMultipleRefs: true },
+    );
+    assert.strictEqual(issues.filter((i) => i.category === 'multiple-reference').length, 1);
+  });
+  it('does not flag one topic published in each of two key scopes', async () => {
+    const issues = await check(
+      {
+        'root.ditamap':
+          '<map><topicgroup keyscope="s1"><topicref href="t.dita"/></topicgroup><topicgroup keyscope="s2"><topicref href="t.dita"/></topicgroup></map>',
+        't.dita': topic('t'),
+      },
+      { reportMultipleRefs: true },
+    );
+    assert.strictEqual(issues.filter((i) => i.category === 'multiple-reference').length, 0);
+  });
+  it('does not flag two references whose own @keyscope differ', async () => {
+    const issues = await check(
+      {
+        'root.ditamap': '<map><topicref href="t.dita" keyscope="s1"/><topicref href="t.dita" keyscope="s2"/></map>',
+        't.dita': topic('t'),
+      },
+      { reportMultipleRefs: true },
+    );
+    assert.strictEqual(issues.filter((i) => i.category === 'multiple-reference').length, 0);
+  });
 });
 
 describe('completeness: ids and keys', () => {

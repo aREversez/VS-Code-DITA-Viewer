@@ -85,6 +85,11 @@ export interface Reference extends Location {
   type?: string;
   /** True when the reference was written in a map (topicref, mapref, keydef). */
   inMap: boolean;
+  /**
+   * Key scopes the reference sits in (map references only), outermost name first; more
+   * than one when a `keyscope` lists several names. Undefined outside a map reference.
+   */
+  scopeChains?: string[][];
   /** True for a reference made by resolving a @keyref: its @format is not the element's own. */
   viaKeyref?: boolean;
 }
@@ -611,7 +616,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     node: XNode,
     kind: RefKind,
     href: string,
-    extra: { resourceOnly?: boolean; inReltable?: boolean; inMap?: boolean } = {},
+    extra: { resourceOnly?: boolean; inReltable?: boolean; inMap?: boolean; scopeChains?: string[][] } = {},
   ): Reference {
     const scope = node.attrs['scope'];
     const format = node.attrs['format'];
@@ -634,6 +639,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       format,
       type: node.attrs['type'],
       inMap: !!extra.inMap,
+      scopeChains: extra.scopeChains,
     };
     if (!remote && !pathPart) ref.target = undefined; // "#id" -- same-file fragment
     result.refs.push(ref);
@@ -805,7 +811,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       const kind: RefKind = isKeydef ? 'keydef' : isMapHref(n, href) ? 'mapref' : 'topicref';
       if (!isRelInner || isMapTag(n)) {
         const ref = addRef(ctx.file, n, kind, href, {
-          resourceOnly: localCtx.resourceOnly, inReltable: localCtx.inReltable, inMap: true,
+          resourceOnly: localCtx.resourceOnly, inReltable: localCtx.inReltable, inMap: true, scopeChains,
         });
         if (mapKeyUse) mapKeyUse.fallbackRef = ref;
         if (ref.target && !ref.remote) {
@@ -1361,6 +1367,9 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
         tag: use.tag ?? '',
         format: def.format,
         inMap: !!use.scopeChains,
+        // A <topicref keyref> sits in the scopes of the map element that carries it,
+        // so a duplicate check counts it in that scope (R008, as the key use does).
+        scopeChains: use.scopeChains,
         viaKeyref: true,
       });
     }

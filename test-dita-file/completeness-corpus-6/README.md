@@ -3,7 +3,8 @@
 The sixth differential corpus, kept apart from the other five so each keeps its own line
 numbers, baseline and parity lock. It has its own root map, `corpus.ditamap`, its own
 `baseline.extension.json`, and since its first run a sanitized `oxygen-report.xml` and an
-`oxygen-parity.expected.json`. The rule it feeds is R066 in `../completeness-corpus/RULES.md`.
+`oxygen-parity.expected.json`. The rules it feeds are R066 (key scope) and the scope half of
+R008 (duplicates) in `../completeness-corpus/RULES.md`.
 
 ## Why a corpus of its own
 
@@ -11,12 +12,14 @@ Key scope is a property of the whole build, not of one file: a key is visible wh
 scope is, so answering R066 needs one map that defines a key inside `keyscope="s1"`, publishes
 a topic inside it, publishes another outside, and publishes a third in two scopes at once.
 That layout cannot be dropped into corpus 1 without changing what its own probes mean, so it
-gets a folder of its own.
+gets a folder of its own. The duplicate probes below need the same thing for R008: the
+question is which publications of one topic Oxygen counts as duplicates, so each answer needs
+a map of its own with the two references laid out one way.
 
 ## Oxygen setup for this corpus
 
-Nothing beyond the other corpora: the `audience` preferences of corpus 1, no filter. The run
-recorded below was **Oxygen XML Editor 27.1**, `corpus.ditamap` as the only open root map,
+Nothing beyond the other corpora: the `audience` preferences of corpus 1, no filter. The runs
+recorded below were **Oxygen XML Editor 27.1**, `corpus.ditamap` as the only open root map,
 every option on, remote off.
 
 ## What the corpus probes
@@ -31,13 +34,17 @@ every option on, remote off.
 
 Every probe topic holds one `<xref>`: `keyref="k-scoped"`, except the qualified
 `s1.k-scoped`. The key resolves to `topics/t-target.dita`, which the map reaches only through a
-`<keydef>`, and that is what produced the second finding family of the run.
+`<keydef>`, and that is what produced the second finding family of the first run.
 
-## The run: 6 incidents, 6 signatures matched
+## The runs: 14 incidents, full parity
 
 `node scripts/oxygen-diff.cjs --corpus completeness-corpus-6 oxygen-report.xml` reports
-**6 matched, 1 extension-only, 0 Oxygen-only**: the first corpus with no Oxygen-only row. No
-incident was an accepted difference, so parity compares all six.
+**10 matched, 0 extension-only, 0 Oxygen-only** — the first corpus with neither row. No
+incident was an accepted difference, so parity compares all ten signatures; the 14 incidents
+collapse into them because each duplicate probe files one incident per reference.
+
+The first run carried **6 incidents**, before the duplicate probes existed, and settled R066
+and the keydef half of R049:
 
 | Oxygen | Where | Extension |
 | --- | --- | --- |
@@ -45,7 +52,7 @@ incident was an accepted difference, so parity compares all six.
 | `dmv.ref.to.resource.only` ×3 | `topics/o-scope-inside-neg.dita:7`, `topics/o-scope-qualified-neg.dita:7`, `topics/o-scope-shared-edge.dita:7` | `resource-only-target` on all three, after the fix below |
 | `dmv.file.not.found` ×1 | `corpus.ditamap:11` | `missing-reference` (control) |
 
-What the run settled beyond R066:
+What that run settled beyond R066:
 
 - **A `<keydef>` publishes its topic resource-only** (R049). `topics/t-target.dita` is reached
   only through the keydef, which DITA makes resource-only unless it says otherwise, so every
@@ -56,40 +63,50 @@ What the run settled beyond R066:
   `src/test/editor/mapCompleteness.test.ts` covers both shapes. The fourth probe, whose bare key
   resolves to nothing, draws no such warning: with no key definition there is no target to call
   resource-only, and its `<xref>` writes no `@href` of its own (R003).
-- **The same topic in two key scopes is not a duplicate to Oxygen** (R008).
-  `topics/o-scope-shared-edge.dita` is referenced twice, once per scope; the extension files
-  `multiple-reference` on the second reference and Oxygen files nothing, so the row is locked
-  extension-only. That pair could not tell "different scope, so intentional" from "duplicates are
-  simply not counted inside a `topicgroup`", so R008 keeps the spec's answer until a run of the
-  duplicate probes below decides it.
+- **The same topic in two key scopes was not a duplicate to Oxygen** (R008).
+  `topics/o-scope-shared-edge.dita` is referenced twice, once per scope; the extension filed
+  `multiple-reference` on the second reference and Oxygen filed nothing. That pair could not
+  tell "different scope, so intentional" from "duplicates are simply not counted inside a
+  `topicgroup`", so it stayed locked extension-only until a run of the duplicate probes below
+  decided it.
 
-## The duplicate probes (R008) — not yet run in Oxygen
+The rerun added the six duplicate probes and answered the question:
+
+| Oxygen | Where | Extension |
+| --- | --- | --- |
+| `dmv.dup.topic` ×8 | `maps/p-dup-a-root.ditamap:8`, `:9`; `p-dup-b-group.ditamap:9`, `:10`; `p-dup-c-two-groups.ditamap:9`, `:12`; `p-dup-d-same-scope.ditamap:9`, `:10` | `multiple-reference` on the second reference of each map, matched on all four |
+
+Nothing else moved: the six incidents of the first run came back the same, and the shared-edge
+pair in `corpus.ditamap` drew nothing again — under the tightened rule the extension no longer
+files it either, so that row closed instead of staying extension-only.
+
+## The duplicate probes (R008): the answer is the scope
 
 Six maps under `maps/`, each referencing its own topic twice, added to settle the open row
-above. They are referenced from the end of `corpus.ditamap` (so the lines the report cites
-did not move) and each sits on a map of its own, because parity compares `(file, category)` and
+above. They are referenced from the end of `corpus.ditamap` (so the lines the report cites did
+not move) and each sits on a map of its own, because parity compares `(file, category)` and
 every probe files its `multiple-reference` on the map that holds the pair.
 
-| Map | Layout | Asks |
+| Map | Layout | Oxygen |
 | --- | --- | --- |
-| `maps/p-dup-a-root.ditamap` | two sibling `topicref`s at the root | control: corpus 1 already shows `dmv.dup.topic` here |
-| `maps/p-dup-b-group.ditamap` | both inside one `topicgroup`, no keyscope | does a container stop duplicates counting? |
-| `maps/p-dup-c-two-groups.ditamap` | one in each of two `topicgroup`s, no keyscope | does a different parent stop them counting? |
-| `maps/p-dup-d-same-scope.ditamap` | both inside one `keyscope="s1"` group | is a duplicate within one scope counted? |
-| `maps/p-dup-e-two-scopes.ditamap` | one in `s1`, one in `s2` (the shared-edge shape, isolated) | reproduces the open row on its own map |
-| `maps/p-dup-f-topicref-scope.ditamap` | `keyscope` on the two `topicref`s, no container | separates the scope from the container |
+| `maps/p-dup-a-root.ditamap` | two sibling `topicref`s at the root | `dmv.dup.topic` ×2 — control: corpus 1 already files it here |
+| `maps/p-dup-b-group.ditamap` | both inside one `topicgroup`, no keyscope | `dmv.dup.topic` ×2 — a container does not stop the count |
+| `maps/p-dup-c-two-groups.ditamap` | one in each of two `topicgroup`s, no keyscope | `dmv.dup.topic` ×2 — a different parent does not stop it either |
+| `maps/p-dup-d-same-scope.ditamap` | both inside one `keyscope="s1"` group | `dmv.dup.topic` ×2 — a `keyscope` by itself does not end the count |
+| `maps/p-dup-e-two-scopes.ditamap` | one in `s1`, one in `s2` (the shared-edge shape, isolated) | *(nothing)* |
+| `maps/p-dup-f-topicref-scope.ditamap` | `keyscope` on the two `topicref`s, no container | *(nothing)* |
 
-The extension files `multiple-reference` on all six today. **No Oxygen answer exists yet**, so
-until a rerun the parity lock carries six extension-only rows that are *unknown*, not
-disagreements. After the rerun, read it so:
+B and C rule out the container, D rules out "a `keyscope` ends the count", and F shows the
+container is not what silences E: the only difference between the reported D and the silent E
+and F is that the two references sit in **different** scopes. **The scope decides**, so R008
+counts a reference by `(target, scope chain)`, in step with R066: `mapChecks.ts` keys its
+duplicate groups on the target plus `Reference.scopeChains`, which `mapCrawl.ts` records for
+every map element (the element's own `keyscope` included) and hands to a `<topicref keyref>`
+as well. The shared-edge pair of `corpus.ditamap` is that same shape, which is why it stopped
+being an extension-only row without a change of its own.
 
-- B, C and D reported, E not: the scope decides. Count a reference by `(target, scope chain)` in R008, in step with R066.
-- B and C not reported: Oxygen does not count duplicates inside a `topicgroup`, whatever the scope; narrow R008 to references that share one container level, and E is a by-product.
-- B reported, C not: duplicates count only between siblings of one parent.
-- D not reported while B is: a `keyscope` by itself ends the count, even inside one scope.
-
-Rerun with `corpus.ditamap` as the only open root map, then `sanitize-oxygen-report.cjs` and
-`UPDATE_OXYGEN_PARITY=1` for this folder. Do not change R008 before that.
+`src/test/editor/mapCompleteness.test.ts` covers the four shapes: two `topicgroup`s, one
+`keyscope` group, two scopes, and `keyscope` on the `topicref`s themselves.
 
 ## Running it
 
@@ -100,7 +117,8 @@ node scripts/sanitize-oxygen-report.cjs --corpus completeness-corpus-6 <raw.xml>
 ```
 
 `UPDATE_COMPLETENESS_BASELINE=1 npm test` and `UPDATE_OXYGEN_PARITY=1 npm test` refresh the
-baseline and the parity lock. Keep the line numbers of `corpus.ditamap` stable when editing the
-comment at its top: the report cites them.
+baseline and the parity lock; `node scripts/completeness-baseline.cjs --corpus
+completeness-corpus-6 --update` rewrites the baseline alone. Keep the line numbers of
+`corpus.ditamap` stable when editing the comment at its top: the report cites them.
 
 Known limit: a map reached twice with different `keyscope`s is crawled once (first scope).

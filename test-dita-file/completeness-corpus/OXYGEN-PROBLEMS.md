@@ -131,7 +131,7 @@ sanitizer writes no such element for them and `oxygen-diff` prints them as `(no 
 
 | Problem ID | Oxygen reports | Extension status |
 | --- | --- | --- |
-| `dmv.dup.topic` | the same topic referenced more than once | ok (`multiple-reference`) — six incidents in the corpus-1 report, and the one shape Oxygen leaves alone is the same topic twice inside two different `keyscope`s (corpus 6), which the extension still files: locked extension-only, and no probe separates "different scope" from "the scope was never the point" yet |
+| `dmv.dup.topic` | the same topic referenced more than once | ok (`multiple-reference`) — six incidents in the corpus-1 report, and corpus 6's six duplicate probes settled the counting: Oxygen files it per (target, scope chain), so a container changes nothing and only a reference in a different `keyscope` is no duplicate (R008); matched in both corpora |
 | `dmv.dup.topic.id` | duplicate topic ID in the map context | ok (`duplicate-id`) — the extension reports every topic that shares the id, as Oxygen does |
 | `dmv.dup.el.id` | duplicate element ID inside one topic | ok (`duplicate-element-id`) — the corpus-3 report carries it on `topics/h-dup-el-id-pos.dita` |
 | `dmv.dup.cond.filter` | duplicate condition in a filter file | ok (`duplicate-filter-condition`) — mapped only: the corpus-4 report carries its two incidents **without** a `<problemID>`, so no incident carries this id and parity maps them on the message wording |
@@ -502,16 +502,17 @@ What the run settled:
   rule rather than given a guessed class. `npm run check:dita-class` re-renders the module
   offline and fails when it and the committed `scripts/dita-class-extracted.json` disagree.
 
-### The key scope run (sixth corpus)
+### The key scope run and the R008 probe run (sixth corpus)
 
 *Validate and Check for Completeness* over `../completeness-corpus-6/corpus.ditamap` — the
-same settings as the runs above — produced **6 incidents**
-(`../completeness-corpus-6/oxygen-report.xml`).
-None of them is an accepted difference, so parity compares all six and locks
-**6 matched, 1 extension-only, 0 Oxygen-only** (`scripts/oxygen-diff.cjs` agrees) — the first
-corpus with no Oxygen-only row.
+same settings as the runs above — was run twice: once on the key scope probes alone
+(**6 incidents**), and once after the six duplicate probes of R008 joined the map
+(**14 incidents**, `../completeness-corpus-6/oxygen-report.xml`).
+Neither run carried an accepted difference, and the second one locks
+**10 matched, 0 extension-only, 0 Oxygen-only** (`scripts/oxygen-diff.cjs` agrees) — the first
+corpus with parity in both directions.
 
-What the run settled:
+What the runs settled:
 
 - **A bare key is looked up in its key scope** (R066). `k-scoped` is defined inside
   `keyscope="s1"`, and the report files `dmv.key.undef` on the topic published outside that
@@ -526,14 +527,15 @@ What the run settled:
   files it and we did not — and `resourceOnlyTargetIssues` now takes a keydef as a
   publication, with an explicit `processing-role="normal"` on the keydef still publishing
   normally.
-- **The same topic in two key scopes is not a duplicate to Oxygen.**
-  `topics/o-scope-shared-edge.dita` is referenced twice, once in `s1` and once in `s2`; the
-  extension files `multiple-reference` on the second and Oxygen files nothing. The row is
-  locked extension-only, and it is the one open question of this corpus: no probe separates
-  "different scope, so intentional" from "duplicates are simply not counted inside a
-  `topicgroup`", so the rule (R008) keeps the spec's answer until a run does.
-  Six probes that separate the readings now sit in corpus 6 (`maps/p-dup-*.ditamap`, see its
-  README); the counts in the table below are those of the last run and do not include them.
+- **A duplicate is counted per (target, scope chain)** (R008). Six maps each reference one
+  topic twice (`../completeness-corpus-6/maps/p-dup-*.ditamap`): Oxygen files `dmv.dup.topic`
+  on both references when they are siblings, when both sit in one `topicgroup`, when they sit
+  in two `topicgroup`s and when both sit inside one `keyscope="s1"`; it files nothing when one
+  sits in `s1` and the other in `s2`, whether the scopes are on `topicgroup`s or on the
+  `topicref`s themselves. A container is therefore no boundary, and a `keyscope` is no
+  boundary either: only a *different* scope is, the reading R066 already gave keys. The first
+  run's one extension-only row — `corpus.ditamap`'s shared-edge pair, the same shape as the two
+  silent probes — closed with the rule instead of staying a difference.
 
 ### All six corpora at a glance
 
@@ -544,18 +546,19 @@ What the run settled:
 | `completeness-corpus-3` | batch 2, conref / id / link forms | 34 | – | 30 / 0 / 4 |
 | `completeness-corpus-4` | batch 3, profiling and filters | 19 | – | 13 / 1 / 2 |
 | `completeness-corpus-5` | batch 4, class / DITA validity / structure | 34 | 6 (4 `MSG_*`, 2 no-schema) | 21 / 6 / 3 |
-| `completeness-corpus-6` | key scopes (R066), and the keydef half of R049 | 6 | – | 6 / 1 / 0 |
-| **Total** | | **237** | **12** | **162 / 16 / 27** |
+| `completeness-corpus-6` | key scopes (R066), the keydef half of R049, duplicates by scope (R008) | 14 | – | 10 / 0 / 0 |
+| **Total** | | **245** | **12** | **166 / 15 / 27** |
 
-The 16 extension-only and 27 Oxygen-only signatures are each accounted for in the batch sections
+The 15 extension-only and 27 Oxygen-only signatures are each accounted for in the batch sections
 above or in the corpus README that owns them; the largest group is corpus 2's 17, whose three
 rows per family are listed in `../completeness-corpus-2/README.md`. The table is current as of
 the last run: corpus 5 has been validated twice since its first report, once for the R064 probe
 and once for the two R065 probes, and no number in it moved; corpus 3 was rerun for the two
 R019 probes of batch 2, which moved it from 30 incidents and 27 / 0 / 3 to 30 / 0 / 4, and once
 more when the conkeyref site joined the reference passes, which left the report alone and moved
-one row from Oxygen-only into the matched set. The sixth corpus added no Oxygen-only row at all:
-its three misses were fixed before its lock was written. With the batch-4 run the 11 ids of that
+one row from Oxygen-only into the matched set. The sixth corpus now has no row in either
+direction: its three first-run misses were fixed before its lock was written, and the R008
+probes turned its one extension-only row into a match. With the batch-4 run the 11 ids of that
 batch were closed, and this one did not reopen any: 84 ids, **no gap left**. Eighteen of the 75
 *ok* rows are *mapped only* — no incident of that exact id in any of the six reports — and each of
 them says in its own row which id the reports carry instead, so the number is worth re-checking

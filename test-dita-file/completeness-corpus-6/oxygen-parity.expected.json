@@ -1,20 +1,16 @@
 {
   "matched": [
     "corpus.ditamap  missing-reference",
+    "maps/p-dup-a-root.ditamap  multiple-reference",
+    "maps/p-dup-b-group.ditamap  multiple-reference",
+    "maps/p-dup-c-two-groups.ditamap  multiple-reference",
+    "maps/p-dup-d-same-scope.ditamap  multiple-reference",
     "topics/o-scope-inside-neg.dita  resource-only-target",
     "topics/o-scope-outside-pos.dita  undefined-key",
     "topics/o-scope-qualified-neg.dita  resource-only-target",
     "topics/o-scope-shared-edge.dita  resource-only-target",
     "topics/o-scope-shared-edge.dita  undefined-key"
   ],
-  "extensionOnly": [
-    "corpus.ditamap  multiple-reference",
-    "maps/p-dup-a-root.ditamap  multiple-reference",
-    "maps/p-dup-b-group.ditamap  multiple-reference",
-    "maps/p-dup-c-two-groups.ditamap  multiple-reference",
-    "maps/p-dup-d-same-scope.ditamap  multiple-reference",
-    "maps/p-dup-e-two-scopes.ditamap  multiple-reference",
-    "maps/p-dup-f-topicref-scope.ditamap  multiple-reference"
-  ],
+  "extensionOnly": [],
   "oxygenOnly": []
 }

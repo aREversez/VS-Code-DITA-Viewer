@@ -363,12 +363,14 @@ export async function runChecks(
     }
   }
 
-  // 5. Same topic referenced more than once (a unique @copy-to makes it a different topic).
+  // 5. Same topic referenced more than once. A unique @copy-to makes it a different
+  // topic, and so does a different key scope: Oxygen counts a duplicate by
+  // (target, scope chain), which is what the six probes of corpus 6 settled (R008).
   if (opts.reportMultipleRefs) {
     const groups = new Map<string, Reference[]>();
     for (const ref of crawl.refs) {
       if (ref.kind !== 'topicref' || ref.inReltable || !ref.dita || !ref.target) continue;
-      const identity = ref.copyTo ? copyToKey(ref) : norm(ref.target);
+      const identity = `${ref.copyTo ? copyToKey(ref) : norm(ref.target)}\u0000${scopeKey(ref)}`;
       const list = groups.get(identity);
       if (list) list.push(ref);
       else groups.set(identity, [ref]);
@@ -953,6 +955,15 @@ function missingCode(ref: Reference): MsgCode {
 
 function copyToKey(ref: Reference): string {
   return `copy-to\u0000${dirname(ref.file)}\u0000${ref.copyTo}`;
+}
+
+/**
+ * The key scopes a reference sits in, as one string (empty at the root scope). A
+ * `keyscope` listing several names gives several chains, and their order is not part
+ * of the identity: two references behind the same set of scopes are duplicates.
+ */
+function scopeKey(ref: Reference): string {
+  return (ref.scopeChains ?? [[]]).map((chain) => chain.join('/')).sort().join('\u0000');
 }
 
 /** Normalized target file -> the set of topic ids declared in it (root and nested). */

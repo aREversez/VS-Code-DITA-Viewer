@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
-<!-- Sixth differential corpus: key scope resolution (R066, see README.md here).
-     A committed Oxygen report (oxygen-report.xml, 6 incidents) and its parity lock
-     cover it now; re-run Oxygen with THIS map as the only root map whenever the
-     corpus changes. -->
+<!-- Sixth differential corpus: key scope resolution (R066) and the scope half of the
+     duplicate rule (R008), see README.md here. A committed Oxygen report
+     (oxygen-report.xml, 14 incidents) and its parity lock cover it now; re-run Oxygen
+     with THIS map as the only root map whenever the corpus changes. -->
 <map id="corpus6">
   <title>Completeness Check Corpus 6</title>
 
