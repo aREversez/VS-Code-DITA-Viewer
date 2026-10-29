@@ -108,6 +108,25 @@ being an extension-only row without a change of its own.
 `src/test/editor/mapCompleteness.test.ts` covers the four shapes: two `topicgroup`s, one
 `keyscope` group, two scopes, and `keyscope` on the `topicref`s themselves.
 
+## The scope shapes Oxygen has not been asked (R008) — not yet run
+
+The six probes above show Oxygen counting by scope for siblings (`s1` against `s2`), but the
+rule as written answers three more shapes by extrapolation. Four more maps ask, each with its
+own topic and referenced after the six, at the end of `corpus.ditamap`. The extension is silent
+on the first three and reports the last, so until a rerun only the last is a lock row, and
+an *unknown* one.
+
+| Map | Layout | Extension today | What Oxygen's answer would mean |
+| --- | --- | --- | --- |
+| `maps/p-dup-g-root-vs-scope.ditamap` | once at the root, once inside `keyscope="s1"` | silent | reported: the root scope is the same publication as a scope below it; silent: it is a scope like any other |
+| `maps/p-dup-h-nested-scope.ditamap` | once in `s1`, once in `s2` nested in `s1` | silent | reported: only the outermost scope name counts; silent: the whole chain does |
+| `maps/p-dup-i-multi-vs-single.ditamap` | once in `keyscope="a b"`, once in `keyscope="a"` | silent | reported: the two share a scope name; silent: the set of names is the identity |
+| `maps/p-dup-j-multi-reordered.ditamap` | once in `"a b"`, once in `"b a"` | reported | silent: order of the names matters (unlikely; the DITA scope is a set) |
+
+`src/test/editor/mapCompleteness.test.ts` pins today's answer for each, so a change after that
+run is deliberate. Rerun with `corpus.ditamap` as the only root map, sanitize, refresh this
+folder's parity lock, and change R008 only where Oxygen disagrees.
+
 ## Running it
 
 ```

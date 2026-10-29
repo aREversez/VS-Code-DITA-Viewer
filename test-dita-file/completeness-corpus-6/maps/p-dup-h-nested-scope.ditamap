@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- R008 shape probe (not yet run in Oxygen): the topic once in s1 and once in s2 nested inside s1.
+     The extension's answer is an extrapolation of probes A-F, so the next Oxygen run
+     decides it. One probe per map; see README.md, "The scope shapes Oxygen has not
+     been asked". -->
+<map id="p-dup-h-nested-scope">
+  <title>p-dup-h-nested-scope</title>
+  <topicgroup keyscope="s1">
+    <topicref href="../topics/p-dup-h-nested-scope.dita"/>
+    <topicgroup keyscope="s2">
+      <topicref href="../topics/p-dup-h-nested-scope.dita"/>
+    </topicgroup>
+  </topicgroup>
+</map>

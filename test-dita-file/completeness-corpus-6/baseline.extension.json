@@ -35,6 +35,13 @@
     "message": "Topic referenced more than once (2 times): ../topics/p-dup-d-same-scope.dita"
   },
   {
+    "category": "multiple-reference",
+    "severity": "warning",
+    "file": "maps/p-dup-j-multi-reordered.ditamap",
+    "line": 13,
+    "message": "Topic referenced more than once (2 times): ../topics/p-dup-j-multi-reordered.dita"
+  },
+  {
     "category": "resource-only-target",
     "severity": "warning",
     "file": "topics/o-scope-inside-neg.dita",

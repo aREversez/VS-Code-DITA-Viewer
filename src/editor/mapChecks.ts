@@ -364,8 +364,10 @@ export async function runChecks(
   }
 
   // 5. Same topic referenced more than once. A unique @copy-to makes it a different
-  // topic, and so does a different key scope: Oxygen counts a duplicate by
-  // (target, scope chain), which is what the six probes of corpus 6 settled (R008).
+  // topic, and so does a different key scope (R008). Corpus 6's six probes settled the
+  // sibling shapes: reported at the root, in one container, across containers and inside
+  // one scope; silent for s1 against s2. Root against scope, nested scopes and
+  // multi-name scopes are this extension's reading of that, until p-dup-g..j are run.
   if (opts.reportMultipleRefs) {
     const groups = new Map<string, Reference[]>();
     for (const ref of crawl.refs) {

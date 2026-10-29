@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- R008 shape probe (not yet run in Oxygen): the topic once in keyscope "a b" and once in keyscope "b a" (the same scopes, written in another order).
+     The extension's answer is an extrapolation of probes A-F, so the next Oxygen run
+     decides it. One probe per map; see README.md, "The scope shapes Oxygen has not
+     been asked". -->
+<map id="p-dup-j-multi-reordered">
+  <title>p-dup-j-multi-reordered</title>
+  <topicgroup keyscope="a b">
+    <topicref href="../topics/p-dup-j-multi-reordered.dita"/>
+  </topicgroup>
+  <topicgroup keyscope="b a">
+    <topicref href="../topics/p-dup-j-multi-reordered.dita"/>
+  </topicgroup>
+</map>
