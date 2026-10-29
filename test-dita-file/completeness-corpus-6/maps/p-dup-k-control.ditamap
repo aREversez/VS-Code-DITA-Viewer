@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- Positive control for the g..j probes: the topic twice inside ONE keyscope="s1" group,
+     the shape of p-dup-d, which Oxygen is known to report (dmv.dup.topic). It is
+     referenced LAST in corpus.ditamap, so a report that carries it proves Oxygen read
+     the whole tail of the map and the silence on g..j is an answer; a report without it
+     means Oxygen worked from a stale copy of the map. See README.md, "The control". -->
+<map id="p-dup-k-control">
+  <title>p-dup-k-control</title>
+  <topicgroup keyscope="s1">
+    <topicref href="../topics/p-dup-k-control.dita"/>
+    <topicref href="../topics/p-dup-k-control.dita"/>
+  </topicgroup>
+</map>

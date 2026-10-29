@@ -42,6 +42,13 @@
     "message": "Topic referenced more than once (2 times): ../topics/p-dup-j-multi-reordered.dita"
   },
   {
+    "category": "multiple-reference",
+    "severity": "warning",
+    "file": "maps/p-dup-k-control.ditamap",
+    "line": 12,
+    "message": "Topic referenced more than once (2 times): ../topics/p-dup-k-control.dita"
+  },
+  {
     "category": "resource-only-target",
     "severity": "warning",
     "file": "topics/o-scope-inside-neg.dita",

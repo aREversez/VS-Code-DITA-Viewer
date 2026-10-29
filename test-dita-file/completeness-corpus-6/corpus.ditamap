@@ -34,4 +34,7 @@
   <mapref href="maps/p-dup-h-nested-scope.ditamap"/>
   <mapref href="maps/p-dup-i-multi-vs-single.ditamap"/>
   <mapref href="maps/p-dup-j-multi-reordered.ditamap"/>
+
+  <!-- Positive control for the four above, kept LAST: see README.md, "The control". -->
+  <mapref href="maps/p-dup-k-control.ditamap"/>
 </map>

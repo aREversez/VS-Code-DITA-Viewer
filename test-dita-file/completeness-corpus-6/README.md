@@ -113,8 +113,8 @@ being an extension-only row without a change of its own.
 The six probes above show Oxygen counting by scope for siblings (`s1` against `s2`), but the
 rule as written answers three more shapes by extrapolation. Four more maps ask, each with its
 own topic and referenced after the six, at the end of `corpus.ditamap`. The extension is silent
-on the first three and reports the last, so until a rerun only the last is a lock row, and
-an *unknown* one.
+on the first three and reports the last, so until a rerun only the last (and the control below)
+are lock rows, and *unknown* ones.
 
 | Map | Layout | Extension today | What Oxygen's answer would mean |
 | --- | --- | --- | --- |
@@ -126,6 +126,28 @@ an *unknown* one.
 `src/test/editor/mapCompleteness.test.ts` pins today's answer for each, so a change after that
 run is deliberate. Rerun with `corpus.ditamap` as the only root map, sanitize, refresh this
 folder's parity lock, and change R008 only where Oxygen disagrees.
+
+### The control: telling silence from a stale map
+
+A first rerun with g to j in the map came back identical to the report before it. That fits two
+things the report cannot tell apart: Oxygen answered "not a duplicate" for all four, or it ran
+on a cached copy of `corpus.ditamap` that did not yet have them (the DITA Maps Manager keeps an
+open root map, and a file changed outside the editor is not always reloaded). The only control
+then was the missing topic at the top of the map, which says the root was read, not the tail.
+
+`maps/p-dup-k-control.ditamap` is the same-scope pair of `p-dup-d`, which Oxygen files, and it is
+referenced **last**. Read the next report by it:
+
+- **Its two `dmv.dup.topic` incidents are there** (16 incidents, if g to j stay silent): Oxygen
+  read the whole map, so the silence on g to j is an answer. g, h and i then agree with the
+  extension. Silence on **j** would say the order of the scope names matters: compare the
+  scope chains in order in `scopeKey` (`mapChecks.ts`), so `"a b"` and `"b a"` stop counting as
+  one scope, and rewrite the j test and row to match.
+- **They are missing**: the run was on a stale map. Close the root map in the DITA Maps Manager,
+  reopen `corpus.ditamap` from disk, and run again; none of g to k has been answered yet.
+
+Before reading anything into the report, check that the Maps Manager tree shows the five new
+nodes (`p-dup-g` to `p-dup-k`) under the root map.
 
 ## Running it
 
