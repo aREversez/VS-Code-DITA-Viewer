@@ -365,12 +365,13 @@ export async function runChecks(
 
   // 5. Same topic referenced more than once. A unique @copy-to makes it a different
   // topic, and so does a different key scope (R008). Corpus 6's probes settled every
-  // shape Oxygen was asked about: reported at the root, in one container, across
-  // containers and inside one keyscope (p-dup-k, the control, is that last shape);
-  // silent for s1 against s2, the root against s1, s2 nested in s1, "a b" against "a",
-  // and "a b" against "b a". So the names count as a list in the order written, not as
-  // a set. Two separate keyscope="a b" groups, s1 > x against s2 > x, and "a b" against
-  // "a  b" are still the extension's reading until p-dup-l..n are run.
+  // shape Oxygen was asked about, over four runs: reported at the root, in one container,
+  // across containers, inside one keyscope (p-dup-k, the control, is that last shape) and
+  // for two separate keyscope="a b" groups (p-dup-l); silent for s1 against s2, the root
+  // against s1, s2 nested in s1, "a b" against "a", "a b" against "b a" and s1 > x against
+  // s2 > x. So the declaring element is not the identity and the innermost name alone is
+  // not either: the whole chain counts, its names count in the order written, and they
+  // split on whitespace (p-dup-n reports "a b" against "a  b").
   if (opts.reportMultipleRefs) {
     const groups = new Map<string, Reference[]>();
     for (const ref of crawl.refs) {
@@ -964,11 +965,13 @@ function copyToKey(ref: Reference): string {
 
 /**
  * The key scopes a reference sits in, as one string (empty at the root scope). A
- * `keyscope` listing several names gives several chains, and the order of the names is
- * part of the identity: Oxygen reports a pair inside one `keyscope="s1"` group (corpus
- * 6's p-dup-k control) but stays silent on "a b" against "b a" (p-dup-j), so the names
- * count as a list in the order written, not as a set. Whether two separate groups with
- * the same names are one scope is not observed (p-dup-l).
+ * `keyscope` listing several names gives several chains, and the names are the identity
+ * rather than the element that declares them: two separate `keyscope="a b"` groups are
+ * one scope (corpus 6's p-dup-l) and the whole chain counts, not its innermost name
+ * (p-dup-m). The order of the names is part of it -- Oxygen reports a pair inside one
+ * `keyscope="s1"` group (p-dup-k) but stays silent on "a b" against "b a" (p-dup-j) --
+ * so the names count as a list in the order written, not as a set, split on whitespace
+ * (p-dup-n).
  */
 function scopeKey(ref: Reference): string {
   return (ref.scopeChains ?? [[]]).map((chain) => chain.join('/')).join('\u0000');

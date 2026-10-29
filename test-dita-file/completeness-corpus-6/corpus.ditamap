@@ -2,7 +2,7 @@
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
 <!-- Sixth differential corpus: key scope resolution (R066) and the scope half of the
      duplicate rule (R008), see README.md here. A committed Oxygen report
-     (oxygen-report.xml, 16 incidents) and its parity lock cover it now; re-run Oxygen
+     (oxygen-report.xml, 20 incidents) and its parity lock cover it now; re-run Oxygen
      with THIS map as the only root map whenever the corpus changes. -->
 <map id="corpus6">
   <title>Completeness Check Corpus 6</title>
@@ -36,9 +36,10 @@
   <mapref href="maps/p-dup-i-multi-vs-single.ditamap"/>
   <mapref href="maps/p-dup-j-multi-reordered.ditamap"/>
 
-  <!-- R008 probes not yet run in Oxygen: two independent keyscope="a b" groups, the same
-       innermost scope under two outer ones, and the same names spaced differently. The
-       readings are registered in README.md, "The shapes still unasked". -->
+  <!-- R008 scope-identity probes, answered by the fourth report: two independent
+       keyscope="a b" groups are filed (p-dup-l), s1 > x against s2 > x draws nothing
+       (p-dup-m), and the differently spaced names are filed (p-dup-n). See README.md,
+       "The scope shapes". -->
   <mapref href="maps/p-dup-l-two-groups.ditamap"/>
   <mapref href="maps/p-dup-m-nested-same-inner.ditamap"/>
   <mapref href="maps/p-dup-n-name-spacing.ditamap"/>

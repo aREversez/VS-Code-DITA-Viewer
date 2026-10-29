@@ -362,9 +362,9 @@ describe('completeness: multiple references', () => {
     assert.strictEqual((await run('a')).filter((i) => i.category === 'multiple-reference').length, 0);
     assert.strictEqual((await run('b a')).filter((i) => i.category === 'multiple-reference').length, 0);
   });
-  // Nothing has asked Oxygen this one: two separate keyscope="a b" declarations list the
-  // same names in the same order, so the identity calls them duplicates. It is the shape
-  // that would tell "the names are the identity" apart from "each keyscope element is".
+  // The fourth report answers the question this shape was written for: two separate
+  // keyscope="a b" declarations list the same names in the same order, and Oxygen files
+  // the pair (p-dup-l), so the names are the identity, not the declaring element.
   it('counts two keyscope groups that list the same names in the same order', async () => {
     const issues = await check(
       {
@@ -376,9 +376,9 @@ describe('completeness: multiple references', () => {
     );
     assert.strictEqual(issues.filter((i) => i.category === 'multiple-reference').length, 1);
   });
-  // Not yet asked of Oxygen (corpus 6, p-dup-m and p-dup-n): the identity is the whole
-  // chain, and the names are parsed rather than compared as text. README, "The shapes
-  // still unasked", registers what each possible answer would change.
+  // Both were asked in the fourth report: p-dup-m is silent, so the identity is the whole
+  // chain rather than its innermost name, and p-dup-n is filed, so the names are parsed on
+  // whitespace rather than compared as attribute text.
   it('treats the same innermost scope under two different outer scopes as different scopes', async () => {
     const issues = await check(
       {

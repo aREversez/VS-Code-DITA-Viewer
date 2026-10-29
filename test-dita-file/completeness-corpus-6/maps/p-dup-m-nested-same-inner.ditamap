@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
-<!-- R008 shape probe (not yet run in Oxygen): the topic once in s1 > x and once in s2 > x
+<!-- R008 shape probe (fourth report: silent): the topic once in s1 > x and once in s2 > x
      (the same innermost scope name, a different outer one).
-     The extension is silent (identity = the whole chain). If Oxygen reports it, only the
-     innermost name counts. The readings are registered in README.md, "The shapes still
-     unasked". -->
+     Oxygen draws nothing, so the whole chain is the identity and its innermost name alone
+     is not; R008 needs no change. See README.md, "The scope shapes". -->
 <map id="p-dup-m-nested-same-inner">
   <title>p-dup-m-nested-same-inner</title>
   <topicgroup keyscope="s1">

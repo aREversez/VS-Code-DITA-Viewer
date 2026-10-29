@@ -505,12 +505,13 @@ What the run settled:
 ### The key scope run and the R008 probe run (sixth corpus)
 
 *Validate and Check for Completeness* over `../completeness-corpus-6/corpus.ditamap` — the
-same settings as the runs above — was run three times: once on the key scope probes alone
+same settings as the runs above — was run four times: once on the key scope probes alone
 (**6 incidents**), once after the six duplicate probes of R008 joined the map (**14
-incidents**), and once after four scope-shape probes and their positive control joined it
-(**16 incidents**, `../completeness-corpus-6/oxygen-report.xml`). No run carried an accepted
-difference, and the last one locks **11 matched, 0 extension-only, 0 Oxygen-only**
-(`scripts/oxygen-diff.cjs` agrees) — the first corpus with parity in both directions.
+incidents**), once after four scope-shape probes and their positive control joined it
+(**16 incidents**), and once after three scope-identity probes joined it (**20 incidents**,
+`../completeness-corpus-6/oxygen-report.xml`). No run carried an accepted difference, and the
+last one locks **13 matched, 0 extension-only, 0 Oxygen-only** (`scripts/oxygen-diff.cjs`
+agrees) — the first corpus with parity in both directions.
 
 What the runs settled:
 
@@ -528,21 +529,26 @@ What the runs settled:
   publication, with an explicit `processing-role="normal"` on the keydef still publishing
   normally.
 - **A duplicate is counted per (target, scope chain), with the names in the order written**
-  (R008). Eleven maps each reference one topic twice
+  (R008). Fourteen maps each reference one topic twice
   (`../completeness-corpus-6/maps/p-dup-*.ditamap`): Oxygen files `dmv.dup.topic` on both
   references when they are siblings, when both sit in one `topicgroup`, when they sit in two
-  `topicgroup`s, when both sit inside one `keyscope="s1"`, and when both sit inside one
+  `topicgroup`s, when both sit inside one `keyscope="s1"`, when both sit inside one
   `keyscope="s1"` at the very end of the map (the positive control `p-dup-k`, which is what
-  proves the third run read the tail of `corpus.ditamap`). It files nothing when one sits in
-  `s1` and the other in `s2`, when one sits at the root and the other in `s1`, when one sits in
-  `s1` and the other in `s2` nested inside `s1`, when one sits in `keyscope="a b"` and the
-  other in `keyscope="a"`, and when one sits in `"a b"` and the other in `"b a"`. A container
-  is therefore no boundary, and a `keyscope` is no boundary either: only a *different* scope
-  is. The last pair makes the comparison a list rather than a set — the same two names in
-  another order are two scopes — which is *not* how R066 reads them, since key resolution only
-  asks whether a name is in effect. The first run's one extension-only row — `corpus.ditamap`'s
+  proves the third and fourth runs read the tail of `corpus.ditamap`), when they sit in two
+  separate `keyscope="a b"` groups, and when one says `keyscope="a b"` and the other
+  `keyscope="a  b"`. It files nothing when one sits in `s1` and the other in `s2`, when one
+  sits at the root and the other in `s1`, when one sits in `s1` and the other in `s2` nested
+  inside `s1`, when one sits in `keyscope="a b"` and the other in `keyscope="a"`, when one
+  sits in `"a b"` and the other in `"b a"`, and when one sits in `s1 > x` and the other in
+  `s2 > x`. A container is therefore no boundary, a `keyscope` element is no boundary either,
+  and neither is a chain that differs only in an outer name: only a *different* chain of names
+  is. The order matters — the same two names in another order are two scopes — the names are
+  parsed on whitespace, and the identity is the names rather than the element that declares
+  them. That ordered reading is *not* how R066 reads them, since key resolution only asks
+  whether a name is in effect. The first run's one extension-only row — `corpus.ditamap`'s
   shared-edge pair, the same shape as the two silent probes — closed with the rule instead of
-  staying a difference, and the third run's silence on `p-dup-j` closed the last one.
+  staying a difference, the third run's silence on `p-dup-j` closed the next, and the fourth
+  run's `p-dup-l` and `p-dup-n` rows closed the last two without a code change.
 
 ### All six corpora at a glance
 
@@ -553,8 +559,8 @@ What the runs settled:
 | `completeness-corpus-3` | batch 2, conref / id / link forms | 34 | – | 30 / 0 / 4 |
 | `completeness-corpus-4` | batch 3, profiling and filters | 19 | – | 13 / 1 / 2 |
 | `completeness-corpus-5` | batch 4, class / DITA validity / structure | 34 | 6 (4 `MSG_*`, 2 no-schema) | 21 / 6 / 3 |
-| `completeness-corpus-6` | key scopes (R066), the keydef half of R049, duplicates by scope (R008) | 16 | – | 11 / 0 / 0 |
-| **Total** | | **247** | **12** | **167 / 15 / 27** |
+| `completeness-corpus-6` | key scopes (R066), the keydef half of R049, duplicates by scope (R008) | 20 | – | 13 / 0 / 0 |
+| **Total** | | **251** | **12** | **169 / 15 / 27** |
 
 The 15 extension-only and 27 Oxygen-only signatures are each accounted for in the batch sections
 above or in the corpus README that owns them; the largest group is corpus 2's 17, whose three
@@ -565,9 +571,10 @@ R019 probes of batch 2, which moved it from 30 incidents and 27 / 0 / 3 to 30 / 
 more when the conkeyref site joined the reference passes, which left the report alone and moved
 one row from Oxygen-only into the matched set. The sixth corpus now has no row in either
 direction: its three first-run misses were fixed before its lock was written, the R008
-probes turned its one extension-only row into a match, and its third run made the control's
+probes turned its one extension-only row into a match, its third run made the control's
 row a match while the rule stopped filing `p-dup-j` — the ordered comparison its silence
-called for. With the batch-4 run the 11 ids of that
+called for — and its fourth run answered the last three scope shapes, two of them matches,
+without a code change. With the batch-4 run the 11 ids of that
 batch were closed, and this one did not reopen any: 84 ids, **no gap left**. Eighteen of the 75
 *ok* rows are *mapped only* — no incident of that exact id in any of the six reports — and each of
 them says in its own row which id the reports carry instead, so the number is worth re-checking

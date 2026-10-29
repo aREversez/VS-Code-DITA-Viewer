@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
-<!-- R008 shape probe (not yet run in Oxygen): the topic once in each of TWO independent
-     keyscope="a b" groups, the same names in the same order.
-     The extension reports it (identity = the names). If Oxygen stays silent, every keyscope
-     element is its own context and R008 must key on the declaring element. The readings
-     are registered in README.md, "The shapes still unasked". -->
+<!-- R008 shape probe (fourth report: reported twice): the topic once in each of TWO
+     independent keyscope="a b" groups, the same names in the same order.
+     Oxygen files the pair, so the names are the identity of a scope and the element that
+     declares it is not; R008 needs no change. This probe closed the last shape that rule had
+     held by extension. See README.md, "The scope shapes". -->
 <map id="p-dup-l-two-groups">
   <title>p-dup-l-two-groups</title>
   <topicgroup keyscope="a b">

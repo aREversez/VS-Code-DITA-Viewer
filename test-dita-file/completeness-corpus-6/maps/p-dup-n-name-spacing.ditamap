@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
-<!-- R008 shape probe (not yet run in Oxygen): the topic once in keyscope="a b" and once in
-     keyscope="a  b" (two spaces: the same names, written differently).
-     The extension reports it (the names are split on whitespace). If Oxygen stays silent it
-     compares the attribute text. The readings are registered in README.md, "The shapes
-     still unasked". -->
+<!-- R008 shape probe (fourth report: reported twice): the topic once in keyscope="a b" and
+     once in keyscope="a  b" (two spaces: the same names, written differently).
+     Oxygen files the pair, so it parses the names on whitespace rather than comparing the
+     attribute text; R008 needs no change. The spacing inside a keyscope therefore never
+     decides whether two references are duplicates. See README.md, "The scope shapes". -->
 <map id="p-dup-n-name-spacing">
   <title>p-dup-n-name-spacing</title>
   <topicgroup keyscope="a b">
