@@ -42,6 +42,20 @@
     "message": "Topic referenced more than once (2 times): ../topics/p-dup-k-control.dita"
   },
   {
+    "category": "multiple-reference",
+    "severity": "warning",
+    "file": "maps/p-dup-l-two-groups.ditamap",
+    "line": 14,
+    "message": "Topic referenced more than once (2 times): ../topics/p-dup-l-two-groups.dita"
+  },
+  {
+    "category": "multiple-reference",
+    "severity": "warning",
+    "file": "maps/p-dup-n-name-spacing.ditamap",
+    "line": 14,
+    "message": "Topic referenced more than once (2 times): ../topics/p-dup-n-name-spacing.dita"
+  },
+  {
     "category": "resource-only-target",
     "severity": "warning",
     "file": "topics/o-scope-inside-neg.dita",

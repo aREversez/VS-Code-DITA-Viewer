@@ -36,7 +36,14 @@
   <mapref href="maps/p-dup-i-multi-vs-single.ditamap"/>
   <mapref href="maps/p-dup-j-multi-reordered.ditamap"/>
 
-  <!-- Positive control for the four above, kept LAST: the third report carries its two
+  <!-- R008 probes not yet run in Oxygen: two independent keyscope="a b" groups, the same
+       innermost scope under two outer ones, and the same names spaced differently. The
+       readings are registered in README.md, "The shapes still unasked". -->
+  <mapref href="maps/p-dup-l-two-groups.ditamap"/>
+  <mapref href="maps/p-dup-m-nested-same-inner.ditamap"/>
+  <mapref href="maps/p-dup-n-name-spacing.ditamap"/>
+
+  <!-- Positive control for the probes above, kept LAST: the third report carries its two
        incidents, so the silence above is an answer. See README.md, "The control". -->
   <mapref href="maps/p-dup-k-control.ditamap"/>
 </map>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- R008 shape probe (not yet run in Oxygen): the topic once in keyscope="a b" and once in
+     keyscope="a  b" (two spaces: the same names, written differently).
+     The extension reports it (the names are split on whitespace). If Oxygen stays silent it
+     compares the attribute text. The readings are registered in README.md, "The shapes
+     still unasked". -->
+<map id="p-dup-n-name-spacing">
+  <title>p-dup-n-name-spacing</title>
+  <topicgroup keyscope="a b">
+    <topicref href="../topics/p-dup-n-name-spacing.dita"/>
+  </topicgroup>
+  <topicgroup keyscope="a  b">
+    <topicref href="../topics/p-dup-n-name-spacing.dita"/>
+  </topicgroup>
+</map>

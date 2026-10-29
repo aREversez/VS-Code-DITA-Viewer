@@ -376,6 +376,31 @@ describe('completeness: multiple references', () => {
     );
     assert.strictEqual(issues.filter((i) => i.category === 'multiple-reference').length, 1);
   });
+  // Not yet asked of Oxygen (corpus 6, p-dup-m and p-dup-n): the identity is the whole
+  // chain, and the names are parsed rather than compared as text. README, "The shapes
+  // still unasked", registers what each possible answer would change.
+  it('treats the same innermost scope under two different outer scopes as different scopes', async () => {
+    const issues = await check(
+      {
+        'root.ditamap':
+          '<map><topicgroup keyscope="s1"><topicgroup keyscope="x"><topicref href="t.dita"/></topicgroup></topicgroup><topicgroup keyscope="s2"><topicgroup keyscope="x"><topicref href="t.dita"/></topicgroup></topicgroup></map>',
+        't.dita': topic('t'),
+      },
+      { reportMultipleRefs: true },
+    );
+    assert.strictEqual(issues.filter((i) => i.category === 'multiple-reference').length, 0);
+  });
+  it('splits keyscope names on any whitespace, so "a b" and "a  b" are one scope', async () => {
+    const issues = await check(
+      {
+        'root.ditamap':
+          '<map><topicgroup keyscope="a b"><topicref href="t.dita"/></topicgroup><topicgroup keyscope="a  b"><topicref href="t.dita"/></topicgroup></map>',
+        't.dita': topic('t'),
+      },
+      { reportMultipleRefs: true },
+    );
+    assert.strictEqual(issues.filter((i) => i.category === 'multiple-reference').length, 1);
+  });
   it('counts a topicref @keyref in the scope of the element that carries it', async () => {
     const run = (second: string) =>
       check(

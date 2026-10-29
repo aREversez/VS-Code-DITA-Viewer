@@ -142,14 +142,34 @@ So R008 counts a reference by `(target, scope chain)` with the names **in the or
 groups that both say `keyscope="a b"` are one. The extension reported `p-dup-j` until this
 report; that row was the lock's only extension-only signature, and it is gone.
 
-One shape is still unasked, and a test says so: two separate `keyscope="a b"` declarations,
-both listing the same names in the same order. The rule calls that a duplicate, but if Oxygen
-treated every `keyscope` element as its own context it would stay silent, and nothing in these
-reports separates the two readings. A probe holding that pair would decide it.
+Three shapes are still unasked, and a test says so for each; "The shapes still unasked" below
+registers the probes and both readings of each before the next run.
 
 `src/test/editor/mapCompleteness.test.ts` pins all four answers, so a change after a later run
 is deliberate. Rerun with `corpus.ditamap` as the only root map, sanitize, refresh this folder's
 parity lock, and change R008 only where Oxygen disagrees.
+
+### The shapes still unasked (R008) — not yet run
+
+Three more maps, each with its own topic, referenced between `p-dup-j` and the control (so the
+control is still last and the lines the third report cites did not move). They ask what the
+**identity** of a scope is, which the first nine probes leave open. The extension's answer today
+is below; each probe has two possible Oxygen answers, registered here **before** the run so the
+reading is not chosen after seeing it.
+
+| Map | Layout | Extension today | If Oxygen reports `dmv.dup.topic` | If Oxygen stays silent |
+| --- | --- | --- | --- | --- |
+| `maps/p-dup-l-two-groups.ditamap` | once in each of two independent `keyscope="a b"` groups (same names, same order) | reported | the names are the identity: R008 as written, and the last extrapolation is observed — no code change | every `keyscope` element is its own context: key the duplicate group on the declaring element (an instance id per scope in `Reference.scopeChains`, so `p-dup-d`, one group, still reports and `l` stops), and rewrite R008 |
+| `maps/p-dup-m-nested-same-inner.ditamap` | once in `s1 > x`, once in `s2 > x` (same innermost name, different outer) | silent | only the innermost name counts: `scopeKey` takes the last name of each chain; `h` (`s1` against `s1 > s2`) and `e` stay silent either way | the whole chain is the identity: R008 as written, no code change |
+| `maps/p-dup-n-name-spacing.ditamap` | once in `keyscope="a b"`, once in `keyscope="a  b"` (two spaces) | reported | the names are parsed, not compared as text: R008 as written, no code change | Oxygen compares the attribute text. Record it as a documented difference first: a keyscope written with different spacing is rare, so follow it only if cheap |
+
+Until the run, the baseline and the parity lock carry `l` and `n` as extension-only rows: they are
+*unknown*, not disagreements, and `oxygen-diff` exits non-zero on them for that reason.
+
+`src/test/editor/mapCompleteness.test.ts` pins today's answer for all three. After the run,
+change the extension only for the "silent" column of `l` and the "reports" column of `m`;
+every other outcome confirms the rule as it stands. If the report lacks the control, the run
+was on a stale map (below) and none of `l` to `n` is answered.
 
 ### The control: telling silence from a stale map
 
@@ -165,8 +185,8 @@ so the run read the whole tail and the silence on g to j is an answer.
 
 A report without them is a stale map: close the root map in the DITA Maps Manager, reopen
 `corpus.ditamap` from disk and run again — none of g to k is answered then. Before reading
-anything into a report, check that the Maps Manager tree shows the five new nodes (`p-dup-g` to
-`p-dup-k`) under the root map.
+anything into a report, check that the Maps Manager tree shows the new nodes (`p-dup-g` to
+`p-dup-n`, and the control `p-dup-k`) under the root map.
 
 ## Running it
 

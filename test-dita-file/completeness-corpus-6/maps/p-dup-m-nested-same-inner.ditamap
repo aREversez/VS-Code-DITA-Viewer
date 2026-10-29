@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- R008 shape probe (not yet run in Oxygen): the topic once in s1 > x and once in s2 > x
+     (the same innermost scope name, a different outer one).
+     The extension is silent (identity = the whole chain). If Oxygen reports it, only the
+     innermost name counts. The readings are registered in README.md, "The shapes still
+     unasked". -->
+<map id="p-dup-m-nested-same-inner">
+  <title>p-dup-m-nested-same-inner</title>
+  <topicgroup keyscope="s1">
+    <topicgroup keyscope="x">
+      <topicref href="../topics/p-dup-m-nested-same-inner.dita"/>
+    </topicgroup>
+  </topicgroup>
+  <topicgroup keyscope="s2">
+    <topicgroup keyscope="x">
+      <topicref href="../topics/p-dup-m-nested-same-inner.dita"/>
+    </topicgroup>
+  </topicgroup>
+</map>
