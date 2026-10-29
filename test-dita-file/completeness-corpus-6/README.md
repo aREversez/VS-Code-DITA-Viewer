@@ -36,15 +36,16 @@ Every probe topic holds one `<xref>`: `keyref="k-scoped"`, except the qualified
 `s1.k-scoped`. The key resolves to `topics/t-target.dita`, which the map reaches only through a
 `<keydef>`, and that is what produced the second finding family of the first run.
 
-## The runs: 14 incidents, full parity
+## The runs: 16 incidents, full parity
 
 `node scripts/oxygen-diff.cjs --corpus completeness-corpus-6 oxygen-report.xml` reports
-**10 matched, 0 extension-only, 0 Oxygen-only** — the first corpus with neither row. No
-incident was an accepted difference, so parity compares all ten signatures; the 14 incidents
-collapse into them because each duplicate probe files one incident per reference.
+**11 matched, 0 extension-only, 0 Oxygen-only**. No incident was an accepted difference, so
+parity compares all eleven signatures; the 16 incidents collapse into them because each
+duplicate probe files one incident per reference.
 
-The first run carried **6 incidents**, before the duplicate probes existed, and settled R066
-and the keydef half of R049:
+Three reports were taken from this corpus, and the last one is the committed
+`oxygen-report.xml`. The first carried **6 incidents**, before the duplicate probes existed,
+and settled R066 and the keydef half of R049:
 
 | Oxygen | Where | Extension |
 | --- | --- | --- |
@@ -70,7 +71,7 @@ What that run settled beyond R066:
   `topicgroup`", so it stayed locked extension-only until a run of the duplicate probes below
   decided it.
 
-The rerun added the six duplicate probes and answered the question:
+The second report (**14 incidents**) added the six duplicate probes and answered the question:
 
 | Oxygen | Where | Extension |
 | --- | --- | --- |
@@ -78,7 +79,18 @@ The rerun added the six duplicate probes and answered the question:
 
 Nothing else moved: the six incidents of the first run came back the same, and the shared-edge
 pair in `corpus.ditamap` drew nothing again — under the tightened rule the extension no longer
-files it either, so that row closed instead of staying extension-only.
+files it either, so that row closed instead of staying extension-only. That report read
+**10 matched, 0 extension-only, 0 Oxygen-only**.
+
+The third report (**16 incidents**) added the four scope shapes and their control:
+
+| Oxygen | Where | Extension |
+| --- | --- | --- |
+| `dmv.dup.topic` ×2 | `maps/p-dup-k-control.ditamap:11`, `:12` | `multiple-reference` on the second reference, matched |
+
+g to j drew nothing at all, so the extension's silence on g, h and i stands and its finding on
+j had to go: the only signature that moved was the control's, out of the lock's extension-only
+row and into the matched set.
 
 ## The duplicate probes (R008): the answer is the scope
 
@@ -99,55 +111,62 @@ every probe files its `multiple-reference` on the map that holds the pair.
 B and C rule out the container, D rules out "a `keyscope` ends the count", and F shows the
 container is not what silences E: the only difference between the reported D and the silent E
 and F is that the two references sit in **different** scopes. **The scope decides**, so R008
-counts a reference by `(target, scope chain)`, in step with R066: `mapChecks.ts` keys its
-duplicate groups on the target plus `Reference.scopeChains`, which `mapCrawl.ts` records for
-every map element (the element's own `keyscope` included) and hands to a `<topicref keyref>`
-as well. The shared-edge pair of `corpus.ditamap` is that same shape, which is why it stopped
-being an extension-only row without a change of its own.
+counts a reference by `(target, scope chain)`. `mapChecks.ts` keys its duplicate groups on the
+target plus `Reference.scopeChains`, which `mapCrawl.ts` records for every map element (the
+element's own `keyscope` included) and hands to a `<topicref keyref>` as well. The shared-edge
+pair of `corpus.ditamap` is that same shape, which is why it stopped being an extension-only
+row without a change of its own. These six probes say nothing about the order of the names
+inside a chain; the next section does.
 
-`src/test/editor/mapCompleteness.test.ts` covers the four shapes: two `topicgroup`s, one
-`keyscope` group, two scopes, and `keyscope` on the `topicref`s themselves.
+`src/test/editor/mapCompleteness.test.ts` covers the four shapes here — two `topicgroup`s, one
+`keyscope` group, two scopes, and `keyscope` on the `topicref`s themselves — and the four scope
+shapes below.
 
-## The scope shapes Oxygen has not been asked (R008) — not yet run
+## The scope shapes (R008): observed, and the order of the names counts
 
-The six probes above show Oxygen counting by scope for siblings (`s1` against `s2`), but the
-rule as written answers three more shapes by extrapolation. Four more maps ask, each with its
-own topic and referenced after the six, at the end of `corpus.ditamap`. The extension is silent
-on the first three and reports the last, so until a rerun only the last (and the control below)
-are lock rows, and *unknown* ones.
+The six probes above count by scope for siblings (`s1` against `s2`), but three more shapes
+were the rule's extrapolation of them, and a fifth map exists only to make the answers
+readable. Each has its own topic and is referenced after the six, at the end of `corpus.ditamap`.
 
-| Map | Layout | Extension today | What Oxygen's answer would mean |
+| Map | Layout | Third report | What it settles |
 | --- | --- | --- | --- |
-| `maps/p-dup-g-root-vs-scope.ditamap` | once at the root, once inside `keyscope="s1"` | silent | reported: the root scope is the same publication as a scope below it; silent: it is a scope like any other |
-| `maps/p-dup-h-nested-scope.ditamap` | once in `s1`, once in `s2` nested in `s1` | silent | reported: only the outermost scope name counts; silent: the whole chain does |
-| `maps/p-dup-i-multi-vs-single.ditamap` | once in `keyscope="a b"`, once in `keyscope="a"` | silent | reported: the two share a scope name; silent: the set of names is the identity |
-| `maps/p-dup-j-multi-reordered.ditamap` | once in `"a b"`, once in `"b a"` | reported | silent: order of the names matters (unlikely; the DITA scope is a set) |
+| `maps/p-dup-g-root-vs-scope.ditamap` | once at the root, once inside `keyscope="s1"` | *(nothing)* | the root is a scope like any other |
+| `maps/p-dup-h-nested-scope.ditamap` | once in `s1`, once in `s2` nested in `s1` | *(nothing)* | the whole chain counts, not only the outermost name |
+| `maps/p-dup-i-multi-vs-single.ditamap` | once in `keyscope="a b"`, once in `keyscope="a"` | *(nothing)* | the names are compared as a whole, not any one they share |
+| `maps/p-dup-j-multi-reordered.ditamap` | once in `"a b"`, once in `"b a"` | *(nothing)* | the names count **in the order written**: a set would have called these one scope |
+| `maps/p-dup-k-control.ditamap` | twice inside one `keyscope="s1"` group (the control) | `dmv.dup.topic` ×2 | the run read the tail of the map, so the silence above is an answer |
 
-`src/test/editor/mapCompleteness.test.ts` pins today's answer for each, so a change after that
-run is deliberate. Rerun with `corpus.ditamap` as the only root map, sanitize, refresh this
-folder's parity lock, and change R008 only where Oxygen disagrees.
+So R008 counts a reference by `(target, scope chain)` with the names **in the order the
+`keyscope` lists them**: `scopeKey` (`mapChecks.ts`) joins the chains without sorting, so
+`"a b"` and `"b a"` are two scopes and the pair of `p-dup-j` stops being a duplicate, while two
+groups that both say `keyscope="a b"` are one. The extension reported `p-dup-j` until this
+report; that row was the lock's only extension-only signature, and it is gone.
+
+One shape is still unasked, and a test says so: two separate `keyscope="a b"` declarations,
+both listing the same names in the same order. The rule calls that a duplicate, but if Oxygen
+treated every `keyscope` element as its own context it would stay silent, and nothing in these
+reports separates the two readings. A probe holding that pair would decide it.
+
+`src/test/editor/mapCompleteness.test.ts` pins all four answers, so a change after a later run
+is deliberate. Rerun with `corpus.ditamap` as the only root map, sanitize, refresh this folder's
+parity lock, and change R008 only where Oxygen disagrees.
 
 ### The control: telling silence from a stale map
 
-A first rerun with g to j in the map came back identical to the report before it. That fits two
-things the report cannot tell apart: Oxygen answered "not a duplicate" for all four, or it ran
-on a cached copy of `corpus.ditamap` that did not yet have them (the DITA Maps Manager keeps an
-open root map, and a file changed outside the editor is not always reloaded). The only control
-then was the missing topic at the top of the map, which says the root was read, not the tail.
+A first look at g to j came back identical to the report before it, and a report cannot tell
+"Oxygen answered *not a duplicate*" from "Oxygen ran on a cached copy of `corpus.ditamap` that
+lacked them" (the DITA Maps Manager keeps an open root map, and a file changed outside the
+editor is not always reloaded). The only control then was the missing topic at the top of the
+map, which says the root was read, not the tail.
 
 `maps/p-dup-k-control.ditamap` is the same-scope pair of `p-dup-d`, which Oxygen files, and it is
-referenced **last**. Read the next report by it:
+referenced **last**. The third report carries its two `dmv.dup.topic` rows, on lines 11 and 12,
+so the run read the whole tail and the silence on g to j is an answer.
 
-- **Its two `dmv.dup.topic` incidents are there** (16 incidents, if g to j stay silent): Oxygen
-  read the whole map, so the silence on g to j is an answer. g, h and i then agree with the
-  extension. Silence on **j** would say the order of the scope names matters: compare the
-  scope chains in order in `scopeKey` (`mapChecks.ts`), so `"a b"` and `"b a"` stop counting as
-  one scope, and rewrite the j test and row to match.
-- **They are missing**: the run was on a stale map. Close the root map in the DITA Maps Manager,
-  reopen `corpus.ditamap` from disk, and run again; none of g to k has been answered yet.
-
-Before reading anything into the report, check that the Maps Manager tree shows the five new
-nodes (`p-dup-g` to `p-dup-k`) under the root map.
+A report without them is a stale map: close the root map in the DITA Maps Manager, reopen
+`corpus.ditamap` from disk and run again — none of g to k is answered then. Before reading
+anything into a report, check that the Maps Manager tree shows the five new nodes (`p-dup-g` to
+`p-dup-k`) under the root map.
 
 ## Running it
 

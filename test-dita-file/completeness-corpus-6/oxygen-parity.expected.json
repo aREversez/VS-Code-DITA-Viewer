@@ -5,15 +5,13 @@
     "maps/p-dup-b-group.ditamap  multiple-reference",
     "maps/p-dup-c-two-groups.ditamap  multiple-reference",
     "maps/p-dup-d-same-scope.ditamap  multiple-reference",
+    "maps/p-dup-k-control.ditamap  multiple-reference",
     "topics/o-scope-inside-neg.dita  resource-only-target",
     "topics/o-scope-outside-pos.dita  undefined-key",
     "topics/o-scope-qualified-neg.dita  resource-only-target",
     "topics/o-scope-shared-edge.dita  resource-only-target",
     "topics/o-scope-shared-edge.dita  undefined-key"
   ],
-  "extensionOnly": [
-    "maps/p-dup-j-multi-reordered.ditamap  multiple-reference",
-    "maps/p-dup-k-control.ditamap  multiple-reference"
-  ],
+  "extensionOnly": [],
   "oxygenOnly": []
 }

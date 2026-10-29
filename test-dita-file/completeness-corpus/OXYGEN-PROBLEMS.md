@@ -505,12 +505,12 @@ What the run settled:
 ### The key scope run and the R008 probe run (sixth corpus)
 
 *Validate and Check for Completeness* over `../completeness-corpus-6/corpus.ditamap` — the
-same settings as the runs above — was run twice: once on the key scope probes alone
-(**6 incidents**), and once after the six duplicate probes of R008 joined the map
-(**14 incidents**, `../completeness-corpus-6/oxygen-report.xml`).
-Neither run carried an accepted difference, and the second one locks
-**10 matched, 0 extension-only, 0 Oxygen-only** (`scripts/oxygen-diff.cjs` agrees) — the first
-corpus with parity in both directions.
+same settings as the runs above — was run three times: once on the key scope probes alone
+(**6 incidents**), once after the six duplicate probes of R008 joined the map (**14
+incidents**), and once after four scope-shape probes and their positive control joined it
+(**16 incidents**, `../completeness-corpus-6/oxygen-report.xml`). No run carried an accepted
+difference, and the last one locks **11 matched, 0 extension-only, 0 Oxygen-only**
+(`scripts/oxygen-diff.cjs` agrees) — the first corpus with parity in both directions.
 
 What the runs settled:
 
@@ -527,15 +527,22 @@ What the runs settled:
   files it and we did not — and `resourceOnlyTargetIssues` now takes a keydef as a
   publication, with an explicit `processing-role="normal"` on the keydef still publishing
   normally.
-- **A duplicate is counted per (target, scope chain)** (R008). Six maps each reference one
-  topic twice (`../completeness-corpus-6/maps/p-dup-*.ditamap`): Oxygen files `dmv.dup.topic`
-  on both references when they are siblings, when both sit in one `topicgroup`, when they sit
-  in two `topicgroup`s and when both sit inside one `keyscope="s1"`; it files nothing when one
-  sits in `s1` and the other in `s2`, whether the scopes are on `topicgroup`s or on the
-  `topicref`s themselves. A container is therefore no boundary, and a `keyscope` is no
-  boundary either: only a *different* scope is, the reading R066 already gave keys. The first
-  run's one extension-only row — `corpus.ditamap`'s shared-edge pair, the same shape as the two
-  silent probes — closed with the rule instead of staying a difference.
+- **A duplicate is counted per (target, scope chain), with the names in the order written**
+  (R008). Eleven maps each reference one topic twice
+  (`../completeness-corpus-6/maps/p-dup-*.ditamap`): Oxygen files `dmv.dup.topic` on both
+  references when they are siblings, when both sit in one `topicgroup`, when they sit in two
+  `topicgroup`s, when both sit inside one `keyscope="s1"`, and when both sit inside one
+  `keyscope="s1"` at the very end of the map (the positive control `p-dup-k`, which is what
+  proves the third run read the tail of `corpus.ditamap`). It files nothing when one sits in
+  `s1` and the other in `s2`, when one sits at the root and the other in `s1`, when one sits in
+  `s1` and the other in `s2` nested inside `s1`, when one sits in `keyscope="a b"` and the
+  other in `keyscope="a"`, and when one sits in `"a b"` and the other in `"b a"`. A container
+  is therefore no boundary, and a `keyscope` is no boundary either: only a *different* scope
+  is. The last pair makes the comparison a list rather than a set — the same two names in
+  another order are two scopes — which is *not* how R066 reads them, since key resolution only
+  asks whether a name is in effect. The first run's one extension-only row — `corpus.ditamap`'s
+  shared-edge pair, the same shape as the two silent probes — closed with the rule instead of
+  staying a difference, and the third run's silence on `p-dup-j` closed the last one.
 
 ### All six corpora at a glance
 
@@ -546,8 +553,8 @@ What the runs settled:
 | `completeness-corpus-3` | batch 2, conref / id / link forms | 34 | – | 30 / 0 / 4 |
 | `completeness-corpus-4` | batch 3, profiling and filters | 19 | – | 13 / 1 / 2 |
 | `completeness-corpus-5` | batch 4, class / DITA validity / structure | 34 | 6 (4 `MSG_*`, 2 no-schema) | 21 / 6 / 3 |
-| `completeness-corpus-6` | key scopes (R066), the keydef half of R049, duplicates by scope (R008) | 14 | – | 10 / 0 / 0 |
-| **Total** | | **245** | **12** | **166 / 15 / 27** |
+| `completeness-corpus-6` | key scopes (R066), the keydef half of R049, duplicates by scope (R008) | 16 | – | 11 / 0 / 0 |
+| **Total** | | **247** | **12** | **167 / 15 / 27** |
 
 The 15 extension-only and 27 Oxygen-only signatures are each accounted for in the batch sections
 above or in the corpus README that owns them; the largest group is corpus 2's 17, whose three
@@ -557,8 +564,10 @@ and once for the two R065 probes, and no number in it moved; corpus 3 was rerun 
 R019 probes of batch 2, which moved it from 30 incidents and 27 / 0 / 3 to 30 / 0 / 4, and once
 more when the conkeyref site joined the reference passes, which left the report alone and moved
 one row from Oxygen-only into the matched set. The sixth corpus now has no row in either
-direction: its three first-run misses were fixed before its lock was written, and the R008
-probes turned its one extension-only row into a match. With the batch-4 run the 11 ids of that
+direction: its three first-run misses were fixed before its lock was written, the R008
+probes turned its one extension-only row into a match, and its third run made the control's
+row a match while the rule stopped filing `p-dup-j` — the ordered comparison its silence
+called for. With the batch-4 run the 11 ids of that
 batch were closed, and this one did not reopen any: 84 ids, **no gap left**. Eighteen of the 75
 *ok* rows are *mapped only* — no incident of that exact id in any of the six reports — and each of
 them says in its own row which id the reports carry instead, so the number is worth re-checking

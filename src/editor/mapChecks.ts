@@ -364,10 +364,12 @@ export async function runChecks(
   }
 
   // 5. Same topic referenced more than once. A unique @copy-to makes it a different
-  // topic, and so does a different key scope (R008). Corpus 6's six probes settled the
-  // sibling shapes: reported at the root, in one container, across containers and inside
-  // one scope; silent for s1 against s2. Root against scope, nested scopes and
-  // multi-name scopes are this extension's reading of that, until p-dup-g..j are run.
+  // topic, and so does a different key scope (R008). Corpus 6's probes settled every
+  // shape Oxygen was asked about: reported at the root, in one container, across
+  // containers, inside one keyscope, and again for two keyscope groups that list the
+  // same names in the same order (p-dup-k, the control); silent for s1 against s2, the
+  // root against s1, s2 nested in s1, "a b" against "a", and "a b" against "b a".
+  // So the names count as a list in the order written, not as a set.
   if (opts.reportMultipleRefs) {
     const groups = new Map<string, Reference[]>();
     for (const ref of crawl.refs) {
@@ -961,11 +963,13 @@ function copyToKey(ref: Reference): string {
 
 /**
  * The key scopes a reference sits in, as one string (empty at the root scope). A
- * `keyscope` listing several names gives several chains, and their order is not part
- * of the identity: two references behind the same set of scopes are duplicates.
+ * `keyscope` listing several names gives several chains, and the order of the names is
+ * part of the identity: Oxygen reports the pair in two `keyscope="a b"` groups (corpus
+ * 6's p-dup-k control) but stays silent on "a b" against "b a" (p-dup-j), so the names
+ * count as a list in the order written, not as a set.
  */
 function scopeKey(ref: Reference): string {
-  return (ref.scopeChains ?? [[]]).map((chain) => chain.join('/')).sort().join('\u0000');
+  return (ref.scopeChains ?? [[]]).map((chain) => chain.join('/')).join('\u0000');
 }
 
 /** Normalized target file -> the set of topic ids declared in it (root and nested). */

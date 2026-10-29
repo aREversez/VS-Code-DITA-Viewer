@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
-<!-- R008 shape probe (not yet run in Oxygen): the topic once in keyscope "a b" and once in keyscope "b a" (the same scopes, written in another order).
-     The extension's answer is an extrapolation of probes A-F, so the next Oxygen run
-     decides it. One probe per map; see README.md, "The scope shapes Oxygen has not
-     been asked". -->
+<!-- R008 shape probe (third report: silent): the topic once in keyscope "a b" and once in keyscope "b a" (the same scopes, written in another order).
+     Observed, not extrapolated: silent in the third Oxygen report, so the order of the names
+     counts and these two are two scopes. It is the one shape where the run changed the
+     extension: whichever way the names are written, they are a list. See README.md,
+     "The scope shapes". -->
 <map id="p-dup-j-multi-reordered">
   <title>p-dup-j-multi-reordered</title>
   <topicgroup keyscope="a b">

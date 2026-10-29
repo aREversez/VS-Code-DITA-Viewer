@@ -326,9 +326,9 @@ describe('completeness: multiple references', () => {
     );
     assert.strictEqual(issues.filter((i) => i.category === 'multiple-reference').length, 0);
   });
-  // The shapes below are the extension's extrapolation of the six probes: corpus 6's
-  // p-dup-g..j maps ask Oxygen about them, and these tests pin the current answer so a
-  // change after that run is deliberate (R008).
+  // The shapes below were extrapolated from the six probes until corpus 6's p-dup-g..j
+  // were run. Oxygen is silent on all four, so g, h and i confirm the rule as written and
+  // j showed that the order of the names counts (R008).
   it('does not flag one topic at the root scope and once inside a keyscope', async () => {
     const issues = await check(
       {
@@ -350,7 +350,7 @@ describe('completeness: multiple references', () => {
     );
     assert.strictEqual(issues.filter((i) => i.category === 'multiple-reference').length, 0);
   });
-  it('treats keyscope "a b" and keyscope "a" as different scopes, and "a b" and "b a" as the same', async () => {
+  it('treats "a b" against "a" and "a b" against "b a" as different scopes', async () => {
     const run = (second: string) =>
       check(
         {
@@ -360,7 +360,21 @@ describe('completeness: multiple references', () => {
         { reportMultipleRefs: true },
       );
     assert.strictEqual((await run('a')).filter((i) => i.category === 'multiple-reference').length, 0);
-    assert.strictEqual((await run('b a')).filter((i) => i.category === 'multiple-reference').length, 1);
+    assert.strictEqual((await run('b a')).filter((i) => i.category === 'multiple-reference').length, 0);
+  });
+  // Nothing has asked Oxygen this one: two separate keyscope="a b" declarations list the
+  // same names in the same order, so the identity calls them duplicates. It is the shape
+  // that would tell "the names are the identity" apart from "each keyscope element is".
+  it('counts two keyscope groups that list the same names in the same order', async () => {
+    const issues = await check(
+      {
+        'root.ditamap':
+          '<map><topicgroup keyscope="a b"><topicref href="t.dita"/></topicgroup><topicgroup keyscope="a b"><topicref href="t.dita"/></topicgroup></map>',
+        't.dita': topic('t'),
+      },
+      { reportMultipleRefs: true },
+    );
+    assert.strictEqual(issues.filter((i) => i.category === 'multiple-reference').length, 1);
   });
   it('counts a topicref @keyref in the scope of the element that carries it', async () => {
     const run = (second: string) =>

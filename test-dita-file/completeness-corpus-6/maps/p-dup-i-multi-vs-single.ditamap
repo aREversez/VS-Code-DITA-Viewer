@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
-<!-- R008 shape probe (not yet run in Oxygen): the topic once in keyscope "a b" and once in keyscope "a" (they share a scope name).
-     The extension's answer is an extrapolation of probes A-F, so the next Oxygen run
-     decides it. One probe per map; see README.md, "The scope shapes Oxygen has not
-     been asked". -->
+<!-- R008 shape probe (third report: silent): the topic once in keyscope "a b" and once in keyscope "a" (they share a scope name).
+     Observed, not extrapolated: silent in the third Oxygen report, so the names are compared
+     as a whole, not any one they share. One probe per map; see README.md, "The scope shapes". -->
 <map id="p-dup-i-multi-vs-single">
   <title>p-dup-i-multi-vs-single</title>
   <topicgroup keyscope="a b">

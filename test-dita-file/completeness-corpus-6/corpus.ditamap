@@ -2,7 +2,7 @@
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
 <!-- Sixth differential corpus: key scope resolution (R066) and the scope half of the
      duplicate rule (R008), see README.md here. A committed Oxygen report
-     (oxygen-report.xml, 14 incidents) and its parity lock cover it now; re-run Oxygen
+     (oxygen-report.xml, 16 incidents) and its parity lock cover it now; re-run Oxygen
      with THIS map as the only root map whenever the corpus changes. -->
 <map id="corpus6">
   <title>Completeness Check Corpus 6</title>
@@ -29,12 +29,14 @@
   <mapref href="maps/p-dup-e-two-scopes.ditamap"/>
   <mapref href="maps/p-dup-f-topicref-scope.ditamap"/>
 
-  <!-- R008 scope-shape probes, not yet run in Oxygen (README.md, "The scope shapes Oxygen has not been asked"). -->
+  <!-- R008 scope-shape probes: all four silent in the third report, which the control
+       below proves was read. See README.md, "The scope shapes". -->
   <mapref href="maps/p-dup-g-root-vs-scope.ditamap"/>
   <mapref href="maps/p-dup-h-nested-scope.ditamap"/>
   <mapref href="maps/p-dup-i-multi-vs-single.ditamap"/>
   <mapref href="maps/p-dup-j-multi-reordered.ditamap"/>
 
-  <!-- Positive control for the four above, kept LAST: see README.md, "The control". -->
+  <!-- Positive control for the four above, kept LAST: the third report carries its two
+       incidents, so the silence above is an answer. See README.md, "The control". -->
   <mapref href="maps/p-dup-k-control.ditamap"/>
 </map>

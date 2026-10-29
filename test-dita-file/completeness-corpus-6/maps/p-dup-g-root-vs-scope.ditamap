@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
-<!-- R008 shape probe (not yet run in Oxygen): the topic once at the root scope and once inside keyscope s1.
-     The extension's answer is an extrapolation of probes A-F, so the next Oxygen run
-     decides it. One probe per map; see README.md, "The scope shapes Oxygen has not
-     been asked". -->
+<!-- R008 shape probe (third report: silent): the topic once at the root scope and once inside keyscope s1.
+     Observed, not extrapolated: silent in the third Oxygen report, so the root is a scope
+     like any other. One probe per map; see README.md, "The scope shapes". -->
 <map id="p-dup-g-root-vs-scope">
   <title>p-dup-g-root-vs-scope</title>
   <topicref href="../topics/p-dup-g-root-vs-scope.dita"/>
