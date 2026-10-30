@@ -417,4 +417,33 @@ describe('refRenameEdits', () => {
       assert.strictEqual(escapeHrefSpecials('a/b c/d.dita'), 'a/b%20c/d.dita');
     });
   });
+
+  describe('computeRefEdits — references that are not live markup', () => {
+    const rewrite = (text: string): string => {
+      const edits = computeRefEdits({
+        renames: [makeRename('/p/b.dita', '/p/c.dita')],
+        files: [makeFile('/p/a.dita', text)],
+        platform: 'linux',
+      });
+      return edits.length ? applyEdits(text, edits[0].edits) : text;
+    };
+
+    it('leaves an href in a CDATA code sample alone and updates the live one', () => {
+      const text = '<codeblock><![CDATA[<xref href="b.dita"/>]]></codeblock><xref href="b.dita"/>';
+      assert.strictEqual(
+        rewrite(text),
+        '<codeblock><![CDATA[<xref href="b.dita"/>]]></codeblock><xref href="c.dita"/>',
+      );
+    });
+
+    it('leaves a commented-out reference and a processing-instruction one alone', () => {
+      const text = '<!-- <xref href="b.dita"/> --><?pi <xref href="b.dita"/> ?>';
+      assert.strictEqual(rewrite(text), text);
+    });
+
+    it('still rewrites the references after an unclosed comment', () => {
+      const text = '<xref href="b.dita"/><!-- never closed <xref href="b.dita"/>';
+      assert.strictEqual(rewrite(text), '<xref href="c.dita"/><!-- never closed <xref href="c.dita"/>');
+    });
+  });
 });

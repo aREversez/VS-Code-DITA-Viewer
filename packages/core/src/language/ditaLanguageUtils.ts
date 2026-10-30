@@ -28,6 +28,23 @@ export interface RefEntry {
   format?: string;
 }
 
+// One alternation, so whichever region opens first wins: a "<!--" inside a
+// CDATA section is CDATA text, and a "<![CDATA[" inside a comment is comment
+// text. An opener with no terminator matches nothing and is left alone, so a
+// stray "<!--" cannot hide every reference after it.
+const NON_MARKUP_RE = /<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<\?[\s\S]*?\?>/g;
+
+/**
+ * Blanks comments, CDATA sections and processing instructions with spaces of
+ * the same length (line breaks are kept), so every offset into the result is
+ * also an offset into `text`. What is left is only live markup and character
+ * data, which is what a reference scan should look at.
+ */
+function blankNonMarkup(text: string): string {
+  if (!text.includes('<!') && !text.includes('<?')) return text;
+  return text.replace(NON_MARKUP_RE, (region) => region.replace(/[^\r\n]/g, ' '));
+}
+
 const TAG_RE = /<([A-Za-z][\w.-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
 const ATTR_RE = /([\w:.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
 
@@ -39,12 +56,18 @@ const ATTR_RE = /([\w:.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
  * participant also has to follow conrefend, copy-to, data and longdescref --
  * passes its own set, so go-to-definition and find-references keep seeing
  * exactly what they saw before.
+ *
+ * Comments, CDATA sections and processing instructions are not scanned: an
+ * `href` inside them is example text or a commented-out reference, not a live
+ * one, so rename, go-to-definition, find-references and diagnostics all leave
+ * it alone. Offsets still index the original `text`.
  */
 export function collectRefEntries(text: string, attrs: ReadonlySet<string> = REF_ATTRS): RefEntry[] {
   const entries: RefEntry[] = [];
+  const scanText = blankNonMarkup(text);
   TAG_RE.lastIndex = 0;
   let tagMatch: RegExpExecArray | null;
-  while ((tagMatch = TAG_RE.exec(text)) !== null) {
+  while ((tagMatch = TAG_RE.exec(scanText)) !== null) {
     const tagName = tagMatch[1];
     const attrSegment = tagMatch[2];
     if (!attrSegment) continue;
