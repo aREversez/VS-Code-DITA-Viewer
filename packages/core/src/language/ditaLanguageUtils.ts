@@ -31,8 +31,16 @@ export interface RefEntry {
 const TAG_RE = /<([A-Za-z][\w.-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
 const ATTR_RE = /([\w:.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
 
-/** Collects every reference-bearing attribute in the document text. */
-export function collectRefEntries(text: string): RefEntry[] {
+/**
+ * Collects every reference-bearing attribute in the document text.
+ *
+ * `attrs` names the attributes to collect and defaults to the navigable set
+ * (href / conref / conkeyref / keyref). A caller that needs more -- the rename
+ * participant also has to follow conrefend, copy-to, data and longdescref --
+ * passes its own set, so go-to-definition and find-references keep seeing
+ * exactly what they saw before.
+ */
+export function collectRefEntries(text: string, attrs: ReadonlySet<string> = REF_ATTRS): RefEntry[] {
   const entries: RefEntry[] = [];
   TAG_RE.lastIndex = 0;
   let tagMatch: RegExpExecArray | null;
@@ -55,7 +63,7 @@ export function collectRefEntries(text: string): RefEntry[] {
 
     ATTR_RE.lastIndex = 0;
     while ((am = ATTR_RE.exec(attrSegment)) !== null) {
-      if (!REF_ATTRS.has(am[1])) continue;
+      if (!attrs.has(am[1])) continue;
       const eqAndQuote = am[0].indexOf('=') + 1 + (am[0].slice(am[0].indexOf('=') + 1).match(/["']/)?.index ?? 0);
       const valueStart = segmentOffset + am.index + eqAndQuote + 1;
       const val = am[2] ?? am[3];

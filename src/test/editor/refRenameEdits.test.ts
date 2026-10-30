@@ -348,4 +348,39 @@ describe('refRenameEdits', () => {
       assert.strictEqual(stripBom('<a/>\uFEFF'), '<a/>\uFEFF');
     });
   });
+  describe('computeRefEdits — attributes beyond href/conref', () => {
+    const renamed = [makeRename('/p/b.dita', '/p/sub/b.dita')];
+    const rewrite = (text: string, renames: RenameEntry[] = renamed, path = '/p/a.dita'): string => {
+      const edits = computeRefEdits({ renames, files: [makeFile(path, text)], platform: 'linux' });
+      return edits.length ? applyEdits(text, edits[0].edits) : text;
+    };
+
+    it('updates the conrefend that closes a conref range, not just the conref', () => {
+      assert.strictEqual(
+        rewrite('<p conref="b.dita#t/p1" conrefend="b.dita#t/p3"/>'),
+        '<p conref="sub/b.dita#t/p1" conrefend="sub/b.dita#t/p3"/>',
+      );
+    });
+
+    it('leaves a same-file conrefend alone', () => {
+      const text = '<p conref="b.dita#t/p1" conrefend="#t/p3"/>';
+      assert.strictEqual(rewrite(text), '<p conref="sub/b.dita#t/p1" conrefend="#t/p3"/>');
+    });
+
+    it('updates object @data and image @longdescref', () => {
+      assert.strictEqual(rewrite('<object data="b.dita"/>'), '<object data="sub/b.dita"/>');
+      assert.strictEqual(rewrite('<image href="i.png" longdescref="b.dita"/>'), '<image href="i.png" longdescref="sub/b.dita"/>');
+    });
+
+    it('re-relativizes copy-to when the map that holds it moves', () => {
+      const text = '<topicref href="x.dita" copy-to="x2.dita"/>';
+      const out = rewrite(text, [makeRename('/p/m.ditamap', '/p/sub/m.ditamap')], '/p/m.ditamap');
+      assert.strictEqual(out, '<topicref href="../x.dita" copy-to="../x2.dita"/>');
+    });
+
+    it('does not touch keyref / conkeyref', () => {
+      const text = '<ph keyref="b.dita" conkeyref="b.dita/x"/>';
+      assert.strictEqual(rewrite(text), text);
+    });
+  });
 });

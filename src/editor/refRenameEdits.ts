@@ -76,7 +76,13 @@ export function mayReferenceRenamed(
   return false;
 }
 
-const HANDLED_ATTRS = new Set(['href', 'conref']);
+/**
+ * Attributes whose value is a path to another file. `conrefend` ends a
+ * conref range in the file `conref` starts in, `data` and `longdescref` point
+ * at files from `object` / `image`, and `copy-to` names a path relative to
+ * the map that holds it (so it only changes when that map moves).
+ */
+const HANDLED_ATTRS: ReadonlySet<string> = new Set(['href', 'conref', 'conrefend', 'copy-to', 'data', 'longdescref']);
 
 export function computeRefEdits(opts: {
   renames: RenameEntry[];
@@ -119,11 +125,11 @@ export function computeRefEdits(opts: {
       }
     }
 
-    const refs = collectRefEntries(file.text);
+    const refs = collectRefEntries(file.text, HANDLED_ATTRS);
     const edits: Array<{ start: number; end: number; newText: string }> = [];
 
     for (const ref of refs) {
-      // Only process href and conref — skip keyref, conkeyref, etc.
+      // Only path-valued attributes (HANDLED_ATTRS) — skip keyref, conkeyref, etc.
       if (!HANDLED_ATTRS.has(ref.attr)) continue;
 
       // Skip external refs

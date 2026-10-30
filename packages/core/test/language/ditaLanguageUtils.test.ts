@@ -28,6 +28,19 @@ import { collectMapEntries, createBookRoleLabeler } from '../../src/render/mapTy
 
 describe('ditaLanguageUtils', () => {
   describe('collectRefEntries', () => {
+    it('collects only the default four attributes unless told otherwise', () => {
+      const text = '<p conref="b.dita#t/p1" conrefend="b.dita#t/p3"/><object data="o.dita"/>';
+      assert.deepStrictEqual(collectRefEntries(text).map((e) => e.attr), ['conref']);
+    });
+
+    it('collects the attributes a caller asks for, with their value offsets', () => {
+      const text = '<p conref="b.dita#t/p1" conrefend="b.dita#t/p3"/>';
+      const entries = collectRefEntries(text, new Set(['conref', 'conrefend']));
+      assert.deepStrictEqual(entries.map((e) => e.attr), ['conref', 'conrefend']);
+      const end = entries[1];
+      assert.strictEqual(text.slice(end.valueStart, end.valueEnd), 'b.dita#t/p3');
+    });
+
     it('collects href, conref, conkeyref and keyref attributes', () => {
       const text =
         '<xref href="a.dita"/><p conref="b.dita#t/e"/><ph conkeyref="k/el"/><keyword keyref="prod"/>';
