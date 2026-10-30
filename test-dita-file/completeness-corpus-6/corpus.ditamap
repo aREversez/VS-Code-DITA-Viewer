@@ -69,6 +69,12 @@
        external and peer. See README.md, "A URL written in a topic". -->
   <mapref href="maps/s-url.ditamap"/>
 
+  <!-- Unused keys below the first map, from a real-map run: an unused key at the probe map, in a
+       submap, in a key map under a submap, and one key defined in two key maps. Not yet run;
+       see README.md, "Unused keys below the first map". -->
+  <mapref href="maps/t-unref.ditamap"/>
+  <mapref href="maps/t-udup.ditamap"/>
+
   <!-- Positive control for the probes above, kept LAST: the third report carries its two
        incidents, so the silence above is an answer. See README.md, "The control". -->
   <mapref href="maps/p-dup-k-control.ditamap"/>

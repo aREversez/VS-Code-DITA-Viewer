@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- Depth 2: an unused key in a key map reached through a submap. -->
+<map id="t-unref-sub-keys">
+  <title>t-unref-sub-keys</title>
+  <keydef keys="k-t2" href="../topics/t-u2.dita"/>
+</map>

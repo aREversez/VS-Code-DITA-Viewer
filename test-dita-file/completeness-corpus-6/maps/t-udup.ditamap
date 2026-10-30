@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- One key defined in two key maps and used nowhere. See README.md, "Unused keys below the first map". -->
+<map id="t-udup">
+  <title>t-udup</title>
+  <mapref href="t-udup-a.ditamap"/>
+  <mapref href="t-udup-b.ditamap"/>
+</map>

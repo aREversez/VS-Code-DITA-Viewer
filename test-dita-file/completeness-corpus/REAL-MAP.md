@@ -43,6 +43,13 @@ table goes to a separate `*.private.json`, which `.gitignore` covers.
    After a rule changes, run the same map again: that second text is what says the difference is
    closed, not the argument that it should be.
 
+## Explaining an `invalid-id-syntax` row
+
+An id the extension calls invalid and Oxygen does not is a question about the id's shape and
+whether the file has a DOCTYPE. `node scripts/id-shapes.cjs <file> [<file> ...]`, on the files the
+labels point to, prints only that: DOCTYPE yes/no and each offending id as a shape (letters `a`,
+digits `9`, non-ASCII letters `u`, other characters as they are). It prints no file name.
+
 ## Reading the result
 
 - A category with equal counts and every file matched needs nothing.

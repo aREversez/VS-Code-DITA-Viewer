@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- Second definition of the same unused key. -->
+<map id="t-udup-b">
+  <title>t-udup-b</title>
+  <keydef keys="k-tud" href="../topics/t-ud-b.dita"/>
+</map>

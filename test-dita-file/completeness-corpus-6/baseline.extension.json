@@ -98,6 +98,55 @@
     "message": "Duplicate key definition \"k-dk3\" (3 definitions in this key scope)"
   },
   {
+    "category": "duplicate-key",
+    "severity": "warning",
+    "file": "maps/t-udup-a.ditamap",
+    "line": 6,
+    "message": "Duplicate key definition \"k-tud\" (2 definitions in this key scope)"
+  },
+  {
+    "category": "unreferenced-key",
+    "severity": "warning",
+    "file": "maps/t-udup-a.ditamap",
+    "line": 6,
+    "message": "Key \"k-tud\" is defined but never referenced"
+  },
+  {
+    "category": "duplicate-key",
+    "severity": "warning",
+    "file": "maps/t-udup-b.ditamap",
+    "line": 6,
+    "message": "Duplicate key definition \"k-tud\" (2 definitions in this key scope)"
+  },
+  {
+    "category": "unreferenced-key",
+    "severity": "warning",
+    "file": "maps/t-udup-b.ditamap",
+    "line": 6,
+    "message": "Key \"k-tud\" is defined but never referenced"
+  },
+  {
+    "category": "unreferenced-key",
+    "severity": "warning",
+    "file": "maps/t-unref-sub-keys.ditamap",
+    "line": 6,
+    "message": "Key \"k-t2\" is defined but never referenced"
+  },
+  {
+    "category": "unreferenced-key",
+    "severity": "warning",
+    "file": "maps/t-unref-sub.ditamap",
+    "line": 6,
+    "message": "Key \"k-t1\" is defined but never referenced"
+  },
+  {
+    "category": "unreferenced-key",
+    "severity": "warning",
+    "file": "maps/t-unref.ditamap",
+    "line": 6,
+    "message": "Key \"k-t0\" is defined but never referenced"
+  },
+  {
     "category": "resource-only-target",
     "severity": "warning",
     "file": "topics/o-scope-inside-neg.dita",

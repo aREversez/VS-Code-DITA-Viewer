@@ -32,6 +32,14 @@
     "topics/s-url-xref-local.dita  external-reference",
     "topics/s-url-xref-pos.dita  external-reference"
   ],
-  "extensionOnly": [],
+  "extensionOnly": [
+    "maps/t-udup-a.ditamap  duplicate-key",
+    "maps/t-udup-a.ditamap  unreferenced-key",
+    "maps/t-udup-b.ditamap  duplicate-key",
+    "maps/t-udup-b.ditamap  unreferenced-key",
+    "maps/t-unref-sub-keys.ditamap  unreferenced-key",
+    "maps/t-unref-sub.ditamap  unreferenced-key",
+    "maps/t-unref.ditamap  unreferenced-key"
+  ],
   "oxygenOnly": []
 }

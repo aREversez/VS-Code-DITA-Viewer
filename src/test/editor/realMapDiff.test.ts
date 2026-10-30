@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { fileKind, summarizeRealMapDiff, SideFinding } from './realMapDiff';
+import { fileKind, idShape, invalidIdShapes, summarizeRealMapDiff, SideFinding } from './realMapDiff';
 
 const f = (file: string, category: string, problemID?: string): SideFinding => ({ file, category, problemID });
 
@@ -57,5 +57,19 @@ describe('real-map diff summary', () => {
     const s = summarizeRealMapDiff([f('a.dita', 'profiling-preference')], [f('b.dita', 'profiling-preference')], ['profiling-preference']);
     assert.strictEqual(s.extensionOnly + s.oxygenOnly + s.matched, 0);
     assert.match(s.text, /left out of both sides: profiling-preference/);
+  });
+
+  it('describes an invalid id by its shape, never by its characters', () => {
+    assert.strictEqual(idShape('1abc'), '9aaa');
+    assert.strictEqual(idShape('a:b'), 'a:a');
+    assert.strictEqual(idShape('Ab c'), 'aa_s_a');
+    assert.strictEqual(idShape('é-1'), 'u-9');
+  });
+
+  it('lists only ids that are not an NCName, with the DOCTYPE state, and no id text', () => {
+    const r = invalidIdShapes('<!DOCTYPE topic PUBLIC "x" "y"><topic id="ok"><p id="9secret"/><p id=\'a:b\'/></topic>');
+    assert.strictEqual(r.hasDoctype, true);
+    assert.deepStrictEqual(r.ids, [{ tag: 'p', shape: '9aaaaaa' }, { tag: 'p', shape: 'a:a' }]);
+    assert.strictEqual(invalidIdShapes('<topic id="ok"/>').hasDoctype, false);
   });
 });

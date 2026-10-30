@@ -117,3 +117,33 @@ export function summarizeRealMapDiff(
     oxygenOnly: diff.filter((d) => d.side === 'Oxygen').length,
   };
 }
+
+// ── id shapes ──
+// For an invalid-id-syntax row that only the extension files: what the offending id looks like,
+// without the id. A letter becomes `a`, a digit `9`, a non-ASCII letter `u`, whitespace `_s_`;
+// every other character stays, since punctuation is what makes an id invalid and names nothing.
+
+const NCNAME = /^[A-Za-z_\p{L}][\p{L}\p{Nd}._\-·\p{Mn}\p{Mc}]*$/u;
+
+export function idShape(id: string): string {
+  return [...id]
+    .map((ch) => (/[A-Za-z]/.test(ch) ? 'a' : /[0-9]/.test(ch) ? '9' : /\p{L}/u.test(ch) ? 'u' : /\s/.test(ch) ? '_s_' : ch))
+    .join('');
+}
+
+export interface IdShapeFinding {
+  /** The element's tag, a DITA element name. */
+  tag: string;
+  shape: string;
+}
+
+/** A diagnostic scan, not the crawl: `@id` values that are not an NCName, as shapes. */
+export function invalidIdShapes(xml: string): { hasDoctype: boolean; ids: IdShapeFinding[] } {
+  const ids: IdShapeFinding[] = [];
+  const re = /<([A-Za-z_][\w:.-]*)\b[^<>]*?\sid\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
+  for (let m = re.exec(xml); m; m = re.exec(xml)) {
+    const id = m[2] ?? m[3] ?? '';
+    if (!NCNAME.test(id)) ids.push({ tag: m[1], shape: idShape(id) });
+  }
+  return { hasDoctype: /<!DOCTYPE\b/i.test(xml), ids };
+}
