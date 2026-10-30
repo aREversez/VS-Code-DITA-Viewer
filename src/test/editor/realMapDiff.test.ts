@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { fileKind, idShape, invalidIdShapes, summarizeRealMapDiff, SideFinding } from './realMapDiff';
+import { fileKind, idMessageShape, idShape, invalidIdShapes, summarizeRealMapDiff, SideFinding } from './realMapDiff';
 
 const f = (file: string, category: string, problemID?: string): SideFinding => ({ file, category, problemID });
 
@@ -71,5 +71,10 @@ describe('real-map diff summary', () => {
     assert.strictEqual(r.hasDoctype, true);
     assert.deepStrictEqual(r.ids, [{ tag: 'p', shape: '9aaaaaa' }, { tag: 'p', shape: 'a:a' }]);
     assert.strictEqual(invalidIdShapes('<topic id="ok"/>').hasDoctype, false);
+  });
+
+  it('reads the shape of the id the extension judged from its message, and nothing from other messages', () => {
+    assert.strictEqual(idMessageShape('ID "9ab.c" is not a valid DITA ID (XML NCName)'), '9aa.a');
+    assert.strictEqual(idMessageShape('Key "k" is defined but never referenced'), undefined);
   });
 });

@@ -10,6 +10,8 @@
 //     [--ditaval <file>]...      DITAVAL files, as chosen in Oxygen's dialog
 //     [--exclude <category>]...  leave a category out of both sides (e.g. profiling-preference)
 //     [--private <file>]         label table (default: real-map-diff.private.json in the cwd)
+//     [--explain-ids]            for each disagreeing file the extension files invalid-id-syntax on:
+//                                the shape of the id it judged and whether the file has a DOCTYPE
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -39,7 +41,8 @@ async function loadModules() {
   }
 }
 
-function options(argv) {
+function options(argvIn) {
+  const argv = argvIn.filter((a) => a !== '--explain-ids');
   const one = {};
   const many = { '--ditaval': [], '--exclude': [] };
   for (let i = 0; i < argv.length; i += 2) {
@@ -84,7 +87,20 @@ async function main() {
   );
   const privateOut = path.resolve(one['--private'] ?? 'real-map-diff.private.json');
   fs.writeFileSync(privateOut, JSON.stringify(summary.labels, null, 2), 'utf8');
-  console.log(summary.text);
+  let text = summary.text;
+  if (process.argv.includes('--explain-ids')) {
+    const labelOf = Object.fromEntries(Object.entries(summary.labels).map(([l, f]) => [f, l]));
+    const rows = [];
+    for (const f of extension) {
+      const shape = f.category === 'invalid-id-syntax' ? mod.idMessageShape(f.message) : undefined;
+      if (shape === undefined || !labelOf[f.file]) continue;
+      let doctype = '?';
+      try { doctype = /<!DOCTYPE\b/i.test(fs.readFileSync(path.resolve(dir, f.file), 'utf8')) ? 'yes' : 'no'; } catch { /* leave ? */ }
+      rows.push(`${labelOf[f.file]}  id shape ${shape}  DOCTYPE ${doctype}`);
+    }
+    text += `\n## invalid-id-syntax, as the extension judged the id\n\n${rows.length ? [...new Set(rows)].sort().join('\n') : 'none of the disagreeing files'}\n`;
+  }
+  console.log(text);
   console.error(`label table (keep it local): ${privateOut}`);
   process.exitCode = summary.extensionOnly || summary.oxygenOnly ? 1 : 0;
 }

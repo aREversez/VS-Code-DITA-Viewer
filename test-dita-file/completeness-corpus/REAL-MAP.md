@@ -46,8 +46,11 @@ table goes to a separate `*.private.json`, which `.gitignore` covers.
 ## Explaining an `invalid-id-syntax` row
 
 An id the extension calls invalid and Oxygen does not is a question about the id's shape and
-whether the file has a DOCTYPE. `node scripts/id-shapes.cjs <file> [<file> ...]`, on the files the
-labels point to, prints only that: DOCTYPE yes/no and each offending id as a shape (letters `a`,
+whether the file has a DOCTYPE. Add `--explain-ids` to the `real-map-diff.cjs` run: for each
+disagreeing file it prints the shape of the id *the extension judged* (read from its finding) and
+whether the file has a DOCTYPE, under the labels of the summary. `node scripts/id-shapes.cjs
+<file> [<file> ...]` rescans files on its own instead, which can differ from what the crawl
+saw, and prints only that: DOCTYPE yes/no and each offending id as a shape (letters `a`,
 digits `9`, non-ASCII letters `u`, other characters as they are). It prints no file name.
 
 ## Reading the result

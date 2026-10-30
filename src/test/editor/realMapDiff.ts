@@ -147,3 +147,13 @@ export function invalidIdShapes(xml: string): { hasDoctype: boolean; ids: IdShap
   }
   return { hasDoctype: /<!DOCTYPE\b/i.test(xml), ids };
 }
+
+/**
+ * The shape of the id in an invalid-id-syntax message of the extension (`ID "x" is not a valid
+ * DITA ID ...`), or undefined for any other message. The run that found the row reads the id
+ * the extension itself judged, rather than rescanning the file.
+ */
+export function idMessageShape(message: string): string | undefined {
+  const m = /^ID "([\s\S]*)" is not a valid DITA ID/.exec(message);
+  return m ? idShape(m[1]) : undefined;
+}
