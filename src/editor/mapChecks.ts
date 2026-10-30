@@ -456,14 +456,26 @@ export async function runChecks(
   // definition: a bare keyref that fails in its scope (R066) leaves the definition unused,
   // which is what Oxygen's `dmv.not.used.key.defs` reports for corpus 6's q-unused-pos.
   // A definition answers to every name it is qualified by, so one resolved use is enough.
+  // An unused name is filed once, on the definition that wins: the first of two that bind
+  // one name in one scope, which is the one resolution reaches. Oxygen does that -- corpus
+  // 6's t-udup asked it, and the real map drew the same one-row-per-name shape.
   if (opts.reportUnreferencedKeys) {
+    const firstOf = new Map<string, (typeof crawl.keyDefs)[number]>();
     for (const def of crawl.keyDefs) {
-      if (!def.qualified.some((q) => crawl.usedKeyNames.has(q))) {
-        issues.push({
-          category: 'unreferenced-key', severity: 'warning', file: def.file, line: def.line,
-          msg: msg('key.unreferenced', def.key),
-        });
+      if (def.qualified.some((q) => crawl.usedKeyNames.has(q))) continue;
+      for (const scopeId of def.scopeIds) {
+        const id = `${scopeId}\u0000${def.key}`;
+        if (!firstOf.has(id)) firstOf.set(id, def);
       }
+    }
+    const filed = new Set<(typeof crawl.keyDefs)[number]>();
+    for (const def of firstOf.values()) {
+      if (filed.has(def)) continue;
+      filed.add(def);
+      issues.push({
+        category: 'unreferenced-key', severity: 'warning', file: def.file, line: def.line,
+        msg: msg('key.unreferenced', def.key),
+      });
     }
   }
 

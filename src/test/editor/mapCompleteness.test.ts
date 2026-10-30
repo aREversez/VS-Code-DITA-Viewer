@@ -490,6 +490,46 @@ describe('completeness: ids and keys', () => {
     );
     assert.strictEqual(issues.filter((i) => i.category === 'unreferenced-key').length, 0);
   });
+
+  // Corpus 6's t-udup: one unused key defined in two maps of one scope. Oxygen files the
+  // name once, on the definition resolution reaches (the first), not on both.
+  it('unreferenced keys: files an unused name once, on the first definition', async () => {
+    const issues = await check(
+      {
+        'root.ditamap':
+          '<map>\n<keydef keys="twice" href="a.dita"/>\n<keydef keys="twice" href="b.dita"/>\n</map>',
+        'a.dita': topic('a'),
+        'b.dita': topic('b'),
+      },
+      { reportUnreferencedKeys: true },
+    );
+    const un = issues.filter((i) => i.category === 'unreferenced-key');
+    assert.deepStrictEqual(
+      un.map((i) => [i.file.endsWith('root.ditamap'), i.line]),
+      [[true, 2]],
+    );
+  });
+
+  it('unreferenced keys: the same name in two key scopes is two keys, both filed', async () => {
+    const issues = await check(
+      {
+        'root.ditamap':
+          '<map>\n<keydef keys="k" href="a.dita"/>\n<mapref href="sub.ditamap" keyscope="s1"/>\n</map>',
+        'sub.ditamap': '<map>\n<keydef keys="k" href="b.dita"/>\n</map>',
+        'a.dita': topic('a'),
+        'b.dita': topic('b'),
+      },
+      { reportUnreferencedKeys: true },
+    );
+    const un = issues.filter((i) => i.category === 'unreferenced-key');
+    assert.deepStrictEqual(
+      un.map((i) => [i.file.endsWith('root.ditamap') ? 'root' : 'sub', i.line]).sort(),
+      [
+        ['root', 2],
+        ['sub', 2],
+      ],
+    );
+  });
 });
 
 describe('completeness: reusable elements', () => {

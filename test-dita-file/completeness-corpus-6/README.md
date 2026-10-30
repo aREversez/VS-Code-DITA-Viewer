@@ -38,14 +38,14 @@ Every probe topic holds one `<xref>`: `keyref="k-scoped"`, except the qualified
 `s1.k-scoped`. The key resolves to `topics/t-target.dita`, which the map reaches only through a
 `<keydef>`, and that is what produced the second finding family of the first run.
 
-## The runs: 39 incidents, full parity
+## The runs: 45 incidents, full parity
 
 `node scripts/oxygen-diff.cjs --corpus completeness-corpus-6 oxygen-report.xml` reports
-**31 matched, 0 extension-only, 0 Oxygen-only**. No incident was an accepted difference, so
-parity compares all thirty-one signatures; the 39 incidents collapse into them because each
+**37 matched, 0 extension-only, 0 Oxygen-only**. No incident was an accepted difference, so
+parity compares all thirty-seven signatures; the 45 incidents collapse into them because each
 duplicate probe files one incident per reference, and the control's `-use` topic two.
 
-Eight reports were taken from this corpus, and the last one is the committed
+Nine reports were taken from this corpus, and the last one is the committed
 `oxygen-report.xml`. The first carried **6 incidents**, before the duplicate probes existed,
 and settled R066 and the keydef half of R049:
 
@@ -125,6 +125,12 @@ The eighth report (**39 incidents**) added the six URL probes and answered the t
 every reading registered for it held — an `xref` and a `link` are both filed, a written
 `scope="local"` is filed with them, and `scope="peer"` is not — so the extension **needed no
 change** and its three extension-only rows became matches. The section below records the ids.
+
+The ninth report (**45 incidents**) added the six probes for unused keys below the first map and
+answered R011's open question: a key unused in the probe map, in a submap and in a key map below
+that submap are all filed, so depth is not what silenced Oxygen on the real map, and one name
+defined in two maps of one scope is filed once, on the definition resolution reaches. The rule
+**changed** to match, and the section below records it.
 
 ## The duplicate probes (R008): the answer is the scope
 
@@ -349,7 +355,7 @@ parity lock carry all three positives as matches now, so `oxygen-diff` exits 0. 
 control's two `dmv.dup.topic` incidents in the report, the run read a stale map and nothing above
 is answered.
 
-## Unused keys below the first map (R011) — from a second real-map run, not yet run here
+## Unused keys below the first map (R011): the ninth report
 
 On a real map whose key maps hang off the main map and off four submaps, the extension filed
 `unreferenced-key` on every one of them (four maps) and Oxygen on one: the key map the main map
@@ -362,18 +368,24 @@ refers to. Two readings fit, and they ask different things, so two probes tell t
   definition. The same key maps carried the `duplicate-key` rows, which the extension and Oxygen
   already agree on.
 
-| Map | Layout | Extension today | If Oxygen answers the same | If Oxygen answers differently |
-| --- | --- | --- | --- | --- |
-| `maps/t-unref.ditamap` | `k-t0` defined in the probe map itself, used nowhere (control) | `unreferenced-key` | `dmv.not.used.key.defs` | silent: an unused key at the first level is not filed; re-read corpus 1's `unusedkey` |
-| `maps/t-unref-sub.ditamap` | `k-t1` defined in a submap (`mapref` from `t-unref`), used nowhere | `unreferenced-key` | filed: depth is not the cause | silent: depth is (with `t-unref-sub-keys`), so stop filing keys below the first level |
-| `maps/t-unref-sub-keys.ditamap` | `k-t2` in a key map below that submap, used nowhere | `unreferenced-key` | filed: depth is not the cause | silent: as above |
-| `maps/t-udup-a.ditamap`, `maps/t-udup-b.ditamap` | `k-tud` defined in both, used nowhere, both reached from `t-udup` | `unreferenced-key` on both (and `duplicate-key` on both, as Oxygen files) | filed on both: the effective definition is not the cause | filed on `t-udup-a` only: file an unused key once, on the first definition |
+| Map | Layout | Extension then | Ninth report |
+| --- | --- | --- | --- |
+| `maps/t-unref.ditamap` | `k-t0` defined in the probe map itself, used nowhere (control) | `unreferenced-key` | `dmv.not.used.key.defs`: an unused key at the first level is filed, as corpus 1's `unusedkey` already showed |
+| `maps/t-unref-sub.ditamap` | `k-t1` defined in a submap (`mapref` from `t-unref`), used nowhere | `unreferenced-key` | filed: depth is not the cause |
+| `maps/t-unref-sub-keys.ditamap` | `k-t2` in a key map below that submap, used nowhere | `unreferenced-key` | filed: the whole tree is walked |
+| `maps/t-udup-a.ditamap`, `maps/t-udup-b.ditamap` | `k-tud` defined in both, used nowhere, both reached from `t-udup` | `unreferenced-key` on both, `duplicate-key` on both | `duplicate-key` on both, as expected; `unreferenced-key` on **`t-udup-a` only** |
 
-The two causes can hold at once; the files each finding lands on say which. The baseline and the
-parity lock carry the five extension `unreferenced-key` rows and the two `duplicate-key` rows
-as extension-only until the run (the `duplicate-key` rows are expected to match: the cross-file
-rule is already observed). Change the extension only for a "differently" column. Without the
-control's two `dmv.dup.topic` incidents in the report, the run read a stale map.
+The effective definition is the cause, not depth: every level is filed, and a name defined twice
+in one scope is filed once, on the definition resolution reaches. Step 8 of `mapChecks.ts` now
+groups the unused definitions by scope and name and files the first of each group, so the baseline
+loses `t-udup-b`'s row (38 findings) and the parity lock reads 37 matched, zero in both directions.
+The real-map row that raised the question is that same shape — the same key names defined in the
+key map the main map refers to and in the submaps' key maps, which is also why those maps carried
+the `duplicate-key` rows — so the rule now files one row per name there too. That is an argument,
+not a measurement: a re-run of that map after this change is what closes the row (REAL-MAP.md,
+"Reading the result"). `src/test/editor/mapCompleteness.test.ts` pins both halves: one name twice
+in one scope gives one row, the same name in two key scopes gives two. Without the control's two
+`dmv.dup.topic` incidents in the report, the run read a stale map.
 
 ## Running it
 

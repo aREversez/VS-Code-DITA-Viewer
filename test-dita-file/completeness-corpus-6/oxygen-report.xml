@@ -725,6 +725,44 @@
 <incident>
 <engine>oXygen</engine>
 <severity>warning</severity>
+<problemID>duplicate.key.definition</problemID>
+<description>Duplicate key definition &quot;k-tud&quot;.</description>
+<systemID>maps/t-udup-a.ditamap</systemID>
+<type>Key definition</type>
+<location>
+<start>
+<line>6</line>
+<column>16</column>
+</start>
+<end>
+<line>6</line>
+<column>23</column>
+</end>
+<length>7</length>
+</location>
+</incident>
+<incident>
+<engine>oXygen</engine>
+<severity>warning</severity>
+<problemID>duplicate.key.definition</problemID>
+<description>Duplicate key definition &quot;k-tud&quot;.</description>
+<systemID>maps/t-udup-b.ditamap</systemID>
+<type>Key definition</type>
+<location>
+<start>
+<line>6</line>
+<column>16</column>
+</start>
+<end>
+<line>6</line>
+<column>23</column>
+</end>
+<length>7</length>
+</location>
+</incident>
+<incident>
+<engine>oXygen</engine>
+<severity>warning</severity>
 <problemID>dmv.not.used.key.defs</problemID>
 <description>Unreferenced key definition: &quot;k-u-pos&quot;.</description>
 <systemID>maps/q-unused-pos.ditamap</systemID>
@@ -739,6 +777,82 @@
 <column>27</column>
 </end>
 <length>9</length>
+</location>
+</incident>
+<incident>
+<engine>oXygen</engine>
+<severity>warning</severity>
+<problemID>dmv.not.used.key.defs</problemID>
+<description>Unreferenced key definition: &quot;k-t0&quot;.</description>
+<systemID>maps/t-unref.ditamap</systemID>
+<type>Key definition</type>
+<location>
+<start>
+<line>6</line>
+<column>16</column>
+</start>
+<end>
+<line>6</line>
+<column>22</column>
+</end>
+<length>6</length>
+</location>
+</incident>
+<incident>
+<engine>oXygen</engine>
+<severity>warning</severity>
+<problemID>dmv.not.used.key.defs</problemID>
+<description>Unreferenced key definition: &quot;k-t1&quot;.</description>
+<systemID>maps/t-unref-sub.ditamap</systemID>
+<type>Key definition</type>
+<location>
+<start>
+<line>6</line>
+<column>16</column>
+</start>
+<end>
+<line>6</line>
+<column>22</column>
+</end>
+<length>6</length>
+</location>
+</incident>
+<incident>
+<engine>oXygen</engine>
+<severity>warning</severity>
+<problemID>dmv.not.used.key.defs</problemID>
+<description>Unreferenced key definition: &quot;k-t2&quot;.</description>
+<systemID>maps/t-unref-sub-keys.ditamap</systemID>
+<type>Key definition</type>
+<location>
+<start>
+<line>6</line>
+<column>16</column>
+</start>
+<end>
+<line>6</line>
+<column>22</column>
+</end>
+<length>6</length>
+</location>
+</incident>
+<incident>
+<engine>oXygen</engine>
+<severity>warning</severity>
+<problemID>dmv.not.used.key.defs</problemID>
+<description>Unreferenced key definition: &quot;k-tud&quot;.</description>
+<systemID>maps/t-udup-a.ditamap</systemID>
+<type>Key definition</type>
+<location>
+<start>
+<line>6</line>
+<column>16</column>
+</start>
+<end>
+<line>6</line>
+<column>23</column>
+</end>
+<length>7</length>
 </location>
 </incident>
 </report>

@@ -14,6 +14,12 @@
     "maps/r-dk3-a.ditamap  duplicate-key",
     "maps/r-dk3-b.ditamap  duplicate-key",
     "maps/r-dk3.ditamap  duplicate-key",
+    "maps/t-udup-a.ditamap  duplicate-key",
+    "maps/t-udup-a.ditamap  unreferenced-key",
+    "maps/t-udup-b.ditamap  duplicate-key",
+    "maps/t-unref-sub-keys.ditamap  unreferenced-key",
+    "maps/t-unref-sub.ditamap  unreferenced-key",
+    "maps/t-unref.ditamap  unreferenced-key",
     "topics/o-scope-inside-neg.dita  resource-only-target",
     "topics/o-scope-outside-pos.dita  undefined-key",
     "topics/o-scope-qualified-neg.dita  resource-only-target",
@@ -32,14 +38,6 @@
     "topics/s-url-xref-local.dita  external-reference",
     "topics/s-url-xref-pos.dita  external-reference"
   ],
-  "extensionOnly": [
-    "maps/t-udup-a.ditamap  duplicate-key",
-    "maps/t-udup-a.ditamap  unreferenced-key",
-    "maps/t-udup-b.ditamap  duplicate-key",
-    "maps/t-udup-b.ditamap  unreferenced-key",
-    "maps/t-unref-sub-keys.ditamap  unreferenced-key",
-    "maps/t-unref-sub.ditamap  unreferenced-key",
-    "maps/t-unref.ditamap  unreferenced-key"
-  ],
+  "extensionOnly": [],
   "oxygenOnly": []
 }

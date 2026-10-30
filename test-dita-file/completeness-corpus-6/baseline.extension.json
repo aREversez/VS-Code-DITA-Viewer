@@ -121,13 +121,6 @@
   {
     "category": "unreferenced-key",
     "severity": "warning",
-    "file": "maps/t-udup-b.ditamap",
-    "line": 6,
-    "message": "Key \"k-tud\" is defined but never referenced"
-  },
-  {
-    "category": "unreferenced-key",
-    "severity": "warning",
     "file": "maps/t-unref-sub-keys.ditamap",
     "line": 6,
     "message": "Key \"k-t2\" is defined but never referenced"

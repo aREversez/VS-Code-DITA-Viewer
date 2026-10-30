@@ -120,7 +120,7 @@ sanitizer writes no such element for them and `oxygen-diff` prints them as `(no 
 | --- | --- | --- |
 | `dmv.undef.key` | keyref cannot be mapped to a target topic | ok (`undefined-key`) — mapped only: the live reports spell this finding `dmv.key.undef` (ten incidents, corpora 1, 3, 4 and 6), which is mapped beside this catalog form that no report carries |
 | `duplicate.key.definition` | the same key is defined twice | ok (`duplicate-key`) — seven incidents over corpora 1 and 6: both lines of a clash inside one file (corpus 1: 28 and 29) and every file of one across files (corpus 6: `r-dk2` twice, `r-dk3` three times), so the rule files each definition that takes part |
-| `dmv.not.used.key.defs` | key defined but never referenced | ok (`unreferenced-key`) — the corpus-3 rerun also fires it on a key whose target file is missing (`maps/e-conref-missing-key.ditamap`) although the conkeyref names that key: Oxygen counts a definition it cannot use, the extension counts the use. Corpus 6's fifth run added the scope shape — a key whose only use is a bare `keyref` outside its `keyscope` draws it beside `dmv.key.undef` (`maps/q-unused-pos.ditamap:9`) — so the count follows a use that resolves, while a use resolving to a definition with an unreachable target still counts, which is the corpus-3 difference above |
+| `dmv.not.used.key.defs` | key defined but never referenced | ok (`unreferenced-key`) — the corpus-3 rerun also fires it on a key whose target file is missing (`maps/e-conref-missing-key.ditamap`) although the conkeyref names that key: Oxygen counts a definition it cannot use, the extension counts the use. Corpus 6's fifth run added the scope shape — a key whose only use is a bare `keyref` outside its `keyscope` draws it beside `dmv.key.undef` (`maps/q-unused-pos.ditamap:9`) — so the count follows a use that resolves, while a use resolving to a definition with an unreachable target still counts, which is the corpus-3 difference above. The ninth run added the depth and duplicate shapes: a key unused in the probe map, in a submap and in a key map below that submap are all filed, so depth is no boundary, while one name defined in two maps of one scope draws one incident, on the first definition (`t-udup-a`, not `t-udup-b`), which is the shape a real map showed and the reason R011 now files the effective definition alone |
 | `dmv.circular.keyref` | circular key reference | n/a — the corpus-3 report produced no incident for the two-key loop, the self-redirect or the linear chain; the extension does not follow redirect chains and stays silent on the same probes, including the chain's link use |
 | `dmv.no.link.keyref` | target key definition has no reference | ok (`link-key-without-target`) — the corpus-3 report carries it on the xref and the `link` element probes; the seven corpus-2 incidents now match too |
 | `dmv.invalid.keyref.syntax.1` | keyref has more than one `/` | ok (`invalid-key-syntax`) — mapped only: the report carries the family as `dmv.invalid.keyref.syntax`, without the suffix, so no incident carries this id |
@@ -505,15 +505,16 @@ What the run settled:
 ### The key scope runs and the R008/R010 probe runs (sixth corpus)
 
 *Validate and Check for Completeness* over `../completeness-corpus-6/corpus.ditamap` — the
-same settings as the runs above — was run eight times: once on the key scope probes alone
+same settings as the runs above — was run nine times: once on the key scope probes alone
 (**6 incidents**), once after the six duplicate probes of R008 joined the map (**14
 incidents**), once after four scope-shape probes and their positive control joined it
 (**16 incidents**), once after three scope-identity probes joined it (**20 incidents**), once
 after the four key-scope tail probes joined it (**23 incidents**), once after the multi-name
 probe joined it (**25 incidents**), once after the five duplicate-key probes joined it
-(**36 incidents**), and once after the six URL probes of R034 joined it (**39 incidents**,
+(**36 incidents**), once after the six URL probes of R034 joined it (**39 incidents**), and once
+after the six unused-key probes of R011 joined it (**45 incidents**,
 `../completeness-corpus-6/oxygen-report.xml`). No run carried an accepted
-difference, and the last one locks **31 matched, 0 extension-only, 0 Oxygen-only**
+difference, and the last one locks **37 matched, 0 extension-only, 0 Oxygen-only**
 (`scripts/oxygen-diff.cjs` agrees) — the first corpus with parity in both directions.
 
 What the runs settled:
@@ -615,7 +616,14 @@ extension-only to matched. Its seventh run answered R010 in both directions: eve
 of a clash is filed, so the three `duplicate-key` rows the extension already had and the two
 first definitions only Oxygen filed are matches, while the two re-reaching shapes stayed silent
 on both sides. Ten signatures joined `matched` — five `duplicate-key` and five
-`resource-only-target` — and no row is left in either direction. With the batch-4 run the 11 ids
+`resource-only-target` — and no row is left in either direction. Its eighth run asked the topic
+form of R034 on six probes and every registered reading held — `xref` and `link` with no scope
+and with `local` are filed, `peer` and `external` are not — so three rows moved from
+extension-only to matched without a code change. Its ninth run asked R011 on six more: depth is
+no boundary, since a key unused in the probe map, in a submap and in a key map below it are all
+filed, while one name defined in two maps of one scope draws one incident, on the first
+definition, so the rule now files the effective definition and the last extension-only row
+(`t-udup-b`'s) is gone. With the batch-4 run the 11 ids
 of that batch were closed, and this one did not reopen any: 84 ids, **no gap left**. Eighteen of
 the 75
 *ok* rows are *mapped only* — no incident of that exact id in any of the six reports — and each of
