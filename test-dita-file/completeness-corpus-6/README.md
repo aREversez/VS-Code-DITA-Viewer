@@ -196,7 +196,31 @@ lines 11 and 12, so the run read the whole tail and the silence on the probes ab
 A report without them is a stale map: close the root map in the DITA Maps Manager, reopen
 `corpus.ditamap` from disk and run again — none of g to n is answered then. Before reading
 anything into a report, check that the Maps Manager tree shows the nodes the run should cover
-(`p-dup-g` to `p-dup-n`, and the control `p-dup-k`) under the root map.
+(`p-dup-g` to `p-dup-n`, `q-twice`, `q-unused-pos`, `q-unused-neg`, `q-conkeyref`, and the control
+`p-dup-k`) under the root map.
+
+## The key-scope tail (R066 and R011) — not yet run
+
+Three questions about keys in scopes that the first nine probes never put to Oxygen. Four maps
+under `maps/`, referenced from `corpus.ditamap` before the control (which is still last, so the
+lines the report cites did not move). Each has its own topics, targets and keys, so one
+probe's finding never lands on another's file. The extension's answer today is the middle
+column; the readings of each possible Oxygen answer are registered here **before** the run.
+
+| Map | Layout | Extension today | If Oxygen answers the same | If Oxygen answers differently |
+| --- | --- | --- | --- | --- |
+| `maps/q-twice.ditamap` | `q-twice-keys.ditamap` (one `keydef`) referenced twice, with `keyscope="x"` and `keyscope="y"`; `q-twice-x` uses `x.k-twice`, `q-twice-y` uses `y.k-twice`, both published outside both scopes | `q-twice-x` silent, `q-twice-y` **`undefined-key`**: a map reached twice is crawled once, in the first scope, so `y.k-twice` is never defined | `dmv.key.undef` on `q-twice-y` only: Oxygen takes the first scope too; record it as a shared limit, no change | silent on `q-twice-y`: Oxygen defines the map's keys in every scope that reaches it, so the extension has a **false positive**; crawl a map once per distinct scope chain and register its keys under each. `dmv.key.undef` on `q-twice-x` as well: Oxygen does not read a `mapref`'s `keyscope` that way, so re-check the claim R066 makes for it |
+| `maps/q-unused-pos.ditamap` | `k-u-pos` defined inside `keyscope="s1"`; its only use (`q-unused-pos`, a bare `keyref`) published outside it | `undefined-key` on the topic, **no** `unreferenced-key` on the keydef: the check counts uses by key name, and the failed use still has the name | `dmv.key.undef` on the topic and no unused-key finding: the name-based count matches, no change | `dmv.not.used.key.defs` on the keydef: a key is used only when a use resolves to it, so mark each definition used by the key resolution rather than by name, in `mapChecks.ts` step 8 |
+| `maps/q-unused-neg.ditamap` | control: the same layout with the use inside `s1` | silent on both | silent on both | `dmv.not.used.key.defs` here would mean an in-scope use does not count, which contradicts R066; stop and re-read the run |
+| `maps/q-conkeyref.ditamap` | `k-ck` defined inside `s1`; a `conkeyref="k-ck/p1"` from a topic outside it (`q-ck-outside-pos`), one inside (`q-ck-inside-neg`) and one by `s1.k-ck/p1` (`q-ck-qualified-neg`) | `undefined-key` on the outside topic only | `dmv.key.undef` on the outside topic only: R066 holds for `conkeyref`, which until now only unit tests cover | silent on the outside topic: a `conkeyref` resolves by bare name globally, so stop scoping it. A finding on the qualified topic: Oxygen does not take a qualified name in a `conkeyref` |
+
+`src/test/editor/keyScopeResolution.test.ts` pins today's answer for the first two rows, so a
+change after the run is deliberate; the third is already covered. Until the run, the baseline and
+the parity lock carry the three extension findings (`q-twice-y`, `q-unused-pos` and
+`q-ck-outside-pos`, all `undefined-key`) as extension-only rows: they are *unknown*, not
+disagreements, and `oxygen-diff` exits non-zero on them for that reason. Change the extension
+only for the "differently" column; every other outcome confirms the rule as it stands. If the
+report lacks the control, the run was on a stale map (above) and none of these is answered.
 
 ## Running it
 

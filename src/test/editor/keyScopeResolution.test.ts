@@ -159,4 +159,28 @@ describe('key scope resolution (R066)', () => {
     assert.strictEqual(hits.length, 1);
     assert.strictEqual(basename(hits[0].file), 'out.dita');
   });
+  // Pinned, not endorsed: corpus 6's q-twice and q-unused-pos ask Oxygen about both, and
+  // README, "The key-scope tail", registers what each possible answer would change.
+  it('crawls a map referenced twice with different keyscopes once, so only the first scope defines its keys', async () => {
+    const c = await crawl({
+      'root.ditamap': root('<mapref href="keys.ditamap" keyscope="x"/><mapref href="keys.ditamap" keyscope="y"/><topicref href="ux.dita"/><topicref href="uy.dita"/>'),
+      'keys.ditamap': root('<keydef keys="k" href="t.dita"/>'),
+      't.dita': topic('t'),
+      'ux.dita': topic('ux', '<p><xref keyref="x.k"/></p>'),
+      'uy.dita': topic('uy', '<p><xref keyref="y.k"/></p>'),
+    });
+    assert.deepStrictEqual(undefinedOf(c), ['uy.dita:y.k']);
+  });
+
+  it('counts a key as used by its name even when the only use resolves to nothing', async () => {
+    const files = {
+      'root.ditamap': root('<topicgroup keyscope="s1"><keydef keys="k" href="t.dita"/></topicgroup><topicref href="out.dita"/>'),
+      't.dita': topic('t'),
+      'out.dita': topic('out', '<p><xref keyref="k"/></p>'),
+    };
+    const host = makeHost(files);
+    const issues = await runChecks(await crawlMaps([P('root.ditamap')], host), { ...NONE, reportUnreferencedKeys: true }, { host });
+    assert.strictEqual(issues.filter((i) => i.category === 'undefined-key').length, 1);
+    assert.strictEqual(issues.filter((i) => i.category === 'unreferenced-key').length, 0);
+  });
 });

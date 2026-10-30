@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="q-ck-qualified-neg">
+  <title>q-ck-qualified-neg</title>
+  <body>
+    <!-- control: from outside, through the qualified name s1.k-ck. -->
+    <p conkeyref="s1.k-ck/p1"/>
+  </body>
+</topic>

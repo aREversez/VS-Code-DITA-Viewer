@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="q-unused-neg">
+  <title>q-unused-neg</title>
+  <body>
+    <!-- control: the use sits INSIDE the keyscope of k-u-neg, so the key is used. -->
+    <p><xref keyref="k-u-neg"/></p>
+  </body>
+</topic>

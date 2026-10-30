@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- A conkeyref to a key defined inside a keyscope, from outside it, inside it, and by the qualified name.
+     Not yet run in Oxygen; the readings are registered in README.md, "The key-scope tail". -->
+<map id="q-conkeyref">
+  <title>q-conkeyref</title>
+  <topicgroup keyscope="s1">
+    <keydef keys="k-ck" href="../topics/q-ck-lib.dita"/>
+    <topicref href="../topics/q-ck-inside-neg.dita"/>
+  </topicgroup>
+  <topicref href="../topics/q-ck-outside-pos.dita"/>
+  <topicref href="../topics/q-ck-qualified-neg.dita"/>
+</map>

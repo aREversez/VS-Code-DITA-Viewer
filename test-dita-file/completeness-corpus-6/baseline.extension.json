@@ -89,5 +89,26 @@
     "file": "topics/o-scope-shared-edge.dita",
     "line": 7,
     "message": "Key reference \"k-scoped\" does not match any key definition"
+  },
+  {
+    "category": "undefined-key",
+    "severity": "error",
+    "file": "topics/q-ck-outside-pos.dita",
+    "line": 7,
+    "message": "Key reference \"k-ck/p1\" does not match any key definition"
+  },
+  {
+    "category": "undefined-key",
+    "severity": "error",
+    "file": "topics/q-twice-y.dita",
+    "line": 7,
+    "message": "Key reference \"y.k-twice\" does not match any key definition"
+  },
+  {
+    "category": "undefined-key",
+    "severity": "error",
+    "file": "topics/q-unused-pos.dita",
+    "line": 7,
+    "message": "Key reference \"k-u-pos\" does not match any key definition"
   }
 ]

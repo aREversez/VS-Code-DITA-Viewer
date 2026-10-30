@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- One map referenced twice with different keyscopes (x, y); two topics outside both reach its key by the qualified names x.k-twice and y.k-twice.
+     Not yet run in Oxygen; the readings are registered in README.md, "The key-scope tail". -->
+<map id="q-twice">
+  <title>q-twice</title>
+  <topicref href="../topics/q-twice-target.dita"/>
+  <mapref href="q-twice-keys.ditamap" keyscope="x"/>
+  <mapref href="q-twice-keys.ditamap" keyscope="y"/>
+  <topicref href="../topics/q-twice-x.dita"/>
+  <topicref href="../topics/q-twice-y.dita"/>
+</map>

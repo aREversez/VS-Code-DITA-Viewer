@@ -44,6 +44,14 @@
   <mapref href="maps/p-dup-m-nested-same-inner.ditamap"/>
   <mapref href="maps/p-dup-n-name-spacing.ditamap"/>
 
+  <!-- Key-scope tail, not yet run in Oxygen: one map referenced twice with different
+       keyscopes, an unreferenced key whose only use is outside its scope, and a conkeyref
+       across a scope. The readings are registered in README.md, "The key-scope tail". -->
+  <mapref href="maps/q-twice.ditamap"/>
+  <mapref href="maps/q-unused-pos.ditamap"/>
+  <mapref href="maps/q-unused-neg.ditamap"/>
+  <mapref href="maps/q-conkeyref.ditamap"/>
+
   <!-- Positive control for the probes above, kept LAST: the third report carries its two
        incidents, so the silence above is an answer. See README.md, "The control". -->
   <mapref href="maps/p-dup-k-control.ditamap"/>

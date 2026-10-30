@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- Control: a key used from inside its own keyscope.
+     Not yet run in Oxygen; the readings are registered in README.md, "The key-scope tail". -->
+<map id="q-unused-neg">
+  <title>q-unused-neg</title>
+  <topicref href="../topics/q-unused-neg-target.dita"/>
+  <topicgroup keyscope="s1">
+    <keydef keys="k-u-neg" href="../topics/q-unused-neg-target.dita"/>
+    <topicref href="../topics/q-unused-neg.dita"/>
+  </topicgroup>
+</map>

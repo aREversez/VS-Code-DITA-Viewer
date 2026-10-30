@@ -14,6 +14,10 @@
     "topics/o-scope-shared-edge.dita  resource-only-target",
     "topics/o-scope-shared-edge.dita  undefined-key"
   ],
-  "extensionOnly": [],
+  "extensionOnly": [
+    "topics/q-ck-outside-pos.dita  undefined-key",
+    "topics/q-twice-y.dita  undefined-key",
+    "topics/q-unused-pos.dita  undefined-key"
+  ],
   "oxygenOnly": []
 }

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- A key whose only use sits outside its keyscope.
+     Not yet run in Oxygen; the readings are registered in README.md, "The key-scope tail". -->
+<map id="q-unused-pos">
+  <title>q-unused-pos</title>
+  <topicref href="../topics/q-unused-pos-target.dita"/>
+  <topicgroup keyscope="s1">
+    <keydef keys="k-u-pos" href="../topics/q-unused-pos-target.dita"/>
+  </topicgroup>
+  <topicref href="../topics/q-unused-pos.dita"/>
+</map>
