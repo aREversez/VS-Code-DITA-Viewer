@@ -2,6 +2,8 @@
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
 <map id="aurora-intro" xml:lang="en-US">
   <title>Getting started</title>
+  <!-- Shared key definitions, published as a resource so no chapter lists them. -->
+  <topicref href="../keys/product-keys.ditamap" format="ditamap" processing-role="resource-only"/>
   <topicref href="../topics/overview.dita"/>
   <!-- Text and warnings reused across the manual, kept out of the navigation. -->
   <topicref href="../shared/common-text.dita" processing-role="resource-only"/>

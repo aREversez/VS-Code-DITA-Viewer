@@ -60,8 +60,9 @@ node scripts/real-map-diff.cjs --map test-dita-file/real-map-sample/aurora-bookm
 
 ## What the extension files today
 
-Nineteen findings over fifteen categories without the filter; the table's last row needs one. The
-extension side of both runs was measured, the Oxygen side is what the run is for.
+Nineteen findings over fifteen categories without the filter; with the filter the last row replaces
+`profiling-conflict`, so the counts stay the same. The extension side of both runs was measured, the
+Oxygen side is what the run is for.
 
 | Category | Where | The shape |
 | --- | --- | --- |
@@ -71,26 +72,40 @@ extension side of both runs was measured, the Oxygen side is what the run is for
 | `unreferenced-key` | `keys/product-keys.ditamap:30` | `legacy-diagram`, left from the previous product |
 | `unreferenced-reusable` | `shared/common-text.dita:15` | `unused-note` never conref'd |
 | `resource-only-target` | `topics/overview.dita:16` | an `xref` to `spec-key`'s resource-only topic |
-| `multiple-reference` | `aurora-bookmap.ditamap:40` | `shared/legal.dita` in the chapter and in the backmatter |
+| `multiple-reference` | `aurora-bookmap.ditamap:38` | `shared/legal.dita` in the chapter and in the backmatter |
 | `duplicate-id` (2) | `topics/mount.dita:3`, `topics/power.dita:3` | copy-paste: both tasks are `id="mount"` |
-| `invalid-id-reference` | `topics/mount.dita:25` | `power.dita#mount/step-4`, a task with three steps |
+| `invalid-id-reference` | `topics/mount.dita:27` | `power.dita#mount/step-4`, a task with three steps |
 | `missing-reference` | `chapters/reference.ditamap:9` | `sensor-history.dita` was deleted, the chapter line stayed |
 | `missing-resource` | `topics/power.dita:22` | `images/wiring.svg`, the file is `wiring-diagram.svg` |
 | `missing-navtitle` | `chapters/reference.ditamap:5` | a `topichead` without `@navtitle` |
 | `table-layout` | `topics/specifications.dita:10` | `@cols="3"` with two `colspec`s |
-| `profiling-conflict` | `topics/link.dita:25` | `audience="expert"` note inside a `novice` section |
+| `profiling-conflict` | `topics/link.dita:25` | `audience="expert"` note inside a `novice` `div` |
 | `empty-profiling-value` | `topics/maintenance.dita:9` | `audience=""` |
-| `profiling-preference` | `topics/sensor-check.dita:19` | `props="ws1-legacy"`: a value no real preference list carries |
-| `filtered-reference` | `topics/troubleshooting.dita:18` | only with the filter: an `xref` into the filtered `expert` note |
+| `profiling-preference` | `topics/sensor-check.dita:18` | `props="ws1-legacy"` on a `postreq`: a value no real preference list carries |
+| `filtered-reference` | `topics/troubleshooting.dita:21` | only with the filter: an `xref` into the filtered `expert` note |
 
 With `field.ditaval` the run drops `profiling-conflict` (the note it names is filtered out) and
 adds `filtered-reference`: nineteen findings again.
 
-## The two labels to watch
+## What the two runs showed
 
-The three `runbook` uses are not the same question. `maintenance.dita` sits outside the
-keyscope, so a bare use has to be undefined. `sensor-check.dita` and `alerts.dita` sit **inside**
-it, and only reach the root scope because the bookmap's reltable names them there; the extension
-resolves their use in the reltable's scope and calls the key undefined. If Oxygen stays silent on
-those two, the topic is being resolved in a scope it does not belong to — a real defect, and the
-cheapest probe in this set.
+The first run matched 17 of those 19 signatures against Oxygen's 23; six rows were Oxygen-only
+and two extension-only. Sorted by cause:
+
+| Row | Cause | State |
+| --- | --- | --- |
+| `class-format` and `MSG_CONTENT_INCOMPLETE`, both on a `.dita` | the fixture, not the rules: a bare `topicref` directly under the bookmap, a `section` after `taskbody`, a `section` inside `postreq`, an empty `ul conref`, and `troubleshootingbody` where the DTD says `troublebody`. `dita --format=html5` names every one. | fixed: the DTD accepts the set now, so both rows should be gone on the next run |
+| `missing-reference` (Oxygen) beside `missing-resource` (extension) | one dangling `images/wiring.svg`; Oxygen has no resource/reference split. `summarizeRealMapDiff` now folds the pair the way the corpus parity does. | fixed in `realMapDiff.ts` |
+| `external-reference`, on a `.dita` | `topics/link.dita` writes an http `xref` without `scope="external"`. R034 covers a **map** reference only, so the extension says nothing. | open: a rule boundary to decide, not a fixture fault |
+| `multiple-reference`, on a second `.ditamap` | the reltable names `sensor-check` and `alerts` again, and Oxygen files that as a topic referenced twice. The extension counts content references, not relationship rows. | open: rule boundary |
+| `profiling-preference`, Oxygen's second row | one more than the `props` probe explains — possibly the empty `audience` value on `maintenance.dita` | open: the label in the private table names the file |
+| `table-layout`, extension only | `@cols="3"` with two `colspec`s; Oxygen's completeness check has no matching rule | accepted: extension-only |
+
+The second run repeated all of this and added one row: with `field.ditaval` supplied the extension
+runs the filtered set only, so the `expert` note the conflict sits on is gone and
+`profiling-conflict` disappears; Oxygen keeps it (`dmv.prof.attr.innef.cond`).
+
+## What the labels said
+
+`undefined-key` matched 3 for 3: **Oxygen also resolves `runbook` in the reltable's scope** and
+calls it undefined, so the shape this section used to watch is a shared reading, not a defect.

@@ -19,14 +19,14 @@
       </step>
     </steps>
     <postreq>
-      <section audience="novice">
-        <title>If the first upload does not arrive</title>
+      <div audience="novice">
+        <p><b>If the first upload does not arrive</b></p>
         <p>Restart the station and watch the status LED.</p>
         <note audience="expert" id="expert-note">
           <p>An upload that keeps failing after a restart is almost always a certificate date problem; read
             the clock over the service port.</p>
         </note>
-      </section>
+      </div>
     </postreq>
   </taskbody>
 </task>

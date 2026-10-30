@@ -16,6 +16,17 @@ describe('real-map diff summary', () => {
     assert.match(s.text, /unreferenced-key {2}Oxygen only {2}x1 {2}dmv\.not\.used\.key\.defs/);
   });
 
+  it('matches a missing resource to the reference category Oxygen files it under', () => {
+    const s = summarizeRealMapDiff(
+      [f('a/power.dita', 'missing-resource')],
+      [f('a/power.dita', 'missing-reference', 'dmv.file.not.found')],
+    );
+    assert.strictEqual(s.matched, 1);
+    assert.strictEqual(s.extensionOnly, 0);
+    assert.strictEqual(s.oxygenOnly, 0);
+    assert.match(s.text, /\| missing-reference \| 1 \| 1 \| 1 \|/);
+  });
+
   it('never writes a path, a file name or a folder into the shareable text', () => {
     const s = summarizeRealMapDiff(
       [f('secret-product/Projet Évasion.dita', 'undefined-key')],

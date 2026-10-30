@@ -19,8 +19,6 @@
       <figurelist/>
     </booklists>
   </frontmatter>
-  <!-- Shared key definitions, published as a resource so no chapter lists them. -->
-  <topicref href="keys/product-keys.ditamap" format="ditamap" processing-role="resource-only"/>
   <part navtitle="Getting started">
     <chapter href="chapters/intro.ditamap" format="ditamap"/>
   </part>

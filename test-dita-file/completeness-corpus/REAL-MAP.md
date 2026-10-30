@@ -82,5 +82,7 @@ map never touched, and with `--prefs` supplied the profiling categories come alo
 
 When no second map is at hand, `../real-map-sample/` stands in for one: invented content, so it
 can be committed, shaped as a bookmap of chapter maps with keyscopes, a conref library, a
-resource-only key and a DITAVAL filter. Its README lists the two commands and what the extension
-files today, including the two findings worth watching on the Oxygen side.
+resource-only key and a DITAVAL filter. Its first run matched 17 of 19 signatures; the README
+separates the rows that were the fixture's own DTD breaks (now fixed) from the four boundaries the
+run exposed, and `summarizeRealMapDiff` now folds `missing-resource` into `missing-reference` the
+way the corpus parity already did.

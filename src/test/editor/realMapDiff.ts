@@ -6,6 +6,8 @@
 // not user data). No path, file name, line or message is ever written into the summary; the
 // label-to-file table is returned separately and stays on the machine.
 
+import { canonicalCategory } from './completenessHarness';
+
 export interface SideFinding {
   /** Path relative to the root map's folder, posix separators. */
   file: string;
@@ -25,7 +27,7 @@ export interface RealMapSummary {
   oxygenOnly: number;
 }
 
-const sig = (f: SideFinding): string => `${f.file}\t${f.category}`;
+const sig = (f: SideFinding): string => `${f.file}\t${canonicalCategory(f.category)}`;
 
 /** The file's extension reduced to letters and digits, so a name can never ride along in it. */
 export function fileKind(file: string): string {

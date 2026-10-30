@@ -7,7 +7,9 @@
     <context>
       <p conref="../shared/common-text.dita#common-text/safety-line"/>
       <p>Have the following at hand:</p>
-      <ul conref="../shared/common-text.dita#common-text/checklist"/>
+      <ul conref="../shared/common-text.dita#common-text/checklist">
+        <li/>
+      </ul>
       <p>The input voltage is <ph conref="../shared/common-text.dita#common-text/voltage-ph"/>.</p>
     </context>
     <steps>

@@ -15,10 +15,9 @@
         <cmd>Record both readings in the <keyword keyref="runbook"/>.</cmd>
       </step>
     </steps>
+    <postreq props="ws1-legacy">
+      <p>The beta firmware compares both readings for you and raises an alert on a drift of more than
+        two units.</p>
+    </postreq>
   </taskbody>
-  <section props="ws1-legacy">
-    <title>Automatic comparison</title>
-    <p>The beta firmware compares both readings for you and raises an alert on a drift of more than two
-      units.</p>
-  </section>
 </task>
