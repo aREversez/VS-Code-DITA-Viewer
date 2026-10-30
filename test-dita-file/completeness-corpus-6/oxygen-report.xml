@@ -97,6 +97,44 @@
 </incident>
 <incident>
 <engine>oXygen</engine>
+<severity>error</severity>
+<problemID>dmv.key.undef</problemID>
+<description>Cannot find definition for key &quot;ab.k-mn&quot;. Keys are gathered from: corpus.ditamap.</description>
+<systemID>topics/q-mn-ab.dita</systemID>
+<type>Key reference</type>
+<location>
+<start>
+<line>7</line>
+<column>21</column>
+</start>
+<end>
+<line>7</line>
+<column>30</column>
+</end>
+<length>9</length>
+</location>
+</incident>
+<incident>
+<engine>oXygen</engine>
+<severity>error</severity>
+<problemID>dmv.key.undef</problemID>
+<description>Cannot find definition for key &quot;k-mn&quot;. Keys are gathered from: corpus.ditamap.</description>
+<systemID>topics/q-mn-bare.dita</systemID>
+<type>Key reference</type>
+<location>
+<start>
+<line>7</line>
+<column>21</column>
+</start>
+<end>
+<line>7</line>
+<column>27</column>
+</end>
+<length>6</length>
+</location>
+</incident>
+<incident>
+<engine>oXygen</engine>
 <severity>warning</severity>
 <problemID>dmv.ref.to.resource.only</problemID>
 <description>Topic &quot;t-target.dita&quot; is referenced in the DITA map as &quot;resource-only&quot;. Any cross reference to it will result in a broken link.</description>

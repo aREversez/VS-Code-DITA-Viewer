@@ -36,14 +36,14 @@ Every probe topic holds one `<xref>`: `keyref="k-scoped"`, except the qualified
 `s1.k-scoped`. The key resolves to `topics/t-target.dita`, which the map reaches only through a
 `<keydef>`, and that is what produced the second finding family of the first run.
 
-## The runs: 23 incidents, full parity
+## The runs: 25 incidents, full parity
 
 `node scripts/oxygen-diff.cjs --corpus completeness-corpus-6 oxygen-report.xml` reports
-**16 matched, 0 extension-only, 0 Oxygen-only**. No incident was an accepted difference, so
-parity compares all sixteen signatures; the 23 incidents collapse into them because each
+**18 matched, 0 extension-only, 0 Oxygen-only**. No incident was an accepted difference, so
+parity compares all eighteen signatures; the 25 incidents collapse into them because each
 duplicate probe files one incident per reference.
 
-Five reports were taken from this corpus, and the last one is the committed
+Six reports were taken from this corpus, and the last one is the committed
 `oxygen-report.xml`. The first carried **6 incidents**, before the duplicate probes existed,
 and settled R066 and the keydef half of R049:
 
@@ -108,6 +108,12 @@ The fifth report (**23 incidents**) added the four key-scope tail probes and ans
 of their questions — one in Oxygen's direction, one in the extension's, one confirming a rule
 that only unit tests had covered. It is the section below that records it, because it moved the
 extension for the first time since the key-scope half of R066 was written.
+
+The sixth report (**25 incidents**) added the multi-name probe and confirmed R066 as it stood:
+`a.k-mn` and `b.k-mn` both resolve from outside the `keyscope="a b"` group, `ab.k-mn` and the
+bare `k-mn` do not, and the topic published inside the group resolves bare. Both controls were
+filed, every earlier incident came back the same, and the extension **needed no change**: its two
+extension-only rows became matches.
 
 ## The duplicate probes (R008): the answer is the scope
 
@@ -195,14 +201,14 @@ editor is not always reloaded). The only control then was the missing topic at t
 map, which says the root was read, not the tail.
 
 `maps/p-dup-k-control.ditamap` is the same-scope pair of `p-dup-d`, which Oxygen files, and it is
-referenced **last**. The third and fourth reports each carry its two `dmv.dup.topic` rows, on
+referenced **last**. Every report from the third on carries its two `dmv.dup.topic` rows, on
 lines 11 and 12, so the run read the whole tail and the silence on the probes above is an answer.
 
 A report without them is a stale map: close the root map in the DITA Maps Manager, reopen
 `corpus.ditamap` from disk and run again — none of g to n is answered then. Before reading
 anything into a report, check that the Maps Manager tree shows the nodes the run should cover
-(`p-dup-g` to `p-dup-n`, `q-twice`, `q-unused-pos`, `q-unused-neg`, `q-conkeyref`, `q-multiname`, and the control
-`p-dup-k`) under the root map.
+(`p-dup-g` to `p-dup-n`, `q-twice`, `q-unused-pos`, `q-unused-neg`, `q-conkeyref`,
+`q-multiname`, and the control `p-dup-k`) under the root map.
 
 ## The key-scope tail (R066 and R011): the fifth report
 
@@ -246,26 +252,27 @@ in the first scope only, because the second pass registers the map's keys, not t
 of its `topicref`s. No probe asks about it — `q-twice` publishes its topics outside both scopes —
 so it is recorded here rather than fixed by extension.
 
-## The multi-name scope (R066) — not yet run
+## The multi-name scope (R066): the sixth report
 
 R066 reads `keyscope="a b"` as a set (a key in it answers to `a.k` and to `b.k`), while R008
 compares the same names as an ordered list. The second is observed (`p-dup-i`, `p-dup-j`); the
-first is the spec's reading and has no Oxygen answer yet. One map, `maps/q-multiname.ditamap`
-(before the control, which is still last): a `keyscope="a b"` group holding `keydef k-mn`, and
-five topics, one use each, so every finding lands on its own file. Registered **before** the run:
+first was the spec's reading with no Oxygen answer, which this probe asked for. One map,
+`maps/q-multiname.ditamap` (before the control, which is still last): a `keyscope="a b"` group
+holding `keydef k-mn`, and five topics, one use each, so every finding lands on its own file.
+Both readings of each row were registered **before** the run:
 
-| Topic | Use | Extension today | If Oxygen answers the same | If Oxygen answers differently |
-| --- | --- | --- | --- | --- |
-| `q-mn-a` | `a.k-mn`, outside the group | silent | silent: the first name qualifies | `dmv.key.undef`: Oxygen takes only one name of a list for qualification; ask which |
-| `q-mn-b` | `b.k-mn`, outside | silent | silent: every name qualifies, R066 reads the list as a set | `dmv.key.undef` here with `q-mn-a` silent: only the first name counts, so change `scopeIds` to the first name for R066 |
-| `q-mn-inside` | bare `k-mn`, published inside | silent | silent | `dmv.key.undef`: a multi-name group is not a scope for its own members; stop and re-read the run |
-| `q-mn-ab` | `ab.k-mn`, outside (control) | `undefined-key` | `dmv.key.undef`: names are not concatenated | silent: Oxygen does not split the names on whitespace |
-| `q-mn-bare` | `k-mn`, outside (control) | `undefined-key` | `dmv.key.undef` | silent: a multi-name group leaks its keys, re-read R066 |
+| Topic | Use | Sixth report | What it settles |
+| --- | --- | --- | --- |
+| `q-mn-a` | `a.k-mn`, outside the group | *(nothing)* | the first name qualifies |
+| `q-mn-b` | `b.k-mn`, outside | *(nothing)* | every name of the list qualifies: R066 reads it as a set, not only its first name |
+| `q-mn-inside` | bare `k-mn`, published inside | *(nothing)* | a multi-name group is a scope for its own members |
+| `q-mn-ab` | `ab.k-mn`, outside (control) | `dmv.key.undef` | the names are not concatenated |
+| `q-mn-bare` | `k-mn`, outside (control) | `dmv.key.undef` | a multi-name group leaks no key out of itself |
 
-The baseline carries the two control findings (`q-mn-ab`, `q-mn-bare`, both `undefined-key`) as
-extension-only rows until the run; `oxygen-diff` exits non-zero on them for that reason. If the
-report lacks the control's `dmv.dup.topic` pair, the run read a stale map and nothing above is
-answered.
+All five landed on the answer the rule already gave — the same one `keyscopeMultiToken.test.ts`
+pins — so no code changed and the parity lock's two extension-only rows (`q-mn-ab`, `q-mn-bare`)
+became matches. The two readings now stand separately and both are observed: a `keyscope` is a
+set of names for key resolution and an ordered list for duplicate counting (R008).
 
 ## Running it
 

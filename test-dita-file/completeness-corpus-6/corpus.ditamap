@@ -2,7 +2,7 @@
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
 <!-- Sixth differential corpus: key scope resolution (R066) and the scope half of the
      duplicate rule (R008), see README.md here. A committed Oxygen report
-     (oxygen-report.xml, 23 incidents) and its parity lock cover it now; re-run Oxygen
+     (oxygen-report.xml, 25 incidents) and its parity lock cover it now; re-run Oxygen
      with THIS map as the only root map whenever the corpus changes. -->
 <map id="corpus6">
   <title>Completeness Check Corpus 6</title>
@@ -52,8 +52,8 @@
   <mapref href="maps/q-unused-neg.ditamap"/>
   <mapref href="maps/q-conkeyref.ditamap"/>
 
-  <!-- Multi-name scope, not yet run: a key in keyscope="a b" is reached as a.k-mn and b.k-mn
-       (q-multiname). See README.md, "The multi-name scope". -->
+  <!-- Multi-name scope, answered by the sixth report: a key in keyscope="a b" is reached as
+       a.k-mn and b.k-mn, but not as ab.k-mn or bare from outside (q-multiname). See README.md. -->
   <mapref href="maps/q-multiname.ditamap"/>
 
   <!-- Positive control for the probes above, kept LAST: the third report carries its two
