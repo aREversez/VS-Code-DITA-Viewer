@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- A key map referenced twice by the same map: no key is defined twice in any file. -->
+<map id="r-dkt-keys">
+  <title>r-dkt-keys</title>
+  <keydef keys="k-dkt" href="../topics/r-dkt-t1.dita"/>
+</map>

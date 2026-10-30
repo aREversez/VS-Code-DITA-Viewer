@@ -208,7 +208,7 @@ A report without them is a stale map: close the root map in the DITA Maps Manage
 `corpus.ditamap` from disk and run again — none of g to n is answered then. Before reading
 anything into a report, check that the Maps Manager tree shows the nodes the run should cover
 (`p-dup-g` to `p-dup-n`, `q-twice`, `q-unused-pos`, `q-unused-neg`, `q-conkeyref`,
-`q-multiname`, and the control `p-dup-k`) under the root map.
+`q-multiname`, `r-dk2`, `r-dk3`, `r-dkt`, `r-dkc`, and the control `p-dup-k`) under the root map.
 
 ## The key-scope tail (R066 and R011): the fifth report
 
@@ -273,6 +273,34 @@ All five landed on the answer the rule already gave — the same one `keyscopeMu
 pins — so no code changed and the parity lock's two extension-only rows (`q-mn-ab`, `q-mn-bare`)
 became matches. The two readings now stand separately and both are observed: a `keyscope` is a
 set of names for key resolution and an ordered list for duplicate counting (R008).
+
+## Duplicate keys across files (R010) — from a real-map run, not yet run here
+
+The first real-map comparison (REAL-MAP.md) agreed everywhere but one line: a key map referenced
+by the main map, where Oxygen files `duplicate.key.definition` against the key map's file twelve
+times and the extension files none there, though it matches the other two files with duplicates.
+The only observation behind R010 is corpus 1's `dupkey`: two definitions in **one** file, and
+Oxygen filed **both** lines (28 and 29). The extension files only the later one, which cannot
+show in one file, since both lines belong to the same signature. The reading the real run
+suggests is that Oxygen files every definition that takes part in a clash, the first included, and
+that this only becomes visible when the definitions sit in different files. That is a
+hypothesis, so four probes ask it, each with its own maps, targets and one use of the key so no
+`unreferenced-key` rides along:
+
+| Map | Layout | Extension today | If Oxygen files the first definition's file too | If Oxygen files only the later ones |
+| --- | --- | --- | --- | --- |
+| `maps/r-dk2.ditamap` | `k-dk2` in `r-dk2-keys.ditamap` (first, via `mapref`), again in `r-dk2.ditamap` | `duplicate-key` on `r-dk2.ditamap` only | `duplicate.key.definition` on both files: R010 files every participant, so report the first definition too | on `r-dk2.ditamap` only: the real run's twelve have another cause (the `r-dkt` row, or a key map reached twice by other maps); no change here |
+| `maps/r-dk3.ditamap` | `k-dk3` in `r-dk3-a`, in `r-dk3-b` and in `r-dk3.ditamap` | `duplicate-key` on `r-dk3-b` and `r-dk3` | on all three files: confirms the rule for any number of definitions | on `-b` and the root only: as above |
+| `maps/r-dkt.ditamap` | `r-dkt-keys.ditamap` referenced twice by the same map; no key is defined twice in any file | silent: a map reached again in the same scope is crawled once | silent: a key map reached twice is not a clash; the twelve have another cause | `duplicate.key.definition` on `r-dkt-keys.ditamap`: Oxygen counts every reaching of a key map, so a map reached again in the same scope defines its keys again |
+| `maps/r-dkc.ditamap` | control: two different keys in two files | silent | silent | any finding: the run is on a wrong map |
+
+Changing the extension is warranted only by the first column of `r-dk2`/`r-dk3` (file the first
+definition as well, in `mapChecks.ts` step 6) or the second column of `r-dkt` (count a map reached
+again in one scope). `r-dk2-use`, `r-dk3-use`, `r-dkt-use` and `r-dkc-use` each carry one
+`resource-only-target`, the R049 shape that Oxygen already confirmed for a keyref to a `keydef`
+target; until the run they are extension-only rows in the baseline and the parity lock, and so
+are the three `duplicate-key` rows above. Do not draw anything from a run whose report lacks the
+control's two `dmv.dup.topic` incidents.
 
 ## Running it
 

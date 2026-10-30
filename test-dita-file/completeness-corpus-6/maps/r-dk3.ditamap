@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- Three definitions of one key in three files (a, b, and this map). See README.md, "Duplicate keys across files". -->
+<map id="r-dk3">
+  <title>r-dk3</title>
+  <mapref href="r-dk3-a.ditamap"/>
+  <mapref href="r-dk3-b.ditamap"/>
+  <keydef keys="k-dk3" href="../topics/r-dk3-t3.dita"/>
+  <topicref href="../topics/r-dk3-use.dita"/>
+</map>

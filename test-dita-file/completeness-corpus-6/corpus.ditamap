@@ -56,6 +56,14 @@
        a.k-mn and b.k-mn, but not as ab.k-mn or bare from outside (q-multiname). See README.md. -->
   <mapref href="maps/q-multiname.ditamap"/>
 
+  <!-- Duplicate keys across files, from a real-map run (REAL-MAP.md): a clash between two files,
+       three definitions in three files, one key map referenced twice, and a control. Not yet run;
+       see README.md, "Duplicate keys across files". -->
+  <mapref href="maps/r-dk2.ditamap"/>
+  <mapref href="maps/r-dk3.ditamap"/>
+  <mapref href="maps/r-dkt.ditamap"/>
+  <mapref href="maps/r-dkc.ditamap"/>
+
   <!-- Positive control for the probes above, kept LAST: the third report carries its two
        incidents, so the silence above is an answer. See README.md, "The control". -->
   <mapref href="maps/p-dup-k-control.ditamap"/>

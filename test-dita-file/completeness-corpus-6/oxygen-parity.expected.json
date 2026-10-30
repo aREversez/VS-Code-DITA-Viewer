@@ -19,6 +19,14 @@
     "topics/q-mn-bare.dita  undefined-key",
     "topics/q-unused-pos.dita  undefined-key"
   ],
-  "extensionOnly": [],
+  "extensionOnly": [
+    "maps/r-dk2.ditamap  duplicate-key",
+    "maps/r-dk3-b.ditamap  duplicate-key",
+    "maps/r-dk3.ditamap  duplicate-key",
+    "topics/r-dk2-use.dita  resource-only-target",
+    "topics/r-dk3-use.dita  resource-only-target",
+    "topics/r-dkc-use.dita  resource-only-target",
+    "topics/r-dkt-use.dita  resource-only-target"
+  ],
   "oxygenOnly": []
 }

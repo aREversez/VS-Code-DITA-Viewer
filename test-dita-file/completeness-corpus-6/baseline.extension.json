@@ -63,6 +63,27 @@
     "message": "Key \"k-u-pos\" is defined but never referenced"
   },
   {
+    "category": "duplicate-key",
+    "severity": "warning",
+    "file": "maps/r-dk2.ditamap",
+    "line": 7,
+    "message": "Key \"k-dk2\" is already defined; this definition is ignored"
+  },
+  {
+    "category": "duplicate-key",
+    "severity": "warning",
+    "file": "maps/r-dk3-b.ditamap",
+    "line": 6,
+    "message": "Key \"k-dk3\" is already defined; this definition is ignored"
+  },
+  {
+    "category": "duplicate-key",
+    "severity": "warning",
+    "file": "maps/r-dk3.ditamap",
+    "line": 8,
+    "message": "Key \"k-dk3\" is already defined; this definition is ignored"
+  },
+  {
     "category": "resource-only-target",
     "severity": "warning",
     "file": "topics/o-scope-inside-neg.dita",
@@ -124,5 +145,40 @@
     "file": "topics/q-unused-pos.dita",
     "line": 7,
     "message": "Key reference \"k-u-pos\" does not match any key definition"
+  },
+  {
+    "category": "resource-only-target",
+    "severity": "warning",
+    "file": "topics/r-dk2-use.dita",
+    "line": 6,
+    "message": "Topic \"../topics/r-dk2-t1.dita\" is published only as resource-only; the cross-reference will break"
+  },
+  {
+    "category": "resource-only-target",
+    "severity": "warning",
+    "file": "topics/r-dk3-use.dita",
+    "line": 6,
+    "message": "Topic \"../topics/r-dk3-t1.dita\" is published only as resource-only; the cross-reference will break"
+  },
+  {
+    "category": "resource-only-target",
+    "severity": "warning",
+    "file": "topics/r-dkc-use.dita",
+    "line": 6,
+    "message": "Topic \"../topics/r-dkc-t1.dita\" is published only as resource-only; the cross-reference will break"
+  },
+  {
+    "category": "resource-only-target",
+    "severity": "warning",
+    "file": "topics/r-dkc-use.dita",
+    "line": 6,
+    "message": "Topic \"../topics/r-dkc-t2.dita\" is published only as resource-only; the cross-reference will break"
+  },
+  {
+    "category": "resource-only-target",
+    "severity": "warning",
+    "file": "topics/r-dkt-use.dita",
+    "line": 6,
+    "message": "Topic \"../topics/r-dkt-t1.dita\" is published only as resource-only; the cross-reference will break"
   }
 ]

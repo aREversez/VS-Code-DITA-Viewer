@@ -199,4 +199,30 @@ describe('key scope resolution (R066)', () => {
     assert.strictEqual(issues.filter((i) => i.category === 'undefined-key').length, 1);
     assert.strictEqual(issues.filter((i) => i.category === 'unreferenced-key').length, 1);
   });
+  // Pinned, not endorsed: a real-map run suggests Oxygen also files the FIRST definition of a
+  // clash when the definitions sit in different files. Corpus 6's r-dk2, r-dk3 and r-dkt ask it
+  // (README, "Duplicate keys across files"); until the run the extension files the later ones.
+  it('files a clash between two files on the later definition only', async () => {
+    const files = {
+      'root.ditamap': root('<mapref href="keys.ditamap"/><keydef keys="k" href="b.dita"/><topicref href="u.dita"/>'),
+      'keys.ditamap': root('<keydef keys="k" href="a.dita"/>'),
+      'a.dita': topic('a'), 'b.dita': topic('b'),
+      'u.dita': topic('u', '<p><xref keyref="k"/></p>'),
+    };
+    const host = makeHost(files);
+    const issues = await runChecks(await crawlMaps([P('root.ditamap')], host), { ...NONE, reportDuplicateKeys: true }, { host });
+    assert.deepStrictEqual(issues.filter((i) => i.category === 'duplicate-key').map((i) => basename(i.file)), ['root.ditamap']);
+  });
+
+  it('does not call a key map reached twice in one scope a clash', async () => {
+    const files = {
+      'root.ditamap': root('<mapref href="keys.ditamap"/><mapref href="keys.ditamap"/><topicref href="u.dita"/>'),
+      'keys.ditamap': root('<keydef keys="k" href="a.dita"/>'),
+      'a.dita': topic('a'),
+      'u.dita': topic('u', '<p><xref keyref="k"/></p>'),
+    };
+    const host = makeHost(files);
+    const issues = await runChecks(await crawlMaps([P('root.ditamap')], host), { ...NONE, reportDuplicateKeys: true }, { host });
+    assert.strictEqual(issues.filter((i) => i.category === 'duplicate-key').length, 0);
+  });
 });

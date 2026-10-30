@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- The same key defined again in the map that references the key map. See README.md, "Duplicate keys across files". -->
+<map id="r-dk2">
+  <title>r-dk2</title>
+  <mapref href="r-dk2-keys.ditamap"/>
+  <keydef keys="k-dk2" href="../topics/r-dk2-t2.dita"/>
+  <topicref href="../topics/r-dk2-use.dita"/>
+</map>

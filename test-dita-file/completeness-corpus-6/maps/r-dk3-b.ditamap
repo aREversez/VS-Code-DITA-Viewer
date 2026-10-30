@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- Second definition of k-dk3. -->
+<map id="r-dk3-b">
+  <title>r-dk3-b</title>
+  <keydef keys="k-dk3" href="../topics/r-dk3-t2.dita"/>
+</map>

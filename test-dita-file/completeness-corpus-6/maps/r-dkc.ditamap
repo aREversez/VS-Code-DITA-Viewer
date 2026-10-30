@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- Control: no clash. See README.md. -->
+<map id="r-dkc">
+  <title>r-dkc</title>
+  <mapref href="r-dkc-keys.ditamap"/>
+  <keydef keys="k-dkc-2" href="../topics/r-dkc-t2.dita"/>
+  <topicref href="../topics/r-dkc-use.dita"/>
+</map>
