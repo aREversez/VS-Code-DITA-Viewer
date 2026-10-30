@@ -364,6 +364,12 @@ export interface CrawlResult {
   topics: Set<string>; // every DITA topic file reached
   refs: Reference[];
   keyDefs: KeyDef[];
+  /**
+   * Names a @keyref / @conkeyref actually resolved through. R011 asks whether a definition's
+   * name was used and resolved, not merely written: a bare keyref that fails in its scope
+   * leaves its name here absent (Oxygen's `dmv.not.used.key.defs` on corpus 6's q-unused-pos).
+   */
+  usedKeyNames: Set<string>;
   keyUses: KeyUse[];
   undefinedKeys: UndefinedKey[];
   topicIds: TopicId[];
@@ -407,6 +413,8 @@ interface XNode {
   tag: string;
   attrs: Record<string, string>;
   line: number; // 1-based
+  /** Position in its document, unique within one file (a line can hold several elements). */
+  uid: number;
   children: XNode[];
   parent?: XNode;
   text: string; // direct text (for <title> presence etc.)
@@ -426,6 +434,7 @@ export function scanXml(raw: string): { root?: XNode; error?: { line: number; me
   const parser = sax.parser(true, { trim: false, normalize: false, position: true });
   let root: XNode | undefined;
   let cur: XNode | undefined;
+  let nextUid = 0;
   let error: { line: number; message: string } | undefined;
   parser.onerror = (err) => {
     error = { line: parser.line + 1 + drift, message: err.message.split('\n')[0] };
@@ -438,6 +447,7 @@ export function scanXml(raw: string): { root?: XNode; error?: { line: number; me
       tag: node.name,
       attrs: node.attributes as Record<string, string>,
       line: parser.line + 1 + drift,
+      uid: nextUid++,
       children: [],
       parent: cur,
       text: '',
@@ -531,6 +541,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     topics: new Set(),
     refs: [],
     keyDefs: [],
+    usedKeyNames: new Set(),
     keyUses: [],
     undefinedKeys: [],
     topicIds: [],
@@ -560,7 +571,10 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     cancelled: false,
   };
   const norm = (p: string) => normalizePathForCompare(p, host.platform);
-  const seenMaps = new Set<string>();
+  const seenMaps = new Map<string, Set<string>>();
+  /** A key definition by its element (file + scan uid), so a map's second scope
+   * extends it instead of cloning it. */
+  const keyDefIndex = new Map<string, KeyDef>();
   const seenTopics = new Set<string>();
   const profilingAttrs = [...PROFILING_ATTRS, ...(opts.extraProfilingAttributes ?? [])];
   const topicQueue: Array<{ path: string; inherited: Map<string, string[]> }> = [];
@@ -661,34 +675,47 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
   }
 
   // ── Maps ──
-  async function crawlMap(mapPath: string, chain: string[], from?: Location, scopeChains: string[][] = [[]]): Promise<void> {
+  async function crawlMap(mapPath: string, chain: string[], from?: Location, scopeChains: string[][] = [[]], replay = false): Promise<void> {
     const key = norm(mapPath);
-    if (seenMaps.has(key)) return;
-    seenMaps.add(key);
+    // A map reached again through a different key scope is a second instance of it: its
+    // key definitions are in effect in both scopes, since a qualified name resolves through
+    // either (corpus 6's q-twice). The file is scanned once; a second scope only re-registers
+    // its keys, so nothing is collected twice.
+    const scopeSig = scopeChains.map((c) => c.join('/')).sort().join('|');
+    const seenScopes = seenMaps.get(key);
+    if (seenScopes) {
+      if (seenScopes.has(scopeSig)) return;
+      seenScopes.add(scopeSig);
+      replay = true;
+    } else seenMaps.set(key, new Set([scopeSig]));
     const loaded = await load(mapPath, from);
     if (!loaded) return;
     const root = loaded.root;
-    result.maps.add(mapPath);
-    const side = sideOfRoot(root.tag, root.attrs['class']);
-    result.fileRoots.push({
-      file: mapPath, line: root.line, tag: root.tag, side,
-      classValue: effectiveClassOf(root.tag, root.attrs['class'], side),
-      dita: isMapRootNode(root) || isTopicElement(root),
-    });
-    scanClasses(root, mapPath, loaded.doctype, loaded.grammar);
-    scanDomains(root, mapPath);
-    const rootId = root.attrs['id'];
-    if (rootId) result.ids.push({ file: mapPath, line: root.line, id: rootId, tag: root.tag });
-    const isMapRoot = isMapRootNode(root);
-    // A topic read as a map (a @format mismatch) is reported by the reference check,
-    // not as a structural problem of the target; only a root that is neither is a warning.
-    if (!isMapRoot && !isTopicElement(root)) {
-      result.fileIssues.push({
-        file: mapPath, line: root.line, severity: 'warning',
-        msg: msg('val.notMap', root.tag), structural: true,
+    if (!replay) {
+      result.maps.add(mapPath);
+      const side = sideOfRoot(root.tag, root.attrs['class']);
+      result.fileRoots.push({
+        file: mapPath, line: root.line, tag: root.tag, side,
+        classValue: effectiveClassOf(root.tag, root.attrs['class'], side),
+        dita: isMapRootNode(root) || isTopicElement(root),
       });
+      scanClasses(root, mapPath, loaded.doctype, loaded.grammar);
+      scanDomains(root, mapPath);
+      const rootId = root.attrs['id'];
+      if (rootId) result.ids.push({ file: mapPath, line: root.line, id: rootId, tag: root.tag });
+      const isMapRoot = isMapRootNode(root);
+      // A topic read as a map (a @format mismatch) is reported by the reference check,
+      // not as a structural problem of the target; only a root that is neither is a warning.
+      if (!isMapRoot && !isTopicElement(root)) {
+        result.fileIssues.push({
+          file: mapPath, line: root.line, severity: 'warning',
+          msg: msg('val.notMap', root.tag), structural: true,
+        });
+      }
     }
-    const ctx: MapCtx = { file: mapPath, scopeChains, resourceOnly: false, inReltable: false, profile: new Map() };
+    const ctx: MapCtx = {
+      file: mapPath, scopeChains, resourceOnly: false, inReltable: false, profile: new Map(), replay,
+    };
     for (const c of root.children) await walkMapNode(c, ctx, chain.concat(key));
   }
 
@@ -700,6 +727,8 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     inReltable: boolean;
     /** Cascaded profiling values from topicref ancestors: attribute -> allowed value set. */
     profile: Map<string, string[]>;
+    /** A second pass over a map already scanned in another scope: register keys only. */
+    replay: boolean;
   }
 
   async function walkMapNode(n: XNode, ctx: MapCtx, chain: string[]): Promise<void> {
@@ -709,8 +738,8 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
 
     const tag = n.tag;
     const id = n.attrs['id'];
-    if (id) result.ids.push({ file: ctx.file, line: n.line, id, tag });
-    if (tag === 'topichead' || TOPICREF_TAGS.has(tag)) {
+    if (id && !ctx.replay) result.ids.push({ file: ctx.file, line: n.line, id, tag });
+    if (!ctx.replay && (tag === 'topichead' || TOPICREF_TAGS.has(tag))) {
       result.mapEntries.push({
         file: ctx.file, line: n.line, tag, href: n.attrs['href'],
         keyref: n.attrs['keyref'], scope: n.attrs['scope'], navTitle: hasNavTitle(n),
@@ -740,7 +769,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     // to. Resolution happens once every map is crawled (a definition may live
     // in a submap or after the use), so the context is recorded here.
     let mapKeyUse: KeyUse | undefined;
-    if (keyref) {
+    if (keyref && !ctx.replay) {
       const keyName = keyref.trim();
       const isMap = tag === 'mapref' || /\bmap\/mapref\b/.test(classOf(n));
       mapKeyUse = {
@@ -755,8 +784,9 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     }
 
     // Cascade profiling attributes from this topicref to descendants and to its topic.
-    const cascaded = new Map(ctx.profile);
-    if (isMapTag(n)) {
+    // A replay only registers keys, so the cascade and its findings are skipped.
+    const cascaded = ctx.replay ? ctx.profile : new Map(ctx.profile);
+    if (isMapTag(n) && !ctx.replay) {
       for (const a of profilingAttrs) {
         const v = n.attrs[a];
         if (v === undefined) continue;
@@ -789,6 +819,16 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       const scopeIds = [...new Set(scopeChains.map((c) => c.join('/')))];
       for (const name of names) {
         const qualified = qualifiedNamesMulti(name, scopeChains);
+        // A replay reaches the same definition under a second scope: it answers to that
+        // scope too, but stays one definition, so R010 and R011 see it once. The name is part
+        // of the identity: one element may carry several (`keys="a b"`).
+        const id = `${norm(ctx.file)}\u0000${n.uid}\u0000${name}`;
+        const known = keyDefIndex.get(id);
+        if (known) {
+          for (const sid of scopeIds) if (!known.scopeIds.includes(sid)) known.scopeIds.push(sid);
+          for (const q of qualified) if (!known.qualified.includes(q)) known.qualified.push(q);
+          continue;
+        }
         const def: KeyDef = {
           file: ctx.file, line: n.line, key: name, qualified, scopeId: scopeIds[0], scopeIds, href,
           keyref: keyref?.trim(),
@@ -798,6 +838,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
           const p = href.split('#')[0];
           if (p) def.target = resolve(dirname(ctx.file), decodeHrefPart(p));
         }
+        keyDefIndex.set(id, def);
         result.keyDefs.push(def);
       }
     }
@@ -810,35 +851,49 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       const isRelInner = ctx.inReltable && !isMapTag(n);
       const kind: RefKind = isKeydef ? 'keydef' : isMapHref(n, href) ? 'mapref' : 'topicref';
       if (!isRelInner || isMapTag(n)) {
-        const ref = addRef(ctx.file, n, kind, href, {
-          resourceOnly: localCtx.resourceOnly, inReltable: localCtx.inReltable, inMap: true, scopeChains,
-        });
-        if (mapKeyUse) mapKeyUse.fallbackRef = ref;
-        if (ref.target && !ref.remote) {
-          const tkey = norm(ref.target);
-          if (kind === 'mapref') {
-            // A target already on the crawl path closes a cycle: report it where it
-            // closes (Oxygen names the map that points back, not every member).
-            if (chain.includes(tkey)) result.recursiveRefs.push({ file: ctx.file, line: n.line, href });
-            else await crawlMap(ref.target, chain, ref, scopeChains);
-            followedMap = true;
-          } else if (ref.dita && n.attrs['format'] !== 'ditamap') {
-            if (kind === 'topicref') noteTopicScope(ref.target, scopeChains);
-            if (!seenTopics.has(tkey)) {
-              seenTopics.add(tkey);
-              topicQueue.push({ path: ref.target, inherited: cascaded });
+        if (ctx.replay) {
+          // A replay follows a nested map for its keys only, not for its references.
+          const target = href.split('#')[0];
+          if (kind === 'mapref' && target && n.attrs['scope'] !== 'external' && !URL_RE.test(href)) {
+            const resolved = resolve(dirname(ctx.file), decodeHrefPart(target));
+            if (!chain.includes(norm(resolved))) {
+              await crawlMap(resolved, chain, { file: ctx.file, line: n.line }, scopeChains, true);
             }
           }
-        } else if (kind === 'mapref') {
-          followedMap = true;
+          if (kind === 'mapref') followedMap = true;
+        } else {
+          const ref = addRef(ctx.file, n, kind, href, {
+            resourceOnly: localCtx.resourceOnly, inReltable: localCtx.inReltable, inMap: true, scopeChains,
+          });
+          if (mapKeyUse) mapKeyUse.fallbackRef = ref;
+          if (ref.target && !ref.remote) {
+            const tkey = norm(ref.target);
+            if (kind === 'mapref') {
+              // A target already on the crawl path closes a cycle: report it where it
+              // closes (Oxygen names the map that points back, not every member).
+              if (chain.includes(tkey)) result.recursiveRefs.push({ file: ctx.file, line: n.line, href });
+              else await crawlMap(ref.target, chain, ref, scopeChains);
+              followedMap = true;
+            } else if (ref.dita && n.attrs['format'] !== 'ditamap') {
+              if (kind === 'topicref') noteTopicScope(ref.target, scopeChains);
+              if (!seenTopics.has(tkey)) {
+                seenTopics.add(tkey);
+                topicQueue.push({ path: ref.target, inherited: cascaded });
+              }
+            }
+          } else if (kind === 'mapref') {
+            followedMap = true;
+          }
         }
       }
     }
     // The content of a reference to a map is ignored by DITA (dmv.ref.topic.inside.mapref).
     if (followedMap) {
-      for (const c of n.children) {
-        if (c.tag !== 'topicmeta' && (isMapTag(c) || TOPICREF_TAGS.has(c.tag))) {
-          result.ignoredMaprefContent.push({ file: ctx.file, line: c.line, tag: c.tag });
+      if (!ctx.replay) {
+        for (const c of n.children) {
+          if (c.tag !== 'topicmeta' && (isMapTag(c) || TOPICREF_TAGS.has(c.tag))) {
+            result.ignoredMaprefContent.push({ file: ctx.file, line: c.line, tag: c.tag });
+          }
         }
       }
       return;
@@ -1310,6 +1365,9 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     if (missing) {
       result.undefinedKeys.push({ file: use.file, line: use.line, key: use.key, value: use.value ?? use.key });
     }
+    // A use counts for its name once any context resolved it: the first of two definitions
+    // that bind one name is the one resolution reaches, so both names are used (R010/R011).
+    if (defs.size) result.usedKeyNames.add(use.key);
     for (const def of defs) {
       // A keyref may append an element id (`key/element`): the key resolves to a
       // file and a topic, so the appended id is checked against that topic later.

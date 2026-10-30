@@ -56,6 +56,13 @@
     "message": "Topic referenced more than once (2 times): ../topics/p-dup-n-name-spacing.dita"
   },
   {
+    "category": "unreferenced-key",
+    "severity": "warning",
+    "file": "maps/q-unused-pos.ditamap",
+    "line": 9,
+    "message": "Key \"k-u-pos\" is defined but never referenced"
+  },
+  {
     "category": "resource-only-target",
     "severity": "warning",
     "file": "topics/o-scope-inside-neg.dita",
@@ -96,13 +103,6 @@
     "file": "topics/q-ck-outside-pos.dita",
     "line": 7,
     "message": "Key reference \"k-ck/p1\" does not match any key definition"
-  },
-  {
-    "category": "undefined-key",
-    "severity": "error",
-    "file": "topics/q-twice-y.dita",
-    "line": 7,
-    "message": "Key reference \"y.k-twice\" does not match any key definition"
   },
   {
     "category": "undefined-key",

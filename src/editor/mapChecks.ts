@@ -448,11 +448,13 @@ export async function runChecks(
     }
   }
 
-  // 8. Key definitions nothing refers to.
+  // 8. Key definitions nothing refers to. A use counts only when it resolves to the
+  // definition: a bare keyref that fails in its scope (R066) leaves the definition unused,
+  // which is what Oxygen's `dmv.not.used.key.defs` reports for corpus 6's q-unused-pos.
+  // A definition answers to every name it is qualified by, so one resolved use is enough.
   if (opts.reportUnreferencedKeys) {
-    const used = new Set(crawl.keyUses.map((u) => u.key));
     for (const def of crawl.keyDefs) {
-      if (!def.qualified.some((q) => used.has(q))) {
+      if (!def.qualified.some((q) => crawl.usedKeyNames.has(q))) {
         issues.push({
           category: 'unreferenced-key', severity: 'warning', file: def.file, line: def.line,
           msg: msg('key.unreferenced', def.key),

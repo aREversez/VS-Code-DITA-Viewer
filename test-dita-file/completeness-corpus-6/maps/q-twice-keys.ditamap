@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
 <!-- Key definitions for q-twice: one keydef, in a map the root references twice.
-     Not yet run in Oxygen; the readings are registered in README.md, "The key-scope tail". -->
+     The fifth report defines it in both scopes; README.md, "The key-scope tail". -->
 <map id="q-twice-keys">
   <title>q-twice-keys</title>
   <keydef keys="k-twice" href="../topics/q-twice-target.dita"/>

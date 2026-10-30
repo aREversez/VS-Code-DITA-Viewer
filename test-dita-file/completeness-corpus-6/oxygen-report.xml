@@ -59,6 +59,44 @@
 </incident>
 <incident>
 <engine>oXygen</engine>
+<severity>error</severity>
+<problemID>dmv.key.undef</problemID>
+<description>Cannot find definition for key &quot;k-u-pos&quot;. Keys are gathered from: corpus.ditamap.</description>
+<systemID>topics/q-unused-pos.dita</systemID>
+<type>Key reference</type>
+<location>
+<start>
+<line>7</line>
+<column>21</column>
+</start>
+<end>
+<line>7</line>
+<column>30</column>
+</end>
+<length>9</length>
+</location>
+</incident>
+<incident>
+<engine>oXygen</engine>
+<severity>error</severity>
+<problemID>dmv.key.undef</problemID>
+<description>Cannot find definition for key &quot;k-ck&quot;. Keys are gathered from: corpus.ditamap.</description>
+<systemID>topics/q-ck-outside-pos.dita</systemID>
+<type>Content key reference</type>
+<location>
+<start>
+<line>7</line>
+<column>18</column>
+</start>
+<end>
+<line>7</line>
+<column>27</column>
+</end>
+<length>9</length>
+</location>
+</incident>
+<incident>
+<engine>oXygen</engine>
 <severity>warning</severity>
 <problemID>dmv.ref.to.resource.only</problemID>
 <description>Topic &quot;t-target.dita&quot; is referenced in the DITA map as &quot;resource-only&quot;. Any cross reference to it will result in a broken link.</description>
@@ -378,6 +416,25 @@
 <column>52</column>
 </end>
 <length>32</length>
+</location>
+</incident>
+<incident>
+<engine>oXygen</engine>
+<severity>warning</severity>
+<problemID>dmv.not.used.key.defs</problemID>
+<description>Unreferenced key definition: &quot;k-u-pos&quot;.</description>
+<systemID>maps/q-unused-pos.ditamap</systemID>
+<type>Key definition</type>
+<location>
+<start>
+<line>9</line>
+<column>18</column>
+</start>
+<end>
+<line>9</line>
+<column>27</column>
+</end>
+<length>9</length>
 </location>
 </incident>
 </report>

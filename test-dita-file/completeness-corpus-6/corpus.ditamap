@@ -2,7 +2,7 @@
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
 <!-- Sixth differential corpus: key scope resolution (R066) and the scope half of the
      duplicate rule (R008), see README.md here. A committed Oxygen report
-     (oxygen-report.xml, 20 incidents) and its parity lock cover it now; re-run Oxygen
+     (oxygen-report.xml, 23 incidents) and its parity lock cover it now; re-run Oxygen
      with THIS map as the only root map whenever the corpus changes. -->
 <map id="corpus6">
   <title>Completeness Check Corpus 6</title>
@@ -44,9 +44,9 @@
   <mapref href="maps/p-dup-m-nested-same-inner.ditamap"/>
   <mapref href="maps/p-dup-n-name-spacing.ditamap"/>
 
-  <!-- Key-scope tail, not yet run in Oxygen: one map referenced twice with different
-       keyscopes, an unreferenced key whose only use is outside its scope, and a conkeyref
-       across a scope. The readings are registered in README.md, "The key-scope tail". -->
+  <!-- Key-scope tail, answered by the fifth report: the map referenced twice defines its
+       key in both scopes (q-twice), a use outside its scope leaves the keydef unreferenced
+       (q-unused-pos), and conkeyref is scoped like keyref (q-conkeyref). See README.md. -->
   <mapref href="maps/q-twice.ditamap"/>
   <mapref href="maps/q-unused-pos.ditamap"/>
   <mapref href="maps/q-unused-neg.ditamap"/>

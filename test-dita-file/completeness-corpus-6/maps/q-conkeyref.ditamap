@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
 <!-- A conkeyref to a key defined inside a keyscope, from outside it, inside it, and by the qualified name.
-     Not yet run in Oxygen; the readings are registered in README.md, "The key-scope tail". -->
+     The fifth report files the outside one only: a conkeyref is scoped like a keyref. See README.md, "The key-scope tail". -->
 <map id="q-conkeyref">
   <title>q-conkeyref</title>
   <topicgroup keyscope="s1">

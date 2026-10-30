@@ -159,9 +159,9 @@ describe('key scope resolution (R066)', () => {
     assert.strictEqual(hits.length, 1);
     assert.strictEqual(basename(hits[0].file), 'out.dita');
   });
-  // Pinned, not endorsed: corpus 6's q-twice and q-unused-pos ask Oxygen about both, and
-  // README, "The key-scope tail", registers what each possible answer would change.
-  it('crawls a map referenced twice with different keyscopes once, so only the first scope defines its keys', async () => {
+  // Corpus 6's q-twice and q-unused-pos asked Oxygen about both; README, "The key-scope tail",
+  // records the answers these two now follow.
+  it('crawls a map reached twice under different keyscopes once, but its keys belong to both scopes', async () => {
     const c = await crawl({
       'root.ditamap': root('<mapref href="keys.ditamap" keyscope="x"/><mapref href="keys.ditamap" keyscope="y"/><topicref href="ux.dita"/><topicref href="uy.dita"/>'),
       'keys.ditamap': root('<keydef keys="k" href="t.dita"/>'),
@@ -169,10 +169,26 @@ describe('key scope resolution (R066)', () => {
       'ux.dita': topic('ux', '<p><xref keyref="x.k"/></p>'),
       'uy.dita': topic('uy', '<p><xref keyref="y.k"/></p>'),
     });
-    assert.deepStrictEqual(undefinedOf(c), ['uy.dita:y.k']);
+    assert.deepStrictEqual(undefinedOf(c), []);
+    // One definition, not one per scope: two would collide under R010's duplicate-key check.
+    assert.strictEqual(c.keyDefs.length, 1);
   });
 
-  it('counts a key as used by its name even when the only use resolves to nothing', async () => {
+  it('replays a twice-reached map per key name, so one element may define several', async () => {
+    const c = await crawl({
+      'root.ditamap': root('<mapref href="keys.ditamap" keyscope="x"/><mapref href="keys.ditamap" keyscope="y"/><topicref href="u.dita"/>'),
+      'keys.ditamap': root('<keydef keys="k1 k2" href="t.dita"/>'),
+      't.dita': topic('t'),
+      'u.dita': topic('u', '<p><xref keyref="x.k1"/><xref keyref="y.k2"/></p>'),
+    });
+    assert.deepStrictEqual(undefinedOf(c), []);
+    assert.deepStrictEqual(c.keyDefs.map((d) => d.key).sort(), ['k1', 'k2']);
+    for (const def of c.keyDefs) {
+      for (const q of [`x.${def.key}`, `y.${def.key}`]) assert.ok(def.qualified.includes(q), `${q} in ${def.qualified.join()}`);
+    }
+  });
+
+  it("leaves a key's definition unreferenced when every use of its name fails in its scope", async () => {
     const files = {
       'root.ditamap': root('<topicgroup keyscope="s1"><keydef keys="k" href="t.dita"/></topicgroup><topicref href="out.dita"/>'),
       't.dita': topic('t'),
@@ -181,6 +197,6 @@ describe('key scope resolution (R066)', () => {
     const host = makeHost(files);
     const issues = await runChecks(await crawlMaps([P('root.ditamap')], host), { ...NONE, reportUnreferencedKeys: true }, { host });
     assert.strictEqual(issues.filter((i) => i.category === 'undefined-key').length, 1);
-    assert.strictEqual(issues.filter((i) => i.category === 'unreferenced-key').length, 0);
+    assert.strictEqual(issues.filter((i) => i.category === 'unreferenced-key').length, 1);
   });
 });

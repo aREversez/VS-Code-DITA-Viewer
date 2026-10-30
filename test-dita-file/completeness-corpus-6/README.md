@@ -3,8 +3,8 @@
 The sixth differential corpus, kept apart from the other five so each keeps its own line
 numbers, baseline and parity lock. It has its own root map, `corpus.ditamap`, its own
 `baseline.extension.json`, and since its first run a sanitized `oxygen-report.xml` and an
-`oxygen-parity.expected.json`. The rules it feeds are R066 (key scope) and the scope half of
-R008 (duplicates) in `../completeness-corpus/RULES.md`.
+`oxygen-parity.expected.json`. The rules it feeds are R066 (key scope), R011 (an unused key
+definition) and the scope half of R008 (duplicates) in `../completeness-corpus/RULES.md`.
 
 ## Why a corpus of its own
 
@@ -36,14 +36,14 @@ Every probe topic holds one `<xref>`: `keyref="k-scoped"`, except the qualified
 `s1.k-scoped`. The key resolves to `topics/t-target.dita`, which the map reaches only through a
 `<keydef>`, and that is what produced the second finding family of the first run.
 
-## The runs: 20 incidents, full parity
+## The runs: 23 incidents, full parity
 
 `node scripts/oxygen-diff.cjs --corpus completeness-corpus-6 oxygen-report.xml` reports
-**13 matched, 0 extension-only, 0 Oxygen-only**. No incident was an accepted difference, so
-parity compares all thirteen signatures; the 20 incidents collapse into them because each
+**16 matched, 0 extension-only, 0 Oxygen-only**. No incident was an accepted difference, so
+parity compares all sixteen signatures; the 23 incidents collapse into them because each
 duplicate probe files one incident per reference.
 
-Four reports were taken from this corpus, and the last one is the committed
+Five reports were taken from this corpus, and the last one is the committed
 `oxygen-report.xml`. The first carried **6 incidents**, before the duplicate probes existed,
 and settled R066 and the keydef half of R049:
 
@@ -103,6 +103,11 @@ is:
 `p-dup-m` drew nothing, and every earlier incident came back the same, so the extension needed
 no change: the lock's two extension-only rows (`l` and `n`) became matches, and it reads zero in
 both directions again.
+
+The fifth report (**23 incidents**) added the four key-scope tail probes and answered all three
+of their questions — one in Oxygen's direction, one in the extension's, one confirming a rule
+that only unit tests had covered. It is the section below that records it, because it moved the
+extension for the first time since the key-scope half of R066 was written.
 
 ## The duplicate probes (R008): the answer is the scope
 
@@ -199,28 +204,47 @@ anything into a report, check that the Maps Manager tree shows the nodes the run
 (`p-dup-g` to `p-dup-n`, `q-twice`, `q-unused-pos`, `q-unused-neg`, `q-conkeyref`, and the control
 `p-dup-k`) under the root map.
 
-## The key-scope tail (R066 and R011) — not yet run
+## The key-scope tail (R066 and R011): the fifth report
 
-Three questions about keys in scopes that the first nine probes never put to Oxygen. Four maps
-under `maps/`, referenced from `corpus.ditamap` before the control (which is still last, so the
-lines the report cites did not move). Each has its own topics, targets and keys, so one
-probe's finding never lands on another's file. The extension's answer today is the middle
-column; the readings of each possible Oxygen answer are registered here **before** the run.
+Four maps under `maps/`, referenced from `corpus.ditamap` before the control (still last, so the
+lines earlier reports cite did not move). Each has its own topics, targets and keys, so one
+probe's finding never lands on another's file. Both readings of each row were registered here
+**before** the run; the fifth report answered all four:
 
-| Map | Layout | Extension today | If Oxygen answers the same | If Oxygen answers differently |
-| --- | --- | --- | --- | --- |
-| `maps/q-twice.ditamap` | `q-twice-keys.ditamap` (one `keydef`) referenced twice, with `keyscope="x"` and `keyscope="y"`; `q-twice-x` uses `x.k-twice`, `q-twice-y` uses `y.k-twice`, both published outside both scopes | `q-twice-x` silent, `q-twice-y` **`undefined-key`**: a map reached twice is crawled once, in the first scope, so `y.k-twice` is never defined | `dmv.key.undef` on `q-twice-y` only: Oxygen takes the first scope too; record it as a shared limit, no change | silent on `q-twice-y`: Oxygen defines the map's keys in every scope that reaches it, so the extension has a **false positive**; crawl a map once per distinct scope chain and register its keys under each. `dmv.key.undef` on `q-twice-x` as well: Oxygen does not read a `mapref`'s `keyscope` that way, so re-check the claim R066 makes for it |
-| `maps/q-unused-pos.ditamap` | `k-u-pos` defined inside `keyscope="s1"`; its only use (`q-unused-pos`, a bare `keyref`) published outside it | `undefined-key` on the topic, **no** `unreferenced-key` on the keydef: the check counts uses by key name, and the failed use still has the name | `dmv.key.undef` on the topic and no unused-key finding: the name-based count matches, no change | `dmv.not.used.key.defs` on the keydef: a key is used only when a use resolves to it, so mark each definition used by the key resolution rather than by name, in `mapChecks.ts` step 8 |
-| `maps/q-unused-neg.ditamap` | control: the same layout with the use inside `s1` | silent on both | silent on both | `dmv.not.used.key.defs` here would mean an in-scope use does not count, which contradicts R066; stop and re-read the run |
-| `maps/q-conkeyref.ditamap` | `k-ck` defined inside `s1`; a `conkeyref="k-ck/p1"` from a topic outside it (`q-ck-outside-pos`), one inside (`q-ck-inside-neg`) and one by `s1.k-ck/p1` (`q-ck-qualified-neg`) | `undefined-key` on the outside topic only | `dmv.key.undef` on the outside topic only: R066 holds for `conkeyref`, which until now only unit tests cover | silent on the outside topic: a `conkeyref` resolves by bare name globally, so stop scoping it. A finding on the qualified topic: Oxygen does not take a qualified name in a `conkeyref` |
+| Map | Layout | Fifth report | What it settles |
+| --- | --- | --- | --- |
+| `maps/q-twice.ditamap` | `q-twice-keys.ditamap` (one `keydef`) referenced twice, with `keyscope="x"` and `keyscope="y"`; `q-twice-x` uses `x.k-twice`, `q-twice-y` uses `y.k-twice`, both published outside both scopes | *(nothing)* | a map reached under a second scope chain is a second instance of it: its keys are in effect in every scope that reaches it. The extension's `undefined-key` on `q-twice-y` was a **false positive** and is gone |
+| `maps/q-unused-pos.ditamap` | `k-u-pos` defined inside `keyscope="s1"`; its only use (`q-unused-pos`, a bare `keyref`) published outside it | `dmv.key.undef` on the topic **and** `dmv.not.used.key.defs` on the keydef | a use counts for its name only when it resolves: the failed use leaves the definition unused, and the extension now files `unreferenced-key` there too |
+| `maps/q-unused-neg.ditamap` | control: the same layout with the use inside `s1` | *(nothing)* | an in-scope use does count, so the new rule does not fire on a used key |
+| `maps/q-conkeyref.ditamap` | `k-ck` defined inside `s1`; `conkeyref="k-ck/p1"` from outside (`q-ck-outside-pos`), from inside (`q-ck-inside-neg`) and by qualified name (`s1.k-ck/p1`, `q-ck-qualified-neg`) | `dmv.key.undef` on the outside topic only | R066 holds for `conkeyref`, which until this run only unit tests covered |
 
-`src/test/editor/keyScopeResolution.test.ts` pins today's answer for the first two rows, so a
-change after the run is deliberate; the third is already covered. Until the run, the baseline and
-the parity lock carry the three extension findings (`q-twice-y`, `q-unused-pos` and
-`q-ck-outside-pos`, all `undefined-key`) as extension-only rows: they are *unknown*, not
-disagreements, and `oxygen-diff` exits non-zero on them for that reason. Change the extension
-only for the "differently" column; every other outcome confirms the rule as it stands. If the
-report lacks the control, the run was on a stale map (above) and none of these is answered.
+Two changes followed, both in the column registered as "differently":
+
+- **A map reached twice is crawled once but defines its keys in each scope** (`mapCrawl.ts`).
+  `seenMaps` now holds a set of scope signatures per map file; a second pass over a map already
+  scanned runs in `replay` mode, which registers its `keydef`s under the new scope and collects
+  nothing else — no reference, id, entry or finding is filed twice. `keyDefIndex` keeps one
+  `KeyDef` per element (`file` plus the scan's `uid`, since a line can hold several), and a
+  replay extends that definition's `scopeIds`/`qualified` instead of adding a second one, so
+  R010 still sees one definition and cannot call it a duplicate.
+- **R011 counts a use only when it resolves** (`mapChecks.ts`, step 8). A name a
+  `@keyref`/`@conkeyref` wrote but never bound leaves its definition unreferenced — Oxygen's
+  `dmv.not.used.key.defs`. Counting per definition instead broke corpus 1's `dupkey`, where
+  resolution reaches the first of two definitions and Oxygen therefore calls the name used, so
+  the count is per name (`usedKeyNames`): a name any context resolved counts once, for every
+  definition that answers to it.
+
+`src/test/editor/keyScopeResolution.test.ts` pins both answers — the twice-reached map resolves
+`y.k-twice` and stays one definition, and the use that fails in its scope leaves a
+`unreferenced-key` behind. The baseline carries one finding more (16), the parity lock none of the
+three unknown rows the fourth one held: `q-twice-y` is gone, and `q-ck-outside-pos` and
+`q-unused-pos` are matches, together with the new `unreferenced-key`. `oxygen-diff` reads zero in
+both directions.
+
+One limit stays next to that change: a *topic* published by a map reached twice is still checked
+in the first scope only, because the second pass registers the map's keys, not the publications
+of its `topicref`s. No probe asks about it — `q-twice` publishes its topics outside both scopes —
+so it is recorded here rather than fixed by extension.
 
 ## Running it
 
@@ -234,5 +258,3 @@ node scripts/sanitize-oxygen-report.cjs --corpus completeness-corpus-6 <raw.xml>
 baseline and the parity lock; `node scripts/completeness-baseline.cjs --corpus
 completeness-corpus-6 --update` rewrites the baseline alone. Keep the line numbers of
 `corpus.ditamap` stable when editing the comment at its top: the report cites them.
-
-Known limit: a map reached twice with different `keyscope`s is crawled once (first scope).

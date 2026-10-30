@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
 <!-- A key whose only use sits outside its keyscope.
-     Not yet run in Oxygen; the readings are registered in README.md, "The key-scope tail". -->
+     The fifth report files both the undefined use and the unused definition. See README.md, "The key-scope tail". -->
 <map id="q-unused-pos">
   <title>q-unused-pos</title>
   <topicref href="../topics/q-unused-pos-target.dita"/>
