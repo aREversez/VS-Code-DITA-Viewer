@@ -29,6 +29,10 @@
     "topics/r-dkn-use.dita  resource-only-target",
     "topics/r-dkt-use.dita  resource-only-target"
   ],
-  "extensionOnly": [],
+  "extensionOnly": [
+    "topics/s-url-link-pos.dita  external-reference",
+    "topics/s-url-xref-local.dita  external-reference",
+    "topics/s-url-xref-pos.dita  external-reference"
+  ],
   "oxygenOnly": []
 }

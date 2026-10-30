@@ -201,5 +201,26 @@
     "file": "topics/r-dkt-use.dita",
     "line": 6,
     "message": "Topic \"../topics/r-dkt-t1.dita\" is published only as resource-only; the cross-reference will break"
+  },
+  {
+    "category": "external-reference",
+    "severity": "warning",
+    "file": "topics/s-url-link-pos.dita",
+    "line": 10,
+    "message": "Reference to a URL must declare scope=\"external\": http://example.invalid/a.html"
+  },
+  {
+    "category": "external-reference",
+    "severity": "warning",
+    "file": "topics/s-url-xref-local.dita",
+    "line": 7,
+    "message": "Reference to a URL must declare scope=\"external\": http://example.invalid/a.html"
+  },
+  {
+    "category": "external-reference",
+    "severity": "warning",
+    "file": "topics/s-url-xref-pos.dita",
+    "line": 7,
+    "message": "Reference to a URL must declare scope=\"external\": http://example.invalid/a.html"
   }
 ]

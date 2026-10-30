@@ -65,6 +65,10 @@
   <mapref href="maps/r-dkn.ditamap"/>
   <mapref href="maps/r-dkc.ditamap"/>
 
+  <!-- A URL written in a topic (R034), not yet run: xref and link, with no scope, local, external
+       and peer. See README.md, "A URL written in a topic". -->
+  <mapref href="maps/s-url.ditamap"/>
+
   <!-- Positive control for the probes above, kept LAST: the third report carries its two
        incidents, so the silence above is an answer. See README.md, "The control". -->
   <mapref href="maps/p-dup-k-control.ditamap"/>

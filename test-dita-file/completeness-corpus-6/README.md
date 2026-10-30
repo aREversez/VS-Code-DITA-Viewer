@@ -212,7 +212,7 @@ A report without them is a stale map: close the root map in the DITA Maps Manage
 `corpus.ditamap` from disk and run again — none of g to n is answered then. Before reading
 anything into a report, check that the Maps Manager tree shows the nodes the run should cover
 (`p-dup-g` to `p-dup-n`, `q-twice`, `q-unused-pos`, `q-unused-neg`, `q-conkeyref`,
-`q-multiname`, `r-dk2`, `r-dk3`, `r-dkt`, `r-dkn`, `r-dkc`, and the control `p-dup-k`) under the root map.
+`q-multiname`, `r-dk2`, `r-dk3`, `r-dkt`, `r-dkn`, `r-dkc`, `s-url`, and the control `p-dup-k`) under the root map.
 
 ## The key-scope tail (R066 and R011): the fifth report
 
@@ -314,6 +314,29 @@ shape — the key map's file filed once for each of its keys that another file d
 re-run of that map after this change matched on all thirteen of its signatures (REAL-MAP.md,
 "What one run proves"), so no per-reaching count is left to add. Do not draw anything from a run
 whose report lacks the control's two `dmv.dup.topic` incidents.
+
+## A URL written in a topic (R034) — not yet run
+
+R034 was widened to the `xref` and `link` of a topic on one observation: the second real-map run
+filed `dmv.topicref.remote.local.scope` on a `.dita` xref (`real-map-sample`, whose report is not
+committed). Nothing in a corpus covers the topic form, and `link`, a missing `@scope` and
+`scope="peer"` were extrapolated from that one row. `maps/s-url.ditamap` publishes six topics, one
+shape each, so every finding lands on its own file; the readings are registered **before** the run:
+
+| Topic | Writes | Extension today | If Oxygen answers the same | If Oxygen answers differently |
+| --- | --- | --- | --- | --- |
+| `s-url-xref-pos` | `<xref href="http://…" format="html">`, no `@scope` | `external-reference` | `dmv.topicref.remote.no.external.scope`: a missing scope is filed in a topic as in a map | silent: Oxygen files only a written `scope="local"` in a topic; narrow the rule to that |
+| `s-url-xref-local` | the same with `scope="local"` | `external-reference` | `dmv.topicref.remote.local.scope`: confirms the observed row on a corpus file | silent: the real-map row had another cause; re-read that report before touching R034 |
+| `s-url-xref-neg` | the same with `scope="external"` (control) | silent | silent | any finding: the run is on a wrong map |
+| `s-url-xref-peer` | the same with `scope="peer"` (edge) | silent: `peer` counts as external | silent | a finding: a peer URL needs `external` in a topic; stop treating `peer` as external there |
+| `s-url-link-pos` | `<link href="http://…" format="html">` in `related-links`, no `@scope` | `external-reference` | filed: `link` belongs to the rule | silent: drop `link` from the rule and keep `xref` (the one shape observed) |
+| `s-url-link-neg` | the same with `scope="external"` (control) | silent | silent | any finding: the run is on a wrong map |
+
+The baseline and the parity lock carry the three extension findings (`s-url-xref-pos`,
+`s-url-xref-local`, `s-url-link-pos`, all `external-reference`) as extension-only rows until the
+run; `oxygen-diff` exits non-zero on them for that reason. Change the extension only for a
+"differently" column. Without the control's two `dmv.dup.topic` incidents in the report, the run
+read a stale map and nothing above is answered.
 
 ## Running it
 

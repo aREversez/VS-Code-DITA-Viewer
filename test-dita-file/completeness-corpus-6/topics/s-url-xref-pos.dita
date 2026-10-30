@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="s-url-xref-pos">
+  <title>s-url-xref-pos</title>
+  <body>
+    <!-- xref to a URL with no @scope: should be filed -->
+    <p><xref href="http://example.invalid/a.html" format="html">site</xref></p>
+  </body>
+</topic>
