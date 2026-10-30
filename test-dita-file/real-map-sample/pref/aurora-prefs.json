@@ -4,5 +4,5 @@
     "product": ["aurora", "aurora-pro"],
     "deliveryTarget": ["web", "pdf"]
   },
-  "singleValue": ["deliveryTarget"]
+  "singleValue": []
 }

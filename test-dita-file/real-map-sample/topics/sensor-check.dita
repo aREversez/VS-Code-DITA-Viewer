@@ -16,7 +16,7 @@
       </step>
     </steps>
   </taskbody>
-  <section props="beta">
+  <section props="ws1-legacy">
     <title>Automatic comparison</title>
     <p>The beta firmware compares both readings for you and raises an alert on a drift of more than two
       units.</p>

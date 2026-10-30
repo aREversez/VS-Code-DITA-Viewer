@@ -28,9 +28,17 @@ only by becoming a sanitized probe in a corpus.
 ## Run it
 
 Oxygen: open `aurora-bookmap.ditamap` in the **DITA Maps Manager**, *DITA Maps → Validate and
-Check for Completeness…* with every option ticked except *Include remote resources*, and set
-**Profiling/Conditional Text** to the values in `pref/aurora-prefs.json`. In the Results view,
-*Save Results as XML…* outside the repository.
+Check for Completeness…* with every option ticked except *Include remote resources*. In
+*Profiling/Conditional Text*, configure what `pref/aurora-prefs.json` holds — `audience`
+(`novice`, `expert`), `product` (`aurora`, `aurora-pro`) and `deliveryTarget` (`web`, `pdf`) —
+all left on *Multiple values*, since nothing in the set is single-valued. **Leave every other
+attribute as your own Oxygen has it**, `props` included: the fixture writes `props="ws1-legacy"`
+on `topics/sensor-check.dita`, a value no real list carries, so Oxygen files it as a value
+outside the preferences and the extension — which is told nothing about `props` — files the
+attribute as unknown. Both land on `profiling-preference` on that file, which is what the run
+compares; if your list happens to hold that value, the finding simply disappears from both sides.
+Extra values in the dialog (`internal`, `webhelp`) are harmless as long as no document writes
+them. In the Results view, *Save Results as XML…* outside the repository.
 
 Then, from the repository root:
 
@@ -52,8 +60,8 @@ node scripts/real-map-diff.cjs --map test-dita-file/real-map-sample/aurora-bookm
 
 ## What the extension files today
 
-Nineteen findings over sixteen categories without the filter; the extension side of both runs
-was measured, the Oxygen side is what the run is for.
+Nineteen findings over fifteen categories without the filter; the table's last row needs one. The
+extension side of both runs was measured, the Oxygen side is what the run is for.
 
 | Category | Where | The shape |
 | --- | --- | --- |
@@ -72,7 +80,7 @@ was measured, the Oxygen side is what the run is for.
 | `table-layout` | `topics/specifications.dita:10` | `@cols="3"` with two `colspec`s |
 | `profiling-conflict` | `topics/link.dita:25` | `audience="expert"` note inside a `novice` section |
 | `empty-profiling-value` | `topics/maintenance.dita:9` | `audience=""` |
-| `profiling-preference` | `topics/sensor-check.dita:19` | `props="beta"`, an attribute the preferences do not list |
+| `profiling-preference` | `topics/sensor-check.dita:19` | `props="ws1-legacy"`: a value no real preference list carries |
 | `filtered-reference` | `topics/troubleshooting.dita:18` | only with the filter: an `xref` into the filtered `expert` note |
 
 With `field.ditaval` the run drops `profiling-conflict` (the note it names is filtered out) and
