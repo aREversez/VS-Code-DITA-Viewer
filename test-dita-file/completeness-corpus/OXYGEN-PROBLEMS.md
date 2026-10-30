@@ -81,8 +81,8 @@ sanitizer writes no such element for them and `oxygen-diff` prints them as `(no 
 | `dmv.ref.topic.inside.mapref` | topicref/keydef inside a map reference is ignored | ok (`ignored-mapref-content`) |
 | `dmv.no.format.non.dita.ref` | non-DITA reference missing `@format` | ok (`format-missing`) — mapped only: the corpus-2 report has no incident with this id |
 | `dmv.topicref.remote` | external reference missing `@format` | ok (`external-reference`) — mapped only: the corpus-2 report produced no incident for this id (its `ext scope` probes carry `dmv.topicref.ext.scope.no.format`) |
-| `dmv.topicref.remote.no.external.scope` | external reference should set `@scope="external"` | ok (`external-reference`) |
-| `dmv.topicref.remote.local.scope` | external reference needs `@format` and `@scope` | ok (`external-reference`) — mapped only: the corpus-2 report has no incident with this id |
+| `dmv.topicref.remote.no.external.scope` | external reference should set `@scope="external"` | ok (`external-reference`) — corpus 6's run files it three times in a topic: an `xref` and a `link` with `@format` and no `@scope`, and an `xref` with `scope="local"`, which draws this id rather than `local.scope` |
+| `dmv.topicref.remote.local.scope` | external reference needs `@format` and `@scope` | ok (`external-reference`) — no corpus report has it: the second real-map run carries it on `topics/link.dita:8`, an `xref` with neither `@format` nor `@scope` (REAL-MAP.md), and corpus 6's probes write `@format`, which turns the same shape into `no.external.scope` |
 | `dmv.topicref.ext.scope.no.format` | external-scope non-DITA ref missing `@format` | ok (`format-missing`) |
 | `dmv.ref.type.class.mismatch` | `@type` does not match the target's class | ok (`type-class-mismatch`) — the corpus-5 report carries it on `topics/l-ref-type-mismatch-pos.dita` and on the map `topicref` probe |
 | `dmv.ref.type.class.mismatch.specific` | `@type` less specific than the target's class | ok (`type-class-specific`) — the corpus-5 report carries it on `topics/l-ref-type-specific-pos.dita` |
@@ -505,14 +505,15 @@ What the run settled:
 ### The key scope runs and the R008/R010 probe runs (sixth corpus)
 
 *Validate and Check for Completeness* over `../completeness-corpus-6/corpus.ditamap` — the
-same settings as the runs above — was run seven times: once on the key scope probes alone
+same settings as the runs above — was run eight times: once on the key scope probes alone
 (**6 incidents**), once after the six duplicate probes of R008 joined the map (**14
 incidents**), once after four scope-shape probes and their positive control joined it
 (**16 incidents**), once after three scope-identity probes joined it (**20 incidents**), once
 after the four key-scope tail probes joined it (**23 incidents**), once after the multi-name
-probe joined it (**25 incidents**), and once after the five duplicate-key probes joined it
-(**36 incidents**, `../completeness-corpus-6/oxygen-report.xml`). No run carried an accepted
-difference, and the last one locks **28 matched, 0 extension-only, 0 Oxygen-only**
+probe joined it (**25 incidents**), once after the five duplicate-key probes joined it
+(**36 incidents**), and once after the six URL probes of R034 joined it (**39 incidents**,
+`../completeness-corpus-6/oxygen-report.xml`). No run carried an accepted
+difference, and the last one locks **31 matched, 0 extension-only, 0 Oxygen-only**
 (`scripts/oxygen-diff.cjs` agrees) — the first corpus with parity in both directions.
 
 What the runs settled:

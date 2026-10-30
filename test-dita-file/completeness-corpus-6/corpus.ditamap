@@ -2,7 +2,7 @@
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
 <!-- Sixth differential corpus: key scope resolution (R066) and the scope half of the
      duplicate rule (R008), see README.md here. A committed Oxygen report
-     (oxygen-report.xml, 36 incidents) and its parity lock cover it now; re-run Oxygen
+     (oxygen-report.xml, 39 incidents) and its parity lock cover it now; re-run Oxygen
      with THIS map as the only root map whenever the corpus changes. -->
 <map id="corpus6">
   <title>Completeness Check Corpus 6</title>
@@ -65,8 +65,8 @@
   <mapref href="maps/r-dkn.ditamap"/>
   <mapref href="maps/r-dkc.ditamap"/>
 
-  <!-- A URL written in a topic (R034), not yet run: xref and link, with no scope, local, external
-       and peer. See README.md, "A URL written in a topic". -->
+  <!-- A URL written in a topic (R034), the eighth report: xref and link, no scope, local,
+       external and peer. See README.md, "A URL written in a topic". -->
   <mapref href="maps/s-url.ditamap"/>
 
   <!-- Positive control for the probes above, kept LAST: the third report carries its two

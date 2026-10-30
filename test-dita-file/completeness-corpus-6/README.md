@@ -4,7 +4,8 @@ The sixth differential corpus, kept apart from the other five so each keeps its 
 numbers, baseline and parity lock. It has its own root map, `corpus.ditamap`, its own
 `baseline.extension.json`, and since its first run a sanitized `oxygen-report.xml` and an
 `oxygen-parity.expected.json`. The rules it feeds are R066 (key scope), R011 (an unused key
-definition) and the scope half of R008 (duplicates) in `../completeness-corpus/RULES.md`.
+definition), the scope half of R008 (duplicates) and the topic form of R034 (a URL written
+outside a map) in `../completeness-corpus/RULES.md`.
 
 ## Why a corpus of its own
 
@@ -18,9 +19,10 @@ a map of its own with the two references laid out one way.
 
 ## Oxygen setup for this corpus
 
-Nothing beyond the other corpora: the `audience` preferences of corpus 1, no filter. The runs
-recorded below were **Oxygen XML Editor 27.1**, `corpus.ditamap` as the only open root map,
-every option on, remote off.
+Nothing beyond the other corpora: the `audience` preferences of corpus 1, no filter. The first
+seven runs recorded below were **Oxygen XML Editor 27.1**; the eighth came from the same setup in
+the editor the `real-map-sample` runs used (neither report carries a build string). `corpus.ditamap`
+was the only open root map, every option on, remote off.
 
 ## What the corpus probes
 
@@ -36,14 +38,14 @@ Every probe topic holds one `<xref>`: `keyref="k-scoped"`, except the qualified
 `s1.k-scoped`. The key resolves to `topics/t-target.dita`, which the map reaches only through a
 `<keydef>`, and that is what produced the second finding family of the first run.
 
-## The runs: 36 incidents, full parity
+## The runs: 39 incidents, full parity
 
 `node scripts/oxygen-diff.cjs --corpus completeness-corpus-6 oxygen-report.xml` reports
-**28 matched, 0 extension-only, 0 Oxygen-only**. No incident was an accepted difference, so
-parity compares all twenty-eight signatures; the 36 incidents collapse into them because each
+**31 matched, 0 extension-only, 0 Oxygen-only**. No incident was an accepted difference, so
+parity compares all thirty-one signatures; the 39 incidents collapse into them because each
 duplicate probe files one incident per reference, and the control's `-use` topic two.
 
-Seven reports were taken from this corpus, and the last one is the committed
+Eight reports were taken from this corpus, and the last one is the committed
 `oxygen-report.xml`. The first carried **6 incidents**, before the duplicate probes existed,
 and settled R066 and the keydef half of R049:
 
@@ -118,6 +120,11 @@ extension-only rows became matches.
 The seventh report (**36 incidents**) added the five duplicate-key probes and answered R010: every
 definition that takes part in a clash is filed, the first included, and a key map reached twice is
 not a clash. It is the section below that records it, because it changed the extension.
+
+The eighth report (**39 incidents**) added the six URL probes and answered the topic form of R034:
+every reading registered for it held — an `xref` and a `link` are both filed, a written
+`scope="local"` is filed with them, and `scope="peer"` is not — so the extension **needed no
+change** and its three extension-only rows became matches. The section below records the ids.
 
 ## The duplicate probes (R008): the answer is the scope
 
@@ -308,35 +315,39 @@ baseline gains the row while its parity lock does not move (both lines share a s
 
 The five `-use` topics carry the `resource-only-target` shape (R049) Oxygen confirmed in the first
 run: four use one key, the control two, and Oxygen filed all six. Those rows and the three
-`duplicate-key` ones were extension-only until this run; the lock now reads 28 matched, zero in
-both directions, and no row of this probe set is left open. The real run's twelve are that same
-shape — the key map's file filed once for each of its keys that another file defines too — and a
-re-run of that map after this change matched on all thirteen of its signatures (REAL-MAP.md,
-"What one run proves"), so no per-reaching count is left to add. Do not draw anything from a run
-whose report lacks the control's two `dmv.dup.topic` incidents.
+`duplicate-key` ones were extension-only until this run; the lock read 28 matched after that run,
+zero in both directions (31 after the URL probes below), and no row of this probe set is left
+open. The real run's twelve are that same shape — the key map's file filed once for each of its
+keys that another file defines too — and a re-run of that map after this change matched on all
+thirteen of its signatures (REAL-MAP.md, "What one run proves"), so no per-reaching count is left
+to add. Do not draw anything from a run whose report lacks the control's two `dmv.dup.topic`
+incidents.
 
-## A URL written in a topic (R034) — not yet run
+## A URL written in a topic (R034): the eighth report
 
 R034 was widened to the `xref` and `link` of a topic on one observation: the second real-map run
-filed `dmv.topicref.remote.local.scope` on a `.dita` xref (`real-map-sample`, whose report is not
-committed). Nothing in a corpus covers the topic form, and `link`, a missing `@scope` and
+filed `dmv.topicref.remote.local.scope` on a `.dita` xref (`../real-map-sample`, whose report is not
+committed). Nothing in a corpus covered the topic form, and `link`, a missing `@scope` and
 `scope="peer"` were extrapolated from that one row. `maps/s-url.ditamap` publishes six topics, one
-shape each, so every finding lands on its own file; the readings are registered **before** the run:
+shape each, so every finding lands on its own file; the readings were registered **before** the run:
 
-| Topic | Writes | Extension today | If Oxygen answers the same | If Oxygen answers differently |
-| --- | --- | --- | --- | --- |
-| `s-url-xref-pos` | `<xref href="http://…" format="html">`, no `@scope` | `external-reference` | `dmv.topicref.remote.no.external.scope`: a missing scope is filed in a topic as in a map | silent: Oxygen files only a written `scope="local"` in a topic; narrow the rule to that |
-| `s-url-xref-local` | the same with `scope="local"` | `external-reference` | `dmv.topicref.remote.local.scope`: confirms the observed row on a corpus file | silent: the real-map row had another cause; re-read that report before touching R034 |
-| `s-url-xref-neg` | the same with `scope="external"` (control) | silent | silent | any finding: the run is on a wrong map |
-| `s-url-xref-peer` | the same with `scope="peer"` (edge) | silent: `peer` counts as external | silent | a finding: a peer URL needs `external` in a topic; stop treating `peer` as external there |
-| `s-url-link-pos` | `<link href="http://…" format="html">` in `related-links`, no `@scope` | `external-reference` | filed: `link` belongs to the rule | silent: drop `link` from the rule and keep `xref` (the one shape observed) |
-| `s-url-link-neg` | the same with `scope="external"` (control) | silent | silent | any finding: the run is on a wrong map |
+| Topic | Writes | Extension | Eighth report |
+| --- | --- | --- | --- |
+| `s-url-xref-pos` | `<xref href="http://…" format="html">`, no `@scope` | `external-reference` | `dmv.topicref.remote.no.external.scope`, `:7` — a missing scope is filed in a topic as in a map |
+| `s-url-xref-local` | the same with `scope="local"` | `external-reference` | the same id, `:7` — a URL that writes `@format` and `scope="local"` is filed as needing an external scope, not under the `local.scope` id the real map drew |
+| `s-url-xref-neg` | the same with `scope="external"` (control) | silent | *(nothing)* |
+| `s-url-xref-peer` | the same with `scope="peer"` (edge) | silent: `peer` counts as external | *(nothing)* — `peer` counts as external in a topic too |
+| `s-url-link-pos` | `<link href="http://…" format="html">` in `related-links`, no `@scope` | `external-reference` | `dmv.topicref.remote.no.external.scope`, `:10` — `link` belongs to the rule |
+| `s-url-link-neg` | the same with `scope="external"` (control) | silent | *(nothing)* |
 
-The baseline and the parity lock carry the three extension findings (`s-url-xref-pos`,
-`s-url-xref-local`, `s-url-link-pos`, all `external-reference`) as extension-only rows until the
-run; `oxygen-diff` exits non-zero on them for that reason. Change the extension only for a
-"differently" column. Without the control's two `dmv.dup.topic` incidents in the report, the run
-read a stale map and nothing above is answered.
+Every reading landed on the column the rule already took, so nothing in `mapChecks.ts` changed for
+R034, and the three rows the lock carried as extension-only became matches. The run also separates
+the two catalog ids: `dmv.topicref.remote.no.external.scope` is what Oxygen files once `@format` is
+written and `@scope` is missing or `local`; the real-map row wrote neither attribute and drew
+`dmv.topicref.remote.local.scope`. Both arrive here as `external-reference`. The baseline and the
+parity lock carry all three positives as matches now, so `oxygen-diff` exits 0. Without the
+control's two `dmv.dup.topic` incidents in the report, the run read a stale map and nothing above
+is answered.
 
 ## Running it
 
