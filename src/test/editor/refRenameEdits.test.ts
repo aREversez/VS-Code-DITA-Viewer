@@ -2,6 +2,7 @@ import * as assert from 'assert';
 import {
   computeRefEdits,
   encodeHrefPart,
+  escapeHrefSpecials,
   mayReferenceRenamed,
   stripBom,
   FileInput,
@@ -381,6 +382,39 @@ describe('refRenameEdits', () => {
     it('does not touch keyref / conkeyref', () => {
       const text = '<ph keyref="b.dita" conkeyref="b.dita/x"/>';
       assert.strictEqual(rewrite(text), text);
+    });
+  });
+
+  describe('computeRefEdits — new names that are not safe to write raw', () => {
+    const toName = (name: string, text = '<xref href="b.dita"/>'): string => {
+      const edits = computeRefEdits({
+        renames: [makeRename('/p/b.dita', '/p/' + name)],
+        files: [makeFile('/p/a.dita', text)],
+        platform: 'linux',
+      });
+      return applyEdits(text, edits[0].edits);
+    };
+
+    it('escapes # so the name is not read back as a fragment', () => {
+      assert.strictEqual(toName('b#1.dita'), '<xref href="b%231.dita"/>');
+    });
+    it('escapes ? and %', () => {
+      assert.strictEqual(toName('b?x.dita'), '<xref href="b%3Fx.dita"/>');
+      assert.strictEqual(toName('b%20x.dita'), '<xref href="b%2520x.dita"/>');
+    });
+    it('escapes a space and the characters that break the attribute', () => {
+      assert.strictEqual(toName('b 1.dita'), '<xref href="b%201.dita"/>');
+      assert.strictEqual(toName('b&c.dita'), '<xref href="b%26c.dita"/>');
+    });
+    it('keeps the fragment, which is not part of the file name', () => {
+      assert.strictEqual(toName('b#1.dita', '<xref href="b.dita#t/x"/>'), '<xref href="b%231.dita#t/x"/>');
+    });
+    it('leaves non-ASCII and ordinary names exactly as before', () => {
+      assert.strictEqual(toName('中文.dita'), '<xref href="中文.dita"/>');
+      assert.strictEqual(toName('new-name_2.dita'), '<xref href="new-name_2.dita"/>');
+    });
+    it('escapeHrefSpecials keeps / and does not double-encode other text', () => {
+      assert.strictEqual(escapeHrefSpecials('a/b c/d.dita'), 'a/b%20c/d.dita');
     });
   });
 });

@@ -84,6 +84,17 @@ export function mayReferenceRenamed(
  */
 const HANDLED_ATTRS: ReadonlySet<string> = new Set(['href', 'conref', 'conrefend', 'copy-to', 'data', 'longdescref']);
 
+/**
+ * Percent-escapes the characters that would change what a written-out path
+ * means -- `#` and `?` start a fragment or query, `%` starts an escape, a
+ * space is not a URI character, and `& " ' < >` break the attribute that
+ * holds it. Everything else (non-ASCII included) is left as it was typed, so
+ * a reference the author wrote unencoded stays unencoded.
+ */
+export function escapeHrefSpecials(part: string): string {
+  return part.replace(/[ %#?&"'<>]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0'));
+}
+
 export function computeRefEdits(opts: {
   renames: RenameEntry[];
   files: FileInput[];
@@ -200,6 +211,10 @@ export function computeRefEdits(opts: {
       if (hadEncoding) {
         // Encode each path segment separately to preserve /
         newRelPath = encodeHrefPart(newRelPath);
+      } else {
+        // A new name may carry a character that is not safe to write raw
+        // (`b#1.dita` would read back as file `b` + fragment `1.dita`).
+        newRelPath = escapeHrefSpecials(newRelPath);
       }
 
       // Re-append fragment
