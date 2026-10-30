@@ -27,9 +27,13 @@ table goes to a separate `*.private.json`, which `.gitignore` covers.
    `CORPUS_PREFERENCES`: every attribute and value the dialog holds, `singleValue` naming the
    attributes it does not treat as multi-value) and pass `--prefs` — that is the only way
    `profiling-conflict`, `profiling-preference` and `empty-profiling-value` are compared at all.
-   `--exclude profiling-preference` keeps a first run quick, but it also leaves a category
-   unspoken, so say which categories a run left out when reporting it. If the map is filtered,
-   pass the DITAVAL files chosen in Oxygen's dialog with `--ditaval`.
+   Without `--prefs` the script leaves `profiling-preference` out of both sides on its own and
+   says so in the summary (a run that compared against the corpus's two-value set would file
+   noise on one side), and so does `--exclude profiling-preference`; either way a category goes
+   unspoken, so say which a run left out when reporting it. If the map is filtered, pass the
+   DITAVAL files chosen in Oxygen's dialog with `--ditaval` **and** run Oxygen once with that
+   same DITAVAL chosen in its dialog: comparing a filtered extension run with an unfiltered
+   Oxygen report (or the reverse) files every filtered-out key, id and reference as one-sided.
 3. **Compare**, from the repository root (`npm run build:core` first on a fresh checkout):
 
    ```sh

@@ -55,6 +55,8 @@ export function summarizeRealMapDiff(
   extension: readonly SideFinding[],
   oxygen: readonly SideFinding[],
   exclude: readonly string[] = [],
+  /** Lines about how the run was set up (preferences, DITAVAL): they hold no file data. */
+  notes: readonly string[] = [],
 ): RealMapSummary {
   const keep = (f: SideFinding) => !exclude.includes(f.category);
   const ext = tally(extension.filter(keep));
@@ -95,6 +97,7 @@ export function summarizeRealMapDiff(
   lines.push(`signatures (file + category): extension ${[...ext.keys()].length}, Oxygen ${[...oxy.keys()].length}`);
   lines.push(`matched ${rows.reduce((n, r) => n + r.both, 0)}, extension only ${diff.filter((d) => d.side === 'extension').length}, Oxygen only ${diff.filter((d) => d.side === 'Oxygen').length}`);
   if (exclude.length) lines.push(`left out of both sides: ${exclude.join(', ')}`);
+  for (const n of notes) lines.push(`note: ${n}`);
   lines.push('');
   lines.push('| category | extension | Oxygen | matched |');
   lines.push('| --- | ---: | ---: | ---: |');

@@ -80,10 +80,20 @@ async function main() {
       problemID: i.problemID,
     }));
 
+  // Without --prefs the extension would compare against the corpus's own two-value audience set,
+  // not this Oxygen's Profiling page, so every profiling-preference row would be noise on one side.
+  const exclude = [...many['--exclude']];
+  const notes = [];
+  if (!one['--prefs'] && !exclude.includes('profiling-preference')) {
+    exclude.push('profiling-preference');
+    notes.push('no --prefs given, so profiling-preference is left out: the extension has no preferences of its own to compare with this Oxygen\'s');
+  }
+  notes.push(`preferences: ${one['--prefs'] ? 'given' : 'none'}; DITAVAL files given: ${settings.ditavalFiles.length} (the Oxygen report must come from a run with the same DITAVAL chosen in its dialog)`);
   const summary = mod.summarizeRealMapDiff(
     extension.map((f) => ({ file: f.file, category: f.category })),
     oxygen,
-    many['--exclude'],
+    exclude,
+    notes,
   );
   const privateOut = path.resolve(one['--private'] ?? 'real-map-diff.private.json');
   fs.writeFileSync(privateOut, JSON.stringify(summary.labels, null, 2), 'utf8');

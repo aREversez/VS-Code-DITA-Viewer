@@ -53,6 +53,11 @@ describe('real-map diff summary', () => {
     assert.deepStrictEqual(Object.keys(s.labels), ['F001']);
   });
 
+  it('carries the setup notes into the text, and nothing else about the run', () => {
+    const s = summarizeRealMapDiff([], [], [], ['preferences: none; DITAVAL files given: 1']);
+    assert.match(s.text, /note: preferences: none; DITAVAL files given: 1/);
+  });
+
   it('leaves excluded categories out of both sides', () => {
     const s = summarizeRealMapDiff([f('a.dita', 'profiling-preference')], [f('b.dita', 'profiling-preference')], ['profiling-preference']);
     assert.strictEqual(s.extensionOnly + s.oxygenOnly + s.matched, 0);
