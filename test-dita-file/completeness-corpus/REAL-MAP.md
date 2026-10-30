@@ -86,7 +86,7 @@ resource-only key and a DITAVAL filter. Its first two runs matched 18 of 19 sign
 R034 was widened and the fixture stopped writing `@deliveryTarget`, 19 of 20. The README separates
 the rows that were the fixture's own DTD breaks (now fixed) from the boundaries the run exposed,
 two of which are settled: `external-reference` on a topic's `xref` is now R034, with that run as
-the evidence, and `@deliveryTarget` turned out not to be one of the profiling attributes Oxygen
-defines for DITA at all, so the sample stopped writing it rather than carry a row one tool can
-never file. `summarizeRealMapDiff` also now folds `missing-resource` into `missing-reference` the
+the evidence, and `@deliveryTarget` is not one of the profiling attributes this Oxygen starts with (the
+owner adds it by hand, as corpus 4's run did), so the sample stopped writing it rather than make
+every run depend on that setting. `summarizeRealMapDiff` also now folds `missing-resource` into `missing-reference` the
 way the corpus parity already did.
