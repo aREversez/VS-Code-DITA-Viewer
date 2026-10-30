@@ -177,6 +177,13 @@
   {
     "category": "resource-only-target",
     "severity": "warning",
+    "file": "topics/r-dkn-use.dita",
+    "line": 6,
+    "message": "Topic \"../topics/r-dkn-t1.dita\" is published only as resource-only; the cross-reference will break"
+  },
+  {
+    "category": "resource-only-target",
+    "severity": "warning",
     "file": "topics/r-dkt-use.dita",
     "line": 6,
     "message": "Topic \"../topics/r-dkt-t1.dita\" is published only as resource-only; the cross-reference will break"

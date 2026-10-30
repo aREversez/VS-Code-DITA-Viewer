@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- Submap s1: refers to the shared key map again. -->
+<map id="r-dkn-s1">
+  <title>r-dkn-s1</title>
+  <mapref href="r-dkn-keys.ditamap"/>
+</map>

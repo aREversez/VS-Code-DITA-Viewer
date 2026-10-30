@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- The real-map shape: the key map first, then submaps that each refer to it again. See README.md, "Duplicate keys across files". -->
+<map id="r-dkn">
+  <title>r-dkn</title>
+  <mapref href="r-dkn-keys.ditamap"/>
+  <mapref href="r-dkn-s1.ditamap"/>
+  <mapref href="r-dkn-s2.ditamap"/>
+  <topicref href="../topics/r-dkn-use.dita"/>
+</map>

@@ -26,6 +26,7 @@
     "topics/r-dk2-use.dita  resource-only-target",
     "topics/r-dk3-use.dita  resource-only-target",
     "topics/r-dkc-use.dita  resource-only-target",
+    "topics/r-dkn-use.dita  resource-only-target",
     "topics/r-dkt-use.dita  resource-only-target"
   ],
   "oxygenOnly": []

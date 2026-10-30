@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- A key map reached three times, once from the root and once from each of two submaps; no key is defined twice in any file. -->
+<map id="r-dkn-keys">
+  <title>r-dkn-keys</title>
+  <keydef keys="k-dkn" href="../topics/r-dkn-t1.dita"/>
+</map>
