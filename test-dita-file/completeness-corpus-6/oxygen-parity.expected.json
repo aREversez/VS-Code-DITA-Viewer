@@ -17,6 +17,9 @@
     "topics/q-ck-outside-pos.dita  undefined-key",
     "topics/q-unused-pos.dita  undefined-key"
   ],
-  "extensionOnly": [],
+  "extensionOnly": [
+    "topics/q-mn-ab.dita  undefined-key",
+    "topics/q-mn-bare.dita  undefined-key"
+  ],
   "oxygenOnly": []
 }

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="q-mn-a">
+  <title>q-mn-a</title>
+  <body>
+    <!-- outside, first name -->
+    <p><xref keyref="a.k-mn"/></p>
+  </body>
+</topic>

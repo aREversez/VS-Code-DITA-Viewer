@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- One keyscope="a b" group: a key defined in it answers to a.k-mn and b.k-mn. Each use has its
+     own topic, so the findings land per file. See README.md, "The multi-name scope". -->
+<map id="q-multiname">
+  <title>q-multiname</title>
+  <topicref href="../topics/q-mn-target.dita"/>
+  <topicgroup keyscope="a b">
+    <keydef keys="k-mn" href="../topics/q-mn-target.dita"/>
+    <topicref href="../topics/q-mn-inside.dita"/>
+  </topicgroup>
+  <topicref href="../topics/q-mn-a.dita"/>
+  <topicref href="../topics/q-mn-b.dita"/>
+  <topicref href="../topics/q-mn-ab.dita"/>
+  <topicref href="../topics/q-mn-bare.dita"/>
+</map>

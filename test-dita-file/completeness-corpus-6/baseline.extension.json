@@ -107,6 +107,20 @@
   {
     "category": "undefined-key",
     "severity": "error",
+    "file": "topics/q-mn-ab.dita",
+    "line": 7,
+    "message": "Key reference \"ab.k-mn\" does not match any key definition"
+  },
+  {
+    "category": "undefined-key",
+    "severity": "error",
+    "file": "topics/q-mn-bare.dita",
+    "line": 7,
+    "message": "Key reference \"k-mn\" does not match any key definition"
+  },
+  {
+    "category": "undefined-key",
+    "severity": "error",
     "file": "topics/q-unused-pos.dita",
     "line": 7,
     "message": "Key reference \"k-u-pos\" does not match any key definition"

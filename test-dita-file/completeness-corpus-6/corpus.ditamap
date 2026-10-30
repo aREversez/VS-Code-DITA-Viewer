@@ -52,6 +52,10 @@
   <mapref href="maps/q-unused-neg.ditamap"/>
   <mapref href="maps/q-conkeyref.ditamap"/>
 
+  <!-- Multi-name scope, not yet run: a key in keyscope="a b" is reached as a.k-mn and b.k-mn
+       (q-multiname). See README.md, "The multi-name scope". -->
+  <mapref href="maps/q-multiname.ditamap"/>
+
   <!-- Positive control for the probes above, kept LAST: the third report carries its two
        incidents, so the silence above is an answer. See README.md, "The control". -->
   <mapref href="maps/p-dup-k-control.ditamap"/>

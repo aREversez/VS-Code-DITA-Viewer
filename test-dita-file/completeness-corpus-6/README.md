@@ -201,7 +201,7 @@ lines 11 and 12, so the run read the whole tail and the silence on the probes ab
 A report without them is a stale map: close the root map in the DITA Maps Manager, reopen
 `corpus.ditamap` from disk and run again — none of g to n is answered then. Before reading
 anything into a report, check that the Maps Manager tree shows the nodes the run should cover
-(`p-dup-g` to `p-dup-n`, `q-twice`, `q-unused-pos`, `q-unused-neg`, `q-conkeyref`, and the control
+(`p-dup-g` to `p-dup-n`, `q-twice`, `q-unused-pos`, `q-unused-neg`, `q-conkeyref`, `q-multiname`, and the control
 `p-dup-k`) under the root map.
 
 ## The key-scope tail (R066 and R011): the fifth report
@@ -245,6 +245,27 @@ One limit stays next to that change: a *topic* published by a map reached twice 
 in the first scope only, because the second pass registers the map's keys, not the publications
 of its `topicref`s. No probe asks about it — `q-twice` publishes its topics outside both scopes —
 so it is recorded here rather than fixed by extension.
+
+## The multi-name scope (R066) — not yet run
+
+R066 reads `keyscope="a b"` as a set (a key in it answers to `a.k` and to `b.k`), while R008
+compares the same names as an ordered list. The second is observed (`p-dup-i`, `p-dup-j`); the
+first is the spec's reading and has no Oxygen answer yet. One map, `maps/q-multiname.ditamap`
+(before the control, which is still last): a `keyscope="a b"` group holding `keydef k-mn`, and
+five topics, one use each, so every finding lands on its own file. Registered **before** the run:
+
+| Topic | Use | Extension today | If Oxygen answers the same | If Oxygen answers differently |
+| --- | --- | --- | --- | --- |
+| `q-mn-a` | `a.k-mn`, outside the group | silent | silent: the first name qualifies | `dmv.key.undef`: Oxygen takes only one name of a list for qualification; ask which |
+| `q-mn-b` | `b.k-mn`, outside | silent | silent: every name qualifies, R066 reads the list as a set | `dmv.key.undef` here with `q-mn-a` silent: only the first name counts, so change `scopeIds` to the first name for R066 |
+| `q-mn-inside` | bare `k-mn`, published inside | silent | silent | `dmv.key.undef`: a multi-name group is not a scope for its own members; stop and re-read the run |
+| `q-mn-ab` | `ab.k-mn`, outside (control) | `undefined-key` | `dmv.key.undef`: names are not concatenated | silent: Oxygen does not split the names on whitespace |
+| `q-mn-bare` | `k-mn`, outside (control) | `undefined-key` | `dmv.key.undef` | silent: a multi-name group leaks its keys, re-read R066 |
+
+The baseline carries the two control findings (`q-mn-ab`, `q-mn-bare`, both `undefined-key`) as
+extension-only rows until the run; `oxygen-diff` exits non-zero on them for that reason. If the
+report lacks the control's `dmv.dup.topic` pair, the run read a stale map and nothing above is
+answered.
 
 ## Running it
 
