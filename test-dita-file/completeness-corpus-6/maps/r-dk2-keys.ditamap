@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
-<!-- First definition of k-dk2, in a key map reached before the second. -->
+<!-- First definition of k-dk2, in a key map reached before the second. Oxygen files this one too. -->
 <map id="r-dk2-keys">
   <title>r-dk2-keys</title>
   <keydef keys="k-dk2" href="../topics/r-dk2-t1.dita"/>

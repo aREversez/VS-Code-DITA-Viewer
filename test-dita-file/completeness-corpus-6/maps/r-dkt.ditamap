@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
-<!-- The same key map referenced twice in one scope. See README.md, "Duplicate keys across files". -->
+<!-- The same key map referenced twice in one scope: not a clash to Oxygen (seventh report). See README.md. -->
 <map id="r-dkt">
   <title>r-dkt</title>
   <mapref href="r-dkt-keys.ditamap"/>

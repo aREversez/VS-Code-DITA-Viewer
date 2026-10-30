@@ -436,13 +436,17 @@ export async function runChecks(
     const reported = new Set<(typeof crawl.keyDefs)[number]>();
     for (const list of byKey.values()) {
       if (list.length < 2) continue;
-      for (const dup of list.slice(1)) {
+      // The clash belongs to the whole group: every definition that takes part is filed,
+      // the first included, each related to the others (as duplicate ids are). Oxygen does
+      // that -- corpus 6's r-dk2 and r-dk3 asked it, and corpus 1's two lines in one file
+      // said the same, invisible there because both lines share one signature.
+      for (const dup of list) {
         if (reported.has(dup)) continue;
         reported.add(dup);
         issues.push({
           category: 'duplicate-key', severity: 'warning', file: dup.file, line: dup.line,
-          msg: msg('key.duplicate', dup.key),
-          related: [{ file: list[0].file, line: list[0].line }],
+          msg: msg('key.duplicate', dup.key, list.length),
+          related: list.filter((o) => o !== dup).map((o) => ({ file: o.file, line: o.line })),
         });
       }
     }

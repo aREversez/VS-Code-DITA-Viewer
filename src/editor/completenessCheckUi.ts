@@ -101,7 +101,7 @@ export function localizeMsg(m: Msg): string {
     case 'nav.topicref': return vscode.l10n.t('External reference has no navigation title: {0}', ...a);
     case 'id.duplicate': return vscode.l10n.t('Duplicate topic id "{0}" ({1} topics share it)', ...a);
     case 'id.duplicateElement': return vscode.l10n.t('Duplicate element id "{0}" in the same topic', ...a);
-    case 'key.duplicate': return vscode.l10n.t('Key "{0}" is already defined; this definition is ignored', ...a);
+    case 'key.duplicate': return vscode.l10n.t('Duplicate key definition "{0}" ({1} definitions in this key scope)', ...a);
     case 'key.undefined': return vscode.l10n.t('Key reference "{0}" does not match any key definition', ...a);
     case 'key.unreferenced': return vscode.l10n.t('Key "{0}" is defined but never referenced', ...a);
     case 'reuse.unreferenced': return vscode.l10n.t('Reusable element <{0} id="{1}"> is never referenced by a conref or conkeyref', ...a);

@@ -269,7 +269,7 @@
   "Duplicate topic id \"{0}\" ({1} topics share it)": "主题 ID“{0}”重复（{1} 个主题使用了它）",
   "Duplicate element id \"{0}\" in the same topic": "同一主题内元素 ID“{0}”重复",
   "Key reference \"{0}\" does not match any key definition": "键引用“{0}”未匹配到任何键定义",
-  "Key \"{0}\" is already defined; this definition is ignored": "键“{0}”已被定义；此处的定义将被忽略",
+  "Duplicate key definition \"{0}\" ({1} definitions in this key scope)": "键定义“{0}”重复（该键作用域中有 {1} 个定义）",
   "Key \"{0}\" is defined but never referenced": "键“{0}”已定义但从未被引用",
   "Reusable element <{0} id=\"{1}\"> is never referenced by a conref or conkeyref": "可重用元素 <{0} id=\"{1}\"> 从未被 conref 或 conkeyref 引用",
   "@{0}=\"{1}\" on <{2}> shares no value with the enclosing \"{3}\"; the content is overshadowed in profiled output": "<{2}> 上的 @{0}=\"{1}\" 与外层的“{3}”没有共同取值；该内容在过滤输出中会被屏蔽",

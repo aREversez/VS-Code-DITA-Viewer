@@ -2,7 +2,7 @@
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
 <!-- Sixth differential corpus: key scope resolution (R066) and the scope half of the
      duplicate rule (R008), see README.md here. A committed Oxygen report
-     (oxygen-report.xml, 25 incidents) and its parity lock cover it now; re-run Oxygen
+     (oxygen-report.xml, 36 incidents) and its parity lock cover it now; re-run Oxygen
      with THIS map as the only root map whenever the corpus changes. -->
 <map id="corpus6">
   <title>Completeness Check Corpus 6</title>
@@ -57,8 +57,8 @@
   <mapref href="maps/q-multiname.ditamap"/>
 
   <!-- Duplicate keys across files, from a real-map run (REAL-MAP.md): a clash between two files,
-       three definitions in three files, one key map referenced twice, one reached from nested submaps (the real-map shape), and a control. Not yet run;
-       see README.md, "Duplicate keys across files". -->
+       three definitions in three files, one key map referenced twice, one reached from nested submaps (the real-map shape), and a control.
+       The seventh report filed every participant and stayed silent on both re-reachings. See README.md. -->
   <mapref href="maps/r-dk2.ditamap"/>
   <mapref href="maps/r-dk3.ditamap"/>
   <mapref href="maps/r-dkt.ditamap"/>

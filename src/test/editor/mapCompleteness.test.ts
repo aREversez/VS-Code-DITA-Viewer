@@ -444,15 +444,22 @@ describe('completeness: ids and keys', () => {
   it('duplicate keys: reports same-scope duplicates, not the same key in a key scope (Oxygen doc example)', async () => {
     const issues = await check(
       {
+        // One definition per line, as a real map writes them: findings on one line collapse.
         'root.ditamap':
-          '<map><topicref href="t2.dita" keys="k2"/><topicgroup keyscope="ks"><topicref href="t2.dita" keys="k2"/></topicgroup><topicref href="t2.dita" keys="dup"/><topicref href="t2.dita" keys="dup"/></map>',
+          '<map>\n<topicref href="t2.dita" keys="k2"/>\n<topicgroup keyscope="ks"><topicref href="t2.dita" keys="k2"/></topicgroup>\n<topicref href="t2.dita" keys="dup"/>\n<topicref href="t2.dita" keys="dup"/>\n</map>',
         't2.dita': topic('t2'),
       },
       { reportDuplicateKeys: true },
     );
     const dup = issues.filter((i) => i.category === 'duplicate-key');
-    assert.strictEqual(dup.length, 1);
-    assert.ok(dup[0].message.includes('"dup"'));
+    assert.strictEqual(dup.length, 2);
+    assert.ok(dup.every((i) => i.message.includes('"dup"')));
+    // Every participant is filed, each pointing at the other one.
+    assert.deepStrictEqual(dup.map((i) => i.line), [4, 5]);
+    const lines = dup.map((i) => i.line);
+    for (const i of dup) {
+      assert.deepStrictEqual(i.related!.map((r) => r.line), lines.filter((l) => l !== i.line));
+    }
   });
 
   it('unreferenced keys: counts keyref in topics, conkeyref, and keyref in the map', async () => {

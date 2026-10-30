@@ -36,14 +36,14 @@ Every probe topic holds one `<xref>`: `keyref="k-scoped"`, except the qualified
 `s1.k-scoped`. The key resolves to `topics/t-target.dita`, which the map reaches only through a
 `<keydef>`, and that is what produced the second finding family of the first run.
 
-## The runs: 25 incidents, full parity
+## The runs: 36 incidents, full parity
 
 `node scripts/oxygen-diff.cjs --corpus completeness-corpus-6 oxygen-report.xml` reports
-**18 matched, 0 extension-only, 0 Oxygen-only**. No incident was an accepted difference, so
-parity compares all eighteen signatures; the 25 incidents collapse into them because each
-duplicate probe files one incident per reference.
+**28 matched, 0 extension-only, 0 Oxygen-only**. No incident was an accepted difference, so
+parity compares all twenty-eight signatures; the 36 incidents collapse into them because each
+duplicate probe files one incident per reference, and the control's `-use` topic two.
 
-Six reports were taken from this corpus, and the last one is the committed
+Seven reports were taken from this corpus, and the last one is the committed
 `oxygen-report.xml`. The first carried **6 incidents**, before the duplicate probes existed,
 and settled R066 and the keydef half of R049:
 
@@ -114,6 +114,10 @@ The sixth report (**25 incidents**) added the multi-name probe and confirmed R06
 bare `k-mn` do not, and the topic published inside the group resolves bare. Both controls were
 filed, every earlier incident came back the same, and the extension **needed no change**: its two
 extension-only rows became matches.
+
+The seventh report (**36 incidents**) added the five duplicate-key probes and answered R010: every
+definition that takes part in a clash is filed, the first included, and a key map reached twice is
+not a clash. It is the section below that records it, because it changed the extension.
 
 ## The duplicate probes (R008): the answer is the scope
 
@@ -274,36 +278,41 @@ pins — so no code changed and the parity lock's two extension-only rows (`q-mn
 became matches. The two readings now stand separately and both are observed: a `keyscope` is a
 set of names for key resolution and an ordered list for duplicate counting (R008).
 
-## Duplicate keys across files (R010) — from a real-map run, not yet run here
+## Duplicate keys across files (R010): the seventh report
 
 The first real-map comparison (REAL-MAP.md) agreed everywhere but one line: a key map referenced
 by the main map, where Oxygen files `duplicate.key.definition` against the key map's file twelve
 times and the extension files none there, though it matches the other two files with duplicates.
-The only observation behind R010 is corpus 1's `dupkey`: two definitions in **one** file, and
-Oxygen filed **both** lines (28 and 29). The extension files only the later one, which cannot
-show in one file, since both lines belong to the same signature. The reading the real run
-suggests is that Oxygen files every definition that takes part in a clash, the first included, and
-that this only becomes visible when the definitions sit in different files. The second
-reading, from the owner's answers about the map (the key map is reached once from the main map
-and once from each of four submaps, and its key names also occur in the other two files with
-duplicates), is that Oxygen counts every reaching of a key map. Both are hypotheses, so five probes ask them, each with its own maps, targets and one use of the key so no
-`unreferenced-key` rides along:
+The only observation behind R010 is corpus 1's `dupkey`: two definitions in **one** file, where
+Oxygen filed **both** lines (28 and 29) and the extension only the later one — invisible in
+parity, since both lines share one signature. Two readings were registered before the run: Oxygen
+files every definition that takes part in a clash, the first included, or it counts every reaching
+of a key map (the real map's key map is reached once from the main map and once from each of four
+submaps, and its key names also occur in the other two files with duplicates). Five probes asked
+them, each with its own maps, targets and one use of the key:
 
-| Map | Layout | Extension today | If Oxygen files the first definition's file too | If Oxygen files only the later ones |
-| --- | --- | --- | --- | --- |
-| `maps/r-dk2.ditamap` | `k-dk2` in `r-dk2-keys.ditamap` (first, via `mapref`), again in `r-dk2.ditamap` | `duplicate-key` on `r-dk2.ditamap` only | `duplicate.key.definition` on both files: R010 files every participant, so report the first definition too | on `r-dk2.ditamap` only: the real run's twelve have another cause (the `r-dkt` row, or a key map reached twice by other maps); no change here |
-| `maps/r-dk3.ditamap` | `k-dk3` in `r-dk3-a`, in `r-dk3-b` and in `r-dk3.ditamap` | `duplicate-key` on `r-dk3-b` and `r-dk3` | on all three files: confirms the rule for any number of definitions | on `-b` and the root only: as above |
-| `maps/r-dkt.ditamap` | `r-dkt-keys.ditamap` referenced twice by the same map; no key is defined twice in any file | silent: a map reached again in the same scope is crawled once | silent: a key map reached twice is not a clash; the twelve have another cause | `duplicate.key.definition` on `r-dkt-keys.ditamap`: Oxygen counts every reaching of a key map, so a map reached again in the same scope defines its keys again |
-| `maps/r-dkn.ditamap` | the real-map shape: `r-dkn-keys.ditamap` reached from the root and from two submaps (`r-dkn-s1`, `r-dkn-s2`), each by a plain `mapref`; no key is defined twice in any file | silent: a map reached again in the same scope is crawled once | silent: a key map reached from submaps is not a clash | `duplicate.key.definition` on `r-dkn-keys.ditamap`, and its count against `r-dkt`'s (one extra reaching) says whether Oxygen counts per reaching; count a map's keys once per reaching in one scope |
-| `maps/r-dkc.ditamap` | control: two different keys in two files | silent | silent | any finding: the run is on a wrong map |
+| Map | Layout | Seventh report | What it settles |
+| --- | --- | --- | --- |
+| `maps/r-dk2.ditamap` | `k-dk2` in `r-dk2-keys.ditamap` (first, via `mapref`), again in `r-dk2.ditamap` | `duplicate.key.definition` on **both** files | every participant is filed, the first definition included |
+| `maps/r-dk3.ditamap` | `k-dk3` in `r-dk3-a`, in `r-dk3-b` and in `r-dk3.ditamap` | on all three files | the same for any number of definitions |
+| `maps/r-dkt.ditamap` | `r-dkt-keys.ditamap` referenced twice by the same map; no key is defined twice in any file | *(nothing)* | a key map reached twice in one scope is not a clash |
+| `maps/r-dkn.ditamap` | the real-map shape: `r-dkn-keys.ditamap` reached from the root and from two submaps (`r-dkn-s1`, `r-dkn-s2`), each by a plain `mapref`; no key is defined twice in any file | *(nothing)* | reaching a key map from submaps is not a clash either, so the per-reaching reading is out |
+| `maps/r-dkc.ditamap` | control: two different keys in two files | *(nothing)* | the run read the tail of the map |
 
-Changing the extension is warranted only by the first column of `r-dk2`/`r-dk3` (file the first
-definition as well, in `mapChecks.ts` step 6) or the second column of `r-dkt`/`r-dkn` (count a map
-reached again in one scope). Both can hold at once; the files each finding lands on say which. `r-dk2-use`, `r-dk3-use`, `r-dkt-use`, `r-dkn-use` and `r-dkc-use` each carry one
-`resource-only-target`, the R049 shape that Oxygen already confirmed for a keyref to a `keydef`
-target; until the run they are extension-only rows in the baseline and the parity lock, and so
-are the three `duplicate-key` rows above. Do not draw anything from a run whose report lacks the
-control's two `dmv.dup.topic` incidents.
+The first reading holds, the second does not: a clash is per **definition**, not per reaching, and
+every definition that takes part is filed. `mapChecks.ts` step 7 now reports the whole group, each
+finding related to the others (as duplicate ids already were), and the message no longer claims to
+know which definition lost: `Duplicate key definition "k-dk3" (3 definitions in this key scope)`.
+The change also files corpus 1's line 28, which Oxygen has filed since the first run, so corpus 1's
+baseline gains the row while its parity lock does not move (both lines share a signature).
+
+The five `-use` topics carry the `resource-only-target` shape (R049) Oxygen confirmed in the first
+run: four use one key, the control two, and Oxygen filed all six. Those rows and the three
+`duplicate-key` ones were extension-only until this run; the lock now reads 28 matched, zero in
+both directions, and no row of this probe set is left open. The real run's twelve fit the reading
+that held — the key map's file is filed once for each of its keys that another file defines too —
+so there is no per-reaching count left to add. Do not draw anything from a run whose report lacks
+the control's two `dmv.dup.topic` incidents.
 
 ## Running it
 

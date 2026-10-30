@@ -269,7 +269,7 @@
   "Duplicate topic id \"{0}\" ({1} topics share it)": "Duplicate topic id \"{0}\" ({1} topics share it)",
   "Duplicate element id \"{0}\" in the same topic": "Duplicate element id \"{0}\" in the same topic",
   "Key reference \"{0}\" does not match any key definition": "Key reference \"{0}\" does not match any key definition",
-  "Key \"{0}\" is already defined; this definition is ignored": "Key \"{0}\" is already defined; this definition is ignored",
+  "Duplicate key definition \"{0}\" ({1} definitions in this key scope)": "Duplicate key definition \"{0}\" ({1} definitions in this key scope)",
   "Key \"{0}\" is defined but never referenced": "Key \"{0}\" is defined but never referenced",
   "Reusable element <{0} id=\"{1}\"> is never referenced by a conref or conkeyref": "Reusable element <{0} id=\"{1}\"> is never referenced by a conref or conkeyref",
   "@{0}=\"{1}\" on <{2}> shares no value with the enclosing \"{3}\"; the content is overshadowed in profiled output": "@{0}=\"{1}\" on <{2}> shares no value with the enclosing \"{3}\"; the content is overshadowed in profiled output",

@@ -65,23 +65,37 @@
   {
     "category": "duplicate-key",
     "severity": "warning",
+    "file": "maps/r-dk2-keys.ditamap",
+    "line": 6,
+    "message": "Duplicate key definition \"k-dk2\" (2 definitions in this key scope)"
+  },
+  {
+    "category": "duplicate-key",
+    "severity": "warning",
     "file": "maps/r-dk2.ditamap",
     "line": 7,
-    "message": "Key \"k-dk2\" is already defined; this definition is ignored"
+    "message": "Duplicate key definition \"k-dk2\" (2 definitions in this key scope)"
+  },
+  {
+    "category": "duplicate-key",
+    "severity": "warning",
+    "file": "maps/r-dk3-a.ditamap",
+    "line": 6,
+    "message": "Duplicate key definition \"k-dk3\" (3 definitions in this key scope)"
   },
   {
     "category": "duplicate-key",
     "severity": "warning",
     "file": "maps/r-dk3-b.ditamap",
     "line": 6,
-    "message": "Key \"k-dk3\" is already defined; this definition is ignored"
+    "message": "Duplicate key definition \"k-dk3\" (3 definitions in this key scope)"
   },
   {
     "category": "duplicate-key",
     "severity": "warning",
     "file": "maps/r-dk3.ditamap",
     "line": 8,
-    "message": "Key \"k-dk3\" is already defined; this definition is ignored"
+    "message": "Duplicate key definition \"k-dk3\" (3 definitions in this key scope)"
   },
   {
     "category": "resource-only-target",

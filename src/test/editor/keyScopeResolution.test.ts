@@ -199,10 +199,9 @@ describe('key scope resolution (R066)', () => {
     assert.strictEqual(issues.filter((i) => i.category === 'undefined-key').length, 1);
     assert.strictEqual(issues.filter((i) => i.category === 'unreferenced-key').length, 1);
   });
-  // Pinned, not endorsed: a real-map run suggests Oxygen also files the FIRST definition of a
-  // clash when the definitions sit in different files. Corpus 6's r-dk2, r-dk3 and r-dkt ask it
-  // (README, "Duplicate keys across files"); until the run the extension files the later ones.
-  it('files a clash between two files on the later definition only', async () => {
+  // Corpus 6's r-dk2 and r-dk3 asked whether a clash across files files the first definition
+  // too, and Oxygen filed every participant (README, "Duplicate keys across files").
+  it('files a clash between two files on every definition that takes part', async () => {
     const files = {
       'root.ditamap': root('<mapref href="keys.ditamap"/><keydef keys="k" href="b.dita"/><topicref href="u.dita"/>'),
       'keys.ditamap': root('<keydef keys="k" href="a.dita"/>'),
@@ -211,9 +210,14 @@ describe('key scope resolution (R066)', () => {
     };
     const host = makeHost(files);
     const issues = await runChecks(await crawlMaps([P('root.ditamap')], host), { ...NONE, reportDuplicateKeys: true }, { host });
-    assert.deepStrictEqual(issues.filter((i) => i.category === 'duplicate-key').map((i) => basename(i.file)), ['root.ditamap']);
+    const dup = issues.filter((i) => i.category === 'duplicate-key');
+    assert.deepStrictEqual(dup.map((i) => basename(i.file)), ['keys.ditamap', 'root.ditamap']);
+    // Each one names the other, so a reader in either file sees where the clash lies.
+    assert.deepStrictEqual(dup.map((i) => basename(i.related![0].file)), ['root.ditamap', 'keys.ditamap']);
   });
 
+  // Corpus 6's r-dkt (same map twice) and r-dkn (root plus two submaps) drew nothing from
+  // Oxygen, so the second scope pass still registers keys only, never a second definition.
   it('does not call a key map reached twice in one scope a clash', async () => {
     const files = {
       'root.ditamap': root('<mapref href="keys.ditamap"/><mapref href="keys.ditamap"/><topicref href="u.dita"/>'),

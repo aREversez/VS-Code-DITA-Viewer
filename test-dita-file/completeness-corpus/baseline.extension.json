@@ -17,8 +17,15 @@
     "category": "duplicate-key",
     "severity": "warning",
     "file": "corpus.ditamap",
+    "line": 28,
+    "message": "Duplicate key definition \"dupkey\" (2 definitions in this key scope)"
+  },
+  {
+    "category": "duplicate-key",
+    "severity": "warning",
+    "file": "corpus.ditamap",
     "line": 29,
-    "message": "Key \"dupkey\" is already defined; this definition is ignored"
+    "message": "Duplicate key definition \"dupkey\" (2 definitions in this key scope)"
   },
   {
     "category": "unreferenced-key",

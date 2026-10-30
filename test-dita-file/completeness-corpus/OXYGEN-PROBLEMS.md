@@ -119,7 +119,7 @@ sanitizer writes no such element for them and `oxygen-diff` prints them as `(no 
 | Problem ID | Oxygen reports | Extension status |
 | --- | --- | --- |
 | `dmv.undef.key` | keyref cannot be mapped to a target topic | ok (`undefined-key`) — mapped only: the live reports spell this finding `dmv.key.undef` (ten incidents, corpora 1, 3, 4 and 6), which is mapped beside this catalog form that no report carries |
-| `duplicate.key.definition` | the same key is defined twice | ok (`duplicate-key`) |
+| `duplicate.key.definition` | the same key is defined twice | ok (`duplicate-key`) — seven incidents over corpora 1 and 6: both lines of a clash inside one file (corpus 1: 28 and 29) and every file of one across files (corpus 6: `r-dk2` twice, `r-dk3` three times), so the rule files each definition that takes part |
 | `dmv.not.used.key.defs` | key defined but never referenced | ok (`unreferenced-key`) — the corpus-3 rerun also fires it on a key whose target file is missing (`maps/e-conref-missing-key.ditamap`) although the conkeyref names that key: Oxygen counts a definition it cannot use, the extension counts the use. Corpus 6's fifth run added the scope shape — a key whose only use is a bare `keyref` outside its `keyscope` draws it beside `dmv.key.undef` (`maps/q-unused-pos.ditamap:9`) — so the count follows a use that resolves, while a use resolving to a definition with an unreachable target still counts, which is the corpus-3 difference above |
 | `dmv.circular.keyref` | circular key reference | n/a — the corpus-3 report produced no incident for the two-key loop, the self-redirect or the linear chain; the extension does not follow redirect chains and stays silent on the same probes, including the chain's link use |
 | `dmv.no.link.keyref` | target key definition has no reference | ok (`link-key-without-target`) — the corpus-3 report carries it on the xref and the `link` element probes; the seven corpus-2 incidents now match too |
@@ -502,16 +502,17 @@ What the run settled:
   rule rather than given a guessed class. `npm run check:dita-class` re-renders the module
   offline and fails when it and the committed `scripts/dita-class-extracted.json` disagree.
 
-### The key scope runs and the R008 probe runs (sixth corpus)
+### The key scope runs and the R008/R010 probe runs (sixth corpus)
 
 *Validate and Check for Completeness* over `../completeness-corpus-6/corpus.ditamap` — the
-same settings as the runs above — was run six times: once on the key scope probes alone
+same settings as the runs above — was run seven times: once on the key scope probes alone
 (**6 incidents**), once after the six duplicate probes of R008 joined the map (**14
 incidents**), once after four scope-shape probes and their positive control joined it
 (**16 incidents**), once after three scope-identity probes joined it (**20 incidents**), once
-after the four key-scope tail probes joined it (**23 incidents**), and once after the multi-name
-probe joined it (**25 incidents**, `../completeness-corpus-6/oxygen-report.xml`). No run carried
-an accepted difference, and the last one locks **18 matched, 0 extension-only, 0 Oxygen-only**
+after the four key-scope tail probes joined it (**23 incidents**), once after the multi-name
+probe joined it (**25 incidents**), and once after the five duplicate-key probes joined it
+(**36 incidents**, `../completeness-corpus-6/oxygen-report.xml`). No run carried an accepted
+difference, and the last one locks **28 matched, 0 extension-only, 0 Oxygen-only**
 (`scripts/oxygen-diff.cjs` agrees) — the first corpus with parity in both directions.
 
 What the runs settled:
@@ -570,6 +571,15 @@ What the runs settled:
   and leaks nothing out of itself — the reading the extension already had. It is also the
   opposite of R008, which compares the same attribute as an ordered list, so the two readings of
   one attribute are now both observed rather than one being extrapolated from the other.
+- **Every definition of a key clash is filed, and a key map reached twice is not a clash**
+  (R010). `r-dk2` defines one key in a key map and again in the map that references it, and
+  Oxygen filed `duplicate.key.definition` on **both** files; `r-dk3` defines one key in three
+  files and Oxygen filed all three. The extension filed only the later definitions, so both
+  first definitions were misses, and step 7 now reports the whole group, each finding related
+  to the others. Both re-reaching shapes came back silent: `r-dkt` (one key map referenced
+  twice by the same map) and `r-dkn` (the real-map shape, the key map reached from the root and
+  from two submaps), so there is no count per reaching to add — which is what the twelve rows a
+  first real-map run filed on a key map had suggested.
 
 ### All six corpora at a glance
 
@@ -580,8 +590,8 @@ What the runs settled:
 | `completeness-corpus-3` | batch 2, conref / id / link forms | 34 | – | 30 / 0 / 4 |
 | `completeness-corpus-4` | batch 3, profiling and filters | 19 | – | 13 / 1 / 2 |
 | `completeness-corpus-5` | batch 4, class / DITA validity / structure | 34 | 6 (4 `MSG_*`, 2 no-schema) | 21 / 6 / 3 |
-| `completeness-corpus-6` | key scopes (R066, R011), the keydef half of R049, duplicates by scope (R008) | 25 | – | 18 / 0 / 0 |
-| **Total** | | **256** | **12** | **174 / 15 / 27** |
+| `completeness-corpus-6` | key scopes (R066, R011), the keydef half of R049, duplicates by scope (R008) and across files (R010) | 36 | – | 28 / 0 / 0 |
+| **Total** | | **267** | **12** | **184 / 15 / 27** |
 
 The 15 extension-only and 27 Oxygen-only signatures are each accounted for in the batch sections
 above or in the corpus README that owns them; the largest group is corpus 2's 17, whose three
@@ -600,8 +610,13 @@ without a code change. Its fifth run answered the key-scope tail: one false posi
 (`q-conkeyref`), three signatures moving into `matched` and none into a difference. Its sixth run
 closed the one question left on R066 — whether every name of a multi-name `keyscope` qualifies —
 and all five of that probe's answers matched, so nothing moved but its two control rows, from
-extension-only to matched. With the batch-4 run the 11 ids of that batch were closed, and this one
-did not reopen any: 84 ids, **no gap left**. Eighteen of the 75
+extension-only to matched. Its seventh run answered R010 in both directions: every definition
+of a clash is filed, so the three `duplicate-key` rows the extension already had and the two
+first definitions only Oxygen filed are matches, while the two re-reaching shapes stayed silent
+on both sides. Ten signatures joined `matched` — five `duplicate-key` and five
+`resource-only-target` — and no row is left in either direction. With the batch-4 run the 11 ids
+of that batch were closed, and this one did not reopen any: 84 ids, **no gap left**. Eighteen of
+the 75
 *ok* rows are *mapped only* — no incident of that exact id in any of the six reports — and each of
 them says in its own row which id the reports carry instead, so the number is worth re-checking
 after any new run.

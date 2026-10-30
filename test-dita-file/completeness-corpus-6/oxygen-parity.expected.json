@@ -9,6 +9,11 @@
     "maps/p-dup-l-two-groups.ditamap  multiple-reference",
     "maps/p-dup-n-name-spacing.ditamap  multiple-reference",
     "maps/q-unused-pos.ditamap  unreferenced-key",
+    "maps/r-dk2-keys.ditamap  duplicate-key",
+    "maps/r-dk2.ditamap  duplicate-key",
+    "maps/r-dk3-a.ditamap  duplicate-key",
+    "maps/r-dk3-b.ditamap  duplicate-key",
+    "maps/r-dk3.ditamap  duplicate-key",
     "topics/o-scope-inside-neg.dita  resource-only-target",
     "topics/o-scope-outside-pos.dita  undefined-key",
     "topics/o-scope-qualified-neg.dita  resource-only-target",
@@ -17,17 +22,13 @@
     "topics/q-ck-outside-pos.dita  undefined-key",
     "topics/q-mn-ab.dita  undefined-key",
     "topics/q-mn-bare.dita  undefined-key",
-    "topics/q-unused-pos.dita  undefined-key"
-  ],
-  "extensionOnly": [
-    "maps/r-dk2.ditamap  duplicate-key",
-    "maps/r-dk3-b.ditamap  duplicate-key",
-    "maps/r-dk3.ditamap  duplicate-key",
+    "topics/q-unused-pos.dita  undefined-key",
     "topics/r-dk2-use.dita  resource-only-target",
     "topics/r-dk3-use.dita  resource-only-target",
     "topics/r-dkc-use.dita  resource-only-target",
     "topics/r-dkn-use.dita  resource-only-target",
     "topics/r-dkt-use.dita  resource-only-target"
   ],
+  "extensionOnly": [],
   "oxygenOnly": []
 }
