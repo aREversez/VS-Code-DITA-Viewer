@@ -309,10 +309,11 @@ baseline gains the row while its parity lock does not move (both lines share a s
 The five `-use` topics carry the `resource-only-target` shape (R049) Oxygen confirmed in the first
 run: four use one key, the control two, and Oxygen filed all six. Those rows and the three
 `duplicate-key` ones were extension-only until this run; the lock now reads 28 matched, zero in
-both directions, and no row of this probe set is left open. The real run's twelve fit the reading
-that held — the key map's file is filed once for each of its keys that another file defines too —
-so there is no per-reaching count left to add. Do not draw anything from a run whose report lacks
-the control's two `dmv.dup.topic` incidents.
+both directions, and no row of this probe set is left open. The real run's twelve are that same
+shape — the key map's file filed once for each of its keys that another file defines too — and a
+re-run of that map after this change matched on all thirteen of its signatures (REAL-MAP.md,
+"What one run proves"), so no per-reaching count is left to add. Do not draw anything from a run
+whose report lacks the control's two `dmv.dup.topic` incidents.
 
 ## Running it
 

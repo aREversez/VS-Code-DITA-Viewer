@@ -22,11 +22,14 @@ table goes to a separate `*.private.json`, which `.gitignore` covers.
    (the corpus setting, `CORPUS_OPTIONS`). In the Results view: *Save Results as XML…* to a
    file outside the repository.
 2. **Profiling preferences.** The GUI report uses whatever Profiling/Conditional Text preferences
-   this Oxygen has; the extension knows none unless told. Either write them down as a JSON file
+   this Oxygen has; the extension knows none unless told. Write them down as a JSON file
    (`{"attributes":{"audience":["novice","expert"]},"singleValue":[]}`, the same shape as
-   `CORPUS_PREFERENCES`) and pass `--prefs`, or leave profiling out of both sides with
-   `--exclude profiling-preference`. If the map is filtered, pass the DITAVAL files chosen in
-   Oxygen's dialog with `--ditaval`.
+   `CORPUS_PREFERENCES`: every attribute and value the dialog holds, `singleValue` naming the
+   attributes it does not treat as multi-value) and pass `--prefs` — that is the only way
+   `profiling-conflict`, `profiling-preference` and `empty-profiling-value` are compared at all.
+   `--exclude profiling-preference` keeps a first run quick, but it also leaves a category
+   unspoken, so say which categories a run left out when reporting it. If the map is filtered,
+   pass the DITAVAL files chosen in Oxygen's dialog with `--ditaval`.
 3. **Compare**, from the repository root (`npm run build:core` first on a fresh checkout):
 
    ```sh
@@ -37,6 +40,8 @@ table goes to a separate `*.private.json`, which `.gitignore` covers.
    The report's paths are read against the map's folder; if Oxygen ran from another location
    (another drive, a copy of the project), give that folder as `--oxygen-root`.
 4. **Send back only the printed text.** Exit status is non-zero when any disagreement exists.
+   After a rule changes, run the same map again: that second text is what says the difference is
+   closed, not the argument that it should be.
 
 ## Reading the result
 
@@ -54,3 +59,23 @@ table goes to a separate `*.private.json`, which `.gitignore` covers.
 
 Nothing here changes a rule on its own. A rule changes only after a sanitized probe reproduces
 the disagreement and an Oxygen run on that probe settles it (CLEAN-ROOM.md, working loop).
+
+## What one run proves
+
+One map touches the categories it happens to use and says nothing about the rest. A clean text
+means "no gap among the categories it lists", never "the rules are right on real maps"; the
+printed counts per category are the measure of how much of the rule set a map actually asked.
+
+The first run on a map is the demonstration: every category agreed but one, `duplicate-key`,
+where Oxygen filed a key map's own file twelve times and the extension not at all. No probe had
+asked that shape — corpus 1's two definitions sat in one file, so both lines fell under one
+signature and the rule could file the later one alone. Four sanitized probes, with a control
+beside them, answered it (`../completeness-corpus-6/README.md`, "Duplicate keys across files");
+the rule was fixed on them, and a re-run of the same map then matched on all thirteen of its
+signatures with nothing in either direction. That is the loop working end to end: a real map
+finds the question, a corpus answers it, the same map confirms it.
+
+The cheapest next step is another map of a different **structure**, not more probing of a shape
+that already agrees: a bookmap, a map whose keys come from several scopes, one whose content is
+mostly `conref`/`conkeyref`, or one built with a DITAVAL filter. Each brings categories the first
+map never touched, and with `--prefs` supplied the profiling categories come along.
