@@ -30,8 +30,8 @@ only by becoming a sanitized probe in a corpus.
 Oxygen: open `aurora-bookmap.ditamap` in the **DITA Maps Manager**, *DITA Maps → Validate and
 Check for Completeness…* with every option ticked except *Include remote resources*. In
 *Profiling/Conditional Text*, configure what `pref/aurora-prefs.json` holds — `audience`
-(`novice`, `expert`), `product` (`aurora`, `aurora-pro`) and `deliveryTarget` (`web`, `pdf`) —
-all left on *Multiple values*, since nothing in the set is single-valued. **Leave every other
+(`novice`, `expert`) and `product` (`aurora`, `aurora-pro`) — all left on *Multiple values*,
+since nothing in the set is single-valued. **Leave every other
 attribute as your own Oxygen has it**, `props` included: the fixture writes `props="ws1-legacy"`
 on `topics/sensor-check.dita`, a value no real list carries, so Oxygen files it as a value
 outside the preferences and the extension — which is told nothing about `props` — files the
@@ -39,8 +39,17 @@ attribute as unknown. Both land on `profiling-preference` on that file, which is
 compares; if your list happens to hold that value, the finding simply disappears from both sides.
 Extra values in the dialog (`internal`, `webhelp`) are harmless as long as no document writes
 them. The reverse is not: every value a document writes must be in the local list, and
-`topics/specifications.dita` writes `deliveryTarget="pdf"`. In the Results view, *Save Results as
-XML…* outside the repository.
+`topics/specifications.dita:32` writes `product="aurora-pro"`.
+
+The fixture writes no `@deliveryTarget`, although `pref/aurora-prefs.json` still declares it.
+Oxygen's DITA profiling set is `audience`, `platform`, `product`, `props`, `otherprops` and
+`rev` — the conditional-processing attributes, `%filter-atts;` in the DTD — and `@deliveryTarget`
+is its own attribute domain, outside that list. A document writing it draws *Profiling attribute
+"deliveryTarget" is not defined in the Profiling/Conditional Text preferences page*
+(`dmv.prof.attr.prefs.undef`) however that page is filled in, which is why the first two runs
+filed the row as Oxygen-only. The extension keeps no such list of its own: it compares whatever
+`--prefs` declares, `deliveryTarget` included, so an attribute Oxygen cannot see is still checked
+in a document of your own. In the Results view, *Save Results as XML…* outside the repository.
 
 Then, from the repository root:
 
@@ -92,18 +101,19 @@ adds `filtered-reference`: twenty findings again.
 
 ## What the runs showed
 
-Two runs, the second with `pref/field.ditaval`, both made before R034 was widened: 18 of the
-extension's 19 signatures matched (Oxygen filed 21 and 22), one row was extension-only and three
-(four with the filter) Oxygen-only. The widened rule makes the extension file that `xref` too, so
-the next run should match on 19. What was left, by cause:
+Four rounds, the odd ones without a filter and the even ones with `pref/field.ditaval`. The last
+two, on the fixture as it stands, both matched 19 of the extension's 20 signatures (Oxygen filed
+20 and 21): one row was extension-only (`table-layout`) and one Oxygen-only (`multiple-reference`,
+two with the filter). The first pair matched 18 of 19, which is what turned the first two rows
+below into the changes described. What is left, by cause:
 
 | Row | Cause | State |
 | --- | --- | --- |
-| `external-reference`, on a `.dita` | `topics/link.dita:8` writes an http `xref` without `scope="external"`. R034 used to cover a **map** reference only, so the extension said nothing. | fixed: R034 now checks a topic's `xref`/`link`, with this run's `.dita` report as its evidence; the extension files it at `link.dita:8` |
-| `multiple-reference`, on a second `.ditamap` | the reltable names `sensor-check` and `alerts` again, and Oxygen files that as a topic referenced twice (`dmv.dup.topic`) | accepted: the extension counts content references, not relationship rows |
-| `profiling-preference`, Oxygen's second row | `topics/specifications.dita:32` writes `deliveryTarget="pdf"`; the fixture declares `pdf` for that attribute, the Oxygen dialog on this desk does not carry it | configuration, not a rule: add `pdf` to `deliveryTarget` |
-| `table-layout`, extension only | `@cols="3"` with two `colspec`s; Oxygen's completeness check has no matching rule | accepted: extension-only |
-| `profiling-conflict`, second run only | with a DITAVAL the extension runs the filtered set only, so the `expert` note the conflict sits on is gone; Oxygen keeps the row (`dmv.prof.attr.innef.cond`) | accepted: filtered content is checked by Oxygen and not by the extension |
+| `external-reference`, on a `.dita` | `topics/link.dita:8` writes an http `xref` without `scope="external"`. R034 used to cover a **map** reference only, so the extension said nothing. | fixed: R034 now checks a topic's `xref`/`link`, with that run's `.dita` report as its evidence; the row has matched in the last two rounds |
+| `multiple-reference`, on a second `.ditamap` | the reltable names `sensor-check` and `alerts` again, and Oxygen files that as a topic referenced twice (`dmv.dup.topic`) | accepted: the extension counts content references, not relationship rows; Oxygen-only in all four rounds |
+| `profiling-preference`, on `topics/specifications.dita` | that file wrote `deliveryTarget="pdf"`. Oxygen's DITA profiling set leaves `@deliveryTarget` out, so the check filed the attribute as undefined (`dmv.prof.attr.prefs.undef`, the message quoted under *Run it*) and its value with it, whatever the preferences page held; the extension, told `pdf` by `pref/aurora-prefs.json`, filed nothing there | fixed in the fixture, not in a rule: `:32` now writes `product="aurora-pro"`, a value both sides hold, and the row is gone from both sides. A document of your own that writes `@deliveryTarget` draws the same Oxygen-only row |
+| `table-layout`, extension only | `@cols="3"` with two `colspec`s; Oxygen's completeness check has no matching rule | accepted: extension-only in all four rounds |
+| `profiling-conflict`, filtered rounds only | with a DITAVAL the extension runs the filtered set only, so the `expert` note the conflict sits on is gone; Oxygen keeps the row (`dmv.prof.attr.innef.cond`) | accepted: filtered content is checked by Oxygen and not by the extension |
 
 Three rows from the first run were not rule differences and are now gone: `class-format` and
 `MSG_CONTENT_INCOMPLETE` were the fixture's own DTD breaks (fixed; `dita --format=html5` accepts

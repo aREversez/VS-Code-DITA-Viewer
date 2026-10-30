@@ -82,8 +82,11 @@ map never touched, and with `--prefs` supplied the profiling categories come alo
 
 When no second map is at hand, `../real-map-sample/` stands in for one: invented content, so it
 can be committed, shaped as a bookmap of chapter maps with keyscopes, a conref library, a
-resource-only key and a DITAVAL filter. Its first two runs matched 18 of 19 signatures; the README
-separates the rows that were the fixture's own DTD breaks (now fixed) from the boundaries the run
-exposed, one of which — `external-reference` on a topic's `xref` — has since become a rule (R034)
-with that run as the evidence. `summarizeRealMapDiff` also now folds `missing-resource` into
-`missing-reference` the way the corpus parity already did.
+resource-only key and a DITAVAL filter. Its first two runs matched 18 of 19 signatures and, once
+R034 was widened and the fixture stopped writing `@deliveryTarget`, 19 of 20. The README separates
+the rows that were the fixture's own DTD breaks (now fixed) from the boundaries the run exposed,
+two of which are settled: `external-reference` on a topic's `xref` is now R034, with that run as
+the evidence, and `@deliveryTarget` turned out not to be one of the profiling attributes Oxygen
+defines for DITA at all, so the sample stopped writing it rather than carry a row one tool can
+never file. `summarizeRealMapDiff` also now folds `missing-resource` into `missing-reference` the
+way the corpus parity already did.
