@@ -17,3 +17,6 @@ test-dita-file/__providers-e2e/
 
 # raw Oxygen reports name files by absolute machine paths; commit the sanitized one
 test-dita-file/completeness-corpus*/*.raw.xml
+
+# label tables of a real-map run name the files of a map that is not ours
+*.private.json

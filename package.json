@@ -806,6 +806,7 @@
     "check:completeness": "node scripts/completeness-baseline.cjs",
     "check:completeness:oxygen": "node scripts/oxygen-diff.cjs",
     "check:completeness:run": "node scripts/run-oxygen-completeness.cjs",
+    "check:completeness:real": "node scripts/real-map-diff.cjs",
     "package": "node -e \"require('fs').mkdirSync('output',{recursive:true})\" && npx --yes @vscode/vsce@4.0.0 package --no-dependencies --out output/",
     "vsix:install": "node scripts/install-vsix.cjs",
     "package:install": "npm run build && npm run package && npm run vsix:install",

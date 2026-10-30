@@ -212,11 +212,13 @@ function compareKeys(a: string, b: string): number {
 /** Sorted, deterministic findings produced by the extension for the corpus. */
 export async function collectExtensionFindings(
   corpusDir: string,
+  /** A map other than the corpus's own, and its settings: the real-map run (REAL-MAP.md). */
+  over: { rootMap?: string; settings?: CorpusSettings } = {},
 ): Promise<NormalizedFinding[]> {
   const absCorpus = resolve(corpusDir);
-  const rootMap = resolve(absCorpus, CORPUS_ROOT_MAP);
+  const rootMap = resolve(absCorpus, over.rootMap ?? CORPUS_ROOT_MAP);
   const host = makeDiskHost();
-  const settings = CORPUS_SETTINGS[basename(absCorpus)] ?? {};
+  const settings = over.settings ?? CORPUS_SETTINGS[basename(absCorpus)] ?? {};
   const preferences = settings.preferences ?? CORPUS_PREFERENCES;
   const ditavalFiles = (settings.ditavalFiles ?? []).map((f) => resolve(absCorpus, f));
   const options: CompletenessOptions = { ...CORPUS_OPTIONS, ditavalFiles };

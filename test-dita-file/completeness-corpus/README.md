@@ -17,7 +17,7 @@ Where to read what: **[RULES.md](RULES.md)** is the ledger (every rule and what 
 **[OXYGEN-PROBLEMS.md](OXYGEN-PROBLEMS.md)** the parity specification (every Oxygen problem id
 and the extension's status for it, with the wrap-up notes), **[CLEAN-ROOM.md](CLEAN-ROOM.md)**
 the rules for where a rule may come from, and **[OXYGEN.md](OXYGEN.md)** how to run Oxygen and
-make a report safe to commit. The problem catalog behind the specification is a data file of
+make a report safe to commit. **[REAL-MAP.md](REAL-MAP.md)** is the same comparison on a real map that cannot be committed, with a summary that is safe to share. The problem catalog behind the specification is a data file of
 the installed editor; no license is required to read it.
 
 - `corpus.ditamap` — the root map. Every child is a deliberate probe.
