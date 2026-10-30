@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<task id="mount" xml:lang="en-US">
+  <title>Mount the station</title>
+  <shortdesc>Fix the mast, then attach the sensor head.</shortdesc>
+  <taskbody>
+    <context>
+      <p conref="../shared/common-text.dita#common-text/safety-line"/>
+      <p>Have the following at hand:</p>
+      <ul conref="../shared/common-text.dita#common-text/checklist"/>
+      <p>The input voltage is <ph conref="../shared/common-text.dita#common-text/voltage-ph"/>.</p>
+    </context>
+    <steps>
+      <step id="step-1">
+        <cmd>Bolt the bracket to the mast at the height marked in the site plan.</cmd>
+      </step>
+      <step id="step-2">
+        <cmd>Fit the sensor head and tighten the collar by hand.</cmd>
+      </step>
+      <step id="step-3">
+        <cmd>Check the whole assembly with a spirit level.</cmd>
+      </step>
+    </steps>
+    <result>
+      <p>The next step is <xref href="power.dita#mount/step-4"/>.</p>
+    </result>
+  </taskbody>
+</task>

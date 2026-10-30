@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<map id="aurora-variant-keys" xml:lang="en-US">
+  <title>Aurora Pro variant keys</title>
+  <!-- The Aurora Pro support desk has its own number; this map overrides the
+       shared key for the chapters that link it. -->
+  <keydef keys="support-phone">
+    <topicmeta>
+      <keywords>
+        <keyword>+1 555 0177</keyword>
+      </keywords>
+    </topicmeta>
+  </keydef>
+</map>

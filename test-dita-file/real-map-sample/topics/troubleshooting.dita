@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE troubleshooting PUBLIC "-//OASIS//DTD DITA Troubleshooting//EN" "troubleshooting.dtd">
+<troubleshooting id="troubleshooting" xml:lang="en-US">
+  <title>The station reports no data</title>
+  <troubleshootingbody>
+    <condition>
+      <p>The cloud account shows the station as offline, and the status LED keeps a steady green.</p>
+    </condition>
+    <troubleSolution>
+      <cause>
+        <p>The station has power but no route to the account.</p>
+      </cause>
+      <remedy>
+        <p>Compare the last contact time with the alert codes in <xref href="alerts.dita"/>.</p>
+      </remedy>
+      <remedy>
+        <p>If a restart did not help, read the certificate note in
+          <xref href="link.dita#link/expert-note"/>.</p>
+      </remedy>
+    </troubleSolution>
+  </troubleshootingbody>
+</troubleshooting>

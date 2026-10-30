@@ -79,3 +79,8 @@ The cheapest next step is another map of a different **structure**, not more pro
 that already agrees: a bookmap, a map whose keys come from several scopes, one whose content is
 mostly `conref`/`conkeyref`, or one built with a DITAVAL filter. Each brings categories the first
 map never touched, and with `--prefs` supplied the profiling categories come along.
+
+When no second map is at hand, `../real-map-sample/` stands in for one: invented content, so it
+can be committed, shaped as a bookmap of chapter maps with keyscopes, a conref library, a
+resource-only key and a DITAVAL filter. Its README lists the two commands and what the extension
+files today, including the two findings worth watching on the Oxygen side.

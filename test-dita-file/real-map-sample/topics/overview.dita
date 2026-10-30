@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="overview" xml:lang="en-US">
+  <title>About the station</title>
+  <shortdesc>The <keyword keyref="product-name"/> measures wind, temperature and rainfall and reports to the
+    Northwind cloud service.</shortdesc>
+  <conbody>
+    <p>Mount the station before you power it on. The sequence is in <xref href="mount.dita"/>.</p>
+    <fig>
+      <title>The assembled station</title>
+      <image href="../images/station.svg" format="svg">
+        <alt>The station on a two-metre mast with its solar panel facing south</alt>
+      </image>
+    </fig>
+    <p>The full specification sheet is maintained as a shared resource:
+      <xref keyref="spec-key"/>.</p>
+    <p audience="expert">Calibration of the wind vane follows the supplier procedure in the service kit.</p>
+  </conbody>
+</concept>

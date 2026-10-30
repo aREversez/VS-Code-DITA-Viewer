@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="common-text" xml:lang="en-US">
+  <title>Shared text</title>
+  <shortdesc>Paragraphs and phrases reused across the manual.</shortdesc>
+  <conbody>
+    <p id="safety-line">Keep the mast clear of power lines and never work on the station during a
+      storm.</p>
+    <p>The station input is <ph id="voltage-ph">12 V DC at 1 A</ph> through the supplied adapter.</p>
+    <ul id="checklist">
+      <li>Spirit level</li>
+      <li>Torque wrench</li>
+      <li>Service log</li>
+    </ul>
+    <p id="unused-note">The WS-1 firmware required a separate voltage regulator.</p>
+  </conbody>
+</concept>

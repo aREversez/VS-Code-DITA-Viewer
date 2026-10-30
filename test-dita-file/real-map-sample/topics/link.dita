@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<task id="link" xml:lang="en-US">
+  <title>Commission the link</title>
+  <shortdesc>Pair the station with the site account and confirm it reports.</shortdesc>
+  <taskbody>
+    <context>
+      <p>Register the serial number at <xref href="https://support.example.com/aurora"/> before the first
+        upload.</p>
+      <p>Release notes are published at
+        <xref href="https://support.example.com/aurora/notes" scope="external" format="html"/>.</p>
+    </context>
+    <steps>
+      <step id="step-1">
+        <cmd>Open the commissioning page and enter the site code.</cmd>
+      </step>
+      <step id="step-2">
+        <cmd>Wait for the first upload, which takes up to ten minutes.</cmd>
+      </step>
+    </steps>
+    <postreq>
+      <section audience="novice">
+        <title>If the first upload does not arrive</title>
+        <p>Restart the station and watch the status LED.</p>
+        <note audience="expert" id="expert-note">
+          <p>An upload that keeps failing after a restart is almost always a certificate date problem; read
+            the clock over the service port.</p>
+        </note>
+      </section>
+    </postreq>
+  </taskbody>
+</task>

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE reference PUBLIC "-//OASIS//DTD DITA Reference//EN" "reference.dtd">
+<reference id="specifications" xml:lang="en-US">
+  <title>Specifications</title>
+  <refbody>
+    <section>
+      <title>Electrical and mechanical</title>
+      <table>
+        <title>Ratings</title>
+        <tgroup cols="3">
+          <colspec colname="c1"/>
+          <colspec colname="c2"/>
+          <thead>
+            <row>
+              <entry>Quantity</entry>
+              <entry>Value</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>Wind range</entry>
+              <entry>0 to 60 m/s</entry>
+            </row>
+            <row>
+              <entry>Operating temperature</entry>
+              <entry>-40 to +70 °C</entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </table>
+    </section>
+    <section deliveryTarget="pdf">
+      <title>Print layout</title>
+      <p>Printed copies use the A4 sheet with a 20 mm gutter.</p>
+    </section>
+  </refbody>
+</reference>

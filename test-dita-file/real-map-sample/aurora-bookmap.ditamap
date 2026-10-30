@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE bookmap PUBLIC "-//OASIS//DTD DITA BookMap//EN" "bookmap.dtd">
+<bookmap id="aurora-book" xml:lang="en-US">
+  <booktitle>
+    <mainbooktitle>Aurora WS-2 Weather Station</mainbooktitle>
+    <booktitlealt>Field Service Manual</booktitlealt>
+  </booktitle>
+  <bookmeta>
+    <shortdesc>Installation, operation and maintenance of the <keyword keyref="product-name"/> for field service engineers.</shortdesc>
+    <keywords>
+      <keyword keyref="product-name"/>
+      <keyword keyref="company-name"/>
+      <keyword>field service</keyword>
+    </keywords>
+  </bookmeta>
+  <frontmatter>
+    <booklists>
+      <toc/>
+      <figurelist/>
+    </booklists>
+  </frontmatter>
+  <!-- Shared key definitions, published as a resource so no chapter lists them. -->
+  <topicref href="keys/product-keys.ditamap" format="ditamap" processing-role="resource-only"/>
+  <part navtitle="Getting started">
+    <chapter href="chapters/intro.ditamap" format="ditamap"/>
+  </part>
+  <part navtitle="Installing at the site">
+    <chapter href="chapters/install.ditamap" format="ditamap"/>
+  </part>
+  <part navtitle="Operating the station">
+    <chapter href="chapters/ops.ditamap" format="ditamap"/>
+  </part>
+  <part navtitle="Reference">
+    <chapter href="chapters/reference.ditamap" format="ditamap"/>
+  </part>
+  <backmatter>
+    <booklists>
+      <indexlist/>
+    </booklists>
+    <topicref href="shared/legal.dita"/>
+  </backmatter>
+  <reltable>
+    <relheader>
+      <relcolspec linking="sourceonly"/>
+      <relcolspec linking="targetonly"/>
+    </relheader>
+    <relrow>
+      <relcell>
+        <topicref href="topics/sensor-check.dita"/>
+      </relcell>
+      <relcell>
+        <topicref href="topics/alerts.dita"/>
+        <topicref href="topics/troubleshooting.dita"/>
+      </relcell>
+    </relrow>
+  </reltable>
+</bookmap>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<task id="maintenance" xml:lang="en-US">
+  <title>Clean and inspect the station</title>
+  <shortdesc>Clean the sensor head and check the mounting twice a year.</shortdesc>
+  <taskbody>
+    <context>
+      <p>Cleaning intervals and the inspection form follow the <ph keyref="runbook"/>.</p>
+      <p audience="">Keep the solar panel free of leaves and dust.</p>
+    </context>
+    <steps>
+      <step id="step-1">
+        <cmd>Wipe the sensor head with a damp cloth.</cmd>
+      </step>
+      <step id="step-2">
+        <cmd>Check the collar and the cable gland for play.</cmd>
+      </step>
+      <step id="step-3">
+        <cmd>Record the inspection in the service log.</cmd>
+      </step>
+    </steps>
+  </taskbody>
+</task>

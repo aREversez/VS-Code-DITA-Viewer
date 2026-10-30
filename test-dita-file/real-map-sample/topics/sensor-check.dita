@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<task id="checklist" xml:lang="en-US">
+  <title>Run the weekly sensor check</title>
+  <shortdesc>Compare the station readings with the reference gauge once a week.</shortdesc>
+  <taskbody>
+    <steps>
+      <step id="step-1">
+        <cmd>Note the temperature and wind speed on the service page.</cmd>
+      </step>
+      <step id="step-2">
+        <cmd>Read the same two values from the reference gauge.</cmd>
+      </step>
+      <step id="step-3">
+        <cmd>Record both readings in the <keyword keyref="runbook"/>.</cmd>
+      </step>
+    </steps>
+  </taskbody>
+  <section props="beta">
+    <title>Automatic comparison</title>
+    <p>The beta firmware compares both readings for you and raises an alert on a drift of more than two
+      units.</p>
+  </section>
+</task>

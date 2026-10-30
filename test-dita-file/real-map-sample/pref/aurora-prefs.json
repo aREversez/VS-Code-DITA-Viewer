@@ -1,0 +1,8 @@
+{
+  "attributes": {
+    "audience": ["novice", "expert", "internal"],
+    "product": ["aurora", "aurora-pro"],
+    "deliveryTarget": ["web", "pdf"]
+  },
+  "singleValue": ["deliveryTarget"]
+}
