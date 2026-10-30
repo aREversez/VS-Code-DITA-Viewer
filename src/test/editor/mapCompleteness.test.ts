@@ -914,7 +914,7 @@ describe('completeness: reference spelling and @format (Oxygen batch 1)', () => 
     ]);
   });
 
-  it('reports a URL without scope="external", and an external reference without @format', async () => {
+  it('reports a URL without scope="external", in a map or in a topic, and an external reference without @format', async () => {
     const issues = await check(
       {
         'root.ditamap':
@@ -923,14 +923,24 @@ describe('completeness: reference spelling and @format (Oxygen batch 1)', () => 
           '<topicref href="http://example.invalid/b.html" scope="local"/>' +
           '<topicref href="http://example.invalid/c.html" scope="external" format="html"/>' +
           '<topicref href="http://example.invalid/d.html" scope="external"/>' +
+          '<topicref href="t.dita"/>' +
           '</map>',
+        't.dita':
+          '<topic id="t"><title>T</title><body>' +
+          '<p><xref href="http://example.invalid/pm.html"/></p>' +
+          '<p><xref href="http://example.invalid/ok.html" scope="external" format="html"/></p>' +
+          '</body></topic>',
       },
       { checkNonDita: true },
     );
     const ext = issues.filter((i) => i.category === 'external-reference');
     const missing = issues.filter((i) => i.category === 'format-missing');
-    assert.strictEqual(ext.length, 2, JSON.stringify(issues, null, 2));
+    assert.strictEqual(ext.length, 3, JSON.stringify(issues, null, 2));
     assert.ok(ext.every((i) => i.severity === 'warning'));
+    assert.ok(
+      ext.some((i) => i.file.endsWith('t.dita')),
+      'a topic xref is checked as well as a map topicref',
+    );
     assert.deepStrictEqual(missing.map((i) => i.message), [
       'External reference has no @format: http://example.invalid/d.html',
     ]);

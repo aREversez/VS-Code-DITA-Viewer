@@ -38,7 +38,9 @@ outside the preferences and the extension — which is told nothing about `props
 attribute as unknown. Both land on `profiling-preference` on that file, which is what the run
 compares; if your list happens to hold that value, the finding simply disappears from both sides.
 Extra values in the dialog (`internal`, `webhelp`) are harmless as long as no document writes
-them. In the Results view, *Save Results as XML…* outside the repository.
+them. The reverse is not: every value a document writes must be in the local list, and
+`topics/specifications.dita` writes `deliveryTarget="pdf"`. In the Results view, *Save Results as
+XML…* outside the repository.
 
 Then, from the repository root:
 
@@ -60,7 +62,7 @@ node scripts/real-map-diff.cjs --map test-dita-file/real-map-sample/aurora-bookm
 
 ## What the extension files today
 
-Nineteen findings over fifteen categories without the filter; with the filter the last row replaces
+Twenty findings over sixteen categories without the filter; with the filter the last row replaces
 `profiling-conflict`, so the counts stay the same. The extension side of both runs was measured, the
 Oxygen side is what the run is for.
 
@@ -72,6 +74,7 @@ Oxygen side is what the run is for.
 | `unreferenced-key` | `keys/product-keys.ditamap:30` | `legacy-diagram`, left from the previous product |
 | `unreferenced-reusable` | `shared/common-text.dita:15` | `unused-note` never conref'd |
 | `resource-only-target` | `topics/overview.dita:16` | an `xref` to `spec-key`'s resource-only topic |
+| `external-reference` | `topics/link.dita:8` | an http `xref` without `scope="external"` |
 | `multiple-reference` | `aurora-bookmap.ditamap:38` | `shared/legal.dita` in the chapter and in the backmatter |
 | `duplicate-id` (2) | `topics/mount.dita:3`, `topics/power.dita:3` | copy-paste: both tasks are `id="mount"` |
 | `invalid-id-reference` | `topics/mount.dita:27` | `power.dita#mount/step-4`, a task with three steps |
@@ -85,25 +88,27 @@ Oxygen side is what the run is for.
 | `filtered-reference` | `topics/troubleshooting.dita:21` | only with the filter: an `xref` into the filtered `expert` note |
 
 With `field.ditaval` the run drops `profiling-conflict` (the note it names is filtered out) and
-adds `filtered-reference`: nineteen findings again.
+adds `filtered-reference`: twenty findings again.
 
-## What the two runs showed
+## What the runs showed
 
-The first run matched 17 of those 19 signatures against Oxygen's 23; six rows were Oxygen-only
-and two extension-only. Sorted by cause:
+Two runs, the second with `pref/field.ditaval`, both made before R034 was widened: 18 of the
+extension's 19 signatures matched (Oxygen filed 21 and 22), one row was extension-only and three
+(four with the filter) Oxygen-only. The widened rule makes the extension file that `xref` too, so
+the next run should match on 19. What was left, by cause:
 
 | Row | Cause | State |
 | --- | --- | --- |
-| `class-format` and `MSG_CONTENT_INCOMPLETE`, both on a `.dita` | the fixture, not the rules: a bare `topicref` directly under the bookmap, a `section` after `taskbody`, a `section` inside `postreq`, an empty `ul conref`, and `troubleshootingbody` where the DTD says `troublebody`. `dita --format=html5` names every one. | fixed: the DTD accepts the set now, so both rows should be gone on the next run |
-| `missing-reference` (Oxygen) beside `missing-resource` (extension) | one dangling `images/wiring.svg`; Oxygen has no resource/reference split. `summarizeRealMapDiff` now folds the pair the way the corpus parity does. | fixed in `realMapDiff.ts` |
-| `external-reference`, on a `.dita` | `topics/link.dita` writes an http `xref` without `scope="external"`. R034 covers a **map** reference only, so the extension says nothing. | open: a rule boundary to decide, not a fixture fault |
-| `multiple-reference`, on a second `.ditamap` | the reltable names `sensor-check` and `alerts` again, and Oxygen files that as a topic referenced twice. The extension counts content references, not relationship rows. | open: rule boundary |
-| `profiling-preference`, Oxygen's second row | one more than the `props` probe explains — possibly the empty `audience` value on `maintenance.dita` | open: the label in the private table names the file |
+| `external-reference`, on a `.dita` | `topics/link.dita:8` writes an http `xref` without `scope="external"`. R034 used to cover a **map** reference only, so the extension said nothing. | fixed: R034 now checks a topic's `xref`/`link`, with this run's `.dita` report as its evidence; the extension files it at `link.dita:8` |
+| `multiple-reference`, on a second `.ditamap` | the reltable names `sensor-check` and `alerts` again, and Oxygen files that as a topic referenced twice (`dmv.dup.topic`) | accepted: the extension counts content references, not relationship rows |
+| `profiling-preference`, Oxygen's second row | `topics/specifications.dita:32` writes `deliveryTarget="pdf"`; the fixture declares `pdf` for that attribute, the Oxygen dialog on this desk does not carry it | configuration, not a rule: add `pdf` to `deliveryTarget` |
 | `table-layout`, extension only | `@cols="3"` with two `colspec`s; Oxygen's completeness check has no matching rule | accepted: extension-only |
+| `profiling-conflict`, second run only | with a DITAVAL the extension runs the filtered set only, so the `expert` note the conflict sits on is gone; Oxygen keeps the row (`dmv.prof.attr.innef.cond`) | accepted: filtered content is checked by Oxygen and not by the extension |
 
-The second run repeated all of this and added one row: with `field.ditaval` supplied the extension
-runs the filtered set only, so the `expert` note the conflict sits on is gone and
-`profiling-conflict` disappears; Oxygen keeps it (`dmv.prof.attr.innef.cond`).
+Three rows from the first run were not rule differences and are now gone: `class-format` and
+`MSG_CONTENT_INCOMPLETE` were the fixture's own DTD breaks (fixed; `dita --format=html5` accepts
+the set), and `missing-resource` beside `missing-reference` was one dangling image that
+`summarizeRealMapDiff` now folds the way the corpus parity does.
 
 ## What the labels said
 

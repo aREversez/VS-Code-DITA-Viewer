@@ -915,7 +915,12 @@ function externalScopeIssues(crawl: CrawlResult): Array<Omit<Issue, 'message'>> 
     if (ref.viaKeyref) continue;
     const external = ref.scope === 'external' || ref.scope === 'peer';
     if (!external) {
-      if (ref.inMap && /^https?:/i.test(ref.href)) {
+      // A URL is remote wherever it is written: a topic's xref needs the same scope as a map's
+      // topicref.
+      const namesTarget =
+        ref.kind === 'topicref' || ref.kind === 'mapref' || ref.kind === 'keydef' ||
+        ref.kind === 'xref' || ref.kind === 'link';
+      if (namesTarget && /^https?:/i.test(ref.href)) {
         out.push({
           category: 'external-reference', severity: 'warning', file: ref.file, line: ref.line,
           msg: msg('ref.needsExternalScope', ref.href),
