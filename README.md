@@ -616,7 +616,7 @@ Both are workspace-folder-level values, so a host opened on a subfolder (say `te
 npm run package        # mkdir output, then vsce package --no-dependencies --out output/
 ```
 
-The `.vsix` file name is derived from the `name` and `version` fields in `package.json` (e.g. `output/dita-viewer-1.0.10.vsix`). `npm run check:package` packages again and asserts the archive's contents (required assets present, `src/**` and the fixtures absent), which is the gate to trust before publishing a build.
+The `.vsix` file name is derived from the `name` and `version` fields in `package.json` (e.g. `output/dita-viewer-1.0.11.vsix`). `npm run check:package` packages again and asserts the archive's contents (required assets present, `src/**` and the fixtures absent), which is the gate to trust before publishing a build.
 
 #### Installing the package into a local VS Code
 
