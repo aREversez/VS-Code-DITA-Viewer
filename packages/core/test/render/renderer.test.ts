@@ -1206,6 +1206,52 @@ describe('renderer', () => {
 
   // ── Conref resolution tests ──
 
+  // ── keyref on the element a conref pulls in ──
+
+  describe('keyref on a conref target', () => {
+    const keyCtx = (target: DitaNode): RenderContext => ({
+      ...defaultCtx,
+      resolveConref: (_conref: string) => target,
+      resolveKey: (key: string) => (key === 'prod' ? 'Acme Widget' : undefined),
+    });
+    const docWith = (referencing: DitaNode): DitaNode =>
+      makeEl('topic/topic', [makeEl('topic/body', [makeEl('topic/p', [referencing])])]);
+
+    it('resolves the keyref written on a same-type target itself', () => {
+      const target = makeEl('topic/ph', [], { id: 'x', keyref: 'prod' });
+      const html = renderDocument(docWith(makeEl('topic/ph', [], { conref: 'b.dita#t/x' })), keyCtx(target));
+      assert.ok(html.includes('Acme Widget'), 'the key text should be substituted');
+      assert.ok(!html.includes('keyref'), 'the keyref attribute should not leak into the output');
+    });
+
+    it('still resolves a keyref in a child of the target (unchanged)', () => {
+      const target = makeEl('topic/ph', [makeEl('topic/keyword', [], { keyref: 'prod' })], { id: 'x' });
+      const html = renderDocument(docWith(makeEl('topic/ph', [], { conref: 'b.dita#t/x' })), keyCtx(target));
+      assert.ok(html.includes('Acme Widget'));
+    });
+
+    it('lets the referencing element\'s own keyref win over the target\'s', () => {
+      const target = makeEl('topic/ph', [], { id: 'x', keyref: 'other' });
+      const ctx = { ...keyCtx(target), resolveKey: (k: string) => (k === 'prod' ? 'Acme Widget' : k === 'other' ? 'Other' : undefined) };
+      const html = renderDocument(docWith(makeEl('topic/ph', [], { conref: 'b.dita#t/x', keyref: 'prod' })), ctx);
+      assert.ok(html.includes('Acme Widget'));
+      assert.ok(!html.includes('Other'));
+    });
+
+    it('does not invent text when the target\'s key is undefined', () => {
+      const target = makeEl('topic/ph', [], { id: 'x', keyref: 'missing' });
+      const html = renderDocument(docWith(makeEl('topic/ph', [], { conref: 'b.dita#t/x' })), keyCtx(target));
+      assert.ok(!html.includes('Acme Widget'));
+    });
+
+    it('keeps the target\'s own content when it has some (content wins over the key)', () => {
+      const target = makeEl('topic/ph', [makeText('local text')], { id: 'x', keyref: 'prod' });
+      const html = renderDocument(docWith(makeEl('topic/ph', [], { conref: 'b.dita#t/x' })), keyCtx(target));
+      assert.ok(html.includes('local text'));
+      assert.ok(!html.includes('Acme Widget'));
+    });
+  });
+
   it('should resolve ph conref with same-type target preserving children', () => {
     // Target is a <ph> (same baseType as referencing <ph>)
     const target = makeEl('topic/ph', [

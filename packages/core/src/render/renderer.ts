@@ -406,7 +406,18 @@ function mergeConrefTarget(node: DitaNode, target: DitaNode): DitaNode {
     Object.entries(node.attributes || {}).filter(([k]) => k !== 'conref' && k !== 'conrefend' && k !== 'conkeyref')
   );
   if (target.baseType && target.baseType === node.baseType) {
-    return { ...node, children: (target.children || []).map((c) => stampSourceRange(c, node.sourceRange)), attributes: restAttrs };
+    // The merged element keeps the referencing element's attributes, so a
+    // keyref written on the target itself (`<ph id="x" keyref="prod"/>`) would
+    // vanish and the reuse would render empty. Conref resolves before keys do,
+    // so the pulled-in element's keyref is resolved here, in this document's
+    // key space. The referencing element's own keyref still wins.
+    const carried: Record<string, string> =
+      target.attributes?.keyref && !restAttrs.keyref ? { keyref: target.attributes.keyref } : {};
+    return {
+      ...node,
+      children: (target.children || []).map((c) => stampSourceRange(c, node.sourceRange)),
+      attributes: { ...carried, ...restAttrs },
+    };
   }
   // Cross-type merge: the target's element shape wins, but never its source
   // position — the target and all of its descendants sit at the referencing
