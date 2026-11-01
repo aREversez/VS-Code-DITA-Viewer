@@ -7,8 +7,8 @@
 
 export { renderTopicXml, buildTitleMap, collectDitamapFilesUpward } from './editor/topicRender';
 export type { TopicXmlRenderInput, TopicRenderInput, TopicRenderResult, ParsedTopicResult } from './editor/topicRender';
-export { buildKeySpace, getKeyDefs } from './editor/keySpace';
-export type { KeyHrefDef, KeySpace } from './editor/keySpace';
+export { buildKeySpace, getKeyDefs, getKeyScopes, getTopicScopeChains, createKeyScopeIndex } from './editor/keySpace';
+export type { KeyHrefDef, KeyScopeIndex, KeySpace } from './editor/keySpace';
 export { readSourceText, setSourceOverlay, clearSourceOverlay } from './editor/sourceText';
 export { decodeHrefPart } from './editor/refResolvers';
 export { buildKeyMapForDocument, buildKeySpaceForDocument } from './keyMapForDocument';
