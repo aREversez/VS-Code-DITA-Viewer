@@ -44,6 +44,9 @@ jobs:
       # committed sources only (about two seconds, no DTD, no display server).
       - run: npm run check:webview
       - run: npm run check:dita-class
+      # No module imports itself, directly or through others (the large files are split into
+      # modules that must keep pointing one way). Reads sources only, about a second.
+      - run: npm run check:cycles
       # VS Code integration tests need a display server on Linux;
       # @vscode/test-electron 3.x requires Node >= 22
       - name: E2E tests (Linux)
