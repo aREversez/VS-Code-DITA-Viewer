@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- **A `keyref` or `conkeyref` in a topic now resolves in the key scope the topic sits in.** The preview looked keys up in one flat table that answered to a key's bare name and each qualified name alike, first definition in document order winning, so two scopes that define the same key (`s1`, `s2`) both showed whichever came first, and a key defined only inside a scope was found by its bare name from outside it. The key space now also keeps the definitions by scope, and a reference is resolved the way the completeness check already did it: its own scope first, then each enclosing one, the nearest definition winning; a key inside a scope is bare only within it, and `s1.k` reaches it from outside. In Book and Site view the scope is that of the topicref that placed the topic (and Export as HTML renders it the same way); the standalone preview uses the first topicref in the map that publishes the file, and the root scope when none does. A `conkeyref` and an `xref keyref` take their target from the same scope as the text, so the two cannot disagree. The render cache keeps a topic's rendering per scope. **A visible change:** a key defined only inside a `keyscope` no longer resolves from outside it by its bare name; write `scope.key`, as the completeness check already required. Map titles, navigation names and the Diff view still read the flat table (README, Known limitations).
+
 ## 1.0.11 (2026-11-01)
 
 ### Fixes

@@ -459,14 +459,17 @@ location for verification.
 
 ### Key scope
 
-- **A bare key name ignores which scope the reference sits in.** A key defined
-  inside `keyscope="a"` answers to `a.k` (and, nested, `x.a.k` and `a.k`) as
-  well as `k`, so a qualified `keyref="a.k"` is substituted in the preview. But
-  the preview looks keys up in one flat table and does not know where the
-  referencing element sits, so a bare `keyref="k"` finds the first definition of
-  `k` in document order, not the one in the reference's own scope. Write the
-  qualified name where two scopes define the same key.
-  (`@dita-viewer/core`, `editor/keySpace.ts`, `collectMapKeys`)
+- **Map titles and navigation names still look keys up by name alone.** A topic's
+  `keyref` and `conkeyref` resolve in the key scope the topic sits in: in Book
+  and Site view the scope of the topicref that placed it, in the standalone
+  preview the scope of the first topicref in the map that publishes the file
+  (the root scope when none does, as DITA puts a topic no map publishes). The
+  keys shown in a map's own titles and navigation names (the DITA Map tree,
+  the template navigation, Find All References) and in the Diff view are still
+  read from one flat table, so a bare `k` there finds the first definition of
+  `k` in document order. Write the qualified name (`a.k`) where two scopes
+  define the same key and that surface matters.
+  (`@dita-viewer/core`, `editor/keySpace.ts`, `KeyScopeIndex`)
 
 ### Custom DTDs and specialization
 
