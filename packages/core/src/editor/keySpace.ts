@@ -77,6 +77,38 @@ export function qualifiedNamesMulti(name: string, scopeChains: string[][]): stri
   return [...out];
 }
 
+/** The key of one (scope, name) entry in a scope index; `scopeId` is the chain joined with "/" ("" is the root). */
+export function scopeKeyIndexKey(scopeId: string, name: string): string {
+  return `${scopeId}\u0000${name}`;
+}
+
+/**
+ * Resolves a key written at a place that sits in the given scope chains, against an
+ * index of `scopeKeyIndexKey(scope, name)` entries: its own scope first, then each
+ * enclosing one, the nearest definition winning (DITA's scope precedence). A name with
+ * scope qualifiers (`a.k`, or `x.a.k` for nested scopes) is looked up below the scope
+ * the search starts from, so a key defined inside a scope is bare only within it and
+ * reachable from outside only by its qualified name. A place in several chains (a
+ * `keyscope` listing several names) resolves in the first chain that finds the key.
+ *
+ * The one rule behind both the completeness checks and the preview, so the two cannot
+ * disagree about which definition a reference reaches.
+ */
+export function resolveKeyInScope<T>(key: string, chains: string[][], index: ReadonlyMap<string, T>): T | undefined {
+  const parts = key.split('.');
+  for (const chain of chains) {
+    for (let depth = chain.length; depth >= 0; depth--) {
+      const prefix = chain.slice(0, depth);
+      for (let j = 0; j < parts.length; j++) {
+        const scope = prefix.concat(parts.slice(0, j)).join('/');
+        const def = index.get(scopeKeyIndexKey(scope, parts.slice(j).join('.')));
+        if (def !== undefined) return def;
+      }
+    }
+  }
+  return undefined;
+}
+
 /**
  * A key's resource target, captured alongside its text value so conkeyref can
  * resolve `keyname/elementid` to a file. `href` is relative to `baseDir` (the

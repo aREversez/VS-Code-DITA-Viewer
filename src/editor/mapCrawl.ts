@@ -12,7 +12,7 @@
 
 import sax from 'sax';
 import { dirname, resolve } from 'path';
-import { preprocessEntities, qualifiedNamesMulti } from '@dita-viewer/core';
+import { preprocessEntities, qualifiedNamesMulti, resolveKeyInScope, scopeKeyIndexKey } from '@dita-viewer/core';
 import { decodeHrefPart } from './ditaRenderUtils';
 import { normalizePathForCompare } from './mapReferenceTools';
 import { DitavalFilter } from './ditaval';
@@ -1343,7 +1343,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
   const keyIndex = new Map<string, KeyDef>();
   for (const def of result.keyDefs) {
     for (const sid of def.scopeIds) {
-      const k = `${sid}\u0000${def.key}`;
+      const k = scopeKeyIndexKey(sid, def.key);
       if (!keyIndex.has(k)) keyIndex.set(k, def);
     }
   }
@@ -1358,7 +1358,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     const defs = new Set<KeyDef>();
     let missing = false;
     for (const chains of contexts) {
-      const def = resolveKeyUse(use, chains, keyIndex);
+      const def = resolveKeyInScope(use.key, chains, keyIndex);
       if (def) defs.add(def);
       else missing = true;
     }
@@ -1434,29 +1434,6 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
   }
   if (droppedFallbacks.size) result.refs = result.refs.filter((r) => !droppedFallbacks.has(r));
   return result;
-}
-
-/**
- * Resolves a keyref use in the key scope it sits in: its own scope first, then each
- * enclosing one, the nearest definition winning (DITA's scope precedence). A name with
- * scope qualifiers (`a.k`, or `x.a.k` for nested scopes) is looked up below the scope
- * the search starts from, so a key defined inside a scope is bare only within it and
- * reachable from outside only by its qualified name. A use in several chains (a
- * `keyscope` listing several names) resolves in the first that finds the key.
- */
-function resolveKeyUse(use: KeyUse, chains: string[][], index: ReadonlyMap<string, KeyDef>): KeyDef | undefined {
-  const parts = use.key.split('.');
-  for (const chain of chains) {
-    for (let depth = chain.length; depth >= 0; depth--) {
-      const prefix = chain.slice(0, depth);
-      for (let j = 0; j < parts.length; j++) {
-        const scope = prefix.concat(parts.slice(0, j)).join('/');
-        const def = index.get(`${scope}\u0000${parts.slice(j).join('.')}`);
-        if (def) return def;
-      }
-    }
-  }
-  return undefined;
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────
