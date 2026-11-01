@@ -9,11 +9,15 @@ import { parseDitamap, preprocessEntities, collectMapEntries, getMapTitleText } 
 import { formatLocalizedRole } from '../language/bookRoleL10n';
 import { expandDitamapRefs, renderTopicToHtml, decodeHrefPart } from './ditaRenderUtils';
 import { buildKeyMap } from './DitaViewerProvider';
+import { getActiveDitaUri } from './activeDitaUri';
 import { buildStandaloneHtml, makeDataUriInliner, buildBookHeading, classifyMapExportEntry } from './exportHtmlHelpers';
 
 // ── Pure helpers (re-exported from exportHtmlHelpers, unit-tested there) ──
 
 export { buildStandaloneHtml, makeDataUriInliner, buildBookHeading };
+// Moved to its own module so the preview chain (mapCheckShared) can reach it without
+// importing this file, which imports the preview provider. Kept exported from here.
+export { getActiveDitaUri };
 
 // ── Content builders ──
 
@@ -85,19 +89,6 @@ function buildMapExport(fsPath: string): { title: string; bodyHtml: string; erro
 }
 
 // ── Command ──
-
-export function getActiveDitaUri(): vscode.Uri | undefined {
-  const editor = vscode.window.activeTextEditor;
-  if (editor && /\.(dita|ditamap)$/i.test(editor.document.uri.fsPath)) {
-    return editor.document.uri;
-  }
-  // Also works while a reading-view (custom editor) tab is active
-  const tab = vscode.window.tabGroups.activeTabGroup.activeTab;
-  if (tab?.input instanceof vscode.TabInputCustom && /\.(dita|ditamap)$/i.test(tab.input.uri.fsPath)) {
-    return tab.input.uri;
-  }
-  return undefined;
-}
 
 /**
  * The export flow itself, independent of how the target file was chosen --

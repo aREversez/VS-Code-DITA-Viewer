@@ -8,7 +8,7 @@
 import * as vscode from 'vscode';
 import { promises as fsp } from 'fs';
 import { CrawlHost } from './mapCrawl';
-import { getActiveDitaUri } from './exportHtml';
+import { getActiveDitaUri } from './activeDitaUri';
 import { readSourceText } from '@dita-viewer/core';
 
 export interface MapCheckDeps {
