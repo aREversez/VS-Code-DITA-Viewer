@@ -389,6 +389,11 @@ export interface DocsiteNavEntry {
    *  filter these out first; see MapViewerProvider.ts's own
    *  siteNavigableEntries. */
   isGroup?: boolean;
+  /** The key scope chains the entry sits in (see MapEntry.scopeChains): the scopes the
+   *  topic it publishes is rendered in, so a keyref on the page resolves as DITA says.
+   *  Set on every entry buildBookNavManifest builds; optional only so hand-built
+   *  entries in tests need not carry one. */
+  scopeChains?: string[][];
 }
 
 /**
@@ -584,7 +589,7 @@ export function buildBookNavManifest(
     const pos = positions[i];
     if (!pos) continue;
     if (!entry.href) {
-      result.push({ id: pos.id, title: entry.displayName, depth: pos.depth, role: entry.role, isGroup: true });
+      result.push({ id: pos.id, title: entry.displayName, depth: pos.depth, role: entry.role, isGroup: true, ...(entry.scopeChains ? { scopeChains: entry.scopeChains } : {}) });
       continue;
     }
     let title = entry.displayName;
@@ -595,9 +600,19 @@ export function buildBookNavManifest(
     const topicType = resolveTopicType ? resolveTopicType(entry.href) : undefined;
     // pos.id is this navigable entry's absPath (see computeManifestEntryPositions),
     // so it doubles as `absPath` directly rather than resolving it again here.
-    result.push({ id: pos.id, absPath: pos.id, href: entry.href, title, depth: pos.depth, role: entry.role, topicType });
+    result.push({ id: pos.id, absPath: pos.id, href: entry.href, title, depth: pos.depth, role: entry.role, topicType, ...(entry.scopeChains ? { scopeChains: entry.scopeChains } : {}) });
   }
   return result;
+}
+
+/**
+ * The key scopes a site page is rendered in: those of the first entry that publishes it,
+ * which is the one Book mode renders when a topic appears twice (renderBookParts keeps the
+ * first). Undefined when the manifest has no such entry, and the render then falls back
+ * to the first topicref that publishes the file.
+ */
+export function sitePageKeyScope(manifest: readonly DocsiteNavEntry[], absPath: string): string[][] | undefined {
+  return manifest.find((e) => !e.isGroup && e.absPath === absPath)?.scopeChains;
 }
 
 /**
@@ -1215,6 +1230,9 @@ export function renderBookParts(input: BookRenderInput): BookPart[] {
         headingLevel,
         uiLanguage,
         bookMembers,
+        // Where the map put this topic: the same topic under two keyscopes shows
+        // each scope's key text, and the cache keeps them apart.
+        keyScope: entry.scopeChains,
       });
 
       if (result.error) {

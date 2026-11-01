@@ -1,8 +1,8 @@
 import * as assert from 'assert';
-import { mkdirSync, mkdtempSync, rmSync, statSync, utimesSync, writeFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { collectMapEntries, type MapEntry, parseDitamap, preprocessEntities } from '@dita-viewer/core';
+import { buildKeySpace, collectMapEntries, type MapEntry, parseDitamap, preprocessEntities } from '@dita-viewer/core';
 import {
   renderBookPlaceholder,
   renderBookError,
@@ -14,6 +14,7 @@ import {
   clearBookMembersCache,
   resolveBookTopicPath,
   buildBookNavManifest,
+  sitePageKeyScope,
   renderSiteNavHtml,
   renderSiteNavTreeHtml,
 } from '../../editor/ditaRenderUtils';
@@ -1715,5 +1716,79 @@ describe('renderSiteNavTreeHtml (extracted for MapViewerProvider\'s incremental 
       assert.ok(itemClass(html, 'grp:0.0').includes('collapsed'));
       assert.ok(!itemClass(html, 'grp:1').includes('collapsed'));
     });
+  });
+});
+
+describe('key scopes in Book and Docsite rendering', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'book-keyscope-'));
+    clearTopicRenderCache();
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  const kw = (keys: string, value: string): string =>
+    `<keydef keys="${keys}"><topicmeta><keywords><keyword>${value}</keyword></keywords></topicmeta></keydef>`;
+  const topic = (id: string): string =>
+    `<?xml version="1.0"?><topic id="${id}"><title>${id}</title><body><p><ph keyref="k"/></p></body></topic>`;
+
+  function setup(mapBody: string): { entries: MapEntry[]; keyMap: Map<string, string> } {
+    const mapPath = join(dir, 'a.ditamap');
+    writeFileSync(mapPath, `<?xml version="1.0"?><map>${mapBody}</map>`);
+    for (const id of ['one', 'two', 'root']) writeFileSync(join(dir, `${id}.dita`), topic(id));
+    const root = parseDitamap(preprocessEntities(readFileSync(mapPath, 'utf-8'))).root;
+    const keyMap = buildKeySpace(mapPath, [], (p, e) => readFileSync(p, e)).keys;
+    return { entries: collectMapEntries(root), keyMap };
+  }
+
+  const MAP =
+    `<topicgroup keyscope="s1">${kw('k', 'S1VAL')}<topicref href="one.dita"/></topicgroup>` +
+    `<topicgroup keyscope="s2">${kw('k', 'S2VAL')}<topicref href="two.dita"/></topicgroup>` +
+    `${kw('k', 'ROOTVAL')}<topicref href="root.dita"/>`;
+
+  function bookHtmlOf(entries: MapEntry[], keyMap: Map<string, string>): string {
+    return renderBookEntries({ entries, docDir: dir, keyMap, fileToWebviewUri: (p) => p, uiLanguage: 'en' });
+  }
+
+  it('Book mode renders each topic with the key text of the scope its topicref sits in', () => {
+    const { entries, keyMap } = setup(MAP);
+    const html = bookHtmlOf(entries, keyMap);
+    const part = (id: string): string => html.slice(html.indexOf(`id="${id}"`), html.indexOf('</article>', html.indexOf(`id="${id}"`)));
+    assert.ok(part('one').includes('S1VAL') && !part('one').includes('S2VAL'));
+    assert.ok(part('two').includes('S2VAL') && !part('two').includes('S1VAL'));
+    assert.ok(part('root').includes('ROOTVAL'));
+  });
+
+  it('Book mode uses the scope its own map gives a topic, not the first one any map in the key space gives it', () => {
+    // Two maps are scanned for keys (as the ancestor scan does); both publish one.dita,
+    // under different scopes. The book is made from the second.
+    const mapA = join(dir, 'a.ditamap');
+    const mapB = join(dir, 'b.ditamap');
+    const wrap = (body: string): string => `<?xml version="1.0"?><map>${body}</map>`;
+    writeFileSync(mapA, wrap(`<topicgroup keyscope="s1">${kw('k', 'S1VAL')}<topicref href="one.dita"/></topicgroup>`));
+    writeFileSync(mapB, wrap(`<topicgroup keyscope="s2">${kw('k', 'S2VAL')}<topicref href="one.dita"/></topicgroup>`));
+    writeFileSync(join(dir, 'one.dita'), topic('one'));
+    const keyMap = buildKeySpace(undefined, [mapA, mapB], (p, e) => readFileSync(p, e)).keys;
+    const entries = collectMapEntries(parseDitamap(preprocessEntities(readFileSync(mapB, 'utf-8'))).root);
+    const html = bookHtmlOf(entries, keyMap);
+    assert.ok(html.includes('S2VAL') && !html.includes('S1VAL'), html);
+  });
+
+  it('a nav manifest entry carries the scopes of its map entry, and a hand-built one stays as it was', () => {
+    const { entries } = setup(MAP);
+    const manifest = buildBookNavManifest(entries, dir);
+    assert.deepStrictEqual(manifest.find((m) => m.href === 'one.dita')?.scopeChains, [['s1']]);
+    assert.deepStrictEqual(manifest.find((m) => m.href === 'root.dita')?.scopeChains, [[]]);
+    const bare = buildBookNavManifest([{ href: 'x.dita', displayName: 'X', displayNameExplicit: true, depth: 0 }], dir);
+    assert.ok(!('scopeChains' in bare[0]));
+  });
+
+  it('a site page is read in the scopes of the first entry that publishes it', () => {
+    const { entries } = setup(
+      `<topicgroup keyscope="s2"><topicref href="one.dita"/></topicgroup><topicgroup keyscope="s1"><topicref href="one.dita"/></topicgroup>`,
+    );
+    const manifest = buildBookNavManifest(entries, dir);
+    assert.deepStrictEqual(sitePageKeyScope(manifest, join(dir, 'one.dita')), [['s2']]);
+    assert.strictEqual(sitePageKeyScope(manifest, join(dir, 'nobody.dita')), undefined);
   });
 });

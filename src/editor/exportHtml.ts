@@ -66,6 +66,9 @@ function buildMapExport(fsPath: string): { title: string; bodyHtml: string; erro
         headingLevel: Math.min(1 + entry.depth, 6),
         uiLanguage: vscode.env.language,
         suppressIndexterm: true,
+        // The same scope Book mode renders the topic in (renderBookParts), so the
+        // exported file shows what the preview shows.
+        keyScope: entry.scopeChains,
       });
       if (result.error) {
         parts.push(heading(entry.displayName, entry.depth, entry.role));
