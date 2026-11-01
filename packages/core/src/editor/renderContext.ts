@@ -36,7 +36,7 @@ import {
   decodeHrefPart,
   URL_SCHEME_RE,
 } from './refResolvers';
-import { getKeyDefs, KeyHrefDef } from './keySpace';
+import { defaultTopicScopeChains, getKeyDefs, getKeyScopes, KeyDefLookup, KeyHrefDef, resolveKeyInScope } from './keySpace';
 import { resolveConkeyref } from './conkeyref';
 
 export interface BuildRenderContextInput {
@@ -56,6 +56,16 @@ export interface BuildRenderContextInput {
    * explicitly only to drive conkeyref with a hand-built keyMap (tests).
    */
   keyDefs?: ReadonlyMap<string, KeyHrefDef>;
+  /**
+   * The key scope chains the document is read in (a keyscope listing several names
+   * gives several chains; `[[]]` is the root scope). A keyref / conkeyref resolves
+   * in the nearest scope that defines the key, as DITA says, instead of by name alone.
+   * Book / site rendering passes the scope of the topicref that put the topic on the
+   * page. Left undefined, the scope comes from `docFile` (the first topicref that
+   * publishes it); with neither, or with a `keyMap` that carries no scope index (one
+   * built by hand), keys resolve by name only, as they always did.
+   */
+  keyScope?: string[][];
   /**
    * Absolute path of the document being rendered. Together with `markConrefs`
    * it lets same-file conrefs be marked too (their target file is this one).
@@ -106,13 +116,24 @@ export function buildRenderContext(input: BuildRenderContextInput): BuiltRenderC
   const conrefRangeResolver = makeConrefRangeResolver(docDir, ownRoot, fileCache);
   const fileTitleResolver = makeFileTitleResolver(docDir, fileCache);
 
+  // Which scope a reference is read in, and the lookups bound to it. The preview's key
+  // space also keeps a flat name map (first definition wins, bare names visible
+  // everywhere); a lookup that knows where it sits reads the scope index instead, so it
+  // finds the nearest definition the way the completeness checks do.
+  const scopeIndex = getKeyScopes(keyMap);
+  const keyChains = scopeIndex
+    ? (input.keyScope ?? (input.docFile ? defaultTopicScopeChains(scopeIndex, input.docFile) : undefined))
+    : undefined;
+  const lookupKey = (key: string): string | undefined =>
+    scopeIndex && keyChains ? resolveKeyInScope(key, keyChains, scopeIndex.values) : keyMap.get(key);
+
   const ctx: RenderContext = {
     headingLevel,
     asWebviewUri,
     documentDir: docDir,
     // Local id match first, then cross-file ("file.dita#topicId" or "file.dita").
     resolveTitle: (id: string) => titleMap.get(id) || fileTitleResolver(id),
-    resolveKey: (key: string) => keyMap.get(key),
+    resolveKey: lookupKey,
     resolveConref: (conref: string) => conrefResolver(conref),
     resolveConrefRange: (conref: string, conrefend: string) => conrefRangeResolver(conref, conrefend),
     noteLabels: detectNoteLabels(ownRoot, uiLanguage),
@@ -148,8 +169,15 @@ export function buildRenderContext(input: BuildRenderContextInput): BuiltRenderC
   // the absolute-path loader rather than the docDir-relative conref resolver.
   // Discovered from keyMap by identity unless the caller passed defs directly.
   let lastLoaded: { file?: string; root: DitaNode } | undefined;
-  const keyDefs = input.keyDefs ?? getKeyDefs(keyMap);
-  if (keyDefs && keyDefs.size > 0) {
+  const flatDefs = input.keyDefs ?? getKeyDefs(keyMap);
+  // Definitions come from the same scope as the text, so a conkeyref or an xref keyref
+  // cannot reach one scope's file while the text shows another's. Defs handed in
+  // explicitly (tests) are used as given.
+  const keyDefs: KeyDefLookup | undefined =
+    flatDefs && !input.keyDefs && scopeIndex && keyChains
+      ? { get: (name) => resolveKeyInScope(name, keyChains, scopeIndex.defs) }
+      : flatDefs;
+  if (keyDefs && flatDefs && flatDefs.size > 0) {
     // A keyref on a link-shaped element (topic/xref) resolves to the key's
     // resource target as its effective href. The keydef's href is relative
     // to the map that defined it, but every href the renderer consumes

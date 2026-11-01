@@ -165,6 +165,20 @@ function noteTopicScope(scopes: KeyScopeIndex, absPath: string, chains: string[]
   else if (!known.some((c) => JSON.stringify(c) === sig)) known.push(chains);
 }
 
+/**
+ * The scope chains a topic is read in when nothing says where it sits: the first
+ * topicref in the map that publishes it, or the root scope when none does (a topic
+ * no map publishes belongs to no keyscope).
+ */
+export function defaultTopicScopeChains(scopes: KeyScopeIndex, absPath: string): string[][] {
+  return getTopicScopeChains(scopes, absPath)?.[0] ?? [[]];
+}
+
+/** What a definition lookup needs; a Map satisfies it, and so does a scope-bound view of one. */
+export interface KeyDefLookup {
+  get(name: string): KeyHrefDef | undefined;
+}
+
 /** A topicref href that names a file of this project: no scheme, not marked external. */
 function localTopicPath(href: string | undefined, scope: string | undefined): string | undefined {
   if (!href || scope === 'external' || /^[a-z][a-z0-9+.-]*:/i.test(href)) return undefined;

@@ -600,6 +600,12 @@ export interface MapEntry {
    *  reading-oriented consumers (buildBookNavManifest, renderBookParts,
    *  exportHtml.ts) that skip an entry once they see resourceOnly true. */
   resourceOnly?: boolean;
+  /** The key scope chains this entry sits in (`[[]]` at the root; a keyscope listing
+   *  several names gives several chains), the entry's own `keyscope` included, as
+   *  collectMapKeys files the keys it defines. A topic the entry publishes is read
+   *  in these scopes. Always set by collectMapEntries; optional so an entry built by
+   *  hand (a test, another host) need not carry one. */
+  scopeChains?: string[][];
 }
 
 function collectEntriesRecursive(
@@ -609,9 +615,15 @@ function collectEntriesRecursive(
   resolveKey: ResolveKey | undefined,
   roleLabel: RoleLabeler,
   inheritedProcessingRole: 'normal' | 'resource-only' = 'normal',
+  outerScopes: string[][] = [[]],
 ): void {
   if (node.type !== 'element') return;
   const baseType = node.baseType;
+  // A keyscope names a scope for the element carrying it and everything below.
+  const keyscope = getAttr(node, 'keyscope');
+  const scopeChains = keyscope
+    ? outerScopes.flatMap((chain) => keyscope.trim().split(/\s+/).filter(Boolean).map((name) => chain.concat(name)))
+    : outerScopes;
 
   // Skip reltable and its children
   if (baseType === 'map/reltable') return;
@@ -632,7 +644,7 @@ function collectEntriesRecursive(
     // level deeper just because expandDitamapRefs happened to splice them
     // in as DOM children of this wrapper node.
     for (const child of node.children || []) {
-      collectEntriesRecursive(child, depth, result, resolveKey, roleLabel, inheritedProcessingRole);
+      collectEntriesRecursive(child, depth, result, resolveKey, roleLabel, inheritedProcessingRole, scopeChains);
     }
     return;
   }
@@ -672,19 +684,20 @@ function collectEntriesRecursive(
       // been) serves no one.
       role: effectiveProcessingRole === 'resource-only' ? undefined : roleLabel(node.tagName, depth),
       resourceOnly: effectiveProcessingRole === 'resource-only',
+      scopeChains,
     });
     // Recurse children at depth+1
     for (const child of node.children || []) {
-      collectEntriesRecursive(child, depth + 1, result, resolveKey, roleLabel, effectiveProcessingRole);
+      collectEntriesRecursive(child, depth + 1, result, resolveKey, roleLabel, effectiveProcessingRole, scopeChains);
     }
   } else if (baseType === 'map/topicgroup' || baseType === 'map/bookmap-structural') {
     // topicgroup / bookmap-structural: no entry itself, but recurse at same depth
     for (const child of node.children || []) {
-      collectEntriesRecursive(child, depth, result, resolveKey, roleLabel, effectiveProcessingRole);
+      collectEntriesRecursive(child, depth, result, resolveKey, roleLabel, effectiveProcessingRole, scopeChains);
     }
   } else {
     for (const child of node.children || []) {
-      collectEntriesRecursive(child, depth, result, resolveKey, roleLabel, effectiveProcessingRole);
+      collectEntriesRecursive(child, depth, result, resolveKey, roleLabel, effectiveProcessingRole, scopeChains);
     }
   }
 }
