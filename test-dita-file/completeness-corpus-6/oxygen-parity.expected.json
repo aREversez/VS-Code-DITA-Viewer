@@ -36,17 +36,11 @@
     "topics/r-dkt-use.dita  resource-only-target",
     "topics/s-url-link-pos.dita  external-reference",
     "topics/s-url-xref-local.dita  external-reference",
-    "topics/s-url-xref-pos.dita  external-reference"
-  ],
-  "extensionOnly": [
-    "maps/u-id.ditamap  invalid-id-syntax",
+    "topics/s-url-xref-pos.dita  external-reference",
     "topics/u-id-nested-digit.dita  invalid-id-syntax",
-    "topics/u-id-p-colon.dita  invalid-id-syntax",
-    "topics/u-id-p-digit.dita  invalid-id-syntax",
     "topics/u-id-p-plus.dita  invalid-id-syntax",
-    "topics/u-id-p-space.dita  invalid-id-syntax",
-    "topics/u-id-p-trail.dita  invalid-id-syntax",
-    "topics/u-id-topic-trail.dita  invalid-id-syntax"
+    "topics/u-id-p-space.dita  invalid-id-syntax"
   ],
+  "extensionOnly": [],
   "oxygenOnly": []
 }

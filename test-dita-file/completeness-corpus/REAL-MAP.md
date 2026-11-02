@@ -57,6 +57,12 @@ whether the file has a DOCTYPE, under the labels of the summary. `node scripts/i
 saw, and prints only that: DOCTYPE yes/no and each offending id as a shape (letters `a`,
 digits `9`, non-ASCII letters `u`, other characters as they are). It prints no file name.
 
+Corpus 6's tenth report answered the question this instrument raised: an `@id` is judged by the
+grammar its element declares -- an NCName on a topic or map element, a name token on any other --
+after XML's normalization, so the two rows that prompted it should stop being filed. That is an
+argument, not a measurement: a re-run of the same map after the change is what closes them
+(`../completeness-corpus-6/README.md`, "Id syntax by element kind").
+
 ## Reading the result
 
 - A category with equal counts and every file matched needs nothing.

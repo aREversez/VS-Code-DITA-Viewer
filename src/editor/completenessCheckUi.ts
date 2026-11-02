@@ -84,6 +84,7 @@ export function localizeMsg(m: Msg): string {
     case 'key.invalidSlash': return vscode.l10n.t('Key reference has more than one "/" (expected key/element): {0}', ...a);
     case 'key.invalidWhitespace': return vscode.l10n.t('Key reference contains whitespace: {0}', ...a);
     case 'id.invalid': return vscode.l10n.t('ID "{0}" is not a valid DITA ID (XML NCName)', ...a);
+    case 'id.invalidToken': return vscode.l10n.t('ID "{0}" is not a valid DITA ID (XML name token)', ...a);
     case 'ref.noFormat': return vscode.l10n.t('Reference to a non-DITA resource has no @format: {0}', ...a);
     case 'ref.extNoFormat': return vscode.l10n.t('External reference has no @format: {0}', ...a);
     case 'ref.resAsDita': return vscode.l10n.t('Non-DITA resource is referenced as a DITA topic: {0}', ...a);

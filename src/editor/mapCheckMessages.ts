@@ -49,6 +49,9 @@ export const MESSAGE_TEMPLATES = {
   'key.invalidSlash': 'Key reference has more than one "/" (expected key/element): {0}',
   'key.invalidWhitespace': 'Key reference contains whitespace: {0}',
   'id.invalid': 'ID "{0}" is not a valid DITA ID (XML NCName)',
+  // An element that is not a topic or map declares its @id as a name token, not an ID: a
+  // digit or a colon may open it, a space or a plus may not (archSpec/base/id).
+  'id.invalidToken': 'ID "{0}" is not a valid DITA ID (XML name token)',
   // @format and @scope
   'ref.noFormat': 'Reference to a non-DITA resource has no @format: {0}',
   'ref.extNoFormat': 'External reference has no @format: {0}',

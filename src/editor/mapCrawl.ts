@@ -156,6 +156,13 @@ export interface TopicId extends Location {
 export interface IdUse extends Location {
   id: string;
   tag: string;
+  /**
+   * The XML attribute type the DITA grammar declares for this element's @id: `ID` on a topic
+   * or map element, a name token on everything else (archSpec/base/id, and the table it
+   * carries). Oxygen validates by that type rather than by one grammar for every @id --
+   * corpus 6's u-id asked it.
+   */
+  idType: 'ID' | 'NMTOKEN';
   /** The nearest enclosing topic element's id (topic files only). */
   topicId?: string;
 }
@@ -702,7 +709,11 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       scanClasses(root, mapPath, loaded.doctype, loaded.grammar);
       scanDomains(root, mapPath);
       const rootId = root.attrs['id'];
-      if (rootId) result.ids.push({ file: mapPath, line: root.line, id: rootId, tag: root.tag });
+      if (rootId) {
+        // A topic read as a map keeps the topic's declared type.
+        const idType = isMapRootNode(root) || isTopicElement(root) ? 'ID' : 'NMTOKEN';
+        result.ids.push({ file: mapPath, line: root.line, id: rootId, tag: root.tag, idType });
+      }
       const isMapRoot = isMapRootNode(root);
       // A topic read as a map (a @format mismatch) is reported by the reference check,
       // not as a structural problem of the target; only a root that is neither is a warning.
@@ -738,7 +749,9 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
 
     const tag = n.tag;
     const id = n.attrs['id'];
-    if (id && !ctx.replay) result.ids.push({ file: ctx.file, line: n.line, id, tag });
+    if (id && !ctx.replay) {
+      result.ids.push({ file: ctx.file, line: n.line, id, tag, idType: isTopicElement(n) ? 'ID' : 'NMTOKEN' });
+    }
     if (!ctx.replay && (tag === 'topichead' || TOPICREF_TAGS.has(tag))) {
       result.mapEntries.push({
         file: ctx.file, line: n.line, tag, href: n.attrs['href'],
@@ -955,7 +968,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
       const currentTopic = isTopic ? (n.attrs['id'] ?? topicId) : topicId;
       const id = n.attrs['id'];
       if (id) {
-        result.ids.push({ file: path, line: n.line, id, tag: n.tag, topicId: currentTopic });
+        result.ids.push({ file: path, line: n.line, id, tag: n.tag, idType: isTopic ? 'ID' : 'NMTOKEN', topicId: currentTopic });
         if (!isTopic) {
           result.reusable.push({
             file: path, line: n.line, id, tag: n.tag, topicFile: path, topicId: currentTopic,

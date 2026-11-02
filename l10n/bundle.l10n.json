@@ -238,6 +238,7 @@
   "Key reference has more than one \"/\" (expected key/element): {0}": "Key reference has more than one \"/\" (expected key/element): {0}",
   "Key reference contains whitespace: {0}": "Key reference contains whitespace: {0}",
   "ID \"{0}\" is not a valid DITA ID (XML NCName)": "ID \"{0}\" is not a valid DITA ID (XML NCName)",
+  "ID \"{0}\" is not a valid DITA ID (XML name token)": "ID \"{0}\" is not a valid DITA ID (XML name token)",
   "Reference to a non-DITA resource has no @format: {0}": "Reference to a non-DITA resource has no @format: {0}",
   "External reference has no @format: {0}": "External reference has no @format: {0}",
   "Non-DITA resource is referenced as a DITA topic: {0}": "Non-DITA resource is referenced as a DITA topic: {0}",

@@ -140,13 +140,6 @@
     "message": "Key \"k-t0\" is defined but never referenced"
   },
   {
-    "category": "invalid-id-syntax",
-    "severity": "error",
-    "file": "maps/u-id.ditamap",
-    "line": 8,
-    "message": "ID \"9tr\" is not a valid DITA ID (XML NCName)"
-  },
-  {
     "category": "resource-only-target",
     "severity": "warning",
     "file": "topics/o-scope-inside-neg.dita",
@@ -282,43 +275,15 @@
   {
     "category": "invalid-id-syntax",
     "severity": "error",
-    "file": "topics/u-id-p-colon.dita",
-    "line": 7,
-    "message": "ID \"a:b\" is not a valid DITA ID (XML NCName)"
-  },
-  {
-    "category": "invalid-id-syntax",
-    "severity": "error",
-    "file": "topics/u-id-p-digit.dita",
-    "line": 7,
-    "message": "ID \"9a\" is not a valid DITA ID (XML NCName)"
-  },
-  {
-    "category": "invalid-id-syntax",
-    "severity": "error",
     "file": "topics/u-id-p-plus.dita",
     "line": 7,
-    "message": "ID \"a+b\" is not a valid DITA ID (XML NCName)"
+    "message": "ID \"a+b\" is not a valid DITA ID (XML name token)"
   },
   {
     "category": "invalid-id-syntax",
     "severity": "error",
     "file": "topics/u-id-p-space.dita",
     "line": 7,
-    "message": "ID \"a b\" is not a valid DITA ID (XML NCName)"
-  },
-  {
-    "category": "invalid-id-syntax",
-    "severity": "error",
-    "file": "topics/u-id-p-trail.dita",
-    "line": 7,
-    "message": "ID \"a \" is not a valid DITA ID (XML NCName)"
-  },
-  {
-    "category": "invalid-id-syntax",
-    "severity": "error",
-    "file": "topics/u-id-topic-trail.dita",
-    "line": 3,
-    "message": "ID \"u-id-topic-trail \" is not a valid DITA ID (XML NCName)"
+    "message": "ID \"a b\" is not a valid DITA ID (XML name token)"
   }
 ]

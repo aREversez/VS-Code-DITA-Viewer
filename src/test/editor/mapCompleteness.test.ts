@@ -904,19 +904,25 @@ describe('completeness: reference spelling and @format (Oxygen batch 1)', () => 
     ]);
   });
 
-  // Pinned, not endorsed: the ids here sit on <p>, which the spec does not declare an XML ID
-  // (corpus 6's u-id asks Oxygen whether it judges them as name tokens instead; README, "Id
-  // syntax by element kind"). Until the run every element's @id is read as an NCName.
-  it('reports @id values that are not XML NCNames, only under batch validation', async () => {
+  // Corpus 6's u-id asked Oxygen which grammar it applies to an @id: the element's declared
+  // type, not one grammar for every value. A topic or map element's @id is an XML ID, every
+  // other element's a name token, and XML 1.0 §3.3.3 normalizes the value first (README, "Id
+  // syntax by element kind").
+  it('judges an @id by the type its element declares, only under batch validation', async () => {
     const files = {
-      'root.ditamap': '<map><topicref href="a.dita"/></map>',
-      'a.dita': '<topic id="a"><title>T</title><body><p id="1a"/><p id="a:b"/><p id="ok-id"/></body></topic>',
+      'root.ditamap': '<map id="9map"><topicref id="9tr" href="a.dita"/></map>',
+      'a.dita':
+        '<topic id="a "><title>T</title><body>' +
+        '<p id="1a"/><p id="a:b"/><p id="a b"/><p id="a+b"/><p id="a "/><p id="ok-id"/>' +
+        '</body><topic id="9n"><title>nested</title><body><p>Text.</p></body></topic></topic>',
     };
     const on = await check(files, { batchValidate: true });
     const off = await check(files, { checkNonDita: true });
     assert.deepStrictEqual(on.filter((i) => i.category === 'invalid-id-syntax').map((i) => i.message), [
-      'ID "1a" is not a valid DITA ID (XML NCName)',
-      'ID "a:b" is not a valid DITA ID (XML NCName)',
+      'ID "9map" is not a valid DITA ID (XML NCName)',
+      'ID "a b" is not a valid DITA ID (XML name token)',
+      'ID "a+b" is not a valid DITA ID (XML name token)',
+      'ID "9n" is not a valid DITA ID (XML NCName)',
     ]);
     assert.strictEqual(off.filter((i) => i.category === 'invalid-id-syntax').length, 0);
   });

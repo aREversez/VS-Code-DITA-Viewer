@@ -238,6 +238,7 @@
   "Key reference has more than one \"/\" (expected key/element): {0}": "键引用包含多个“/”（应为 key/element）：{0}",
   "Key reference contains whitespace: {0}": "键引用包含空白字符：{0}",
   "ID \"{0}\" is not a valid DITA ID (XML NCName)": "ID“{0}”不是有效的 DITA ID（XML NCName）",
+  "ID \"{0}\" is not a valid DITA ID (XML name token)": "ID“{0}”不是有效的 DITA ID（XML name token）",
   "Reference to a non-DITA resource has no @format: {0}": "对非 DITA 资源的引用缺少 @format：{0}",
   "External reference has no @format: {0}": "外部引用缺少 @format：{0}",
   "Non-DITA resource is referenced as a DITA topic: {0}": "非 DITA 资源被当作 DITA 主题引用：{0}",

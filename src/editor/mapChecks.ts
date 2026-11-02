@@ -697,13 +697,30 @@ function invalidKeySyntaxIssues(crawl: CrawlResult): Array<Omit<Issue, 'message'
 /** The DITA `@id` grammar is XML's NCName: a letter or `_` first, then letters, digits, `.`, `-`, `_`, `·` and combining marks. */
 const DITA_ID = /^[A-Za-z_\p{L}][\p{L}\p{Nd}._\-\u00B7\p{Mn}\p{Mc}]*$/u;
 
+/** A name token is XML's NMTOKEN: one or more NameChars, so a digit or a colon may open it. */
+const DITA_NMTOKEN = /^[A-Za-z_0-9:\p{L}\p{Nd}.\-\u00B7\p{Mn}\p{Mc}]+$/u;
+
+/**
+ * XML 1.0 §3.3.3 normalizes every attribute that is not CDATA before it is judged: whitespace
+ * runs collapse to one space and the ends are trimmed. Oxygen does that -- corpus 6's u-id drew
+ * nothing for a trailing space, on a topic id as much as on a `<p>`.
+ */
+const normalizeIdValue = (value: string): string => value.replace(/[ \t\n\r]+/g, ' ').trim();
+
 function invalidIdSyntaxIssues(crawl: CrawlResult): Array<Omit<Issue, 'message'>> {
   const out: Array<Omit<Issue, 'message'>> = [];
   for (const id of crawl.ids) {
-    if (DITA_ID.test(id.id)) continue;
+    // Which grammar applies is the element's declared type, not the value: a topic or map
+    // element's @id is an XML ID, every other element's a name token (archSpec/base/id).
+    // Corpus 6's u-id held that reading -- a digit-first or colon id on a `<p>` drew nothing,
+    // a space or a plus drew Oxygen's `NMTOKENInvalid`, and a nested `<topic id="9n">` was an
+    // ID error, as a topic id always was.
+    const value = normalizeIdValue(id.id);
+    const valid = id.idType === 'ID' ? DITA_ID.test(value) : DITA_NMTOKEN.test(value);
+    if (valid) continue;
     out.push({
       category: 'invalid-id-syntax', severity: 'error', file: id.file, line: id.line,
-      msg: msg('id.invalid', id.id),
+      msg: msg(id.idType === 'ID' ? 'id.invalid' : 'id.invalidToken', id.id),
     });
   }
   return out;

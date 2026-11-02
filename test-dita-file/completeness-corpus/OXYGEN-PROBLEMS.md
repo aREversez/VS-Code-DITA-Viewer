@@ -34,11 +34,11 @@ Eighteen of the 75 *ok* rows say **mapped only**: the check exists and the id is
 `PROBLEM_ID_CATEGORY`, but no incident of that exact id has ever been seen in the six reports.
 The reason comes in three shapes. Five rows are a spelling difference: a live report emits
 `dmv.key.undef` where the catalog lists `dmv.undef.key`, `dmv.invalid.keyref.syntax` where it
-lists the `.1` and `.3` variants, and the Xerces `IDInvalidWithNamespaces` where it lists
-`dmv.invalid.id.syntax.2` and `.3`; `PROBLEM_ID_CATEGORY` answers the observed spelling beside
-the catalog one. One row, `dmv.dup.cond.filter`, is an incident no report gives a `problemID` to,
-so parity matches it on wording. The other twelve are the finding arriving under a different
-catalog id (`dmv.file.not.found` for a dangling reference the catalog calls
+lists the `.1` and `.3` variants, and the Xerces `IDInvalidWithNamespaces` and `NMTOKENInvalid`
+where it lists `dmv.invalid.id.syntax.2` and `.3`; `PROBLEM_ID_CATEGORY` answers the observed
+spelling beside the catalog one. One row, `dmv.dup.cond.filter`, is an incident no report gives a
+`problemID` to, so parity matches it on wording. The other twelve are the finding arriving under
+a different catalog id (`dmv.file.not.found` for a dangling reference the catalog calls
 `dmv.reference.not.exist`) or not arriving for these probes at all — no corpus writes a
 `<reltable>`, and this Oxygen defines the attributes the profiling probes use.
 
@@ -166,8 +166,8 @@ sanitizer writes no such element for them and `oxygen-diff` prints them as `(no 
 | `dmv.invalid.class.generalization` | `@class` is not a generalization | ok (`conref-class`) — the corpus-5 report files four conref pairs here: unrelated classes, a more specific source (`step`→`li`), and both specialization directions; a source on the general end is not filed, which is the `source-general` probe of R064, silent in the same report; the id also covers the `conref` that names a whole topic (corpus 3) |
 | `dmv.invalid.class.specialization` | `@class` is not a specialization | n/a — Oxygen never emitted it: the `l-class-specialization-{pos,neg}` probes are both `dmv.invalid.class.generalization`, and the id appears in none of the six reports; the mapped category answers both directions |
 | `dmv.invalid.domains.format` | `@domains` missing/malformed | ok (`domains-format`) — the corpus-5 report carries it on the empty-`@domains` edge only; an absent `@domains` is not a finding, and the DOCTYPE-less probe drew the schema differences instead |
-| `dmv.invalid.id.syntax.2` | invalid character in an ID | ok (`invalid-id-syntax`) — mapped only: the corpus-2 report files both probes as `IDInvalidWithNamespaces`, so no incident carries this id |
-| `dmv.invalid.id.syntax.3` | ID contains whitespace | ok (`invalid-id-syntax`) — mapped only: `IDInvalidWithNamespaces` in the corpus-2 report, so no incident carries this id |
+| `dmv.invalid.id.syntax.2` | invalid character in an ID | ok (`invalid-id-syntax`) — mapped only: the corpus-2 report files both probes as `IDInvalidWithNamespaces`, so no incident carries this id; corpus 6's u-id files a `<p>` id with a space or a plus as `NMTOKENInvalid`, the other Xerces spelling for the same family |
+| `dmv.invalid.id.syntax.3` | ID contains whitespace | ok (`invalid-id-syntax`) — mapped only: `IDInvalidWithNamespaces` in the corpus-2 report, so no incident carries this id; the name-token half of corpus 6's u-id drew `NMTOKENInvalid` |
 | `dmv.invalid.parse.dita.content` | problem parsing DITA content | ok (`dita-parse`) — reported on the map that references the broken file, which is Oxygen's own attribution (corpus 1 and corpus 5); the only row left Oxygen-only is a remote target, which the extension never fetches |
 | `dmv.section.first.title` | `<section>` title is not the first element | ok (`section-title-order`) — the corpus-5 report carries it on the positive probe; a section nested in a section is not checked, because the DTD rejects the nesting before the order matters |
 | `dmv.section.no.dup.title` | `<section>` has more than one title | ok (`section-title-duplicate`) — the corpus-5 report carries it on the positive probe; every title after the first is its own finding |
@@ -505,16 +505,17 @@ What the run settled:
 ### The key scope runs and the R008/R010 probe runs (sixth corpus)
 
 *Validate and Check for Completeness* over `../completeness-corpus-6/corpus.ditamap` — the
-same settings as the runs above — was run nine times: once on the key scope probes alone
+same settings as the runs above — was run ten times: once on the key scope probes alone
 (**6 incidents**), once after the six duplicate probes of R008 joined the map (**14
 incidents**), once after four scope-shape probes and their positive control joined it
 (**16 incidents**), once after three scope-identity probes joined it (**20 incidents**), once
 after the four key-scope tail probes joined it (**23 incidents**), once after the multi-name
 probe joined it (**25 incidents**), once after the five duplicate-key probes joined it
-(**36 incidents**), once after the six URL probes of R034 joined it (**39 incidents**), and once
-after the six unused-key probes of R011 joined it (**45 incidents**,
+(**36 incidents**), once after the six URL probes of R034 joined it (**39 incidents**), once
+after the six unused-key probes of R011 joined it (**45 incidents**), and once after the eight
+id-syntax probes of R031 joined it (**48 incidents**,
 `../completeness-corpus-6/oxygen-report.xml`). No run carried an accepted
-difference, and the last one locks **37 matched, 0 extension-only, 0 Oxygen-only**
+difference, and the last one locks **40 matched, 0 extension-only, 0 Oxygen-only**
 (`scripts/oxygen-diff.cjs` agrees) — the first corpus with parity in both directions.
 
 What the runs settled:
@@ -592,8 +593,8 @@ What the runs settled:
 | `completeness-corpus-3` | batch 2, conref / id / link forms | 34 | – | 30 / 0 / 4 |
 | `completeness-corpus-4` | batch 3, profiling and filters | 19 | – | 13 / 1 / 2 |
 | `completeness-corpus-5` | batch 4, class / DITA validity / structure | 34 | 6 (4 `MSG_*`, 2 no-schema) | 21 / 6 / 3 |
-| `completeness-corpus-6` | key scopes (R066, R011), the keydef half of R049, duplicates by scope (R008) and across files (R010) | 36 | – | 28 / 0 / 0 |
-| **Total** | | **267** | **12** | **184 / 15 / 27** |
+| `completeness-corpus-6` | key scopes (R066, R011), the keydef half of R049, duplicates by scope (R008) and across files (R010), URL and id shapes (R034, R031) | 48 | – | 40 / 0 / 0 |
+| **Total** | | **279** | **12** | **196 / 15 / 27** |
 
 The 15 extension-only and 27 Oxygen-only signatures are each accounted for in the batch sections
 above or in the corpus README that owns them; the largest group is corpus 2's 17, whose three
@@ -623,7 +624,11 @@ extension-only to matched without a code change. Its ninth run asked R011 on six
 no boundary, since a key unused in the probe map, in a submap and in a key map below it are all
 filed, while one name defined in two maps of one scope draws one incident, on the first
 definition, so the rule now files the effective definition and the last extension-only row
-(`t-udup-b`'s) is gone. With the batch-4 run the 11 ids
+(`t-udup-b`'s) is gone. Its tenth run asked R031 on eight: every registered reading held, so an
+`@id` is now judged by the grammar its element declares -- an NCName on a topic or map element, a
+name token on every other, after XML's normalization -- and five of the eight stopped being filed
+while the other three matched, two of them through the `NMTOKENInvalid` spelling Oxygen uses for
+the name-token half. With the batch-4 run the 11 ids
 of that batch were closed, and this one did not reopen any: 84 ids, **no gap left**. Eighteen of
 the 75
 *ok* rows are *mapped only* — no incident of that exact id in any of the six reports — and each of
