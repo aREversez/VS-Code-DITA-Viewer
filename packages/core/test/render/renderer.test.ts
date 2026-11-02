@@ -14,6 +14,15 @@ function makeText(text: string): DitaNode {
   };
 }
 
+function makeComment(comment: string, sourceRange?: SourceRange): DitaNode {
+  return {
+    type: 'comment',
+    comment,
+    children: [],
+    sourceRange: sourceRange || { startLine: 0, startCol: 0, endLine: 0, endCol: 0 },
+  };
+}
+
 function makeEl(
   baseType: string,
   children: DitaNode[],
@@ -2188,6 +2197,102 @@ describe('renderer', () => {
       ]);
       const html = renderDocument(doc, defaultCtx);
       assert.ok(html.includes('indexterm-chip'), 'preview default must keep showing chips');
+    });
+  });
+
+  // An XML comment used to be dropped by the parser, so its text was nowhere in
+  // the preview. It now renders in the flow where it was written, the way
+  // Oxygen's Author mode shows it (see renderComment in renderer.ts).
+  describe('XML comments', () => {
+    it('shows the comment text inline, without the <!-- --> markup, inside running text', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [
+          makeEl('topic/p', [
+            makeText('最后掌握维护与故障排查方法。'),
+            makeComment('This is a comment', { startLine: 20, startCol: 60, endLine: 20, endCol: 84 }),
+          ]),
+        ]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(html.includes('This is a comment'), `the comment text must be visible, got: ${html}`);
+      assert.ok(!html.includes('&lt;!--'), 'the delimiters are markup, not text');
+      assert.ok(/<span class="dv-comment"/.test(html), 'a comment inside a paragraph joins the text flow, not a block of its own');
+      assert.ok(
+        html.includes('data-dita-tagname="comment"') && html.includes('data-line="20"'),
+        'Tags toggle and source sync need the tag name and the comment’s own line',
+      );
+    });
+
+    it('renders a comment written between blocks as a block of its own', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [
+          makeEl('topic/p', [makeText('one')]),
+          makeComment('check with legal'),
+          makeEl('topic/p', [makeText('two')]),
+        ]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(
+        /<div class="dv-comment dv-comment--block"/.test(html),
+        `an element-only parent has no sentence to join, so the comment gets its own block: ${html}`,
+      );
+    });
+
+    it('does not glue a comment between two list items onto the previous one', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [
+          makeEl('topic/ul', [
+            makeEl('topic/li', [makeText('one')]),
+            makeComment('applies to both items'),
+            makeEl('topic/li', [makeText('two')]),
+          ]),
+        ]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(/<div class="dv-comment dv-comment--block"/.test(html), `list container should give the comment its own block: ${html}`);
+    });
+
+    it('escapes markup written inside a comment instead of emitting it', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [makeEl('topic/p', [makeComment('<b>x</b> & y')])]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(html.includes('&lt;b&gt;x&lt;/b&gt; &amp; y'), `comment text must be escaped: ${html}`);
+      assert.ok(!html.includes('<b>x</b>'), 'a comment is never markup');
+    });
+
+    it('renders nothing for an empty or whitespace-only comment', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [makeEl('topic/p', [makeText('x'), makeComment('   \n  ')])]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(!html.includes('dv-comment'), `an empty comment is not a box worth drawing: ${html}`);
+    });
+
+    it('keeps a multi-line comment’s own line breaks readable', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [makeComment('\n  TODO: fix the figure\n  after review\n')]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(html.includes('TODO: fix the figure\n  after review'), 'inner line breaks survive (white-space: pre-wrap)');
+      assert.ok(!html.includes('\n  TODO'), 'only the surrounding whitespace is trimmed');
+    });
+
+    it('renders a real comment end-to-end through parseDita, between the text around it', () => {
+      const xml = `<topic id="t"><title>T</title><body><p>before<!--注释-->after</p></body></topic>`;
+      const doc = parseDita(xml);
+      const html = renderDocument(doc.root, defaultCtx);
+      assert.ok(
+        /before<span class="dv-comment"[^>]*>注释<\/span>after/.test(html),
+        `the comment must sit exactly where it was authored: ${html}`,
+      );
+    });
+
+    it('leaves a comment in a title out of the extracted title text', () => {
+      const doc = parseDita(`<topic id="t"><title>Real<!--hidden-->Title</title></topic>`);
+      const title = doc.root.children.find((c) => c.type === 'element' && c.baseType === 'topic/title')!;
+      const texts = title.children.filter((c) => c.type === 'text').map((c) => c.text).join('');
+      assert.strictEqual(texts, 'RealTitle', 'text extraction sees only text nodes, so a comment never becomes title text');
     });
   });
 });

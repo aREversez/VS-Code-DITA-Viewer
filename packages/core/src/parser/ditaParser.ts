@@ -70,6 +70,25 @@ interface TagEvent {
 }
 
 /**
+ * One `<!-- … -->` occurrence found by the same source scan.
+ *
+ * A comment is not a tag, so sax gives no position for it either -- and the
+ * comment's own text is needed verbatim (a commented-out reference, a reviewer
+ * note), so the offsets of its `<!--` / `-->` delimiters are recorded here and
+ * matched against sax's oncomment by content.
+ */
+interface CommentEvent {
+  /** Offset of the comment's '<'. */
+  start: number;
+  /** Offset just past the comment's '-->'. */
+  end: number;
+  /** First character after `<!--`. */
+  contentStart: number;
+  /** Offset of the closing `-->`. */
+  contentEnd: number;
+}
+
+/**
  * Walks the raw source and lists every element tag with its exact offsets.
  * sax's parser.line/column only update on newlines and at onopentag describe
  * the position AFTER the tag's '>', and parser.position is unreliable once
@@ -79,15 +98,22 @@ interface TagEvent {
  * values (conref="a>b.dita#t/id") is skipped like a real XML parser does,
  * `<` inside them is rejected by strict-mode sax outright.
  */
-function scanTagEvents(xml: string): TagEvent[] {
+function scanTagEvents(xml: string): { tags: TagEvent[]; comments: CommentEvent[] } {
   const events: TagEvent[] = [];
+  const comments: CommentEvent[] = [];
   let i = 0;
   while (i < xml.length) {
     const lt = xml.indexOf('<', i);
     if (lt < 0) break;
     if (xml.startsWith('<!--', lt)) {
       const end = xml.indexOf('-->', lt + 4);
-      i = end < 0 ? xml.length : end + 3;
+      if (end < 0) {
+        // Unterminated: sax rejects it in strict mode, so nothing will ask
+        // for a position -- record nothing rather than invent one.
+        break;
+      }
+      comments.push({ start: lt, end: end + 3, contentStart: lt + 4, contentEnd: end });
+      i = end + 3;
       continue;
     }
     if (xml.startsWith('<![CDATA[', lt)) {
@@ -141,7 +167,7 @@ function scanTagEvents(xml: string): TagEvent[] {
     events.push({ name, selfClosing, isClose, start: lt, end: gt + 1 });
     i = gt + 1;
   }
-  return events;
+  return { tags: events, comments };
 }
 
 function makeParser(tagMap: Record<string, string>) {
@@ -165,25 +191,33 @@ function makeParser(tagMap: Record<string, string>) {
     let selfClosingEnd: { line: number; col: number } | undefined;
 
     // The source scan feeding exact tag offsets to the handlers below.
-    const tagEvents = scanTagEvents(xml);
+    const { tags: tagEvents, comments: commentEvents } = scanTagEvents(xml);
     let q = 0;
+    let cq = 0;
     // (line, col) of a raw offset, via an ever-forward line-start cursor.
-    // Tag offsets are consumed in document order, so it never rewinds.
-    let lastLineStart = 0;
-    let currentLine = 0;
-    function locAt(pos: number): { line: number; col: number } {
-      let i = lastLineStart;
-      let line = currentLine;
-      let nl = xml.indexOf('\n', i);
-      while (nl !== -1 && nl < pos) {
-        i = nl + 1;
-        line++;
-        nl = xml.indexOf('\n', i);
-      }
-      lastLineStart = i;
-      currentLine = line;
-      return { line, col: pos - i };
+    // Offsets are consumed in document order (tags and comments each in their
+    // own stream), so a cursor never rewinds -- which is why each stream gets
+    // its own: a comment can sit between two tags that the tag queue has
+    // already looked past.
+    function makeLocator() {
+      let lastLineStart = 0;
+      let currentLine = 0;
+      return function locAt(pos: number): { line: number; col: number } {
+        let i = lastLineStart;
+        let line = currentLine;
+        let nl = xml.indexOf('\n', i);
+        while (nl !== -1 && nl < pos) {
+          i = nl + 1;
+          line++;
+          nl = xml.indexOf('\n', i);
+        }
+        lastLineStart = i;
+        currentLine = line;
+        return { line, col: pos - i };
+      };
     }
+    const locAt = makeLocator();
+    const commentLocAt = makeLocator();
     /**
      * Pops the queue's next tag of the given kind, trusting sax as the
      * authority on order but the scan as the authority on position. sax
@@ -207,6 +241,22 @@ function makeParser(tagMap: Record<string, string>) {
     }
     function saxFallbackEnd(): { line: number; col: number } {
       return { line: parser.line, col: parser.column };
+    }
+    /**
+     * Pops the scan's next comment whose inner text matches what sax reported.
+     * Matched by content, not by position in the stream alone: `<!--` inside a
+     * CDATA section or an attribute value is not a comment, so the two scans
+     * may legitimately disagree, and content is the one thing both agree on.
+     * A window keeps a single disagreement from desynchronising the rest.
+     */
+    function nextComment(text: string): CommentEvent | undefined {
+      for (let k = cq; k < Math.min(cq + 8, commentEvents.length); k++) {
+        const e = commentEvents[k];
+        if (xml.slice(e.contentStart, e.contentEnd) !== text) continue;
+        cq = k + 1;
+        return e;
+      }
+      return undefined;
     }
 
     function flushText() {
@@ -314,6 +364,32 @@ function makeParser(tagMap: Record<string, string>) {
         currentTextStartCol = parser.column;
       }
       currentText += text;
+    };
+
+    // An XML comment becomes a node of its own, kept where it was written:
+    // the preview shows a comment's text in place (the way Oxygen's Author
+    // mode does), so dropping comments here made them invisible. Its range
+    // spans `<!--` through `-->` so a click in the preview lands on the
+    // comment's own source line. The pending text is flushed first, so the
+    // text either side of it stays on the right side of the comment.
+    parser.oncomment = (comment: string) => {
+      flushText();
+      const parent = stack[stack.length - 1];
+      const event = nextComment(comment);
+      const start = event ? commentLocAt(event.start) : saxFallbackEnd();
+      const end = event ? commentLocAt(event.end) : saxFallbackEnd();
+      if (!parent) return;
+      parent.children.push({
+        type: 'comment',
+        comment,
+        children: [],
+        sourceRange: {
+          startLine: start.line,
+          startCol: start.col,
+          endLine: end.line,
+          endCol: end.col,
+        },
+      });
     };
 
     parser.onerror = (err) => {

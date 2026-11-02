@@ -672,9 +672,73 @@ function renderConrefRange(node: DitaNode, range: DitaNode[], context: RenderCon
     .join('');
 }
 
+// Parents whose content model is element-only, so a comment written inside
+// them sits between blocks rather than inside a sentence and should get a
+// block of its own. Everything else -- p, ph, li, entry, title, note text --
+// holds mixed content, where an inline <span> is both valid and what the
+// author saw. This is the same inline/block distinction profiling markers
+// make (INLINE_PROFILING_BASETYPES), stated the other way round: there,
+// inline was the short list; here the inline cases are the majority, and
+// getting it wrong on the block side is the harmless direction (a comment on
+// its own line inside a phrase) while a <div> inside a <p> would make the
+// browser close the paragraph and split the sentence around it.
+const BLOCK_COMMENT_PARENTS = new Set([
+  'topic/body',
+  'topic/section',
+  'topic/example',
+  'topic/fig',
+  'topic/div',
+  'topic/bodydiv',
+  'topic/sectiondiv',
+  'topic/topic',
+  'topic/abstract',
+  'topic/related-links',
+  'topic/imagemap',
+  'topic/tgroup',
+  // List containers: a comment written between two <li>s is not part of
+  // either item's sentence, and an inline span there would be a stray
+  // fragment of the previous item.
+  'topic/ul',
+  'topic/ol',
+  'topic/sl',
+  'topic/dl',
+]);
+
+/**
+ * An XML comment, shown in the flow at the position it was authored in --
+ * Oxygen's Author mode shows the comment text the same way, instead of the
+ * reader having to open the source. The text is the comment's inner content
+ * with the `<!-- -->` delimiters stripped: the delimiters are markup, and a
+ * comment's *text* is what the author wanted read. data-dita-tagname makes the
+ * story explicit through the Tags toggle (its tooltip reads "comment"), and
+ * data-line* keeps preview clicks and scroll-sync landing on the comment's own
+ * source lines -- its range spans `<!--` through `-->`.
+ *
+ * An empty or whitespace-only comment renders nothing: it is a spelling of
+ * "nothing here", and an empty box in the page would only be noise.
+ */
+function renderComment(node: DitaNode, context: RenderContext): string {
+  const text = (node.comment || '').replace(/\r\n?/g, '\n').trim();
+  if (!text) return '';
+  const block = BLOCK_COMMENT_PARENTS.has(context.parentBaseType || '');
+  const tag = block ? 'div' : 'span';
+  const cls = block ? 'dv-comment dv-comment--block' : 'dv-comment';
+  const range = node.sourceRange;
+  return (
+    `<${tag} class="${cls}" data-dita-tagname="comment"` +
+    ` data-line="${range.startLine}" data-end-line="${range.endLine}"` +
+    ` data-start-col="${range.startCol}" data-end-col="${range.endCol}">` +
+    escapeHtml(text) +
+    `</${tag}>`
+  );
+}
+
 export function renderElement(node: DitaNode, context: RenderContext, conrefMark?: ConrefMark): string {
   if (node.type === 'text') {
     return escapeHtml(node.text || '');
+  }
+  if (node.type === 'comment') {
+    return renderComment(node, context);
   }
 
   const conref = node.attributes?.conref;
