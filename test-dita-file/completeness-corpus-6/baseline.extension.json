@@ -140,6 +140,13 @@
     "message": "Key \"k-t0\" is defined but never referenced"
   },
   {
+    "category": "invalid-id-syntax",
+    "severity": "error",
+    "file": "maps/u-id.ditamap",
+    "line": 8,
+    "message": "ID \"9tr\" is not a valid DITA ID (XML NCName)"
+  },
+  {
     "category": "resource-only-target",
     "severity": "warning",
     "file": "topics/o-scope-inside-neg.dita",
@@ -264,5 +271,54 @@
     "file": "topics/s-url-xref-pos.dita",
     "line": 7,
     "message": "Reference to a URL must declare scope=\"external\": http://example.invalid/a.html"
+  },
+  {
+    "category": "invalid-id-syntax",
+    "severity": "error",
+    "file": "topics/u-id-nested-digit.dita",
+    "line": 9,
+    "message": "ID \"9n\" is not a valid DITA ID (XML NCName)"
+  },
+  {
+    "category": "invalid-id-syntax",
+    "severity": "error",
+    "file": "topics/u-id-p-colon.dita",
+    "line": 7,
+    "message": "ID \"a:b\" is not a valid DITA ID (XML NCName)"
+  },
+  {
+    "category": "invalid-id-syntax",
+    "severity": "error",
+    "file": "topics/u-id-p-digit.dita",
+    "line": 7,
+    "message": "ID \"9a\" is not a valid DITA ID (XML NCName)"
+  },
+  {
+    "category": "invalid-id-syntax",
+    "severity": "error",
+    "file": "topics/u-id-p-plus.dita",
+    "line": 7,
+    "message": "ID \"a+b\" is not a valid DITA ID (XML NCName)"
+  },
+  {
+    "category": "invalid-id-syntax",
+    "severity": "error",
+    "file": "topics/u-id-p-space.dita",
+    "line": 7,
+    "message": "ID \"a b\" is not a valid DITA ID (XML NCName)"
+  },
+  {
+    "category": "invalid-id-syntax",
+    "severity": "error",
+    "file": "topics/u-id-p-trail.dita",
+    "line": 7,
+    "message": "ID \"a \" is not a valid DITA ID (XML NCName)"
+  },
+  {
+    "category": "invalid-id-syntax",
+    "severity": "error",
+    "file": "topics/u-id-topic-trail.dita",
+    "line": 3,
+    "message": "ID \"u-id-topic-trail \" is not a valid DITA ID (XML NCName)"
   }
 ]

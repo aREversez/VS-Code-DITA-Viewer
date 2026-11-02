@@ -75,6 +75,11 @@
   <mapref href="maps/t-unref.ditamap"/>
   <mapref href="maps/t-udup.ditamap"/>
 
+  <!-- Id syntax by element kind, from a real-map run: a digit-first id, a trailing space, a colon, a
+       space inside and a plus, on elements that are not topics, and a topic id with a trailing
+       space and a nested topic with a digit-first id. Not yet run; see README.md. -->
+  <mapref href="maps/u-id.ditamap"/>
+
   <!-- Positive control for the probes above, kept LAST: the third report carries its two
        incidents, so the silence above is an answer. See README.md, "The control". -->
   <mapref href="maps/p-dup-k-control.ditamap"/>

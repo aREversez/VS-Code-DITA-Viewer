@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- Id syntax by element kind (R031): the topicref below carries a digit-first id (a map element
+     other than the map itself), and the topics each carry one shape. See README.md, "Id syntax by
+     element kind". -->
+<map id="u-id">
+  <title>u-id</title>
+  <topicref id="9tr" href="../topics/u-id-p-digit.dita"/>
+  <topicref href="../topics/u-id-p-trail.dita"/>
+  <topicref href="../topics/u-id-topic-trail.dita"/>
+  <topicref href="../topics/u-id-p-colon.dita"/>
+  <topicref href="../topics/u-id-p-space.dita"/>
+  <topicref href="../topics/u-id-p-plus.dita"/>
+  <topicref href="../topics/u-id-nested-digit.dita"/>
+</map>

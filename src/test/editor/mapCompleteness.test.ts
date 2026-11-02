@@ -904,6 +904,9 @@ describe('completeness: reference spelling and @format (Oxygen batch 1)', () => 
     ]);
   });
 
+  // Pinned, not endorsed: the ids here sit on <p>, which the spec does not declare an XML ID
+  // (corpus 6's u-id asks Oxygen whether it judges them as name tokens instead; README, "Id
+  // syntax by element kind"). Until the run every element's @id is read as an NCName.
   it('reports @id values that are not XML NCNames, only under batch validation', async () => {
     const files = {
       'root.ditamap': '<map><topicref href="a.dita"/></map>',

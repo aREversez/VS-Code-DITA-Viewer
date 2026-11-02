@@ -225,7 +225,7 @@ A report without them is a stale map: close the root map in the DITA Maps Manage
 `corpus.ditamap` from disk and run again — none of g to n is answered then. Before reading
 anything into a report, check that the Maps Manager tree shows the nodes the run should cover
 (`p-dup-g` to `p-dup-n`, `q-twice`, `q-unused-pos`, `q-unused-neg`, `q-conkeyref`,
-`q-multiname`, `r-dk2`, `r-dk3`, `r-dkt`, `r-dkn`, `r-dkc`, `s-url`, `t-unref`, `t-udup`, and the control `p-dup-k`) under the root map.
+`q-multiname`, `r-dk2`, `r-dk3`, `r-dkt`, `r-dkn`, `r-dkc`, `s-url`, `t-unref`, `t-udup`, `u-id`, and the control `p-dup-k`) under the root map.
 
 ## The key-scope tail (R066 and R011): the fifth report
 
@@ -386,6 +386,40 @@ not a measurement: a re-run of that map after this change is what closes the row
 "Reading the result"). `src/test/editor/mapCompleteness.test.ts` pins both halves: one name twice
 in one scope gives one row, the same name in two key scopes gives two. Without the control's two
 `dmv.dup.topic` incidents in the report, the run read a stale map.
+
+## Id syntax by element kind (R031) — from a third real-map run, not yet run here
+
+On a real map the extension filed `invalid-id-syntax` on two topics that Oxygen left alone, both
+with a DOCTYPE. What the extension judged, as shapes: one id was a run of lower-case words joined
+by underscores **with trailing whitespace**, the other began with **digits** (`999_aaa_aaa_aaa`).
+Every probe behind R031 so far puts the bad id on the root `<topic>` or `<map>`
+(`b-id2-colon`, `b-id2-digit`, `b-id3-space`, `b-id3-map` in corpus 2). The DITA 1.3 spec
+(`archSpec/base/id`) says all `@id` values are XML name tokens, that the `@id` of a **topic or map
+element** is declared an XML `ID`, and that most other elements' `@id` is not an `ID` at all (the
+table lists `NMTOKEN`); and XML 1.0 §3.3.3 trims leading and trailing whitespace from any
+attribute that is not `CDATA`. If Oxygen follows the declared types, a digit-first or
+trailing-space id on an element that is not a topic or map is fine, and so is a trailing space on
+a topic's own id. The extension checks every `@id` as an NCName without trimming. One map,
+`maps/u-id.ditamap`, publishes seven topics (one shape each) and carries one `topicref` with a
+digit-first id; the readings are registered **before** the run:
+
+| File | Writes | Extension today | If Oxygen follows the declared types | If Oxygen answers differently |
+| --- | --- | --- | --- | --- |
+| `topics/u-id-p-digit.dita` | `<p id="9a">` (not a topic) | `invalid-id-syntax` | silent: a name token may start with a digit | filed: Oxygen applies the ID rule to every element, so the real rows had another cause (re-read them) |
+| `topics/u-id-p-trail.dita` | `<p id="a ">`, trailing space | `invalid-id-syntax` | silent: the value is normalized before it is judged | filed: no normalization; the real row is something else |
+| `topics/u-id-topic-trail.dita` | `<topic id="… ">`, trailing space on the topic's own id | `invalid-id-syntax` | silent: an `ID` is normalized too | filed: normalize only for name tokens |
+| `topics/u-id-p-colon.dita` | `<p id="a:b">` | `invalid-id-syntax` | silent: a colon is a name character | filed: Oxygen reads the id as an NCName on every element |
+| `topics/u-id-p-space.dita` | `<p id="a b">`, a space inside | `invalid-id-syntax` | filed: a name token has no whitespace (the id of the incident may not be the one mapped to this category; add it to `PROBLEM_ID_CATEGORY` from the report) | silent: whitespace inside is not checked on non-topics |
+| `topics/u-id-p-plus.dita` | `<p id="a+b">` | `invalid-id-syntax` | filed | silent: only whitespace is checked on non-topics |
+| `topics/u-id-nested-digit.dita` | a nested `<topic id="9n">` (control) | `invalid-id-syntax` | filed: a topic id is an `ID` | silent: nested topics are not checked; re-read `b-id2-digit` |
+| `maps/u-id.ditamap` | `<topicref id="9tr" …>` | `invalid-id-syntax` | silent: a topicref's id is a name token | filed: map elements are checked as `ID`s |
+
+If the first column holds, the rule changes: a topic or map element's `@id` is an NCName after XML
+whitespace normalization, any other element's `@id` is a name token after it, and the extension
+stops filing the rest. A "differently" cell changes that by that cell only. Until the run the
+baseline and parity lock carry all eight extension rows as extension-only; `oxygen-diff` exits
+non-zero on them for that reason, and a report without the control's two `dmv.dup.topic`
+incidents is a stale map.
 
 ## Running it
 
