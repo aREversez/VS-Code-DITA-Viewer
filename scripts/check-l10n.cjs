@@ -3,9 +3,9 @@
 // Run via `npm run check:l10n`. Exits non-zero when keys drift apart.
 //
 // Strings looked up with a runtime key (vscode.l10n.t(info.role)) can't be
-// found statically — allowlist them here with their call site.
+// found statically - allowlist them here with their call site.
 const DYNAMIC_KEYS = [
-  // src/language/bookRoleL10n.ts — vscode.l10n.t(info.role)
+  // src/language/bookRoleL10n.ts - vscode.l10n.t(info.role)
   'Abstract',
   'Amendments',
   'Colophon',
@@ -72,7 +72,7 @@ console.log(`\n[4] in en catalog but NOT used in source (${unused.length}):`);
 unused.forEach((k) => console.log(`    ${JSON.stringify(k)}`));
 
 const identicalZh = [...zhKeys].filter((k) => zh[k] === en[k] && /[a-z]{3}/i.test(k));
-console.log(`\n[5] zh-cn translation identical to en — possible oversight (${identicalZh.length}):`);
+console.log(`\n[5] zh-cn translation identical to en - possible oversight (${identicalZh.length}):`);
 identicalZh.forEach((k) => console.log(`    ${JSON.stringify(k)}`));
 
 // package.json %keys% vs package.nls.<locale>.json
