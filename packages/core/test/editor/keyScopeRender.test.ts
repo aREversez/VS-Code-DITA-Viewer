@@ -1,8 +1,8 @@
 import * as assert from 'assert';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
-import { join } from 'path';
-import { buildKeySpace } from '../../src/editor/keySpace';
+import { join, resolve } from 'path';
+import { buildKeySpace, getTopicScopeChains } from '../../src/editor/keySpace';
 import { clearTopicRenderCache, renderTopicCached, renderTopicToHtml } from '../../src/editor/topicRender';
 import { collectMapEntries } from '../../src/render/mapTypeMap';
 import { expandDitamapRefs } from '../../src/editor/refResolvers';
@@ -180,6 +180,52 @@ describe('collectMapEntries scope chains', () => {
       expandDitamapRefs(root, dir, read);
       const e = collectMapEntries(root).filter((x) => x.href === 'in-sub.dita');
       assert.deepStrictEqual(e[0].scopeChains, [['s1']]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+// Two walks compute the scope chain of a topicref: collectMapKeys (the key space's
+// topicScopes, which the preview reads when no scope is passed) and collectMapEntries
+// (MapEntry.scopeChains, which Book and Site pass on). They must agree, or a topic
+// renders in one scope on the standalone preview and another in the book.
+describe('scope chains: the key space and the map entries agree', () => {
+  it('files every topicref under the chain its entry carries', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'keyscope-parity-'));
+    try {
+      writeFileSync(
+        join(dir, 'sub.ditamap'),
+        '<?xml version="1.0"?><map><topicref href="in-sub.dita"/><topicgroup keyscope="n"><topicref href="deep.dita"/></topicgroup></map>',
+      );
+      const mapPath = join(dir, 'a.ditamap');
+      writeFileSync(
+        mapPath,
+        '<?xml version="1.0"?><map>' +
+          '<topicref href="a.dita"/>' +
+          '<topicgroup keyscope="s1"><topicref href="b.dita"><topicref href="c.dita"/></topicref></topicgroup>' +
+          '<topicref href="d.dita" keyscope="s2 s3"/>' +
+          '<topicgroup keyscope="x"><topicgroup keyscope="y z"><topicref href="e.dita"/></topicgroup></topicgroup>' +
+          '<mapref href="sub.ditamap" keyscope="m"/>' +
+          '</map>',
+      );
+      const root = parseDitamap(preprocessEntities(readFileSync(mapPath, 'utf-8'))).root;
+      expandDitamapRefs(root, dir, read);
+      const entries = collectMapEntries(root).filter((e) => e.href);
+      assert.deepStrictEqual(
+        entries.map((e) => e.href),
+        ['a.dita', 'b.dita', 'c.dita', 'd.dita', 'e.dita', 'in-sub.dita', 'deep.dita'],
+      );
+
+      const { scopes } = buildKeySpace(mapPath, [], read);
+      for (const e of entries) {
+        const filed = getTopicScopeChains(scopes, resolve(dir, e.href!));
+        assert.ok(filed, `${e.href} is not filed in topicScopes`);
+        assert.ok(
+          filed.some((chains) => JSON.stringify(chains) === JSON.stringify(e.scopeChains)),
+          `${e.href}: entry says ${JSON.stringify(e.scopeChains)}, key space has ${JSON.stringify(filed)}`,
+        );
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
