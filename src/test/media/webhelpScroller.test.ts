@@ -52,7 +52,10 @@ describe('webhelp shell: #dita-content-root is the scroller', () => {
   it('the scripts that follow the reader still read #dita-content-root as the scroller', () => {
     // If one of these ever moves to another element, this invariant (and the
     // css above) has to move with it.
-    const nav = read('src/editor/webview/siteNavScripts.ts');
+    // the sidebar scripts live in three modules now; the invariant is about all of them
+    const nav = ['siteNavShared', 'siteModeScripts', 'bookModeScripts']
+      .map((m) => read(`src/editor/webview/${m}.ts`))
+      .join('\n');
     assert.ok(/new IntersectionObserver\(onIntersect, \{ root: contentRoot,/.test(nav));
     assert.ok(/var scroller = document\.getElementById\('dita-content-root'\);\s*return scroller \? scroller\.scrollTop : 0;/.test(nav));
   });
