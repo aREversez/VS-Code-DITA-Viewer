@@ -3,9 +3,10 @@
 // onWillRenameFiles, and "Fix Broken References…" awaits workspace.applyEdit.
 //
 // The invariant this module exists to keep is "one edit, one undo step", plus
-// the rule that decides which open documents may be saved afterwards: only the
-// ones that were clean before the edit, so a user's own unsaved work is never
-// flushed as a side effect of updating references.
+// the rule that decides which open documents may be saved afterwards: the ones
+// the edit itself made dirty, and never one that had unsaved work of the user's
+// in it, so a user's own changes are never flushed as a side effect of updating
+// references.
 
 import * as vscode from 'vscode';
 import { FileEdit } from './refRenameEdits';
@@ -83,4 +84,41 @@ export function offsetToPosition(text: string, offset: number): vscode.Position 
     }
   }
   return new vscode.Position(line, character);
+}
+
+/** The open file documents that already hold unsaved work, by normalized path. */
+export function dirtyFileDocuments(): Set<string> {
+  const dirty = new Set<string>();
+  for (const doc of vscode.workspace.textDocuments) {
+    if (doc.uri.scheme === 'file' && doc.isDirty) {
+      dirty.add(normalizePathForCompare(doc.uri.fsPath, process.platform));
+    }
+  }
+  return dirty;
+}
+
+/**
+ * Saves the files an applied edit made dirty, after the fact.
+ *
+ * A file the edit had to open in order to write it comes back as a dirty model
+ * that is not in any editor, and nothing persists it -- the rewrite would sit in
+ * a buffer while the file on disk keeps the old path. Such a file cannot hold
+ * unsaved work, and neither can a file that was clean before the edit; a file
+ * that was already dirty is the user's own work and is left alone. The rename
+ * participant does not use this: the file operation that follows it saves.
+ */
+export async function saveRefEdits(opts: {
+  fileEdits: FileEdit[];
+  /** `dirtyFileDocuments()` taken before the edit was applied. */
+  dirtyBefore: Set<string>;
+}): Promise<void> {
+  const touched = new Set(
+    opts.fileEdits.map((fe) => normalizePathForCompare(fe.sourcePath, process.platform)),
+  );
+  for (const doc of vscode.workspace.textDocuments) {
+    if (doc.uri.scheme !== 'file' || !doc.isDirty) continue;
+    const key = normalizePathForCompare(doc.uri.fsPath, process.platform);
+    if (!touched.has(key) || opts.dirtyBefore.has(key)) continue;
+    await doc.save();
+  }
 }

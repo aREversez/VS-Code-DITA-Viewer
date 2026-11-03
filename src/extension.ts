@@ -18,6 +18,7 @@ import { registerUnreferencedResourcesCommand } from './editor/unreferencedResou
 import { registerCompletenessCommand } from './editor/completenessCheckUi';
 import { registerRefRenameParticipant, computeRenameEditsForTesting } from './editor/refRenameParticipant';
 import { registerFixBrokenRefsCommand, fixBrokenRefsForTesting } from './editor/fixBrokenRefsCommand';
+import { registerBrokenRefCodeActions } from './editor/brokenRefCodeAction';
 import { ensureCommandAllowed } from './editor/workspaceTrustGate';
 import { registerTransformCommand } from './transformCommand';
 
@@ -43,6 +44,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   // "Fix Broken References…": the repair for renames VS Code never saw
   registerFixBrokenRefsCommand(context);
+
+  // The same repair on the missing-file diagnostic itself (Quick Fix)
+  registerBrokenRefCodeActions(context);
 
   // Explorer sidebar tree view of the active DITA map
   const mapTree = registerMapTreeView(context);

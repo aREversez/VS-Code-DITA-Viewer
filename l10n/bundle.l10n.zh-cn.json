@@ -445,5 +445,6 @@
   "No broken references found ({0} files scanned).": "没有发现失效引用（已扫描 {0} 个文件）。",
   "The scan stopped after {0} files; some references were not checked.": "扫描在 {0} 个文件后停止，部分引用未检查。",
   "{0} missing target(s) had no matching file; they are listed in the output.": "有 {0} 个缺失目标没有匹配到文件，已列在输出中。",
-  "Show Output": "显示输出"
+  "Show Output": "显示输出",
+  "Change to {0}": "改为 {0}"
 }

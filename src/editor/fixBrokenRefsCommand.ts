@@ -26,7 +26,7 @@ import {
   toRenames,
 } from './brokenRefs';
 import { type FileInput, computeRefEdits, stripBom } from './refRenameEdits';
-import { openFileDocuments, workspaceEditForRefEdits } from './refEditWorkspaceEdit';
+import { dirtyFileDocuments, openFileDocuments, saveRefEdits, workspaceEditForRefEdits } from './refEditWorkspaceEdit';
 import { normalizePathForCompare } from './mapReferenceTools';
 
 const FIX_CMD = 'ditaViewer.fixBrokenReferences';
@@ -302,17 +302,17 @@ async function applyChosen(scanResult: Scan, chosen: ChosenFix[]): Promise<{ upd
   if (applied.replacements === 0) return { updated: 0, files: 0 };
 
   // One edit for the whole batch, so one undo takes all of it back.
+  const dirtyBefore = dirtyFileDocuments();
   const ok = await vscode.workspace.applyEdit(applied.edit);
   if (!ok) {
     void vscode.window.showErrorMessage(vscode.l10n.t('The reference update could not be applied.'));
     return { updated: 0, files: 0 };
   }
 
-  // Files that were closed are already on disk; save only the ones that were
-  // open and clean before the edit, never a user's own unsaved work.
-  for (const doc of applied.toSave) {
-    if (doc.isDirty) await doc.save();
-  }
+  // The edit leaves a file it had to open as a dirty buffer, so the rewrite is
+  // only on disk once that is saved -- and only buffers the edit itself made
+  // dirty are saved, never one the user had unsaved work in.
+  await saveRefEdits({ fileEdits, dirtyBefore });
 
   vscode.window.setStatusBarMessage(
     vscode.l10n.t('Updated {0} references in {1} files', String(applied.replacements), String(applied.fileCount)),

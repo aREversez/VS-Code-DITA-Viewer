@@ -445,5 +445,6 @@
   "No broken references found ({0} files scanned).": "No broken references found ({0} files scanned).",
   "The scan stopped after {0} files; some references were not checked.": "The scan stopped after {0} files; some references were not checked.",
   "{0} missing target(s) had no matching file; they are listed in the output.": "{0} missing target(s) had no matching file; they are listed in the output.",
-  "Show Output": "Show Output"
+  "Show Output": "Show Output",
+  "Change to {0}": "Change to {0}"
 }

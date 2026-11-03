@@ -95,7 +95,9 @@ describe('Unknown-element diagnostic', () => {
  * References…" command cannot end up scanning different attributes again.
  */
 describe('Broken-reference diagnostic', () => {
-  const dir = path.resolve(__dirname, '..', '..', 'test-dita-file', '__broken-refs-e2e');
+  // Per host: this build sometimes runs the suite in a second window as well,
+  // and a shared folder lets one run's cleanup delete the other's fixtures.
+  const dir = path.resolve(__dirname, '..', '..', 'test-dita-file', `__broken-refs-e2e-${process.pid}`);
   const abs = (...rel: string[]) => path.join(dir, ...rel);
 
   before(async () => {
@@ -111,7 +113,7 @@ describe('Broken-reference diagnostic', () => {
         '  <p><ph conref="gone.dita#t/x"/></p>\n' +
         '  <object data="gone.mp4"/>\n' +
         '  <image href="gone.png" longdescref="gone-full.png"/>\n' +
-        '  <p><xref href="gone-conrefend.dita" conrefend="gone-conrefend.dita#t/y"/></p>\n' +
+        '  <p conref="gone-conref.dita#t/x" conrefend="gone-conrefend.dita#t/y"/>\n' +
         '</body></topic>\n',
     );
     // copy-to names a file the transform generates; a missing one is not broken.
@@ -123,7 +125,7 @@ describe('Broken-reference diagnostic', () => {
   });
 
   after(async () => {
-    await vscode.commands.executeCommand('revertAndCloseActiveEditor');
+    await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
     await fsp.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   });
 
@@ -138,6 +140,7 @@ describe('Broken-reference diagnostic', () => {
       .map((d) => d.message)
       .sort();
     assert.deepStrictEqual(messages, [
+      'Referenced file not found: gone-conref.dita',
       'Referenced file not found: gone-conrefend.dita',
       'Referenced file not found: gone-full.png',
       'Referenced file not found: gone.dita',

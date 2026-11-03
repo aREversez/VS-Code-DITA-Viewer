@@ -177,6 +177,7 @@ const EXPECTED_REGISTRATIONS: string[] = [
   'vscode.workspace.onWillRenameFiles',
   'vscode.workspace.onDidRenameFiles',
   'vscode.commands.registerCommand',
+  'vscode.languages.registerCodeActionsProvider',
   'vscode.window.createTreeView',
   'vscode.commands.registerCommand',
   'vscode.commands.registerCommand',
