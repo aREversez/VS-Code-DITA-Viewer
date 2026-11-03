@@ -19,6 +19,7 @@ import {
   type ChosenFix,
   type FixPlan,
   type FixProposal,
+  MAX_INDEXED_FILES,
   MAX_SCANNED_FILES,
   buildFileIndex,
   findBrokenRefs,
@@ -53,6 +54,8 @@ interface Scan {
   openDocs: Map<string, vscode.TextDocument>;
   plan: FixPlan;
   truncated: boolean;
+  /** False when the workspace had more files than the candidate index holds. */
+  indexComplete: boolean;
 }
 
 async function fileTypeOf(uri: vscode.Uri): Promise<vscode.FileType | undefined> {
@@ -150,28 +153,33 @@ async function scan(scope: vscode.Uri[] | undefined): Promise<Scan | undefined> 
         findBrokenRefs({ file, exists, platform: process.platform }),
       );
       if (broken.length === 0) {
-        return { files, textBySource: new Map(), openDocs, plan: { proposals: [], moves: [] }, truncated };
+        return { files, textBySource: new Map(), openDocs, plan: { proposals: [], moves: [] }, truncated, indexComplete: true };
       }
 
       // One index for the whole workspace: candidates are matched by name only,
       // so a target is looked up, never crawled for.
-      const indexUris = await vscode.workspace.findFiles('**/*', EXCLUDE_GLOB, MAX_SCANNED_FILES);
+      // The cap is on names, not on files read (see MAX_INDEXED_FILES). One more than the
+      // cap is asked for, so a workspace of exactly that size is not called too big.
+      const indexUris = await vscode.workspace.findFiles('**/*', EXCLUDE_GLOB, MAX_INDEXED_FILES + 1);
+      const indexComplete = indexUris.length <= MAX_INDEXED_FILES;
+      const indexed = indexComplete ? indexUris : indexUris.slice(0, MAX_INDEXED_FILES);
       const roots = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
       const plan = proposeFixes({
         broken,
         index: buildFileIndex(
-          indexUris.map((u) => u.fsPath),
+          indexed.map((u) => u.fsPath),
           process.platform,
         ),
         platform: process.platform,
         roots,
+        indexComplete,
       });
 
       const textBySource = new Map<string, string>();
       for (const file of files) {
         textBySource.set(normalizePathForCompare(file.path, process.platform), file.text);
       }
-      return { files, textBySource, openDocs, plan, truncated };
+      return { files, textBySource, openDocs, plan, truncated, indexComplete };
     },
   );
 }
@@ -362,6 +370,15 @@ async function fixBrokenRefs(scope: vscode.Uri[] | undefined): Promise<{ updated
   if (scanResult.truncated) {
     void vscode.window.showWarningMessage(
       vscode.l10n.t('The scan stopped after {0} files; some references were not checked.', String(MAX_SCANNED_FILES)),
+    );
+  }
+
+  if (!scanResult.indexComplete) {
+    void vscode.window.showWarningMessage(
+      vscode.l10n.t(
+        'The workspace has more than {0} files, so a file of the right name may not have been seen. Nothing is ticked for you: check each target before applying.',
+        String(MAX_INDEXED_FILES),
+      ),
     );
   }
 

@@ -28,6 +28,14 @@ export const FILE_REF_ATTRS: ReadonlySet<string> = new Set([
 /** How many files one scan reads; the same cap the rename participant uses. */
 export const MAX_SCANNED_FILES = 5000;
 
+/**
+ * How many workspace files the candidate index holds (every file type, paths only, so a
+ * workspace this size costs a few megabytes). Far above MAX_SCANNED_FILES on purpose: that
+ * one bounds files that are *read*, this one bounds a list of names, and a documentation
+ * repository with its images passes five thousand files long before it is large.
+ */
+export const MAX_INDEXED_FILES = 100_000;
+
 export interface SourceFile {
   /** Absolute path of the file that holds the reference. */
   path: string;
@@ -259,8 +267,14 @@ export function proposeFixes(opts: {
   platform: NodeJS.Platform;
   /** Workspace folders, for the "same folder" tie-break. */
   roots?: string[];
+  /**
+   * False when the index is known to be missing files (the workspace was larger than
+   * MAX_INDEXED_FILES). A name found once is then not known to exist once, so it is
+   * a choice for the user, never a default.
+   */
+  indexComplete?: boolean;
 }): FixPlan {
-  const { broken, index, platform, roots } = opts;
+  const { broken, index, platform, roots, indexComplete = true } = opts;
   const pImpl = (platform === 'win32' ? pathWin32 : pathPosix) as typeof import('path');
 
   const proposals: FixProposal[] = [];
@@ -271,7 +285,10 @@ export function proposeFixes(opts: {
       continue;
     }
     const spelledExactly = found.filter((p) => pImpl.basename(p) === target.fileName).length;
-    const kind: FixKind = found.length > 1 ? 'multiple' : spelledExactly === 1 ? 'unique' : 'case';
+    let kind: FixKind;
+    if (found.length > 1) kind = 'multiple';
+    else if (spelledExactly === 1) kind = indexComplete ? 'unique' : 'multiple';
+    else kind = 'case';
     const candidates = found
       .map((p) => rankCandidate(p, target, platform, roots))
       .sort(compareCandidates);

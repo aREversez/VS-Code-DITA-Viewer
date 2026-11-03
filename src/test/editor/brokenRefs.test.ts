@@ -378,3 +378,51 @@ describe('brokenRefs — toRenames', () => {
     );
   });
 });
+
+describe('brokenRefs — an index that may be missing files', () => {
+  const text = '<map><topicref href="intro.dita"/></map>';
+  const indexed = ['/ws/new/intro.dita'];
+  const incomplete = (idx: string[]) =>
+    proposeFixes({
+      broken: brokenIn('/ws/topics/a.dita', text),
+      index: buildFileIndex(idx, 'linux'),
+      platform: 'linux',
+      indexComplete: false,
+    });
+
+  it('does not take the only file it saw for the only file there is', () => {
+    const p = incomplete(indexed).proposals[0];
+    assert.strictEqual(p.preselect, undefined);
+    assert.strictEqual(p.kind, 'multiple');
+    assert.deepStrictEqual(p.candidates.map((c) => c.path), ['/ws/new/intro.dita']);
+  });
+
+  it('still preselects it when the index is known to be complete (the default)', () => {
+    assert.strictEqual(plan(text, indexed).proposals[0].preselect, '/ws/new/intro.dita');
+    const explicit = proposeFixes({
+      broken: brokenIn('/ws/topics/a.dita', text),
+      index: buildFileIndex(indexed, 'linux'),
+      platform: 'linux',
+      indexComplete: true,
+    });
+    assert.strictEqual(explicit.proposals[0].preselect, '/ws/new/intro.dita');
+  });
+
+  it('leaves a case-only match unticked and a target with no match unmatched, as always', () => {
+    const c = incomplete(['/ws/new/INTRO.dita']).proposals[0];
+    assert.strictEqual(c.kind, 'case');
+    assert.strictEqual(c.preselect, undefined);
+    assert.strictEqual(incomplete([]).proposals[0].kind, 'none');
+  });
+
+  it('infers no folder move from a target it could not be sure of', () => {
+    const t = '<map><topicref href="a.dita"/><topicref href="b.dita"/></map>';
+    const p = proposeFixes({
+      broken: brokenIn('/ws/topics/m.ditamap', t),
+      index: buildFileIndex(['/ws/new/a.dita', '/ws/new/b.dita'], 'linux'),
+      platform: 'linux',
+      indexComplete: false,
+    });
+    assert.deepStrictEqual(p.moves, []);
+  });
+});
