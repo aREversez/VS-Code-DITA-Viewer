@@ -72,6 +72,15 @@ describe('bookSearchIndex', () => {
       assert.ok(!result!.bodyText.includes('HelloWorld'), 'element boundaries need a separator, or adjacent words become one unsearchable token');
     });
 
+    it('does not let a comment split a phrase, nor put its text into the search body', () => {
+      const p = writeTopic('a.dita', '<p>点击<!-- reviewer note -->确定</p><p>one<!-- x -->two</p>');
+      const result = extractBookSearchEntry(p);
+      assert.ok(result);
+      assert.ok(result!.bodyText.includes('点击确定'), `a comment between words must not add a gap, got: ${result!.bodyText}`);
+      assert.ok(result!.bodyText.includes('onetwo'));
+      assert.ok(!result!.bodyText.includes('reviewer note'), 'a comment is not searchable body text');
+    });
+
     it('does not put a space where an inline element interrupts running text (matters most for CJK, which has no word gaps)', () => {
       const p = writeTopic('a.dita', '<p>点击<b>确定</b>按钮，设置<codeph>foo</codeph>bar。</p>');
       const result = extractBookSearchEntry(p);
