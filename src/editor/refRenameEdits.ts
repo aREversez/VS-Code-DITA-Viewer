@@ -9,6 +9,7 @@ import * as pathWin32 from 'path/win32';
 import * as pathPosix from 'path/posix';
 import { collectRefEntries, isExternalRef, decodeHrefPart } from '@dita-viewer/core';
 import { normalizePathForCompare } from './mapReferenceTools';
+import { FILE_REF_ATTRS } from './brokenRefs';
 
 export interface RenameEntry {
   oldPath: string; // absolute, normalized
@@ -80,9 +81,12 @@ export function mayReferenceRenamed(
  * Attributes whose value is a path to another file. `conrefend` ends a
  * conref range in the file `conref` starts in, `data` and `longdescref` point
  * at files from `object` / `image`, and `copy-to` names a path relative to
- * the map that holds it (so it only changes when that map moves).
+ * the map that holds it (so it only changes when that map moves). The first
+ * five are the ones that name a file that must already exist -- the set
+ * "Fix Broken References…" scans for -- and `copy-to` is the exception that
+ * only a rename has to follow.
  */
-const HANDLED_ATTRS: ReadonlySet<string> = new Set(['href', 'conref', 'conrefend', 'copy-to', 'data', 'longdescref']);
+const HANDLED_ATTRS: ReadonlySet<string> = new Set([...FILE_REF_ATTRS, 'copy-to']);
 
 /**
  * Percent-escapes the characters that would change what a written-out path

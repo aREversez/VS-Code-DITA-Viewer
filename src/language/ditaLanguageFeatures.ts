@@ -41,6 +41,7 @@ import {
 import { buildKeyMap, getKeySourceMaps } from '../editor/DitaViewerProvider';
 import { onKeyContextChanged } from '../editor/keyContext';
 import { decodeHrefPart } from '../editor/ditaRenderUtils';
+import { findBrokenRefs, refTargetOf } from '../editor/brokenRefs';
 import { scanMarkup } from './xmlTagBalance';
 
 const DITA_SELECTOR: vscode.DocumentSelector = [
@@ -525,7 +526,7 @@ const DEBOUNCE_MS = 700;
 function validateDocument(document: vscode.TextDocument, collection: vscode.DiagnosticCollection): void {
   if (!vscode.languages.match(DITA_SELECTOR, document)) return;
   const text = document.getText();
-  const docDir = dirname(document.uri.fsPath);
+  const docPath = document.uri.fsPath;
   const diagnostics: vscode.Diagnostic[] = [];
 
   let keySpace: Map<string, string> | undefined;
@@ -534,16 +535,34 @@ function validateDocument(document: vscode.TextDocument, collection: vscode.Diag
     return keySpace;
   };
 
+  // The same rule "Fix Broken References…" repairs: a reference whose file
+  // part resolves to nothing on disk. It covers conrefend, data and
+  // longdescref as well, which the navigable set scanned below does not.
+  for (const ref of findBrokenRefs({
+    file: { path: docPath, text },
+    exists: existsSync,
+    platform: process.platform,
+  })) {
+    const d = new vscode.Diagnostic(
+      new vscode.Range(document.positionAt(ref.valueStart), document.positionAt(ref.valueEnd)),
+      vscode.l10n.t('Referenced file not found: {0}', ref.filePart),
+      vscode.DiagnosticSeverity.Error,
+    );
+    d.source = 'dita';
+    d.code = 'missing-file';
+    diagnostics.push(d);
+  }
+
   for (const entry of collectRefEntries(text)) {
     if (!entry.value) continue;
-    const range = new vscode.Range(
-      document.positionAt(entry.valueStart),
-      document.positionAt(entry.valueEnd),
-    );
 
     if (entry.attr === 'keyref' || entry.attr === 'conkeyref') {
       const key = entry.value.split('/')[0];
       if (key && !getKeySpace().has(key)) {
+        const range = new vscode.Range(
+          document.positionAt(entry.valueStart),
+          document.positionAt(entry.valueEnd),
+        );
         const d = new vscode.Diagnostic(
           range,
           vscode.l10n.t('Key "{0}" is not defined in any DITA map.', key),
@@ -556,42 +575,35 @@ function validateDocument(document: vscode.TextDocument, collection: vscode.Diag
       continue;
     }
 
-    // href / conref
+    // href / conref. A missing target was already reported above, by the rule
+    // "Fix Broken References…" uses; what is left here is the id that a
+    // fragment names.
+    if (entry.attr !== 'href' && entry.attr !== 'conref') continue;
     if (isExternalRef(entry.value, entry.scope)) continue;
-    const hashIdx = entry.value.indexOf('#');
-    const filePart = hashIdx >= 0 ? entry.value.substring(0, hashIdx) : entry.value;
-    const fragment = hashIdx >= 0 ? entry.value.substring(hashIdx + 1) : '';
+    const target = refTargetOf(entry.value, entry.scope, docPath, process.platform);
+    if (!target || !target.fragment) continue;
+    if (!/\.(dita|xml)$/i.test(target.filePart || docPath)) continue;
 
-    const targetPath = filePart ? resolve(docDir, decodeHrefPart(filePart)) : document.uri.fsPath;
-    if (!existsSync(targetPath)) {
-      const d = new vscode.Diagnostic(
-        range,
-        vscode.l10n.t('Referenced file not found: {0}', filePart),
-        vscode.DiagnosticSeverity.Error,
-      );
-      d.source = 'dita';
-      d.code = 'missing-file';
-      diagnostics.push(d);
+    // A same-file reference (filePart === '') is checked in this document's
+    // unsaved text, never in what is on disk.
+    const sameFile = !target.filePart;
+    if (!sameFile && !existsSync(target.targetPath)) continue;
+    let targetText: string;
+    try {
+      targetText = sameFile ? text : readFileSync(target.targetPath, 'utf-8');
+    } catch {
       continue;
     }
-
-    if (fragment && /\.(dita|xml)$/i.test(filePart || document.uri.fsPath)) {
-      let targetText: string;
-      try {
-        targetText = filePart ? readFileSync(targetPath, 'utf-8') : text;
-      } catch {
-        continue;
-      }
-      if (findConrefTargetOffset(targetText, fragment) < 0) {
-        const d = new vscode.Diagnostic(
-          range,
-          vscode.l10n.t('Target id "{0}" not found in {1}.', fragment, filePart || vscode.l10n.t('this file')),
-          vscode.DiagnosticSeverity.Warning,
-        );
-        d.source = 'dita';
-        d.code = 'missing-id';
-        diagnostics.push(d);
-      }
+    const fragment = target.fragment.slice(1);
+    if (findConrefTargetOffset(targetText, fragment) < 0) {
+      const d = new vscode.Diagnostic(
+        new vscode.Range(document.positionAt(entry.valueStart), document.positionAt(entry.valueEnd)),
+        vscode.l10n.t('Target id "{0}" not found in {1}.', fragment, target.filePart || vscode.l10n.t('this file')),
+        vscode.DiagnosticSeverity.Warning,
+      );
+      d.source = 'dita';
+      d.code = 'missing-id';
+      diagnostics.push(d);
     }
   }
 

@@ -1,4 +1,6 @@
 import * as assert from 'assert';
+import * as path from 'path';
+import * as fsp from 'fs/promises';
 import * as vscode from 'vscode';
 
 const EXTENSION_ID = 'dita-viewer.dita-viewer';
@@ -83,5 +85,73 @@ describe('Unknown-element diagnostic', () => {
     );
 
     await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
+  });
+});
+
+/**
+ * Which attributes the "file not found" diagnostic covers. The rule itself is
+ * unit-tested in src/test/editor/brokenRefs.test.ts; what this pins is that
+ * validateDocument() really calls it, so the diagnostics and the "Fix Broken
+ * References…" command cannot end up scanning different attributes again.
+ */
+describe('Broken-reference diagnostic', () => {
+  const dir = path.resolve(__dirname, '..', '..', 'test-dita-file', '__broken-refs-e2e');
+  const abs = (...rel: string[]) => path.join(dir, ...rel);
+
+  before(async () => {
+    const ext = vscode.extensions.getExtension(EXTENSION_ID);
+    await ext?.activate();
+    await fsp.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    await fsp.mkdir(dir, { recursive: true });
+    // Every attribute a rename follows except copy-to, each pointing at a file
+    // that is not there.
+    await fsp.writeFile(
+      abs('topic.dita'),
+      '<topic id="t"><title>T</title><body>\n' +
+        '  <p><ph conref="gone.dita#t/x"/></p>\n' +
+        '  <object data="gone.mp4"/>\n' +
+        '  <image href="gone.png" longdescref="gone-full.png"/>\n' +
+        '  <p><xref href="gone-conrefend.dita" conrefend="gone-conrefend.dita#t/y"/></p>\n' +
+        '</body></topic>\n',
+    );
+    // copy-to names a file the transform generates; a missing one is not broken.
+    await fsp.writeFile(abs('present.dita'), '<topic id="p"><title>P</title></topic>\n');
+    await fsp.writeFile(
+      abs('map.ditamap'),
+      '<map>\n  <topicref href="present.dita" copy-to="generated/present.dita"/>\n</map>\n',
+    );
+  });
+
+  after(async () => {
+    await vscode.commands.executeCommand('revertAndCloseActiveEditor');
+    await fsp.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  });
+
+  it('covers conref, data, longdescref and conrefend, but never copy-to', async () => {
+    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(abs('topic.dita')));
+    await vscode.window.showTextDocument(doc);
+    await waitFor(() => vscode.languages.getDiagnostics(doc.uri).some((d) => d.code === 'missing-file'));
+
+    const messages = vscode.languages
+      .getDiagnostics(doc.uri)
+      .filter((d) => d.code === 'missing-file')
+      .map((d) => d.message)
+      .sort();
+    assert.deepStrictEqual(messages, [
+      'Referenced file not found: gone-conrefend.dita',
+      'Referenced file not found: gone-full.png',
+      'Referenced file not found: gone.dita',
+      'Referenced file not found: gone.mp4',
+      'Referenced file not found: gone.png',
+    ]);
+
+    const map = await vscode.workspace.openTextDocument(vscode.Uri.file(abs('map.ditamap')));
+    await vscode.window.showTextDocument(map);
+    await new Promise((r) => setTimeout(r, 1200));
+    assert.deepStrictEqual(
+      vscode.languages.getDiagnostics(map.uri).filter((d) => d.code === 'missing-file').map((d) => d.message),
+      [],
+      'a copy-to that does not exist yet is not a broken reference',
+    );
   });
 });

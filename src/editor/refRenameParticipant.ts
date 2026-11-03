@@ -26,6 +26,7 @@ import {
   type FileInput,
 } from './refRenameEdits';
 import { normalizePathForCompare } from './mapReferenceTools';
+import { MAX_SCANNED_FILES } from './brokenRefs';
 
 export function registerRefRenameParticipant(context: vscode.ExtensionContext): void {
   // Open documents touched by the refactor are left dirty by VS Code once the
@@ -71,7 +72,6 @@ function getOpenDocs(): Map<string, vscode.TextDocument> {
 }
 
 const READ_CONCURRENCY = 32;
-const MAX_FILES = 5000;
 
 async function handleRename(
   event: vscode.FileWillRenameEvent,
@@ -114,7 +114,7 @@ async function handleRename(
   if (files.length === 0) {
     if (truncated) {
       vscode.window.showWarningMessage(
-        vscode.l10n.t('Rename reference update exceeded file limit of {0}', String(MAX_FILES)),
+        vscode.l10n.t('Rename reference update exceeded file limit of {0}', String(MAX_SCANNED_FILES)),
       );
     }
     return emptyEdit;
@@ -126,7 +126,7 @@ async function handleRename(
 
   if (truncated) {
     vscode.window.showWarningMessage(
-      vscode.l10n.t('Rename reference update exceeded file limit of {0}', String(MAX_FILES)),
+      vscode.l10n.t('Rename reference update exceeded file limit of {0}', String(MAX_SCANNED_FILES)),
     );
   }
 
@@ -201,9 +201,9 @@ async function collectCandidates(
 
   let truncated = false;
   let workingUris = candidateUris;
-  if (candidateUris.length > MAX_FILES) {
+  if (candidateUris.length > MAX_SCANNED_FILES) {
     truncated = true;
-    workingUris = candidateUris.slice(0, MAX_FILES);
+    workingUris = candidateUris.slice(0, MAX_SCANNED_FILES);
   }
 
   // Renamed files stay candidates: a moved file's own relative references may
