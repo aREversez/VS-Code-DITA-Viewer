@@ -2295,4 +2295,47 @@ describe('renderer', () => {
       assert.strictEqual(texts, 'RealTitle', 'text extraction sees only text nodes, so a comment never becomes title text');
     });
   });
+
+  // A comment is a node of its own now, so every place that decided "has this
+  // element any content" by looking at its children, and every place that
+  // cannot take a span/div child, had to learn about it.
+  describe('XML comments are not content', () => {
+    function parseAndRender(body: string, ctx: RenderContext = defaultCtx): string {
+      return renderDocument(parseDita(`<topic id="t"><title>T</title><body>${body}</body></topic>`).root, ctx);
+    }
+
+    it('lets an xref that holds only a comment fall back to its href, as an empty one does', () => {
+      const plain = parseAndRender('<p><xref href="a.dita"/></p>');
+      const html = parseAndRender('<p><xref href="a.dita"><!-- Pull title from a.dita --></xref></p>');
+      assert.ok(html.includes('a.dita') && !html.includes('Pull title'), `comment must not become the link text, got: ${html}`);
+      assert.strictEqual(
+        html.replace(/ data-[a-z-]+="[^"]*"/g, '').replace(/^.*?<p /s, '<p '),
+        plain.replace(/ data-[a-z-]+="[^"]*"/g, '').replace(/^.*?<p /s, '<p '),
+      );
+    });
+
+    it('uses the resolved title for a comment-only xref, internal and cross-file', () => {
+      const ctx: RenderContext = { ...defaultCtx, resolveTitle: (ref: string) => (ref === 'x' || ref === 'a.dita' ? 'Resolved Title' : undefined) };
+      const internal = parseAndRender('<p><xref href="#t/x"><!-- c --></xref></p>', ctx);
+      assert.ok(internal.includes('>Resolved Title</a>'), internal);
+      const external = parseAndRender('<p><xref href="a.dita"><!-- c --></xref></p>', ctx);
+      assert.ok(external.includes('Resolved Title') && !external.includes('dv-comment'), external);
+    });
+
+    it('still uses an xref label the author wrote, next to a comment', () => {
+      const html = parseAndRender('<p><xref href="a.dita">label<!-- c --></xref></p>');
+      assert.ok(html.includes('label'), html);
+    });
+
+    it('keeps a comment-only xref without href an empty one (no content, no keyref: nothing to show)', () => {
+      assert.ok(!parseAndRender('<p>x<xref><!-- c --></xref></p>').includes('dv-comment'));
+    });
+
+    it('does not count a comment as an mfenced argument (no extra separator)', () => {
+      const withComment = parseAndRender('<mathml><math xmlns="http://www.w3.org/1998/Math/MathML"><mfenced separators=","><!-- c --><mi>x</mi><mi>y</mi></mfenced></math></mathml>');
+      const without = parseAndRender('<mathml><math xmlns="http://www.w3.org/1998/Math/MathML"><mfenced separators=","><mi>x</mi><mi>y</mi></mfenced></math></mathml>');
+      const mrow = (h: string): string => /<mrow>.*<\/mrow>/.exec(h)![0];
+      assert.strictEqual(mrow(withComment), mrow(without));
+    });
+  });
 });

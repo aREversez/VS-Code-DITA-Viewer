@@ -268,7 +268,7 @@ function expandMfenced(node: DitaNode): string {
   // spurious extra separator characters for the whitespace "children"
   // surrounding the real one.
   const items = (node.children || [])
-    .filter((c) => c.type !== 'text' || (c.text || '').trim() !== '')
+    .filter((c) => c.type !== 'comment' && (c.type !== 'text' || (c.text || '').trim() !== ''))
     .map(serializeForeignContent);
 
   let inner = '';
@@ -285,6 +285,15 @@ function expandMfenced(node: DitaNode): string {
   if (close !== '') inner += `<mo>${escapeHtml(close)}</mo>`;
 
   return `<mrow>${inner}</mrow>`;
+}
+
+/**
+ * True when the element has any child that is author content. An XML comment
+ * is a node of its own in the parse tree (shown in place by the renderer) but
+ * is never content: `<xref href="a.dita"><!-- note --></xref>` has no label.
+ */
+function hasContentChildren(node: DitaNode): boolean {
+  return (node.children || []).some((c) => c.type !== 'comment');
 }
 
 function serializeForeignContent(node: DitaNode): string {
@@ -885,6 +894,10 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     `<pre class="pre preformatted">${renderChildren(_node, ctx)}</pre>`,
 
   'topic/xref': (node, ctx, renderChildren) => {
+    // An xref whose only child is an XML comment (<!-- Pull title from ... -->)
+    // has no author-written label: it falls back to the resolved title / href
+    // exactly as an empty one does, rather than showing the comment as its
+    // link text. hasContentChildren() is the single place that says so.
     const href = getAttr(node, 'href') || '';
 
     // No target at all: an xref with neither @href nor a keyref that
@@ -894,7 +907,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     // when it does not (the same treatment topic/ph gives an unresolved
     // keyref) -- means a broken xref reads as one instead of vanishing.
     if (!href) {
-      if (node.children.length > 0) {
+      if (hasContentChildren(node)) {
         const content = renderChildren(node, ctx);
         const keyref = getAttr(node, 'keyref');
         return keyref
@@ -907,7 +920,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     }
 
     let content: string;
-    if (node.children.length > 0) {
+    if (hasContentChildren(node)) {
       content = renderChildren(node, ctx);
     } else if (href.startsWith('#')) {
       const id = href.includes('/') ? href.split('/').pop()! : href.slice(1);
