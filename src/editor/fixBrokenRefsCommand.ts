@@ -290,7 +290,7 @@ function silentPath(p: FixProposal): string | undefined {
 // ── Apply ───────────────────────────────────────────────────────────────
 
 async function applyChosen(scanResult: Scan, chosen: ChosenFix[]): Promise<{ updated: number; files: number }> {
-  const renames = toRenames(chosen);
+  const renames = toRenames(chosen, process.platform);
   if (renames.length === 0) return { updated: 0, files: 0 };
 
   const fileEdits = computeRefEdits({ renames, files: scanResult.files, platform: process.platform });

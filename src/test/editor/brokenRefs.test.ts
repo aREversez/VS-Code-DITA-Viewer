@@ -349,3 +349,32 @@ describe('brokenRefs — the rewrite is computeRefEdits\u2019s, so every rule co
     assert.strictEqual(applyEdits('<map><topicref href="Intro.dita"/></map>', fileEdits[0].edits), '<map><topicref href="intro.dita"/></map>');
   });
 });
+
+describe('brokenRefs — toRenames', () => {
+  const fixes = [
+    { targetPath: '/ws/A.dita', newPath: '/ws/x/A.dita' },
+    { targetPath: '/ws/a.dita', newPath: '/ws/y/a.dita' },
+  ];
+
+  it('keeps two missing targets that differ only in case where the file system tells them apart', () => {
+    assert.deepStrictEqual(
+      toRenames(fixes, 'linux').map((r) => r.newPath),
+      ['/ws/x/A.dita', '/ws/y/a.dita'],
+    );
+  });
+
+  it('counts them as one target where the file system does not', () => {
+    assert.deepStrictEqual(
+      toRenames(fixes, 'win32').map((r) => r.newPath),
+      ['/ws/x/A.dita'],
+    );
+  });
+
+  it('keeps one rename for a target chosen twice, the first choice', () => {
+    const twice = [fixes[0], { targetPath: '/ws/A.dita', newPath: '/ws/z/A.dita' }];
+    assert.deepStrictEqual(
+      toRenames(twice, 'linux').map((r) => r.newPath),
+      ['/ws/x/A.dita'],
+    );
+  });
+});

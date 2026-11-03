@@ -289,12 +289,20 @@ export function proposeFixes(opts: {
   return { proposals, moves };
 }
 
-/** The renames a `WorkspaceEdit` is computed from: one virtual rename per fixed target. */
-export function toRenames(chosen: ChosenFix[]): Array<{ oldPath: string; newPath: string }> {
+/**
+ * The renames a `WorkspaceEdit` is computed from: one virtual rename per fixed target.
+ * Two targets are the same target only where the file system says so (`A.dita` and
+ * `a.dita` are two missing files on Linux, one on Windows), the way the missing targets
+ * were grouped in the first place.
+ */
+export function toRenames(
+  chosen: ChosenFix[],
+  platform: NodeJS.Platform = process.platform,
+): Array<{ oldPath: string; newPath: string }> {
   const seen = new Set<string>();
   const renames: Array<{ oldPath: string; newPath: string }> = [];
   for (const fix of chosen) {
-    const key = fold(fix.targetPath);
+    const key = normalizePathForCompare(fix.targetPath, platform);
     if (seen.has(key)) continue;
     seen.add(key);
     renames.push({ oldPath: fix.targetPath, newPath: fix.newPath });
