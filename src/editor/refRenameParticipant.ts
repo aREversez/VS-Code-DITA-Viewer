@@ -27,6 +27,7 @@ import {
 } from './refRenameEdits';
 import { normalizePathForCompare } from './mapReferenceTools';
 import { MAX_SCANNED_FILES } from './brokenRefs';
+import { openFileDocuments, workspaceEditForRefEdits } from './refEditWorkspaceEdit';
 
 export function registerRefRenameParticipant(context: vscode.ExtensionContext): void {
   // Open documents touched by the refactor are left dirty by VS Code once the
@@ -58,17 +59,6 @@ export function registerRefRenameParticipant(context: vscode.ExtensionContext): 
       }
     }),
   );
-}
-
-// Open file-scheme documents keyed by normalized path
-function getOpenDocs(): Map<string, vscode.TextDocument> {
-  const open = new Map<string, vscode.TextDocument>();
-  for (const doc of vscode.workspace.textDocuments) {
-    if (doc.uri.scheme === 'file') {
-      open.set(normalizePathForCompare(doc.uri.fsPath, process.platform), doc);
-    }
-  }
-  return open;
 }
 
 const READ_CONCURRENCY = 32;
@@ -121,7 +111,7 @@ async function handleRename(
   }
 
   // Compute edits via the pure function
-  const openDocs = getOpenDocs();
+  const openDocs = openFileDocuments();
   const fileEdits = computeRefEdits({ renames, files, platform: process.platform });
 
   if (truncated) {
@@ -130,21 +120,6 @@ async function handleRename(
     );
   }
 
-  // Count total edits and affected files
-  let totalEdits = 0;
-  for (const fe of fileEdits) {
-    totalEdits += fe.edits.length;
-  }
-
-  if (totalEdits === 0) {
-    return emptyEdit;
-  }
-
-  // Build ONE WorkspaceEdit covering every affected file, open or closed. This
-  // is what lets VS Code bundle the edits with the rename so Skip/undo revert
-  // all of them and "Show Preview" displays all of them.
-  const workspaceEdit = new vscode.WorkspaceEdit();
-
   // Offsets were computed against the text we read above, keyed by the file's
   // current (pre-rename) path.
   const textBySource = new Map<string, string>();
@@ -152,37 +127,29 @@ async function handleRename(
     textBySource.set(normalizePathForCompare(fi.path, process.platform), fi.text);
   }
 
-  for (const fe of fileEdits) {
-    const srcNorm = normalizePathForCompare(fe.sourcePath, process.platform);
-    const fileText = textBySource.get(srcNorm);
-    if (fileText === undefined) continue;
-
-    // The WorkspaceEdit runs before the rename, so it targets the OLD location
-    // even for files that are being moved themselves.
-    const targetUri = vscode.Uri.file(fe.sourcePath);
-    const openDoc = openDocs.get(srcNorm);
-    for (const edit of fe.edits) {
-      const range = openDoc
-        ? new vscode.Range(openDoc.positionAt(edit.start), openDoc.positionAt(edit.end))
-        : new vscode.Range(offsetToPosition(fileText, edit.start), offsetToPosition(fileText, edit.end));
-      workspaceEdit.replace(targetUri, range, edit.newText);
-    }
-
-    // Auto-save later only documents that were clean before our edit — never
-    // flush a user's own unsaved changes as a side effect of a rename. Store
-    // the TextDocument (not the URI): VS Code rewrites the URI on rename.
-    if (openDoc && !openDoc.isDirty) {
-      pendingSaveDocs.push(openDoc);
-    }
+  // Build ONE WorkspaceEdit covering every affected file, open or closed. This
+  // is what lets VS Code bundle the edits with the rename so Skip/undo revert
+  // all of them and "Show Preview" displays all of them.
+  const applied = workspaceEditForRefEdits({ fileEdits, textBySource, openDocs });
+  if (applied.replacements === 0) {
+    return emptyEdit;
   }
+
+  // Auto-save later only documents that were clean before our edit -- never
+  // flush a user's own unsaved changes as a side effect of a rename.
+  pendingSaveDocs.push(...applied.toSave);
 
   // Status bar notice (the setting is only 'always' or 'never'; 'never' returned early)
   vscode.window.setStatusBarMessage(
-    vscode.l10n.t('Updated {0} references in {1} files', String(totalEdits), String(fileEdits.length)),
+    vscode.l10n.t(
+      'Updated {0} references in {1} files',
+      String(applied.replacements),
+      String(applied.fileCount),
+    ),
     5000,
   );
 
-  return workspaceEdit;
+  return applied.edit;
 }
 
 // Collect the .dita/.ditamap files that might reference the renamed targets,
@@ -208,7 +175,7 @@ async function collectCandidates(
 
   // Renamed files stay candidates: a moved file's own relative references may
   // need rewriting (the edit is applied to its current location, before the move).
-  const openDocs = getOpenDocs();
+  const openDocs = openFileDocuments();
   const files: FileInput[] = [];
   const readOne = async (uri: vscode.Uri): Promise<FileInput | undefined> => {
     const normPath = normalizePathForCompare(uri.fsPath, process.platform);
@@ -261,18 +228,4 @@ export async function computeRenameEditsForTesting(
     }
     return { sourcePath: fe.sourcePath, path: fe.path, newText: out };
   });
-}
-
-function offsetToPosition(text: string, offset: number): vscode.Position {
-  let line = 0;
-  let character = 0;
-  for (let i = 0; i < offset && i < text.length; i++) {
-    if (text[i] === '\n') {
-      line++;
-      character = 0;
-    } else {
-      character++;
-    }
-  }
-  return new vscode.Position(line, character);
 }

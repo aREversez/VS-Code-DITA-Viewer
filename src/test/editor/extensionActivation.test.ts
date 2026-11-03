@@ -124,6 +124,7 @@ describe('extension activation (vscode stubbed)', () => {
 // Recorded from activate() as it stood before the transform command moved to its own module.
 const EXPECTED_COMMANDS: string[] = [
   'ditaViewer.selectContextMap',
+  'ditaViewer.fixBrokenReferences',
   'ditaViewer.mapExplorer.refresh',
   'ditaViewer.mapExplorer.selectMap',
   'ditaViewer.mapExplorer.pin',
@@ -175,6 +176,7 @@ const EXPECTED_REGISTRATIONS: string[] = [
   'vscode.workspace.onDidCloseTextDocument',
   'vscode.workspace.onWillRenameFiles',
   'vscode.workspace.onDidRenameFiles',
+  'vscode.commands.registerCommand',
   'vscode.window.createTreeView',
   'vscode.commands.registerCommand',
   'vscode.commands.registerCommand',

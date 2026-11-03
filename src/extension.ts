@@ -17,6 +17,7 @@ import { registerKeyContextCommand } from './editor/keyContextCommand';
 import { registerUnreferencedResourcesCommand } from './editor/unreferencedResourcesUi';
 import { registerCompletenessCommand } from './editor/completenessCheckUi';
 import { registerRefRenameParticipant, computeRenameEditsForTesting } from './editor/refRenameParticipant';
+import { registerFixBrokenRefsCommand, fixBrokenRefsForTesting } from './editor/fixBrokenRefsCommand';
 import { ensureCommandAllowed } from './editor/workspaceTrustGate';
 import { registerTransformCommand } from './transformCommand';
 
@@ -39,6 +40,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Update href/conref references when DITA files are renamed or moved
   registerRefRenameParticipant(context);
+
+  // "Fix Broken References…": the repair for renames VS Code never saw
+  registerFixBrokenRefsCommand(context);
 
   // Explorer sidebar tree view of the active DITA map
   const mapTree = registerMapTreeView(context);
@@ -247,6 +251,12 @@ export function activate(context: vscode.ExtensionContext) {
       // given rename and returns each affected file's post-edit content, which
       // is what the suite asserts against.
       computeRenameEdits: computeRenameEditsForTesting,
+      // "Fix Broken References…" asks through a multi-select quick pick, which
+      // the harness cannot operate. This seam runs the command's real scan and
+      // its real apply step for a folder with an explicit choice per target, so
+      // the suite can assert the rewritten files, the single undo step and the
+      // save-only-clean-documents rule.
+      fixBrokenRefs: fixBrokenRefsForTesting,
       // Reproduces the webview "Open source diff" button's exact production
       // path (register the virtual-doc provider, then vscode.diff over two
       // .dita-scheme URIs) so the integration suite can confirm the native
