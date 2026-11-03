@@ -2299,7 +2299,7 @@ describe('renderer', () => {
   // A comment is a node of its own now, so every place that decided "has this
   // element any content" by looking at its children, and every place that
   // cannot take a span/div child, had to learn about it.
-  describe('XML comments are not content', () => {
+  describe('XML comments are not content, and are left out where they cannot render in place', () => {
     function parseAndRender(body: string, ctx: RenderContext = defaultCtx): string {
       return renderDocument(parseDita(`<topic id="t"><title>T</title><body>${body}</body></topic>`).root, ctx);
     }
@@ -2336,6 +2336,40 @@ describe('renderer', () => {
       const without = parseAndRender('<mathml><math xmlns="http://www.w3.org/1998/Math/MathML"><mfenced separators=","><mi>x</mi><mi>y</mi></mfenced></math></mathml>');
       const mrow = (h: string): string => /<mrow>.*<\/mrow>/.exec(h)![0];
       assert.strictEqual(mrow(withComment), mrow(without));
+    });
+
+    it('leaves a comment out of every table context, where the browser would move it above the table', () => {
+      const cals = parseAndRender(
+        '<table><tgroup cols="2"><!-- g --><thead><!-- h --><row><!-- r --><entry>h1</entry><entry>h2</entry></row></thead>' +
+        '<tbody><!-- b --><row><entry>a</entry><entry>b</entry></row></tbody></tgroup></table>',
+      );
+      assert.ok(!cals.includes('dv-comment'), cals);
+      assert.ok(cals.includes('h1') && cals.includes('>a</td>'), 'the table itself still renders');
+      const simple = parseAndRender('<simpletable><sthead><!-- h --><stentry>h</stentry></sthead><!-- b --><strow><!-- r --><stentry>x</stentry></strow></simpletable>');
+      assert.ok(!simple.includes('dv-comment'), simple);
+    });
+
+    it('keeps a comment inside a table cell, which is ordinary mixed content', () => {
+      const html = parseAndRender('<table><tgroup cols="1"><tbody><row><entry>cell<!-- in cell --></entry></row></tbody></tgroup></table>');
+      assert.ok(/<td[^>]*>cell<span class="dv-comment"/.test(html), html);
+    });
+
+    it('leaves a comment out of preformatted blocks, where its text would read and copy as code', () => {
+      for (const tag of ['codeblock', 'pre', 'lines']) {
+        const html = parseAndRender(`<${tag}>a<!-- hidden -->b</${tag}>`);
+        assert.ok(!html.includes('dv-comment') && !html.includes('hidden'), `${tag}: ${html}`);
+      }
+    });
+
+    it('leaves a comment out of a title, whose text feeds the outline', () => {
+      const html = parseAndRender('<section><title>Hi<!-- c --></title><p>x</p></section>');
+      assert.ok(!html.includes('dv-comment'), html);
+      assert.ok(html.includes('Hi'));
+    });
+
+    it('still shows a comment between list items as a block of its own', () => {
+      const html = parseAndRender('<ul><!-- c --><li>a</li></ul>');
+      assert.ok(/<ul[^>]*><div class="dv-comment dv-comment--block"/.test(html), html);
     });
   });
 });

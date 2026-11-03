@@ -694,7 +694,6 @@ const BLOCK_COMMENT_PARENTS = new Set([
   'topic/abstract',
   'topic/related-links',
   'topic/imagemap',
-  'topic/tgroup',
   // List containers: a comment written between two <li>s is not part of
   // either item's sentence, and an inline span there would be a stray
   // fragment of the previous item.
@@ -760,8 +759,24 @@ export function renderElement(node: DitaNode, context: RenderContext, conrefMark
   return renderEffectiveNode(effectiveNode, context, resolved.chainKey, resolved.mark ?? conrefMark);
 }
 
+// Parents whose children must not include a comment span or block:
+//  - table machinery: a <span>/<div> directly inside <table>, <tbody> or <tr>
+//    is foster-parented by the browser to just before the whole table, so the
+//    comment would show up away from where it was written;
+//  - preformatted blocks: the comment's text would read, and copy, as code;
+//  - titles: the heading's text feeds the outline / table of contents.
+// Keyed by the baseType of the element being rendered (the real parent), not
+// by the overloaded context.parentBaseType.
+const NO_COMMENT_CHILDREN = new Set([
+  'topic/table', 'topic/tgroup', 'topic/thead', 'topic/tbody', 'topic/row',
+  'topic/simpletable', 'topic/sthead', 'topic/strow',
+  'topic/pre', 'topic/codeblock', 'topic/lines',
+  'topic/title',
+]);
+
 function renderChildren(node: DitaNode, context: RenderContext): string {
-  const children = node.children || [];
+  const skipComments = !!node.baseType && NO_COMMENT_CHILDREN.has(node.baseType);
+  const children = (node.children || []).filter((c) => !(skipComments && c.type === 'comment'));
   // Resolved key text can leave CJK and Latin glued together (`打开` + `ABC`).
   // Insert a display-only space outside the key element; the source is untouched.
   const spacing = computeKeyrefSpacing(children, node.baseType, context.resolveKey);
