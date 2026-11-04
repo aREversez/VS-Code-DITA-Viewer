@@ -454,8 +454,9 @@ export function registerFixBrokenRefsCommand(context: vscode.ExtensionContext): 
 // The quick pick cannot be driven from @vscode/test-electron, so this runs the
 // command's real scan (findFiles, disk reads, exists) and its real apply step
 // for a scope and an explicit choice per target, and reports what the picker
-// would have offered. `choose` overrides a target's preselection, which is how
-// the suite covers the "needs a choice" path.
+// would have offered. Only what the picker ticks is applied; `choose` adds a
+// target's answer for one it does not tick (a choice among several files, or a name
+// that differs in case), which is how the suite covers the "needs a choice" path.
 
 export interface BrokenRefFixResult {
   proposals: Array<{ target: string; kind: string; candidates: string[]; preselect?: string }>;
@@ -472,9 +473,12 @@ export async function fixBrokenRefsForTesting(opts: {
 
   const chosen: ChosenFix[] = [];
   for (const p of scanResult.plan.proposals) {
+    // What Enter alone would do: the preselected target only. A name that differs in case
+    // is listed but unticked in the picker, so the seam leaves it alone unless a test
+    // chooses it, exactly as the picker does.
     const override = opts.choose?.[p.target.targetPath];
-    const silent = override ?? silentPath(p);
-    if (silent) chosen.push({ targetPath: p.target.targetPath, newPath: silent });
+    const picked = override ?? p.preselect;
+    if (picked) chosen.push({ targetPath: p.target.targetPath, newPath: picked });
   }
 
   const result = await applyChosen(scanResult, chosen);
