@@ -34,6 +34,7 @@ import {
 } from './ditaGitUtils';
 import { getActiveDitaUri } from './exportHtml';
 import { ensureCommandAllowed } from './workspaceTrustGate';
+import { diffPanelTitle, secondPickChoices, shouldReportFailure, VersionOutcome } from './diffVersionPick';
 import { ensureDitaDiffVirtualDocuments, DITA_DIFF_SCHEME } from './ditaDiffVirtualDoc';
 
 const DIFF_PANELS = new Map<string, vscode.WebviewPanel>();
@@ -107,7 +108,9 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
         // Recency rank, lower = newer -- see arrangeByRecency. Working copy
         // is always the newest possible content; commit-backed choices use
         // their position in `commits` (git log order: index 0 is newest).
-        resolve: () => Promise<{ xml: string; label: string; order: number } | undefined>;
+        resolve: () => Promise<VersionOutcome<{ xml: string; label: string; order: number }>>;
+        // Opens a further picker, so it stays on offer for the second pick.
+        opensPicker?: boolean;
       }
 
       const choices: VersionChoice[] = [];
@@ -115,7 +118,7 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
       choices.push({
         label: '$(file) Working copy' + (hasLocal ? ' •' : ''),
         description: vscode.l10n.t('includes unsaved changes'),
-        resolve: async () => ({ xml: await getLocalContent(uri), label: vscode.l10n.t('Working copy'), order: -1 }),
+        resolve: async () => ({ kind: 'ok', value: { xml: await getLocalContent(uri), label: vscode.l10n.t('Working copy'), order: -1 } }),
       });
 
       const quickChoices = buildQuickCommitChoices(commits);
@@ -127,7 +130,7 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
           description: c.subject,
           resolve: async () => {
             const xml = await getFileAtRef(repoRoot, relPath, c.refHash);
-            return xml ? { xml, label: `${c.shortHash} ${c.subject}`, order: 0 } : undefined;
+            return xml ? { kind: 'ok', value: { xml, label: `${c.shortHash} ${c.subject}`, order: 0 } } : { kind: 'failed' };
           },
         });
       }
@@ -139,20 +142,23 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
           description: c.subject,
           resolve: async () => {
             const xml = await getFileAtRef(repoRoot, relPath, c.refHash);
-            return xml ? { xml, label: `${c.shortHash} ${c.subject}`, order: 1 } : undefined;
+            return xml ? { kind: 'ok', value: { xml, label: `${c.shortHash} ${c.subject}`, order: 1 } } : { kind: 'failed' };
           },
         });
       }
 
       choices.push({
         label: '$(git-commit) Pick a specific commit…',
+        opensPicker: true,
         resolve: async () => {
           const picked = await pickCommit(commits);
-          if (!picked) return undefined;
+          // Backing out (or an empty history, which pickCommit already
+          // reported) is not a read failure.
+          if (!picked) return { kind: 'cancelled' };
           const xml = await getFileAtRef(repoRoot, relPath, picked.hash);
-          if (!xml) return undefined;
+          if (!xml) return { kind: 'failed' };
           const order = commits.findIndex((c) => c.hash === picked.hash);
-          return { xml, label: `${picked.shortHash} ${picked.subject}`, order: order >= 0 ? order : commits.length };
+          return { kind: 'ok', value: { xml, label: `${picked.shortHash} ${picked.subject}`, order: order >= 0 ? order : commits.length } };
         },
       });
 
@@ -162,24 +168,30 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
       });
       if (!leftChoice) return;
 
-      const leftResult = await leftChoice.resolve();
-      if (!leftResult) {
-        vscode.window.showErrorMessage(vscode.l10n.t('Could not read the selected version.'));
+      const leftOutcome = await leftChoice.resolve();
+      if (leftOutcome.kind !== 'ok') {
+        if (shouldReportFailure(leftOutcome)) {
+          vscode.window.showErrorMessage(vscode.l10n.t('Could not read the selected version.'));
+        }
         return;
       }
+      const leftResult = leftOutcome.value;
 
-      const rightChoices = choices.filter((c) => c !== leftChoice);
+      const rightChoices = secondPickChoices(choices, leftChoice, (c) => c.opensPicker === true);
       const rightChoice = await vscode.window.showQuickPick(rightChoices, {
         placeHolder: vscode.l10n.t('Select the version to compare against'),
         title: vscode.l10n.t('Compare with Git Version'),
       });
       if (!rightChoice) return;
 
-      const rightResult = await rightChoice.resolve();
-      if (!rightResult) {
-        vscode.window.showErrorMessage(vscode.l10n.t('Could not read the selected version.'));
+      const rightOutcome = await rightChoice.resolve();
+      if (rightOutcome.kind !== 'ok') {
+        if (shouldReportFailure(rightOutcome)) {
+          vscode.window.showErrorMessage(vscode.l10n.t('Could not read the selected version.'));
+        }
         return;
       }
+      const rightResult = rightOutcome.value;
 
       // Place the older version on the left and the newer on the right
       // regardless of which the user actually picked first -- see
@@ -314,7 +326,7 @@ function getOrCreateDiffPanel(
   const fileName = basename(uri.fsPath);
   const panel = vscode.window.createWebviewPanel(
     'ditaViewer.diff',
-    `$(diff) ${fileName} — ${leftLabel} ↔ ${rightLabel}`,
+    diffPanelTitle(fileName, leftLabel, rightLabel),
     vscode.ViewColumn.Beside,
     {
       enableScripts: true,
@@ -459,6 +471,10 @@ function renderDiffPanel(
   state: DiffPanelState,
 ): void {
   DIFF_STATE.set(panel, state);
+  // Every path that shows a comparison ends here: first open, re-compare on a
+  // reused panel, and swap. Retitling anywhere else left the tab on the
+  // previous comparison.
+  panel.title = diffPanelTitle(basename(state.docUri.fsPath), state.leftLabel, state.rightLabel);
   panel.webview.html = buildDiffHtml(context, panel.webview, state.result, state.leftLabel, state.rightLabel);
   recordDiffHtml(panel, panel.webview.html);
 }
