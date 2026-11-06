@@ -4,6 +4,7 @@
   --diff-add-border: #2ea043;
   --diff-del-border: #f85149;
   --diff-mod-border: #8250df;
+  --diff-mod-bg: rgba(130, 80, 223, 0.08);
   --diff-gutter: #e1e4e8;
   --diff-toolbar-bg: var(--vscode-editor-background);
   --diff-toolbar-border: var(--vscode-widget-border, #ccc);
@@ -13,6 +14,7 @@
   --diff-add-border: #3fb950;
   --diff-del-border: #f85149;
   --diff-mod-border: #a371f7;
+  --diff-mod-bg: rgba(163, 113, 247, 0.14);
   --diff-gutter: #30363d;
 }
 
@@ -477,6 +479,14 @@ body:not(.show-inline) .diff-inline-del,
 body:not(.show-inline) .diff-inline-add {
   background: transparent;
   text-decoration: none;
+}
+
+/* With word-level marks off, a block counted as modified would otherwise carry
+   nothing but its 3px edge bar. A soft tint on both sides keeps the toolbar's
+   ~N and the view in agreement. Only shown with Aa off: with it on, the word
+   marks already say what changed. */
+body:not(.show-inline) .dv-block--modified {
+  background: var(--diff-mod-bg);
 }
 
 /* ── Current change highlight (navigation) ──
