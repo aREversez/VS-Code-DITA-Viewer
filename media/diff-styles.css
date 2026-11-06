@@ -21,6 +21,12 @@
   --diff-red: #f85149;
   --diff-green-bg: rgba(63, 185, 80, 0.14);
   --diff-red-bg: rgba(248, 81, 73, 0.14);
+  /* var() resolves where it is declared: the :root copies would keep the light
+     values, since this class sits on body, so the derived ones are restated. */
+  --diff-add-border: var(--diff-green);
+  --diff-del-border: var(--diff-red);
+  --diff-add-bg: var(--diff-green-bg);
+  --diff-del-bg: var(--diff-red-bg);
   --diff-mod-border: #a371f7;
   --diff-mod-bg: rgba(163, 113, 247, 0.14);
   --diff-gutter: #30363d;
