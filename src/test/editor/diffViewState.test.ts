@@ -9,17 +9,19 @@ const provider = readFileSync(join(root, 'src/editor/ditaDiffProvider.ts'), 'utf
 
 describe('diff view state across a re-render', () => {
   it('keeps Aa and the position on swap, keeps only Aa on a new comparison', () => {
-    const ui = { inline: false, idx: 3 };
-    assert.deepStrictEqual(carryViewState(ui, 'swap'), { inline: false, idx: 3 });
-    assert.deepStrictEqual(carryViewState(ui, 'recompare'), { inline: false, idx: -1 });
+    const ui = { inline: false, profiling: false, idx: 3 };
+    assert.deepStrictEqual(carryViewState(ui, 'swap'), { inline: false, profiling: false, idx: 3 });
+    assert.deepStrictEqual(carryViewState(ui, 'recompare'), { inline: false, profiling: false, idx: -1 });
     assert.deepStrictEqual(carryViewState(undefined, 'recompare'), initialViewState());
-    assert.deepStrictEqual(initialViewState(), { inline: true, idx: -1 });
+    assert.deepStrictEqual(initialViewState(), { inline: true, profiling: true, idx: -1 });
   });
 
   it('is fed by the webview and replayed into the next page', () => {
     assert.ok(/msg\.type === 'viewState'/.test(provider), 'provider listens for viewState');
     assert.ok(/data-initial-idx/.test(provider), 'the position is written into the page');
     assert.ok(/show-inline/.test(provider));
+    assert.ok(/id="btn-profiling"/.test(provider), 'the Flags button is in the toolbar');
+    assert.ok(/hide-profiling/.test(provider), 'a hidden state is written into the next page');
   });
 
   describe('script', () => {
@@ -33,6 +35,7 @@ describe('diff view state across a re-render', () => {
           value: '',
           addEventListener: (t: string, fn: Listener) => { (listeners[id] ||= {})[t] = fn; },
           setAttribute: () => undefined,
+          getAttribute: () => null,
           appendChild: () => undefined,
           removeChild: () => undefined,
           firstChild: null,
@@ -86,12 +89,21 @@ describe('diff view state across a re-render', () => {
       assert.strictEqual(env.byId['nav-counter'].value, '0 / 4');
     });
 
+    it('has a Flags toggle that hides the profiling highlight and is reported like Aa', () => {
+      const env = boot({}, ['show-inline'], [0, 1]);
+      env.listeners['btn-profiling']['click']({ preventDefault: () => undefined });
+      assert.ok(env.classes.has('hide-profiling'), 'body.hide-profiling is what styles.css keys on');
+      assert.deepStrictEqual(env.posted.pop(), { type: 'viewState', inline: true, profiling: false, idx: -1 });
+      env.listeners['btn-profiling']['click']({ preventDefault: () => undefined });
+      assert.ok(!env.classes.has('hide-profiling'));
+    });
+
     it('reports a navigation and an Aa toggle so the next page can restore them', () => {
       const env = boot({}, ['show-inline'], [0, 1, 2]);
       env.listeners['btn-next']['click']({ preventDefault: () => undefined });
-      assert.deepStrictEqual(env.posted.pop(), { type: 'viewState', inline: true, idx: 0 });
+      assert.deepStrictEqual(env.posted.pop(), { type: 'viewState', inline: true, profiling: true, idx: 0 });
       env.listeners['btn-inline']['click']({ preventDefault: () => undefined });
-      assert.deepStrictEqual(env.posted.pop(), { type: 'viewState', inline: false, idx: 0 });
+      assert.deepStrictEqual(env.posted.pop(), { type: 'viewState', inline: false, profiling: true, idx: 0 });
     });
   });
 });

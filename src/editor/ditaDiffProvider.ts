@@ -406,7 +406,7 @@ function getOrCreateDiffPanel(
       renderDiffPanel(context, panel, swapped);
     } else if (msg.type === 'viewState') {
       // Remembered, not rendered: the page already shows it.
-      state.ui = { inline: msg.inline !== false, idx: Number.isInteger(msg.idx) ? msg.idx : -1 };
+      state.ui = { inline: msg.inline !== false, profiling: msg.profiling !== false, idx: Number.isInteger(msg.idx) ? msg.idx : -1 };
     } else if (msg.type === 'openSourceDiff') {
       void openSourceDiff(context, state);
     }
@@ -575,6 +575,9 @@ function buildDiffHtml(
     toggleInline: vscode.l10n.t('Show word-level changes'),
     navCounter: vscode.l10n.t('Jump to change (type a number and press Enter)'),
     sourceToggle: vscode.l10n.t('Open source diff'),
+    flagsLabel: L.profilingLabel,
+    flagsOnTitle: L.profilingOnTitle,
+    flagsOffTitle: L.profilingOffTitle,
   };
 
   return `<!DOCTYPE html>
@@ -587,7 +590,7 @@ function buildDiffHtml(
 <link rel="stylesheet" href="${diffStylesUri}">
 <title>Diff — ${escapeHtml(leftLabel)} ↔ ${escapeHtml(rightLabel)}</title>
 </head>
-<body class="${[ui.inline ? 'show-inline' : '', swapped ? 'roles-swapped' : ''].filter(Boolean).join(' ')}"${ui.idx >= 0 ? ` data-initial-idx="${ui.idx}"` : ''}>
+<body class="${[ui.inline ? 'show-inline' : '', ui.profiling ? '' : 'hide-profiling', swapped ? 'roles-swapped' : ''].filter(Boolean).join(' ')}"${ui.idx >= 0 ? ` data-initial-idx="${ui.idx}"` : ''}>
 <div id="diff-toolbar">
   <span class="diff-label" id="lbl-left">${escapeHtml(leftLabel)}</span>
   <span class="diff-stats">${statsHtml}</span>
@@ -598,6 +601,7 @@ function buildDiffHtml(
   <button id="btn-next" title="${escapeHtml(labels.nextChange)}" aria-label="${escapeHtml(labels.nextChange)}">↓</button>
   <button id="btn-swap" title="${escapeHtml(labels.swapTitle)}" aria-label="${escapeHtml(labels.swapTitle)}">⇄</button>
   <button id="btn-inline" title="${escapeHtml(labels.toggleInline)}" aria-label="${escapeHtml(labels.toggleInline)}" aria-pressed="${ui.inline}">Aa</button>
+  <button id="btn-profiling" title="${escapeHtml(ui.profiling ? labels.flagsOnTitle : labels.flagsOffTitle)}" aria-label="${escapeHtml(ui.profiling ? labels.flagsOnTitle : labels.flagsOffTitle)}" data-title-on="${escapeHtml(labels.flagsOnTitle)}" data-title-off="${escapeHtml(labels.flagsOffTitle)}" aria-pressed="${ui.profiling}">${escapeHtml(labels.flagsLabel)}</button>
   <button id="btn-source" title="${escapeHtml(labels.sourceToggle)}" aria-label="${escapeHtml(labels.sourceToggle)}">&lt;/&gt;</button>
 </div>
 <div id="diff-scroll">

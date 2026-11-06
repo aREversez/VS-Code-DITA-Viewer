@@ -46,16 +46,18 @@ export function roleStats(stats: DiffStats, swapped: boolean): DiffStats {
   return swapped ? { added: stats.removed, removed: stats.added, modified: stats.modified } : stats;
 }
 
-// What the reader has set in the diff panel: the Aa toggle and which change
+// What the reader has set in the diff panel: the Aa and Flags toggles and which change
 // they are on (-1 = none yet). The page is replaced wholesale on every render,
 // so the host keeps this and writes it back into the next page.
 export interface DiffViewState {
   inline: boolean;
+  // The Flags toggle: whether conditional-content highlighting is shown.
+  profiling: boolean;
   idx: number;
 }
 
 export function initialViewState(): DiffViewState {
-  return { inline: true, idx: -1 };
+  return { inline: true, profiling: true, idx: -1 };
 }
 
 // Swap shows the same changes the other way round, so the position stays.
@@ -63,5 +65,5 @@ export function initialViewState(): DiffViewState {
 // preference, carries over.
 export function carryViewState(prev: DiffViewState | undefined, kind: 'swap' | 'recompare'): DiffViewState {
   if (!prev) return initialViewState();
-  return kind === 'swap' ? { ...prev } : { inline: prev.inline, idx: -1 };
+  return kind === 'swap' ? { ...prev } : { inline: prev.inline, profiling: prev.profiling, idx: -1 };
 }
