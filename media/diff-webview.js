@@ -35,15 +35,22 @@
     counter.value = (currentIdx + 1) + ' / ' + idxs.length;
   }
 
-  function navigateTo(idx) {
+  // The page is replaced on every render (swap, re-compare), so what the reader
+  // set is reported to the extension, which writes it back into the next page.
+  function reportViewState() {
+    vscode.postMessage({ type: 'viewState', inline: body.classList.contains('show-inline'), idx: currentIdx });
+  }
+
+  function navigateTo(idx, instant) {
     const idxs = getChangeIdxs();
     if (idxs.length === 0) return;
     document.querySelectorAll('.__diff_current').forEach(function (r) { r.classList.remove('__diff_current'); });
     currentIdx = ((idx % idxs.length) + idxs.length) % idxs.length;
     const els = document.querySelectorAll('[data-diff-idx="' + idxs[currentIdx] + '"]');
     els.forEach(function (el) { el.classList.add('__diff_current'); });
-    if (els.length > 0) els[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+    if (els.length > 0) els[0].scrollIntoView({ block: 'center', behavior: instant ? 'auto' : 'smooth' });
     updateCounter();
+    reportViewState();
   }
 
   btnPrev.addEventListener('click', function() { navigateTo(currentIdx - 1); });
@@ -80,6 +87,7 @@
     body.classList.toggle('show-inline');
     btnInline.setAttribute('aria-pressed', body.classList.contains('show-inline'));
     scheduleDraw();
+    reportViewState();
   });
 
   // Hand the exact two versions this panel is showing to the extension, which
@@ -276,4 +284,8 @@
   }
 
   updateCounter();
+
+  // Replay the position the previous page was left at.
+  const initial = typeof body.getAttribute === 'function' ? parseInt(body.getAttribute('data-initial-idx'), 10) : NaN;
+  if (initial >= 0) navigateTo(initial, true);
 })();

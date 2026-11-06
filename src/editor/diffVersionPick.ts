@@ -45,3 +45,23 @@ export interface DiffStats {
 export function roleStats(stats: DiffStats, swapped: boolean): DiffStats {
   return swapped ? { added: stats.removed, removed: stats.added, modified: stats.modified } : stats;
 }
+
+// What the reader has set in the diff panel: the Aa toggle and which change
+// they are on (-1 = none yet). The page is replaced wholesale on every render,
+// so the host keeps this and writes it back into the next page.
+export interface DiffViewState {
+  inline: boolean;
+  idx: number;
+}
+
+export function initialViewState(): DiffViewState {
+  return { inline: true, idx: -1 };
+}
+
+// Swap shows the same changes the other way round, so the position stays.
+// A new comparison has different changes, so only the Aa choice, a reading
+// preference, carries over.
+export function carryViewState(prev: DiffViewState | undefined, kind: 'swap' | 'recompare'): DiffViewState {
+  if (!prev) return initialViewState();
+  return kind === 'swap' ? { ...prev } : { inline: prev.inline, idx: -1 };
+}

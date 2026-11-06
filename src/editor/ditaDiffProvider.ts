@@ -34,7 +34,7 @@ import {
 } from './ditaGitUtils';
 import { getActiveDitaUri } from './exportHtml';
 import { ensureCommandAllowed } from './workspaceTrustGate';
-import { diffPanelTitle, roleStats, secondPickChoices, shouldReportFailure, VersionOutcome } from './diffVersionPick';
+import { carryViewState, DiffViewState, initialViewState, diffPanelTitle, roleStats, secondPickChoices, shouldReportFailure, VersionOutcome } from './diffVersionPick';
 import { ensureDitaDiffVirtualDocuments } from './ditaDiffVirtualDoc';
 import { DITA_DIFF_SCHEME, docUriStringFromDiffUri } from './diffScheme';
 
@@ -75,6 +75,8 @@ type DiffPanelState = {
   // True after Swap sides: the left column then holds the newer version, and
   // colours and the chip follow the version rather than the column.
   swapped: boolean;
+  // Aa and the current change, replayed into every re-rendered page.
+  ui: DiffViewState;
 };
 const DIFF_STATE = new WeakMap<vscode.WebviewPanel, DiffPanelState>();
 
@@ -219,6 +221,7 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
               rightLabel: finalRight.label,
               docUri: uri,
               swapped: false,
+              ui: carryViewState(DIFF_STATE.get(panel)?.ui, 'recompare'),
             });
           } catch (err) {
             // Defense-in-depth, not a substitute for fixing known failure
@@ -398,8 +401,12 @@ function getOrCreateDiffPanel(
         rightLabel: state.leftLabel,
         docUri: state.docUri,
         swapped: !state.swapped,
+        ui: carryViewState(state.ui, 'swap'),
       };
       renderDiffPanel(context, panel, swapped);
+    } else if (msg.type === 'viewState') {
+      // Remembered, not rendered: the page already shows it.
+      state.ui = { inline: msg.inline !== false, idx: Number.isInteger(msg.idx) ? msg.idx : -1 };
     } else if (msg.type === 'openSourceDiff') {
       void openSourceDiff(context, state);
     }
@@ -506,7 +513,7 @@ function renderDiffPanel(
   // reused panel, and swap. Retitling anywhere else left the tab on the
   // previous comparison.
   panel.title = diffPanelTitle(basename(state.docUri.fsPath), state.leftLabel, state.rightLabel);
-  panel.webview.html = buildDiffHtml(context, panel.webview, state.result, state.leftLabel, state.rightLabel, state.swapped);
+  panel.webview.html = buildDiffHtml(context, panel.webview, state.result, state.leftLabel, state.rightLabel, state.swapped, state.ui);
   recordDiffHtml(panel, panel.webview.html);
 }
 
@@ -517,6 +524,7 @@ function buildDiffHtml(
   leftLabel: string,
   rightLabel: string,
   swapped: boolean,
+  ui: DiffViewState = initialViewState(),
 ): string {
   const stylesUri = webview.asWebviewUri(
     vscode.Uri.file(join(context.extensionPath, 'media', 'styles.css')),
@@ -579,7 +587,7 @@ function buildDiffHtml(
 <link rel="stylesheet" href="${diffStylesUri}">
 <title>Diff — ${escapeHtml(leftLabel)} ↔ ${escapeHtml(rightLabel)}</title>
 </head>
-<body class="show-inline${swapped ? ' roles-swapped' : ''}">
+<body class="${[ui.inline ? 'show-inline' : '', swapped ? 'roles-swapped' : ''].filter(Boolean).join(' ')}"${ui.idx >= 0 ? ` data-initial-idx="${ui.idx}"` : ''}>
 <div id="diff-toolbar">
   <span class="diff-label" id="lbl-left">${escapeHtml(leftLabel)}</span>
   <span class="diff-stats">${statsHtml}</span>
@@ -589,7 +597,7 @@ function buildDiffHtml(
   <button id="btn-prev" title="${escapeHtml(labels.prevChange)}" aria-label="${escapeHtml(labels.prevChange)}">↑</button>
   <button id="btn-next" title="${escapeHtml(labels.nextChange)}" aria-label="${escapeHtml(labels.nextChange)}">↓</button>
   <button id="btn-swap" title="${escapeHtml(labels.swapTitle)}" aria-label="${escapeHtml(labels.swapTitle)}">⇄</button>
-  <button id="btn-inline" title="${escapeHtml(labels.toggleInline)}" aria-label="${escapeHtml(labels.toggleInline)}" aria-pressed="true">Aa</button>
+  <button id="btn-inline" title="${escapeHtml(labels.toggleInline)}" aria-label="${escapeHtml(labels.toggleInline)}" aria-pressed="${ui.inline}">Aa</button>
   <button id="btn-source" title="${escapeHtml(labels.sourceToggle)}" aria-label="${escapeHtml(labels.sourceToggle)}">&lt;/&gt;</button>
 </div>
 <div id="diff-scroll">
