@@ -35,7 +35,8 @@ import {
 import { getActiveDitaUri } from './exportHtml';
 import { ensureCommandAllowed } from './workspaceTrustGate';
 import { diffPanelTitle, secondPickChoices, shouldReportFailure, VersionOutcome } from './diffVersionPick';
-import { ensureDitaDiffVirtualDocuments, DITA_DIFF_SCHEME } from './ditaDiffVirtualDoc';
+import { ensureDitaDiffVirtualDocuments } from './ditaDiffVirtualDoc';
+import { DITA_DIFF_SCHEME, docUriStringFromDiffUri } from './diffScheme';
 
 const DIFF_PANELS = new Map<string, vscode.WebviewPanel>();
 
@@ -82,7 +83,7 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
       if (!(await ensureCommandAllowed('ditaViewer.compareWithGit'))) return;
       // Invoked while the diff panel itself is focused (a webview: no text
       // editor, no custom-editor tab), the compared document is the target.
-      const uri = getActiveDitaUri() ?? activeDiffDocUri();
+      const uri = compareTargetUri();
       if (!uri || !uri.fsPath.toLowerCase().endsWith('.dita')) {
         vscode.window.showErrorMessage(vscode.l10n.t('Please open a .dita file first.'));
         return;
@@ -249,6 +250,20 @@ async function pickCommit(commits: GitCommitInfo[]): Promise<GitCommitInfo | und
     })),
     { placeHolder: vscode.l10n.t('Select a commit') },
   ).then((picked) => picked?.commit);
+}
+
+// The document to compare. From a source editor or a reading view that is the
+// active document; from the rendered diff panel it is the one behind that
+// panel; from the native source diff the active editor is a virtual
+// `dita-diff:` file, which has no repository of its own, so go through the
+// `doc=` it carries to the real file.
+function compareTargetUri(): vscode.Uri | undefined {
+  const active = getActiveDitaUri();
+  if (active && active.scheme === DITA_DIFF_SCHEME) {
+    const key = docUriStringFromDiffUri(active);
+    return key ? vscode.Uri.parse(key) : activeDiffDocUri();
+  }
+  return active ?? activeDiffDocUri();
 }
 
 // The document behind the diff panel that currently has focus, if any. The panel

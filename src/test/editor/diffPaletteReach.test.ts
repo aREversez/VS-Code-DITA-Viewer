@@ -21,6 +21,6 @@ describe('Compare with Git Version from the diff panel', () => {
     // Without this the command would pass the palette and then stop at
     // "Please open a .dita file first.", since no editor or custom tab is active.
     assert.ok(/function activeDiffDocUri\(/.test(provider));
-    assert.ok(/getActiveDitaUri\(\)\s*\?\?\s*activeDiffDocUri\(\)/.test(provider));
+    assert.ok(/active\s*\?\?\s*activeDiffDocUri\(\)/.test(provider));
   });
 });

@@ -13,8 +13,9 @@
 // the file-service side.
 
 import * as vscode from 'vscode';
+import { DITA_DIFF_SCHEME } from './diffScheme';
 
-export const DITA_DIFF_SCHEME = 'dita-diff';
+export { DITA_DIFF_SCHEME };
 
 export class DitaDiffVirtualDocuments implements vscode.FileSystemProvider, vscode.TextDocumentContentProvider {
   // The two interfaces want different change-event payloads from the same edit:

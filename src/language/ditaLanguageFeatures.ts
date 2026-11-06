@@ -43,6 +43,7 @@ import { onKeyContextChanged } from '../editor/keyContext';
 import { decodeHrefPart } from '../editor/ditaRenderUtils';
 import { findBrokenRefs, refTargetOf } from '../editor/brokenRefs';
 import { scanMarkup } from './xmlTagBalance';
+import { isDiffVirtualScheme } from '../editor/diffScheme';
 
 const DITA_SELECTOR: vscode.DocumentSelector = [
   { language: 'dita' },
@@ -50,6 +51,14 @@ const DITA_SELECTOR: vscode.DocumentSelector = [
   { pattern: '**/*.dita' },
   { pattern: '**/*.ditamap' },
 ];
+
+// A document the diagnostics apply to. The source-diff view's virtual files
+// (`dita-diff:`) match the .dita pattern but live at the scheme's root, so every
+// relative image and conref in them would be reported as missing.
+function isLintTarget(document: vscode.TextDocument): boolean {
+  if (isDiffVirtualScheme(document.uri.scheme)) return false;
+  return vscode.languages.match(DITA_SELECTOR, document) > 0;
+}
 
 function isMapDocument(document: vscode.TextDocument): boolean {
   return document.languageId === 'ditamap' || document.uri.fsPath.toLowerCase().endsWith('.ditamap');
@@ -524,7 +533,7 @@ class DitaDocumentSymbolProvider implements vscode.DocumentSymbolProvider {
 const DEBOUNCE_MS = 700;
 
 function validateDocument(document: vscode.TextDocument, collection: vscode.DiagnosticCollection): void {
-  if (!vscode.languages.match(DITA_SELECTOR, document)) return;
+  if (!isLintTarget(document)) return;
   const text = document.getText();
   const docPath = document.uri.fsPath;
   const diagnostics: vscode.Diagnostic[] = [];
@@ -742,7 +751,7 @@ export function registerLanguageFeatures(context: vscode.ExtensionContext): void
 
   const timers = new Map<string, NodeJS.Timeout>();
   const scheduleValidation = (document: vscode.TextDocument) => {
-    if (!vscode.languages.match(DITA_SELECTOR, document)) return;
+    if (!isLintTarget(document)) return;
     const key = document.uri.toString();
     const existing = timers.get(key);
     if (existing) clearTimeout(existing);
