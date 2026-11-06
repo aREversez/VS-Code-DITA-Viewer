@@ -578,7 +578,7 @@
         },
         {
           "command": "ditaViewer.compareWithGit",
-          "when": "resourceExtname == .dita"
+          "when": "resourceExtname == .dita || activeWebviewPanelId == ditaViewer.diff"
         },
         {
           "command": "ditaViewer.openWithOxygen",

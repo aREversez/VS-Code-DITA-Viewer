@@ -80,7 +80,9 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
       // The diff shells out to `git` (ditaGitUtils.ts); an untrusted
       // workspace stops at the gate rather than running it.
       if (!(await ensureCommandAllowed('ditaViewer.compareWithGit'))) return;
-      const uri = getActiveDitaUri();
+      // Invoked while the diff panel itself is focused (a webview: no text
+      // editor, no custom-editor tab), the compared document is the target.
+      const uri = getActiveDitaUri() ?? activeDiffDocUri();
       if (!uri || !uri.fsPath.toLowerCase().endsWith('.dita')) {
         vscode.window.showErrorMessage(vscode.l10n.t('Please open a .dita file first.'));
         return;
@@ -247,6 +249,15 @@ async function pickCommit(commits: GitCommitInfo[]): Promise<GitCommitInfo | und
     })),
     { placeHolder: vscode.l10n.t('Select a commit') },
   ).then((picked) => picked?.commit);
+}
+
+// The document behind the diff panel that currently has focus, if any. The panel
+// map is keyed by the document URI string.
+function activeDiffDocUri(): vscode.Uri | undefined {
+  for (const [key, panel] of DIFF_PANELS) {
+    if (panel.active) return vscode.Uri.parse(key);
+  }
+  return undefined;
 }
 
 function computeDiff(
