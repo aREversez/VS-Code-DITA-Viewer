@@ -3,8 +3,12 @@
 :root {
   --diff-green: #2ea043;
   --diff-red: #f85149;
+  --diff-green-bg: rgba(46, 160, 67, 0.09);
+  --diff-red-bg: rgba(248, 81, 73, 0.09);
   --diff-add-border: var(--diff-green);
   --diff-del-border: var(--diff-red);
+  --diff-add-bg: var(--diff-green-bg);
+  --diff-del-bg: var(--diff-red-bg);
   --diff-mod-border: #8250df;
   --diff-mod-bg: rgba(130, 80, 223, 0.08);
   --diff-gutter: #e1e4e8;
@@ -15,6 +19,8 @@
 .vscode-dark {
   --diff-green: #3fb950;
   --diff-red: #f85149;
+  --diff-green-bg: rgba(63, 185, 80, 0.14);
+  --diff-red-bg: rgba(248, 81, 73, 0.14);
   --diff-mod-border: #a371f7;
   --diff-mod-bg: rgba(163, 113, 247, 0.14);
   --diff-gutter: #30363d;
@@ -256,12 +262,13 @@ body {
 
 /* ── Change type marker ──
  *
- * No background fills anywhere. A rendered paragraph is a whole "line", so the
- * source-diff convention of tinting every changed line buries a block of
- * still-valid prose under a big colored slab that is hard to read. Change type
- * is carried instead by a thin edge marker plus the word-level inline
- * highlights below. Added / removed blocks need no fill to read clearly: they
- * simply appear on one side and not the other.
+ * No full-strength fills. A rendered paragraph is a whole "line", so the
+ * source-diff convention of tinting every changed line buries still-valid
+ * prose under a big colored slab. Change type is carried by a thin edge marker
+ * plus the word-level highlights below. A block that exists on one side only
+ * (a <p> replaced by a <note>, say) has no words to mark and sat opposite
+ * empty space with nothing but a 3px bar, which is too little to read as a
+ * change, so it also gets a faint tint of the same colour.
  *
  * The marker hugs the gutter on both sides -- the left document marks on its
  * right edge, the right document on its left edge -- so the bar and the
@@ -273,6 +280,7 @@ body {
 
 .diff-col--left .dv-block--removed {
   border-right: 3px solid var(--diff-del-border);
+  background: var(--diff-del-bg);
 }
 
 .diff-col--left .dv-block--modified {
@@ -281,6 +289,7 @@ body {
 
 .diff-col--right .dv-block--added {
   border-left: 3px solid var(--diff-add-border);
+  background: var(--diff-add-bg);
 }
 
 .diff-col--right .dv-block--modified {
@@ -486,6 +495,8 @@ body {
 body.roles-swapped {
   --diff-add-border: var(--diff-red);
   --diff-del-border: var(--diff-green);
+  --diff-add-bg: var(--diff-red-bg);
+  --diff-del-bg: var(--diff-green-bg);
 }
 
 body.roles-swapped .diff-inline-del {
