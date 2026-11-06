@@ -34,6 +34,7 @@ import {
 } from './ditaGitUtils';
 import { getActiveDitaUri } from './exportHtml';
 import { ensureCommandAllowed } from './workspaceTrustGate';
+import { logDiffError } from './diffLog';
 import { carryViewState, DiffViewState, initialViewState, diffPanelTitle, roleStats, secondPickChoices, shouldReportFailure, VersionOutcome } from './diffVersionPick';
 import { ensureDitaDiffVirtualDocuments } from './ditaDiffVirtualDoc';
 import { DITA_DIFF_SCHEME, docUriStringFromDiffUri } from './diffScheme';
@@ -138,7 +139,7 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
           description: c.subject,
           resolve: async () => {
             const xml = await getFileAtRef(repoRoot, relPath, c.refHash);
-            return xml ? { kind: 'ok', value: { xml, label: `${c.shortHash} ${c.subject}`, order: 0 } } : { kind: 'failed' };
+            return xml ? { kind: 'ok', value: { xml, label: `${c.shortHash} ${c.subject}`, order: 0 } } : failedRead(relPath, c.refHash);
           },
         });
       }
@@ -150,7 +151,7 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
           description: c.subject,
           resolve: async () => {
             const xml = await getFileAtRef(repoRoot, relPath, c.refHash);
-            return xml ? { kind: 'ok', value: { xml, label: `${c.shortHash} ${c.subject}`, order: 1 } } : { kind: 'failed' };
+            return xml ? { kind: 'ok', value: { xml, label: `${c.shortHash} ${c.subject}`, order: 1 } } : failedRead(relPath, c.refHash);
           },
         });
       }
@@ -164,7 +165,7 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
           // reported) is not a read failure.
           if (!picked) return { kind: 'cancelled' };
           const xml = await getFileAtRef(repoRoot, relPath, picked.hash);
-          if (!xml) return { kind: 'failed' };
+          if (!xml) return failedRead(relPath, picked.hash);
           const order = commits.findIndex((c) => c.hash === picked.hash);
           return { kind: 'ok', value: { xml, label: `${picked.shortHash} ${picked.subject}`, order: order >= 0 ? order : commits.length } };
         },
@@ -231,7 +232,7 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
             // surfaces as a readable message instead of VS Code's generic
             // "command failed" notification with no indication of why.
             const message = err instanceof Error ? err.message : String(err);
-            console.error('Compare with Git Version failed:', err);
+            logDiffError('Compare with Git Version failed', err);
             vscode.window.showErrorMessage(
               vscode.l10n.t('Could not compute the difference: {0}', message),
             );
@@ -264,6 +265,13 @@ async function pickCommit(commits: GitCommitInfo[]): Promise<GitCommitInfo | und
 // panel; from the native source diff the active editor is a virtual
 // `dita-diff:` file, which has no repository of its own, so go through the
 // `doc=` it carries to the real file.
+// A version that git could not hand back. The user sees one generic message;
+// the file and ref that went wrong are what a bug report needs.
+function failedRead(relPath: string, ref: string): { kind: 'failed' } {
+  logDiffError('Could not read version', new Error(`${ref}:${relPath}`));
+  return { kind: 'failed' };
+}
+
 function compareTargetUri(): vscode.Uri | undefined {
   const active = getActiveDitaUri();
   if (active && active.scheme === DITA_DIFF_SCHEME) {

@@ -12,6 +12,7 @@
 
 ### Fixes
 
+- **Diff view: failures are now logged to a "DITA Diff" output channel.** A failed comparison or an unreadable Git version showed one generic message, and the detail went to the extension host's console, which users cannot see. The stack, and the file and ref that could not be read, are now written to **Output → DITA Diff**.
 - **Diff view: a block that exists on one side only is easier to see.** A paragraph replaced by a note, or any block added or removed whole, had no word marks and only a 3px edge bar, which read as no change at all. It now also carries a faint tint of the same colour (following the version after Swap).
 - **Diff view: "Computing differences…" no longer lingers for screen readers.** The progress was shown as a notification, which leaves an alert node in the accessibility tree after it closes, so the finished work kept being announced. It now uses the status bar's progress slot.
 - **Diff view: a Flags button hides the conditional-content highlight.** The preview's green box and label around content carrying `props`, `audience` and the like was always on in the diff view and shared its green with an addition, so a reader could not tell flagged content from new content. The toolbar now has the same **Flags** toggle as the topic and map previews (it flips the same `body.hide-profiling` rule); it is remembered across Swap and re-compare like Aa.
