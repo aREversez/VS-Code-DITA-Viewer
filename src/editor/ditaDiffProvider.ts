@@ -34,7 +34,7 @@ import {
 } from './ditaGitUtils';
 import { getActiveDitaUri } from './exportHtml';
 import { ensureCommandAllowed } from './workspaceTrustGate';
-import { diffPanelTitle, secondPickChoices, shouldReportFailure, VersionOutcome } from './diffVersionPick';
+import { diffPanelTitle, roleStats, secondPickChoices, shouldReportFailure, VersionOutcome } from './diffVersionPick';
 import { ensureDitaDiffVirtualDocuments } from './ditaDiffVirtualDoc';
 import { DITA_DIFF_SCHEME, docUriStringFromDiffUri } from './diffScheme';
 
@@ -72,6 +72,9 @@ type DiffPanelState = {
   leftLabel: string;
   rightLabel: string;
   docUri: vscode.Uri;
+  // True after Swap sides: the left column then holds the newer version, and
+  // colours and the chip follow the version rather than the column.
+  swapped: boolean;
 };
 const DIFF_STATE = new WeakMap<vscode.WebviewPanel, DiffPanelState>();
 
@@ -215,6 +218,7 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
               leftLabel: finalLeft.label,
               rightLabel: finalRight.label,
               docUri: uri,
+              swapped: false,
             });
           } catch (err) {
             // Defense-in-depth, not a substitute for fixing known failure
@@ -393,6 +397,7 @@ function getOrCreateDiffPanel(
         leftLabel: state.rightLabel,
         rightLabel: state.leftLabel,
         docUri: state.docUri,
+        swapped: !state.swapped,
       };
       renderDiffPanel(context, panel, swapped);
     } else if (msg.type === 'openSourceDiff') {
@@ -501,7 +506,7 @@ function renderDiffPanel(
   // reused panel, and swap. Retitling anywhere else left the tab on the
   // previous comparison.
   panel.title = diffPanelTitle(basename(state.docUri.fsPath), state.leftLabel, state.rightLabel);
-  panel.webview.html = buildDiffHtml(context, panel.webview, state.result, state.leftLabel, state.rightLabel);
+  panel.webview.html = buildDiffHtml(context, panel.webview, state.result, state.leftLabel, state.rightLabel, state.swapped);
   recordDiffHtml(panel, panel.webview.html);
 }
 
@@ -511,6 +516,7 @@ function buildDiffHtml(
   result: TopicDiffResult,
   leftLabel: string,
   rightLabel: string,
+  swapped: boolean,
 ): string {
   const stylesUri = webview.asWebviewUri(
     vscode.Uri.file(join(context.extensionPath, 'media', 'styles.css')),
@@ -552,7 +558,7 @@ function buildDiffHtml(
   });
 
   const cols = renderDiffColumns(result.rows);
-  const statsHtml = renderStats(result.stats);
+  const statsHtml = renderStats(roleStats(result.stats, swapped));
 
   const labels = {
     swapTitle: vscode.l10n.t('Swap sides'),
@@ -573,7 +579,7 @@ function buildDiffHtml(
 <link rel="stylesheet" href="${diffStylesUri}">
 <title>Diff — ${escapeHtml(leftLabel)} ↔ ${escapeHtml(rightLabel)}</title>
 </head>
-<body class="show-inline">
+<body class="show-inline${swapped ? ' roles-swapped' : ''}">
 <div id="diff-toolbar">
   <span class="diff-label" id="lbl-left">${escapeHtml(leftLabel)}</span>
   <span class="diff-stats">${statsHtml}</span>

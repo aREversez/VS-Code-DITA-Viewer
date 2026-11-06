@@ -1,8 +1,10 @@
 /* Diff/Compare view styles — side-by-side rendered DITA comparison */
 
 :root {
-  --diff-add-border: #2ea043;
-  --diff-del-border: #f85149;
+  --diff-green: #2ea043;
+  --diff-red: #f85149;
+  --diff-add-border: var(--diff-green);
+  --diff-del-border: var(--diff-red);
   --diff-mod-border: #8250df;
   --diff-mod-bg: rgba(130, 80, 223, 0.08);
   --diff-gutter: #e1e4e8;
@@ -11,8 +13,8 @@
 }
 
 .vscode-dark {
-  --diff-add-border: #3fb950;
-  --diff-del-border: #f85149;
+  --diff-green: #3fb950;
+  --diff-red: #f85149;
   --diff-mod-border: #a371f7;
   --diff-mod-bg: rgba(163, 113, 247, 0.14);
   --diff-gutter: #30363d;
@@ -475,6 +477,27 @@ body {
   padding: 0 1px;
 }
 
+/* After Swap the left column holds the NEWER version. Colour follows the
+   version, not the column: what only the new version has stays green and
+   what only the old one has stays red, wherever each is drawn. The edge bars,
+   connector lines and chip follow by exchanging the two variables; the word
+   marks need their own rules because they hard-code the colour and, for the
+   deletion, the strike-through. */
+body.roles-swapped {
+  --diff-add-border: var(--diff-red);
+  --diff-del-border: var(--diff-green);
+}
+
+body.roles-swapped .diff-inline-del {
+  background: rgba(46, 160, 67, 0.30);
+  text-decoration: none;
+}
+
+body.roles-swapped .diff-inline-add {
+  background: rgba(248, 81, 73, 0.30);
+  text-decoration: line-through;
+}
+
 body:not(.show-inline) .diff-inline-del,
 body:not(.show-inline) .diff-inline-add {
   background: transparent;
@@ -505,8 +528,8 @@ body:not(.show-inline) .dv-block--modified {
 
 .diff-error {
   padding: 12px 16px;
-  border-left: 3px solid var(--diff-del-border);
-  color: var(--diff-del-border);
+  border-left: 3px solid var(--diff-red);
+  color: var(--diff-red);
   font-size: 13px;
 }
 
