@@ -209,7 +209,7 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
       const panel = getOrCreateDiffPanel(context, uri, finalLeft.label, finalRight.label);
 
       await vscode.window.withProgress(
-        { location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('Computing differences…') },
+        { location: vscode.ProgressLocation.Window, title: vscode.l10n.t('Computing differences…') },
         async () => {
           try {
             const result = computeDiff(finalLeft.xml, finalRight.xml, docDir, uri, panel.webview);
