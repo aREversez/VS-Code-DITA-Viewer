@@ -67,3 +67,9 @@ export function carryViewState(prev: DiffViewState | undefined, kind: 'swap' | '
   if (!prev) return initialViewState();
   return kind === 'swap' ? { ...prev } : { inline: prev.inline, profiling: prev.profiling, idx: -1 };
 }
+
+// Two picks that landed on the same commit compare a file with itself and show
+// an empty diff. The working copy has no hash and never counts as the same.
+export function sameVersion(a: string | undefined, b: string | undefined): boolean {
+  return a !== undefined && b !== undefined && a === b;
+}

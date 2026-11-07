@@ -132,6 +132,7 @@
   "Working copy": "工作副本",
   "Select the base (older) version": "选择基准（较旧）版本",
   "Compare with Git Version": "与 Git 版本比较",
+  "Both sides are the same version, so there is nothing to compare.": "两侧是同一个版本，没有可比较的内容。",
   "Could not read the selected version.": "无法读取所选版本。",
   "Could not compute the difference: {0}": "无法计算差异：{0}",
   "Select the version to compare against": "选择要对比的版本",

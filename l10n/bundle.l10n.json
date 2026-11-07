@@ -132,6 +132,7 @@
   "Working copy": "Working copy",
   "Select the base (older) version": "Select the base (older) version",
   "Compare with Git Version": "Compare with Git Version",
+  "Both sides are the same version, so there is nothing to compare.": "Both sides are the same version, so there is nothing to compare.",
   "Could not read the selected version.": "Could not read the selected version.",
   "Could not compute the difference: {0}": "Could not compute the difference: {0}",
   "Select the version to compare against": "Select the version to compare against",

@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { secondPickChoices, shouldReportFailure, VersionOutcome } from '../../editor/diffVersionPick';
+import { sameVersion, secondPickChoices, shouldReportFailure, VersionOutcome } from '../../editor/diffVersionPick';
 
 const provider = readFileSync(join(__dirname, '..', '..', '..', 'src/editor/ditaDiffProvider.ts'), 'utf8');
 
@@ -37,5 +37,21 @@ describe('version outcome reporting', () => {
     // The old code showed "Could not read the selected version." for any
     // falsy resolve, including a cancelled commit picker.
     assert.ok(!/if \(!(left|right)Result\) \{\s*vscode\.window\.showErrorMessage/.test(provider));
+  });
+});
+
+describe('the same version on both sides', () => {
+  it('is detected by commit hash', () => {
+    assert.strictEqual(sameVersion('abc', 'abc'), true);
+    assert.strictEqual(sameVersion('abc', 'def'), false);
+  });
+
+  it('never matches the working copy, which has no hash', () => {
+    assert.strictEqual(sameVersion(undefined, undefined), false);
+    assert.strictEqual(sameVersion('abc', undefined), false);
+  });
+
+  it('is checked before a panel is opened', () => {
+    assert.ok(/sameVersion\(leftResult\.hash, rightResult\.hash\)/.test(provider));
   });
 });

@@ -12,6 +12,7 @@
 
 ### Fixes
 
+- **Diff view: picking the same commit on both sides says so instead of opening an empty diff.** With **Pick a specific commit…** now available on the second pick, the same commit could be chosen twice, or chosen once and again as "Last commit to this file", and the result was a diff of a file with itself.
 - **Diff view: failures are now logged to a "DITA Diff" output channel.** A failed comparison or an unreadable Git version showed one generic message, and the detail went to the extension host's console, which users cannot see. The stack, and the file and ref that could not be read, are now written to **Output → DITA Diff**.
 - **Diff view: a block that exists on one side only is easier to see.** A paragraph replaced by a note, or any block added or removed whole, had no word marks and only a 3px edge bar, which read as no change at all. It now also carries a faint tint of the same colour (following the version after Swap).
 - **Diff view: "Computing differences…" no longer lingers for screen readers.** The progress was shown as a notification, which leaves an alert node in the accessibility tree after it closes, so the finished work kept being announced. It now uses the status bar's progress slot.

@@ -35,7 +35,7 @@ import {
 import { getActiveDitaUri } from './exportHtml';
 import { ensureCommandAllowed } from './workspaceTrustGate';
 import { logDiffError } from './diffLog';
-import { carryViewState, DiffViewState, initialViewState, diffPanelTitle, roleStats, secondPickChoices, shouldReportFailure, VersionOutcome } from './diffVersionPick';
+import { sameVersion, carryViewState, DiffViewState, initialViewState, diffPanelTitle, roleStats, secondPickChoices, shouldReportFailure, VersionOutcome } from './diffVersionPick';
 import { ensureDitaDiffVirtualDocuments } from './ditaDiffVirtualDoc';
 import { DITA_DIFF_SCHEME, docUriStringFromDiffUri } from './diffScheme';
 
@@ -117,7 +117,7 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
         // Recency rank, lower = newer -- see arrangeByRecency. Working copy
         // is always the newest possible content; commit-backed choices use
         // their position in `commits` (git log order: index 0 is newest).
-        resolve: () => Promise<VersionOutcome<{ xml: string; label: string; order: number }>>;
+        resolve: () => Promise<VersionOutcome<{ xml: string; label: string; order: number; hash?: string }>>;
         // Opens a further picker, so it stays on offer for the second pick.
         opensPicker?: boolean;
       }
@@ -139,7 +139,7 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
           description: c.subject,
           resolve: async () => {
             const xml = await getFileAtRef(repoRoot, relPath, c.refHash);
-            return xml ? { kind: 'ok', value: { xml, label: `${c.shortHash} ${c.subject}`, order: 0 } } : failedRead(relPath, c.refHash);
+            return xml ? { kind: 'ok', value: { xml, label: `${c.shortHash} ${c.subject}`, order: 0, hash: c.refHash } } : failedRead(relPath, c.refHash);
           },
         });
       }
@@ -151,7 +151,7 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
           description: c.subject,
           resolve: async () => {
             const xml = await getFileAtRef(repoRoot, relPath, c.refHash);
-            return xml ? { kind: 'ok', value: { xml, label: `${c.shortHash} ${c.subject}`, order: 1 } } : failedRead(relPath, c.refHash);
+            return xml ? { kind: 'ok', value: { xml, label: `${c.shortHash} ${c.subject}`, order: 1, hash: c.refHash } } : failedRead(relPath, c.refHash);
           },
         });
       }
@@ -167,7 +167,7 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
           const xml = await getFileAtRef(repoRoot, relPath, picked.hash);
           if (!xml) return failedRead(relPath, picked.hash);
           const order = commits.findIndex((c) => c.hash === picked.hash);
-          return { kind: 'ok', value: { xml, label: `${picked.shortHash} ${picked.subject}`, order: order >= 0 ? order : commits.length } };
+          return { kind: 'ok', value: { xml, label: `${picked.shortHash} ${picked.subject}`, order: order >= 0 ? order : commits.length, hash: picked.hash } };
         },
       });
 
@@ -201,6 +201,11 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
         return;
       }
       const rightResult = rightOutcome.value;
+
+      if (sameVersion(leftResult.hash, rightResult.hash)) {
+        vscode.window.showInformationMessage(vscode.l10n.t('Both sides are the same version, so there is nothing to compare.'));
+        return;
+      }
 
       // Place the older version on the left and the newer on the right
       // regardless of which the user actually picked first -- see
