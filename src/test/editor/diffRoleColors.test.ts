@@ -1,20 +1,12 @@
 import * as assert from 'assert';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { roleStats } from '../../editor/diffVersionPick';
 
 const root = join(__dirname, '..', '..', '..');
 const css = readFileSync(join(root, 'media/diff-styles.css'), 'utf8');
 const provider = readFileSync(join(root, 'src/editor/ditaDiffProvider.ts'), 'utf8');
 
 describe('diff colours follow the version, not the column', () => {
-  it('counts the chip by role once the sides are swapped', () => {
-    // After Swap the right-only rows hold the OLD content: they are removals
-    // by role, so a green + would sit over a red block.
-    assert.deepStrictEqual(roleStats({ added: 1, removed: 2, modified: 3 }, true), { added: 2, removed: 1, modified: 3 });
-    assert.deepStrictEqual(roleStats({ added: 1, removed: 2, modified: 3 }, false), { added: 1, removed: 2, modified: 3 });
-  });
-
   it('exchanges the add/del colours under body.roles-swapped', () => {
     const rule = css.match(/body\.roles-swapped\s*\{([^}]*)\}/);
     assert.ok(rule, 'body.roles-swapped sets the two border colours');

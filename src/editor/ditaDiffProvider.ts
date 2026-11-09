@@ -17,8 +17,7 @@ import { sharedWebviewStrings } from './webviewL10n';
 import {
   diffTopics,
   TopicDiffResult,
-  swapAlignedRows,
-  computeRowStats,
+  swapDiffResult,
   buildQuickCommitChoices,
   arrangeByRecency,
 } from './ditaDiffEngine';
@@ -35,7 +34,17 @@ import {
 import { getActiveDitaUri } from './exportHtml';
 import { ensureCommandAllowed } from './workspaceTrustGate';
 import { logDiffError } from './diffLog';
-import { sameVersion, carryViewState, DiffViewState, initialViewState, diffPanelTitle, roleStats, secondPickChoices, shouldReportFailure, VersionOutcome } from './diffVersionPick';
+import {
+  carryViewState,
+  diffPanelTitle,
+  DiffViewState,
+  initialViewState,
+  sameVersion,
+  secondPickChoices,
+  shouldReportFailure,
+  VersionOutcome,
+} from './diffVersionPick';
+import { renderStats } from './diffStatsHtml';
 import { ensureDitaDiffVirtualDocuments } from './ditaDiffVirtualDoc';
 import { DITA_DIFF_SCHEME, docUriStringFromDiffUri } from './diffScheme';
 
@@ -265,11 +274,6 @@ async function pickCommit(commits: GitCommitInfo[]): Promise<GitCommitInfo | und
   ).then((picked) => picked?.commit);
 }
 
-// The document to compare. From a source editor or a reading view that is the
-// active document; from the rendered diff panel it is the one behind that
-// panel; from the native source diff the active editor is a virtual
-// `dita-diff:` file, which has no repository of its own, so go through the
-// `doc=` it carries to the real file.
 // A version that git could not hand back. The user sees one generic message;
 // the file and ref that went wrong are what a bug report needs.
 function failedRead(relPath: string, ref: string): { kind: 'failed' } {
@@ -277,6 +281,11 @@ function failedRead(relPath: string, ref: string): { kind: 'failed' } {
   return { kind: 'failed' };
 }
 
+// The document to compare. From a source editor or a reading view that is the
+// active document; from the rendered diff panel it is the one behind that
+// panel; from the native source diff the active editor is a virtual
+// `dita-diff:` file, which has no repository of its own, so go through the
+// `doc=` it carries to the real file.
 function compareTargetUri(): vscode.Uri | undefined {
   const active = getActiveDitaUri();
   if (active && active.scheme === DITA_DIFF_SCHEME) {
@@ -400,14 +409,10 @@ function getOrCreateDiffPanel(
       // turn around, so the native source diff (openSourceDiff below) always
       // reflects whatever the rendered view is currently showing.
       //
-      // The stats chip has to be RECOUNTED, not reused. swapAlignedRows flips
-      // every row's changeType (added <-> removed), so carrying the old numbers
-      // over left the chip contradicting the view it sits on top of: an
-      // insertion-only diff showed "+1 −0" while the only changed block was on
-      // the left (a deletion) after the swap.
-      const rows = swapAlignedRows(state.result.rows);
+      // swapDiffResult also recounts the chip's numbers (see there); they are
+      // rendered as they are, not flipped again.
       const swapped: DiffPanelState = {
-        result: { ...state.result, rows, stats: computeRowStats(rows) },
+        result: swapDiffResult(state.result),
         leftXml: state.rightXml,
         rightXml: state.leftXml,
         leftLabel: state.rightLabel,
@@ -579,7 +584,7 @@ function buildDiffHtml(
   });
 
   const cols = renderDiffColumns(result.rows);
-  const statsHtml = renderStats(roleStats(result.stats, swapped));
+  const statsHtml = renderStats(result.stats);
 
   const labels = {
     swapTitle: vscode.l10n.t('Swap sides'),
@@ -632,10 +637,3 @@ ${result.errorRight ? `<div class="diff-error">${escapeHtml(result.errorRight)}<
 </html>`;
 }
 
-function renderStats(stats: { added: number; removed: number; modified: number }): string {
-  const parts: string[] = [];
-  if (stats.added > 0) parts.push(`<span class="stat-add">+${stats.added}</span>`);
-  if (stats.removed > 0) parts.push(`<span class="stat-del">−${stats.removed}</span>`);
-  if (stats.modified > 0) parts.push(`<span class="stat-mod">~${stats.modified}</span>`);
-  return parts.join(' ') || '0';
-}

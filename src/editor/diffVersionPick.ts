@@ -31,21 +31,6 @@ export function secondPickChoices<T>(
   return choices.filter((c) => c !== firstPick || opensPicker(c));
 }
 
-export interface DiffStats {
-  added: number;
-  removed: number;
-  modified: number;
-}
-
-// The toolbar chip, counted by which VERSION each change belongs to. After
-// Swap the rows are laid out newer-left, older-right, so the right-only rows
-// hold old content: by role they are removals. Colours follow the role (see
-// body.roles-swapped in diff-styles.css), and the chip has to as well, or a
-// green "+" would sit over a red block.
-export function roleStats(stats: DiffStats, swapped: boolean): DiffStats {
-  return swapped ? { added: stats.removed, removed: stats.added, modified: stats.modified } : stats;
-}
-
 // What the reader has set in the diff panel: the Aa and Flags toggles and which change
 // they are on (-1 = none yet). The page is replaced wholesale on every render,
 // so the host keeps this and writes it back into the next page.

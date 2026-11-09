@@ -30,6 +30,16 @@ export type { AlignedRow, DiffChangeType, DiffPart, RenderedBlock, TopicDiffResu
 
 // ── Swap helper ──
 
+// A whole-result swap: the rows turn around AND the stats are recounted from
+// them. swapAlignedRows flips every added/removed row, so recounting is what
+// swaps the chip's numbers; reusing the old ones left the chip contradicting
+// the view (an insertion-only diff showing "+1 −0" over a lone deletion).
+// This is the only place that flips the numbers; the renderer shows them as is.
+export function swapDiffResult<T extends { rows: AlignedRow[]; stats: { added: number; removed: number; modified: number } }>(result: T): T {
+  const rows = swapAlignedRows(result.rows);
+  return { ...result, rows, stats: computeRowStats(rows) };
+}
+
 export function swapAlignedRows(rows: AlignedRow[]): AlignedRow[] {
   return rows.map((row) => {
     const swapped: AlignedRow = {
