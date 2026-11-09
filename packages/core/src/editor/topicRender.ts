@@ -48,6 +48,13 @@ export interface TopicRenderInput {
   asWebviewUri: (relPath: string) => string;
   headingLevel: number;
   /**
+   * The key scope chains the topic is read in, when the caller knows where the
+   * topic sits (book / site: the scope of the topicref that placed it). Left
+   * undefined, the first topicref that publishes the file decides. See
+   * BuildRenderContextInput.keyScope.
+   */
+  keyScope?: string[][];
+  /**
    * Fallback language (e.g. from vscode.env.language) used to pick note
    * labels (Warning/Attention/...) when the topic itself has no xml:lang
    * of its own to go by -- see detectNoteLabels. Most individual topic
@@ -129,6 +136,8 @@ export interface TopicXmlRenderInput {
    */
   docFile?: string;
   markConrefs?: boolean;
+  /** See BuildRenderContextInput.keyScope. */
+  keyScope?: string[][];
 }
 
 export interface ParsedTopicResult {
@@ -140,7 +149,7 @@ export interface ParsedTopicResult {
 
 
 export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
-  const { xml, docDir, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, collectDependencies, bookMembers, clickableExternalXrefs, docFile, markConrefs } = input;
+  const { xml, docDir, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, collectDependencies, bookMembers, clickableExternalXrefs, docFile, markConrefs, keyScope } = input;
   try {
     const preprocessedXml = preprocessEntities(xml);
     const ditaDoc = parseDita(preprocessedXml);
@@ -165,6 +174,7 @@ export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
       collectDependencies,
       docFile,
       markConrefs,
+      keyScope,
     });
 
     const html = renderDocument(ditaDoc.root, ctx);
@@ -185,7 +195,7 @@ export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
 }
 
 export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
-  const { filePath, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, collectDependencies, bookMembers, clickableExternalXrefs, markConrefs } = input;
+  const { filePath, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, collectDependencies, bookMembers, clickableExternalXrefs, markConrefs, keyScope } = input;
   try {
     if (!existsSync(filePath)) {
       return { html: '', error: `File not found: ${filePath}` };
@@ -207,6 +217,7 @@ export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
       clickableExternalXrefs,
       docFile: filePath,
       markConrefs,
+      keyScope,
     });
     return { html: result.html, title: result.title, error: result.error };
   } catch (err) {
@@ -406,10 +417,12 @@ function dropOldestTopicEntry(): void {
  * headingLevel is part of the key rather than a merely validated field
  * because the same topic legitimately sits at different depths across two
  * open books -- validating it instead would make those two entries evict each
- * other on every pass.
+ * other on every pass. The key scope is part of it for the same reason, and
+ * for a stronger one: a topic published under two keyscopes renders with
+ * different key text in each, so a hit from the other scope would be wrong.
  */
 export function renderTopicCached(input: TopicRenderInput): TopicRenderResult {
-  const key = `${input.filePath}\u0000${input.headingLevel}`;
+  const key = `${input.filePath}\u0000${input.headingLevel}\u0000${input.keyScope ? JSON.stringify(input.keyScope) : ''}`;
 
   const cached = topicRenderCache.get(key);
   if (

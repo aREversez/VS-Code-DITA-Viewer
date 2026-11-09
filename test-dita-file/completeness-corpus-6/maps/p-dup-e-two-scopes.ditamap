@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- R008 probe: the topic once in keyscope s1 and once in keyscope s2 (the corpus-6 shared-edge shape, isolated on its own map).
+     One probe per map, because parity compares (file, category) and every probe files
+     its multiple-reference on its own map. See README.md, "The duplicate probes". -->
+<map id="p-dup-e-two-scopes">
+  <title>p-dup-e-two-scopes</title>
+  <topicgroup keyscope="s1">
+    <topicref href="../topics/p-dup-e-two-scopes.dita"/>
+  </topicgroup>
+  <topicgroup keyscope="s2">
+    <topicref href="../topics/p-dup-e-two-scopes.dita"/>
+  </topicgroup>
+</map>

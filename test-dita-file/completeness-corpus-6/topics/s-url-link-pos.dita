@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="s-url-link-pos">
+  <title>s-url-link-pos</title>
+  <body>
+    <!-- link to a URL with no @scope: should be filed -->
+    <p>Text.</p>
+  </body>
+  <related-links>
+    <link href="http://example.invalid/a.html" format="html"/>
+  </related-links>
+</topic>

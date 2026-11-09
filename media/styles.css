@@ -78,6 +78,9 @@
   --color-profiling-label-text: #2a3a12;
   --color-indexterm-chip-bg: #e6f0fa;
   --color-indexterm-chip-text: #2c5282;
+  --color-comment-bg: #efefef;
+  --color-comment-border: #c4c4c4;
+  --color-comment-text: #6b6b6b;
   --color-menucascade-arrow: #767676;
 }
 
@@ -98,6 +101,9 @@
   --color-profiling-label-text: #eef7dc;
   --color-indexterm-chip-bg: #1f2f42;
   --color-indexterm-chip-text: #9dc4ea;
+  --color-comment-bg: #2b2b2b;
+  --color-comment-border: #4d4d4d;
+  --color-comment-text: #9a9a9a;
   --color-menucascade-arrow: #aaaaaa;
 }
 
@@ -580,6 +586,30 @@ html.dv-conref-hot [data-conref] * {
 }
 .indexterm-chip--ref { font-style: italic; }
 .indexterm-chip__see { font-style: italic; opacity: 0.85; }
+/* An XML comment's own text, shown where the author wrote it (Oxygen's Author
+   mode does the same). Deliberately quiet -- muted colour, no border of its
+   own -- because it is not document content: the reader should be able to see
+   it, and to skip over it without the page looking broken. Block comments
+   (one written between two blocks rather than inside a sentence) get a
+   leading rule so the whole run reads as one comment instead of stray text. */
+.dv-comment {
+  background: var(--color-comment-bg);
+  color: var(--color-comment-text);
+  font-style: italic;
+  border-radius: 3px;
+  padding: 0 0.2em;
+  white-space: pre-wrap;
+  /* A wrapped inline comment must paint each line's box, not just the first. */
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.dv-comment--block {
+  display: block;
+  margin: 0.5em 0;
+  padding: 0.15em 0.6em;
+  border-left: 3px solid var(--color-comment-border);
+  border-radius: 0 3px 3px 0;
+}
 body.hide-profiling .profiled {
   background: none;
   box-shadow: none;

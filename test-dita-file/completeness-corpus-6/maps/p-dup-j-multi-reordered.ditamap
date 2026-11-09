@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- R008 shape probe (third report: silent): the topic once in keyscope "a b" and once in keyscope "b a" (the same scopes, written in another order).
+     Observed, not extrapolated: silent in the third Oxygen report, so the order of the names
+     counts and these two are two scopes. It is the one shape where the run changed the
+     extension: whichever way the names are written, they are a list. See README.md,
+     "The scope shapes". -->
+<map id="p-dup-j-multi-reordered">
+  <title>p-dup-j-multi-reordered</title>
+  <topicgroup keyscope="a b">
+    <topicref href="../topics/p-dup-j-multi-reordered.dita"/>
+  </topicgroup>
+  <topicgroup keyscope="b a">
+    <topicref href="../topics/p-dup-j-multi-reordered.dita"/>
+  </topicgroup>
+</map>

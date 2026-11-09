@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- R008 probe: the topic twice inside ONE keyscope="s1" topicgroup: is a duplicate within a single scope counted?
+     One probe per map, because parity compares (file, category) and every probe files
+     its multiple-reference on its own map. See README.md, "The duplicate probes". -->
+<map id="p-dup-d-same-scope">
+  <title>p-dup-d-same-scope</title>
+  <topicgroup keyscope="s1">
+    <topicref href="../topics/p-dup-d-same-scope.dita"/>
+    <topicref href="../topics/p-dup-d-same-scope.dita"/>
+  </topicgroup>
+</map>

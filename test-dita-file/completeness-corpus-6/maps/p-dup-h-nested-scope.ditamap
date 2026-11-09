@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- R008 shape probe (third report: silent): the topic once in s1 and once in s2 nested inside s1.
+     Observed, not extrapolated: silent in the third Oxygen report, so the whole chain
+     counts, not only the outermost name. One probe per map; see README.md, "The scope shapes". -->
+<map id="p-dup-h-nested-scope">
+  <title>p-dup-h-nested-scope</title>
+  <topicgroup keyscope="s1">
+    <topicref href="../topics/p-dup-h-nested-scope.dita"/>
+    <topicgroup keyscope="s2">
+      <topicref href="../topics/p-dup-h-nested-scope.dita"/>
+    </topicgroup>
+  </topicgroup>
+</map>

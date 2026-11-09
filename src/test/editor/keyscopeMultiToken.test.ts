@@ -71,16 +71,18 @@ describe('keyscope with several tokens', () => {
     assert.strictEqual(c.keyDefs[1].scopeId, 's');
   });
 
-  it('duplicate detection: same key in scope "a b" and in scope "b" collides in b only, reported once', async () => {
+  it('duplicate detection: same key in scope "a b" and in scope "b" collides in b only, reported once per definition', async () => {
     const issues = await check(
       {
         'root.ditamap':
-          '<map><topicgroup keyscope="a b"><keydef keys="k" href="t.dita"/></topicgroup><topicgroup keyscope="b"><keydef keys="k" href="t.dita"/></topicgroup></map>',
+          '<map>\n<topicgroup keyscope="a b"><keydef keys="k" href="t.dita"/></topicgroup>\n<topicgroup keyscope="b"><keydef keys="k" href="t.dita"/></topicgroup>\n</map>',
         't.dita': topic('t'),
       },
       { reportDuplicateKeys: true },
     );
-    assert.strictEqual(issues.filter((i) => i.category === 'duplicate-key').length, 1);
+    // One clash, one finding per participating definition: the shared "b" name must not
+    // double the first one (both definitions hold it).
+    assert.strictEqual(issues.filter((i) => i.category === 'duplicate-key').length, 2);
   });
 
   it('duplicate detection: scopes "a" and "b" do not collide', async () => {

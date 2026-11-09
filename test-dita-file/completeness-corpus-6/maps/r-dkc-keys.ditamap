@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- Control: a different key name. -->
+<map id="r-dkc-keys">
+  <title>r-dkc-keys</title>
+  <keydef keys="k-dkc-1" href="../topics/r-dkc-t1.dita"/>
+</map>

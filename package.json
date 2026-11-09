@@ -2,7 +2,7 @@
   "name": "dita-viewer",
   "displayName": "DITA Viewer",
   "description": "%extension.description%",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "publisher": "dita-viewer",
   "license": "MIT",
   "repository": {
@@ -239,6 +239,11 @@
       {
         "command": "ditaViewer.clearMapCheckResults",
         "title": "%command.clearMapCheckResults.title%"
+      },
+      {
+        "command": "ditaViewer.fixBrokenReferences",
+        "title": "%command.fixBrokenReferences.title%",
+        "icon": "$(wrench)"
       }
     ],
     "icons": {
@@ -539,6 +544,11 @@
           "command": "ditaViewer.validateMapCompleteness",
           "when": "resourceExtname == .ditamap",
           "group": "3_check@2"
+        },
+        {
+          "command": "ditaViewer.fixBrokenReferences",
+          "when": "resourceExtname == .dita || resourceExtname == .ditamap || explorerResourceIsFolder",
+          "group": "3_check@3"
         }
       ],
       "commandPalette": [
@@ -568,7 +578,7 @@
         },
         {
           "command": "ditaViewer.compareWithGit",
-          "when": "resourceExtname == .dita"
+          "when": "resourceExtname == .dita || activeWebviewPanelId == ditaViewer.diff"
         },
         {
           "command": "ditaViewer.openWithOxygen",
@@ -797,15 +807,17 @@
     "pretypecheck": "npm run build:core",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "typecheck:core": "npm run typecheck -w @dita-viewer/core",
-    "verify": "npm run typecheck && npm run typecheck:core && tsc --noEmit -p tsconfig.e2e.json && npm run lint && npm run build && npm run check:l10n && npm run check:webview && npm run check:dita-class && npm test && npm run test:core",
+    "verify": "npm run typecheck && npm run typecheck:core && tsc --noEmit -p tsconfig.e2e.json && npm run lint && npm run build && npm run check:l10n && npm run check:webview && npm run check:dita-class && npm run check:cycles && npm test && npm run test:core",
     "check:l10n": "node scripts/check-l10n.cjs",
     "check:webview": "node scripts/check-webview-scope.cjs && node scripts/check-map-message-parity.cjs",
     "check:dita-class": "node scripts/extract-dita-class.cjs --check-module",
+    "check:cycles": "node scripts/check-cycles.cjs",
     "check:core-pack": "node scripts/check-core-pack.mjs",
     "check:package": "npx --yes @vscode/vsce@4.0.0 package --no-dependencies --allow-missing-repository && node scripts/check-package.cjs",
     "check:completeness": "node scripts/completeness-baseline.cjs",
     "check:completeness:oxygen": "node scripts/oxygen-diff.cjs",
     "check:completeness:run": "node scripts/run-oxygen-completeness.cjs",
+    "check:completeness:real": "node scripts/real-map-diff.cjs",
     "package": "node -e \"require('fs').mkdirSync('output',{recursive:true})\" && npx --yes @vscode/vsce@4.0.0 package --no-dependencies --out output/",
     "vsix:install": "node scripts/install-vsix.cjs",
     "package:install": "npm run build && npm run package && npm run vsix:install",

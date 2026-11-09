@@ -1,0 +1,19 @@
+{
+"getSiteNavKeyboardScript": {"length":6375,"sha256":"fb0666afb981e89db1e2b92d3275abc6fd7f77d70fc4db3caa5903d511e06f58"},
+"getSidebarUpdateScript site": {"length":1268,"sha256":"35fc90813a1a26cdaae820ce8eda793b0733673cc7c856eb0b286965ec6cd4ab"},
+"getSidebarUpdateScript book": {"length":1174,"sha256":"48a19c54ebac6472a84ba2fc2b9460a3e26fd061987523af85b192ae5184e4a1"},
+"getSiteHistoryModelScript": {"length":3319,"sha256":"51cf5168ab11c9b5c8d22ac9557bf87564e0e55d6eac3e423000edbf1d1bbb5d"},
+"getSiteNavClickHandlerScript": {"length":19752,"sha256":"72e2ee28868012def863df9b3baa372707ca1cde7a32f95ec43a990e34e7d794"},
+"getSiteNavClickHandlerScript other type": {"length":19743,"sha256":"276f3b20d3b2690ef6b0a034a550938c7fea5d8950159fcb507cf5bc46c4eb28"},
+"getBookNavClickHandlerScript": {"length":4209,"sha256":"6e8d29cc0a4cf418bbca2f7f67c7690437327b455da04929178986c88124cca6"},
+"getBookScrollSyncScript": {"length":5631,"sha256":"5091d34f9d04cbdc55da04d8b46cafcdcb4a890e34850c565a5defe0894576d8"},
+"getOutlineSyncScript": {"length":5008,"sha256":"c460bf2f04c5aac18bfb88618b50a525ff26b11e3ba95e3242c49f69e04cec64"},
+"getInitialSidebarBodyClass tree": {"length":9,"sha256":"a1158cca32ff7efd7a03023385fdfaab1ad0e9c45c3657a6282f1f52badf0957"},
+"getInitialSidebarBodyClass book": {"length":28,"sha256":"ec68bbf6f6f6f218184fe10a5af78167d8f18f614c254954a5d58cbe75a9c77a"},
+"getInitialSidebarBodyClass site": {"length":9,"sha256":"68eae594a0bb4710f83aafa258985fb470926732104703590d4d0f84e20c39f9"},
+"getSiteNavCollapseStateHelperScript": {"length":2265,"sha256":"3e031f24ce8f3692677bd17f9bfe46c86aea766c2783b823299de8487d00c684"},
+"getSiteNavCollapseStateHelperScript reporting": {"length":3072,"sha256":"5e6f5ac5b59ec17d1bc724c4f82344161029bc86e146cf69704a5757f4305ed6"},
+"getSiteNavExpandCollapseAllButtonsScript": {"length":2277,"sha256":"4c571510278c2c899911db8948cde3f0226b8bbce4b0e9590797da59e0d650b3"},
+"getSiteNavExpandCollapseAllButtonsScript quoting": {"length":2279,"sha256":"06b2f2a005ba965fed5b94d55a399392558efe8814e50193d93e1b787f9fe428"},
+"getSiteNavToggleScript": {"length":690,"sha256":"6b8687f26b09ec36b739d9b8164ea19a6c957f03b8b65f0e8a83a7c336d79a4e"}
+}

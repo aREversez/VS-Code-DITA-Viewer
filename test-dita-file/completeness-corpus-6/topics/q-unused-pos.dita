@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="q-unused-pos">
+  <title>q-unused-pos</title>
+  <body>
+    <!-- the only use of k-u-pos sits OUTSIDE its keyscope: it resolves to nothing. -->
+    <p><xref keyref="k-u-pos"/></p>
+  </body>
+</topic>

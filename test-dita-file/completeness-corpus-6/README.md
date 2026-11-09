@@ -1,0 +1,454 @@
+# Completeness corpus 6: key scope resolution
+
+The sixth differential corpus, kept apart from the other five so each keeps its own line
+numbers, baseline and parity lock. It has its own root map, `corpus.ditamap`, its own
+`baseline.extension.json`, and since its first run a sanitized `oxygen-report.xml` and an
+`oxygen-parity.expected.json`. The rules it feeds are R066 (key scope), R011 (an unused key
+definition), the scope half of R008 (duplicates) and the topic form of R034 (a URL written
+outside a map) in `../completeness-corpus/RULES.md`.
+
+## Why a corpus of its own
+
+Key scope is a property of the whole build, not of one file: a key is visible where its
+scope is, so answering R066 needs one map that defines a key inside `keyscope="s1"`, publishes
+a topic inside it, publishes another outside, and publishes a third in two scopes at once.
+That layout cannot be dropped into corpus 1 without changing what its own probes mean, so it
+gets a folder of its own. The duplicate probes below need the same thing for R008: the
+question is which publications of one topic Oxygen counts as duplicates, so each answer needs
+a map of its own with the two references laid out one way.
+
+## Oxygen setup for this corpus
+
+Nothing beyond the other corpora: the `audience` preferences of corpus 1, no filter. The first
+seven runs recorded below were **Oxygen XML Editor 27.1**; the eighth came from the same setup in
+the editor the `real-map-sample` runs used (neither report carries a build string). `corpus.ditamap`
+was the only open root map, every option on, remote off.
+
+## What the corpus probes
+
+| Probe | File | What it asks |
+| --- | --- | --- |
+| bare key defined only inside `keyscope="s1"`, used by a topic published outside it | `topics/o-scope-outside-pos.dita` | `undefined-key` |
+| the same bare key, topic published inside `s1` | `topics/o-scope-inside-neg.dita` | *(no key finding)* |
+| qualified name `s1.k-scoped` from outside | `topics/o-scope-qualified-neg.dita` | *(no key finding)* |
+| topic published in `s1` (key defined) and in `s2` (not) | `topics/o-scope-shared-edge.dita` | `undefined-key` for the `s2` publication only |
+| missing topic | `topics/control-missing.dita` (absent) | `missing-reference` (control, so silence means Oxygen did not look) |
+
+Every probe topic holds one `<xref>`: `keyref="k-scoped"`, except the qualified
+`s1.k-scoped`. The key resolves to `topics/t-target.dita`, which the map reaches only through a
+`<keydef>`, and that is what produced the second finding family of the first run.
+
+## The runs: 48 incidents, full parity
+
+`node scripts/oxygen-diff.cjs --corpus completeness-corpus-6 oxygen-report.xml` reports
+**40 matched, 0 extension-only, 0 Oxygen-only**. No incident was an accepted difference, so
+parity compares all forty signatures; the 48 incidents collapse into them because each
+duplicate probe files one incident per reference, and the control's `-use` topic two.
+
+Ten reports were taken from this corpus, and the last one is the committed
+`oxygen-report.xml`. The first carried **6 incidents**, before the duplicate probes existed,
+and settled R066 and the keydef half of R049:
+
+| Oxygen | Where | Extension |
+| --- | --- | --- |
+| `dmv.key.undef` ×2 | `topics/o-scope-outside-pos.dita:7`; `topics/o-scope-shared-edge.dita:7`, whose message names the scope that lacks the key (`Key Scopes:[[s2]]`) | `undefined-key` on both — the shared topic is checked per publication scope (R066) |
+| `dmv.ref.to.resource.only` ×3 | `topics/o-scope-inside-neg.dita:7`, `topics/o-scope-qualified-neg.dita:7`, `topics/o-scope-shared-edge.dita:7` | `resource-only-target` on all three, after the fix below |
+| `dmv.file.not.found` ×1 | `corpus.ditamap:11` | `missing-reference` (control) |
+
+What that run settled beyond R066:
+
+- **A `<keydef>` publishes its topic resource-only** (R049). `topics/t-target.dita` is reached
+  only through the keydef, which DITA makes resource-only unless it says otherwise, so every
+  xref to it breaks. The extension had read a publication only from a `topicref`, so these were
+  a gap in the ordinary sense — Oxygen filed it and we did not. `resourceOnlyTargetIssues` now
+  takes a keydef as a publication, which turned all three rows from Oxygen-only into matched;
+  an explicit `processing-role="normal"` on a keydef still publishes normally, and
+  `src/test/editor/mapCompleteness.test.ts` covers both shapes. The fourth probe, whose bare key
+  resolves to nothing, draws no such warning: with no key definition there is no target to call
+  resource-only, and its `<xref>` writes no `@href` of its own (R003).
+- **The same topic in two key scopes was not a duplicate to Oxygen** (R008).
+  `topics/o-scope-shared-edge.dita` is referenced twice, once per scope; the extension filed
+  `multiple-reference` on the second reference and Oxygen filed nothing. That pair could not
+  tell "different scope, so intentional" from "duplicates are simply not counted inside a
+  `topicgroup`", so it stayed locked extension-only until a run of the duplicate probes below
+  decided it.
+
+The second report (**14 incidents**) added the six duplicate probes and answered the question:
+
+| Oxygen | Where | Extension |
+| --- | --- | --- |
+| `dmv.dup.topic` ×8 | `maps/p-dup-a-root.ditamap:8`, `:9`; `p-dup-b-group.ditamap:9`, `:10`; `p-dup-c-two-groups.ditamap:9`, `:12`; `p-dup-d-same-scope.ditamap:9`, `:10` | `multiple-reference` on the second reference of each map, matched on all four |
+
+Nothing else moved: the six incidents of the first run came back the same, and the shared-edge
+pair in `corpus.ditamap` drew nothing again — under the tightened rule the extension no longer
+files it either, so that row closed instead of staying extension-only. That report read
+**10 matched, 0 extension-only, 0 Oxygen-only**.
+
+The third report (**16 incidents**) added the four scope shapes and their control:
+
+| Oxygen | Where | Extension |
+| --- | --- | --- |
+| `dmv.dup.topic` ×2 | `maps/p-dup-k-control.ditamap:11`, `:12` | `multiple-reference` on the second reference, matched |
+
+g to j drew nothing at all, so the extension's silence on g, h and i stands and its finding on
+j had to go: the only signature that moved was the control's, out of the lock's extension-only
+row and into the matched set.
+
+The fourth report (**20 incidents**) added the three probes that ask what a scope's identity
+is:
+
+| Oxygen | Where | Extension |
+| --- | --- | --- |
+| `dmv.dup.topic` ×2 | `maps/p-dup-l-two-groups.ditamap:11`, `:14` | `multiple-reference` on the second reference, matched |
+| `dmv.dup.topic` ×2 | `maps/p-dup-n-name-spacing.ditamap:11`, `:14` | `multiple-reference` on the second reference, matched |
+
+`p-dup-m` drew nothing, and every earlier incident came back the same, so the extension needed
+no change: the lock's two extension-only rows (`l` and `n`) became matches, and it reads zero in
+both directions again.
+
+The fifth report (**23 incidents**) added the four key-scope tail probes and answered all three
+of their questions — one in Oxygen's direction, one in the extension's, one confirming a rule
+that only unit tests had covered. It is the section below that records it, because it moved the
+extension for the first time since the key-scope half of R066 was written.
+
+The sixth report (**25 incidents**) added the multi-name probe and confirmed R066 as it stood:
+`a.k-mn` and `b.k-mn` both resolve from outside the `keyscope="a b"` group, `ab.k-mn` and the
+bare `k-mn` do not, and the topic published inside the group resolves bare. Both controls were
+filed, every earlier incident came back the same, and the extension **needed no change**: its two
+extension-only rows became matches.
+
+The seventh report (**36 incidents**) added the five duplicate-key probes and answered R010: every
+definition that takes part in a clash is filed, the first included, and a key map reached twice is
+not a clash. It is the section below that records it, because it changed the extension.
+
+The eighth report (**39 incidents**) added the six URL probes and answered the topic form of R034:
+every reading registered for it held — an `xref` and a `link` are both filed, a written
+`scope="local"` is filed with them, and `scope="peer"` is not — so the extension **needed no
+change** and its three extension-only rows became matches. The section below records the ids.
+
+The ninth report (**45 incidents**) added the six probes for unused keys below the first map and
+answered R011's open question: a key unused in the probe map, in a submap and in a key map below
+that submap are all filed, so depth is not what silenced Oxygen on the real map, and one name
+defined in two maps of one scope is filed once, on the definition resolution reaches. The rule
+**changed** to match, and the section below records it.
+
+The tenth report (**48 incidents**) added the eight id-syntax probes and answered R031's open
+question: every reading registered for them held — a topic or map element's `@id` is judged as an
+XML `ID`, any other element's as a name token, and the value is normalized first — so a digit-first
+id or a colon on a `<p>`, a trailing space on a topic id and a digit-first id on a `topicref` drew
+nothing, a space or a plus inside a `<p>` id drew `NMTOKENInvalid` beside the extension's
+`invalid-id-syntax`, and a nested `<topic id="9n">` drew `IDInvalidWithNamespaces`. The rule
+**changed** to match, and the section below records it.
+
+## The duplicate probes (R008): the answer is the scope
+
+Six maps under `maps/`, each referencing its own topic twice, added to settle the open row
+above. They are referenced from the end of `corpus.ditamap` (so the lines the report cites did
+not move) and each sits on a map of its own, because parity compares `(file, category)` and
+every probe files its `multiple-reference` on the map that holds the pair.
+
+| Map | Layout | Oxygen |
+| --- | --- | --- |
+| `maps/p-dup-a-root.ditamap` | two sibling `topicref`s at the root | `dmv.dup.topic` ×2 — control: corpus 1 already files it here |
+| `maps/p-dup-b-group.ditamap` | both inside one `topicgroup`, no keyscope | `dmv.dup.topic` ×2 — a container does not stop the count |
+| `maps/p-dup-c-two-groups.ditamap` | one in each of two `topicgroup`s, no keyscope | `dmv.dup.topic` ×2 — a different parent does not stop it either |
+| `maps/p-dup-d-same-scope.ditamap` | both inside one `keyscope="s1"` group | `dmv.dup.topic` ×2 — a `keyscope` by itself does not end the count |
+| `maps/p-dup-e-two-scopes.ditamap` | one in `s1`, one in `s2` (the shared-edge shape, isolated) | *(nothing)* |
+| `maps/p-dup-f-topicref-scope.ditamap` | `keyscope` on the two `topicref`s, no container | *(nothing)* |
+
+B and C rule out the container, D rules out "a `keyscope` ends the count", and F shows the
+container is not what silences E: the only difference between the reported D and the silent E
+and F is that the two references sit in **different** scopes. **The scope decides**, so R008
+counts a reference by `(target, scope chain)`. `mapChecks.ts` keys its duplicate groups on the
+target plus `Reference.scopeChains`, which `mapCrawl.ts` records for every map element (the
+element's own `keyscope` included) and hands to a `<topicref keyref>` as well. The shared-edge
+pair of `corpus.ditamap` is that same shape, which is why it stopped being an extension-only
+row without a change of its own. These six probes say nothing about the order of the names
+inside a chain; the next section does.
+
+`src/test/editor/mapCompleteness.test.ts` covers the four shapes here — two `topicgroup`s, one
+`keyscope` group, two scopes, and `keyscope` on the `topicref`s themselves — and the seven scope
+shapes below.
+
+## The scope shapes (R008): all eight observed
+
+The six probes above count by scope for siblings (`s1` against `s2`); the maps below ask the
+shapes those leave open, each with its own topic, referenced after the six and before the
+control.
+
+| Map | Layout | Report | What it settles |
+| --- | --- | --- | --- |
+| `maps/p-dup-g-root-vs-scope.ditamap` | once at the root, once inside `keyscope="s1"` | 3rd: *(nothing)* | the root is a scope like any other |
+| `maps/p-dup-h-nested-scope.ditamap` | once in `s1`, once in `s2` nested in `s1` | 3rd: *(nothing)* | the whole chain counts, not only the outermost name |
+| `maps/p-dup-i-multi-vs-single.ditamap` | once in `keyscope="a b"`, once in `keyscope="a"` | 3rd: *(nothing)* | the names are compared as a whole, not any one they share |
+| `maps/p-dup-j-multi-reordered.ditamap` | once in `"a b"`, once in `"b a"` | 3rd: *(nothing)* | the names count **in the order written**: a set would have called these one scope |
+| `maps/p-dup-l-two-groups.ditamap` | once in each of two independent `keyscope="a b"` groups | 4th: `dmv.dup.topic` ×2 | the names are the identity, not the element that declares them |
+| `maps/p-dup-m-nested-same-inner.ditamap` | once in `s1 > x`, once in `s2 > x` | 4th: *(nothing)* | the whole chain counts, not its innermost name |
+| `maps/p-dup-n-name-spacing.ditamap` | once in `keyscope="a b"`, once in `keyscope="a  b"` | 4th: `dmv.dup.topic` ×2 | the names are split on whitespace, not compared as attribute text |
+| `maps/p-dup-k-control.ditamap` | twice inside one `keyscope="s1"` group (the control) | 3rd and 4th: ×2 | the run read the tail of the map, so the silence above is an answer |
+
+So R008 counts a reference by `(target, scope chain)` with the names **in the order the
+`keyscope` lists them**: `scopeKey` (`mapChecks.ts`) joins the chains without sorting, so
+`"a b"` and `"b a"` are two scopes and the pair of `p-dup-j` stops being a duplicate, while two
+groups that both say `keyscope="a b"` are one — which the fourth report filed (`p-dup-l`). The
+same run answered the two neighbours: a chain is its whole list of names, not its innermost one
+(`p-dup-m` silent), and the names are parsed, not read as attribute text (`p-dup-n` filed). No
+shape is left to extrapolate; nothing in `mapChecks.ts` changed for any of the three.
+
+`src/test/editor/mapCompleteness.test.ts` pins all seven answers, so a change after a later run
+is deliberate. Rerun with `corpus.ditamap` as the only root map, sanitize, refresh this folder's
+parity lock, and change R008 only where Oxygen disagrees.
+
+### The scope identity (R008): the fourth report
+
+The three maps asked what the **identity** of a scope is, which the first nine probes leave
+open. Both readings of each were registered here **before** the run, so the reading was not
+chosen after seeing it; all three landed on the reading the rule already took, and no code
+changed.
+
+| Map | Registered reading | Fourth report |
+| --- | --- | --- |
+| `maps/p-dup-l-two-groups.ditamap` | reported = the names are the identity; silent = each `keyscope` element is its own context, so the group key must name the declaring element | reported ×2, so the names are the identity |
+| `maps/p-dup-m-nested-same-inner.ditamap` | reported = only the innermost name counts; silent = the whole chain is the identity | *(nothing)*, so the whole chain is the identity |
+| `maps/p-dup-n-name-spacing.ditamap` | reported = the names are parsed on whitespace; silent = the attribute text is compared, recorded as a known difference | reported ×2, so the names are parsed |
+
+While the shapes were unknown, the baseline and the parity lock carried `l` and `n` as
+extension-only rows, and `oxygen-diff` returned non-zero on them for that reason. The fourth
+report turned both into matches, so the lock reads zero in both directions again and no unknown
+row is left in this corpus.
+
+### The control: telling silence from a stale map
+
+A first look at g to j came back identical to the report before it, and a report cannot tell
+"Oxygen answered *not a duplicate*" from "Oxygen ran on a cached copy of `corpus.ditamap` that
+lacked them" (the DITA Maps Manager keeps an open root map, and a file changed outside the
+editor is not always reloaded). The only control then was the missing topic at the top of the
+map, which says the root was read, not the tail.
+
+`maps/p-dup-k-control.ditamap` is the same-scope pair of `p-dup-d`, which Oxygen files, and it is
+referenced **last**. Every report from the third on carries its two `dmv.dup.topic` rows, on
+lines 11 and 12, so the run read the whole tail and the silence on the probes above is an answer.
+
+A report without them is a stale map: close the root map in the DITA Maps Manager, reopen
+`corpus.ditamap` from disk and run again — none of g to n is answered then. Before reading
+anything into a report, check that the Maps Manager tree shows the nodes the run should cover
+(`p-dup-g` to `p-dup-n`, `q-twice`, `q-unused-pos`, `q-unused-neg`, `q-conkeyref`,
+`q-multiname`, `r-dk2`, `r-dk3`, `r-dkt`, `r-dkn`, `r-dkc`, `s-url`, `t-unref`, `t-udup`, `u-id`, and the control `p-dup-k`) under the root map.
+
+## The key-scope tail (R066 and R011): the fifth report
+
+Four maps under `maps/`, referenced from `corpus.ditamap` before the control (still last, so the
+lines earlier reports cite did not move). Each has its own topics, targets and keys, so one
+probe's finding never lands on another's file. Both readings of each row were registered here
+**before** the run; the fifth report answered all four:
+
+| Map | Layout | Fifth report | What it settles |
+| --- | --- | --- | --- |
+| `maps/q-twice.ditamap` | `q-twice-keys.ditamap` (one `keydef`) referenced twice, with `keyscope="x"` and `keyscope="y"`; `q-twice-x` uses `x.k-twice`, `q-twice-y` uses `y.k-twice`, both published outside both scopes | *(nothing)* | a map reached under a second scope chain is a second instance of it: its keys are in effect in every scope that reaches it. The extension's `undefined-key` on `q-twice-y` was a **false positive** and is gone |
+| `maps/q-unused-pos.ditamap` | `k-u-pos` defined inside `keyscope="s1"`; its only use (`q-unused-pos`, a bare `keyref`) published outside it | `dmv.key.undef` on the topic **and** `dmv.not.used.key.defs` on the keydef | a use counts for its name only when it resolves: the failed use leaves the definition unused, and the extension now files `unreferenced-key` there too |
+| `maps/q-unused-neg.ditamap` | control: the same layout with the use inside `s1` | *(nothing)* | an in-scope use does count, so the new rule does not fire on a used key |
+| `maps/q-conkeyref.ditamap` | `k-ck` defined inside `s1`; `conkeyref="k-ck/p1"` from outside (`q-ck-outside-pos`), from inside (`q-ck-inside-neg`) and by qualified name (`s1.k-ck/p1`, `q-ck-qualified-neg`) | `dmv.key.undef` on the outside topic only | R066 holds for `conkeyref`, which until this run only unit tests covered |
+
+Two changes followed, both in the column registered as "differently":
+
+- **A map reached twice is crawled once but defines its keys in each scope** (`mapCrawl.ts`).
+  `seenMaps` now holds a set of scope signatures per map file; a second pass over a map already
+  scanned runs in `replay` mode, which registers its `keydef`s under the new scope and collects
+  nothing else — no reference, id, entry or finding is filed twice. `keyDefIndex` keeps one
+  `KeyDef` per element (`file` plus the scan's `uid`, since a line can hold several), and a
+  replay extends that definition's `scopeIds`/`qualified` instead of adding a second one, so
+  R010 still sees one definition and cannot call it a duplicate.
+- **R011 counts a use only when it resolves** (`mapChecks.ts`, step 8). A name a
+  `@keyref`/`@conkeyref` wrote but never bound leaves its definition unreferenced — Oxygen's
+  `dmv.not.used.key.defs`. Counting per definition instead broke corpus 1's `dupkey`, where
+  resolution reaches the first of two definitions and Oxygen therefore calls the name used, so
+  the count is per name (`usedKeyNames`): a name any context resolved counts once, for every
+  definition that answers to it.
+
+`src/test/editor/keyScopeResolution.test.ts` pins both answers — the twice-reached map resolves
+`y.k-twice` and stays one definition, and the use that fails in its scope leaves a
+`unreferenced-key` behind. The baseline carries one finding more (16), the parity lock none of the
+three unknown rows the fourth one held: `q-twice-y` is gone, and `q-ck-outside-pos` and
+`q-unused-pos` are matches, together with the new `unreferenced-key`. `oxygen-diff` reads zero in
+both directions.
+
+One limit stays next to that change: a *topic* published by a map reached twice is still checked
+in the first scope only, because the second pass registers the map's keys, not the publications
+of its `topicref`s. No probe asks about it — `q-twice` publishes its topics outside both scopes —
+so it is recorded here rather than fixed by extension.
+
+## The multi-name scope (R066): the sixth report
+
+R066 reads `keyscope="a b"` as a set (a key in it answers to `a.k` and to `b.k`), while R008
+compares the same names as an ordered list. The second is observed (`p-dup-i`, `p-dup-j`); the
+first was the spec's reading with no Oxygen answer, which this probe asked for. One map,
+`maps/q-multiname.ditamap` (before the control, which is still last): a `keyscope="a b"` group
+holding `keydef k-mn`, and five topics, one use each, so every finding lands on its own file.
+Both readings of each row were registered **before** the run:
+
+| Topic | Use | Sixth report | What it settles |
+| --- | --- | --- | --- |
+| `q-mn-a` | `a.k-mn`, outside the group | *(nothing)* | the first name qualifies |
+| `q-mn-b` | `b.k-mn`, outside | *(nothing)* | every name of the list qualifies: R066 reads it as a set, not only its first name |
+| `q-mn-inside` | bare `k-mn`, published inside | *(nothing)* | a multi-name group is a scope for its own members |
+| `q-mn-ab` | `ab.k-mn`, outside (control) | `dmv.key.undef` | the names are not concatenated |
+| `q-mn-bare` | `k-mn`, outside (control) | `dmv.key.undef` | a multi-name group leaks no key out of itself |
+
+All five landed on the answer the rule already gave — the same one `keyscopeMultiToken.test.ts`
+pins — so no code changed and the parity lock's two extension-only rows (`q-mn-ab`, `q-mn-bare`)
+became matches. The two readings now stand separately and both are observed: a `keyscope` is a
+set of names for key resolution and an ordered list for duplicate counting (R008).
+
+## Duplicate keys across files (R010): the seventh report
+
+The first real-map comparison (REAL-MAP.md) agreed everywhere but one line: a key map referenced
+by the main map, where Oxygen files `duplicate.key.definition` against the key map's file twelve
+times and the extension files none there, though it matches the other two files with duplicates.
+The only observation behind R010 is corpus 1's `dupkey`: two definitions in **one** file, where
+Oxygen filed **both** lines (28 and 29) and the extension only the later one — invisible in
+parity, since both lines share one signature. Two readings were registered before the run: Oxygen
+files every definition that takes part in a clash, the first included, or it counts every reaching
+of a key map (the real map's key map is reached once from the main map and once from each of four
+submaps, and its key names also occur in the other two files with duplicates). Five probes asked
+them, each with its own maps, targets and one use of the key:
+
+| Map | Layout | Seventh report | What it settles |
+| --- | --- | --- | --- |
+| `maps/r-dk2.ditamap` | `k-dk2` in `r-dk2-keys.ditamap` (first, via `mapref`), again in `r-dk2.ditamap` | `duplicate.key.definition` on **both** files | every participant is filed, the first definition included |
+| `maps/r-dk3.ditamap` | `k-dk3` in `r-dk3-a`, in `r-dk3-b` and in `r-dk3.ditamap` | on all three files | the same for any number of definitions |
+| `maps/r-dkt.ditamap` | `r-dkt-keys.ditamap` referenced twice by the same map; no key is defined twice in any file | *(nothing)* | a key map reached twice in one scope is not a clash |
+| `maps/r-dkn.ditamap` | the real-map shape: `r-dkn-keys.ditamap` reached from the root and from two submaps (`r-dkn-s1`, `r-dkn-s2`), each by a plain `mapref`; no key is defined twice in any file | *(nothing)* | reaching a key map from submaps is not a clash either, so the per-reaching reading is out |
+| `maps/r-dkc.ditamap` | control: two different keys in two files | *(nothing)* | the run read the tail of the map |
+
+The first reading holds, the second does not: a clash is per **definition**, not per reaching, and
+every definition that takes part is filed. `mapChecks.ts` step 7 now reports the whole group, each
+finding related to the others (as duplicate ids already were), and the message no longer claims to
+know which definition lost: `Duplicate key definition "k-dk3" (3 definitions in this key scope)`.
+The change also files corpus 1's line 28, which Oxygen has filed since the first run, so corpus 1's
+baseline gains the row while its parity lock does not move (both lines share a signature).
+
+The five `-use` topics carry the `resource-only-target` shape (R049) Oxygen confirmed in the first
+run: four use one key, the control two, and Oxygen filed all six. Those rows and the three
+`duplicate-key` ones were extension-only until this run; the lock read 28 matched after that run,
+zero in both directions (31 after the URL probes below), and no row of this probe set is left
+open. The real run's twelve are that same shape — the key map's file filed once for each of its
+keys that another file defines too — and a re-run of that map after this change matched on all
+thirteen of its signatures (REAL-MAP.md, "What one run proves"), so no per-reaching count is left
+to add. Do not draw anything from a run whose report lacks the control's two `dmv.dup.topic`
+incidents.
+
+## A URL written in a topic (R034): the eighth report
+
+R034 was widened to the `xref` and `link` of a topic on one observation: the second real-map run
+filed `dmv.topicref.remote.local.scope` on a `.dita` xref (`../real-map-sample`, whose report is not
+committed). Nothing in a corpus covered the topic form, and `link`, a missing `@scope` and
+`scope="peer"` were extrapolated from that one row. `maps/s-url.ditamap` publishes six topics, one
+shape each, so every finding lands on its own file; the readings were registered **before** the run:
+
+| Topic | Writes | Extension | Eighth report |
+| --- | --- | --- | --- |
+| `s-url-xref-pos` | `<xref href="http://…" format="html">`, no `@scope` | `external-reference` | `dmv.topicref.remote.no.external.scope`, `:7` — a missing scope is filed in a topic as in a map |
+| `s-url-xref-local` | the same with `scope="local"` | `external-reference` | the same id, `:7` — a URL that writes `@format` and `scope="local"` is filed as needing an external scope, not under the `local.scope` id the real map drew |
+| `s-url-xref-neg` | the same with `scope="external"` (control) | silent | *(nothing)* |
+| `s-url-xref-peer` | the same with `scope="peer"` (edge) | silent: `peer` counts as external | *(nothing)* — `peer` counts as external in a topic too |
+| `s-url-link-pos` | `<link href="http://…" format="html">` in `related-links`, no `@scope` | `external-reference` | `dmv.topicref.remote.no.external.scope`, `:10` — `link` belongs to the rule |
+| `s-url-link-neg` | the same with `scope="external"` (control) | silent | *(nothing)* |
+
+Every reading landed on the column the rule already took, so nothing in `mapChecks.ts` changed for
+R034, and the three rows the lock carried as extension-only became matches. The run also separates
+the two catalog ids: `dmv.topicref.remote.no.external.scope` is what Oxygen files once `@format` is
+written and `@scope` is missing or `local`; the real-map row wrote neither attribute and drew
+`dmv.topicref.remote.local.scope`. Both arrive here as `external-reference`. The baseline and the
+parity lock carry all three positives as matches now, so `oxygen-diff` exits 0. Without the
+control's two `dmv.dup.topic` incidents in the report, the run read a stale map and nothing above
+is answered.
+
+## Unused keys below the first map (R011): the ninth report
+
+On a real map whose key maps hang off the main map and off four submaps, the extension filed
+`unreferenced-key` on every one of them (four maps) and Oxygen on one: the key map the main map
+refers to. Two readings fit, and they ask different things, so two probes tell them apart:
+
+- **Depth.** Oxygen files an unused key only in the first map level (the root map and the maps it
+  refers to directly), not in a submap's own key definitions or a key map below a submap.
+- **Effective definition.** Oxygen files an unused key *name* once, on the definition that wins
+  (the first), and not again on the later definitions of the same name; the extension files every
+  definition. The same key maps carried the `duplicate-key` rows, which the extension and Oxygen
+  already agree on.
+
+| Map | Layout | Extension then | Ninth report |
+| --- | --- | --- | --- |
+| `maps/t-unref.ditamap` | `k-t0` defined in the probe map itself, used nowhere (control) | `unreferenced-key` | `dmv.not.used.key.defs`: an unused key at the first level is filed, as corpus 1's `unusedkey` already showed |
+| `maps/t-unref-sub.ditamap` | `k-t1` defined in a submap (`mapref` from `t-unref`), used nowhere | `unreferenced-key` | filed: depth is not the cause |
+| `maps/t-unref-sub-keys.ditamap` | `k-t2` in a key map below that submap, used nowhere | `unreferenced-key` | filed: the whole tree is walked |
+| `maps/t-udup-a.ditamap`, `maps/t-udup-b.ditamap` | `k-tud` defined in both, used nowhere, both reached from `t-udup` | `unreferenced-key` on both, `duplicate-key` on both | `duplicate-key` on both, as expected; `unreferenced-key` on **`t-udup-a` only** |
+
+The effective definition is the cause, not depth: every level is filed, and a name defined twice
+in one scope is filed once, on the definition resolution reaches. Step 8 of `mapChecks.ts` now
+groups the unused definitions by scope and name and files the first of each group, so the baseline
+loses `t-udup-b`'s row (38 findings) and the parity lock reads 37 matched, zero in both directions.
+The real-map row that raised the question is that same shape — the same key names defined in the
+key map the main map refers to and in the submaps' key maps, which is also why those maps carried
+the `duplicate-key` rows — so the rule now files one row per name there too. That is an argument,
+not a measurement: a re-run of that map after this change is what closes the row (REAL-MAP.md,
+"Reading the result"). `src/test/editor/mapCompleteness.test.ts` pins both halves: one name twice
+in one scope gives one row, the same name in two key scopes gives two. Without the control's two
+`dmv.dup.topic` incidents in the report, the run read a stale map.
+
+## Id syntax by element kind (R031): the tenth report
+
+On a real map the extension filed `invalid-id-syntax` on two topics that Oxygen left alone, both
+with a DOCTYPE. What the extension judged, as shapes: one id was a run of lower-case words joined
+by underscores **with trailing whitespace**, the other began with **digits** (`999_aaa_aaa_aaa`).
+Every probe behind R031 so far puts the bad id on the root `<topic>` or `<map>`
+(`b-id2-colon`, `b-id2-digit`, `b-id3-space`, `b-id3-map` in corpus 2). The DITA 1.3 spec
+(`archSpec/base/id`) says all `@id` values are XML name tokens, declares the `@id` of a **topic or
+map element** an XML `ID` and most other elements' `@id` not an `ID` at all (the table says
+`NMTOKEN`), and XML 1.0 §3.3.3 trims and collapses the value of any attribute that is not `CDATA`
+before it is judged. If Oxygen follows the declared types, the extension was the one over-filing.
+One map, `maps/u-id.ditamap`, publishes seven topics (one shape each) and carries one `topicref`
+with a digit-first id; the readings were registered **before** the run, and the tenth report is
+the answer:
+
+| File | Writes | Extension then | Tenth report |
+| --- | --- | --- | --- |
+| `topics/u-id-p-digit.dita` | `<p id="9a">` (not a topic) | `invalid-id-syntax` | silent: a name token may start with a digit |
+| `topics/u-id-p-trail.dita` | `<p id="a ">`, trailing space | `invalid-id-syntax` | silent: the value is normalized before it is judged |
+| `topics/u-id-topic-trail.dita` | `<topic id="… ">`, trailing space on the topic's own id | `invalid-id-syntax` | silent: an `ID` is normalized too |
+| `topics/u-id-p-colon.dita` | `<p id="a:b">` | `invalid-id-syntax` | silent: a colon is a name character |
+| `topics/u-id-p-space.dita` | `<p id="a b">`, a space inside | `invalid-id-syntax` | `NMTOKENInvalid`: a name token has no whitespace |
+| `topics/u-id-p-plus.dita` | `<p id="a+b">` | `invalid-id-syntax` | `NMTOKENInvalid` |
+| `topics/u-id-nested-digit.dita` | a nested `<topic id="9n">` (control) | `invalid-id-syntax` | `IDInvalidWithNamespaces`: a topic id is an `ID` |
+| `maps/u-id.ditamap` | `<topicref id="9tr" …>` | `invalid-id-syntax` | silent: a topicref's id is a name token |
+
+Every cell in the fourth column is the one registered for it, so the cause was the declared type,
+not either real-map row having been misread: the two ids Oxygen left alone sit on elements that
+are not topics, one of them normalized clean. `invalidIdSyntaxIssues` in `mapChecks.ts` now
+normalizes the value and judges it as a name token on every element that is not a topic or map,
+as an NCName on those; the crawl records which type the grammar declares for an element's `@id`
+(`idType` in `mapCrawl.ts`). `NMTOKENInvalid` is a second Oxygen id for this category and joins
+`IDInvalidWithNamespaces` in `PROBLEM_ID_CATEGORY`. The baseline loses five rows and stands at 41
+findings, all matched: 40 signatures against 48 incidents, zero in both directions. The two
+grammars get two messages (`id.invalid` and `id.invalidToken`), so a reader is told which one
+failed. `src/test/editor/mapCompleteness.test.ts` pins the whole shape on one fixture: a
+digit-first or colon id on a `<p>`, a trailing space on a topic id and a digit-first `topicref`
+id draw nothing, a space or a plus draws the name-token message, and a nested `<topic id="9n">`
+and a map id `9map` draw the NCName one.
+
+What the probe does not cover is the `@id` of the `<dita>` container, which no corpus file writes.
+The spec's table declares only topic and map elements an `ID`, so the crawl reads the container
+as a name token until a real row says otherwise. Without the control's two `dmv.dup.topic`
+incidents in the report, the run read a stale map.
+
+## Running it
+
+```
+node scripts/completeness-baseline.cjs --corpus completeness-corpus-6           # extension findings
+node scripts/oxygen-diff.cjs --corpus completeness-corpus-6 <report.xml>        # against Oxygen
+node scripts/sanitize-oxygen-report.cjs --corpus completeness-corpus-6 <raw.xml> # writes oxygen-report.xml here
+```
+
+`UPDATE_COMPLETENESS_BASELINE=1 npm test` and `UPDATE_OXYGEN_PARITY=1 npm test` refresh the
+baseline and the parity lock; `node scripts/completeness-baseline.cjs --corpus
+completeness-corpus-6 --update` rewrites the baseline alone. Keep the line numbers of
+`corpus.ditamap` stable when editing the comment at its top: the report cites them.

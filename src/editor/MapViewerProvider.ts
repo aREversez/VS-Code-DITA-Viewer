@@ -16,7 +16,7 @@ import { getMapWebviewScript } from './webview/mapScript';
 import { MSG_BOOK_SEARCH, MSG_BOOK_SEARCH_RESULTS, MSG_CHOOSE_DITAVAL, MSG_CLEAR_DITAVAL, MSG_NAV_CONTEXT, MSG_OPEN_TOPIC_SOURCE, MSG_REQUEST_FULL_RENDER, MSG_SET_DITAVAL, MSG_SET_FONT_PREFS, MSG_SET_NAV_COLLAPSED, MSG_SET_TAG_TOOLTIPS, MSG_SET_TEMPLATE, MSG_SET_WIDTH_SELECTION, MSG_SWITCH_SITE_PAGE } from './mapMessages';
 import { MSG_OPEN_CONREF_TARGET, parseConrefJumpMessage } from './conrefJump';
 import { openConrefTarget } from './conrefJumpCommand';
-import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, decodeHrefPart, openHrefTarget, buildBookNavManifest, siteNavigableEntries, renderSiteNavTreeHtml, wrapSiteNavTreeHtml, getInitialSidebarBodyClass, renderTopicCached, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry, SITE_HOME_TARGET, buildSiteHomeTiles, renderSiteHomeHtml } from './ditaRenderUtils';
+import { renderBookParts, wrapBookParts, escapeHtml, escapeAttr, expandDitamapRefs, decodeHrefPart, openHrefTarget, buildBookNavManifest, siteNavigableEntries, renderSiteNavTreeHtml, wrapSiteNavTreeHtml, getInitialSidebarBodyClass, renderTopicCached, sitePageKeyScope, makeFileTitleResolver, makeFileTopicTypeResolver, DocsiteNavEntry, SITE_HOME_TARGET, buildSiteHomeTiles, renderSiteHomeHtml } from './ditaRenderUtils';
 import { getBookSearchIndex, searchBookIndex, buildBookSearchResultsPayload, invalidateBookSearchIndex } from './bookSearchIndex';
 import { acquireDitaFileWatcher, ditaWatchBase } from './ditaFileWatcher';
 import { BookPart } from './bookPatch';
@@ -189,7 +189,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
         return built.error !== undefined ? undefined : { manifest: built.manifest, keyMap: built.keyMap, bookMembers: built.bookMembers };
       },
       renderSiteHome: (manifest) => this.renderSiteHomeContent(document, manifest),
-      renderSiteTopic: (absPath, keyMap, bookMembers) => this.renderSiteTopicContent(absPath, webview, keyMap, bookMembers),
+      renderSiteTopic: (absPath, keyMap, bookMembers, keyScope) => this.renderSiteTopicContent(absPath, webview, keyMap, bookMembers, keyScope),
       readViewState: () => parseMapViewState(readForDocument(this.context.globalState, MAP_VIEW_STATE_KEY, document.uri)),
       writeViewState: (state) => writeForDocument(this.context.globalState, MAP_VIEW_STATE_KEY, document.uri, state),
       recordRenderedHtml: (html) => {
@@ -540,6 +540,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
     webview: vscode.Webview,
     keyMap: Map<string, string>,
     bookMembers: ReadonlySet<string>,
+    keyScope?: string[][],
   ): { html: string; error?: undefined } | { html?: undefined; error: string } {
     const topicDir = dirname(absPath);
     const asWebviewUri = (relPath: string): string => {
@@ -557,6 +558,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       headingLevel: 1,
       uiLanguage: vscode.env.language,
       bookMembers,
+      keyScope,
     });
     if (result.error) return { error: result.error };
     return { html: result.html };
@@ -700,7 +702,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
           // tracked -- the home page reads no topic file of its own.
           return { html: homeHtml, sidebarHtml, sidebarTreeHtml, resolvedSitePage, siteManifest: manifest, siteKeyMap: keyMap, siteBookMembers: bookMembers, pageFiles: new Set() };
         }
-        const pageTracked = trackSourceReads(() => this.renderSiteTopicContent(resolvedSitePage, webview, keyMap, bookMembers));
+        const pageTracked = trackSourceReads(() => this.renderSiteTopicContent(resolvedSitePage, webview, keyMap, bookMembers, sitePageKeyScope(manifest, resolvedSitePage)));
         const topic = pageTracked.result;
         if (topic.error !== undefined) return { error: topic.error };
         // manifest/keyMap/bookMembers go back to the caller too

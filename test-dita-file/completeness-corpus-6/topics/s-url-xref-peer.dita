@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="s-url-xref-peer">
+  <title>s-url-xref-peer</title>
+  <body>
+    <!-- edge: xref to a URL with scope="peer" -->
+    <p><xref href="http://example.invalid/a.html" format="html" scope="peer">site</xref></p>
+  </body>
+</topic>

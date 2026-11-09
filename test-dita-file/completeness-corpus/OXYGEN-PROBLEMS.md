@@ -31,18 +31,18 @@ Descriptions are paraphrases; the exact wording legitimately differs and is
 ignored by the `(file, category)` diff.
 
 Eighteen of the 75 *ok* rows say **mapped only**: the check exists and the id is mapped in
-`PROBLEM_ID_CATEGORY`, but no incident of that exact id has ever been seen in the five reports.
+`PROBLEM_ID_CATEGORY`, but no incident of that exact id has ever been seen in the six reports.
 The reason comes in three shapes. Five rows are a spelling difference: a live report emits
 `dmv.key.undef` where the catalog lists `dmv.undef.key`, `dmv.invalid.keyref.syntax` where it
-lists the `.1` and `.3` variants, and the Xerces `IDInvalidWithNamespaces` where it lists
-`dmv.invalid.id.syntax.2` and `.3`; `PROBLEM_ID_CATEGORY` answers the observed spelling beside
-the catalog one. One row, `dmv.dup.cond.filter`, is an incident no report gives a `problemID` to,
-so parity matches it on wording. The other twelve are the finding arriving under a different
-catalog id (`dmv.file.not.found` for a dangling reference the catalog calls
+lists the `.1` and `.3` variants, and the Xerces `IDInvalidWithNamespaces` and `NMTOKENInvalid`
+where it lists `dmv.invalid.id.syntax.2` and `.3`; `PROBLEM_ID_CATEGORY` answers the observed
+spelling beside the catalog one. One row, `dmv.dup.cond.filter`, is an incident no report gives a
+`problemID` to, so parity matches it on wording. The other twelve are the finding arriving under
+a different catalog id (`dmv.file.not.found` for a dangling reference the catalog calls
 `dmv.reference.not.exist`) or not arriving for these probes at all — no corpus writes a
 `<reltable>`, and this Oxygen defines the attributes the profiling probes use.
 
-Twenty-one incidents across the five reports carry no `problemID` at all: the five "There is no
+Twenty-one incidents across the six reports carry no `problemID` at all: the five "There is no
 schema or DTD associated with the document" errors (three in corpus 2, two in corpus 5), the
 twelve HTML-validator messages on corpus 2's `.html` resources, the two duplicate filter
 conditions of corpus 4, and two of corpus 3 (`Empty reference value`, `Invalid anchor`). The
@@ -52,9 +52,9 @@ sanitizer writes no such element for them and `oxygen-diff` prints them as `(no 
 
 | Problem ID | Oxygen reports | Extension status |
 | --- | --- | --- |
-| `dmv.file.not.found` | a referenced file does not exist | ok (`missing-reference`) — 18 incidents across the five reports, including (corpus 3, R019) a `@conref` at an absent file and, for the `@conkeyref` that reaches such a key, both the broken keydef and the referring element, which the extension reports the same way |
+| `dmv.file.not.found` | a referenced file does not exist | ok (`missing-reference`) — 19 incidents across the six reports, including (corpus 3, R019) a `@conref` at an absent file and, for the `@conkeyref` that reaches such a key, both the broken keydef and the referring element, which the extension reports the same way |
 | `dmv.reference.not.exist` | a reference cannot be resolved | ok (`missing-reference`) — mapped only: no report carries this id, every dangling reference arriving as `dmv.file.not.found`. The corpus-3 probes added for R019 put a `@conref` at an absent file and a `@conkeyref` through a key whose file is absent, and their run also filed both as `dmv.file.not.found`, so the catalog id stays unobserved (a `@conref` whose topic id or element id does not resolve is `dmv.id.miss.conref` or `dmv.invalid.ref.id.path`) |
-| `dmv.invalid.DITA.reference` | reference is invalid DITA | n/a — no incident in five runs: the batch-4 probe (`maps/m-dita-ref-pos.ditamap`, `format="dita"` on a well-formed non-DITA XML file) drew `dmv.ref.res.as.dita`, and the non-XML boundary drew `dmv.invalid.parse.dita.content`; the extension answers both probes as `format-mismatch` / `dita-parse`, so an equivalent exists but no incident of this id |
+| `dmv.invalid.DITA.reference` | reference is invalid DITA | n/a — no incident in six runs: the batch-4 probe (`maps/m-dita-ref-pos.ditamap`, `format="dita"` on a well-formed non-DITA XML file) drew `dmv.ref.res.as.dita`, and the non-XML boundary drew `dmv.invalid.parse.dita.content`; the extension answers both probes as `format-mismatch` / `dita-parse`, so an equivalent exists but no incident of this id |
 | `dmv.invalid.DITA.uri.target` | URI does not resolve to a DITA target | n/a — same run: the three `maps/m-uri-target-*.ditamap` probes produced `dmv.topicref.remote.no.external.scope` and, on the no-`@scope` edge, `dmv.invalid.parse.dita.content`, never this id; the extension answers `external-reference` there |
 | `dmv.folder.ref` | a reference points at a folder, not a file | ok (`folder-reference`) |
 | `dmv.absolute.ref` | an absolute reference (not portable) | ok (`reference-syntax`) |
@@ -81,8 +81,8 @@ sanitizer writes no such element for them and `oxygen-diff` prints them as `(no 
 | `dmv.ref.topic.inside.mapref` | topicref/keydef inside a map reference is ignored | ok (`ignored-mapref-content`) |
 | `dmv.no.format.non.dita.ref` | non-DITA reference missing `@format` | ok (`format-missing`) — mapped only: the corpus-2 report has no incident with this id |
 | `dmv.topicref.remote` | external reference missing `@format` | ok (`external-reference`) — mapped only: the corpus-2 report produced no incident for this id (its `ext scope` probes carry `dmv.topicref.ext.scope.no.format`) |
-| `dmv.topicref.remote.no.external.scope` | external reference should set `@scope="external"` | ok (`external-reference`) |
-| `dmv.topicref.remote.local.scope` | external reference needs `@format` and `@scope` | ok (`external-reference`) — mapped only: the corpus-2 report has no incident with this id |
+| `dmv.topicref.remote.no.external.scope` | external reference should set `@scope="external"` | ok (`external-reference`) — corpus 6's run files it three times in a topic: an `xref` and a `link` with `@format` and no `@scope`, and an `xref` with `scope="local"`, which draws this id rather than `local.scope` |
+| `dmv.topicref.remote.local.scope` | external reference needs `@format` and `@scope` | ok (`external-reference`) — no corpus report has it: the second real-map run carries it on `topics/link.dita:8`, an `xref` with neither `@format` nor `@scope` (REAL-MAP.md), and corpus 6's probes write `@format`, which turns the same shape into `no.external.scope` |
 | `dmv.topicref.ext.scope.no.format` | external-scope non-DITA ref missing `@format` | ok (`format-missing`) |
 | `dmv.ref.type.class.mismatch` | `@type` does not match the target's class | ok (`type-class-mismatch`) — the corpus-5 report carries it on `topics/l-ref-type-mismatch-pos.dita` and on the map `topicref` probe |
 | `dmv.ref.type.class.mismatch.specific` | `@type` less specific than the target's class | ok (`type-class-specific`) — the corpus-5 report carries it on `topics/l-ref-type-specific-pos.dita` |
@@ -96,7 +96,7 @@ sanitizer writes no such element for them and `oxygen-diff` prints them as `(no 
 | `dmv.invalid.ref.topic.id` | referenced topic ID not found | ok (`invalid-ref-topic-id`) |
 | `dmv.link.no.target` | link/xref has neither `@href` nor `@keyref` | ok (`link-no-target`) — the corpus-3 report carries it on `topics/g-link-no-target-pos.dita` |
 | `dmv.link.topic.to.map` | topic-to-map reference is not resolved in output | ok (`format-mismatch`) — same file and fix as `dmv.ref.topic.as.map` in the corpus-2 probe |
-| `dmv.ref.to.resource.only` | cross-reference to a resource-only topic breaks | ok (`resource-only-target`) — the corpus-3 report carries it for a direct xref and for the two key-element boundaries |
+| `dmv.ref.to.resource.only` | cross-reference to a resource-only topic breaks | ok (`resource-only-target`) — the corpus-3 report carries it for a direct xref and for the two key-element boundaries, and the corpus-6 report for the three xrefs into the topic the map publishes only through a `<keydef>`: DITA makes a keydef resource-only unless it says otherwise, so a keydef publication counts (R049) |
 | `dmv.ref.filtered` | target is excluded by profiling filters | ok (`filtered-reference`) — the corpus-4 report carries it on both filtered-range probes, reported on the referrer |
 | `dmv.empty.link.peer.target` | peer-map reference needs explicit link text | n/a — the corpus-3 report produced no incident for the peer xref without text, the one with text, or the local edge, so no shape has been observed to implement; see the batch 2 run below |
 
@@ -118,9 +118,9 @@ sanitizer writes no such element for them and `oxygen-diff` prints them as `(no 
 
 | Problem ID | Oxygen reports | Extension status |
 | --- | --- | --- |
-| `dmv.undef.key` | keyref cannot be mapped to a target topic | ok (`undefined-key`) — mapped only: the live reports spell this finding `dmv.key.undef` (six incidents, corpora 1, 3 and 4), which is mapped beside this catalog form that no report carries |
-| `duplicate.key.definition` | the same key is defined twice | ok (`duplicate-key`) |
-| `dmv.not.used.key.defs` | key defined but never referenced | ok (`unreferenced-key`) — the corpus-3 rerun also fires it on a key whose target file is missing (`maps/e-conref-missing-key.ditamap`) although the conkeyref names that key: Oxygen counts a definition it cannot use, the extension counts the use |
+| `dmv.undef.key` | keyref cannot be mapped to a target topic | ok (`undefined-key`) — mapped only: the live reports spell this finding `dmv.key.undef` (ten incidents, corpora 1, 3, 4 and 6), which is mapped beside this catalog form that no report carries |
+| `duplicate.key.definition` | the same key is defined twice | ok (`duplicate-key`) — seven incidents over corpora 1 and 6: both lines of a clash inside one file (corpus 1: 28 and 29) and every file of one across files (corpus 6: `r-dk2` twice, `r-dk3` three times), so the rule files each definition that takes part |
+| `dmv.not.used.key.defs` | key defined but never referenced | ok (`unreferenced-key`) — the corpus-3 rerun also fires it on a key whose target file is missing (`maps/e-conref-missing-key.ditamap`) although the conkeyref names that key: Oxygen counts a definition it cannot use, the extension counts the use. Corpus 6's fifth run added the scope shape — a key whose only use is a bare `keyref` outside its `keyscope` draws it beside `dmv.key.undef` (`maps/q-unused-pos.ditamap:9`) — so the count follows a use that resolves, while a use resolving to a definition with an unreachable target still counts, which is the corpus-3 difference above. The ninth run added the depth and duplicate shapes: a key unused in the probe map, in a submap and in a key map below that submap are all filed, so depth is no boundary, while one name defined in two maps of one scope draws one incident, on the first definition (`t-udup-a`, not `t-udup-b`), which is the shape a real map showed and the reason R011 now files the effective definition alone |
 | `dmv.circular.keyref` | circular key reference | n/a — the corpus-3 report produced no incident for the two-key loop, the self-redirect or the linear chain; the extension does not follow redirect chains and stays silent on the same probes, including the chain's link use |
 | `dmv.no.link.keyref` | target key definition has no reference | ok (`link-key-without-target`) — the corpus-3 report carries it on the xref and the `link` element probes; the seven corpus-2 incidents now match too |
 | `dmv.invalid.keyref.syntax.1` | keyref has more than one `/` | ok (`invalid-key-syntax`) — mapped only: the report carries the family as `dmv.invalid.keyref.syntax`, without the suffix, so no incident carries this id |
@@ -131,7 +131,7 @@ sanitizer writes no such element for them and `oxygen-diff` prints them as `(no 
 
 | Problem ID | Oxygen reports | Extension status |
 | --- | --- | --- |
-| `dmv.dup.topic` | the same topic referenced more than once | ok (`multiple-reference`) |
+| `dmv.dup.topic` | the same topic referenced more than once | ok (`multiple-reference`) — six incidents in the corpus-1 report, and corpus 6's six duplicate probes settled the counting: Oxygen files it per (target, scope chain), so a container changes nothing and only a reference in a different `keyscope` is no duplicate (R008); matched in both corpora |
 | `dmv.dup.topic.id` | duplicate topic ID in the map context | ok (`duplicate-id`) — the extension reports every topic that shares the id, as Oxygen does |
 | `dmv.dup.el.id` | duplicate element ID inside one topic | ok (`duplicate-element-id`) — the corpus-3 report carries it on `topics/h-dup-el-id-pos.dita` |
 | `dmv.dup.cond.filter` | duplicate condition in a filter file | ok (`duplicate-filter-condition`) — mapped only: the corpus-4 report carries its two incidents **without** a `<problemID>`, so no incident carries this id and parity maps them on the message wording |
@@ -149,7 +149,7 @@ sanitizer writes no such element for them and `oxygen-diff` prints them as `(no 
 | --- | --- | --- |
 | `dmv.prof.attr.innef.cond` | attribute value can never show (ancestor conditions) | ok (`profiling-conflict`) |
 | `dmv.prof.attr.group.innef.cond` | condition group can never show | ok (`profiling-conflict`) — mapped only: no report carries this id; the three conflicts corpus 1 files are the attribute form `dmv.prof.attr.innef.cond`, and no probe puts a whole condition group out of reach |
-| `dmv.prof.attr.prefs.undef` | attribute not defined in profiling preferences | ok (`profiling-preference`) — mapped only: no report carries this id, because this Oxygen defines the attributes the probes use; only the value-level forms fire (`dmv.prof.attr.val.prefs.undef`, `dmv.prof.group.val.prefs.undef`) |
+| `dmv.prof.attr.prefs.undef` | attribute not defined in profiling preferences | ok (`profiling-preference`) — no corpus report carries this id, because the corpora write only attributes this Oxygen defines; the real-map run carries it on `topics/specifications.dita:32`, where `@deliveryTarget` was written. the spec counts `@deliveryTarget` as a filtering attribute (`archSpec/base/conditional-processing-attributes`), but this Oxygen's preferences page starts without a row for it and the owner adds one by hand (corpus 4's run did), so the sample stopped writing that attribute rather than depend on the setting |
 | `dmv.prof.attr.val.prefs.undef` | value not defined in profiling preferences | ok (`profiling-preference`) |
 | `dmv.prof.attr.empty.value` | profiling attribute has an empty value | ok (`empty-profiling-value`) — warning; the corpus-4 report fires it on `audience=""`, `audience="   "` and `platform=""`, but not on the empty group `props="audience()"` |
 | `dmv.prof.attr.val.prefs.confl` | multi-value attribute defined as single-value | ok (`profiling-preference`) — the corpus-4 report files `platform="linux windows"` here, not as an empty value |
@@ -164,10 +164,10 @@ sanitizer writes no such element for them and `oxygen-diff` prints them as `(no 
 | --- | --- | --- |
 | `dmv.invalid.class.format` | malformed `@class` | ok (`class-format`) — the corpus-5 report carries all four message forms (not specified, no leading `-`/`+`, empty, no trailing space); a written value is checked as written, so a copy of the DTD default that lacks its trailing space is reported too; the two probes that declare a RELAX NG or XML Schema grammar instead of a DOCTYPE are not reported for an unwritten class (R065) |
 | `dmv.invalid.class.generalization` | `@class` is not a generalization | ok (`conref-class`) — the corpus-5 report files four conref pairs here: unrelated classes, a more specific source (`step`→`li`), and both specialization directions; a source on the general end is not filed, which is the `source-general` probe of R064, silent in the same report; the id also covers the `conref` that names a whole topic (corpus 3) |
-| `dmv.invalid.class.specialization` | `@class` is not a specialization | n/a — Oxygen never emitted it: the `l-class-specialization-{pos,neg}` probes are both `dmv.invalid.class.generalization`, and the id appears in none of the five reports; the mapped category answers both directions |
+| `dmv.invalid.class.specialization` | `@class` is not a specialization | n/a — Oxygen never emitted it: the `l-class-specialization-{pos,neg}` probes are both `dmv.invalid.class.generalization`, and the id appears in none of the six reports; the mapped category answers both directions |
 | `dmv.invalid.domains.format` | `@domains` missing/malformed | ok (`domains-format`) — the corpus-5 report carries it on the empty-`@domains` edge only; an absent `@domains` is not a finding, and the DOCTYPE-less probe drew the schema differences instead |
-| `dmv.invalid.id.syntax.2` | invalid character in an ID | ok (`invalid-id-syntax`) — mapped only: the corpus-2 report files both probes as `IDInvalidWithNamespaces`, so no incident carries this id |
-| `dmv.invalid.id.syntax.3` | ID contains whitespace | ok (`invalid-id-syntax`) — mapped only: `IDInvalidWithNamespaces` in the corpus-2 report, so no incident carries this id |
+| `dmv.invalid.id.syntax.2` | invalid character in an ID | ok (`invalid-id-syntax`) — mapped only: the corpus-2 report files both probes as `IDInvalidWithNamespaces`, so no incident carries this id; corpus 6's u-id files a `<p>` id with a space or a plus as `NMTOKENInvalid`, the other Xerces spelling for the same family |
+| `dmv.invalid.id.syntax.3` | ID contains whitespace | ok (`invalid-id-syntax`) — mapped only: `IDInvalidWithNamespaces` in the corpus-2 report, so no incident carries this id; the name-token half of corpus 6's u-id drew `NMTOKENInvalid` |
 | `dmv.invalid.parse.dita.content` | problem parsing DITA content | ok (`dita-parse`) — reported on the map that references the broken file, which is Oxygen's own attribution (corpus 1 and corpus 5); the only row left Oxygen-only is a remote target, which the extension never fetches |
 | `dmv.section.first.title` | `<section>` title is not the first element | ok (`section-title-order`) — the corpus-5 report carries it on the positive probe; a section nested in a section is not checked, because the DTD rejects the nesting before the order matters |
 | `dmv.section.no.dup.title` | `<section>` has more than one title | ok (`section-title-duplicate`) — the corpus-5 report carries it on the positive probe; every title after the first is its own finding |
@@ -419,8 +419,8 @@ What the run settled, beyond which id fires where:
 - **A filtered element is not a missing one.** Before batch 3 the extension reported a conref
   at a filtered-out element as `invalid-id-reference`, because pruning removes the id from the
   crawled tree; `idReferenceIssues` now defers to the filtered finding for exactly that case.
-- **The subject scheme never loads.** Five runs (`../completeness-corpus-4/README.md`) tried
-  all four spellings that register a scheme, including making the root map the scheme itself.
+- **The subject scheme never loads.** Five corpus-4 runs (`../completeness-corpus-4/README.md`)
+  tried all four spellings that register a scheme, including making the root map the scheme itself.
   Every one left the three `dmv.prof.sbj.*` ids silent and reported the probes' `subjectdef`
   keys as `dmv.key.undef`, so the group is recorded *n/a* rather than implemented against a
   guess. (Root-as-scheme also added unrelated incidents to files that are controls, which is
@@ -502,7 +502,89 @@ What the run settled:
   rule rather than given a guessed class. `npm run check:dita-class` re-renders the module
   offline and fails when it and the committed `scripts/dita-class-extracted.json` disagree.
 
-### All five corpora at a glance
+### The key scope runs and the R008/R010 probe runs (sixth corpus)
+
+*Validate and Check for Completeness* over `../completeness-corpus-6/corpus.ditamap` — the
+same settings as the runs above — was run ten times: once on the key scope probes alone
+(**6 incidents**), once after the six duplicate probes of R008 joined the map (**14
+incidents**), once after four scope-shape probes and their positive control joined it
+(**16 incidents**), once after three scope-identity probes joined it (**20 incidents**), once
+after the four key-scope tail probes joined it (**23 incidents**), once after the multi-name
+probe joined it (**25 incidents**), once after the five duplicate-key probes joined it
+(**36 incidents**), once after the six URL probes of R034 joined it (**39 incidents**), once
+after the six unused-key probes of R011 joined it (**45 incidents**), and once after the eight
+id-syntax probes of R031 joined it (**48 incidents**,
+`../completeness-corpus-6/oxygen-report.xml`). No run carried an accepted
+difference, and the last one locks **40 matched, 0 extension-only, 0 Oxygen-only**
+(`scripts/oxygen-diff.cjs` agrees) — the first corpus with parity in both directions.
+
+What the runs settled:
+
+- **A bare key is looked up in its key scope** (R066). `k-scoped` is defined inside
+  `keyscope="s1"`, and the report files `dmv.key.undef` on the topic published outside that
+  scope (`topics/o-scope-outside-pos.dita:7`) and on the topic published in both
+  (`topics/o-scope-shared-edge.dita:7`, whose message names the scope that lacks it:
+  `Key Scopes:[[s2]]`). The two negatives came back with no key finding: the topic published
+  inside `s1`, and the qualified `s1.k-scoped` used from outside.
+- **A keydef publishes its topic resource-only** (R049). All three negatives, plus the shared
+  edge, draw `dmv.ref.to.resource.only`: the map reaches `topics/t-target.dita` only through
+  the `<keydef>`, which DITA makes resource-only unless it says otherwise. The extension had
+  read a publication only from a `topicref`, so this was a gap in the ordinary sense — Oxygen
+  files it and we did not — and `resourceOnlyTargetIssues` now takes a keydef as a
+  publication, with an explicit `processing-role="normal"` on the keydef still publishing
+  normally.
+- **A duplicate is counted per (target, scope chain), with the names in the order written**
+  (R008). Fourteen maps each reference one topic twice
+  (`../completeness-corpus-6/maps/p-dup-*.ditamap`): Oxygen files `dmv.dup.topic` on both
+  references when they are siblings, when both sit in one `topicgroup`, when they sit in two
+  `topicgroup`s, when both sit inside one `keyscope="s1"`, when both sit inside one
+  `keyscope="s1"` at the very end of the map (the positive control `p-dup-k`, which is what
+  proves the third and fourth runs read the tail of `corpus.ditamap`), when they sit in two
+  separate `keyscope="a b"` groups, and when one says `keyscope="a b"` and the other
+  `keyscope="a  b"`. It files nothing when one sits in `s1` and the other in `s2`, when one
+  sits at the root and the other in `s1`, when one sits in `s1` and the other in `s2` nested
+  inside `s1`, when one sits in `keyscope="a b"` and the other in `keyscope="a"`, when one
+  sits in `"a b"` and the other in `"b a"`, and when one sits in `s1 > x` and the other in
+  `s2 > x`. A container is therefore no boundary, a `keyscope` element is no boundary either,
+  and neither is a chain that differs only in an outer name: only a *different* chain of names
+  is. The order matters — the same two names in another order are two scopes — the names are
+  parsed on whitespace, and the identity is the names rather than the element that declares
+  them. That ordered reading is *not* how R066 reads them, since key resolution only asks
+  whether a name is in effect. The first run's one extension-only row — `corpus.ditamap`'s
+  shared-edge pair, the same shape as the two silent probes — closed with the rule instead of
+  staying a difference, the third run's silence on `p-dup-j` closed the next, and the fourth
+  run's `p-dup-l` and `p-dup-n` rows closed the last two without a code change.
+- **A map reached twice defines its keys in every scope that reaches it** (R066), and **a key
+  whose only use fails in its scope stays unused** (R011). `q-twice` references one map under
+  `keyscope="x"` and `keyscope="y"`, with one topic using `x.k-twice` and one `y.k-twice`,
+  and Oxygen filed neither — so the map is a second instance of itself per scope chain, not a
+  file crawled once in the first. The extension had filed `undefined-key` on the second scope;
+  it now crawls a map once per scope signature, a second pass registering only the keys. The
+  same report filed `dmv.not.used.key.defs` on `maps/q-unused-pos.ditamap:9`, a key defined
+  inside `keyscope="s1"` whose only use is published outside it: the use fails, so it does not
+  count, which the extension's name-based count had missed. Its control `q-unused-neg`, the same
+  layout with the use inside the scope, drew nothing, so an in-scope use still counts; and
+  `q-conkeyref` showed the scoping holds for `conkeyref` as for `keyref` — an incident on the
+  outside topic only, which the extension already filed.
+- **A multi-name `keyscope` is a set of names for key resolution** (R066). `q-multiname` puts
+  `keydef k-mn` in a `keyscope="a b"` group, and five topics use it one way each: `a.k-mn` and
+  `b.k-mn` from outside both resolved, `ab.k-mn` and the bare `k-mn` from outside both stayed
+  `dmv.key.undef`, and the topic published inside the group resolved bare. So every name of the
+  list qualifies, no name is concatenated with another, the group is a scope for its own members
+  and leaks nothing out of itself — the reading the extension already had. It is also the
+  opposite of R008, which compares the same attribute as an ordered list, so the two readings of
+  one attribute are now both observed rather than one being extrapolated from the other.
+- **Every definition of a key clash is filed, and a key map reached twice is not a clash**
+  (R010). `r-dk2` defines one key in a key map and again in the map that references it, and
+  Oxygen filed `duplicate.key.definition` on **both** files; `r-dk3` defines one key in three
+  files and Oxygen filed all three. The extension filed only the later definitions, so both
+  first definitions were misses, and step 7 now reports the whole group, each finding related
+  to the others. Both re-reaching shapes came back silent: `r-dkt` (one key map referenced
+  twice by the same map) and `r-dkn` (the real-map shape, the key map reached from the root and
+  from two submaps), so there is no count per reaching to add — which is what the twelve rows a
+  first real-map run filed on a key map had suggested.
+
+### All six corpora at a glance
 
 | Corpus | Written for | Incidents | Accepted differences | Parity: matched / extension-only / Oxygen-only |
 | --- | --- | --- | --- | --- |
@@ -511,7 +593,8 @@ What the run settled:
 | `completeness-corpus-3` | batch 2, conref / id / link forms | 34 | – | 30 / 0 / 4 |
 | `completeness-corpus-4` | batch 3, profiling and filters | 19 | – | 13 / 1 / 2 |
 | `completeness-corpus-5` | batch 4, class / DITA validity / structure | 34 | 6 (4 `MSG_*`, 2 no-schema) | 21 / 6 / 3 |
-| **Total** | | **231** | **12** | **156 / 15 / 27** |
+| `completeness-corpus-6` | key scopes (R066, R011), the keydef half of R049, duplicates by scope (R008) and across files (R010), URL and id shapes (R034, R031) | 48 | – | 40 / 0 / 0 |
+| **Total** | | **279** | **12** | **196 / 15 / 27** |
 
 The 15 extension-only and 27 Oxygen-only signatures are each accounted for in the batch sections
 above or in the corpus README that owns them; the largest group is corpus 2's 17, whose three
@@ -520,9 +603,35 @@ the last run: corpus 5 has been validated twice since its first report, once for
 and once for the two R065 probes, and no number in it moved; corpus 3 was rerun for the two
 R019 probes of batch 2, which moved it from 30 incidents and 27 / 0 / 3 to 30 / 0 / 4, and once
 more when the conkeyref site joined the reference passes, which left the report alone and moved
-one row from Oxygen-only into the matched set. With
-this run the 11 ids of batch 4 are closed: 84 ids, **no gap left**. Eighteen of the 75 *ok*
-rows are *mapped only* — no incident of that exact id in any of the five reports — and each of
+one row from Oxygen-only into the matched set. The sixth corpus now has no row in either
+direction: its three first-run misses were fixed before its lock was written, the R008
+probes turned its one extension-only row into a match, its third run made the control's
+row a match while the rule stopped filing `p-dup-j` — the ordered comparison its silence
+called for — and its fourth run answered the last three scope shapes, two of them matches,
+without a code change. Its fifth run answered the key-scope tail: one false positive removed
+(`q-twice`), one miss closed (`q-unused-pos`'s unused definition) and one confirmation
+(`q-conkeyref`), three signatures moving into `matched` and none into a difference. Its sixth run
+closed the one question left on R066 — whether every name of a multi-name `keyscope` qualifies —
+and all five of that probe's answers matched, so nothing moved but its two control rows, from
+extension-only to matched. Its seventh run answered R010 in both directions: every definition
+of a clash is filed, so the three `duplicate-key` rows the extension already had and the two
+first definitions only Oxygen filed are matches, while the two re-reaching shapes stayed silent
+on both sides. Ten signatures joined `matched` — five `duplicate-key` and five
+`resource-only-target` — and no row is left in either direction. Its eighth run asked the topic
+form of R034 on six probes and every registered reading held — `xref` and `link` with no scope
+and with `local` are filed, `peer` and `external` are not — so three rows moved from
+extension-only to matched without a code change. Its ninth run asked R011 on six more: depth is
+no boundary, since a key unused in the probe map, in a submap and in a key map below it are all
+filed, while one name defined in two maps of one scope draws one incident, on the first
+definition, so the rule now files the effective definition and the last extension-only row
+(`t-udup-b`'s) is gone. Its tenth run asked R031 on eight: every registered reading held, so an
+`@id` is now judged by the grammar its element declares -- an NCName on a topic or map element, a
+name token on every other, after XML's normalization -- and five of the eight stopped being filed
+while the other three matched, two of them through the `NMTOKENInvalid` spelling Oxygen uses for
+the name-token half. With the batch-4 run the 11 ids
+of that batch were closed, and this one did not reopen any: 84 ids, **no gap left**. Eighteen of
+the 75
+*ok* rows are *mapped only* — no incident of that exact id in any of the six reports — and each of
 them says in its own row which id the reports carry instead, so the number is worth re-checking
 after any new run.
 

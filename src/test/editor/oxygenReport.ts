@@ -255,8 +255,9 @@ export const PROBLEM_ID_CATEGORY: Record<string, string> = {
   'dmv.invalid.keyref.syntax.1': 'invalid-key-syntax',
   'dmv.invalid.keyref.syntax.2': 'invalid-key-syntax',
   'dmv.invalid.keyref.syntax.3': 'invalid-key-syntax',
-  // ids
+  // ids (ID type on topic and map elements, a name token on every other element)
   'IDInvalidWithNamespaces': 'invalid-id-syntax',
+  'NMTOKENInvalid': 'invalid-id-syntax',
   'dmv.invalid.id.syntax.2': 'invalid-id-syntax',
   'dmv.invalid.id.syntax.3': 'invalid-id-syntax',
   // duplicates

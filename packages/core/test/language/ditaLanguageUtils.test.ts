@@ -28,6 +28,19 @@ import { collectMapEntries, createBookRoleLabeler } from '../../src/render/mapTy
 
 describe('ditaLanguageUtils', () => {
   describe('collectRefEntries', () => {
+    it('collects only the default four attributes unless told otherwise', () => {
+      const text = '<p conref="b.dita#t/p1" conrefend="b.dita#t/p3"/><object data="o.dita"/>';
+      assert.deepStrictEqual(collectRefEntries(text).map((e) => e.attr), ['conref']);
+    });
+
+    it('collects the attributes a caller asks for, with their value offsets', () => {
+      const text = '<p conref="b.dita#t/p1" conrefend="b.dita#t/p3"/>';
+      const entries = collectRefEntries(text, new Set(['conref', 'conrefend']));
+      assert.deepStrictEqual(entries.map((e) => e.attr), ['conref', 'conrefend']);
+      const end = entries[1];
+      assert.strictEqual(text.slice(end.valueStart, end.valueEnd), 'b.dita#t/p3');
+    });
+
     it('collects href, conref, conkeyref and keyref attributes', () => {
       const text =
         '<xref href="a.dita"/><p conref="b.dita#t/e"/><ph conkeyref="k/el"/><keyword keyref="prod"/>';
@@ -66,6 +79,46 @@ describe('ditaLanguageUtils', () => {
       const entries = collectRefEntries(text);
       assert.strictEqual(entries.length, 1);
       assert.strictEqual(entries[0].value, 'topics/a.dita');
+    });
+
+    describe('regions that are not live markup', () => {
+      it('skips a reference inside a comment', () => {
+        const text = '<!-- <xref href="old.dita"/> --><xref href="live.dita"/>';
+        assert.deepStrictEqual(collectRefEntries(text).map((e) => e.value), ['live.dita']);
+      });
+
+      it('skips a reference inside a CDATA section', () => {
+        const text = '<codeblock><![CDATA[<xref href="b.dita"/>]]></codeblock><xref href="live.dita"/>';
+        assert.deepStrictEqual(collectRefEntries(text).map((e) => e.value), ['live.dita']);
+      });
+
+      it('skips a reference inside a processing instruction', () => {
+        const text = '<?pi <xref href="pi.dita"/> ?><xref href="live.dita"/>';
+        assert.deepStrictEqual(collectRefEntries(text).map((e) => e.value), ['live.dita']);
+      });
+
+      it('keeps the offsets of the live references that follow', () => {
+        const text = '<!--\n<xref href="old.dita"/>\n--><p>\n<xref href="live.dita"/></p>';
+        const [entry] = collectRefEntries(text);
+        assert.strictEqual(text.slice(entry.valueStart, entry.valueEnd), 'live.dita');
+      });
+
+      it('lets a comment opener inside CDATA stay CDATA, and the reverse', () => {
+        const a = '<![CDATA[ <!-- ]]><xref href="a.dita"/> --><xref href="b.dita"/>';
+        assert.deepStrictEqual(collectRefEntries(a).map((e) => e.value), ['a.dita', 'b.dita']);
+        const b = '<!-- <![CDATA[ --><xref href="a.dita"/> ]]><xref href="b.dita"/>';
+        assert.deepStrictEqual(collectRefEntries(b).map((e) => e.value), ['a.dita', 'b.dita']);
+      });
+
+      it('does not let an unclosed comment swallow the rest of the file', () => {
+        const text = '<xref href="a.dita"/><!-- never closed <xref href="b.dita"/>';
+        assert.deepStrictEqual(collectRefEntries(text).map((e) => e.value), ['a.dita', 'b.dita']);
+      });
+
+      it('still reads a reference in escaped example text as plain text, not a tag', () => {
+        const text = '<codeblock>&lt;xref href="b.dita"/&gt;</codeblock>';
+        assert.strictEqual(collectRefEntries(text).length, 0);
+      });
     });
   });
 

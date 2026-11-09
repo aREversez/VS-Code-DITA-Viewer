@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<map id="aurora-ops" xml:lang="en-US">
+  <title>Operating the station</title>
+  <!-- Aurora Pro variants reach the station through this chapter only. -->
+  <topicref href="../keys/variant-keys.ditamap" format="ditamap" processing-role="resource-only"/>
+  <topicgroup keyscope="ops">
+    <keydef keys="runbook">
+      <topicmeta>
+        <keywords>
+          <keyword>Ops runbook v4</keyword>
+        </keywords>
+      </topicmeta>
+    </keydef>
+    <topicref href="../topics/sensor-check.dita"/>
+    <topicref href="../topics/alerts.dita"/>
+  </topicgroup>
+</map>

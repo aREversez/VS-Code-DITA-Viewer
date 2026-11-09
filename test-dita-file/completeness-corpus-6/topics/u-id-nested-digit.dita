@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="u-id-nested-digit">
+  <title>u-id-nested-digit</title>
+  <body>
+    <!-- a nested topic id that starts with a digit (control: a topic id is an XML ID) -->
+    <p>Text.</p>
+  </body>
+  <topic id="9n">
+    <title>nested</title>
+    <body><p>Text.</p></body>
+  </topic>
+</topic>

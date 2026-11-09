@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="q-mn-bare">
+  <title>q-mn-bare</title>
+  <body>
+    <!-- outside, bare: must stay undefined -->
+    <p><xref keyref="k-mn"/></p>
+  </body>
+</topic>

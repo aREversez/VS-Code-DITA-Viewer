@@ -1,4 +1,4 @@
-import { siteNavigableEntries, DocsiteNavEntry } from './ditaRenderUtils';
+import { siteNavigableEntries, sitePageKeyScope, DocsiteNavEntry } from './ditaRenderUtils';
 import { SITE_HOME_TARGET } from './webview/toolbarScripts';
 import { diffBookParts, BookPart } from './bookPatch';
 import { foldPendingRender, foldSiteRefresh, escalateAfterFailure, PendingRender, SiteRefresh } from './pendingRender';
@@ -40,6 +40,8 @@ export interface MapPanelHost {
     absPath: string,
     keyMap: Map<string, string>,
     bookMembers: ReadonlySet<string>,
+    /** The key scopes the page's entry sits in (sitePageKeyScope). */
+    keyScope?: string[][],
   ): { html: string; error?: undefined } | { html?: undefined; error: string };
   readViewState(): MapViewState | undefined;
   writeViewState(state: MapViewState): void;
@@ -392,7 +394,7 @@ export class MapPanelController {
       this.rememberView();
       return;
     }
-    const tracked = trackSourceReads(() => this.host.renderSiteTopic(resolvedSitePage, site.keyMap, site.bookMembers));
+    const tracked = trackSourceReads(() => this.host.renderSiteTopic(resolvedSitePage, site.keyMap, site.bookMembers, sitePageKeyScope(site.manifest, resolvedSitePage)));
     const topic = tracked.result;
     if (topic.error !== undefined) {
       void this.updateWebview();

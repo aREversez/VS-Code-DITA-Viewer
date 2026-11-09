@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE reference PUBLIC "-//OASIS//DTD DITA Reference//EN" "reference.dtd">
+<reference id="alerts" xml:lang="en-US">
+  <title>Alert codes</title>
+  <refbody>
+    <section>
+      <title>Escalation</title>
+      <p>Alert codes 20 to 29 mean the sensor head is unreachable. Follow the
+        <keyword keyref="runbook"/> before you call the support desk.</p>
+      <p>Support is reachable at <keyword keyref="support-phone"/> during business hours.</p>
+    </section>
+    <section>
+      <title>Code list</title>
+      <dl>
+        <dlentry>
+          <dt>21</dt>
+          <dd>No reply from the wind sensor.</dd>
+        </dlentry>
+        <dlentry>
+          <dt>24</dt>
+          <dd>The rain gauge counter is stuck.</dd>
+        </dlentry>
+        <dlentry>
+          <dt>29</dt>
+          <dd>The sensor head reports an internal supply fault.</dd>
+        </dlentry>
+      </dl>
+    </section>
+  </refbody>
+</reference>

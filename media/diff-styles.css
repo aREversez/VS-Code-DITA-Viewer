@@ -1,18 +1,34 @@
 /* Diff/Compare view styles — side-by-side rendered DITA comparison */
 
 :root {
-  --diff-add-border: #2ea043;
-  --diff-del-border: #f85149;
+  --diff-green: #2ea043;
+  --diff-red: #f85149;
+  --diff-green-bg: rgba(46, 160, 67, 0.09);
+  --diff-red-bg: rgba(248, 81, 73, 0.09);
+  --diff-add-border: var(--diff-green);
+  --diff-del-border: var(--diff-red);
+  --diff-add-bg: var(--diff-green-bg);
+  --diff-del-bg: var(--diff-red-bg);
   --diff-mod-border: #8250df;
+  --diff-mod-bg: rgba(130, 80, 223, 0.08);
   --diff-gutter: #e1e4e8;
   --diff-toolbar-bg: var(--vscode-editor-background);
   --diff-toolbar-border: var(--vscode-widget-border, #ccc);
 }
 
 .vscode-dark {
-  --diff-add-border: #3fb950;
-  --diff-del-border: #f85149;
+  --diff-green: #3fb950;
+  --diff-red: #f85149;
+  --diff-green-bg: rgba(63, 185, 80, 0.14);
+  --diff-red-bg: rgba(248, 81, 73, 0.14);
+  /* var() resolves where it is declared: the :root copies would keep the light
+     values, since this class sits on body, so the derived ones are restated. */
+  --diff-add-border: var(--diff-green);
+  --diff-del-border: var(--diff-red);
+  --diff-add-bg: var(--diff-green-bg);
+  --diff-del-bg: var(--diff-red-bg);
   --diff-mod-border: #a371f7;
+  --diff-mod-bg: rgba(163, 113, 247, 0.14);
   --diff-gutter: #30363d;
 }
 
@@ -252,12 +268,13 @@ body {
 
 /* ── Change type marker ──
  *
- * No background fills anywhere. A rendered paragraph is a whole "line", so the
- * source-diff convention of tinting every changed line buries a block of
- * still-valid prose under a big colored slab that is hard to read. Change type
- * is carried instead by a thin edge marker plus the word-level inline
- * highlights below. Added / removed blocks need no fill to read clearly: they
- * simply appear on one side and not the other.
+ * No full-strength fills. A rendered paragraph is a whole "line", so the
+ * source-diff convention of tinting every changed line buries still-valid
+ * prose under a big colored slab. Change type is carried by a thin edge marker
+ * plus the word-level highlights below. A block that exists on one side only
+ * (a <p> replaced by a <note>, say) has no words to mark and sat opposite
+ * empty space with nothing but a 3px bar, which is too little to read as a
+ * change, so it also gets a faint tint of the same colour.
  *
  * The marker hugs the gutter on both sides -- the left document marks on its
  * right edge, the right document on its left edge -- so the bar and the
@@ -269,6 +286,7 @@ body {
 
 .diff-col--left .dv-block--removed {
   border-right: 3px solid var(--diff-del-border);
+  background: var(--diff-del-bg);
 }
 
 .diff-col--left .dv-block--modified {
@@ -277,6 +295,7 @@ body {
 
 .diff-col--right .dv-block--added {
   border-left: 3px solid var(--diff-add-border);
+  background: var(--diff-add-bg);
 }
 
 .diff-col--right .dv-block--modified {
@@ -473,10 +492,41 @@ body {
   padding: 0 1px;
 }
 
+/* After Swap the left column holds the NEWER version. Colour follows the
+   version, not the column: what only the new version has stays green and
+   what only the old one has stays red, wherever each is drawn. The edge bars,
+   connector lines and chip follow by exchanging the two variables; the word
+   marks need their own rules because they hard-code the colour and, for the
+   deletion, the strike-through. */
+body.roles-swapped {
+  --diff-add-border: var(--diff-red);
+  --diff-del-border: var(--diff-green);
+  --diff-add-bg: var(--diff-red-bg);
+  --diff-del-bg: var(--diff-green-bg);
+}
+
+body.roles-swapped .diff-inline-del {
+  background: rgba(46, 160, 67, 0.30);
+  text-decoration: none;
+}
+
+body.roles-swapped .diff-inline-add {
+  background: rgba(248, 81, 73, 0.30);
+  text-decoration: line-through;
+}
+
 body:not(.show-inline) .diff-inline-del,
 body:not(.show-inline) .diff-inline-add {
   background: transparent;
   text-decoration: none;
+}
+
+/* With word-level marks off, a block counted as modified would otherwise carry
+   nothing but its 3px edge bar. A soft tint on both sides keeps the toolbar's
+   ~N and the view in agreement. Only shown with Aa off: with it on, the word
+   marks already say what changed. */
+body:not(.show-inline) .dv-block--modified {
+  background: var(--diff-mod-bg);
 }
 
 /* ── Current change highlight (navigation) ──
@@ -495,8 +545,8 @@ body:not(.show-inline) .diff-inline-add {
 
 .diff-error {
   padding: 12px 16px;
-  border-left: 3px solid var(--diff-del-border);
-  color: var(--diff-del-border);
+  border-left: 3px solid var(--diff-red);
+  color: var(--diff-red);
   font-size: 13px;
 }
 

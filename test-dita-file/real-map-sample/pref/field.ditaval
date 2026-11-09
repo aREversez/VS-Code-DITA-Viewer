@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<val>
+  <prop att="audience" val="expert" action="exclude"/>
+  <prop att="audience" val="internal" action="exclude"/>
+  <prop att="product" val="aurora-pro" action="exclude"/>
+</val>

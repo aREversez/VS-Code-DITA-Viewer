@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="q-twice-x">
+  <title>q-twice-x</title>
+  <body>
+    <!-- control: x.k-twice, the key as the first copy of the map defines it. -->
+    <p><xref keyref="x.k-twice"/></p>
+  </body>
+</topic>

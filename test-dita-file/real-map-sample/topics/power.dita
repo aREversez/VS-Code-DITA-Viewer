@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE task PUBLIC "-//OASIS//DTD DITA Task//EN" "task.dtd">
+<task id="mount" xml:lang="en-US">
+  <title>Connect power</title>
+  <shortdesc>Wire the station to the site supply through the supplied adapter.</shortdesc>
+  <taskbody>
+    <prereq>
+      <p>The mast is mounted and the cable gland is in place.</p>
+    </prereq>
+    <steps>
+      <step id="step-1">
+        <cmd>Run the supply cable through the gland.</cmd>
+      </step>
+      <step id="step-2">
+        <cmd>Terminate the pair in the adapter block.</cmd>
+      </step>
+      <step id="step-3">
+        <cmd>Switch the site supply on and read the status LED.</cmd>
+        <info>
+          <p>See the wiring diagram below for the terminal order.</p>
+          <p>
+            <image href="../images/wiring.svg" format="svg">
+              <alt>Terminal block with the supply pair on terminals one and two</alt>
+            </image>
+          </p>
+        </info>
+      </step>
+    </steps>
+  </taskbody>
+</task>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<map id="aurora-product-keys" xml:lang="en-US">
+  <title>Product keys</title>
+  <keydef keys="product-name">
+    <topicmeta>
+      <keywords>
+        <keyword>Aurora WS-2</keyword>
+      </keywords>
+    </topicmeta>
+  </keydef>
+  <keydef keys="company-name">
+    <topicmeta>
+      <keywords>
+        <keyword>Northwind Instruments</keyword>
+      </keywords>
+    </topicmeta>
+  </keydef>
+  <keydef keys="support-phone">
+    <topicmeta>
+      <keywords>
+        <keyword>+1 555 0142</keyword>
+      </keywords>
+    </topicmeta>
+  </keydef>
+  <!-- The specification sheet is maintained as a topic and published only as a
+       key resource, so no chapter lists it. -->
+  <keydef keys="spec-key" href="../topics/specifications.dita" processing-role="resource-only"/>
+  <!-- Left behind by the WS-1 diagram set; the file it names is still shipped. -->
+  <keydef keys="legacy-diagram" href="../images/wiring-diagram.svg" format="svg"/>
+</map>

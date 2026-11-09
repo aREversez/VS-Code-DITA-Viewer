@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="o-scope-outside-pos">
+  <title>o-scope-outside-pos</title>
+  <body>
+    <!-- R066 positive: k-scoped is defined only inside keyscope "s1"; this topic is published outside it. -->
+    <p><xref keyref="k-scoped"/></p>
+  </body>
+</topic>

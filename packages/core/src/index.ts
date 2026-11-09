@@ -7,8 +7,8 @@
 
 export { renderTopicXml, buildTitleMap, collectDitamapFilesUpward } from './editor/topicRender';
 export type { TopicXmlRenderInput, TopicRenderInput, TopicRenderResult, ParsedTopicResult } from './editor/topicRender';
-export { buildKeySpace, getKeyDefs } from './editor/keySpace';
-export type { KeyHrefDef, KeySpace } from './editor/keySpace';
+export { buildKeySpace, getKeyDefs, getKeyScopes, getTopicScopeChains, createKeyScopeIndex } from './editor/keySpace';
+export type { KeyHrefDef, KeyScopeIndex, KeySpace } from './editor/keySpace';
 export { readSourceText, setSourceOverlay, clearSourceOverlay } from './editor/sourceText';
 export { decodeHrefPart } from './editor/refResolvers';
 export { buildKeyMapForDocument, buildKeySpaceForDocument } from './keyMapForDocument';
@@ -67,7 +67,7 @@ export { BASE_TYPE_RENDERERS } from './render/baseTypeMap';
 export { computeKeyrefSpacing, needsSpace } from './render/cjkSpacing';
 export { mergeProfilingAttrs, profilingChipsHtml, profilingKeysAttr } from './render/renderer';
 export { resolveConkeyref } from './editor/conkeyref';
-export { collectMapKeys, isKeyContextAvailable, keySourceMaps, qualifiedNames, qualifiedNamesMulti } from './editor/keySpace';
+export { collectMapKeys, isKeyContextAvailable, keySourceMaps, qualifiedNames, qualifiedNamesMulti, resolveKeyInScope, scopeKeyIndexKey } from './editor/keySpace';
 export { DEFAULT_NOTE_LABELS, IMAGE_DIMENSIONS_CACHE_MAX, URL_SCHEME_RE, ZH_NOTE_LABELS, clearImageDimensionsCache, detectIndexLabel, detectNoteLabels, expandDitamapRefs, makeConrefRangeResolver, makeConrefResolver, makeFileCache, makeFileTitleResolver, makeIsInCurrentBook, readImageDimensions } from './editor/refResolvers';
 export type { FileReader } from './editor/refResolvers';
 export { buildRenderContext } from './editor/renderContext';

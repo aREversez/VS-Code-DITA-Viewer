@@ -5,10 +5,11 @@
 // keys a map defines" go through collectMapKeys so there is one rule for
 // what a keydef contributes.
 
-import { dirname } from 'path';
+import { dirname, resolve } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
-import { expandDitamapRefs, FileReader } from './refResolvers';
+import { isDitamapRef } from '../render/mapTypeMap';
+import { decodeHrefPart, expandDitamapRefs, FileReader } from './refResolvers';
 import { sourceStamp } from './sourceText';
 
 function extractTextFromNode(node: DitaNode): string {
@@ -77,6 +78,38 @@ export function qualifiedNamesMulti(name: string, scopeChains: string[][]): stri
   return [...out];
 }
 
+/** The key of one (scope, name) entry in a scope index; `scopeId` is the chain joined with "/" ("" is the root). */
+export function scopeKeyIndexKey(scopeId: string, name: string): string {
+  return `${scopeId}\u0000${name}`;
+}
+
+/**
+ * Resolves a key written at a place that sits in the given scope chains, against an
+ * index of `scopeKeyIndexKey(scope, name)` entries: its own scope first, then each
+ * enclosing one, the nearest definition winning (DITA's scope precedence). A name with
+ * scope qualifiers (`a.k`, or `x.a.k` for nested scopes) is looked up below the scope
+ * the search starts from, so a key defined inside a scope is bare only within it and
+ * reachable from outside only by its qualified name. A place in several chains (a
+ * `keyscope` listing several names) resolves in the first chain that finds the key.
+ *
+ * The one rule behind both the completeness checks and the preview, so the two cannot
+ * disagree about which definition a reference reaches.
+ */
+export function resolveKeyInScope<T>(key: string, chains: string[][], index: ReadonlyMap<string, T>): T | undefined {
+  const parts = key.split('.');
+  for (const chain of chains) {
+    for (let depth = chain.length; depth >= 0; depth--) {
+      const prefix = chain.slice(0, depth);
+      for (let j = 0; j < parts.length; j++) {
+        const scope = prefix.concat(parts.slice(0, j)).join('/');
+        const def = index.get(scopeKeyIndexKey(scope, parts.slice(j).join('.')));
+        if (def !== undefined) return def;
+      }
+    }
+  }
+  return undefined;
+}
+
 /**
  * A key's resource target, captured alongside its text value so conkeyref can
  * resolve `keyname/elementid` to a file. `href` is relative to `baseDir` (the
@@ -92,18 +125,83 @@ export interface KeyHrefDef {
 }
 
 /**
+ * The keys of a key space by scope, kept beside the flat name map (which answers to
+ * bare and qualified names alike and cannot tell scopes apart). Built by the same walk
+ * as the flat map, so the two never disagree about what is defined, only about where a
+ * lookup may find it.
+ */
+export interface KeyScopeIndex {
+  /** `scopeKeyIndexKey(scope, name)` -> the key's text value. First definition wins. */
+  values: Map<string, string>;
+  /** `scopeKeyIndexKey(scope, name)` -> the key's resource target, from the same definition as the value. */
+  defs: Map<string, KeyHrefDef>;
+  /**
+   * A topic's absolute path (see getTopicScopeChains) -> the scope chains each topicref that
+   * publishes it sits in, one entry per publishing scope, in document order, no repeats.
+   * A topic nothing publishes has no entry.
+   */
+  topicScopes: Map<string, string[][][]>;
+}
+
+export function createKeyScopeIndex(): KeyScopeIndex {
+  return { values: new Map(), defs: new Map(), topicScopes: new Map() };
+}
+
+function topicScopeKey(absPath: string): string {
+  const p = resolve(absPath);
+  return process.platform === 'win32' ? p.toLowerCase() : p;
+}
+
+/** The scope chains of the topicrefs that publish `absPath`, or undefined when no topicref does. */
+export function getTopicScopeChains(scopes: KeyScopeIndex, absPath: string): string[][][] | undefined {
+  return scopes.topicScopes.get(topicScopeKey(absPath));
+}
+
+function noteTopicScope(scopes: KeyScopeIndex, absPath: string, chains: string[][]): void {
+  const k = topicScopeKey(absPath);
+  const known = scopes.topicScopes.get(k);
+  const sig = JSON.stringify(chains);
+  if (!known) scopes.topicScopes.set(k, [chains]);
+  else if (!known.some((c) => JSON.stringify(c) === sig)) known.push(chains);
+}
+
+/**
+ * The scope chains a topic is read in when nothing says where it sits: the first
+ * topicref in the map that publishes it, or the root scope when none does (a topic
+ * no map publishes belongs to no keyscope).
+ */
+export function defaultTopicScopeChains(scopes: KeyScopeIndex, absPath: string): string[][] {
+  return getTopicScopeChains(scopes, absPath)?.[0] ?? [[]];
+}
+
+/** What a definition lookup needs; a Map satisfies it, and so does a scope-bound view of one. */
+export interface KeyDefLookup {
+  get(name: string): KeyHrefDef | undefined;
+}
+
+/** A topicref href that names a file of this project: no scheme, not marked external. */
+function localTopicPath(href: string | undefined, scope: string | undefined): string | undefined {
+  if (!href || scope === 'external' || /^[a-z][a-z0-9+.-]*:/i.test(href)) return undefined;
+  const path = href.split('#')[0];
+  return path || undefined;
+}
+
+/**
  * Parses one ditamap, expands the ditamaps it references, and adds every
  * key it defines to `into` (first definition wins, in document order).
  * When `hrefs` is supplied, each newly defined key also records its resource
  * target there (same first-definition-wins gate as the value), keyed by the
- * individual name. Throws if the map itself cannot be read or parsed; the
- * caller decides whether that is fatal.
+ * individual name. When `scopes` is supplied, every definition is also recorded
+ * under the scope it sits in, and every topic a topicref publishes under the scope
+ * of that topicref (same first-definition-wins gate). Throws if the map itself
+ * cannot be read or parsed; the caller decides whether that is fatal.
  */
 export function collectMapKeys(
   mapPath: string,
   into: Map<string, string>,
   read: FileReader,
   hrefs?: Map<string, KeyHrefDef>,
+  scopes?: KeyScopeIndex,
 ): void {
   const content = read(mapPath, 'utf-8');
   const doc = parseDitamap(preprocessEntities(content));
@@ -138,7 +236,24 @@ export function collectMapKeys(
             hrefs?.set(name, { href: node.attributes?.href, baseDir: mapDir });
           }
         }
+        if (scopes) {
+          // The same definition, filed by scope: a lookup that knows where it is
+          // asking from finds the nearest one instead of the first in the file.
+          for (const chain of chains) {
+            const at = scopeKeyIndexKey(chain.join('/'), keyName);
+            if (!scopes.values.has(at)) {
+              scopes.values.set(at, value || keyName);
+              scopes.defs.set(at, { href: node.attributes?.href, baseDir: mapDir });
+            }
+          }
+        }
       }
+    }
+    // A topicref publishes its topic in the scopes it sits in. A keydef does not (it
+    // is resource-only), and a submap reference was expanded into its children above.
+    if (scopes && baseType === 'map/topicref' && !isDitamapRef(node)) {
+      const path = localTopicPath(node.attributes?.href, node.attributes?.scope);
+      if (path) noteTopicScope(scopes, resolve(mapDir, decodeHrefPart(path)), chains);
     }
     for (const child of node.children || []) walk(child, chains);
   }
@@ -153,6 +268,8 @@ export interface KeySpace {
   keys: Map<string, string>;
   /** Each key's resource target (href + defining map dir), for conkeyref. */
   defs: Map<string, KeyHrefDef>;
+  /** The same definitions filed by key scope, and the scopes that publish each topic. */
+  scopes: KeyScopeIndex;
   /** Every file the key values were derived from (for cache stamping). */
   files: string[];
   /** 'none': no context set. 'active': keys come from the context map alone.
@@ -215,9 +332,10 @@ export function buildKeySpace(
 
   const keys = new Map<string, string>();
   const defs = new Map<string, KeyHrefDef>();
+  const scopes = createKeyScopeIndex();
   for (const mf of sources) {
     try {
-      collectMapKeys(mf, keys, recordingRead, defs);
+      collectMapKeys(mf, keys, recordingRead, defs, scopes);
     } catch (e) {
       onError(mf, e);
     }
@@ -230,7 +348,8 @@ export function buildKeySpace(
   // tests drive -- gets it, and so renderContext.ts can read it without
   // importing the vscode-dependent keyMap.ts.
   registerKeyDefs(keys, defs);
-  return { keys, defs, files: [...new Set(files)], status };
+  registerKeyScopes(keys, scopes);
+  return { keys, defs, scopes, files: [...new Set(files)], status };
 }
 
 // ── values map -> href defs, by instance identity ──
@@ -252,4 +371,18 @@ export function registerKeyDefs(keys: Map<string, string>, defs: ReadonlyMap<str
  *  produced by buildKeySpace (e.g. a hand-built map in a test). */
 export function getKeyDefs(keys: Map<string, string>): ReadonlyMap<string, KeyHrefDef> | undefined {
   return defsByKeyMap.get(keys);
+}
+
+// The scope index travels with the values map the same way, for the same reason: the
+// render paths hand around `keyMap` and nothing else.
+const scopesByKeyMap = new WeakMap<Map<string, string>, KeyScopeIndex>();
+
+export function registerKeyScopes(keys: Map<string, string>, scopes: KeyScopeIndex): void {
+  scopesByKeyMap.set(keys, scopes);
+}
+
+/** The scope index paired with a given values map, or undefined if it was not
+ *  produced by buildKeySpace (e.g. a hand-built map in a test). */
+export function getKeyScopes(keys: Map<string, string>): KeyScopeIndex | undefined {
+  return scopesByKeyMap.get(keys);
 }

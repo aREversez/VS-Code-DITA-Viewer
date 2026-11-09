@@ -1,5 +1,5 @@
 {
-  "extension.description": "DITA reading view for VS Code — renders .dita files as formatted read-only preview",
+  "extension.description": "DITA reading view for VS Code - renders .dita files as formatted read-only preview",
   "capabilities.virtualWorkspaces.description": "DITA Viewer reads maps, topics and media from the local file system, so previews and checks do not work in virtual workspaces.",
   "capabilities.untrustedWorkspaces.description": "Reading views, the Map Navigator and the checks keep working; commands that start external programs (DITA-OT Transform, Open in Oxygen, Compare with Git Version) need a trusted workspace.",
   "command.showRendered.title": "Open DITA Reading View",
@@ -52,6 +52,7 @@
   "config.completenessEnabledChecks.description": "Checks that \"Validate and Check for Completeness\" runs. Updated when you accept the check picker; edit here to share the choice with a team.",
   "config.completenessDitavalFiles.description": "DITAVAL files for the completeness check (paths relative to the map's folder, or absolute). Set by the file dialog that opens each time \"useDitaval\" is checked (it starts at the previous choice); the check runs once per file.",
   "command.clearMapCheckResults.title": "DITA: Clear Map Check Results",
+    "command.fixBrokenReferences.title": "DITA: Fix Broken References…",
   "config.updateReferencesOnRename.description": "Control whether href and conref references are automatically updated when DITA files are renamed or moved.",
   "config.updateReferencesOnRename.always": "Always update references automatically",
   "config.updateReferencesOnRename.never": "Never update references"

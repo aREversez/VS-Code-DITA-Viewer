@@ -164,6 +164,52 @@ describe('ditaParser', () => {
     assert.ok(text.includes('"x & y"'), 'special chars inside CDATA should survive');
   });
 
+  it('should keep an XML comment as a node of its own, in place and with its source range', () => {
+    const xml = `<topic id="t">\n  <body><p>before<!--Note-->after</p></body>\n</topic>`;
+    const doc = parseDita(xml);
+    const p = doc.root.children.find((c) => c.type === 'element' && c.tagName === 'body')!.children[0];
+    assert.deepStrictEqual(
+      p.children.map((c) => c.type),
+      ['text', 'comment', 'text'],
+      'the text either side of a comment must stay on its own side of it',
+    );
+    const comment = p.children[1];
+    assert.strictEqual(comment.comment, 'Note', 'the delimiter-free comment text is kept verbatim');
+    assert.strictEqual(comment.text, undefined, 'a comment is not content: its text must not land in `text`');
+    assert.deepStrictEqual(comment.children, []);
+    // The range spans `<!--` through `-->`: a click anywhere in it, and the
+    // whole comment's own line, belong to this node.
+    const lineStart = xml.lastIndexOf('\n', xml.indexOf('<!--')) + 1;
+    assert.strictEqual(comment.sourceRange.startLine, 1);
+    assert.strictEqual(comment.sourceRange.startCol, xml.indexOf('<!--') - lineStart);
+    assert.strictEqual(comment.sourceRange.endLine, 1);
+    assert.strictEqual(comment.sourceRange.endCol, comment.sourceRange.startCol + '<!--Note-->'.length);
+  });
+
+  it('should not read a `<!--` inside a CDATA section as a comment', () => {
+    const xml = `<topic id="t"><body><codeblock><![CDATA[a <!-- b --> c]]></codeblock><p><!--real--></p></body></topic>`;
+    const doc = parseDita(xml);
+    const body = doc.root.children.find((c) => c.type === 'element' && c.tagName === 'body')!;
+    const codeblock = body.children[0];
+    assert.ok(
+      codeblock.children.every((c) => c.type !== 'comment'),
+      'the CDATA example is literal text, not a comment node',
+    );
+    const p = body.children[1];
+    assert.strictEqual(p.children.filter((c) => c.type === 'comment').length, 1);
+    assert.strictEqual(p.children.find((c) => c.type === 'comment')!.comment, 'real');
+  });
+
+  it('should keep a comment written outside the root element out of the document', () => {
+    const xml = `<?xml version="1.0"?>\n<!-- licence header -->\n<topic id="t"><title>T</title></topic>`;
+    const doc = parseDita(xml);
+    assert.strictEqual(doc.root.tagName, 'topic', 'the topic is still the document root');
+    assert.ok(
+      (doc.root.children || []).every((c) => c.type !== 'comment'),
+      'a prolog-style header comment belongs to no rendered content',
+    );
+  });
+
   it('should map hyphenated standard tags to their baseTypes', () => {
     const xml = `<topic id="t"><body><p><draft-comment>todo</draft-comment></p></body><related-links><link href="a.dita"/></related-links></topic>`;
     const doc = parseDita(xml);

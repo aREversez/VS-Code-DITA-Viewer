@@ -37,6 +37,16 @@ jobs:
       # l10n consistency guard (source strings vs l10n/package.nls catalogs);
       # a pure source scan, so it needs neither a build nor a display server
       - run: npm run check:l10n
+      # `npm run verify` runs these two, CI did not. The webview scripts are template
+      # strings that tsc, eslint and the unit tests never see: the first scans that every
+      # message a webview posts has a host handler (and the Map preview's parity), the
+      # second that the committed @class table still matches its extraction. Both read
+      # committed sources only (about two seconds, no DTD, no display server).
+      - run: npm run check:webview
+      - run: npm run check:dita-class
+      # No module imports itself, directly or through others (the large files are split into
+      # modules that must keep pointing one way). Reads sources only, about a second.
+      - run: npm run check:cycles
       # VS Code integration tests need a display server on Linux;
       # @vscode/test-electron 3.x requires Node >= 22
       - name: E2E tests (Linux)

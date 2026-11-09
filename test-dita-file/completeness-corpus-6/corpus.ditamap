@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- Sixth differential corpus: key scope resolution (R066) and the scope half of the
+     duplicate rule (R008), see README.md here. A committed Oxygen report
+     (oxygen-report.xml, 48 incidents) and its parity lock cover it now; re-run Oxygen
+     with THIS map as the only root map whenever the corpus changes. -->
+<map id="corpus6">
+  <title>Completeness Check Corpus 6</title>
+
+  <!-- Control, kept in every run: a reference to a file that does not exist. -->
+  <topicref href="topics/control-missing.dita"/>
+
+  <topicgroup keyscope="s1">
+    <keydef keys="k-scoped" href="topics/t-target.dita"/>
+    <topicref href="topics/o-scope-inside-neg.dita"/>
+    <topicref href="topics/o-scope-shared-edge.dita"/>
+  </topicgroup>
+  <topicgroup keyscope="s2">
+    <topicref href="topics/o-scope-shared-edge.dita"/>
+  </topicgroup>
+  <topicref href="topics/o-scope-outside-pos.dita"/>
+  <topicref href="topics/o-scope-qualified-neg.dita"/>
+
+  <!-- R008 duplicate probes (README.md, "The duplicate probes"): one map each. -->
+  <mapref href="maps/p-dup-a-root.ditamap"/>
+  <mapref href="maps/p-dup-b-group.ditamap"/>
+  <mapref href="maps/p-dup-c-two-groups.ditamap"/>
+  <mapref href="maps/p-dup-d-same-scope.ditamap"/>
+  <mapref href="maps/p-dup-e-two-scopes.ditamap"/>
+  <mapref href="maps/p-dup-f-topicref-scope.ditamap"/>
+
+  <!-- R008 scope-shape probes: all four silent in the third report, which the control
+       below proves was read. See README.md, "The scope shapes". -->
+  <mapref href="maps/p-dup-g-root-vs-scope.ditamap"/>
+  <mapref href="maps/p-dup-h-nested-scope.ditamap"/>
+  <mapref href="maps/p-dup-i-multi-vs-single.ditamap"/>
+  <mapref href="maps/p-dup-j-multi-reordered.ditamap"/>
+
+  <!-- R008 scope-identity probes, answered by the fourth report: two independent
+       keyscope="a b" groups are filed (p-dup-l), s1 > x against s2 > x draws nothing
+       (p-dup-m), and the differently spaced names are filed (p-dup-n). See README.md,
+       "The scope shapes". -->
+  <mapref href="maps/p-dup-l-two-groups.ditamap"/>
+  <mapref href="maps/p-dup-m-nested-same-inner.ditamap"/>
+  <mapref href="maps/p-dup-n-name-spacing.ditamap"/>
+
+  <!-- Key-scope tail, answered by the fifth report: the map referenced twice defines its
+       key in both scopes (q-twice), a use outside its scope leaves the keydef unreferenced
+       (q-unused-pos), and conkeyref is scoped like keyref (q-conkeyref). See README.md. -->
+  <mapref href="maps/q-twice.ditamap"/>
+  <mapref href="maps/q-unused-pos.ditamap"/>
+  <mapref href="maps/q-unused-neg.ditamap"/>
+  <mapref href="maps/q-conkeyref.ditamap"/>
+
+  <!-- Multi-name scope, answered by the sixth report: a key in keyscope="a b" is reached as
+       a.k-mn and b.k-mn, but not as ab.k-mn or bare from outside (q-multiname). See README.md. -->
+  <mapref href="maps/q-multiname.ditamap"/>
+
+  <!-- Duplicate keys across files, from a real-map run (REAL-MAP.md): a clash between two files,
+       three definitions in three files, one key map referenced twice, one reached from nested submaps (the real-map shape), and a control.
+       The seventh report filed every participant and stayed silent on both re-reachings. See README.md. -->
+  <mapref href="maps/r-dk2.ditamap"/>
+  <mapref href="maps/r-dk3.ditamap"/>
+  <mapref href="maps/r-dkt.ditamap"/>
+  <mapref href="maps/r-dkn.ditamap"/>
+  <mapref href="maps/r-dkc.ditamap"/>
+
+  <!-- A URL written in a topic (R034), the eighth report: xref and link, no scope, local,
+       external and peer. See README.md, "A URL written in a topic". -->
+  <mapref href="maps/s-url.ditamap"/>
+
+  <!-- Unused keys below the first map, the ninth report: an unused key at the probe map, in a
+       submap, in a key map under a submap, and one key defined in two key maps. See README.md,
+       "Unused keys below the first map". -->
+  <mapref href="maps/t-unref.ditamap"/>
+  <mapref href="maps/t-udup.ditamap"/>
+
+  <!-- Id syntax by element kind, the tenth report: a digit-first id, a trailing space, a colon, a
+       space inside and a plus, on elements that are not topics, and a topic id with a trailing
+       space and a nested topic with a digit-first id. See README.md. -->
+  <mapref href="maps/u-id.ditamap"/>
+
+  <!-- Positive control for the probes above, kept LAST: the third report carries its two
+       incidents, so the silence above is an answer. See README.md, "The control". -->
+  <mapref href="maps/p-dup-k-control.ditamap"/>
+</map>

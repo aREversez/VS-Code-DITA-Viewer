@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- Depth 0: an unused key in the probe map itself (control), then the submap. See README.md, "Unused keys below the first map". -->
+<map id="t-unref">
+  <title>t-unref</title>
+  <keydef keys="k-t0" href="../topics/t-u0.dita"/>
+  <mapref href="t-unref-sub.ditamap"/>
+</map>

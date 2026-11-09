@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="140" viewBox="0 0 240 140">
+  <rect x="0" y="0" width="240" height="140" fill="#f4f6f8"/>
+  <rect x="70" y="30" width="100" height="80" rx="4" fill="#ffffff" stroke="#5b6670"/>
+  <circle cx="92" cy="50" r="6" fill="#b03a2e"/>
+  <circle cx="112" cy="50" r="6" fill="#22313f"/>
+  <circle cx="92" cy="72" r="6" fill="#7f8c8d"/>
+  <circle cx="112" cy="72" r="6" fill="#7f8c8d"/>
+  <text x="132" y="54" font-family="sans-serif" font-size="9" fill="#3b444b">+12 V</text>
+  <text x="132" y="76" font-family="sans-serif" font-size="9" fill="#3b444b">0 V</text>
+  <text x="120" y="128" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#3b444b">Adapter block</text>
+</svg>

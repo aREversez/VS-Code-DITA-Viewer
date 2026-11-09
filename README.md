@@ -20,6 +20,7 @@ A VS Code extension that renders **`.dita`** and **`.ditamap`** files as a forma
 - **Validate and Check for Completeness** — Oxygen's DITA Map Completeness Check over a map and everything it references: missing topics, images and other resources, references outside the map folder, links to topics not in any map, multiple references, duplicate topic IDs and keys, unreferenced keys and reusable elements, table layout, profiling conflicts, optional DITAVAL filtering, and the rules that read `@class`: `@class` syntax, an empty `@domains`, a `conref` whose source element is more specific than its target, `@type` against the target's class, section title structure, and a reference to DITA content that does not parse. Element classes come from a generated table of the DITA-OT 1.3 DTD defaults (base, technical content and bookmap), so a file that leaves `@class` to the DTD is checked too; a written value always wins; an element outside the table is skipped rather than given a guessed class; and only a file that declares neither a DOCTYPE nor a schema (a RELAX NG association or a schema location) is asked to write `@class` on every element, since its grammar may supply the defaults. What it deliberately does not do is DTD validation — undeclared elements or attributes, and content models — which is a good fit for a VS Code XML language server that knows DTDs and catalogs. Pick the checks in a quick pick; the findings, labelled by category, go to the Problems panel
 - **DITA Map Explorer** — sidebar tree of the map associated with the active editor, laid out like Oxygen's DITA Maps Manager: the main map is the root row (its own `<title>`/`<mainbooktitle>`, keyrefs resolved — version numbers in titles show the key's value), submaps are named by the referenced map's title rather than its file name, and rows carry type icons (map, submap, key definition, topic group, task, concept, reference, troubleshooting, glossary). Every branch starts collapsed (frontmatter and keydef entries are listed again — one collapsed line each), **Expand All** / **Collapse All** sit next to each other in the title bar and act on the selected node — expanding its subtree, or folding that subtree together with the selected row itself (the main map row stays open, so collapsing from the root leaves the one-level outline; a chapter `topichead` over leaf topics has nothing below it to fold, which is why the row itself is part of the collapse) — also from a row's context menu, with the main map as the target when nothing is selected; and what you expand survives map edits, reloads and VS Code restarts, per map.
 - **Export as HTML** — render any topic or full map to a single self-contained `.html` file (styles inlined, images embedded) without DITA-OT
+- **Fix Broken References** — the repair for a rename VS Code never saw (`git mv`, a terminal `mv`, a file moved in another editor, or a reference that was broken before the extension was installed): the references whose target is gone are found, grouped by the file they point at and matched against the workspace by file name only, and offered in one check-list. A target with exactly one file of that name is ticked for you; several files of that name ask which one after Enter; a name that differs in case only is listed but never ticked, because on a case-sensitive file system it is a different file. Targets that all went to the same new folder are shown as one moved-folder group, so a moved folder reads as one line. Everything ticked is rewritten in a single edit, so one undo takes all of it back; targets no file of that name could be found for are listed in the Output panel with the file and line each is written on. From the Command Palette (whole workspace) or the Explorer's right-click menu (the selected files and folders); the same repair is also a **Quick Fix** on the `Referenced file not found` diagnostic, one action per candidate file
 - **Full DITA element coverage** — topic, sections, notes (all types), lists, tables, figures, code blocks with language labels, images, cross-references (with title resolution), quotes, related links, inline formatting, keydef/keyword display; specialization modules (task/concept/reference, troubleshooting, glossary, taskreq, highlight/programming/software/UI domains) are audited against the DITA-OT 1.3 DTDs and render correctly even without explicit `@class` attributes in the source
 - **Index term visibility** — `<indexterm>` (including nested primary/secondary/… levels, sibling sub-entries, and `index-see`/`index-see-also` cross-references) and `<indextermref>` render as small inline chips right where they're authored, in both topic preview and book mode. This is intentionally not a compiled, alphabetically-sorted back-of-book index page — sort order only makes sense for scripts with a stable alphabetic/stroke ordering, so a generated index would be meaningless for e.g. Chinese content; seeing each term inline works the same way regardless of language.
 - **Profiling / conditional-processing support** — content carrying `props`/`platform`/`product`/`audience`/`otherprops`/`deliveryTarget`/`base`/`importance`/`rev`/`status` is highlighted (toggleable via **Flags**) and can be hidden by value (**Filter**), matching Oxygen's own conditional-processing display; available both within topic content and, independently, at the ditamap `topicref` level in map/book view, where a topicref's profiling attributes cascade down to its descendant topicrefs
@@ -89,7 +90,7 @@ Duplicate topics (same file referenced multiple times) are shown with a skip mes
 - `keyref` elements display the value from the matching `keydef`. The keydef map does **not** need to sit next to the root map or be named `keys.ditamap` — any local `.ditamap` referenced via `topicref`, `keydef`, or `mapref` (or found in an ancestor directory) is scanned, and the nearest definition wins.
 - **Key context map** (like the *context* in Oxygen's DITA Maps Manager) — when several keydef maps define the same keys with different values (one per brand or product), run **DITA: Select Key Context Map…** (or the key button in the Map Navigator toolbar, next to Select Map, or the `Keys:` item in the status bar) and pick the map every `keyref` should resolve against. The choice applies to all open topics and maps, is remembered per workspace, and replaces the surrounding-maps lookup entirely: only the chosen map's keys (and those of the maps it references) exist, so a key defined only in another brand's map reads as undefined. Each keydef map still shows its own content when opened on its own. Choose *No context* to go back to the default lookup. Go to Definition, the Map Navigator, diagnostics, export and both previews all follow it. A sample lives in `test-dita-file/manual-context/`.
 - A `keys` attribute may list several names (`keys="brand company"`); each is defined.
-- **`conkeyref`** (content reuse by key) resolves the leading key the same way a `keyref` does — through the effective key space, so the selected key context and "nearest definition wins" apply — then pulls in the addressed element (`key/elementid`), or the whole topic (`key`) when no element id is given, from the key's target file. Per the DITA rule, a `conkeyref` that cannot be resolved (undefined key, key with no target, or addressed element missing) falls back to a `conref` written on the same element, and otherwise keeps its own content; a `conkeyref` cycle between topics is detected and stops. *Known limitation:* a key written **inside** content that a `conref` or `conkeyref` pulls in is not yet resolved.
+- **`conkeyref`** (content reuse by key) resolves the leading key the same way a `keyref` does — through the effective key space, so the selected key context and "nearest definition wins" apply — then pulls in the addressed element (`key/elementid`), or the whole topic (`key`) when no element id is given, from the key's target file. Per the DITA rule, a `conkeyref` that cannot be resolved (undefined key, key with no target, or addressed element missing) falls back to a `conref` written on the same element, and otherwise keeps its own content; a `conkeyref` cycle between topics is detected and stops. A `keyref` inside content that a `conref` or `conkeyref` pulls in — on the pulled-in element itself or on anything below it — is resolved in the key space of the document that does the pulling, the way DITA-OT resolves it.
 - Maps that reference other maps (including “all-in-one” maps whose children live in nested sub-folders) are merged recursively; relative hrefs inside referenced maps are rebased automatically so topics and images resolve correctly.
 
 ### Profiling / Conditional Content
@@ -120,9 +121,10 @@ Right-click entries the extension adds or powers, by where you right-click.
 
 The editor menu also shows **Go to Definition**, **Go to References**, **Peek** and **Find All References**. These are VS Code's own entries; the extension supplies their results for `keyref`, `conref`, `href` and element ids (see [Features](#features)), so they appear wherever VS Code puts them rather than in the DITA submenu.
 
-**In VS Code's file Explorer** (right-click a `.dita` / `.ditamap` file)
+**In VS Code's file Explorer** (right-click a `.dita` / `.ditamap` file, or a folder)
 
 - Open with Oxygen XML Editor
+- Fix Broken References… — also on a folder, which scans just that folder
 - Find Maps Referencing This File…
 - Reveal in Map Navigator
 - Export as HTML…
@@ -459,14 +461,17 @@ location for verification.
 
 ### Key scope
 
-- **A bare key name ignores which scope the reference sits in.** A key defined
-  inside `keyscope="a"` answers to `a.k` (and, nested, `x.a.k` and `a.k`) as
-  well as `k`, so a qualified `keyref="a.k"` is substituted in the preview. But
-  the preview looks keys up in one flat table and does not know where the
-  referencing element sits, so a bare `keyref="k"` finds the first definition of
-  `k` in document order, not the one in the reference's own scope. Write the
-  qualified name where two scopes define the same key.
-  (`@dita-viewer/core`, `editor/keySpace.ts`, `collectMapKeys`)
+- **Map titles and navigation names still look keys up by name alone.** A topic's
+  `keyref` and `conkeyref` resolve in the key scope the topic sits in: in Book
+  and Site view the scope of the topicref that placed it, in the standalone
+  preview the scope of the first topicref in the map that publishes the file
+  (the root scope when none does, as DITA puts a topic no map publishes). The
+  keys shown in a map's own titles and navigation names (the DITA Map tree,
+  the template navigation, Find All References) and in the Diff view are still
+  read from one flat table, so a bare `k` there finds the first definition of
+  `k` in document order. Write the qualified name (`a.k`) where two scopes
+  define the same key and that surface matters.
+  (`@dita-viewer/core`, `editor/keySpace.ts`, `KeyScopeIndex`)
 
 ### Custom DTDs and specialization
 
@@ -534,7 +539,7 @@ location for verification.
 
 ### Rename / reference updates
 
-- **Reference updates on rename only work for renames initiated within VS Code.** External renames (e.g. `git mv`, terminal `mv`) are not detected.
+- **Reference updates on rename only work for renames initiated within VS Code.** External renames (e.g. `git mv`, terminal `mv`) are not detected — run **DITA: Fix Broken References…** afterwards: it finds the references that are broken now and offers the file each one probably meant. A target is matched by file name only, so a file renamed to a different name is reported (in the Output panel) rather than guessed at.
 
 ## Localization
 
@@ -616,7 +621,7 @@ Both are workspace-folder-level values, so a host opened on a subfolder (say `te
 npm run package        # mkdir output, then vsce package --no-dependencies --out output/
 ```
 
-The `.vsix` file name is derived from the `name` and `version` fields in `package.json` (e.g. `output/dita-viewer-1.0.10.vsix`). `npm run check:package` packages again and asserts the archive's contents (required assets present, `src/**` and the fixtures absent), which is the gate to trust before publishing a build.
+The `.vsix` file name is derived from the `name` and `version` fields in `package.json` (e.g. `output/dita-viewer-1.0.11.vsix`). `npm run check:package` packages again and asserts the archive's contents (required assets present, `src/**` and the fixtures absent), which is the gate to trust before publishing a build.
 
 #### Installing the package into a local VS Code
 

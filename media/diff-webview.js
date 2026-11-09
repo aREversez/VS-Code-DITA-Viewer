@@ -5,6 +5,7 @@
   const btnNext = document.getElementById('btn-next');
   const btnSwap = document.getElementById('btn-swap');
   const btnInline = document.getElementById('btn-inline');
+  const btnProfiling = document.getElementById('btn-profiling');
   const btnSource = document.getElementById('btn-source');
   const counter = document.getElementById('nav-counter');
   const gutter = document.getElementById('diff-gutter');
@@ -35,15 +36,27 @@
     counter.value = (currentIdx + 1) + ' / ' + idxs.length;
   }
 
-  function navigateTo(idx) {
+  // The page is replaced on every render (swap, re-compare), so what the reader
+  // set is reported to the extension, which writes it back into the next page.
+  function reportViewState() {
+    vscode.postMessage({
+      type: 'viewState',
+      inline: body.classList.contains('show-inline'),
+      profiling: !body.classList.contains('hide-profiling'),
+      idx: currentIdx,
+    });
+  }
+
+  function navigateTo(idx, instant) {
     const idxs = getChangeIdxs();
     if (idxs.length === 0) return;
     document.querySelectorAll('.__diff_current').forEach(function (r) { r.classList.remove('__diff_current'); });
     currentIdx = ((idx % idxs.length) + idxs.length) % idxs.length;
     const els = document.querySelectorAll('[data-diff-idx="' + idxs[currentIdx] + '"]');
     els.forEach(function (el) { el.classList.add('__diff_current'); });
-    if (els.length > 0) els[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+    if (els.length > 0) els[0].scrollIntoView({ block: 'center', behavior: instant ? 'auto' : 'smooth' });
     updateCounter();
+    reportViewState();
   }
 
   btnPrev.addEventListener('click', function() { navigateTo(currentIdx - 1); });
@@ -80,6 +93,26 @@
     body.classList.toggle('show-inline');
     btnInline.setAttribute('aria-pressed', body.classList.contains('show-inline'));
     scheduleDraw();
+    reportViewState();
+  });
+
+  // Flags: the conditional-content highlight (a green box and label around
+  // content carrying props / audience / ...). It shares its green with an
+  // addition, so without a way to hide it a reader cannot tell flagged content
+  // from new content. The rule it flips, body.hide-profiling, is the one the
+  // topic and map previews use, from the shared styles.css.
+  btnProfiling.addEventListener('click', function() {
+    body.classList.toggle('hide-profiling');
+    const on = !body.classList.contains('hide-profiling');
+    btnProfiling.setAttribute('aria-pressed', on);
+    // The title says what a click will do, so it follows the state.
+    const title = btnProfiling.getAttribute(on ? 'data-title-on' : 'data-title-off');
+    if (title) {
+      btnProfiling.title = title;
+      btnProfiling.setAttribute('aria-label', title);
+    }
+    scheduleDraw();
+    reportViewState();
   });
 
   // Hand the exact two versions this panel is showing to the extension, which
@@ -276,4 +309,8 @@
   }
 
   updateCounter();
+
+  // Replay the position the previous page was left at.
+  const initial = typeof body.getAttribute === 'function' ? parseInt(body.getAttribute('data-initial-idx'), 10) : NaN;
+  if (initial >= 0) navigateTo(initial, true);
 })();

@@ -14,6 +14,15 @@ function makeText(text: string): DitaNode {
   };
 }
 
+function makeComment(comment: string, sourceRange?: SourceRange): DitaNode {
+  return {
+    type: 'comment',
+    comment,
+    children: [],
+    sourceRange: sourceRange || { startLine: 0, startCol: 0, endLine: 0, endCol: 0 },
+  };
+}
+
 function makeEl(
   baseType: string,
   children: DitaNode[],
@@ -1206,6 +1215,52 @@ describe('renderer', () => {
 
   // ── Conref resolution tests ──
 
+  // ── keyref on the element a conref pulls in ──
+
+  describe('keyref on a conref target', () => {
+    const keyCtx = (target: DitaNode): RenderContext => ({
+      ...defaultCtx,
+      resolveConref: (_conref: string) => target,
+      resolveKey: (key: string) => (key === 'prod' ? 'Acme Widget' : undefined),
+    });
+    const docWith = (referencing: DitaNode): DitaNode =>
+      makeEl('topic/topic', [makeEl('topic/body', [makeEl('topic/p', [referencing])])]);
+
+    it('resolves the keyref written on a same-type target itself', () => {
+      const target = makeEl('topic/ph', [], { id: 'x', keyref: 'prod' });
+      const html = renderDocument(docWith(makeEl('topic/ph', [], { conref: 'b.dita#t/x' })), keyCtx(target));
+      assert.ok(html.includes('Acme Widget'), 'the key text should be substituted');
+      assert.ok(!html.includes('keyref'), 'the keyref attribute should not leak into the output');
+    });
+
+    it('still resolves a keyref in a child of the target (unchanged)', () => {
+      const target = makeEl('topic/ph', [makeEl('topic/keyword', [], { keyref: 'prod' })], { id: 'x' });
+      const html = renderDocument(docWith(makeEl('topic/ph', [], { conref: 'b.dita#t/x' })), keyCtx(target));
+      assert.ok(html.includes('Acme Widget'));
+    });
+
+    it('lets the referencing element\'s own keyref win over the target\'s', () => {
+      const target = makeEl('topic/ph', [], { id: 'x', keyref: 'other' });
+      const ctx = { ...keyCtx(target), resolveKey: (k: string) => (k === 'prod' ? 'Acme Widget' : k === 'other' ? 'Other' : undefined) };
+      const html = renderDocument(docWith(makeEl('topic/ph', [], { conref: 'b.dita#t/x', keyref: 'prod' })), ctx);
+      assert.ok(html.includes('Acme Widget'));
+      assert.ok(!html.includes('Other'));
+    });
+
+    it('does not invent text when the target\'s key is undefined', () => {
+      const target = makeEl('topic/ph', [], { id: 'x', keyref: 'missing' });
+      const html = renderDocument(docWith(makeEl('topic/ph', [], { conref: 'b.dita#t/x' })), keyCtx(target));
+      assert.ok(!html.includes('Acme Widget'));
+    });
+
+    it('keeps the target\'s own content when it has some (content wins over the key)', () => {
+      const target = makeEl('topic/ph', [makeText('local text')], { id: 'x', keyref: 'prod' });
+      const html = renderDocument(docWith(makeEl('topic/ph', [], { conref: 'b.dita#t/x' })), keyCtx(target));
+      assert.ok(html.includes('local text'));
+      assert.ok(!html.includes('Acme Widget'));
+    });
+  });
+
   it('should resolve ph conref with same-type target preserving children', () => {
     // Target is a <ph> (same baseType as referencing <ph>)
     const target = makeEl('topic/ph', [
@@ -2142,6 +2197,179 @@ describe('renderer', () => {
       ]);
       const html = renderDocument(doc, defaultCtx);
       assert.ok(html.includes('indexterm-chip'), 'preview default must keep showing chips');
+    });
+  });
+
+  // An XML comment used to be dropped by the parser, so its text was nowhere in
+  // the preview. It now renders in the flow where it was written, the way
+  // Oxygen's Author mode shows it (see renderComment in renderer.ts).
+  describe('XML comments', () => {
+    it('shows the comment text inline, without the <!-- --> markup, inside running text', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [
+          makeEl('topic/p', [
+            makeText('最后掌握维护与故障排查方法。'),
+            makeComment('This is a comment', { startLine: 20, startCol: 60, endLine: 20, endCol: 84 }),
+          ]),
+        ]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(html.includes('This is a comment'), `the comment text must be visible, got: ${html}`);
+      assert.ok(!html.includes('&lt;!--'), 'the delimiters are markup, not text');
+      assert.ok(/<span class="dv-comment"/.test(html), 'a comment inside a paragraph joins the text flow, not a block of its own');
+      assert.ok(
+        html.includes('data-dita-tagname="comment"') && html.includes('data-line="20"'),
+        'Tags toggle and source sync need the tag name and the comment’s own line',
+      );
+    });
+
+    it('renders a comment written between blocks as a block of its own', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [
+          makeEl('topic/p', [makeText('one')]),
+          makeComment('check with legal'),
+          makeEl('topic/p', [makeText('two')]),
+        ]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(
+        /<div class="dv-comment dv-comment--block"/.test(html),
+        `an element-only parent has no sentence to join, so the comment gets its own block: ${html}`,
+      );
+    });
+
+    it('does not glue a comment between two list items onto the previous one', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [
+          makeEl('topic/ul', [
+            makeEl('topic/li', [makeText('one')]),
+            makeComment('applies to both items'),
+            makeEl('topic/li', [makeText('two')]),
+          ]),
+        ]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(/<div class="dv-comment dv-comment--block"/.test(html), `list container should give the comment its own block: ${html}`);
+    });
+
+    it('escapes markup written inside a comment instead of emitting it', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [makeEl('topic/p', [makeComment('<b>x</b> & y')])]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(html.includes('&lt;b&gt;x&lt;/b&gt; &amp; y'), `comment text must be escaped: ${html}`);
+      assert.ok(!html.includes('<b>x</b>'), 'a comment is never markup');
+    });
+
+    it('renders nothing for an empty or whitespace-only comment', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [makeEl('topic/p', [makeText('x'), makeComment('   \n  ')])]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(!html.includes('dv-comment'), `an empty comment is not a box worth drawing: ${html}`);
+    });
+
+    it('keeps a multi-line comment’s own line breaks readable', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [makeComment('\n  TODO: fix the figure\n  after review\n')]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(html.includes('TODO: fix the figure\n  after review'), 'inner line breaks survive (white-space: pre-wrap)');
+      assert.ok(!html.includes('\n  TODO'), 'only the surrounding whitespace is trimmed');
+    });
+
+    it('renders a real comment end-to-end through parseDita, between the text around it', () => {
+      const xml = `<topic id="t"><title>T</title><body><p>before<!--注释-->after</p></body></topic>`;
+      const doc = parseDita(xml);
+      const html = renderDocument(doc.root, defaultCtx);
+      assert.ok(
+        /before<span class="dv-comment"[^>]*>注释<\/span>after/.test(html),
+        `the comment must sit exactly where it was authored: ${html}`,
+      );
+    });
+
+    it('leaves a comment in a title out of the extracted title text', () => {
+      const doc = parseDita(`<topic id="t"><title>Real<!--hidden-->Title</title></topic>`);
+      const title = doc.root.children.find((c) => c.type === 'element' && c.baseType === 'topic/title')!;
+      const texts = title.children.filter((c) => c.type === 'text').map((c) => c.text).join('');
+      assert.strictEqual(texts, 'RealTitle', 'text extraction sees only text nodes, so a comment never becomes title text');
+    });
+  });
+
+  // A comment is a node of its own now, so every place that decided "has this
+  // element any content" by looking at its children, and every place that
+  // cannot take a span/div child, had to learn about it.
+  describe('XML comments are not content, and are left out where they cannot render in place', () => {
+    function parseAndRender(body: string, ctx: RenderContext = defaultCtx): string {
+      return renderDocument(parseDita(`<topic id="t"><title>T</title><body>${body}</body></topic>`).root, ctx);
+    }
+
+    it('lets an xref that holds only a comment fall back to its href, as an empty one does', () => {
+      const plain = parseAndRender('<p><xref href="a.dita"/></p>');
+      const html = parseAndRender('<p><xref href="a.dita"><!-- Pull title from a.dita --></xref></p>');
+      assert.ok(html.includes('a.dita') && !html.includes('Pull title'), `comment must not become the link text, got: ${html}`);
+      assert.strictEqual(
+        html.replace(/ data-[a-z-]+="[^"]*"/g, '').replace(/^.*?<p /s, '<p '),
+        plain.replace(/ data-[a-z-]+="[^"]*"/g, '').replace(/^.*?<p /s, '<p '),
+      );
+    });
+
+    it('uses the resolved title for a comment-only xref, internal and cross-file', () => {
+      const ctx: RenderContext = { ...defaultCtx, resolveTitle: (ref: string) => (ref === 'x' || ref === 'a.dita' ? 'Resolved Title' : undefined) };
+      const internal = parseAndRender('<p><xref href="#t/x"><!-- c --></xref></p>', ctx);
+      assert.ok(internal.includes('>Resolved Title</a>'), internal);
+      const external = parseAndRender('<p><xref href="a.dita"><!-- c --></xref></p>', ctx);
+      assert.ok(external.includes('Resolved Title') && !external.includes('dv-comment'), external);
+    });
+
+    it('still uses an xref label the author wrote, next to a comment', () => {
+      const html = parseAndRender('<p><xref href="a.dita">label<!-- c --></xref></p>');
+      assert.ok(html.includes('label'), html);
+    });
+
+    it('keeps a comment-only xref without href an empty one (no content, no keyref: nothing to show)', () => {
+      assert.ok(!parseAndRender('<p>x<xref><!-- c --></xref></p>').includes('dv-comment'));
+    });
+
+    it('does not count a comment as an mfenced argument (no extra separator)', () => {
+      const withComment = parseAndRender('<mathml><math xmlns="http://www.w3.org/1998/Math/MathML"><mfenced separators=","><!-- c --><mi>x</mi><mi>y</mi></mfenced></math></mathml>');
+      const without = parseAndRender('<mathml><math xmlns="http://www.w3.org/1998/Math/MathML"><mfenced separators=","><mi>x</mi><mi>y</mi></mfenced></math></mathml>');
+      const mrow = (h: string): string => /<mrow>.*<\/mrow>/.exec(h)![0];
+      assert.strictEqual(mrow(withComment), mrow(without));
+    });
+
+    it('leaves a comment out of every table context, where the browser would move it above the table', () => {
+      const cals = parseAndRender(
+        '<table><tgroup cols="2"><!-- g --><thead><!-- h --><row><!-- r --><entry>h1</entry><entry>h2</entry></row></thead>' +
+        '<tbody><!-- b --><row><entry>a</entry><entry>b</entry></row></tbody></tgroup></table>',
+      );
+      assert.ok(!cals.includes('dv-comment'), cals);
+      assert.ok(cals.includes('h1') && cals.includes('>a</td>'), 'the table itself still renders');
+      const simple = parseAndRender('<simpletable><sthead><!-- h --><stentry>h</stentry></sthead><!-- b --><strow><!-- r --><stentry>x</stentry></strow></simpletable>');
+      assert.ok(!simple.includes('dv-comment'), simple);
+    });
+
+    it('keeps a comment inside a table cell, which is ordinary mixed content', () => {
+      const html = parseAndRender('<table><tgroup cols="1"><tbody><row><entry>cell<!-- in cell --></entry></row></tbody></tgroup></table>');
+      assert.ok(/<td[^>]*>cell<span class="dv-comment"/.test(html), html);
+    });
+
+    it('leaves a comment out of preformatted blocks, where its text would read and copy as code', () => {
+      for (const tag of ['codeblock', 'pre', 'lines']) {
+        const html = parseAndRender(`<${tag}>a<!-- hidden -->b</${tag}>`);
+        assert.ok(!html.includes('dv-comment') && !html.includes('hidden'), `${tag}: ${html}`);
+      }
+    });
+
+    it('leaves a comment out of a title, whose text feeds the outline', () => {
+      const html = parseAndRender('<section><title>Hi<!-- c --></title><p>x</p></section>');
+      assert.ok(!html.includes('dv-comment'), html);
+      assert.ok(html.includes('Hi'));
+    });
+
+    it('still shows a comment between list items as a block of its own', () => {
+      const html = parseAndRender('<ul><!-- c --><li>a</li></ul>');
+      assert.ok(/<ul[^>]*><div class="dv-comment dv-comment--block"/.test(html), html);
     });
   });
 });

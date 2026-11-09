@@ -17,8 +17,7 @@ import { sharedWebviewStrings } from './webviewL10n';
 import {
   diffTopics,
   TopicDiffResult,
-  swapAlignedRows,
-  computeRowStats,
+  swapDiffResult,
   buildQuickCommitChoices,
   arrangeByRecency,
 } from './ditaDiffEngine';
@@ -34,7 +33,20 @@ import {
 } from './ditaGitUtils';
 import { getActiveDitaUri } from './exportHtml';
 import { ensureCommandAllowed } from './workspaceTrustGate';
-import { ensureDitaDiffVirtualDocuments, DITA_DIFF_SCHEME } from './ditaDiffVirtualDoc';
+import { logDiffError } from './diffLog';
+import {
+  carryViewState,
+  diffPanelTitle,
+  DiffViewState,
+  initialViewState,
+  sameVersion,
+  secondPickChoices,
+  shouldReportFailure,
+  VersionOutcome,
+} from './diffVersionPick';
+import { renderStats } from './diffStatsHtml';
+import { ensureDitaDiffVirtualDocuments } from './ditaDiffVirtualDoc';
+import { DITA_DIFF_SCHEME, docUriStringFromDiffUri } from './diffScheme';
 
 const DIFF_PANELS = new Map<string, vscode.WebviewPanel>();
 
@@ -70,6 +82,11 @@ type DiffPanelState = {
   leftLabel: string;
   rightLabel: string;
   docUri: vscode.Uri;
+  // True after Swap sides: the left column then holds the newer version, and
+  // colours and the chip follow the version rather than the column.
+  swapped: boolean;
+  // Aa and the current change, replayed into every re-rendered page.
+  ui: DiffViewState;
 };
 const DIFF_STATE = new WeakMap<vscode.WebviewPanel, DiffPanelState>();
 
@@ -79,7 +96,9 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
       // The diff shells out to `git` (ditaGitUtils.ts); an untrusted
       // workspace stops at the gate rather than running it.
       if (!(await ensureCommandAllowed('ditaViewer.compareWithGit'))) return;
-      const uri = getActiveDitaUri();
+      // Invoked while the diff panel itself is focused (a webview: no text
+      // editor, no custom-editor tab), the compared document is the target.
+      const uri = compareTargetUri();
       if (!uri || !uri.fsPath.toLowerCase().endsWith('.dita')) {
         vscode.window.showErrorMessage(vscode.l10n.t('Please open a .dita file first.'));
         return;
@@ -107,7 +126,9 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
         // Recency rank, lower = newer -- see arrangeByRecency. Working copy
         // is always the newest possible content; commit-backed choices use
         // their position in `commits` (git log order: index 0 is newest).
-        resolve: () => Promise<{ xml: string; label: string; order: number } | undefined>;
+        resolve: () => Promise<VersionOutcome<{ xml: string; label: string; order: number; hash?: string }>>;
+        // Opens a further picker, so it stays on offer for the second pick.
+        opensPicker?: boolean;
       }
 
       const choices: VersionChoice[] = [];
@@ -115,7 +136,7 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
       choices.push({
         label: '$(file) Working copy' + (hasLocal ? ' •' : ''),
         description: vscode.l10n.t('includes unsaved changes'),
-        resolve: async () => ({ xml: await getLocalContent(uri), label: vscode.l10n.t('Working copy'), order: -1 }),
+        resolve: async () => ({ kind: 'ok', value: { xml: await getLocalContent(uri), label: vscode.l10n.t('Working copy'), order: -1 } }),
       });
 
       const quickChoices = buildQuickCommitChoices(commits);
@@ -127,7 +148,7 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
           description: c.subject,
           resolve: async () => {
             const xml = await getFileAtRef(repoRoot, relPath, c.refHash);
-            return xml ? { xml, label: `${c.shortHash} ${c.subject}`, order: 0 } : undefined;
+            return xml ? { kind: 'ok', value: { xml, label: `${c.shortHash} ${c.subject}`, order: 0, hash: c.refHash } } : failedRead(relPath, c.refHash);
           },
         });
       }
@@ -139,20 +160,23 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
           description: c.subject,
           resolve: async () => {
             const xml = await getFileAtRef(repoRoot, relPath, c.refHash);
-            return xml ? { xml, label: `${c.shortHash} ${c.subject}`, order: 1 } : undefined;
+            return xml ? { kind: 'ok', value: { xml, label: `${c.shortHash} ${c.subject}`, order: 1, hash: c.refHash } } : failedRead(relPath, c.refHash);
           },
         });
       }
 
       choices.push({
         label: '$(git-commit) Pick a specific commit…',
+        opensPicker: true,
         resolve: async () => {
           const picked = await pickCommit(commits);
-          if (!picked) return undefined;
+          // Backing out (or an empty history, which pickCommit already
+          // reported) is not a read failure.
+          if (!picked) return { kind: 'cancelled' };
           const xml = await getFileAtRef(repoRoot, relPath, picked.hash);
-          if (!xml) return undefined;
+          if (!xml) return failedRead(relPath, picked.hash);
           const order = commits.findIndex((c) => c.hash === picked.hash);
-          return { xml, label: `${picked.shortHash} ${picked.subject}`, order: order >= 0 ? order : commits.length };
+          return { kind: 'ok', value: { xml, label: `${picked.shortHash} ${picked.subject}`, order: order >= 0 ? order : commits.length, hash: picked.hash } };
         },
       });
 
@@ -162,22 +186,33 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
       });
       if (!leftChoice) return;
 
-      const leftResult = await leftChoice.resolve();
-      if (!leftResult) {
-        vscode.window.showErrorMessage(vscode.l10n.t('Could not read the selected version.'));
+      const leftOutcome = await leftChoice.resolve();
+      if (leftOutcome.kind !== 'ok') {
+        if (shouldReportFailure(leftOutcome)) {
+          vscode.window.showErrorMessage(vscode.l10n.t('Could not read the selected version.'));
+        }
         return;
       }
+      const leftResult = leftOutcome.value;
 
-      const rightChoices = choices.filter((c) => c !== leftChoice);
+      const rightChoices = secondPickChoices(choices, leftChoice, (c) => c.opensPicker === true);
       const rightChoice = await vscode.window.showQuickPick(rightChoices, {
         placeHolder: vscode.l10n.t('Select the version to compare against'),
         title: vscode.l10n.t('Compare with Git Version'),
       });
       if (!rightChoice) return;
 
-      const rightResult = await rightChoice.resolve();
-      if (!rightResult) {
-        vscode.window.showErrorMessage(vscode.l10n.t('Could not read the selected version.'));
+      const rightOutcome = await rightChoice.resolve();
+      if (rightOutcome.kind !== 'ok') {
+        if (shouldReportFailure(rightOutcome)) {
+          vscode.window.showErrorMessage(vscode.l10n.t('Could not read the selected version.'));
+        }
+        return;
+      }
+      const rightResult = rightOutcome.value;
+
+      if (sameVersion(leftResult.hash, rightResult.hash)) {
+        vscode.window.showInformationMessage(vscode.l10n.t('Both sides are the same version, so there is nothing to compare.'));
         return;
       }
 
@@ -189,7 +224,7 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
       const panel = getOrCreateDiffPanel(context, uri, finalLeft.label, finalRight.label);
 
       await vscode.window.withProgress(
-        { location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('Computing differences…') },
+        { location: vscode.ProgressLocation.Window, title: vscode.l10n.t('Computing differences…') },
         async () => {
           try {
             const result = computeDiff(finalLeft.xml, finalRight.xml, docDir, uri, panel.webview);
@@ -200,6 +235,8 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
               leftLabel: finalLeft.label,
               rightLabel: finalRight.label,
               docUri: uri,
+              swapped: false,
+              ui: carryViewState(DIFF_STATE.get(panel)?.ui, 'recompare'),
             });
           } catch (err) {
             // Defense-in-depth, not a substitute for fixing known failure
@@ -209,7 +246,7 @@ export function registerCompareCommand(context: vscode.ExtensionContext): void {
             // surfaces as a readable message instead of VS Code's generic
             // "command failed" notification with no indication of why.
             const message = err instanceof Error ? err.message : String(err);
-            console.error('Compare with Git Version failed:', err);
+            logDiffError('Compare with Git Version failed', err);
             vscode.window.showErrorMessage(
               vscode.l10n.t('Could not compute the difference: {0}', message),
             );
@@ -235,6 +272,36 @@ async function pickCommit(commits: GitCommitInfo[]): Promise<GitCommitInfo | und
     })),
     { placeHolder: vscode.l10n.t('Select a commit') },
   ).then((picked) => picked?.commit);
+}
+
+// A version that git could not hand back. The user sees one generic message;
+// the file and ref that went wrong are what a bug report needs.
+function failedRead(relPath: string, ref: string): { kind: 'failed' } {
+  logDiffError('Could not read version', new Error(`${ref}:${relPath}`));
+  return { kind: 'failed' };
+}
+
+// The document to compare. From a source editor or a reading view that is the
+// active document; from the rendered diff panel it is the one behind that
+// panel; from the native source diff the active editor is a virtual
+// `dita-diff:` file, which has no repository of its own, so go through the
+// `doc=` it carries to the real file.
+function compareTargetUri(): vscode.Uri | undefined {
+  const active = getActiveDitaUri();
+  if (active && active.scheme === DITA_DIFF_SCHEME) {
+    const key = docUriStringFromDiffUri(active);
+    return key ? vscode.Uri.parse(key) : activeDiffDocUri();
+  }
+  return active ?? activeDiffDocUri();
+}
+
+// The document behind the diff panel that currently has focus, if any. The panel
+// map is keyed by the document URI string.
+function activeDiffDocUri(): vscode.Uri | undefined {
+  for (const [key, panel] of DIFF_PANELS) {
+    if (panel.active) return vscode.Uri.parse(key);
+  }
+  return undefined;
 }
 
 function computeDiff(
@@ -314,7 +381,7 @@ function getOrCreateDiffPanel(
   const fileName = basename(uri.fsPath);
   const panel = vscode.window.createWebviewPanel(
     'ditaViewer.diff',
-    `$(diff) ${fileName} — ${leftLabel} ↔ ${rightLabel}`,
+    diffPanelTitle(fileName, leftLabel, rightLabel),
     vscode.ViewColumn.Beside,
     {
       enableScripts: true,
@@ -342,21 +409,22 @@ function getOrCreateDiffPanel(
       // turn around, so the native source diff (openSourceDiff below) always
       // reflects whatever the rendered view is currently showing.
       //
-      // The stats chip has to be RECOUNTED, not reused. swapAlignedRows flips
-      // every row's changeType (added <-> removed), so carrying the old numbers
-      // over left the chip contradicting the view it sits on top of: an
-      // insertion-only diff showed "+1 −0" while the only changed block was on
-      // the left (a deletion) after the swap.
-      const rows = swapAlignedRows(state.result.rows);
+      // swapDiffResult also recounts the chip's numbers (see there); they are
+      // rendered as they are, not flipped again.
       const swapped: DiffPanelState = {
-        result: { ...state.result, rows, stats: computeRowStats(rows) },
+        result: swapDiffResult(state.result),
         leftXml: state.rightXml,
         rightXml: state.leftXml,
         leftLabel: state.rightLabel,
         rightLabel: state.leftLabel,
         docUri: state.docUri,
+        swapped: !state.swapped,
+        ui: carryViewState(state.ui, 'swap'),
       };
       renderDiffPanel(context, panel, swapped);
+    } else if (msg.type === 'viewState') {
+      // Remembered, not rendered: the page already shows it.
+      state.ui = { inline: msg.inline !== false, profiling: msg.profiling !== false, idx: Number.isInteger(msg.idx) ? msg.idx : -1 };
     } else if (msg.type === 'openSourceDiff') {
       void openSourceDiff(context, state);
     }
@@ -459,7 +527,11 @@ function renderDiffPanel(
   state: DiffPanelState,
 ): void {
   DIFF_STATE.set(panel, state);
-  panel.webview.html = buildDiffHtml(context, panel.webview, state.result, state.leftLabel, state.rightLabel);
+  // Every path that shows a comparison ends here: first open, re-compare on a
+  // reused panel, and swap. Retitling anywhere else left the tab on the
+  // previous comparison.
+  panel.title = diffPanelTitle(basename(state.docUri.fsPath), state.leftLabel, state.rightLabel);
+  panel.webview.html = buildDiffHtml(context, panel.webview, state.result, state.leftLabel, state.rightLabel, state.swapped, state.ui);
   recordDiffHtml(panel, panel.webview.html);
 }
 
@@ -469,6 +541,8 @@ function buildDiffHtml(
   result: TopicDiffResult,
   leftLabel: string,
   rightLabel: string,
+  swapped: boolean,
+  ui: DiffViewState = initialViewState(),
 ): string {
   const stylesUri = webview.asWebviewUri(
     vscode.Uri.file(join(context.extensionPath, 'media', 'styles.css')),
@@ -519,6 +593,9 @@ function buildDiffHtml(
     toggleInline: vscode.l10n.t('Show word-level changes'),
     navCounter: vscode.l10n.t('Jump to change (type a number and press Enter)'),
     sourceToggle: vscode.l10n.t('Open source diff'),
+    flagsLabel: L.profilingLabel,
+    flagsOnTitle: L.profilingOnTitle,
+    flagsOffTitle: L.profilingOffTitle,
   };
 
   return `<!DOCTYPE html>
@@ -531,7 +608,7 @@ function buildDiffHtml(
 <link rel="stylesheet" href="${diffStylesUri}">
 <title>Diff — ${escapeHtml(leftLabel)} ↔ ${escapeHtml(rightLabel)}</title>
 </head>
-<body class="show-inline">
+<body class="${[ui.inline ? 'show-inline' : '', ui.profiling ? '' : 'hide-profiling', swapped ? 'roles-swapped' : ''].filter(Boolean).join(' ')}"${ui.idx >= 0 ? ` data-initial-idx="${ui.idx}"` : ''}>
 <div id="diff-toolbar">
   <span class="diff-label" id="lbl-left">${escapeHtml(leftLabel)}</span>
   <span class="diff-stats">${statsHtml}</span>
@@ -541,7 +618,8 @@ function buildDiffHtml(
   <button id="btn-prev" title="${escapeHtml(labels.prevChange)}" aria-label="${escapeHtml(labels.prevChange)}">↑</button>
   <button id="btn-next" title="${escapeHtml(labels.nextChange)}" aria-label="${escapeHtml(labels.nextChange)}">↓</button>
   <button id="btn-swap" title="${escapeHtml(labels.swapTitle)}" aria-label="${escapeHtml(labels.swapTitle)}">⇄</button>
-  <button id="btn-inline" title="${escapeHtml(labels.toggleInline)}" aria-label="${escapeHtml(labels.toggleInline)}" aria-pressed="true">Aa</button>
+  <button id="btn-inline" title="${escapeHtml(labels.toggleInline)}" aria-label="${escapeHtml(labels.toggleInline)}" aria-pressed="${ui.inline}">Aa</button>
+  <button id="btn-profiling" title="${escapeHtml(ui.profiling ? labels.flagsOnTitle : labels.flagsOffTitle)}" aria-label="${escapeHtml(ui.profiling ? labels.flagsOnTitle : labels.flagsOffTitle)}" data-title-on="${escapeHtml(labels.flagsOnTitle)}" data-title-off="${escapeHtml(labels.flagsOffTitle)}" aria-pressed="${ui.profiling}">${escapeHtml(labels.flagsLabel)}</button>
   <button id="btn-source" title="${escapeHtml(labels.sourceToggle)}" aria-label="${escapeHtml(labels.sourceToggle)}">&lt;/&gt;</button>
 </div>
 <div id="diff-scroll">
@@ -559,10 +637,3 @@ ${result.errorRight ? `<div class="diff-error">${escapeHtml(result.errorRight)}<
 </html>`;
 }
 
-function renderStats(stats: { added: number; removed: number; modified: number }): string {
-  const parts: string[] = [];
-  if (stats.added > 0) parts.push(`<span class="stat-add">+${stats.added}</span>`);
-  if (stats.removed > 0) parts.push(`<span class="stat-del">−${stats.removed}</span>`);
-  if (stats.modified > 0) parts.push(`<span class="stat-mod">~${stats.modified}</span>`);
-  return parts.join(' ') || '0';
-}

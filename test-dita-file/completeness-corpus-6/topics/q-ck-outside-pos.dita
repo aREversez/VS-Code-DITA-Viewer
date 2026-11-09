@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="q-ck-outside-pos">
+  <title>q-ck-outside-pos</title>
+  <body>
+    <!-- k-ck is defined only inside keyscope s1; this topic is published outside it. -->
+    <p conkeyref="k-ck/p1"/>
+  </body>
+</topic>

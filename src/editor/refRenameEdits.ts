@@ -9,6 +9,7 @@ import * as pathWin32 from 'path/win32';
 import * as pathPosix from 'path/posix';
 import { collectRefEntries, isExternalRef, decodeHrefPart } from '@dita-viewer/core';
 import { normalizePathForCompare } from './mapReferenceTools';
+import { FILE_REF_ATTRS } from './brokenRefs';
 
 export interface RenameEntry {
   oldPath: string; // absolute, normalized
@@ -76,7 +77,27 @@ export function mayReferenceRenamed(
   return false;
 }
 
-const HANDLED_ATTRS = new Set(['href', 'conref']);
+/**
+ * Attributes whose value is a path to another file. `conrefend` ends a
+ * conref range in the file `conref` starts in, `data` and `longdescref` point
+ * at files from `object` / `image`, and `copy-to` names a path relative to
+ * the map that holds it (so it only changes when that map moves). The first
+ * five are the ones that name a file that must already exist -- the set
+ * "Fix Broken References…" scans for -- and `copy-to` is the exception that
+ * only a rename has to follow.
+ */
+const HANDLED_ATTRS: ReadonlySet<string> = new Set([...FILE_REF_ATTRS, 'copy-to']);
+
+/**
+ * Percent-escapes the characters that would change what a written-out path
+ * means -- `#` and `?` start a fragment or query, `%` starts an escape, a
+ * space is not a URI character, and `& " ' < >` break the attribute that
+ * holds it. Everything else (non-ASCII included) is left as it was typed, so
+ * a reference the author wrote unencoded stays unencoded.
+ */
+export function escapeHrefSpecials(part: string): string {
+  return part.replace(/[ %#?&"'<>]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0'));
+}
 
 export function computeRefEdits(opts: {
   renames: RenameEntry[];
@@ -119,11 +140,11 @@ export function computeRefEdits(opts: {
       }
     }
 
-    const refs = collectRefEntries(file.text);
+    const refs = collectRefEntries(file.text, HANDLED_ATTRS);
     const edits: Array<{ start: number; end: number; newText: string }> = [];
 
     for (const ref of refs) {
-      // Only process href and conref — skip keyref, conkeyref, etc.
+      // Only path-valued attributes (HANDLED_ATTRS) — skip keyref, conkeyref, etc.
       if (!HANDLED_ATTRS.has(ref.attr)) continue;
 
       // Skip external refs
@@ -194,6 +215,10 @@ export function computeRefEdits(opts: {
       if (hadEncoding) {
         // Encode each path segment separately to preserve /
         newRelPath = encodeHrefPart(newRelPath);
+      } else {
+        // A new name may carry a character that is not safe to write raw
+        // (`b#1.dita` would read back as file `b` + fragment `1.dita`).
+        newRelPath = escapeHrefSpecials(newRelPath);
       }
 
       // Re-append fragment

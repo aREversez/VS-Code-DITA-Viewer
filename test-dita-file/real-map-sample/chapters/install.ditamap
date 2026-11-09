@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<map id="aurora-install" xml:lang="en-US">
+  <title>Installing at the site</title>
+  <topicref href="../topics/mount.dita"/>
+  <topicref href="../topics/power.dita"/>
+  <topicref href="../topics/link.dita"/>
+</map>

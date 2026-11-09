@@ -280,6 +280,143 @@ describe('completeness: multiple references', () => {
     );
     assert.strictEqual(issues.filter((i) => i.category === 'multiple-reference').length, 1);
   });
+  // Corpus 6's six probes (its README, "The duplicate probes"): Oxygen files
+  // dmv.dup.topic by (target, scope chain), so a container changes nothing and a
+  // different key scope is what separates two publications of one topic (R008).
+  it('counts a duplicate across two topicgroups, so a container is not the boundary', async () => {
+    const issues = await check(
+      {
+        'root.ditamap':
+          '<map><topicgroup><topicref href="t.dita"/></topicgroup><topicgroup><topicref href="t.dita"/></topicgroup></map>',
+        't.dita': topic('t'),
+      },
+      { reportMultipleRefs: true },
+    );
+    assert.strictEqual(issues.filter((i) => i.category === 'multiple-reference').length, 1);
+  });
+  it('counts a duplicate inside one keyscope, so a scope is not the boundary either', async () => {
+    const issues = await check(
+      {
+        'root.ditamap':
+          '<map><topicgroup keyscope="s1"><topicref href="t.dita"/><topicref href="t.dita"/></topicgroup></map>',
+        't.dita': topic('t'),
+      },
+      { reportMultipleRefs: true },
+    );
+    assert.strictEqual(issues.filter((i) => i.category === 'multiple-reference').length, 1);
+  });
+  it('does not flag one topic published in each of two key scopes', async () => {
+    const issues = await check(
+      {
+        'root.ditamap':
+          '<map><topicgroup keyscope="s1"><topicref href="t.dita"/></topicgroup><topicgroup keyscope="s2"><topicref href="t.dita"/></topicgroup></map>',
+        't.dita': topic('t'),
+      },
+      { reportMultipleRefs: true },
+    );
+    assert.strictEqual(issues.filter((i) => i.category === 'multiple-reference').length, 0);
+  });
+  it('does not flag two references whose own @keyscope differ', async () => {
+    const issues = await check(
+      {
+        'root.ditamap': '<map><topicref href="t.dita" keyscope="s1"/><topicref href="t.dita" keyscope="s2"/></map>',
+        't.dita': topic('t'),
+      },
+      { reportMultipleRefs: true },
+    );
+    assert.strictEqual(issues.filter((i) => i.category === 'multiple-reference').length, 0);
+  });
+  // The shapes below were extrapolated from the six probes until corpus 6's p-dup-g..j
+  // were run. Oxygen is silent on all four, so g, h and i confirm the rule as written and
+  // j showed that the order of the names counts (R008).
+  it('does not flag one topic at the root scope and once inside a keyscope', async () => {
+    const issues = await check(
+      {
+        'root.ditamap': '<map><topicref href="t.dita"/><topicgroup keyscope="s1"><topicref href="t.dita"/></topicgroup></map>',
+        't.dita': topic('t'),
+      },
+      { reportMultipleRefs: true },
+    );
+    assert.strictEqual(issues.filter((i) => i.category === 'multiple-reference').length, 0);
+  });
+  it('does not flag one topic in a scope and again in a scope nested inside it', async () => {
+    const issues = await check(
+      {
+        'root.ditamap':
+          '<map><topicgroup keyscope="s1"><topicref href="t.dita"/><topicgroup keyscope="s2"><topicref href="t.dita"/></topicgroup></topicgroup></map>',
+        't.dita': topic('t'),
+      },
+      { reportMultipleRefs: true },
+    );
+    assert.strictEqual(issues.filter((i) => i.category === 'multiple-reference').length, 0);
+  });
+  it('treats "a b" against "a" and "a b" against "b a" as different scopes', async () => {
+    const run = (second: string) =>
+      check(
+        {
+          'root.ditamap': `<map><topicgroup keyscope="a b"><topicref href="t.dita"/></topicgroup><topicgroup keyscope="${second}"><topicref href="t.dita"/></topicgroup></map>`,
+          't.dita': topic('t'),
+        },
+        { reportMultipleRefs: true },
+      );
+    assert.strictEqual((await run('a')).filter((i) => i.category === 'multiple-reference').length, 0);
+    assert.strictEqual((await run('b a')).filter((i) => i.category === 'multiple-reference').length, 0);
+  });
+  // The fourth report answers the question this shape was written for: two separate
+  // keyscope="a b" declarations list the same names in the same order, and Oxygen files
+  // the pair (p-dup-l), so the names are the identity, not the declaring element.
+  it('counts two keyscope groups that list the same names in the same order', async () => {
+    const issues = await check(
+      {
+        'root.ditamap':
+          '<map><topicgroup keyscope="a b"><topicref href="t.dita"/></topicgroup><topicgroup keyscope="a b"><topicref href="t.dita"/></topicgroup></map>',
+        't.dita': topic('t'),
+      },
+      { reportMultipleRefs: true },
+    );
+    assert.strictEqual(issues.filter((i) => i.category === 'multiple-reference').length, 1);
+  });
+  // Both were asked in the fourth report: p-dup-m is silent, so the identity is the whole
+  // chain rather than its innermost name, and p-dup-n is filed, so the names are parsed on
+  // whitespace rather than compared as attribute text.
+  it('treats the same innermost scope under two different outer scopes as different scopes', async () => {
+    const issues = await check(
+      {
+        'root.ditamap':
+          '<map><topicgroup keyscope="s1"><topicgroup keyscope="x"><topicref href="t.dita"/></topicgroup></topicgroup><topicgroup keyscope="s2"><topicgroup keyscope="x"><topicref href="t.dita"/></topicgroup></topicgroup></map>',
+        't.dita': topic('t'),
+      },
+      { reportMultipleRefs: true },
+    );
+    assert.strictEqual(issues.filter((i) => i.category === 'multiple-reference').length, 0);
+  });
+  it('splits keyscope names on any whitespace, so "a b" and "a  b" are one scope', async () => {
+    const issues = await check(
+      {
+        'root.ditamap':
+          '<map><topicgroup keyscope="a b"><topicref href="t.dita"/></topicgroup><topicgroup keyscope="a  b"><topicref href="t.dita"/></topicgroup></map>',
+        't.dita': topic('t'),
+      },
+      { reportMultipleRefs: true },
+    );
+    assert.strictEqual(issues.filter((i) => i.category === 'multiple-reference').length, 1);
+  });
+  it('counts a topicref @keyref in the scope of the element that carries it', async () => {
+    const run = (second: string) =>
+      check(
+        {
+          'root.ditamap': `<map><keydef keys="k" href="t.dita"/>${second}<topicref keyref="k"/></map>`,
+          't.dita': topic('t'),
+        },
+        { reportMultipleRefs: true },
+      );
+    // The keydef's own href is not a plain topicref; the two keyref uses are what repeat.
+    assert.strictEqual((await run('<topicref keyref="k"/>')).filter((i) => i.category === 'multiple-reference').length, 1);
+    assert.strictEqual(
+      (await run('<topicgroup keyscope="s1"><topicref keyref="k"/></topicgroup>')).filter((i) => i.category === 'multiple-reference').length,
+      0,
+    );
+  });
 });
 
 describe('completeness: ids and keys', () => {
@@ -307,15 +444,22 @@ describe('completeness: ids and keys', () => {
   it('duplicate keys: reports same-scope duplicates, not the same key in a key scope (Oxygen doc example)', async () => {
     const issues = await check(
       {
+        // One definition per line, as a real map writes them: findings on one line collapse.
         'root.ditamap':
-          '<map><topicref href="t2.dita" keys="k2"/><topicgroup keyscope="ks"><topicref href="t2.dita" keys="k2"/></topicgroup><topicref href="t2.dita" keys="dup"/><topicref href="t2.dita" keys="dup"/></map>',
+          '<map>\n<topicref href="t2.dita" keys="k2"/>\n<topicgroup keyscope="ks"><topicref href="t2.dita" keys="k2"/></topicgroup>\n<topicref href="t2.dita" keys="dup"/>\n<topicref href="t2.dita" keys="dup"/>\n</map>',
         't2.dita': topic('t2'),
       },
       { reportDuplicateKeys: true },
     );
     const dup = issues.filter((i) => i.category === 'duplicate-key');
-    assert.strictEqual(dup.length, 1);
-    assert.ok(dup[0].message.includes('"dup"'));
+    assert.strictEqual(dup.length, 2);
+    assert.ok(dup.every((i) => i.message.includes('"dup"')));
+    // Every participant is filed, each pointing at the other one.
+    assert.deepStrictEqual(dup.map((i) => i.line), [4, 5]);
+    const lines = dup.map((i) => i.line);
+    for (const i of dup) {
+      assert.deepStrictEqual(i.related!.map((r) => r.line), lines.filter((l) => l !== i.line));
+    }
   });
 
   it('unreferenced keys: counts keyref in topics, conkeyref, and keyref in the map', async () => {
@@ -345,6 +489,46 @@ describe('completeness: ids and keys', () => {
       { reportUnreferencedKeys: true },
     );
     assert.strictEqual(issues.filter((i) => i.category === 'unreferenced-key').length, 0);
+  });
+
+  // Corpus 6's t-udup: one unused key defined in two maps of one scope. Oxygen files the
+  // name once, on the definition resolution reaches (the first), not on both.
+  it('unreferenced keys: files an unused name once, on the first definition', async () => {
+    const issues = await check(
+      {
+        'root.ditamap':
+          '<map>\n<keydef keys="twice" href="a.dita"/>\n<keydef keys="twice" href="b.dita"/>\n</map>',
+        'a.dita': topic('a'),
+        'b.dita': topic('b'),
+      },
+      { reportUnreferencedKeys: true },
+    );
+    const un = issues.filter((i) => i.category === 'unreferenced-key');
+    assert.deepStrictEqual(
+      un.map((i) => [i.file.endsWith('root.ditamap'), i.line]),
+      [[true, 2]],
+    );
+  });
+
+  it('unreferenced keys: the same name in two key scopes is two keys, both filed', async () => {
+    const issues = await check(
+      {
+        'root.ditamap':
+          '<map>\n<keydef keys="k" href="a.dita"/>\n<mapref href="sub.ditamap" keyscope="s1"/>\n</map>',
+        'sub.ditamap': '<map>\n<keydef keys="k" href="b.dita"/>\n</map>',
+        'a.dita': topic('a'),
+        'b.dita': topic('b'),
+      },
+      { reportUnreferencedKeys: true },
+    );
+    const un = issues.filter((i) => i.category === 'unreferenced-key');
+    assert.deepStrictEqual(
+      un.map((i) => [i.file.endsWith('root.ditamap') ? 'root' : 'sub', i.line]).sort(),
+      [
+        ['root', 2],
+        ['sub', 2],
+      ],
+    );
   });
 });
 
@@ -720,16 +904,25 @@ describe('completeness: reference spelling and @format (Oxygen batch 1)', () => 
     ]);
   });
 
-  it('reports @id values that are not XML NCNames, only under batch validation', async () => {
+  // Corpus 6's u-id asked Oxygen which grammar it applies to an @id: the element's declared
+  // type, not one grammar for every value. A topic or map element's @id is an XML ID, every
+  // other element's a name token, and XML 1.0 §3.3.3 normalizes the value first (README, "Id
+  // syntax by element kind").
+  it('judges an @id by the type its element declares, only under batch validation', async () => {
     const files = {
-      'root.ditamap': '<map><topicref href="a.dita"/></map>',
-      'a.dita': '<topic id="a"><title>T</title><body><p id="1a"/><p id="a:b"/><p id="ok-id"/></body></topic>',
+      'root.ditamap': '<map id="9map"><topicref id="9tr" href="a.dita"/></map>',
+      'a.dita':
+        '<topic id="a "><title>T</title><body>' +
+        '<p id="1a"/><p id="a:b"/><p id="a b"/><p id="a+b"/><p id="a "/><p id="ok-id"/>' +
+        '</body><topic id="9n"><title>nested</title><body><p>Text.</p></body></topic></topic>',
     };
     const on = await check(files, { batchValidate: true });
     const off = await check(files, { checkNonDita: true });
     assert.deepStrictEqual(on.filter((i) => i.category === 'invalid-id-syntax').map((i) => i.message), [
-      'ID "1a" is not a valid DITA ID (XML NCName)',
-      'ID "a:b" is not a valid DITA ID (XML NCName)',
+      'ID "9map" is not a valid DITA ID (XML NCName)',
+      'ID "a b" is not a valid DITA ID (XML name token)',
+      'ID "a+b" is not a valid DITA ID (XML name token)',
+      'ID "9n" is not a valid DITA ID (XML NCName)',
     ]);
     assert.strictEqual(off.filter((i) => i.category === 'invalid-id-syntax').length, 0);
   });
@@ -770,7 +963,7 @@ describe('completeness: reference spelling and @format (Oxygen batch 1)', () => 
     ]);
   });
 
-  it('reports a URL without scope="external", and an external reference without @format', async () => {
+  it('reports a URL without scope="external", in a map or in a topic, and an external reference without @format', async () => {
     const issues = await check(
       {
         'root.ditamap':
@@ -779,14 +972,24 @@ describe('completeness: reference spelling and @format (Oxygen batch 1)', () => 
           '<topicref href="http://example.invalid/b.html" scope="local"/>' +
           '<topicref href="http://example.invalid/c.html" scope="external" format="html"/>' +
           '<topicref href="http://example.invalid/d.html" scope="external"/>' +
+          '<topicref href="t.dita"/>' +
           '</map>',
+        't.dita':
+          '<topic id="t"><title>T</title><body>' +
+          '<p><xref href="http://example.invalid/pm.html"/></p>' +
+          '<p><xref href="http://example.invalid/ok.html" scope="external" format="html"/></p>' +
+          '</body></topic>',
       },
       { checkNonDita: true },
     );
     const ext = issues.filter((i) => i.category === 'external-reference');
     const missing = issues.filter((i) => i.category === 'format-missing');
-    assert.strictEqual(ext.length, 2, JSON.stringify(issues, null, 2));
+    assert.strictEqual(ext.length, 3, JSON.stringify(issues, null, 2));
     assert.ok(ext.every((i) => i.severity === 'warning'));
+    assert.ok(
+      ext.some((i) => i.file.endsWith('t.dita')),
+      'a topic xref is checked as well as a map topicref',
+    );
     assert.deepStrictEqual(missing.map((i) => i.message), [
       'External reference has no @format: http://example.invalid/d.html',
     ]);
@@ -958,19 +1161,31 @@ describe('completeness: links', () => {
         'root.ditamap':
           '<map><topicref href="lib.dita" processing-role="resource-only"/>' +
           '<topicref href="pub.dita"/><topicref href="shared.dita" processing-role="resource-only" copy-to="shared-copy.dita"/>' +
-          '<topicref href="shared.dita"/><topicref href="a.dita"/><topicref href="b.dita"/><topicref href="c.dita"/></map>',
+          '<topicref href="shared.dita"/><topicref href="a.dita"/><topicref href="b.dita"/><topicref href="c.dita"/>' +
+          '<keydef keys="kk" href="keyed.dita"/><keydef keys="kn" href="keynormal.dita" processing-role="normal"/>' +
+          '<topicref href="d.dita"/><topicref href="e.dita"/></map>',
         'a.dita': topic('a', '<p><xref href="lib.dita">broken</xref></p>'),
         'b.dita': topic('b', '<p><xref href="pub.dita">ok</xref></p>'),
         'c.dita': topic('c', '<related-links><link href="shared.dita"/></related-links>'),
+        'd.dita': topic('d', '<p><xref href="keyed.dita">broken</xref></p>'),
+        'e.dita': topic('e', '<p><xref href="keynormal.dita">ok</xref></p>'),
         'lib.dita': topic('lib'),
         'pub.dita': topic('pub'),
         'shared.dita': topic('shared'),
+        'keyed.dita': topic('keyed'),
+        'keynormal.dita': topic('keynormal'),
       },
       { checkNonDita: true },
     );
+    // A keydef publishes resource-only by DITA default (corpus 6: Oxygen files the
+    // same warning for it), and only an explicit @processing-role="normal" publishes.
     const found = issues.filter((i) => i.category === 'resource-only-target');
-    assert.strictEqual(found.length, 1, JSON.stringify(issues, null, 2));
-    assert.ok(found[0].file.endsWith('a.dita'), found[0].file);
+    assert.strictEqual(found.length, 2, JSON.stringify(issues, null, 2));
+    assert.deepStrictEqual(
+      found.map((i) => i.file.replace(/\\/g, '/').split('/').pop()).sort(),
+      ['a.dita', 'd.dita'],
+      JSON.stringify(found, null, 2),
+    );
   });
 });
 

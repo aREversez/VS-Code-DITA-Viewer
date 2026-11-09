@@ -1,0 +1,289 @@
+[
+  {
+    "category": "missing-reference",
+    "severity": "error",
+    "file": "corpus.ditamap",
+    "line": 11,
+    "message": "Referenced topic not found: topics/control-missing.dita"
+  },
+  {
+    "category": "multiple-reference",
+    "severity": "warning",
+    "file": "maps/p-dup-a-root.ditamap",
+    "line": 9,
+    "message": "Topic referenced more than once (2 times): ../topics/p-dup-a-root.dita"
+  },
+  {
+    "category": "multiple-reference",
+    "severity": "warning",
+    "file": "maps/p-dup-b-group.ditamap",
+    "line": 10,
+    "message": "Topic referenced more than once (2 times): ../topics/p-dup-b-group.dita"
+  },
+  {
+    "category": "multiple-reference",
+    "severity": "warning",
+    "file": "maps/p-dup-c-two-groups.ditamap",
+    "line": 12,
+    "message": "Topic referenced more than once (2 times): ../topics/p-dup-c-two-groups.dita"
+  },
+  {
+    "category": "multiple-reference",
+    "severity": "warning",
+    "file": "maps/p-dup-d-same-scope.ditamap",
+    "line": 10,
+    "message": "Topic referenced more than once (2 times): ../topics/p-dup-d-same-scope.dita"
+  },
+  {
+    "category": "multiple-reference",
+    "severity": "warning",
+    "file": "maps/p-dup-k-control.ditamap",
+    "line": 12,
+    "message": "Topic referenced more than once (2 times): ../topics/p-dup-k-control.dita"
+  },
+  {
+    "category": "multiple-reference",
+    "severity": "warning",
+    "file": "maps/p-dup-l-two-groups.ditamap",
+    "line": 14,
+    "message": "Topic referenced more than once (2 times): ../topics/p-dup-l-two-groups.dita"
+  },
+  {
+    "category": "multiple-reference",
+    "severity": "warning",
+    "file": "maps/p-dup-n-name-spacing.ditamap",
+    "line": 14,
+    "message": "Topic referenced more than once (2 times): ../topics/p-dup-n-name-spacing.dita"
+  },
+  {
+    "category": "unreferenced-key",
+    "severity": "warning",
+    "file": "maps/q-unused-pos.ditamap",
+    "line": 9,
+    "message": "Key \"k-u-pos\" is defined but never referenced"
+  },
+  {
+    "category": "duplicate-key",
+    "severity": "warning",
+    "file": "maps/r-dk2-keys.ditamap",
+    "line": 6,
+    "message": "Duplicate key definition \"k-dk2\" (2 definitions in this key scope)"
+  },
+  {
+    "category": "duplicate-key",
+    "severity": "warning",
+    "file": "maps/r-dk2.ditamap",
+    "line": 7,
+    "message": "Duplicate key definition \"k-dk2\" (2 definitions in this key scope)"
+  },
+  {
+    "category": "duplicate-key",
+    "severity": "warning",
+    "file": "maps/r-dk3-a.ditamap",
+    "line": 6,
+    "message": "Duplicate key definition \"k-dk3\" (3 definitions in this key scope)"
+  },
+  {
+    "category": "duplicate-key",
+    "severity": "warning",
+    "file": "maps/r-dk3-b.ditamap",
+    "line": 6,
+    "message": "Duplicate key definition \"k-dk3\" (3 definitions in this key scope)"
+  },
+  {
+    "category": "duplicate-key",
+    "severity": "warning",
+    "file": "maps/r-dk3.ditamap",
+    "line": 8,
+    "message": "Duplicate key definition \"k-dk3\" (3 definitions in this key scope)"
+  },
+  {
+    "category": "duplicate-key",
+    "severity": "warning",
+    "file": "maps/t-udup-a.ditamap",
+    "line": 6,
+    "message": "Duplicate key definition \"k-tud\" (2 definitions in this key scope)"
+  },
+  {
+    "category": "unreferenced-key",
+    "severity": "warning",
+    "file": "maps/t-udup-a.ditamap",
+    "line": 6,
+    "message": "Key \"k-tud\" is defined but never referenced"
+  },
+  {
+    "category": "duplicate-key",
+    "severity": "warning",
+    "file": "maps/t-udup-b.ditamap",
+    "line": 6,
+    "message": "Duplicate key definition \"k-tud\" (2 definitions in this key scope)"
+  },
+  {
+    "category": "unreferenced-key",
+    "severity": "warning",
+    "file": "maps/t-unref-sub-keys.ditamap",
+    "line": 6,
+    "message": "Key \"k-t2\" is defined but never referenced"
+  },
+  {
+    "category": "unreferenced-key",
+    "severity": "warning",
+    "file": "maps/t-unref-sub.ditamap",
+    "line": 6,
+    "message": "Key \"k-t1\" is defined but never referenced"
+  },
+  {
+    "category": "unreferenced-key",
+    "severity": "warning",
+    "file": "maps/t-unref.ditamap",
+    "line": 6,
+    "message": "Key \"k-t0\" is defined but never referenced"
+  },
+  {
+    "category": "resource-only-target",
+    "severity": "warning",
+    "file": "topics/o-scope-inside-neg.dita",
+    "line": 7,
+    "message": "Topic \"topics/t-target.dita\" is published only as resource-only; the cross-reference will break"
+  },
+  {
+    "category": "undefined-key",
+    "severity": "error",
+    "file": "topics/o-scope-outside-pos.dita",
+    "line": 7,
+    "message": "Key reference \"k-scoped\" does not match any key definition"
+  },
+  {
+    "category": "resource-only-target",
+    "severity": "warning",
+    "file": "topics/o-scope-qualified-neg.dita",
+    "line": 7,
+    "message": "Topic \"topics/t-target.dita\" is published only as resource-only; the cross-reference will break"
+  },
+  {
+    "category": "resource-only-target",
+    "severity": "warning",
+    "file": "topics/o-scope-shared-edge.dita",
+    "line": 7,
+    "message": "Topic \"topics/t-target.dita\" is published only as resource-only; the cross-reference will break"
+  },
+  {
+    "category": "undefined-key",
+    "severity": "error",
+    "file": "topics/o-scope-shared-edge.dita",
+    "line": 7,
+    "message": "Key reference \"k-scoped\" does not match any key definition"
+  },
+  {
+    "category": "undefined-key",
+    "severity": "error",
+    "file": "topics/q-ck-outside-pos.dita",
+    "line": 7,
+    "message": "Key reference \"k-ck/p1\" does not match any key definition"
+  },
+  {
+    "category": "undefined-key",
+    "severity": "error",
+    "file": "topics/q-mn-ab.dita",
+    "line": 7,
+    "message": "Key reference \"ab.k-mn\" does not match any key definition"
+  },
+  {
+    "category": "undefined-key",
+    "severity": "error",
+    "file": "topics/q-mn-bare.dita",
+    "line": 7,
+    "message": "Key reference \"k-mn\" does not match any key definition"
+  },
+  {
+    "category": "undefined-key",
+    "severity": "error",
+    "file": "topics/q-unused-pos.dita",
+    "line": 7,
+    "message": "Key reference \"k-u-pos\" does not match any key definition"
+  },
+  {
+    "category": "resource-only-target",
+    "severity": "warning",
+    "file": "topics/r-dk2-use.dita",
+    "line": 6,
+    "message": "Topic \"../topics/r-dk2-t1.dita\" is published only as resource-only; the cross-reference will break"
+  },
+  {
+    "category": "resource-only-target",
+    "severity": "warning",
+    "file": "topics/r-dk3-use.dita",
+    "line": 6,
+    "message": "Topic \"../topics/r-dk3-t1.dita\" is published only as resource-only; the cross-reference will break"
+  },
+  {
+    "category": "resource-only-target",
+    "severity": "warning",
+    "file": "topics/r-dkc-use.dita",
+    "line": 6,
+    "message": "Topic \"../topics/r-dkc-t1.dita\" is published only as resource-only; the cross-reference will break"
+  },
+  {
+    "category": "resource-only-target",
+    "severity": "warning",
+    "file": "topics/r-dkc-use.dita",
+    "line": 6,
+    "message": "Topic \"../topics/r-dkc-t2.dita\" is published only as resource-only; the cross-reference will break"
+  },
+  {
+    "category": "resource-only-target",
+    "severity": "warning",
+    "file": "topics/r-dkn-use.dita",
+    "line": 6,
+    "message": "Topic \"../topics/r-dkn-t1.dita\" is published only as resource-only; the cross-reference will break"
+  },
+  {
+    "category": "resource-only-target",
+    "severity": "warning",
+    "file": "topics/r-dkt-use.dita",
+    "line": 6,
+    "message": "Topic \"../topics/r-dkt-t1.dita\" is published only as resource-only; the cross-reference will break"
+  },
+  {
+    "category": "external-reference",
+    "severity": "warning",
+    "file": "topics/s-url-link-pos.dita",
+    "line": 10,
+    "message": "Reference to a URL must declare scope=\"external\": http://example.invalid/a.html"
+  },
+  {
+    "category": "external-reference",
+    "severity": "warning",
+    "file": "topics/s-url-xref-local.dita",
+    "line": 7,
+    "message": "Reference to a URL must declare scope=\"external\": http://example.invalid/a.html"
+  },
+  {
+    "category": "external-reference",
+    "severity": "warning",
+    "file": "topics/s-url-xref-pos.dita",
+    "line": 7,
+    "message": "Reference to a URL must declare scope=\"external\": http://example.invalid/a.html"
+  },
+  {
+    "category": "invalid-id-syntax",
+    "severity": "error",
+    "file": "topics/u-id-nested-digit.dita",
+    "line": 9,
+    "message": "ID \"9n\" is not a valid DITA ID (XML NCName)"
+  },
+  {
+    "category": "invalid-id-syntax",
+    "severity": "error",
+    "file": "topics/u-id-p-plus.dita",
+    "line": 7,
+    "message": "ID \"a+b\" is not a valid DITA ID (XML name token)"
+  },
+  {
+    "category": "invalid-id-syntax",
+    "severity": "error",
+    "file": "topics/u-id-p-space.dita",
+    "line": 7,
+    "message": "ID \"a b\" is not a valid DITA ID (XML name token)"
+  }
+]

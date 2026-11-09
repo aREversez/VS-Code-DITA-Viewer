@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="legal" xml:lang="en-US">
+  <title>Legal notice</title>
+  <body>
+    <p>Northwind Instruments ships the station under the WS-2 limited warranty.</p>
+    <section id="recycling">
+      <title>Recycling</title>
+      <p>Return the sensor head to the supplier at the end of its service life.</p>
+    </section>
+  </body>
+</topic>

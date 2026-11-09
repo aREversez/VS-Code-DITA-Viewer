@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- R008 probe: the topic once in each of TWO topicgroups, no keyscope: does a different parent stop duplicates counting?
+     One probe per map, because parity compares (file, category) and every probe files
+     its multiple-reference on its own map. See README.md, "The duplicate probes". -->
+<map id="p-dup-c-two-groups">
+  <title>p-dup-c-two-groups</title>
+  <topicgroup>
+    <topicref href="../topics/p-dup-c-two-groups.dita"/>
+  </topicgroup>
+  <topicgroup>
+    <topicref href="../topics/p-dup-c-two-groups.dita"/>
+  </topicgroup>
+</map>

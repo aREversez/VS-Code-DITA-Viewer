@@ -106,6 +106,9 @@ function extractBodyText(node: DitaNode): string {
   let out = '';
   let prev: DitaNode | undefined;
   for (const child of node.children || []) {
+    // A comment is not body text, and must not count as a block boundary:
+    // "点击<!-- x -->确定" is still the phrase "点击确定".
+    if (child.type === 'comment') continue;
     if (prev !== undefined && !(flowsInline(prev) && flowsInline(child))) out += ' ';
     out += extractBodyText(child);
     prev = child;

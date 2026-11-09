@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- A URL written in a topic, not in a map (R034). One topic per shape, so each finding lands on
+     its own file. See README.md, "A URL written in a topic". -->
+<map id="s-url">
+  <title>s-url</title>
+  <topicref href="../topics/s-url-xref-pos.dita"/>
+  <topicref href="../topics/s-url-xref-local.dita"/>
+  <topicref href="../topics/s-url-xref-neg.dita"/>
+  <topicref href="../topics/s-url-xref-peer.dita"/>
+  <topicref href="../topics/s-url-link-pos.dita"/>
+  <topicref href="../topics/s-url-link-neg.dita"/>
+</map>

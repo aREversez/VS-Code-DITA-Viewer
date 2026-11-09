@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<!-- R008 probe: the topic twice with the keyscope written on the topicrefs themselves (s1, s2), no container.
+     One probe per map, because parity compares (file, category) and every probe files
+     its multiple-reference on its own map. See README.md, "The duplicate probes". -->
+<map id="p-dup-f-topicref-scope">
+  <title>p-dup-f-topicref-scope</title>
+  <topicref href="../topics/p-dup-f-topicref-scope.dita" keyscope="s1"/>
+  <topicref href="../topics/p-dup-f-topicref-scope.dita" keyscope="s2"/>
+</map>

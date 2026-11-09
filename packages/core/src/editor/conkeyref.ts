@@ -24,7 +24,7 @@
 // switches conkeyref targets for free.
 
 import { DitaNode } from '../parser/domTypes';
-import { KeyHrefDef } from './keySpace';
+import { KeyDefLookup } from './keySpace';
 
 /**
  * Addressing inside the key's target topic: the whole topic when the value has
@@ -85,7 +85,7 @@ function findElementById(root: DitaNode, targetId: string): DitaNode | undefined
  */
 export function resolveConkeyref(
   conkeyref: string,
-  defs: ReadonlyMap<string, KeyHrefDef>,
+  defs: KeyDefLookup,
   loadTopic: (baseDir: string, href: string) => DitaNode | undefined,
 ): DitaNode | undefined {
   if (!conkeyref) return undefined;
