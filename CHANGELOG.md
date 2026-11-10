@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- **The preview follows a source link to a later section of the same document.** Clicking such a link moved the source editor to the target, but the preview stayed where it was until the next mouse-wheel scroll in the source. The click and the go-to-definition jump it triggers are two selection changes a few milliseconds apart, and the first one opened a 400 ms window that was meant to keep the editor's own auto-reveal from fighting the preview's centering — but the same window also swallowed the second selection, so the jump never reached the preview. The window now only silences the visible-range echo it was made for; a selection change is dropped only when it is the echo of the preview's own scroll. The timing rules moved out of the provider into a module the unit tests can run.
+
 ## 1.0.11 (2026-11-09)
 
 ### Features
