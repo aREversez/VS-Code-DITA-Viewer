@@ -13,7 +13,8 @@
     "src/editor/templateSnapshot.ts",
     "src/editor/siteTemplates.ts",
     "src/editor/templateChrome.ts",
-    "src/editor/templateStyle.ts"
+    "src/editor/templateStyle.ts",
+    "src/editor/webview/topicScript.ts"
   ],
   "exclude": ["node_modules"]
 }

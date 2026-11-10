@@ -137,7 +137,7 @@ export function getWebviewScript(): string {
       // Checked and cleared together, synchronously, in the one place that
       // both this flag and the resulting report are decided -- no separate
       // timer racing against the real scroll to get the order wrong.
-      if (programmaticScroll) { programmaticScroll = false; return; }
+      if (programmaticScroll) { programmaticScroll = false; settleAnchor(); return; }
       onScrollEnd();
     });
   }
@@ -475,6 +475,69 @@ export function getWebviewScript(): string {
     vscode.postMessage({ type: 'navigateToLine', line: line, col: col });
   });
 
+  // Where a highlighted element should end up, and when it needs to move at
+  // all. Centering suits a short element (a paragraph, a list item); a
+  // go-to-definition jump lands on a <section> or a <fig>, which can be many
+  // screens tall, and centering THAT puts its middle on screen with the
+  // heading far above the fold -- the preview looked like it had jumped to
+  // the wrong place. A tall element is therefore placed by its top, a little
+  // below the edge, and is only considered \"already there\" when that top is
+  // actually on screen (any overlap counts for a short one, as before).
+  var ALIGN_SETTLE_MS = 3000;
+  var ALIGN_TOLERANCE_PX = 12;
+  var alignPending = null;
+  function isTallAnchor(el) {
+    return el.getBoundingClientRect().height > window.innerHeight * 0.6;
+  }
+  function anchorDesiredTop(el) {
+    var h = window.innerHeight;
+    if (isTallAnchor(el)) return Math.min(h * 0.2, 160);
+    return (h - el.getBoundingClientRect().height) / 2;
+  }
+  function anchorNeedsScroll(el, line) {
+    var r = el.getBoundingClientRect();
+    var startsHere = parseInt(el.getAttribute('data-line'), 10) === line;
+    if (startsHere && isTallAnchor(el)) {
+      return !(r.top >= 0 && r.top < window.innerHeight * 0.7);
+    }
+    return !isElementVisible(el);
+  }
+  // Moves the page so the anchor sits at its desired top. Reports whether it
+  // actually asked the browser to scroll: scrollend only fires for a scroll
+  // that moved something, so beginProgrammaticScroll() must not be raised for
+  // a no-op or the next real scroll of the reader's would be swallowed.
+  function scrollAnchorIntoPlace(el, instant) {
+    var maxY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    var target = window.scrollY + el.getBoundingClientRect().top - anchorDesiredTop(el);
+    target = Math.max(0, Math.min(maxY, target));
+    if (Math.abs(target - window.scrollY) < 2) return false;
+    beginProgrammaticScroll();
+    window.scrollTo({ top: target, behavior: instant ? 'auto' : 'smooth' });
+    return true;
+  }
+  // A smooth scroll toward an element is computed once, but the page keeps
+  // changing under it: images below the fold are loading=\"lazy\" and shrink
+  // to their default preview size only once decoded, so everything past them
+  // shifts after the destination was fixed. After the scroll settles, and
+  // again as each image loads, put the anchor back where it belongs -- at
+  // most a few times, and never once the reader has taken over the scroll.
+  function settleAnchor() {
+    var a = alignPending;
+    if (!a) return;
+    if (!a.el.isConnected || Date.now() > a.until || a.attempts >= 8) { alignPending = null; return; }
+    var r = a.el.getBoundingClientRect();
+    if (Math.abs(r.top - anchorDesiredTop(a.el)) <= ALIGN_TOLERANCE_PX) return;
+    a.attempts++;
+    scrollAnchorIntoPlace(a.el, true);
+  }
+  ['wheel', 'touchstart', 'keydown', 'mousedown'].forEach(function(type) {
+    window.addEventListener(type, function() { alignPending = null; }, { passive: true, capture: true });
+  });
+  document.addEventListener('load', function(e) {
+    if (programmaticScroll || !e.target || e.target.tagName !== 'IMG') return;
+    settleAnchor();
+  }, true);
+
   // Tracked so a content swap (updateContent below) that lands mid-flight
   // of an in-progress highlight/scroll can re-apply it against the fresh
   // DOM, instead of abandoning it. The scrollIntoView triggered here can
@@ -502,9 +565,10 @@ export function getWebviewScript(): string {
       var run = findRunElements(best);
       highlightElements(run.els, run.isRun);
       var anchor = (run.els && run.els.length) ? run.els[0] : best;
-      if (!isElementVisible(anchor)) {
-        beginProgrammaticScroll();
-        anchor.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      alignPending = null;
+      if (anchorNeedsScroll(anchor, line)) {
+        alignPending = { el: anchor, line: line, attempts: 0, until: Date.now() + ALIGN_SETTLE_MS };
+        scrollAnchorIntoPlace(anchor, false);
       }
     }
   }

@@ -32,18 +32,39 @@ function extractFn(name: string): string {
   return topicSource.slice(start, end + '\n  }'.length);
 }
 
+/** One `  var NAME = ...;` line of the template, run as written. */
+function extractVar(name: string): string {
+  const start = topicSource.indexOf(`  var ${name} = `);
+  assert.notStrictEqual(start, -1, `topicScript.ts no longer declares ${name}`);
+  return topicSource.slice(start, topicSource.indexOf('\n', start));
+}
+
 interface FakeEl {
   attrs: Record<string, string>;
   parentElement: FakeEl | null;
   classes: Set<string>;
   classList: { add(c: string): void; remove(c: string): void };
   getAttribute(n: string): string | null;
-  scrollIntoView(opts: unknown): void;
+  isConnected: boolean;
+  rect: { top: number; height: number };
+  getBoundingClientRect(): { top: number; height: number };
+}
+
+interface FakeWindow {
+  innerHeight: number;
+  scrollY: number;
+  scrollTo(opts: { top: number; behavior: string }): void;
 }
 
 function wire(visible: (el: FakeEl) => boolean = () => true) {
   const all: FakeEl[] = [];
-  const scrolls: { el: FakeEl; opts: unknown }[] = [];
+  const scrolls: { top: number; behavior: string }[] = [];
+  const win: FakeWindow = {
+    innerHeight: 700,
+    scrollY: 0,
+    scrollTo: (opts) => void scrolls.push(opts),
+  };
+  let scrollHeight = 20000;
   let programmaticBegins = 0;
   const pending: { fn: () => void; ms: number }[] = [];
 
@@ -56,13 +77,18 @@ function wire(visible: (el: FakeEl) => boolean = () => true) {
       classes,
       classList: { add: (c) => void classes.add(c), remove: (c) => void classes.delete(c) },
       getAttribute: (n) => (n in e.attrs ? e.attrs[n] : null),
-      scrollIntoView: (opts) => void scrolls.push({ el: e, opts }),
+      isConnected: true,
+      rect: { top: 0, height: 20 },
+      getBoundingClientRect: () => e.rect,
     };
     all.push(e);
     return e;
   }
 
-  const document = { querySelectorAll: (sel: string) => (sel === '[data-line]' ? all.slice() : []) };
+  const document = {
+    querySelectorAll: (sel: string) => (sel === '[data-line]' ? all.slice() : []),
+    documentElement: { get scrollHeight() { return scrollHeight; } },
+  };
   // These tests only check the synchronous half of a click; the fade timers
   // the script arms are recorded and left unfired (their timing is covered in
   // highlightRunScript.test.ts against the real script text).
@@ -77,19 +103,29 @@ function wire(visible: (el: FakeEl) => boolean = () => true) {
 
   const factory = new Function(
     'document',
+    'window',
     'setTimeout',
     'clearTimeout',
     'isElementVisible',
     'beginProgrammaticScroll',
     [
       getHighlightRunScript(),
+      extractVar('ALIGN_SETTLE_MS'),
+      extractVar('ALIGN_TOLERANCE_PX'),
+      extractVar('alignPending'),
       extractFn('findClosest'),
       extractFn('findContaining'),
+      extractFn('isTallAnchor'),
+      extractFn('anchorDesiredTop'),
+      extractFn('anchorNeedsScroll'),
+      extractFn('scrollAnchorIntoPlace'),
+      extractFn('settleAnchor'),
       extractFn('applyHighlightLine'),
-      'return { findContaining, applyHighlightLine };',
+      'return { findContaining, applyHighlightLine, settleAnchor, pending: function() { return alignPending; }, cancel: function() { alignPending = null; } };',
     ].join('\n'),
   ) as (
     d: unknown,
+    w: unknown,
     s: unknown,
     c: unknown,
     v: (el: FakeEl) => boolean,
@@ -97,15 +133,22 @@ function wire(visible: (el: FakeEl) => boolean = () => true) {
   ) => {
     findContaining(line: number, col: number): FakeEl | null;
     applyHighlightLine(line: number, col: number): void;
+    settleAnchor(): void;
+    pending(): { el: FakeEl; attempts: number } | null;
+    cancel(): void;
   };
-  const api = factory(document, setTimeoutFake, clearTimeoutFake, visible, () => {
+  const api = factory(document, win, setTimeoutFake, clearTimeoutFake, visible, () => {
     programmaticBegins++;
   });
 
   return {
     el,
     api,
+    win,
     scrolls,
+    setScrollHeight: (h: number) => {
+      scrollHeight = h;
+    },
     beginCount: () => programmaticBegins,
     classes: (e: FakeEl) => [...e.classes].sort().join(' '),
   };
@@ -156,16 +199,18 @@ describe('the topic preview cursor-to-highlight wiring (findContaining -> run ->
     assert.strictEqual(w.classes(p), '__hl', 'isRun false: no flat __hl-run tint');
   });
 
-  it('an off-screen run scrolls its first box into view, marked programmatic', () => {
+  it('an off-screen run scrolls its first box into place, marked programmatic', () => {
     const w = wire((e) => e.attrs['data-line'] !== '5');
     const section = w.el('2:20:0:9');
     const dl = w.el('5:5:0:30', section);
     const holder = w.el('5:5:0:30', section);
+    dl.rect = { top: 900, height: 20 };
+    holder.rect = { top: 1300, height: 20 };
     w.api.applyHighlightLine(5, 12);
     assert.strictEqual(w.scrolls.length, 1, 'one scroll for the whole run, not one per box');
-    assert.strictEqual(w.scrolls[0].el, dl, 'the run\'s first box is the anchor');
-    assert.notStrictEqual(w.scrolls[0].el, holder);
-    assert.deepStrictEqual(w.scrolls[0].opts, { block: 'center', behavior: 'smooth' });
+    // The run's first box is the anchor: it is centered (a short element),
+    // so the page moves by its top minus (viewport - height) / 2.
+    assert.deepStrictEqual(w.scrolls[0], { top: 900 - (700 - 20) / 2, behavior: 'smooth' });
     assert.strictEqual(w.beginCount(), 1, 'without beginProgrammaticScroll the echo loops back into the editor');
   });
 
@@ -177,5 +222,123 @@ describe('the topic preview cursor-to-highlight wiring (findContaining -> run ->
     w.api.applyHighlightLine(5, 12);
     assert.strictEqual(w.scrolls.length, 0);
     assert.strictEqual(w.beginCount(), 0);
+  });
+});
+
+describe('the topic preview places a tall jump target by its top and keeps it there', () => {
+  // A go-to-definition jump lands on a <section> that can be many screens
+  // tall. Centering it put its middle on screen with the heading far above the
+  // fold, and a smooth scroll computed before lazy images shrank landed off
+  // again -- both seen in real Chromium (see test-visual).
+  function tallSection(w: ReturnType<typeof wire>, top: number) {
+    const section = w.el('12:40:0:9');
+    section.rect = { top, height: 1640 };
+    return section;
+  }
+
+  it('a tall element is put at the top of the page, not centered', () => {
+    const w = wire((e) => e.rect.top < 0 || e.rect.top > 700);
+    const section = tallSection(w, 5000);
+    w.api.applyHighlightLine(12, 0);
+    assert.strictEqual(w.scrolls.length, 1);
+    // 20% of the 700px viewport = 140px below the edge; centering would have
+    // been 5000 - (700 - 1640) / 2 = 5470.
+    assert.deepStrictEqual(w.scrolls[0], { top: 5000 - 140, behavior: 'smooth' });
+    assert.strictEqual(w.beginCount(), 1);
+    assert.strictEqual(w.api.pending()?.el, section);
+  });
+
+  it('a tall element whose top is above the fold counts as not there yet, even though it overlaps the screen', () => {
+    // Overlap is all isElementVisible checks, and a tall section that started
+    // 470px up still overlapped -- so the first fix attempt never moved at all.
+    const w = wire(() => true);
+    w.win.scrollY = 3000; // somewhere the page can still scroll up from
+    tallSection(w, -470);
+    w.api.applyHighlightLine(12, 0);
+    assert.strictEqual(w.scrolls.length, 1);
+    assert.deepStrictEqual(w.scrolls[0], { top: 3000 - 470 - 140, behavior: 'smooth' });
+  });
+
+  it('a tall element whose top is already on screen is left alone', () => {
+    const w = wire(() => true);
+    tallSection(w, 300);
+    w.api.applyHighlightLine(12, 0);
+    assert.strictEqual(w.scrolls.length, 0);
+    assert.strictEqual(w.beginCount(), 0);
+    assert.strictEqual(w.api.pending(), null);
+  });
+
+  it('a cursor deep inside a tall element keeps the old overlap rule', () => {
+    const w = wire(() => true);
+    const section = tallSection(w, -470);
+    w.el('20:20:0:30', section); // a paragraph in it, but the cursor is on line 20
+    w.api.applyHighlightLine(20, 5);
+    assert.strictEqual(w.scrolls.length, 0, 'reading the middle of a long section must not snap to its heading');
+  });
+
+  it('after the scroll settles, a layout shift is corrected with an instant scroll', () => {
+    const w = wire((e) => e.rect.top < 0 || e.rect.top > 700);
+    const section = tallSection(w, 5000);
+    w.api.applyHighlightLine(12, 0);
+    w.win.scrollY = 4860; // the smooth scroll landed where it was aimed...
+    section.rect = { top: 140 + 526, height: 1640 }; // ...but images above shrank/loaded since
+    w.api.settleAnchor();
+    assert.strictEqual(w.scrolls.length, 2);
+    assert.deepStrictEqual(w.scrolls[1], { top: 4860 + 526, behavior: 'auto' });
+    assert.strictEqual(w.beginCount(), 2, 'the correction is programmatic too');
+  });
+
+  it('settling does nothing once the anchor is where it belongs, and keeps waiting for late image loads', () => {
+    const w = wire((e) => e.rect.top < 0 || e.rect.top > 700);
+    const section = tallSection(w, 5000);
+    w.api.applyHighlightLine(12, 0);
+    section.rect = { top: 140 + 5, height: 1640 }; // within tolerance
+    w.api.settleAnchor();
+    assert.strictEqual(w.scrolls.length, 1);
+    assert.strictEqual(w.beginCount(), 1);
+    assert.strictEqual(w.api.pending()?.el, section, 'still pending: an image can load later');
+  });
+
+  it('never raises the programmatic flag for a correction the page cannot make (end of document)', () => {
+    // scrollend only fires for a scroll that moved something; a flag raised for
+    // a clamped no-op would swallow the reader's next real scroll.
+    const w = wire((e) => e.rect.top < 0 || e.rect.top > 700);
+    const section = tallSection(w, 5000);
+    w.api.applyHighlightLine(12, 0);
+    w.setScrollHeight(5000 + 700);
+    w.win.scrollY = 5000; // already at the very bottom
+    section.rect = { top: 900, height: 1640 };
+    w.api.settleAnchor();
+    assert.strictEqual(w.scrolls.length, 1, 'only the original smooth scroll');
+    assert.strictEqual(w.beginCount(), 1);
+  });
+
+  it('gives up after a few corrections, once the reader takes over, or when the element is gone', () => {
+    const w = wire((e) => e.rect.top < 0 || e.rect.top > 700);
+    const section = tallSection(w, 5000);
+    w.api.applyHighlightLine(12, 0);
+    for (let i = 0; i < 20; i++) {
+      section.rect = { top: 900 + i, height: 1640 };
+      w.api.settleAnchor();
+    }
+    assert.strictEqual(w.scrolls.length, 1 + 8, 'bounded: the first scroll plus at most 8 corrections');
+    assert.strictEqual(w.api.pending(), null, 'the 9th settle drops the pending alignment');
+
+    const w2 = wire((e) => e.rect.top < 0 || e.rect.top > 700);
+    const s2 = tallSection(w2, 5000);
+    w2.api.applyHighlightLine(12, 0);
+    w2.api.cancel(); // what the wheel/touch/key/mouse listeners do
+    s2.rect = { top: 900, height: 1640 };
+    w2.api.settleAnchor();
+    assert.strictEqual(w2.scrolls.length, 1);
+
+    const w3 = wire((e) => e.rect.top < 0 || e.rect.top > 700);
+    const s3 = tallSection(w3, 5000);
+    w3.api.applyHighlightLine(12, 0);
+    s3.isConnected = false; // a content swap replaced it
+    s3.rect = { top: 900, height: 1640 };
+    w3.api.settleAnchor();
+    assert.strictEqual(w3.scrolls.length, 1);
+    assert.strictEqual(w3.api.pending(), null);
   });
 });
