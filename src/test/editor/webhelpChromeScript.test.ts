@@ -23,7 +23,6 @@ interface Api {
 }
 
 function load(): Api {
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
   const factory = new Function(
     'document',
     'MutationObserver',
@@ -182,7 +181,6 @@ describe('webhelp chrome: binds before the shell is on (late shell init)', () =>
       querySelector: () => null,
       querySelectorAll: () => [],
     };
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval
     const factory = new Function('document', 'MutationObserver', getWebhelpChromeScript({ crumbLabel: 'x' })) as (
       d: unknown,
       m: unknown,
@@ -226,7 +224,6 @@ describe('webhelp chrome: landing-page body token follows the content (M3-10)', 
       querySelector: (sel: string) => (sel === '.wh_top_menu' || sel === '.wh_breadcrumb' ? el() : sel === '#dita-content-root .site-home' && o.home ? el() : null),
       querySelectorAll: () => [],
     };
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval
     const factory = new Function('document', 'MutationObserver', getWebhelpChromeScript({ crumbLabel: 'x' })) as (
       d: unknown,
       m: unknown,
@@ -280,7 +277,6 @@ describe('webhelp chrome: landing-page body token follows the content (M3-10)', 
       querySelector: () => null,
       querySelectorAll: () => [],
     };
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval
     const factory = new Function('document', 'MutationObserver', getWebhelpChromeScript({ crumbLabel: 'x' })) as (
       d: unknown,
       m: unknown,
@@ -309,7 +305,6 @@ describe('webhelp chrome: wiring', () => {
   });
 
   it('the generated script is valid JavaScript on its own', () => {
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval
     assert.doesNotThrow(() => new Function('document', 'MutationObserver', getWebhelpChromeScript({ crumbLabel: 'x' })));
   });
 });

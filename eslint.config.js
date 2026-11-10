@@ -30,4 +30,13 @@ module.exports = [
     },
   },
   prettierConfig,
+  // Test files legitimately use require()-style imports: they hijack the
+  // module cache (new Module + _compile) to stub 'vscode' and lazily load
+  // compiled output, which cannot be expressed as static ESM imports.
+  {
+    files: ['src/test/**/*.ts', 'src/test-e2e/**/*.ts', 'src/test-visual/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
 ];

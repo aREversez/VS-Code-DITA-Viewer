@@ -75,7 +75,6 @@ function wire(visible: (el: FakeEl) => boolean = () => true) {
     if (t) t.fn = () => undefined;
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
   const factory = new Function(
     'document',
     'setTimeout',

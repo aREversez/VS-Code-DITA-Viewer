@@ -70,7 +70,6 @@ function runOnPageToc(sections: Array<{ heading: FakeHeading | null }>, h1: Fake
       return null;
     },
   };
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
   const boot = new Function(
     'document',
     'window',

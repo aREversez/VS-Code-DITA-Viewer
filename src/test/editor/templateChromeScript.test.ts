@@ -83,7 +83,6 @@ function makeEl(opts: {
 }
 
 function boot(featuresJson: string, doc: unknown, storage: Record<string, string> = {}) {
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
   const fn = new Function('document', 'window', 'location', 'localStorage', 'navigator', expose(featuresJson)) as
     (d: unknown, w: unknown, l: unknown, ls: unknown, n: unknown) => Record<string, (...a: unknown[]) => unknown>;
   const appended: El[] = [];

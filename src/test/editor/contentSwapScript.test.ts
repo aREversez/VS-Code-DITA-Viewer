@@ -42,7 +42,6 @@ function harness(opts: { panelOpen?: boolean; tooltipsOn?: boolean; omit?: strin
      ${Object.keys(defs).map((k) => `var ${k} = __defs.${k};`).join('\n')}
      ${getContentSwapRefreshScript()}
      return { refresh: refreshAfterContentSwap, panel: function() { return pfPanel; } };`;
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
   const out = new Function('document', '__first', '__on', '__defs', body)(doc, first, !!opts.tooltipsOn, defs) as {
     refresh: () => void; panel: () => Panel | null;
   };

@@ -82,7 +82,6 @@ async function activateWithStub(): Promise<Log> {
   const realLoad = loader._load;
   loader._load = (request: string, ...rest: unknown[]) => (request === 'vscode' ? stub : realLoad.call(Module, request, ...rest));
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const ext = require(out) as { activate: (c: unknown) => unknown };
     const context = {
       subscriptions: [] as unknown[],

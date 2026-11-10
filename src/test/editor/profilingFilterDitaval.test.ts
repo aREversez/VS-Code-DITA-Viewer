@@ -83,7 +83,6 @@ function setup(profiled: Array<Record<string, string>>, seeded: WebviewDitaval |
     clearMsgType: 'clearDitaval',
     setMsgType: 'setDitaval',
   });
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
   const api = new Function(
     'document', 'window', 'toolbar', 'btnStyle', 'vscode',
     `${script}; return { pfBuildPanel: pfBuildPanel, pfTogglePanel: pfTogglePanel, pfBtn: function() { return pfFilterBtn; }, hand: function(k) { pfExcluded[k] = true; pfApplyFilter(); } };`,

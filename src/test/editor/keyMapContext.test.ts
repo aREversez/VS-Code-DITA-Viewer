@@ -47,7 +47,6 @@ describe('buildKeyMap with a context map (real keyMap.ts, vscode stubbed)', () =
     internals._load = function (request: string, ...rest: unknown[]) {
       return request === 'vscode' ? vscodeStub : originalLoad.call(this, request, ...rest);
     };
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     keyMap = require('../../editor/keyMap') as KeyMapModule;
   });
 

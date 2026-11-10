@@ -57,7 +57,6 @@ function run(pathname: string, initialLayoutAttr: string | null) {
     getItem: (k: string) => storage[k] ?? null,
     setItem: (k: string, v: string) => { storage[k] = v; },
   };
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
   const boot = new Function(
     'document', 'window', 'location', 'localStorage', 'navigator',
     scriptWithPlaceholdersFilled([{ file: 'product_intro.html', title: 't' }]),

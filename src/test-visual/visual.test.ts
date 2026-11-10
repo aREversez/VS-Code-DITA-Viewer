@@ -126,7 +126,6 @@ const WH_NAV_ROWS = [
  * and the result is injected into the page the way update() does.
  */
 function webhelpChrome(): { menuHtml: string; crumbHtml: string } {
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
   const factory = new Function(
     'document',
     'MutationObserver',

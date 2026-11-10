@@ -5,7 +5,6 @@ interface Row { hasChildren: boolean; expanded: boolean; parent: number }
 type Action = { type: 'focus' | 'expand' | 'collapse' | 'activate'; index: number } | null;
 
 function load(): (rows: Row[], index: number, key: string) => Action {
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
   const factory = new Function('document', 'MutationObserver', `${getSiteNavKeyboardScript()}\nreturn siteNavKeyAction;`) as (
     d: unknown, m: unknown,
   ) => (rows: Row[], index: number, key: string) => Action;

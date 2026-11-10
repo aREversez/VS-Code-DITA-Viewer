@@ -62,7 +62,6 @@ function run(): { btn: FakeButton; bodyClasses: Set<string>; appended: FakeButto
     onTitle: 'on-title',
     offTitle: 'off-title',
   });
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
   new Function('document', 'toolbar', 'btnStyle', script)(document, toolbar, 'BTN-STYLE');
   const btn = created as FakeButton;
   return { btn, bodyClasses, appended, click: () => btn.listeners['click'].forEach((fn) => fn()) };

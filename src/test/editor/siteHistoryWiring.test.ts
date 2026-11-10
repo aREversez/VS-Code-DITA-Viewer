@@ -55,7 +55,6 @@ function setup(opts: { targets: string[]; active: string; savedState?: unknown; 
   };
   const timers: Array<() => void> = [];
   const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
   const api = new Function(
     'document', 'window', 'vscode', 'setTimeout',
     `${script}
