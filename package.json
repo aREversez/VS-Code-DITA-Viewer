@@ -821,7 +821,7 @@
     "package": "node -e \"require('fs').mkdirSync('output',{recursive:true})\" && npx --yes @vscode/vsce@4.0.0 package --no-dependencies --out output/",
     "vsix:install": "node scripts/install-vsix.cjs",
     "package:install": "npm run build && npm run package && npm run vsix:install",
-  "bench:book-render": "node scripts/bench-book-render.js",
+    "bench:book-render": "node scripts/bench-book-render.js",
     "build:icons": "node scripts/build-icon-font.js",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "pretest": "npm run build:core && node -e \"require('fs').rmSync('dist-test',{recursive:true,force:true})\" && tsc -p tsconfig.test.json",
