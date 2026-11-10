@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import { spawn } from 'child_process';
 import { StringDecoder } from 'string_decoder';
 import { cpSync, existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs';
+import { readFile, readdir, stat, writeFile } from 'fs/promises';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'path';
 import { stagePdfCustomization } from './editor/pdfImageSizes';
 import { findDitamapFiles, buildKeyMap } from './editor/DitaViewerProvider';
@@ -125,36 +126,59 @@ function fixRootIndexLinks(outputDir: string, outputChannel: vscode.OutputChanne
   outputChannel.appendLine(vscode.l10n.t('\n[DITA-OT] Fixed root index.html topic links (removed stray ../ prefixes).'));
 }
 
-function injectSiteChrome(
+async function injectSiteChrome(
   extPath: string,
   mapPath: string,
   outputDir: string,
   features: SiteChromeFeatures,
-): void {
+  outputChannel?: vscode.OutputChannel,
+): Promise<void> {
+  // Log to both the channel (survives after the run, user-facing) and the
+  // console (visible in the extension host log when no channel is passed).
+  const warn = (message: string) => {
+    console.warn(message);
+    outputChannel?.appendLine(message);
+  };
   const manifest = buildNavManifest(mapPath);
-  const jsTemplate = readFileSync(join(extPath, 'media', 'transform-assets', 'site-chrome.js'), 'utf-8');
+  const jsTemplate = await readFile(join(extPath, 'media', 'transform-assets', 'site-chrome.js'), 'utf-8');
   const js = buildSiteChromeScript(jsTemplate, manifest, features);
-  writeFileSync(join(outputDir, 'dita-viewer-chrome.js'), js, 'utf-8');
+  await writeFile(join(outputDir, 'dita-viewer-chrome.js'), js, 'utf-8');
 
-  const css = readFileSync(join(extPath, 'media', 'transform-assets', 'site-chrome.css'), 'utf-8');
-  writeFileSync(join(outputDir, 'dita-viewer-chrome.css'), css, 'utf-8');
+  const css = await readFile(join(extPath, 'media', 'transform-assets', 'site-chrome.css'), 'utf-8');
+  await writeFile(join(outputDir, 'dita-viewer-chrome.css'), css, 'utf-8');
 
   const hasDark = features.darkMode;
   if (hasDark) {
-    const darkCss = readFileSync(join(extPath, 'media', 'transform-assets', 'dark-mode.css'), 'utf-8');
-    writeFileSync(join(outputDir, 'dita-viewer-dark.css'), darkCss, 'utf-8');
+    const darkCss = await readFile(join(extPath, 'media', 'transform-assets', 'dark-mode.css'), 'utf-8');
+    await writeFile(join(outputDir, 'dita-viewer-dark.css'), darkCss, 'utf-8');
   }
 
-  // Walk all HTML files (including index.html) and inject link+script tags
-  function walk(dir: string) {
-    for (const entry of readdirSync(dir)) {
+  // Walk all HTML files (including index.html) and inject link+script tags.
+  // Async so a large docsite does not block the extension host main thread.
+  async function walk(dir: string): Promise<void> {
+    for (const entry of await readdir(dir)) {
       const full = join(dir, entry);
+      let isDir = false;
       try {
-        if (statSync(full).isDirectory()) { walk(full); continue; }
-      } catch { continue; }
+        isDir = (await stat(full)).isDirectory();
+      } catch {
+        warn(vscode.l10n.t('[DITA-OT] Skipping an unreadable path (it will have no site enhancements): {0}', full));
+        continue;
+      }
+      if (isDir) { await walk(full); continue; }
       if (!entry.toLowerCase().endsWith('.html')) continue;
-      let html = readFileSync(full, 'utf-8');
+      let html: string;
+      try {
+        html = await readFile(full, 'utf-8');
+      } catch (e) {
+        warn(vscode.l10n.t('[DITA-OT] Skipping an unreadable page (it will have no site enhancements): {0} ({1})', full, e instanceof Error ? e.message : String(e)));
+        continue;
+      }
       if (html.includes('dita-viewer-chrome')) continue;
+      if (!html.includes('</head>') || !html.includes('</body>')) {
+        warn(vscode.l10n.t('[DITA-OT] Skipped a page without the expected </head>/</body> markers (it will have no site enhancements): {0}', full));
+        continue;
+      }
 
       const rel = full.substring(outputDir.length).replace(/\\/g, '/');
       const depth = rel.replace(/^\/+/, '').split('/').length - 1;
@@ -196,10 +220,10 @@ function injectSiteChrome(
       }
 
       html = html.replace('</body>', '<script src="' + prefix + 'dita-viewer-chrome.js"></script></body>');
-      writeFileSync(full, html, 'utf-8');
+      await writeFile(full, html, 'utf-8');
     }
   }
-  walk(outputDir);
+  await walk(outputDir);
 }
 
 // ── Template-shell injection ──
@@ -216,13 +240,20 @@ function injectSiteChrome(
  * its siteShell variant; the layout toggles are the template's job and never
  * fire. The legacy injectSiteChrome path is untouched by anything here.
  */
-function injectTemplateChrome(
+async function injectTemplateChrome(
   extPath: string,
   mapPath: string,
   outputDir: string,
   template: SiteTemplate,
   features: SiteChromeFeatures,
-): void {
+  outputChannel?: vscode.OutputChannel,
+): Promise<void> {
+  // Same dual-target logging as injectSiteChrome: the channel survives after
+  // the run, the console is visible in the extension host log regardless.
+  const warn = (message: string) => {
+    console.warn(message);
+    outputChannel?.appendLine(message);
+  };
   const toPosix = (p: string) => p.replace(/\\/g, '/');
   const mapDir = dirname(mapPath);
 
@@ -242,11 +273,11 @@ function injectTemplateChrome(
   //    stay relative to the css file, needing no per-page depth prefix).
   const relInTemplate = (abs: string) => toPosix(relative(template.dir, abs));
   const templateCssName = 'dv-styles.css';
-  writeFileSync(join(templateTarget, templateCssName), buildTemplateCssText(template, relInTemplate), 'utf-8');
+  await writeFile(join(templateTarget, templateCssName), buildTemplateCssText(template, relInTemplate), 'utf-8');
 
   // 3. The static-shell assets, written once at the site root.
-  writeFileSync(join(outputDir, 'dita-viewer-site-shell.css'), readShellCss(extPath), 'utf-8');
-  writeFileSync(join(outputDir, 'dita-viewer-template-chrome.css'), readTemplateChromeCss(extPath), 'utf-8');
+  await writeFile(join(outputDir, 'dita-viewer-site-shell.css'), readShellCss(extPath), 'utf-8');
+  await writeFile(join(outputDir, 'dita-viewer-template-chrome.css'), readTemplateChromeCss(extPath), 'utf-8');
 
   // 4. Nav tree + reading-order pages, then the chrome script (manifest and
   //    the siteShell feature flags baked into its placeholders).
@@ -257,7 +288,7 @@ function injectTemplateChrome(
 
   const jsTemplate = readFileSync(join(extPath, 'media', 'transform-assets', 'site-chrome.js'), 'utf-8');
   const js = buildSiteChromeScript(jsTemplate, nav.pages, features);
-  writeFileSync(join(outputDir, 'dita-viewer-chrome.js'), js, 'utf-8');
+  await writeFile(join(outputDir, 'dita-viewer-chrome.js'), js, 'utf-8');
 
   const mapTitle = mapTitleFromXml(readFileSync(mapPath, 'utf-8'), basename(mapPath), resolveKey);
   const year = new Date().getFullYear();
@@ -271,23 +302,31 @@ function injectTemplateChrome(
 
   // 5. Re-wrap every page. The '_template' copy is pruned (its own files are
   //    assets, not pages); a page already carrying data-template is skipped
-  //    so a re-run on an untouched output is idempotent.
-  function walk(dir: string) {
-    for (const entry of readdirSync(dir)) {
+  //    so a re-run on an untouched output is idempotent. Async so a large
+  //    docsite does not block the extension host main thread.
+  async function walk(dir: string): Promise<void> {
+    for (const entry of await readdir(dir)) {
       const full = join(dir, entry);
       let isDir = false;
       try {
-        isDir = statSync(full).isDirectory();
+        isDir = (await stat(full)).isDirectory();
       } catch {
+        warn(vscode.l10n.t('[DITA-OT] Skipping an unreadable path (it will keep its original markup): {0}', full));
         continue;
       }
       if (isDir) {
         if (dir === outputDir && entry === tmplDirName) continue;
-        walk(full);
+        await walk(full);
         continue;
       }
       if (!entry.toLowerCase().endsWith('.html')) continue;
-      let html = readFileSync(full, 'utf-8');
+      let html: string;
+      try {
+        html = await readFile(full, 'utf-8');
+      } catch (e) {
+        warn(vscode.l10n.t('[DITA-OT] Skipping an unreadable page (it will keep its original markup): {0} ({1})', full, e instanceof Error ? e.message : String(e)));
+        continue;
+      }
       if (html.includes('data-template=')) continue;
 
       const rel = toPosix(relative(outputDir, full));
@@ -323,10 +362,10 @@ function injectTemplateChrome(
         bodyBootstrapHtml: bodyBootstrap,
         headInjectHtml,
       });
-      writeFileSync(full, html, 'utf-8');
+      await writeFile(full, html, 'utf-8');
     }
   }
-  walk(outputDir);
+  await walk(outputDir);
 }
 
 // ── CSS file scanning for transform ──
@@ -769,7 +808,8 @@ export function registerTransformCommand(context: vscode.ExtensionContext): void
                 // Kill the whole tree — terminating the cmd.exe wrapper alone
                 // leaves the DITA-OT Java process running.
                 try {
-                  spawn('taskkill', ['/pid', String(child.pid), '/t', '/f']);
+                  spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'])
+                    .on('error', (e) => console.warn('Failed to kill Windows process tree:', e.message));
                 } catch (e) {
                   console.warn('Failed to kill Windows process tree:', e instanceof Error ? e.message : e);
                 }
@@ -870,10 +910,10 @@ export function registerTransformCommand(context: vscode.ExtensionContext): void
               if (transtype === 'html5' || transtype === 'xhtml') {
                 try {
                   if (template && siteChromeFeatures) {
-                    injectTemplateChrome(extensionPath, mapPath, outputDir, template, siteChromeFeatures);
+                    await injectTemplateChrome(extensionPath, mapPath, outputDir, template, siteChromeFeatures, outputChannel);
                     outputChannel.appendLine(vscode.l10n.t('\n[DITA-OT] Template "{0}" applied to the site.', template.id));
                   } else if (siteChromeFeatures) {
-                    injectSiteChrome(extensionPath, mapPath, outputDir, siteChromeFeatures);
+                    await injectSiteChrome(extensionPath, mapPath, outputDir, siteChromeFeatures, outputChannel);
                     outputChannel.appendLine(vscode.l10n.t('\n[DITA-OT] Site enhancements injected.'));
                   }
                 } catch (e) {
