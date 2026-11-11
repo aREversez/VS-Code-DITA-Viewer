@@ -150,6 +150,37 @@ describe('single-topic preview highlight scroll (real Chromium)', function () {
     }
   });
 
+  async function post(at: { line: number; col: number }): Promise<void> {
+    await page.evaluate((a) => window.postMessage({ type: 'highlightLine', line: a.line, col: a.col }, '*'), at);
+  }
+
+  it('ends at the target when the click on the link and the jump it triggers arrive a moment apart', async () => {
+    // A click on a link places the cursor at the link, and the go-to-
+    // definition jump follows. The second highlight used to find the target
+    // "on screen" (the page was only just leaving it), ask for nothing, and
+    // let the scroll toward the link finish -- the preview ended at the link.
+    const ref = await pos('#r, p.p');
+    const sec = await pos('section');
+    for (const gap of [60, 150, 400]) {
+      await highlight(sec); // park at the target
+      const parked = await page.evaluate(() => Math.round(scrollY));
+      await post(ref);
+      await page.waitForTimeout(gap);
+      await post(sec);
+      let lowest = parked;
+      const t0 = Date.now();
+      while (Date.now() - t0 < 2200) {
+        lowest = Math.min(lowest, await page.evaluate(() => Math.round(scrollY)));
+        await page.waitForTimeout(40);
+      }
+      const end = await page.evaluate(() => Math.round(scrollY));
+      assert.ok(Math.abs(end - parked) <= 12, `gap ${gap}ms: ended at ${end}px, expected the target at ${parked}px`);
+      if (gap <= 150) {
+        assert.ok(parked - lowest <= 40, `gap ${gap}ms: the preview slid ${parked - lowest}px toward the link before turning around`);
+      }
+    }
+  });
+
   it('puts a short far-away element in the middle of the screen as before', async () => {
     await highlight({ line: 1, col: 0 });
     const target = await page.$$eval('section p', (els) => {

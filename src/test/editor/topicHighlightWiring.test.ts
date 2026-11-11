@@ -107,9 +107,11 @@ function wire(visible: (el: FakeEl) => boolean = () => true) {
     'setTimeout',
     'clearTimeout',
     'isElementVisible',
-    'beginProgrammaticScroll',
+    'onBegin',
     [
       getHighlightRunScript(),
+      'var programmaticScroll = false;',
+      'function beginProgrammaticScroll() { programmaticScroll = true; onBegin(); }',
       extractVar('ALIGN_SETTLE_MS'),
       extractVar('ALIGN_TOLERANCE_PX'),
       extractVar('alignPending'),
@@ -121,7 +123,7 @@ function wire(visible: (el: FakeEl) => boolean = () => true) {
       extractFn('scrollAnchorIntoPlace'),
       extractFn('settleAnchor'),
       extractFn('applyHighlightLine'),
-      'return { findContaining, applyHighlightLine, settleAnchor, pending: function() { return alignPending; }, cancel: function() { alignPending = null; } };',
+      'return { findContaining, applyHighlightLine, settleAnchor, pending: function() { return alignPending; }, setInFlight: function(v) { programmaticScroll = v; }, cancel: function() { alignPending = null; } };',
     ].join('\n'),
   ) as (
     d: unknown,
@@ -136,6 +138,7 @@ function wire(visible: (el: FakeEl) => boolean = () => true) {
     settleAnchor(): void;
     pending(): { el: FakeEl; attempts: number } | null;
     cancel(): void;
+    setInFlight(v: boolean): void;
   };
   const api = factory(document, win, setTimeoutFake, clearTimeoutFake, visible, () => {
     programmaticBegins++;
@@ -280,6 +283,7 @@ describe('the topic preview places a tall jump target by its top and keeps it th
     const w = wire((e) => e.rect.top < 0 || e.rect.top > 700);
     const section = tallSection(w, 5000);
     w.api.applyHighlightLine(12, 0);
+    w.api.setInFlight(false); // scrollend has fired
     w.win.scrollY = 4860; // the smooth scroll landed where it was aimed...
     section.rect = { top: 140 + 526, height: 1640 }; // ...but images above shrank/loaded since
     w.api.settleAnchor();
@@ -305,6 +309,7 @@ describe('the topic preview places a tall jump target by its top and keeps it th
     const w = wire((e) => e.rect.top < 0 || e.rect.top > 700);
     const section = tallSection(w, 5000);
     w.api.applyHighlightLine(12, 0);
+    w.api.setInFlight(false); // scrollend has fired
     w.setScrollHeight(5000 + 700);
     w.win.scrollY = 5000; // already at the very bottom
     section.rect = { top: 900, height: 1640 };
@@ -340,5 +345,40 @@ describe('the topic preview places a tall jump target by its top and keeps it th
     w3.api.settleAnchor();
     assert.strictEqual(w3.scrolls.length, 1);
     assert.strictEqual(w3.api.pending(), null);
+  });
+});
+
+describe('a highlight that arrives while a programmatic scroll is still in flight', () => {
+  // Clicking a link places the cursor at the link, and the go-to-definition
+  // jump follows a few ms later. Reproduced in real Chromium: the target
+  // looked on screen at the moment the second highlight arrived (the page was
+  // only just leaving it), nothing was asked for, and the first scroll carried
+  // the preview to the link and left it there.
+  it('re-aims instead of trusting where the page happens to be right now', () => {
+    const w = wire(() => true); // everything "visible" at this instant
+    const section = w.el('12:40:0:9');
+    section.rect = { top: 300, height: 1640 }; // top on screen: normally "already there"
+    w.api.setInFlight(true);
+    w.api.applyHighlightLine(12, 0);
+    assert.strictEqual(w.scrolls.length, 1, 'a new scroll replaces the one in flight');
+    assert.deepStrictEqual(w.scrolls[0], { top: 300 - 140, behavior: 'smooth' });
+  });
+
+  it('re-aims even when the target is exactly where the page is, since that is the only way to cancel the old animation', () => {
+    const w = wire(() => true);
+    const section = w.el('12:40:0:9');
+    section.rect = { top: 140, height: 1640 };
+    w.api.setInFlight(true);
+    w.api.applyHighlightLine(12, 0);
+    assert.strictEqual(w.scrolls.length, 1);
+    assert.deepStrictEqual(w.scrolls[0], { top: 0, behavior: 'smooth' });
+  });
+
+  it('without a scroll in flight an on-screen target is still left alone', () => {
+    const w = wire(() => true);
+    const section = w.el('12:40:0:9');
+    section.rect = { top: 300, height: 1640 };
+    w.api.applyHighlightLine(12, 0);
+    assert.strictEqual(w.scrolls.length, 0);
   });
 });

@@ -505,12 +505,15 @@ export function getWebviewScript(): string {
   // Moves the page so the anchor sits at its desired top. Reports whether it
   // actually asked the browser to scroll: scrollend only fires for a scroll
   // that moved something, so beginProgrammaticScroll() must not be raised for
-  // a no-op or the next real scroll of the reader's would be swallowed.
+  // a no-op or the next real scroll of the reader's would be swallowed. While
+  // a programmatic scroll is already in flight the request always goes
+  // through, even when the target is where the page is right now: it is the
+  // only way to cancel the animation that is carrying the page away.
   function scrollAnchorIntoPlace(el, instant) {
     var maxY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
     var target = window.scrollY + el.getBoundingClientRect().top - anchorDesiredTop(el);
     target = Math.max(0, Math.min(maxY, target));
-    if (Math.abs(target - window.scrollY) < 2) return false;
+    if (!programmaticScroll && Math.abs(target - window.scrollY) < 2) return false;
     beginProgrammaticScroll();
     window.scrollTo({ top: target, behavior: instant ? 'auto' : 'smooth' });
     return true;
@@ -553,6 +556,8 @@ export function getWebviewScript(): string {
   // from wherever the preview happened to already be scrolled, since
   // that's when the initial scroll has the most distance (and time) left
   // to still be animating when the first content update lands.
+  var HIGHLIGHT_DEBOUNCE_MS = 180;
+  var highlightTimer = null;
   var lastHighlightLine = null;
   var lastHighlightCol = 0;
   function applyHighlightLine(line, col) {
@@ -566,7 +571,15 @@ export function getWebviewScript(): string {
       highlightElements(run.els, run.isRun);
       var anchor = (run.els && run.els.length) ? run.els[0] : best;
       alignPending = null;
-      if (anchorNeedsScroll(anchor, line)) {
+      // A smooth scroll still in flight was aimed at the previous cursor
+      // position (a click on a link places the cursor at the link, and the
+      // go-to-definition jump follows a few milliseconds later). Where the
+      // page happens to be right now says nothing about where it is going,
+      // so a new highlight never trusts the visibility check then: it
+      // re-aims, which also replaces the old animation. Otherwise the target
+      // looked on screen at the start of the old scroll, nothing was asked
+      // for, and the old scroll carried the preview back to the link.
+      if (programmaticScroll || anchorNeedsScroll(anchor, line)) {
         alignPending = { el: anchor, line: line, attempts: 0, until: Date.now() + ALIGN_SETTLE_MS };
         scrollAnchorIntoPlace(anchor, false);
       }
@@ -580,7 +593,16 @@ export function getWebviewScript(): string {
     if (e.data.type === 'highlightLine') {
       lastHighlightLine = e.data.line;
       lastHighlightCol = e.data.col || 0;
-      applyHighlightLine(lastHighlightLine, lastHighlightCol);
+      // Trailing debounce: a click on a link is two cursor moves a few
+      // tens to a couple of hundred milliseconds apart (the click, then the
+      // go-to-definition jump), and following the first one sent the
+      // preview sliding toward the link before it turned around for the
+      // target. Only the last position of a burst is acted on.
+      if (highlightTimer) clearTimeout(highlightTimer);
+      highlightTimer = setTimeout(function() {
+        highlightTimer = null;
+        applyHighlightLine(lastHighlightLine, lastHighlightCol);
+      }, HIGHLIGHT_DEBOUNCE_MS);
     }
     if (e.data.type === 'updateContent') {
       var contentRoot = document.getElementById('dita-content-root');
@@ -593,7 +615,8 @@ export function getWebviewScript(): string {
         contentRoot.innerHTML = e.data.html;
         enhanceImages(); // per-image zoom toolbars -- idempotent, only wraps images not already wrapped
         refreshAfterContentSwap(); // profiling filter, its open panel, page search and tag tooltips all point at the DOM that was just replaced
-        if (lastHighlightLine !== null) {
+        if (lastHighlightLine !== null && !highlightTimer) {
+          // (A pending debounced highlight is about to apply the same position.)
           // Re-target the still-current cursor position against the new
           // DOM. If the earlier scroll had already settled and the spot
           // is still on screen, applyHighlightLine's own isElementVisible
