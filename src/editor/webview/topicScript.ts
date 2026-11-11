@@ -143,8 +143,26 @@ export function getWebviewScript(): string {
   }
 
   function scrollToLine(targetLine, instant) {
+    // A reveal is the source editor telling the preview where to be: it is a
+    // new instruction, so any highlight correction still pending must not
+    // survive it. settleAnchor() runs on every programmatic scrollend, so a
+    // pending one would drag the page back to the highlighted element right
+    // after the reveal had landed it on the line the reader is looking at --
+    // and again on every source scroll for the rest of the 3s window.
+    alignPending = null;
     var behavior = instant ? 'auto' : 'smooth';
-    if (targetLine <= 0) { beginProgrammaticScroll(); window.scrollTo({ top: 0, behavior: behavior }); return; }
+    if (targetLine <= 0) {
+      // scrollend only fires for a scroll that actually moved something, so a
+      // no-op scrollTo here would leave programmaticScroll raised with no
+      // scrollend coming to clear it. The reader's next real scroll would then
+      // be the one to clear (and be swallowed by) it, and the first highlight
+      // after load would read it as "a scroll is in flight" and re-centre even
+      // a target that is already on screen.
+      if (window.scrollY === 0) return;
+      beginProgrammaticScroll();
+      window.scrollTo({ top: 0, behavior: behavior });
+      return;
+    }
     var best = findClosest(targetLine);
     if (!best) return;
     var rect = best.getBoundingClientRect();
@@ -536,9 +554,21 @@ export function getWebviewScript(): string {
   ['wheel', 'touchstart', 'keydown', 'mousedown'].forEach(function(type) {
     window.addEventListener(type, function() { alignPending = null; }, { passive: true, capture: true });
   });
+  // Deferred one frame on purpose: this listener is on the capture phase, so
+  // it runs BEFORE the <img>'s own load handler (enhanceOneImage ->
+  // applyDefaultPreviewScale), which is what shrinks it to its default preview
+  // size. Measuring here read the box as it was before that resize -- the
+  // natural 500px on the way in, 375px once scaled -- so every correction
+  // aimed at a layout that no longer existed, the current image's own shift
+  // went uncounted, and the last image to decode left its shift uncorrected
+  // for good.
   document.addEventListener('load', function(e) {
     if (programmaticScroll || !e.target || e.target.tagName !== 'IMG') return;
-    settleAnchor();
+    requestAnimationFrame(function() {
+      // Re-checked a frame later: a highlight that arrived in between owns the
+      // scroll now, and its own scrollend settles it.
+      if (!programmaticScroll) settleAnchor();
+    });
   }, true);
 
   // Tracked so a content swap (updateContent below) that lands mid-flight

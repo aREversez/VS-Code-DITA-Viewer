@@ -206,4 +206,31 @@ describe('single-topic preview highlight scroll (real Chromium)', function () {
     const theirs = await page.evaluate(() => (window as unknown as { __msgs: { type: string }[] }).__msgs.map((m) => m.type));
     assert.ok(theirs.includes('scrollSync'), 'the reader\'s own scroll was swallowed');
   });
+
+  it('stays at the revealed line when the source scrolls inside the highlight settle window', async () => {
+    // Scrolling the source editor right after a jump posts revealLine for the
+    // editor's new top line. The highlight correction is still pending at that
+    // point, so correcting on the reveal's own scrollend pulled the page back
+    // to the section: the preview followed the source, then snapped away from
+    // it, once per source scroll for the rest of the 3s window.
+    await highlight(await pos('section')); // parked at the top edge, correction still pending
+    const parked = await page.evaluate(() => Math.round(scrollY));
+    const reveals = await page.$$eval('section p', (els) => {
+      const el = els[6];
+      return {
+        line: parseInt(el.getAttribute('data-line') as string, 10),
+        // Where the page has to end up: block:'start' puts this paragraph's
+        // top at 0, so scrollY must equal its document offset.
+        want: Math.round(scrollY + el.getBoundingClientRect().top),
+      };
+    });
+    assert.ok(Math.abs(reveals.want - parked) > 400, 'the reveal target has to sit well away from the parked section');
+    await page.evaluate((line) => window.postMessage({ type: 'revealLine', line }, '*'), reveals.line);
+    await page.waitForTimeout(1200); // past the smooth scroll, its scrollend and any correction
+    const end = await page.evaluate(() => Math.round(scrollY));
+    assert.ok(
+      Math.abs(end - reveals.want) <= 12,
+      `ended at ${end}px, expected the revealed line at ${reveals.want}px (back at the highlight would be ${parked}px)`,
+    );
+  });
 });

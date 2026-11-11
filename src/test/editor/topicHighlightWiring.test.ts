@@ -48,6 +48,7 @@ interface FakeEl {
   isConnected: boolean;
   rect: { top: number; height: number };
   getBoundingClientRect(): { top: number; height: number };
+  scrollIntoView(opts: { block: string; behavior: string }): void;
 }
 
 interface FakeWindow {
@@ -59,6 +60,7 @@ interface FakeWindow {
 function wire(visible: (el: FakeEl) => boolean = () => true) {
   const all: FakeEl[] = [];
   const scrolls: { top: number; behavior: string }[] = [];
+  const reveals: { block: string; behavior: string }[] = [];
   const win: FakeWindow = {
     innerHeight: 700,
     scrollY: 0,
@@ -80,6 +82,7 @@ function wire(visible: (el: FakeEl) => boolean = () => true) {
       isConnected: true,
       rect: { top: 0, height: 20 },
       getBoundingClientRect: () => e.rect,
+      scrollIntoView: (opts) => void reveals.push(opts),
     };
     all.push(e);
     return e;
@@ -122,8 +125,9 @@ function wire(visible: (el: FakeEl) => boolean = () => true) {
       extractFn('anchorNeedsScroll'),
       extractFn('scrollAnchorIntoPlace'),
       extractFn('settleAnchor'),
+      extractFn('scrollToLine'),
       extractFn('applyHighlightLine'),
-      'return { findContaining, applyHighlightLine, settleAnchor, pending: function() { return alignPending; }, setInFlight: function(v) { programmaticScroll = v; }, cancel: function() { alignPending = null; } };',
+      'return { findContaining, applyHighlightLine, settleAnchor, scrollToLine, pending: function() { return alignPending; }, setInFlight: function(v) { programmaticScroll = v; }, cancel: function() { alignPending = null; } };',
     ].join('\n'),
   ) as (
     d: unknown,
@@ -136,6 +140,7 @@ function wire(visible: (el: FakeEl) => boolean = () => true) {
     findContaining(line: number, col: number): FakeEl | null;
     applyHighlightLine(line: number, col: number): void;
     settleAnchor(): void;
+    scrollToLine(targetLine: number, instant?: boolean): void;
     pending(): { el: FakeEl; attempts: number } | null;
     cancel(): void;
     setInFlight(v: boolean): void;
@@ -149,6 +154,7 @@ function wire(visible: (el: FakeEl) => boolean = () => true) {
     api,
     win,
     scrolls,
+    reveals,
     setScrollHeight: (h: number) => {
       scrollHeight = h;
     },
@@ -380,5 +386,83 @@ describe('a highlight that arrives while a programmatic scroll is still in fligh
     section.rect = { top: 300, height: 1640 };
     w.api.applyHighlightLine(12, 0);
     assert.strictEqual(w.scrolls.length, 0);
+  });
+});
+
+describe('a source-side reveal (revealLine) that arrives after a highlight', () => {
+  // A reveal is how the source editor tells the preview which line to follow
+  // (DitaViewerProvider posts it ~120ms after the editor's visible range
+  // moves). Because settleAnchor() now runs on every programmatic scrollend, a
+  // highlight's still-pending correction used to drag the page back to the
+  // highlighted element immediately after the reveal had landed it on the line
+  // the reader was looking at -- and again on every further source scroll for
+  // the rest of the 3s window.
+  function tallSection(w: ReturnType<typeof wire>, top: number) {
+    const section = w.el('12:40:0:9');
+    section.rect = { top, height: 1640 };
+    return section;
+  }
+
+  it('drops the pending correction, so the reveal is not dragged back to the highlight', () => {
+    const w = wire((e) => e.rect.top < 0 || e.rect.top > 700);
+    const section = tallSection(w, 5000);
+    w.api.applyHighlightLine(12, 0); // smooth scroll to the section, correction pending
+    w.api.setInFlight(false); // that scroll's scrollend
+    section.rect = { top: 140, height: 1640 }; // landed on target
+
+    const p = w.el('40:40:0:30');
+    p.rect = { top: 2800, height: 20 }; // well down the page: where the source now is
+    w.api.scrollToLine(40);
+    assert.deepStrictEqual(w.reveals, [{ block: 'start', behavior: 'smooth' }], 'the reveal still scrolls as before');
+
+    w.api.setInFlight(false); // the reveal scroll's scrollend
+    section.rect = { top: 2800, height: 1640 }; // the reveal moved the page far from it
+    w.api.settleAnchor();
+
+    assert.strictEqual(w.api.pending(), null, 'the reveal replaced the highlight as the instruction to follow');
+    assert.strictEqual(w.scrolls.length, 1, 'only the highlight\'s own smooth scroll: no yank back');
+    assert.strictEqual(w.beginCount(), 2, 'one begin per real scroll, the reveal included');
+  });
+
+  it('a reveal to a line already at the top of the viewport asks for nothing', () => {
+    const w = wire();
+    const p = w.el('40:40:0:30');
+    p.rect = { top: 2, height: 20 }; // inside the +/-5px the reveal treats as "there"
+    w.api.scrollToLine(40);
+    assert.strictEqual(w.reveals.length, 0);
+    assert.strictEqual(w.beginCount(), 0, 'a flag raised for a no-op scroll would have no scrollend to clear it');
+  });
+
+  it('a reveal to the top of an already-at-top page raises no flag and scrolls nothing', () => {
+    // scrollend never fires for a scroll that moves nothing, so the raised flag
+    // survived until the reader's next real scroll cleared (and was swallowed by)
+    // it -- and the first highlight after load read it as "a scroll is in
+    // flight", re-centring even a target that was already on screen.
+    const w = wire();
+    w.win.scrollY = 0; // the source editor sits at line 0, the preview's default
+    w.api.scrollToLine(0);
+    assert.strictEqual(w.scrolls.length, 0);
+    assert.strictEqual(w.beginCount(), 0);
+  });
+
+  it('a reveal to the top from further down still scrolls, marked programmatic', () => {
+    const w = wire();
+    w.win.scrollY = 4000;
+    w.api.scrollToLine(0);
+    assert.deepStrictEqual(w.scrolls[0], { top: 0, behavior: 'smooth' });
+    assert.strictEqual(w.beginCount(), 1);
+  });
+});
+
+describe('the correction an image load triggers', () => {
+  it('waits a frame, because in the capture phase the image has not been resized yet', () => {
+    // enhanceOneImage hangs its own load handler on the <img> (target phase) and
+    // that is what applies the default preview scale, so a capture-phase
+    // measurement reads the natural size and aims the correction at a layout
+    // that is about to be replaced. Real Chromium covers the outcome; this pins
+    // the ordering that makes it possible.
+    const listener = /document\.addEventListener\('load',[\s\S]*?\}, true\);/.exec(topicSource);
+    assert.ok(listener, 'topicScript.ts no longer registers the document-level load listener');
+    assert.ok(/requestAnimationFrame\(/.test(listener[0]), 'measuring inside the capture phase reads the pre-resize box');
   });
 });
