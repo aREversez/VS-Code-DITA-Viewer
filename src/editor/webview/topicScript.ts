@@ -119,25 +119,41 @@ export function getWebviewScript(): string {
   var programmaticScroll = false;
   var programmaticScrollFallbackTimer = null;
   var supportsScrollend = 'onscrollend' in window;
+  // scrollend only fires for a scroll that moved something, and the paths
+  // that raise the flag each have to know in advance whether theirs will. That
+  // has been got wrong more than once (a scrollTo that was already there, a
+  // scrollIntoView clamped by the end of the document), and the cost of a flag
+  // that never comes down is real: the reader's next scroll is swallowed
+  // instead of reported, and a new highlight takes the page for one in
+  // flight and re-aims. So whatever raises the flag also arms this timer,
+  // long enough for the longest smooth scroll there is (a few seconds is many
+  // times what one across a very long document takes), and it ends the
+  // scroll exactly as scrollend would have -- including the correction that
+  // scrollend runs. Without scrollend (an old webview) it is the only thing
+  // that ends one, which is why that case gets a shorter wait.
+  var PROGRAMMATIC_SCROLL_WATCHDOG_MS = 4000;
+  var PROGRAMMATIC_SCROLL_FALLBACK_MS = 2000;
   function beginProgrammaticScroll() {
     programmaticScroll = true;
-    if (!supportsScrollend) {
-      // Old-webview fallback only -- current VS Code's Chromium has
-      // supported scrollend since well before this was written. Generous
-      // on purpose, since the only failure mode of guessing too long here
-      // is a brief window where a genuine user scroll right on the heels
-      // of a programmatic one doesn't get reported -- much less disruptive
-      // than the AtTop-reveal jump guessing too short used to cause.
-      if (programmaticScrollFallbackTimer) clearTimeout(programmaticScrollFallbackTimer);
-      programmaticScrollFallbackTimer = setTimeout(function() { programmaticScroll = false; }, 2000);
-    }
+    if (programmaticScrollFallbackTimer) clearTimeout(programmaticScrollFallbackTimer);
+    programmaticScrollFallbackTimer = setTimeout(function() {
+      programmaticScrollFallbackTimer = null;
+      if (!programmaticScroll) return;
+      programmaticScroll = false;
+      settleAnchor();
+    }, supportsScrollend ? PROGRAMMATIC_SCROLL_WATCHDOG_MS : PROGRAMMATIC_SCROLL_FALLBACK_MS);
   }
   if (supportsScrollend) {
     window.addEventListener('scrollend', function() {
       // Checked and cleared together, synchronously, in the one place that
       // both this flag and the resulting report are decided -- no separate
       // timer racing against the real scroll to get the order wrong.
-      if (programmaticScroll) { programmaticScroll = false; settleAnchor(); return; }
+      if (programmaticScroll) {
+        programmaticScroll = false;
+        if (programmaticScrollFallbackTimer) { clearTimeout(programmaticScrollFallbackTimer); programmaticScrollFallbackTimer = null; }
+        settleAnchor();
+        return;
+      }
       onScrollEnd();
     });
   }
@@ -167,6 +183,13 @@ export function getWebviewScript(): string {
     if (!best) return;
     var rect = best.getBoundingClientRect();
     if (rect.top < -5 || rect.top > 5) {
+      // scrollIntoView stops at the end of the document, so a line whose
+      // element sits below the top of the screen on a page that cannot scroll
+      // any further moves nothing -- and then no scrollend comes to lower the
+      // flag raised for it.
+      var maxY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+      var wantY = Math.max(0, Math.min(maxY, window.scrollY + rect.top));
+      if (Math.abs(wantY - window.scrollY) < 2) return;
       beginProgrammaticScroll();
       best.scrollIntoView({ block: 'start', behavior: behavior });
     }
@@ -610,7 +633,7 @@ export function getWebviewScript(): string {
       // looked on screen at the start of the old scroll, nothing was asked
       // for, and the old scroll carried the preview back to the link.
       if (programmaticScroll || anchorNeedsScroll(anchor, line)) {
-        alignPending = { el: anchor, line: line, attempts: 0, until: Date.now() + ALIGN_SETTLE_MS };
+        alignPending = { el: anchor, attempts: 0, until: Date.now() + ALIGN_SETTLE_MS };
         scrollAnchorIntoPlace(anchor, false);
       }
     }

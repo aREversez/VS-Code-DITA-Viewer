@@ -195,6 +195,25 @@ describe('single-topic preview highlight scroll (real Chromium)', function () {
     assert.ok(Math.abs(t - want) <= 12, `centered paragraph at ${t}px, expected near ${want}px`);
   });
 
+  it('a reveal the end of the document cannot make leaves the reader\'s next scroll reported', async () => {
+    // scrollend never fires for a scroll that moved nothing, so a flag raised
+    // for one stayed up and swallowed the reader's next scroll.
+    const last = await page.$$eval('section p', (els) => {
+      const el = els[els.length - 1];
+      return parseInt(el.getAttribute('data-line') as string, 10);
+    });
+    await page.evaluate(() => window.scrollTo(0, 1e7));
+    await page.waitForTimeout(800);
+    await page.evaluate(() => ((window as unknown as { __msgs: unknown[] }).__msgs.length = 0));
+    await page.evaluate((l) => window.postMessage({ type: 'revealLine', line: l }, '*'), last);
+    await page.waitForTimeout(900);
+    await page.mouse.move(400, 300);
+    await page.mouse.wheel(0, -300);
+    await page.waitForTimeout(900);
+    const types = await page.evaluate(() => (window as unknown as { __msgs: { type: string }[] }).__msgs.map((m) => m.type));
+    assert.ok(types.includes('scrollSync'), 'the reader\'s scroll after a no-op reveal was swallowed');
+  });
+
   it('does not report its own scrolling, and still reports the reader\'s', async () => {
     await page.evaluate(() => ((window as unknown as { __msgs: unknown[] }).__msgs.length = 0));
     await highlight(await pos('section'));

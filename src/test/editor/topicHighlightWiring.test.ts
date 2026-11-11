@@ -466,3 +466,103 @@ describe('the correction an image load triggers', () => {
     assert.ok(/requestAnimationFrame\(/.test(listener[0]), 'measuring inside the capture phase reads the pre-resize box');
   });
 });
+
+describe('the programmatic-scroll flag cannot be left raised by a scroll that moves nothing', () => {
+  // scrollend never fires for a scroll that moved nothing. Reproduced in real
+  // Chromium: a revealLine to a line sitting below the top of the screen, on
+  // a page already at the end of the document, raised the flag for a
+  // scrollIntoView that the end of the document clamped to a no-op, and the
+  // reader's next scroll was swallowed instead of reported.
+  it('a reveal the end of the document clamps to nothing raises no flag and scrolls nothing', () => {
+    const w = wire();
+    const last = w.el('30:30:0:40');
+    last.rect = { top: 300, height: 40 };
+    w.setScrollHeight(14759 + 700);
+    w.win.scrollY = 14759; // the very bottom
+    w.api.scrollToLine(30);
+    assert.strictEqual(w.beginCount(), 0);
+    assert.strictEqual(w.reveals.length, 0);
+  });
+
+  it('a reveal the page can make still raises the flag and scrolls', () => {
+    const w = wire();
+    const el = w.el('30:30:0:40');
+    el.rect = { top: 300, height: 40 };
+    w.setScrollHeight(20000);
+    w.win.scrollY = 1000;
+    w.api.scrollToLine(30);
+    assert.strictEqual(w.beginCount(), 1);
+    assert.strictEqual(w.reveals.length, 1);
+  });
+
+  function wireFlag(hasScrollend: boolean) {
+    const timers: { fn: () => void; ms: number; cleared: boolean }[] = [];
+    let settles = 0;
+    const factory = new Function(
+      'window',
+      'setTimeout',
+      'clearTimeout',
+      'settleAnchor',
+      [
+        extractVar('programmaticScroll'),
+        extractVar('programmaticScrollFallbackTimer'),
+        extractVar('supportsScrollend'),
+        extractVar('PROGRAMMATIC_SCROLL_WATCHDOG_MS'),
+        extractVar('PROGRAMMATIC_SCROLL_FALLBACK_MS'),
+        extractFn('beginProgrammaticScroll'),
+        'return { begin: beginProgrammaticScroll, up: function() { return programmaticScroll; }, set: function(v) { programmaticScroll = v; } };',
+      ].join('\n'),
+    ) as (
+      w: unknown,
+      s: (fn: () => void, ms: number) => number,
+      c: (id: number) => void,
+      settle: () => void,
+    ) => { begin(): void; up(): boolean; set(v: boolean): void };
+    const api = factory(
+      hasScrollend ? { onscrollend: null } : {},
+      (fn, ms) => timers.push({ fn, ms, cleared: false }),
+      (id) => {
+        if (timers[id - 1]) timers[id - 1].cleared = true;
+      },
+      () => void settles++,
+    );
+    return { api, timers, settles: () => settles };
+  }
+
+  it('whatever raises the flag also arms a watchdog that ends the scroll like scrollend would', () => {
+    const f = wireFlag(true);
+    f.api.begin();
+    assert.strictEqual(f.api.up(), true);
+    assert.strictEqual(f.timers.length, 1);
+    assert.strictEqual(f.timers[0].ms, 4000);
+    f.timers[0].fn();
+    assert.strictEqual(f.api.up(), false, 'a flag nobody lowered comes down by itself');
+    assert.strictEqual(f.settles(), 1, 'and runs the correction scrollend would have run');
+  });
+
+  it('a second scroll replaces the first one\'s watchdog instead of being cut short by it', () => {
+    const f = wireFlag(true);
+    f.api.begin();
+    f.api.begin();
+    assert.strictEqual(f.timers.length, 2);
+    assert.strictEqual(f.timers[0].cleared, true);
+    assert.strictEqual(f.timers[1].cleared, false);
+  });
+
+  it('a watchdog that fires after scrollend already lowered the flag does nothing', () => {
+    const f = wireFlag(true);
+    f.api.begin();
+    f.api.set(false); // scrollend ran
+    f.timers[0].fn();
+    assert.strictEqual(f.settles(), 0);
+  });
+
+  it('without scrollend the same timer is the only thing that ends a scroll, with the shorter wait', () => {
+    const f = wireFlag(false);
+    f.api.begin();
+    assert.strictEqual(f.timers[0].ms, 2000);
+    f.timers[0].fn();
+    assert.strictEqual(f.api.up(), false);
+    assert.strictEqual(f.settles(), 1, 'the correction runs there too, which scrollend-less webviews never got');
+  });
+});
