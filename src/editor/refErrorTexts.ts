@@ -1,6 +1,6 @@
 // Localized wording for the renderer's broken-reference hints
 // (RenderContext.refError / refErrorTexts). The core ships English
-// defaults (DEFAULT_REF_ERROR_TEXTS); the extension fills the same five
+// defaults (DEFAULT_REF_ERROR_TEXTS); the extension fills the same six
 // strings from its own l10n catalog so the hints follow the editor's
 // display language, the same way note labels follow uiLanguage.
 //
@@ -19,6 +19,7 @@ export function refErrorTexts(): RefErrorTexts {
   return {
     content: vscode.l10n.t('Referenced content could not be resolved ({0})'),
     xref: vscode.l10n.t('→ {0} ({1})'),
+    missingKey: vscode.l10n.t('key is not defined or has no target'),
     missingFile: vscode.l10n.t('target file does not exist'),
     parseError: vscode.l10n.t('target file cannot be parsed as XML'),
     missingId: vscode.l10n.t('target ID does not exist'),

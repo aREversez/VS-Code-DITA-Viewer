@@ -21,6 +21,7 @@
 //     collectDependencies also folds image reads into the dependency set.
 //   - suppressIndexterm: only the export path sets it.
 
+import { existsSync } from 'fs';
 import { resolve, relative, isAbsolute } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { RenderContext } from '../render/renderer';
@@ -39,7 +40,7 @@ import {
 } from './refResolvers';
 import { DEFAULT_REF_ERROR_TEXTS, RefErrorTexts } from '../render/refErrorTexts';
 import { defaultTopicScopeChains, getKeyDefs, getKeyScopes, KeyDefLookup, KeyHrefDef, resolveKeyInScope } from './keySpace';
-import { resolveConkeyref } from './conkeyref';
+import { diagnoseConkeyref, resolveConkeyref } from './conkeyref';
 
 export interface BuildRenderContextInput {
   /** Directory hrefs in this document resolve against (== RenderContext.documentDir). */
@@ -242,6 +243,21 @@ export function buildRenderContext(input: BuildRenderContextInput): BuiltRenderC
       if (el && lastLoaded) fileCache.noteOrigin(el, lastLoaded);
       return el;
     };
+    // Only with a key space (this block): a topic previewed with no map has
+    // no keys at all, and "key is not defined" there would flag every
+    // conkeyref for a reason the author cannot act on.
+    if (input.refErrors) {
+      const texts: RefErrorTexts = { ...DEFAULT_REF_ERROR_TEXTS, ...input.refErrorTexts };
+      ctx.conkeyrefError = (conkeyref: string) => {
+        const failure = diagnoseConkeyref(
+          conkeyref,
+          keyDefs,
+          loadTopic,
+          (baseDir, href) => existsSync(resolve(baseDir, decodeHrefPart(href.split('#')[0]))),
+        );
+        return failure === undefined ? undefined : texts[failure];
+      };
+    }
   }
 
   // One hop further along a reference chain, resolved relative to the file

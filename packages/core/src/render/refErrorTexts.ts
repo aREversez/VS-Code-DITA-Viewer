@@ -28,6 +28,8 @@ export interface RefErrorTexts {
    * {0} = the raw href, {1} = the reason refError returned.
    */
   xref: string;
+  /** Reason (conkeyref only): the key is not defined, or has no resource target. */
+  missingKey: string;
   /** Reason: the referenced file is not in the repository closure. */
   missingFile: string;
   /** Reason: the file exists but is not well-formed XML. */
@@ -39,6 +41,7 @@ export interface RefErrorTexts {
 export const DEFAULT_REF_ERROR_TEXTS: RefErrorTexts = {
   content: 'Referenced content could not be resolved ({0})',
   xref: '→ {0} ({1})',
+  missingKey: 'key is not defined or has no target',
   missingFile: 'target file does not exist',
   parseError: 'target file cannot be parsed as XML',
   missingId: 'target ID does not exist',

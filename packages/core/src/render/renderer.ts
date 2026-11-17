@@ -159,6 +159,15 @@ export interface RenderContext {
    * English defaults. Only read when refError is wired.
    */
   refErrorTexts?: RefErrorTexts;
+  /**
+   * The conkeyref counterpart of refError: given a raw @conkeyref value,
+   * the reason it pulls nothing (key not defined / no target, file missing
+   * or unparseable, id absent), or undefined when it resolves. Wired only
+   * when the host has a key space, so a topic previewed without a map is
+   * not flagged for keys it cannot have. Consulted only when the element
+   * has no @conref of its own that rescues it.
+   */
+  conkeyrefError?: (conkeyref: string) => string | undefined;
 }
 
 const CONTAINER_BASETYPES = new Set([
@@ -560,7 +569,7 @@ function followConrefChain(first: DitaNode, context: RenderContext): DitaNode {
 function resolveConrefForNode(
   node: DitaNode,
   context: RenderContext,
-): { node: DitaNode; chainKey?: string; mark?: ConrefMark; refErrorReason?: string } {
+): { node: DitaNode; chainKey?: string; mark?: ConrefMark; refErrorReason?: string; refErrorRef?: string } {
   const conkeyref = node.attributes?.conkeyref;
   if (conkeyref && context.resolveConkeyref && !context.conrefChain?.has(conkeyref)) {
     const keyTarget = context.resolveConkeyref(conkeyref);
@@ -570,7 +579,16 @@ function resolveConrefForNode(
     }
   }
   const conref = node.attributes?.conref;
-  if (!conref || !context.resolveConref) return { node };
+  if (!conref || !context.resolveConref) {
+    // An unresolved conkeyref with no @conref to fall back on: the element
+    // would render its own (usually empty) content. Not on a cycle -- the
+    // chain check above already excluded that case.
+    if (conkeyref && !conref && context.resolveConkeyref && !context.conrefChain?.has(conkeyref)) {
+      const reason = context.conkeyrefError?.(conkeyref);
+      if (reason !== undefined) return { node, refErrorReason: reason, refErrorRef: conkeyref };
+    }
+    return { node };
+  }
   // A conref already resolved on this branch points back here — stop the
   // cycle and render the element's literal content instead of recursing.
   if (context.conrefChain?.has(conref)) return { node };
@@ -582,7 +600,7 @@ function resolveConrefForNode(
     // render is the dangerous shape in a review. A cycle above deliberately
     // never reaches this branch.
     const reason = context.refError?.(conref);
-    return reason !== undefined ? { node, refErrorReason: reason } : { node };
+    return reason !== undefined ? { node, refErrorReason: reason, refErrorRef: conref } : { node };
   }
   const end = followConrefChain(target, context);
   return { node: mergeConrefTarget(node, end), chainKey: conref, mark: conrefMarkFor(end, context) };
@@ -614,6 +632,11 @@ function renderRefErrorPlaceholder(node: DitaNode, context: RenderContext, ref: 
   if (baseType === 'topic/row' || baseType === 'topic/strow') {
     // colspan 1000 is the HTML maximum: the chip spans the whole row.
     return `<tr class="ref-error-row"><td class="ref-error"${attrs} colspan="1000">${label}</td></tr>`;
+  }
+  if (baseType === 'topic/tbody' || baseType === 'topic/thead' || baseType === 'topic/tgroup' || baseType === 'topic/sthead') {
+    // A whole row group (or the tgroup around it) failed: one full-width
+    // row inside a <tbody> stands in for it, so it stays in the table.
+    return `<tbody class="ref-error-rows"><tr class="ref-error-row"><td class="ref-error"${attrs} colspan="1000">${label}</td></tr></tbody>`;
   }
   if (baseType === 'topic/entry' || baseType === 'topic/stentry') {
     return `<td class="ref-error"${attrs}>${label}</td>`;
@@ -829,7 +852,7 @@ export function renderElement(node: DitaNode, context: RenderContext, conrefMark
 
   const resolved = resolveConrefForNode(node, context);
   if (resolved.refErrorReason !== undefined) {
-    return renderRefErrorPlaceholder(node, context, conref!, resolved.refErrorReason);
+    return renderRefErrorPlaceholder(node, context, resolved.refErrorRef ?? conref!, resolved.refErrorReason);
   }
   const effectiveNode = resolveKeyrefForNode(resolved.node, context);
   // The element's own conref wins over a mark handed down by a range.

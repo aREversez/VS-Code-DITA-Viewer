@@ -41,7 +41,7 @@ const enBundle: Record<string, string> = JSON.parse(read('l10n/bundle.l10n.json'
 const zhBundle: Record<string, string> = JSON.parse(read('l10n/bundle.l10n.zh-cn.json'));
 
 describe('refErrorTexts l10n parity', () => {
-  it('covers exactly the five fields of RefErrorTexts', () => {
+  it('covers exactly the six fields of RefErrorTexts', () => {
     assert.deepStrictEqual([...entries.keys()].sort(), Object.keys(DEFAULT_REF_ERROR_TEXTS).sort());
   });
 

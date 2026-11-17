@@ -235,6 +235,7 @@
   "→ {0} ({1})": "→ {0}（{1}）",
   "target file does not exist": "目标文件不存在",
   "target file cannot be parsed as XML": "目标文件 XML 解析失败",
+  "key is not defined or has no target": "键未定义或没有资源目标",
   "target ID does not exist": "目标 ID 不存在",
   "Remote resource could not be reached: {0}": "无法访问远程资源：{0}",
   "Reference points outside the map folder: {0}": "引用指向 Map 文件夹之外：{0}",

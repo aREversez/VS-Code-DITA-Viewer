@@ -106,3 +106,31 @@ export function resolveConkeyref(
   if (!targetId) return root;
   return findElementById(root, targetId);
 }
+
+
+export type ConkeyrefFailure = 'missingKey' | 'missingFile' | 'parseError' | 'missingId';
+
+/**
+ * Why a conkeyref pulls nothing, in the order resolveConkeyref checks:
+ * the key is undefined or has no href; its file is missing or not
+ * well-formed (`fileExists` tells the two apart, as loadTopic cannot); the
+ * addressed id is absent. Undefined when the reference resolves. Kept next
+ * to resolveConkeyref and built on the same steps so the two cannot
+ * disagree about what "resolves" means.
+ */
+export function diagnoseConkeyref(
+  conkeyref: string,
+  defs: KeyDefLookup,
+  loadTopic: (baseDir: string, href: string) => DitaNode | undefined,
+  fileExists: (baseDir: string, href: string) => boolean,
+): ConkeyrefFailure | undefined {
+  const { keyName, elementId } = parseConkeyref(conkeyref);
+  if (!keyName) return undefined;
+  const def = defs.get(keyName);
+  if (!def || !def.href) return 'missingKey';
+  const root = loadTopic(def.baseDir, def.href);
+  if (!root) return fileExists(def.baseDir, def.href) ? 'parseError' : 'missingFile';
+  const targetId = elementId ?? hrefFragmentTarget(def.href);
+  if (!targetId) return undefined;
+  return findElementById(root, targetId) ? undefined : 'missingId';
+}

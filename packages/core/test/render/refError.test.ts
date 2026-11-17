@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { mkdtempSync, writeFileSync, rmSync } from 'fs';
+import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
 import { renderDocument, RenderContext } from '../../src/render/renderer';
@@ -7,6 +7,7 @@ import { DEFAULT_REF_ERROR_TEXTS, RefErrorTexts, fillRefErrorTemplate } from '..
 import { makeFileCache, makeRefErrorResolver } from '../../src/editor/refResolvers';
 import { buildRenderContext } from '../../src/editor/renderContext';
 import { renderTopicCached, renderTopicXml, clearTopicRenderCache } from '../../src/editor/topicRender';
+import { buildKeySpace } from '../../src/editor/keySpace';
 import { parseDita } from '../../src/parser/ditaParser';
 import { DitaNode, SourceRange } from '../../src/parser/domTypes';
 
@@ -56,6 +57,7 @@ function topicWith(child: DitaNode): DitaNode {
 const zhTexts: RefErrorTexts = {
   content: '引用内容无法解析（{0}）',
   xref: '→ {0}（{1}）',
+  missingKey: '键未定义或没有资源目标',
   missingFile: '目标文件不存在',
   parseError: '目标文件 XML 解析失败',
   missingId: '目标 ID 不存在',
@@ -391,5 +393,69 @@ describe('ref-error placeholder placement and xref diagnosis scope', () => {
   it('an xref to a missing DITA topic is still diagnosed', () => {
     assert.ok(render('<p><xref href="gone.dita#t/p"/></p>').includes('xref-broken'));
     assert.ok(render('<p><xref href="gone.dita" format="dita"/></p>').includes('xref-broken'));
+  });
+});
+
+
+describe('conkeyref and row-group hints', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'referr-ck-'));
+  after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(join(dir, 'ok.dita'), '<topic id="o"><title>o</title><body><p id="here">x</p></body></topic>');
+  writeFileSync(join(dir, 'bad.dita'), '<topic id="b"><body><p>');
+  const mapFile = join(dir, 'm.ditamap');
+  writeFileSync(
+    mapFile,
+    '<map><keydef keys="good" href="ok.dita"/><keydef keys="nofile" href="gone.dita"/>' +
+      '<keydef keys="broken" href="bad.dita"/><keydef keys="notarget"/></map>',
+  );
+  const keys = buildKeySpace(mapFile, [], (p: string) => readFileSync(p, 'utf-8')).keys;
+
+  const render = (body: string, keyMap: Map<string, string> = keys): string =>
+    renderTopicXml({
+      xml: `<?xml version="1.0"?><topic id="t"><title>T</title><body>${body}</body></topic>`,
+      docDir: dir,
+      keyMap,
+      asWebviewUri: (p: string) => p,
+      headingLevel: 1,
+      uiLanguage: 'en',
+      refErrors: true,
+    }).html;
+
+  it('an unresolved conkeyref renders the chip, with the failing reason', () => {
+    const cases: Array<[string, string]> = [
+      ['nokey/x', 'key is not defined or has no target'],
+      ['notarget/x', 'key is not defined or has no target'],
+      ['nofile/x', 'target file does not exist'],
+      ['broken/x', 'target file cannot be parsed as XML'],
+      ['good/absent', 'target ID does not exist'],
+    ];
+    for (const [ref, reason] of cases) {
+      const html = render(`<p conkeyref="${ref}"/>`);
+      assert.ok(html.includes(`class="ref-error" title="${ref}"`), `${ref}: ${html}`);
+      assert.ok(html.includes(`(${reason})`), `${ref}: ${html}`);
+    }
+  });
+
+  it('a resolving conkeyref, one rescued by @conref, and a keyless topic stay as before', () => {
+    assert.ok(!render('<p conkeyref="good/here"/>').includes('ref-error'));
+    writeFileSync(join(dir, 'c.dita'), '<topic id="c"><title>c</title><body><p id="p1">rescue</p></body></topic>');
+    const rescued = render('<p conkeyref="nokey/x" conref="c.dita#c/p1"/>');
+    assert.ok(rescued.includes('rescue') && !rescued.includes('ref-error'), rescued);
+    assert.ok(!render('<p conkeyref="nokey/x"/>', new Map()).includes('ref-error'), 'no key space, no diagnosis');
+  });
+
+  it('a failed conkeyref is not diagnosed without the refErrors opt-in', () => {
+    const html = renderTopicXml({
+      xml: '<?xml version="1.0"?><topic id="t"><title>T</title><body><p conkeyref="nokey/x"/></body></topic>',
+      docDir: dir, keyMap: keys, asWebviewUri: (p: string) => p, headingLevel: 1,
+    }).html;
+    assert.ok(!html.includes('ref-error'));
+  });
+
+  it('a broken <tbody conref> stays inside the table as a full-width row', () => {
+    const html = render(
+      '<table><tgroup cols="1"><tbody conref="gone.dita#x/tb"/></tgroup></table>',
+    );
+    assert.ok(/<table[^>]*>\s*<tbody class="ref-error-rows"><tr class="ref-error-row"><td class="ref-error"/.test(html), html);
   });
 });
