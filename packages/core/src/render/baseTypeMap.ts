@@ -1,6 +1,7 @@
 import { DitaNode } from '../parser/domTypes';
 import { RenderContext } from './renderer';
 import { DEFAULT_REF_ERROR_TEXTS, fillRefErrorTemplate } from './refErrorTexts';
+import { isDitaFormat } from './refTargets';
 
 // parentBaseType only reflects the immediate ancestor (entry sits under row,
 // not thead), so header status is carried by an explicit ctx flag set when
@@ -933,9 +934,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
       // An xref whose @format names a non-DITA target (html, pdf, ...) does
       // not point at a DITA id: its fragment is the target format's own
       // (#page=3, #section), so it is never diagnosed.
-      const format = getAttr(node, 'format');
-      const ditaTarget = !format || format === 'dita' || format === 'ditamap';
-      if (scope !== 'external' && scope !== 'peer' && ditaTarget) {
+      if (scope !== 'external' && scope !== 'peer' && isDitaFormat(getAttr(node, 'format'))) {
         const reason = ctx.refError(href);
         if (reason !== undefined) {
           const texts = { ...DEFAULT_REF_ERROR_TEXTS, ...ctx.refErrorTexts };

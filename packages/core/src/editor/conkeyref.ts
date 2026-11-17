@@ -23,10 +23,9 @@
 // this function only reads the map it is handed, so switching the key context
 // switches conkeyref targets for free.
 
-import { isAbsolute } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { KeyDefLookup } from './keySpace';
-import { URL_SCHEME_RE } from './refResolvers';
+import { isNonDitaTarget } from '../render/refTargets';
 
 /**
  * Addressing inside the key's target topic: the whole topic when the value has
@@ -132,15 +131,10 @@ export function diagnoseConkeyref(
   if (!def || !def.href) return 'missingKey';
   // A keydef may name a non-local or non-DITA resource (scope="external"
   // href="https://...", format="pdf" href="manual.pdf"): keySpace records
-  // hrefs without filtering scope/format, so the exclusion lives here,
-  // mirroring makeRefErrorResolver's rule for a direct ref. A URL scheme, an
-  // absolute path or a web-document extension is not a local DITA target;
-  // probing it would report a working external key as a missing file. The
-  // fragment is stripped first -- it is the target format's own (#page=3),
-  // not a DITA id, and must not hide the file part's shape.
-  const filePart = def.href.split('#')[0];
-  if (URL_SCHEME_RE.test(filePart) || isAbsolute(filePart)) return undefined;
-  if (/\.(html?|pdf)$/i.test(filePart)) return undefined;
+  // hrefs without filtering scope/format, so the exclusion lives here, from
+  // the same rule makeRefErrorResolver applies to a direct ref. The fragment
+  // is stripped first -- it is the target format's own, not a DITA id.
+  if (isNonDitaTarget(def.href.split('#')[0])) return undefined;
   const root = loadTopic(def.baseDir, def.href);
   if (!root) return fileExists(def.baseDir, def.href) ? 'parseError' : 'missingFile';
   const targetId = elementId ?? hrefFragmentTarget(def.href);

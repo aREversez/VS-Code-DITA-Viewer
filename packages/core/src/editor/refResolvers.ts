@@ -15,6 +15,7 @@ import { DitaNode } from '../parser/domTypes';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { extractText, getMapTitleText, isDitamapRef } from '../render/mapTypeMap';
 import { DEFAULT_REF_ERROR_TEXTS, RefErrorTexts } from '../render/refErrorTexts';
+import { URL_SCHEME_RE, isNonDitaTarget } from '../render/refTargets';
 import { readSourceText } from './sourceText';
 // ── Image dimensions (for reserving layout space before the image loads) ──
 //
@@ -468,7 +469,7 @@ export function makeRefErrorResolver(
   const cache = sharedCache ?? makeFileCache(docDir);
 
   return (ref: string): string | undefined => {
-    if (!ref || URL_SCHEME_RE.test(ref) || isAbsolute(ref)) return undefined;
+    if (!ref) return undefined;
     const hashIdx = ref.indexOf('#');
     const filePath = hashIdx >= 0 ? ref.substring(0, hashIdx) : ref;
     // "#./topicId/elementId" shorthand: strip the same-document marker
@@ -477,10 +478,9 @@ export function makeRefErrorResolver(
     const parts = idPart.split('/');
     const elementId = parts.length > 1 ? parts[1] : parts[0];
 
-    // A web document's fragment is not a DITA id (guide.html#sec,
-    // manual.pdf#page=3): never probe it, so an xref that works is not
-    // reported as a broken one.
-    if (/\.(html?|pdf)$/i.test(filePath)) return undefined;
+    // URL, absolute path, or a web document (guide.html#sec): not a local
+    // DITA target, so never probed -- see isNonDitaTarget.
+    if (isNonDitaTarget(filePath)) return undefined;
 
     if (!filePath) {
       // Same-document fragment: the id must exist in the document itself.
@@ -603,7 +603,7 @@ export function detectIndexLabel(root: DitaNode, uiLanguage?: string): string {
 
 export type FileReader = (path: string, encoding: 'utf-8') => string;
 
-export const URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
+export { URL_SCHEME_RE };
 
 /**
  * Builds the render context's isInCurrentBook resolver: given a cross-file
