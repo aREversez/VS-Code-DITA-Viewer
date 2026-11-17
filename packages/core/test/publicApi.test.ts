@@ -1,7 +1,7 @@
 import { strict as assert } from 'assert';
 import * as core from '../src/index';
 // Type-only: fails the build, not just the run, if a type the extension needs stops being exported.
-import type { DitaDocument, DitaNode, DocSymbolSpec, FileReader, RenderContext, SourceRange } from '../src/index';
+import type { DitaDocument, DitaNode, DocSymbolSpec, FileReader, RefErrorTexts, RenderContext, SourceRange } from '../src/index';
 
 describe('public API', () => {
   // What the VS Code viewer imports from the modules it copied. If one of these
@@ -24,6 +24,8 @@ describe('public API', () => {
     'isExternalRef',
     'BASE_TYPE_RENDERERS',
     'DEFAULT_NOTE_LABELS',
+    'DEFAULT_REF_ERROR_TEXTS',
+    'fillRefErrorTemplate',
     'IMAGE_DIMENSIONS_CACHE_MAX',
     'TOPIC_RENDER_CACHE_MAX_BYTES',
     'URL_SCHEME_RE',
@@ -62,6 +64,7 @@ describe('public API', () => {
     'makeFileCache',
     'makeFileTitleResolver',
     'makeIsInCurrentBook',
+    'makeRefErrorResolver',
     'mergeProfilingAttrs',
     'needsSpace',
     'noteSourceDependencies',
@@ -100,7 +103,7 @@ describe('public API', () => {
     assert.equal(core.STANDARD_TAG_TO_BASETYPE.p, 'topic/p');
     assert.equal(core.MAP_STANDARD_TAG_TO_BASETYPE.topicref, 'map/topicref');
     // RenderContext is only named here, so a rename or removal is a compile error.
-    const unused: RenderContext | DocSymbolSpec | FileReader | undefined = undefined;
+    const unused: RenderContext | DocSymbolSpec | FileReader | RefErrorTexts | undefined = undefined;
     assert.equal(unused, undefined);
   });
 });

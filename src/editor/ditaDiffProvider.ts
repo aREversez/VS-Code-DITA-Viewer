@@ -14,6 +14,7 @@ import {
   getImageLightboxScript,
 } from './ditaRenderUtils';
 import { sharedWebviewStrings } from './webviewL10n';
+import { refErrorTexts } from './refErrorTexts';
 import {
   diffTopics,
   TopicDiffResult,
@@ -345,6 +346,12 @@ function computeDiff(
       uiLanguage: vscode.env.language,
       // includeIndexLabel omitted: the diff view never surfaces indexterm
       // chips, so it has never set ctx.indexLabel (preserved byte-for-byte).
+      // Broken references DO surface here: a review is exactly where a
+      // silently empty conref is most dangerous, and the placeholder chip
+      // carries the referencing element's data-line range, so it takes part
+      // in diff highlighting and click-to-source like any other block.
+      refErrors: true,
+      refErrorTexts: refErrorTexts(),
     });
 
     return (node: DitaNode, parentBaseType: string, headingLevel: number) => {

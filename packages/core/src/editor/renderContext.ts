@@ -30,12 +30,14 @@ import {
   makeConrefRangeResolver,
   makeFileTitleResolver,
   makeIsInCurrentBook,
+  makeRefErrorResolver,
   detectNoteLabels,
   detectIndexLabel,
   readImageDimensions,
   decodeHrefPart,
   URL_SCHEME_RE,
 } from './refResolvers';
+import { DEFAULT_REF_ERROR_TEXTS, RefErrorTexts } from '../render/refErrorTexts';
 import { defaultTopicScopeChains, getKeyDefs, getKeyScopes, KeyDefLookup, KeyHrefDef, resolveKeyInScope } from './keySpace';
 import { resolveConkeyref } from './conkeyref';
 
@@ -96,6 +98,23 @@ export interface BuildRenderContextInput {
   clickableExternalXrefs?: boolean;
   /** Book / site only: sink that records every file the render read. */
   collectDependencies?: Set<string>;
+  /**
+   * Opt-in: wire RenderContext.refError with the default three-state
+   * diagnosis (makeRefErrorResolver) so a conref that pulls nothing renders
+   * as a placeholder chip and an empty xref with a broken target as a
+   * .xref-broken marker, instead of silently empty/link-shaped output.
+   * Preview and diff paths set this; "Export as HTML" does not -- a shipped
+   * document has no editing context for the hints, the same rule
+   * suppressIndexterm and markConrefs follow.
+   */
+  refErrors?: boolean;
+  /**
+   * Localized wording for the refError hints, merged over the English
+   * defaults (DEFAULT_REF_ERROR_TEXTS). The host fills these from its own
+   * string catalog -- the VS Code extension via vscode.l10n.t -- so the
+   * factory itself stays free of locale logic, like noteLabels.
+   */
+  refErrorTexts?: Partial<RefErrorTexts>;
 }
 
 export interface BuiltRenderContext {
@@ -163,6 +182,15 @@ export function buildRenderContext(input: BuildRenderContextInput): BuiltRenderC
   if (input.includeIndexLabel) ctx.indexLabel = detectIndexLabel(ownRoot, uiLanguage);
   if (input.bookMembers) ctx.isInCurrentBook = makeIsInCurrentBook(docDir, input.bookMembers);
   if (input.clickableExternalXrefs) ctx.clickableExternalXrefs = true;
+
+  if (input.refErrors) {
+    const texts: RefErrorTexts = { ...DEFAULT_REF_ERROR_TEXTS, ...input.refErrorTexts };
+    ctx.refErrorTexts = texts;
+    // Same shared cache as the conref/title resolvers: a target probed here
+    // is usually one they already loaded, and every probe (missing files
+    // included) joins touchedFiles for the caller's dependency set.
+    ctx.refError = makeRefErrorResolver(docDir, ownRoot, fileCache, texts);
+  }
 
   // conkeyref rides on the same file cache: a key's href resolves against the
   // map that defined it (baseDir), not the topic being rendered, so it needs

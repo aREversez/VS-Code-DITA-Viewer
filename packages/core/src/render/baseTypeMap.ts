@@ -1,5 +1,6 @@
 import { DitaNode } from '../parser/domTypes';
 import { RenderContext } from './renderer';
+import { DEFAULT_REF_ERROR_TEXTS, fillRefErrorTemplate } from './refErrorTexts';
 
 // parentBaseType only reflects the immediate ancestor (entry sits under row,
 // not thead), so header status is carried by an explicit ctx flag set when
@@ -917,6 +918,26 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
       const keyref = getAttr(node, 'keyref');
       if (!keyref) return '';
       return `<span class="xref unresolved-keyref" title="Unresolved key: ${escapeAttr(keyref)}">[${escapeAttr(keyref)}]</span>`;
+    }
+
+    // An EMPTY xref whose local target is broken (host-diagnosed, see
+    // RenderContext.refError): the title/href fallback below would render
+    // the raw href in a link-shaped hint that reads as if the reference
+    // worked -- the silent failure this marker exists to surface. Keep the
+    // arrow convention of the xref-external hint, but in the error colour
+    // with a dashed underline and the reason appended. An xref WITH author
+    // text keeps it (content wins, same rule as keyref); scope=external/peer
+    // references are not local documents and are never diagnosed.
+    if (!hasContentChildren(node) && ctx.refError) {
+      const scope = getAttr(node, 'scope');
+      if (scope !== 'external' && scope !== 'peer') {
+        const reason = ctx.refError(href);
+        if (reason !== undefined) {
+          const texts = { ...DEFAULT_REF_ERROR_TEXTS, ...ctx.refErrorTexts };
+          const text = fillRefErrorTemplate(texts.xref, href, reason);
+          return `<span class="xref-broken" title="${escapeAttr(href)}">${escapeAttr(text)}</span>`;
+        }
+      }
     }
 
     let content: string;

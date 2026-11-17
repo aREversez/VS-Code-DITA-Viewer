@@ -14,6 +14,7 @@ import { resolve, isAbsolute, extname, dirname, relative, normalize } from 'path
 import { DitaNode } from '../parser/domTypes';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { extractText, getMapTitleText, isDitamapRef } from '../render/mapTypeMap';
+import { DEFAULT_REF_ERROR_TEXTS, RefErrorTexts } from '../render/refErrorTexts';
 import { readSourceText } from './sourceText';
 // ── Image dimensions (for reserving layout space before the image loads) ──
 //
@@ -431,6 +432,68 @@ export function makeConrefRangeResolver(
     // run sits under one parent (checked above), hence in one file.
     for (const el of run) cache.noteOrigin(el, { file: start.file, root: start.root });
     return run;
+  };
+}
+
+/**
+ * Default broken-reference diagnosis for RenderContext.refError: the
+ * three-state reason a local reference can fail with, in the order the
+ * resolver chain itself checks --
+ *   missing file  -- nothing at the referenced path in the closure;
+ *   parse error   -- the file is there but is not well-formed XML (the
+ *                    common review case: an author broke a DIFFERENT file);
+ *   missing id    -- the file parses but #topicId/elementId names no id.
+ * Returns undefined for a reference that resolves, and for ones it will
+ * not diagnose at all: external URLs, absolute paths, and hrefs that are
+ * neither a fragment nor a DITA-shaped file path (a bare id is not a
+ * filename to probe). Same-document fragments (#id, #./topicId/id) are
+ * checked against ownRoot without touching the filesystem.
+ *
+ * Rides the shared file cache so a target already loaded for conref/title
+ * resolution is not parsed twice, and every probed path -- missing ones
+ * included -- lands in touchedFiles() for the caller's dependency set:
+ * creating the missing target is exactly the change that must invalidate
+ * a cached render. The cache memoizes missing and unparsable alike as
+ * undefined, so existsSync is what tells the two apart.
+ *
+ * The renderer only presents the returned reason (see refErrorTexts.ts);
+ * a host with its own diagnostic rules supplies its own callback instead.
+ */
+export function makeRefErrorResolver(
+  docDir: string,
+  ownRoot?: DitaNode,
+  sharedCache?: ReturnType<typeof makeFileCache>,
+  texts: RefErrorTexts = DEFAULT_REF_ERROR_TEXTS,
+): (ref: string) => string | undefined {
+  const cache = sharedCache ?? makeFileCache(docDir);
+
+  return (ref: string): string | undefined => {
+    if (!ref || URL_SCHEME_RE.test(ref) || isAbsolute(ref)) return undefined;
+    const hashIdx = ref.indexOf('#');
+    const filePath = hashIdx >= 0 ? ref.substring(0, hashIdx) : ref;
+    // "#./topicId/elementId" shorthand: strip the same-document marker
+    // before splitting, the same rule makeConrefRangeResolver applies.
+    const idPart = hashIdx >= 0 ? ref.substring(hashIdx + 1).replace(/^\.\/+/, '') : '';
+    const parts = idPart.split('/');
+    const elementId = parts.length > 1 ? parts[1] : parts[0];
+
+    if (!filePath) {
+      // Same-document fragment: the id must exist in the document itself.
+      if (!idPart || !elementId || !ownRoot) return undefined;
+      return cache.findElementById(ownRoot, elementId) ? undefined : texts.missingId;
+    }
+
+    // No fragment: only a DITA-shaped file path is a file-level reference
+    // worth probing (a bare word is not a filename). With a fragment the
+    // file part is always checked, whatever its extension -- conref/xref
+    // targets are .dita/.xml in practice but the resolver loads any path.
+    if (hashIdx < 0 && !/\.(dita|xml|ditamap)$/i.test(filePath)) return undefined;
+
+    const abs = resolve(docDir, decodeHrefPart(filePath));
+    const root = cache.loadAbsPath(abs);
+    if (!root) return existsSync(abs) ? texts.parseError : texts.missingFile;
+    if (!elementId) return undefined;
+    return cache.findElementById(root, elementId) ? undefined : texts.missingId;
   };
 }
 

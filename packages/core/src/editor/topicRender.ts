@@ -8,6 +8,7 @@ import { dirname, join } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { parseDita, preprocessEntities } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
+import type { RefErrorTexts } from '../render/refErrorTexts';
 import { buildRenderContext } from './renderContext';
 import { sourceStamp, readSourceText, noteSourceDependencies } from './sourceText';
 
@@ -87,6 +88,13 @@ export interface TopicRenderInput {
    * which only ever serves previews, turns it on.
    */
   markConrefs?: boolean;
+  /** See BuildRenderContextInput.refErrors -- passed through untouched.
+   *  renderTopicCached (previews only) forces it on, like markConrefs. */
+  refErrors?: boolean;
+  /** See BuildRenderContextInput.refErrorTexts -- the host's localized
+   *  wording for the broken-reference hints. Part of renderTopicCached's
+   *  cache key: the same topic renders different hint text per locale. */
+  refErrorTexts?: Partial<RefErrorTexts>;
 }
 
 export interface TopicRenderResult {
@@ -136,6 +144,10 @@ export interface TopicXmlRenderInput {
    */
   docFile?: string;
   markConrefs?: boolean;
+  /** See TopicRenderInput.refErrors. */
+  refErrors?: boolean;
+  /** See TopicRenderInput.refErrorTexts. */
+  refErrorTexts?: Partial<RefErrorTexts>;
   /** See BuildRenderContextInput.keyScope. */
   keyScope?: string[][];
 }
@@ -149,7 +161,7 @@ export interface ParsedTopicResult {
 
 
 export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
-  const { xml, docDir, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, collectDependencies, bookMembers, clickableExternalXrefs, docFile, markConrefs, keyScope } = input;
+  const { xml, docDir, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, collectDependencies, bookMembers, clickableExternalXrefs, docFile, markConrefs, refErrors, refErrorTexts, keyScope } = input;
   try {
     const preprocessedXml = preprocessEntities(xml);
     const ditaDoc = parseDita(preprocessedXml);
@@ -174,6 +186,8 @@ export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
       collectDependencies,
       docFile,
       markConrefs,
+      refErrors,
+      refErrorTexts,
       keyScope,
     });
 
@@ -195,7 +209,7 @@ export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
 }
 
 export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
-  const { filePath, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, collectDependencies, bookMembers, clickableExternalXrefs, markConrefs, keyScope } = input;
+  const { filePath, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, collectDependencies, bookMembers, clickableExternalXrefs, markConrefs, refErrors, refErrorTexts, keyScope } = input;
   try {
     if (!existsSync(filePath)) {
       return { html: '', error: `File not found: ${filePath}` };
@@ -217,6 +231,8 @@ export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
       clickableExternalXrefs,
       docFile: filePath,
       markConrefs,
+      refErrors,
+      refErrorTexts,
       keyScope,
     });
     return { html: result.html, title: result.title, error: result.error };
@@ -422,7 +438,12 @@ function dropOldestTopicEntry(): void {
  * different key text in each, so a hit from the other scope would be wrong.
  */
 export function renderTopicCached(input: TopicRenderInput): TopicRenderResult {
-  const key = `${input.filePath}\u0000${input.headingLevel}\u0000${input.keyScope ? JSON.stringify(input.keyScope) : ''}`;
+  // The hint wording is part of the key: two locales render different chip
+  // text for the same topic, so a hit from the other locale would be wrong.
+  // JSON of the (small, fixed-shape) overrides object is a cheap fingerprint;
+  // undefined and {} normalize to the same string.
+  const textsKey = JSON.stringify(input.refErrorTexts ?? {});
+  const key = `${input.filePath}\u0000${input.headingLevel}\u0000${input.keyScope ? JSON.stringify(input.keyScope) : ''}\u0000${textsKey}`;
 
   const cached = topicRenderCache.get(key);
   if (
@@ -446,8 +467,9 @@ export function renderTopicCached(input: TopicRenderInput): TopicRenderResult {
   // Honour a caller-supplied sink as well, so anyone who passed one still
   // sees the dependency set instead of having it silently replaced.
   const dependencies = input.collectDependencies ?? new Set<string>();
-  // Previews only (see above), so conref'd content is always marked here.
-  const result = renderTopicToHtml({ ...input, markConrefs: true, collectDependencies: dependencies });
+  // Previews only (see above), so conref'd content is always marked here and
+  // broken references always surface as hints rather than silent empties.
+  const result = renderTopicToHtml({ ...input, markConrefs: true, refErrors: true, collectDependencies: dependencies });
   if (result.error) {
     // Never cache a failure. A malformed mid-edit save is exactly the
     // transient case this path sees, and pinning it would keep serving the

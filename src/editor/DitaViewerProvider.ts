@@ -23,6 +23,7 @@ import { affectsPanel } from './sourceOverlaySync';
 import { createSourcePreviewSyncGate } from './sourcePreviewSyncGate';
 import { MSG_CHOOSE_DITAVAL, MSG_CLEAR_DITAVAL, MSG_SET_DITAVAL } from './mapMessages';
 import { ditavalForDocument, handleDitavalRequest } from './profilingDitaval';
+import { refErrorTexts } from './refErrorTexts';
 
 // Test-only hook: @vscode/test-electron integration tests can't read a
 // webview's rendered HTML directly (VS Code doesn't expose the WebviewPanel
@@ -517,6 +518,10 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
         // of the dead xref-external hint. Book/site rendering (which needs
         // page switching, not file opening) and export keep their own shapes.
         clickableExternalXrefs: true,
+        // Broken references surface as placeholder chips / dashed markers
+        // instead of silently empty elements, in the editor's own language.
+        refErrors: true,
+        refErrorTexts: refErrorTexts(),
       });
 
       const content = renderDocument(ditaDoc.root, ctx);

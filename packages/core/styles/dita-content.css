@@ -55,6 +55,12 @@
   --color-comment-border: #c4c4c4;
   --color-comment-text: #6b6b6b;
   --color-menucascade-arrow: #767676;
+  /* Broken-reference hints (.ref-error / .xref-broken): a muted rose that
+     reads as an error without shouting -- distinct from the orange
+     unresolved-keyref chip and the red danger callout. */
+  --color-ref-error-bg: #f8efee;
+  --color-ref-error-fg: #97534a;
+  --color-ref-error-border: #dfc1bb;
 }
 
 .vscode-dark, :host([data-scheme="dark"]) {
@@ -78,6 +84,10 @@
   --color-comment-border: #4d4d4d;
   --color-comment-text: #9a9a9a;
   --color-menucascade-arrow: #aaaaaa;
+  /* Semi-transparent rose over the dark canvas, same hue family as light. */
+  --color-ref-error-bg: rgba(224, 133, 120, 0.12);
+  --color-ref-error-fg: #d99a90;
+  --color-ref-error-border: rgba(224, 133, 120, 0.45);
 }
 
 body, .dita-body {
@@ -864,6 +874,30 @@ pre code { background: none; padding: 0; border-radius: 0; }
 .xref { color: var(--color-link); text-decoration: none; }
 .xref:hover { text-decoration: underline; }
 .xref-external { font-style: italic; font-size: 0.9em; opacity: 0.7; }
+/* Broken-reference hints (RenderContext.refError). A conref that pulled
+   nothing renders as a dashed placeholder chip in place of the silently
+   empty element; an empty xref whose target is gone keeps the arrow hint
+   but reads as an error. Both carry the raw reference in title= and the
+   referencing element's data-line range, so click-to-source and diff
+   highlighting keep working on them. */
+.ref-error {
+  display: inline-block;
+  padding: 0 0.4em;
+  border: 1px dashed var(--color-ref-error-border);
+  border-radius: 4px;
+  background: var(--color-ref-error-bg);
+  color: var(--color-ref-error-fg);
+  font-size: 0.9em;
+  font-style: normal;
+  cursor: help;
+}
+.xref-broken {
+  font-style: italic;
+  font-size: 0.9em;
+  color: var(--color-ref-error-fg);
+  border-bottom: 1px dashed var(--color-ref-error-fg);
+  cursor: help;
+}
 .link { color: var(--color-link); text-decoration: none; }
 .link:hover { text-decoration: underline; }
 

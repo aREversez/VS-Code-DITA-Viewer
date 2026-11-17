@@ -314,6 +314,8 @@ export function renderSiteXml(input: SiteXmlRenderInput): SiteXmlRenderResult {
     bookMembers: new Set(members),
     docFile: current,
     markConrefs: true,
+    refErrors: true,
+    refErrorTexts: input.refErrorTexts,
   });
 
   if (result.error !== undefined) {

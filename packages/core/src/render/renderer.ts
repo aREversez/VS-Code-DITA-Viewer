@@ -1,6 +1,7 @@
 import { DitaNode, SourceRange } from '../parser/domTypes';
 import { BASE_TYPE_RENDERERS } from './baseTypeMap';
 import { computeKeyrefSpacing } from './cjkSpacing';
+import { DEFAULT_REF_ERROR_TEXTS, RefErrorTexts, fillRefErrorTemplate } from './refErrorTexts';
 
 export interface RenderContext {
   headingLevel: number;
@@ -130,6 +131,34 @@ export interface RenderContext {
    * applied to xref titles.
    */
   isInCurrentBook?: (href: string) => string | undefined;
+  /**
+   * Opt-in broken-reference diagnosis: given a raw @conref or @href value,
+   * returns a human-readable reason when the reference is broken (the
+   * target file is missing, does not parse as XML, or names no such id),
+   * and undefined when it is fine -- or when the host chooses not to
+   * diagnose it (external URLs and absolute paths are the host's to
+   * exclude; see makeRefErrorResolver). The renderer only PRESENTS the
+   * answer: a conref that resolved to nothing becomes a .ref-error
+   * placeholder chip instead of a silently empty element, and an EMPTY
+   * xref with a broken target becomes a .xref-broken marker instead of a
+   * link-shaped hint that reads as if it worked. Same injection pattern
+   * as noteLabels/resolveTitle -- the host owns the diagnosis logic and
+   * the wording's locale, this module stays host-neutral. Absent: every
+   * render path keeps its historical shape byte-for-byte.
+   *
+   * Deliberately NOT consulted for a conref cycle (conrefChain already
+   * holds the reference): a loop renders its literal content, and a
+   * "could not be resolved" chip there would mislabel a different class
+   * of problem. A failed conrefend range falls through to the single
+   * conref path, so the chip covers it naturally.
+   */
+  refError?: (ref: string) => string | undefined;
+  /**
+   * Wording for the two refError presentations (see refErrorTexts.ts).
+   * The host localizes these; absent or partial fields fall back to the
+   * English defaults. Only read when refError is wired.
+   */
+  refErrorTexts?: RefErrorTexts;
 }
 
 const CONTAINER_BASETYPES = new Set([
@@ -531,7 +560,7 @@ function followConrefChain(first: DitaNode, context: RenderContext): DitaNode {
 function resolveConrefForNode(
   node: DitaNode,
   context: RenderContext,
-): { node: DitaNode; chainKey?: string; mark?: ConrefMark } {
+): { node: DitaNode; chainKey?: string; mark?: ConrefMark; refErrorReason?: string } {
   const conkeyref = node.attributes?.conkeyref;
   if (conkeyref && context.resolveConkeyref && !context.conrefChain?.has(conkeyref)) {
     const keyTarget = context.resolveConkeyref(conkeyref);
@@ -546,9 +575,38 @@ function resolveConrefForNode(
   // cycle and render the element's literal content instead of recursing.
   if (context.conrefChain?.has(conref)) return { node };
   const target = context.resolveConref(conref);
-  if (!target) return { node };
+  if (!target) {
+    // Resolution was attempted and pulled nothing. When the host wired a
+    // diagnosis, a broken reference reads as a placeholder chip instead of
+    // the element's (usually empty) literal content -- the silent-empty
+    // render is the dangerous shape in a review. A cycle above deliberately
+    // never reaches this branch.
+    const reason = context.refError?.(conref);
+    return reason !== undefined ? { node, refErrorReason: reason } : { node };
+  }
   const end = followConrefChain(target, context);
   return { node: mergeConrefTarget(node, end), chainKey: conref, mark: conrefMarkFor(end, context) };
+}
+
+/**
+ * The placeholder chip for a conref that pulled nothing (see
+ * RenderContext.refError). title carries the raw reference value so it can
+ * be copied straight out of the tooltip to fix the source; the data-line*
+ * range is the referencing element's own, so the chip keeps participating
+ * in click-to-source, scroll-sync and diff highlighting exactly like the
+ * element it stands in for.
+ */
+function renderRefErrorPlaceholder(node: DitaNode, context: RenderContext, ref: string, reason: string): string {
+  const texts = { ...DEFAULT_REF_ERROR_TEXTS, ...context.refErrorTexts };
+  const range = node.sourceRange;
+  const label = fillRefErrorTemplate(texts.content, reason);
+  return (
+    `<span class="ref-error" title="${escapeHtml(ref)}"` +
+    ` data-line="${range.startLine}" data-end-line="${range.endLine}"` +
+    ` data-start-col="${range.startCol}" data-end-col="${range.endCol}">` +
+    escapeHtml(label) +
+    '</span>'
+  );
 }
 
 /**
@@ -754,6 +812,9 @@ export function renderElement(node: DitaNode, context: RenderContext, conrefMark
   }
 
   const resolved = resolveConrefForNode(node, context);
+  if (resolved.refErrorReason !== undefined) {
+    return renderRefErrorPlaceholder(node, context, conref!, resolved.refErrorReason);
+  }
   const effectiveNode = resolveKeyrefForNode(resolved.node, context);
   // The element's own conref wins over a mark handed down by a range.
   return renderEffectiveNode(effectiveNode, context, resolved.chainKey, resolved.mark ?? conrefMark);
