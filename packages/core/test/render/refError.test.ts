@@ -8,6 +8,7 @@ import { makeFileCache, makeRefErrorResolver } from '../../src/editor/refResolve
 import { buildRenderContext } from '../../src/editor/renderContext';
 import { renderTopicCached, renderTopicXml, clearTopicRenderCache } from '../../src/editor/topicRender';
 import { buildKeySpace } from '../../src/editor/keySpace';
+import { diagnoseConkeyref } from '../../src/editor/conkeyref';
 import { parseDita } from '../../src/parser/ditaParser';
 import { DitaNode, SourceRange } from '../../src/parser/domTypes';
 
@@ -406,7 +407,10 @@ describe('conkeyref and row-group hints', () => {
   writeFileSync(
     mapFile,
     '<map><keydef keys="good" href="ok.dita"/><keydef keys="nofile" href="gone.dita"/>' +
-      '<keydef keys="broken" href="bad.dita"/><keydef keys="notarget"/></map>',
+      '<keydef keys="broken" href="bad.dita"/><keydef keys="notarget"/>' +
+      '<keydef keys="ext" href="https://example.com/guide.html" scope="external" format="html"/>' +
+      '<keydef keys="pdfk" href="manual.pdf" format="pdf"/>' +
+      '<keydef keys="web" href="guide.html#sec"/></map>',
   );
   const keys = buildKeySpace(mapFile, [], (p: string) => readFileSync(p, 'utf-8')).keys;
 
@@ -457,5 +461,23 @@ describe('conkeyref and row-group hints', () => {
       '<table><tgroup cols="1"><tbody conref="gone.dita#x/tb"/></tgroup></table>',
     );
     assert.ok(/<table[^>]*>\s*<tbody class="ref-error-rows"><tr class="ref-error-row"><td class="ref-error"/.test(html), html);
+  });
+
+  it('never diagnoses a key whose href is external or a web document', () => {
+    // keySpace records these hrefs without filtering scope/format, so the
+    // diagnosis itself must exclude them -- otherwise a working external
+    // keydef reads as "target file does not exist" (the URL resolves to a
+    // bogus local path) and a PDF as "cannot be parsed as XML".
+    for (const ref of ['ext/x', 'pdfk/x', 'web/x']) {
+      const html = render(`<p conkeyref="${ref}">literal</p>`);
+      assert.ok(!html.includes('ref-error'), `${ref}: ${html}`);
+      assert.ok(html.includes('literal'), `${ref}: literal content must survive`);
+    }
+  });
+
+  it('the guard skips an absolute-path href without probing the filesystem', () => {
+    const defs = new Map([['abs', { href: resolve(dir, 'ok.dita'), baseDir: dir }]]);
+    const noProbe = () => { throw new Error('must not probe a non-local target'); };
+    assert.strictEqual(diagnoseConkeyref('abs/here', defs, noProbe, noProbe), undefined);
   });
 });
