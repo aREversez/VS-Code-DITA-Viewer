@@ -451,6 +451,15 @@ location for verification.
   a hop that cannot be resolved ends the chain at the last element that could.
   (`@dita-viewer/core`, `render/renderer.ts`, `followConrefChain`)
 
+- **A conkeyref through an external keydef that uses a relative path is still
+  checked as a local file.** The broken-reference hint skips a key whose `href`
+  is a URL, an absolute path or a `.html`/`.htm`/`.pdf` file, but the key space
+  does not record a keydef's `scope` or `format`, so a `scope="external"` key
+  written as a relative path ending in `.dita` (a topic in another package) can
+  show a "target file does not exist" hint although the reference is fine.
+  Recording `scope` and `format` on the key definition would remove it.
+  (`@dita-viewer/core`, `editor/conkeyref.ts`, `diagnoseConkeyref`)
+
 - **A keyref inside conref-pulled content gets no CJK spacing.** The bundled
   DITA-OT plugin (`com.dita-viewer.cjk-spacing`) runs at
   `depend.preprocess.conrefpush.pre` — before conref content is pushed in —
