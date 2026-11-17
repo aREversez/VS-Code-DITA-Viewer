@@ -331,3 +331,65 @@ describe('renderTopicCached: hint wording is part of the cache key', () => {
     assert.ok(!result.html.includes('ref-error'));
   });
 });
+
+describe('ref-error placeholder placement and xref diagnosis scope', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'referr-place-'));
+  after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(join(dir, 'guide.html'), '<html><body><h1 id="a">x</h1></body></html>');
+
+  const render = (body: string): string =>
+    renderTopicXml({
+      xml: `<?xml version="1.0"?><topic id="t"><title>T</title><body>${body}</body></topic>`,
+      docDir: dir,
+      keyMap: new Map(),
+      asWebviewUri: (p: string) => p,
+      headingLevel: 1,
+      uiLanguage: 'en',
+      refErrors: true,
+    }).html;
+
+  it('a broken <row conref> stays a table row (a bare span is foster-parented out of the table)', () => {
+    const html = render(
+      '<table><tgroup cols="1"><tbody><row conref="gone.dita#x/r"/><row><entry>ok</entry></row></tbody></tgroup></table>',
+    );
+    assert.ok(/<tbody[^>]*>\s*<tr class="ref-error-row"[^>]*><td class="ref-error"[^>]*colspan="\d+"/.test(html), html);
+    assert.ok(!/<tbody[^>]*>\s*<span/.test(html), 'no bare span directly in tbody');
+  });
+
+  it('a broken <entry conref> is a table cell', () => {
+    const html = render(
+      '<table><tgroup cols="1"><tbody><row><entry conref="gone.dita#x/e"/></row></tbody></tgroup></table>',
+    );
+    assert.ok(/<tr[^>]*><td class="ref-error"/.test(html), html);
+  });
+
+  it('a broken <li conref> is a list item, not a span inside the list', () => {
+    const html = render('<ul><li conref="gone.dita#x/l"/></ul>');
+    assert.ok(/<ul[^>]*><li class="ref-error"/.test(html), html);
+  });
+
+  it('a broken block conref (<p>) is a block, an inline one (<ph>) stays a span', () => {
+    assert.ok(/<div class="ref-error"/.test(render('<p conref="gone.dita#x/p"/>')));
+    assert.ok(/<p[^>]*>a <span class="ref-error"/.test(render('<p>a <ph conref="gone.dita#x/q"/></p>')));
+  });
+
+  it('every wrapper keeps title, data-line and the localized text', () => {
+    const html = render('<ul><li conref="gone.dita#x/l"/></ul>');
+    assert.ok(/class="ref-error" title="gone\.dita#x\/l" data-line="\d+"/.test(html), html);
+    assert.ok(html.includes('target file does not exist'));
+  });
+
+  it('an empty xref to an existing html file is not diagnosed (the fragment is not a DITA id)', () => {
+    assert.ok(!render('<p><xref href="guide.html#a"/></p>').includes('xref-broken'));
+    assert.ok(!render('<p><xref href="guide.html#nope" format="html"/></p>').includes('xref-broken'));
+  });
+
+  it('an xref with a non-DITA @format is never diagnosed, a missing .pdf included', () => {
+    assert.ok(!render('<p><xref href="gone.pdf#page=3" format="pdf"/></p>').includes('xref-broken'));
+  });
+
+  it('an xref to a missing DITA topic is still diagnosed', () => {
+    assert.ok(render('<p><xref href="gone.dita#t/p"/></p>').includes('xref-broken'));
+    assert.ok(render('<p><xref href="gone.dita" format="dita"/></p>').includes('xref-broken'));
+  });
+});

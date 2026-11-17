@@ -599,14 +599,30 @@ function resolveConrefForNode(
 function renderRefErrorPlaceholder(node: DitaNode, context: RenderContext, ref: string, reason: string): string {
   const texts = { ...DEFAULT_REF_ERROR_TEXTS, ...context.refErrorTexts };
   const range = node.sourceRange;
-  const label = fillRefErrorTemplate(texts.content, reason);
-  return (
-    `<span class="ref-error" title="${escapeHtml(ref)}"` +
+  const label = escapeHtml(fillRefErrorTemplate(texts.content, reason));
+  const attrs =
+    ` title="${escapeHtml(ref)}"` +
     ` data-line="${range.startLine}" data-end-line="${range.endLine}"` +
-    ` data-start-col="${range.startCol}" data-end-col="${range.endCol}">` +
-    escapeHtml(label) +
-    '</span>'
-  );
+    ` data-start-col="${range.startCol}" data-end-col="${range.endCol}"`;
+  // The chip must be a legal child of whatever the stand-in element would
+  // have been: a bare <span> directly in <tbody> is foster-parented by the
+  // browser to just before the whole table (the same trap the comment
+  // renderer avoids), and a <span> directly in <ul> is invalid. So rows and
+  // cells stay rows and cells, items stay items, and a block-level slot
+  // gets a <div>; only a slot that holds running text keeps the inline span.
+  const baseType = node.baseType;
+  if (baseType === 'topic/row' || baseType === 'topic/strow') {
+    // colspan 1000 is the HTML maximum: the chip spans the whole row.
+    return `<tr class="ref-error-row"><td class="ref-error"${attrs} colspan="1000">${label}</td></tr>`;
+  }
+  if (baseType === 'topic/entry' || baseType === 'topic/stentry') {
+    return `<td class="ref-error"${attrs}>${label}</td>`;
+  }
+  if (baseType === 'topic/li' || baseType === 'topic/sli') {
+    return `<li class="ref-error"${attrs}>${label}</li>`;
+  }
+  const tag = BLOCK_COMMENT_PARENTS.has(context.parentBaseType || '') ? 'div' : 'span';
+  return `<${tag} class="ref-error"${attrs}>${label}</${tag}>`;
 }
 
 /**

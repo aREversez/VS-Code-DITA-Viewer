@@ -908,6 +908,11 @@ pre code { background: none; padding: 0; border-radius: 0; }
   font-style: normal;
   cursor: help;
 }
+/* The same chip in a block, list or table slot (see renderRefErrorPlaceholder):
+   inline-block would drop the list marker and break the table cell. */
+div.ref-error { display: block; width: fit-content; }
+li.ref-error { display: list-item; }
+td.ref-error { display: table-cell; }
 .xref-broken {
   font-style: italic;
   font-size: 0.9em;

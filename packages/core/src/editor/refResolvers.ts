@@ -477,6 +477,11 @@ export function makeRefErrorResolver(
     const parts = idPart.split('/');
     const elementId = parts.length > 1 ? parts[1] : parts[0];
 
+    // A web document's fragment is not a DITA id (guide.html#sec,
+    // manual.pdf#page=3): never probe it, so an xref that works is not
+    // reported as a broken one.
+    if (/\.(html?|pdf)$/i.test(filePath)) return undefined;
+
     if (!filePath) {
       // Same-document fragment: the id must exist in the document itself.
       if (!idPart || !elementId || !ownRoot) return undefined;

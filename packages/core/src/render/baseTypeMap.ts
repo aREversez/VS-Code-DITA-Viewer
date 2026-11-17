@@ -930,7 +930,12 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     // references are not local documents and are never diagnosed.
     if (!hasContentChildren(node) && ctx.refError) {
       const scope = getAttr(node, 'scope');
-      if (scope !== 'external' && scope !== 'peer') {
+      // An xref whose @format names a non-DITA target (html, pdf, ...) does
+      // not point at a DITA id: its fragment is the target format's own
+      // (#page=3, #section), so it is never diagnosed.
+      const format = getAttr(node, 'format');
+      const ditaTarget = !format || format === 'dita' || format === 'ditamap';
+      if (scope !== 'external' && scope !== 'peer' && ditaTarget) {
         const reason = ctx.refError(href);
         if (reason !== undefined) {
           const texts = { ...DEFAULT_REF_ERROR_TEXTS, ...ctx.refErrorTexts };
