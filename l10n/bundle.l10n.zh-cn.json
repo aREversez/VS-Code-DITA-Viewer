@@ -130,6 +130,7 @@
   "Copied!": "已复制！",
   "Copy failed": "复制失败",
   "Copying images is not supported here": "此处不支持复制图片",
+  "Copy code": "复制代码",
   "Image copied to clipboard": "图片已复制到剪贴板",
   "Please open a .dita file first.": "请先打开一个 .dita 文件。",
   "Not a Git repository: {0}": "不是 Git 仓库：{0}",

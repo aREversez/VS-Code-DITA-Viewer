@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Features
+
+- **Click a code block's language chip to copy its code.** The label in the top-right corner of a `codeblock` that carries a language (`outputclass="language-xml"`) was a plain label; it is now a copy button in the topic, Book and Docsite previews. Clicking it copies the block's code — never the label — to the clipboard, and the chip reads *Copied!* for a moment (*Copy failed* if the host refused) before showing the language again; hovering shows a *Copy code* tooltip. Where the async clipboard API is unavailable or refuses, it falls back to `execCommand('copy')`. The chip stays inert in hosts that do not run the script (the diff view, exported HTML), since the stylesheet only makes it clickable once the script has marked the page. A block without a language has no chip and so no button.
+
 ### Fixes
 
 - **The preview follows a source link to a later section of the same document.** Clicking such a link moved the source editor to the target, but the preview stayed where it was until the next mouse-wheel scroll in the source. The click and the go-to-definition jump it triggers are two selection changes a few milliseconds apart, and the first one opened a 400 ms window that was meant to keep the editor's own auto-reveal from fighting the preview's centering — but the same window also swallowed the second selection, so the jump never reached the preview. The window now only silences the visible-range echo it was made for; a selection change is dropped only when it is the echo of the preview's own scroll. The timing rules moved out of the provider into a module the unit tests can run.

@@ -876,6 +876,18 @@ pre.codeblock, pre.preformatted {
   pointer-events: none;
 }
 
+/* The language chip doubles as a copy button in previews that run
+   codeCopyScript (which marks <html> with .dv-code-copy); everywhere else it
+   stays the inert label above. */
+.dv-code-copy .codeblock-lang {
+  pointer-events: auto;
+  cursor: pointer;
+  user-select: none;
+}
+.dv-code-copy .codeblock-lang:hover {
+  filter: brightness(1.2);
+}
+
 code {
   font-family: var(--code-font);
   font-size: 0.9em;

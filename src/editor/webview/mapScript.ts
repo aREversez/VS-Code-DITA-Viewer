@@ -9,7 +9,7 @@
 
 import * as vscode from 'vscode';
 import { getProfilingToggleScript } from './profilingToggleScript';
-import { getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getImageMapSupportScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getRefreshButtonScript, getSiteNavClickHandlerScript, getSidebarUpdateScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getOutlineSyncScript, getSiteNavToggleScript, getSiteNavKeyboardScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteOpenSourceScript, getTemplateSelectScript, getToolbarPlacementScript, PREV_TOPIC_ICON_SVG, NEXT_TOPIC_ICON_SVG, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, HISTORY_BACK_ICON_SVG, HISTORY_FORWARD_ICON_SVG, getSiteHomeButtonScript } from '../ditaRenderUtils';
+import { getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getCodeCopyScript, getImageMapSupportScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getRefreshButtonScript, getSiteNavClickHandlerScript, getSidebarUpdateScript, getBookNavClickHandlerScript, getBookScrollSyncScript, getOutlineSyncScript, getSiteNavToggleScript, getSiteNavKeyboardScript, getSiteNavCollapseStateHelperScript, getSiteNavExpandCollapseAllButtonsScript, getSitePrevNextButtonsScript, getSiteHistoryButtonsScript, getSiteOpenSourceScript, getTemplateSelectScript, getToolbarPlacementScript, PREV_TOPIC_ICON_SVG, NEXT_TOPIC_ICON_SVG, getSiteSidebarToggleScript, getModeToggleScript, getSiteSidebarResizerScript, HISTORY_BACK_ICON_SVG, HISTORY_FORWARD_ICON_SVG, getSiteHomeButtonScript } from '../ditaRenderUtils';
 import { getWebhelpChromeScript } from './webhelpChromeScript';
 import { getBookSearchScript } from '../bookSearchIndex';
 import { sharedWebviewStrings } from '../webviewL10n';
@@ -360,6 +360,14 @@ export function getMapWebviewScript(
     copyUnsupportedLabel: L.imgCopyUnsupportedLabel,
     copyToastDone: L.imgCopyToastDone,
     copyToastFailed: L.imgCopyToastFailed,
+  })}
+
+  // Clicking a code block's language chip copies its code. Document-level
+  // delegation, so content swaps need no re-run -- see getCodeCopyScript.
+  ${getCodeCopyScript({
+    copyTitle: L.codeCopyTitle,
+    doneLabel: L.codeCopyDoneLabel,
+    failedLabel: L.codeCopyFailedLabel,
   })}
 
   // Image-map hotspots: same two fixes as the topic preview (see

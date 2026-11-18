@@ -12,7 +12,7 @@ import { getHighlightRunScript } from './highlightRunScript';
 import { getConrefJumpScript } from './conrefJumpScript';
 import { MSG_CHOOSE_DITAVAL, MSG_CLEAR_DITAVAL, MSG_OPEN_CONREF_TARGET, MSG_OPEN_XREF_TARGET, MSG_SET_DITAVAL } from '../mapMessages';
 import { getProfilingToggleScript } from './profilingToggleScript';
-import { getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getImageMapSupportScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getRefreshButtonScript } from '../ditaRenderUtils';
+import { getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getCodeCopyScript, getImageMapSupportScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getRefreshButtonScript } from '../ditaRenderUtils';
 import { sharedWebviewStrings } from '../webviewL10n';
 
 export function getWebviewScript(): string {
@@ -224,6 +224,14 @@ export function getWebviewScript(): string {
     copyUnsupportedLabel: L.imgCopyUnsupportedLabel,
     copyToastDone: L.imgCopyToastDone,
     copyToastFailed: L.imgCopyToastFailed,
+  })}
+
+  // Clicking a code block's language chip copies its code. Document-level
+  // delegation, so content swaps need no re-run -- see getCodeCopyScript.
+  ${getCodeCopyScript({
+    copyTitle: L.codeCopyTitle,
+    doneLabel: L.codeCopyDoneLabel,
+    failedLabel: L.codeCopyFailedLabel,
   })}
 
   // Image-map hotspots: keeps <area> hit regions aligned with the rendered
