@@ -15,14 +15,25 @@
 // styles.css keeps `.codeblock-lang` inert (pointer-events: none) for hosts
 // that don't run this script; the script marks <html> with `dv-code-copy`,
 // and `.dv-code-copy .codeblock-lang` turns the chip into a clickable one.
+// The renderer emits the chip as a plain <div> (it must stay an inert label
+// in the diff view and exported HTML), so the button semantics -- role,
+// tabindex, Enter/Space activation and a polite live region for the result
+// -- are added here, once at startup and via MutationObserver for every
+// later content swap or book-mode patch (same self-maintaining shape as
+// imageMapScript's rescale observer).
 export function getCodeCopyScript(opts: {
   copyTitle: string;
   doneLabel: string;
   failedLabel: string;
 }): string {
-  const copyTitle = JSON.stringify(opts.copyTitle);
-  const doneLabel = JSON.stringify(opts.doneLabel);
-  const failedLabel = JSON.stringify(opts.failedLabel);
+  // JSON.stringify alone leaves `<` literal, so a label containing
+  // `</script>` would close the surrounding <script> element when this
+  // string is interpolated into the webview HTML. \u003c decodes to the
+  // exact same JS string but cannot terminate the HTML script block.
+  const jsString = (s: string) => JSON.stringify(s).replace(/</g, '\\u003c');
+  const copyTitle = jsString(opts.copyTitle);
+  const doneLabel = jsString(opts.doneLabel);
+  const failedLabel = jsString(opts.failedLabel);
   return `
   (function() {
     var COPY_TITLE = ${copyTitle};
@@ -41,6 +52,37 @@ export function getCodeCopyScript(opts: {
       var chip = chipOf(e.target);
       if (chip && !chip.title) chip.title = COPY_TITLE;
     });
+
+    // Button semantics for keyboard and screen-reader users. Idempotent:
+    // re-enhancing an already-enhanced chip changes nothing.
+    function enhance(chip) {
+      if (!chip.getAttribute('role')) {
+        chip.setAttribute('role', 'button');
+        chip.setAttribute('tabindex', '0');
+      }
+      if (!chip.title) chip.title = COPY_TITLE;
+    }
+
+    function enhanceIn(node) {
+      if (!node || node.nodeType !== 1) return;
+      if (node.matches && node.matches('.codeblock-lang')) enhance(node);
+      if (!node.querySelectorAll) return;
+      var chips = node.querySelectorAll('.codeblock-lang');
+      for (var i = 0; i < chips.length; i++) enhance(chips[i]);
+    }
+
+    // One pass at startup, then the observer covers every content swap and
+    // book-mode patch -- no re-run from a content-swap hook, same shape as
+    // imageMapScript's rescale observer.
+    enhanceIn(document.body);
+    if (typeof MutationObserver === 'function') {
+      new MutationObserver(function(records) {
+        for (var i = 0; i < records.length; i++) {
+          var added = records[i].addedNodes;
+          for (var j = 0; j < added.length; j++) enhanceIn(added[j]);
+        }
+      }).observe(document.documentElement, { childList: true, subtree: true });
+    }
 
     // Fallback for hosts where the async clipboard API is missing or refuses
     // (it needs a focused document and a user gesture).
@@ -71,6 +113,25 @@ export function getCodeCopyScript(opts: {
       return Promise.resolve(legacyCopy(text));
     }
 
+    // One visually-hidden polite live region announces the copy result;
+    // swapping the chip's own text is not reliably read by screen readers.
+    // Created lazily on the first copy and reused; it lives on <body>, so
+    // content swaps inside #dita-content-root never remove it.
+    var liveRegion = null;
+    function announce(msg) {
+      if (!liveRegion) {
+        liveRegion = document.createElement('div');
+        liveRegion.setAttribute('aria-live', 'polite');
+        liveRegion.style.position = 'fixed';
+        liveRegion.style.width = '1px';
+        liveRegion.style.height = '1px';
+        liveRegion.style.overflow = 'hidden';
+        liveRegion.style.clipPath = 'inset(50%)';
+        document.body.appendChild(liveRegion);
+      }
+      liveRegion.textContent = msg;
+    }
+
     function flash(chip, ok) {
       // The first click remembers the language; a click during feedback must
       // not capture the feedback text as the "original".
@@ -79,7 +140,9 @@ export function getCodeCopyScript(opts: {
         orig = chip.textContent;
         chip.setAttribute('data-orig-label', orig);
       }
-      chip.textContent = ok ? DONE_LABEL : FAILED_LABEL;
+      var label = ok ? DONE_LABEL : FAILED_LABEL;
+      chip.textContent = label;
+      announce(label);
       if (chip.__dvCopyTimer) clearTimeout(chip.__dvCopyTimer);
       chip.__dvCopyTimer = setTimeout(function() {
         chip.textContent = orig;
@@ -88,13 +151,25 @@ export function getCodeCopyScript(opts: {
       }, FEEDBACK_MS);
     }
 
-    document.addEventListener('click', function(e) {
-      var chip = chipOf(e.target);
-      if (!chip) return;
+    function copyChip(chip) {
       var wrap = chip.closest('.codeblock-wrap');
       var pre = wrap && wrap.querySelector('pre');
       if (!pre) return;
       copyText(pre.textContent || '').then(function(ok) { flash(chip, ok); });
+    }
+
+    document.addEventListener('click', function(e) {
+      var chip = chipOf(e.target);
+      if (chip) copyChip(chip);
+    });
+
+    // Enter/Space activate the focused chip like a native button.
+    document.addEventListener('keydown', function(e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var chip = chipOf(e.target);
+      if (!chip) return;
+      e.preventDefault();
+      copyChip(chip);
     });
   })();
 `;

@@ -34,6 +34,9 @@ interface FakeNode extends FakeEl {
   cls: string;
   parent: FakeNode | null;
   kids: FakeNode[];
+  nodeType: number;
+  matches(sel: string): boolean;
+  querySelectorAll(sel: string): FakeNode[];
 }
 
 function el(cls: string, text = ''): FakeNode {
@@ -41,6 +44,7 @@ function el(cls: string, text = ''): FakeNode {
     cls,
     parent: null,
     kids: [],
+    nodeType: 1,
     textContent: text,
     title: '',
     attrs: {},
@@ -53,8 +57,23 @@ function el(cls: string, text = ''): FakeNode {
       }
       return null;
     },
+    matches(sel: string) {
+      return self.cls.split(' ').includes(sel.replace('.', ''));
+    },
     querySelector(sel: string) {
       return self.kids.find((k) => k.cls.split(' ').includes(sel)) ?? null;
+    },
+    querySelectorAll(sel: string) {
+      const want = sel.replace('.', '');
+      const out: FakeNode[] = [];
+      const walk = (n: FakeNode) => {
+        for (const k of n.kids) {
+          if (k.cls.split(' ').includes(want)) out.push(k);
+          walk(k);
+        }
+      };
+      walk(self);
+      return out;
     },
     getAttribute: (n) => (n in self.attrs ? self.attrs[n] : null),
     setAttribute: (n, v) => { self.attrs[n] = v; },
@@ -73,30 +92,61 @@ function block(lang: string, code: string) {
   return { wrap, pre, chip };
 }
 
+interface FakeCreated {
+  tag: string;
+  value: string;
+  textContent: string;
+  style: Record<string, string>;
+  attrs: Record<string, string>;
+  setAttribute(n: string, v: string): void;
+  select(): void;
+  remove(): void;
+}
+
 interface Harness {
-  fire(type: string, target: unknown): void;
+  fire(type: string, target: unknown, props?: Record<string, unknown>): void;
+  swapIn(node: unknown): void;
   rootClasses: string[];
   timers: Array<() => void>;
   runTimers(): void;
   copied: string[];
   legacyCopied: string[];
+  appended: FakeCreated[];
+  prevented: number;
 }
 
-function load(opts: { clipboard: 'ok' | 'reject' | 'none'; legacyOk?: boolean }): Harness {
+function load(opts: { clipboard: 'ok' | 'reject' | 'none'; legacyOk?: boolean; observers?: boolean }): Harness {
   const listeners: Record<string, Listener[]> = {};
   const rootClasses: string[] = [];
   const copied: string[] = [];
   const legacyCopied: string[] = [];
+  const appended: FakeCreated[] = [];
   const timers: Array<() => void> = [];
+  const observerCallbacks: Array<(recs: Array<{ addedNodes: unknown[] }>) => void> = [];
+  const harness: Harness = {
+    fire: (type, target, props = {}) => (listeners[type] || []).forEach((fn) =>
+      fn({ target, preventDefault: () => { harness.prevented++; }, ...props })),
+    swapIn: (node) => observerCallbacks.forEach((cb) => cb([{ addedNodes: [node] }])),
+    rootClasses,
+    timers,
+    runTimers: () => { while (timers.length) (timers.shift() as () => void)(); },
+    copied,
+    legacyCopied,
+    appended,
+    prevented: 0,
+  };
   const doc = {
     documentElement: { classList: { add: (c: string) => rootClasses.push(c) } },
     addEventListener: (t: string, fn: Listener) => { (listeners[t] ||= []).push(fn); },
-    createElement: () => {
-      const ta = { value: '', style: {} as Record<string, string>, setAttribute() {}, select() {}, remove() {} };
-      return ta;
-    },
+    createElement: (tag: string): FakeCreated => ({
+      tag, value: '', textContent: '', style: {}, attrs: {},
+      setAttribute(n, v) { this.attrs[n] = v; }, select() {}, remove() {},
+    }),
     body: {
-      appendChild(ta: { value: string }) { legacyCopied.push(ta.value); },
+      appendChild(n: FakeCreated) {
+        appended.push(n);
+        if (n.tag === 'textarea') legacyCopied.push(n.value);
+      },
     },
     execCommand: () => opts.legacyOk !== false,
   };
@@ -110,20 +160,17 @@ function load(opts: { clipboard: 'ok' | 'reject' | 'none'; legacyOk?: boolean })
       },
     };
   }
+  class FakeMutationObserver {
+    constructor(cb: (recs: Array<{ addedNodes: unknown[] }>) => void) { observerCallbacks.push(cb); }
+    observe() {}
+  }
   const setT = (fn: () => void) => { timers.push(fn); return timers.length; };
-  new Function('document', 'navigator', 'setTimeout', 'clearTimeout', getCodeCopyScript({
+  new Function('document', 'navigator', 'setTimeout', 'clearTimeout', 'MutationObserver', getCodeCopyScript({
     copyTitle: 'Copy code',
     doneLabel: 'Copied!',
     failedLabel: 'Copy failed',
-  }))(doc, nav, setT, () => {});
-  return {
-    fire: (type, target) => (listeners[type] || []).forEach((fn) => fn({ target })),
-    rootClasses,
-    timers,
-    runTimers: () => { while (timers.length) (timers.shift() as () => void)(); },
-    copied,
-    legacyCopied,
-  };
+  }))(doc, nav, setT, () => {}, opts.observers === false ? undefined : FakeMutationObserver);
+  return harness;
 }
 
 const flush = () => new Promise<void>((r) => setImmediate(r));
@@ -215,6 +262,83 @@ describe('getCodeCopyScript', () => {
     h.fire('mouseover', b.chip);
     assert.strictEqual(b.chip.title, 'custom');
   });
+
+  it('never lets a label break out of the surrounding <script> element', () => {
+    const src = getCodeCopyScript({
+      copyTitle: '</script><script>alert(1)</script>',
+      doneLabel: 'a</script>b',
+      failedLabel: '<img src=x onerror=alert(1)>',
+    });
+    assert.ok(!src.includes('</script>'), 'no literal </script> in the embedded script');
+    assert.ok(!src.includes('<script>'), 'no literal <script> either');
+    assert.ok(src.includes('\\u003c'), 'label < characters are escaped as \\u003c');
+    assert.doesNotThrow(() => new Function(src));
+  });
+
+  it('enhances chips added by a content swap into keyboard buttons', () => {
+    const h = load({ clipboard: 'ok' });
+    const b = block('xml', '<a/>');
+    h.swapIn(b.wrap);
+    assert.strictEqual(b.chip.getAttribute('role'), 'button');
+    assert.strictEqual(b.chip.getAttribute('tabindex'), '0');
+    assert.strictEqual(b.chip.title, 'Copy code');
+  });
+
+  it('enhancement is idempotent and keeps a custom tooltip', () => {
+    const h = load({ clipboard: 'ok' });
+    const b = block('xml', '<a/>');
+    h.swapIn(b.wrap);
+    b.chip.title = 'custom';
+    h.swapIn(b.chip); // the added node can be the chip itself (outerHTML patch)
+    assert.strictEqual(b.chip.getAttribute('role'), 'button');
+    assert.strictEqual(b.chip.title, 'custom');
+  });
+
+  it('Enter on the focused chip copies the code and prevents the default', async () => {
+    const h = load({ clipboard: 'ok' });
+    const b = block('sh', 'ls -la');
+    h.fire('keydown', b.chip, { key: 'Enter' });
+    await flush();
+    assert.deepStrictEqual(h.copied, ['ls -la']);
+    assert.strictEqual(h.prevented, 1);
+    assert.strictEqual(b.chip.textContent, 'Copied!');
+  });
+
+  it('Space copies too; other keys and non-chips are ignored', async () => {
+    const h = load({ clipboard: 'ok' });
+    const b = block('sh', 'pwd');
+    h.fire('keydown', b.chip, { key: ' ' });
+    await flush();
+    assert.deepStrictEqual(h.copied, ['pwd']);
+    h.fire('keydown', b.chip, { key: 'a' });
+    h.fire('keydown', b.pre, { key: 'Enter' });
+    h.fire('keydown', null, { key: 'Enter' });
+    await flush();
+    assert.deepStrictEqual(h.copied, ['pwd']);
+    assert.strictEqual(h.prevented, 1);
+  });
+
+  it('announces the result through one reused polite live region', async () => {
+    const h = load({ clipboard: 'ok' });
+    const b = block('xml', '<a/>');
+    h.fire('click', b.chip);
+    await flush();
+    const regions = () => h.appended.filter((n) => n.tag === 'div');
+    assert.strictEqual(regions().length, 1);
+    assert.strictEqual(regions()[0].attrs['aria-live'], 'polite');
+    assert.strictEqual(regions()[0].textContent, 'Copied!');
+    h.fire('click', b.chip);
+    await flush();
+    assert.strictEqual(regions().length, 1, 'the region is reused, not re-created');
+  });
+
+  it('still copies when MutationObserver is unavailable', async () => {
+    const h = load({ clipboard: 'ok', observers: false });
+    const b = block('xml', '<a/>');
+    h.fire('click', b.chip);
+    await flush();
+    assert.deepStrictEqual(h.copied, ['<a/>']);
+  });
 });
 
 describe('code copy wiring', () => {
@@ -231,5 +355,6 @@ describe('code copy wiring', () => {
     const css = read('media/styles.css');
     assert.ok(/\.dv-code-copy \.codeblock-lang\s*\{[^}]*pointer-events:\s*auto/.test(css));
     assert.ok(/\.codeblock-lang\s*\{[^}]*pointer-events:\s*none/.test(css), 'default stays inert for hosts without the script');
+    assert.ok(/\.dv-code-copy \.codeblock-lang:focus-visible\s*\{[^}]*outline:/.test(css), 'keyboard focus ring');
   });
 });
