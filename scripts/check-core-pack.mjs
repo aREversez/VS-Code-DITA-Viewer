@@ -43,7 +43,21 @@ const check = (ok, message) => {
 try {
   // npm pack runs prepublishOnly's sibling lifecycle for `pack`, not publish; build explicitly.
   npm(['run', 'build', '-w', '@dita-viewer/core'], root);
-  const info = JSON.parse(npm(['pack', '--json', '--pack-destination', work], pkgDir))[0];
+  const packOutput = npm(['pack', '--json', '--pack-destination', work], pkgDir);
+  // `npm pack --json` prints an array with one entry per package; some npm
+  // versions print the single entry itself, and a failing pack can print
+  // { "error": ... } with a zero exit status. Accept both shapes and, when
+  // neither has a file list, show npm's own output instead of a TypeError.
+  let packJson;
+  try {
+    packJson = JSON.parse(packOutput);
+  } catch {
+    throw new Error(`npm pack --json did not print JSON:\n${packOutput}`);
+  }
+  const info = Array.isArray(packJson) ? packJson[0] : packJson;
+  if (!info || !Array.isArray(info.files)) {
+    throw new Error(`npm pack --json has no file list; npm printed:\n${packOutput}`);
+  }
   const files = info.files.map((f) => f.path);
   const has = (p) => files.includes(p);
   check(has('LICENSE'), 'tarball has LICENSE');
