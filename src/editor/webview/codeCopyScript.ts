@@ -61,6 +61,15 @@ export function getCodeCopyScript(opts: {
         chip.setAttribute('tabindex', '0');
       }
       if (!chip.title) chip.title = COPY_TITLE;
+      // The chip's text is only the bare language ("xml"), so a screen reader
+      // would announce "xml, button" with no hint of what it does. Name it by
+      // action and language instead. data-orig-label holds the language while
+      // the feedback text ("Copied!") is showing, so the name never absorbs it.
+      if (!chip.getAttribute('aria-label')) {
+        var lang = chip.getAttribute('data-orig-label');
+        if (lang === null) lang = chip.textContent;
+        chip.setAttribute('aria-label', COPY_TITLE + ' (' + lang + ')');
+      }
     }
 
     function enhanceIn(node) {

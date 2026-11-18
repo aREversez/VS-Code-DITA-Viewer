@@ -294,6 +294,28 @@ describe('getCodeCopyScript', () => {
     assert.strictEqual(b.chip.title, 'custom');
   });
 
+  it('names the button by its action and language, not just the bare language', () => {
+    const h = load({ clipboard: 'ok' });
+    const b = block('xml', '<a/>');
+    h.swapIn(b.wrap);
+    assert.strictEqual(b.chip.getAttribute('aria-label'), 'Copy code (xml)');
+  });
+
+  it('the accessible name never absorbs the feedback text, and a custom aria-label is kept', async () => {
+    const h = load({ clipboard: 'ok' });
+    const b = block('xml', '<a/>');
+    h.swapIn(b.wrap);
+    h.fire('click', b.chip);
+    await flush();
+    assert.strictEqual(b.chip.textContent, 'Copied!');
+    h.swapIn(b.chip); // re-enhanced while the feedback text is showing
+    assert.strictEqual(b.chip.getAttribute('aria-label'), 'Copy code (xml)');
+    const c = block('sh', 'ls');
+    c.chip.setAttribute('aria-label', 'custom');
+    h.swapIn(c.wrap);
+    assert.strictEqual(c.chip.getAttribute('aria-label'), 'custom');
+  });
+
   it('Enter on the focused chip copies the code and prevents the default', async () => {
     const h = load({ clipboard: 'ok' });
     const b = block('sh', 'ls -la');
@@ -355,6 +377,10 @@ describe('code copy wiring', () => {
     const css = read('media/styles.css');
     assert.ok(/\.dv-code-copy \.codeblock-lang\s*\{[^}]*pointer-events:\s*auto/.test(css));
     assert.ok(/\.codeblock-lang\s*\{[^}]*pointer-events:\s*none/.test(css), 'default stays inert for hosts without the script');
+    assert.ok(
+      /\.dv-code-copy \.codeblock-lang:focus-visible\s*\{[^}]*var\(--dita-focus,\s*#007fd4\)/.test(css),
+      'the focus ring carries the same fallback colour as the other focus rule',
+    );
     assert.ok(/\.dv-code-copy \.codeblock-lang:focus-visible\s*\{[^}]*outline:/.test(css), 'keyboard focus ring');
   });
 });

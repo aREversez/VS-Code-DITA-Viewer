@@ -890,7 +890,7 @@ pre.codeblock, pre.preformatted {
 /* The script gives the chip role="button" tabindex="0"; show the standard
    focus ring for keyboard activation (Enter/Space). */
 .dv-code-copy .codeblock-lang:focus-visible {
-  outline: 1px solid var(--dita-focus);
+  outline: 1px solid var(--dita-focus, #007fd4);
   outline-offset: 1px;
 }
 
