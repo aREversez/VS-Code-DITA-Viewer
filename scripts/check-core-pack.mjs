@@ -44,17 +44,24 @@ try {
   // npm pack runs prepublishOnly's sibling lifecycle for `pack`, not publish; build explicitly.
   npm(['run', 'build', '-w', '@dita-viewer/core'], root);
   const packOutput = npm(['pack', '--json', '--pack-destination', work], pkgDir);
-  // `npm pack --json` prints an array with one entry per package; some npm
-  // versions print the single entry itself, and a failing pack can print
-  // { "error": ... } with a zero exit status. Accept both shapes and, when
-  // neither has a file list, show npm's own output instead of a TypeError.
+  // `npm pack --json` does not print the same shape everywhere, and a failing
+  // pack can print { "error": ... } with a zero exit status. Accept every
+  // known shape and, when none has a file list, show npm's own output
+  // instead of a TypeError.
   let packJson;
   try {
     packJson = JSON.parse(packOutput);
   } catch {
     throw new Error(`npm pack --json did not print JSON:\n${packOutput}`);
   }
-  const info = Array.isArray(packJson) ? packJson[0] : packJson;
+  // Three shapes seen: [entry] (npm 10), entry itself, and { "<package name>":
+  // entry } (an npm that prints per-workspace results keyed by name, as on
+  // Termux with Node 26).
+  const info = Array.isArray(packJson)
+    ? packJson[0]
+    : Array.isArray(packJson?.files)
+      ? packJson
+      : Object.values(packJson ?? {}).find((v) => v && Array.isArray(v.files));
   if (!info || !Array.isArray(info.files)) {
     throw new Error(`npm pack --json has no file list; npm printed:\n${packOutput}`);
   }
