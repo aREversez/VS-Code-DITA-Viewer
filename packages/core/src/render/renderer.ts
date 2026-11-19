@@ -1,5 +1,6 @@
 import { DitaNode, SourceRange } from '../parser/domTypes';
 import { BASE_TYPE_RENDERERS } from './baseTypeMap';
+import { BLOCK_COMMENT_PARENTS } from './blockCommentParents';
 import { computeKeyrefSpacing } from './cjkSpacing';
 import { DEFAULT_REF_ERROR_TEXTS, RefErrorTexts, fillRefErrorTemplate } from './refErrorTexts';
 
@@ -75,6 +76,20 @@ export interface RenderContext {
    *  noteLabels is, so this module stays free of any locale logic of its
    *  own. Falls back to 'Index' when not supplied. */
   indexLabel?: string;
+  /** Localized "Comment" label heading a <draft-comment> box (Oxygen's
+   *  Author mode shows the same lead-in, followed by @author). Resolved
+   *  upstream like noteLabels/indexLabel (detectDraftCommentLabel); falls
+   *  back to 'Comment' when not supplied. */
+  draftCommentLabel?: string;
+  /**
+   * When true, <draft-comment> content is never rendered. The DITA spec
+   * says processors SHOULD strip draft comments from published output so
+   * internal review notes are not shipped by mistake -- "Export as HTML"
+   * sets this, the same rule suppressIndexterm follows. The interactive
+   * preview and the diff view leave it off: showing review comments is
+   * exactly what those views are for.
+   */
+  suppressDraftComment?: boolean;
   /**
    * When true, <indexterm> content is never rendered -- neither as an
    * inline chip in the body nor pulled out of <prolog><metadata><keywords>.
@@ -768,37 +783,6 @@ function renderConrefRange(node: DitaNode, range: DitaNode[], context: RenderCon
     })
     .join('');
 }
-
-// Parents whose content model is element-only, so a comment written inside
-// them sits between blocks rather than inside a sentence and should get a
-// block of its own. Everything else -- p, ph, li, entry, title, note text --
-// holds mixed content, where an inline <span> is both valid and what the
-// author saw. This is the same inline/block distinction profiling markers
-// make (INLINE_PROFILING_BASETYPES), stated the other way round: there,
-// inline was the short list; here the inline cases are the majority, and
-// getting it wrong on the block side is the harmless direction (a comment on
-// its own line inside a phrase) while a <div> inside a <p> would make the
-// browser close the paragraph and split the sentence around it.
-const BLOCK_COMMENT_PARENTS = new Set([
-  'topic/body',
-  'topic/section',
-  'topic/example',
-  'topic/fig',
-  'topic/div',
-  'topic/bodydiv',
-  'topic/sectiondiv',
-  'topic/topic',
-  'topic/abstract',
-  'topic/related-links',
-  'topic/imagemap',
-  // List containers: a comment written between two <li>s is not part of
-  // either item's sentence, and an inline span there would be a stray
-  // fragment of the previous item.
-  'topic/ul',
-  'topic/ol',
-  'topic/sl',
-  'topic/dl',
-]);
 
 /**
  * An XML comment, shown in the flow at the position it was authored in --

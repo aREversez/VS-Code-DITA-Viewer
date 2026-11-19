@@ -2372,4 +2372,152 @@ describe('renderer', () => {
       assert.ok(/<ul[^>]*><div class="dv-comment dv-comment--block"/.test(html), html);
     });
   });
+
+  // <draft-comment> used to fall through to the generic "no handler" path,
+  // which flattened it to bare text indistinguishable from publication
+  // content. It now renders as Oxygen's Author-mode review box: a green
+  // annotation led by a bold "Comment {author}:" label (see the
+  // topic/draft-comment renderer in baseTypeMap.ts).
+  describe('draft-comment', () => {
+    it('renders an inline review box with the Comment label, author and content inside running text', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [
+          makeEl('topic/p', [
+            makeText('Before '),
+            makeEl('topic/draft-comment', [makeText('Where is the usage info?')], { author: 'EBP' }),
+            makeText(' after'),
+          ]),
+        ]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(
+        /Before <span [^>]*class="draft-comment"[^>]*><span class="draft-comment__label">Comment EBP:<\/span> Where is the usage info\?<\/span> after/.test(html),
+        `the box joins the sentence inline, led by the bold label: ${html}`,
+      );
+      assert.ok(html.includes('data-dita-tagname="draft-comment"'), 'click-to-source / Tags tooltip keep working');
+      assert.ok((html.match(/<p\b/g) || []).length === 1, 'an inline box must not split the paragraph');
+    });
+
+    it('renders a block box between blocks (element-only parent), like an XML comment does', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [
+          makeEl('topic/draft-comment', [makeText('section still missing')], { author: 'EBP' }),
+        ]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(
+        /<div [^>]*class="draft-comment draft-comment--block"[^>]*><span class="draft-comment__label">Comment EBP:<\/span> section still missing<\/div>/.test(html),
+        html,
+      );
+    });
+
+    it('renders a block box between list items', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/ul', [
+          makeEl('topic/draft-comment', [makeText('reorder?')]),
+          makeEl('topic/li', [makeText('a')]),
+        ]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(/<ul[^>]*><div [^>]*class="draft-comment draft-comment--block"/.test(html), html);
+    });
+
+    it('omits the author from the label when @author is absent', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/p', [makeEl('topic/draft-comment', [makeText('todo')])]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(html.includes('<span class="draft-comment__label">Comment:</span> todo'), html);
+    });
+
+    it('uses the localized lead-in label from the context (zh mirrors Oxygen)', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/p', [
+          makeEl('topic/draft-comment', [makeText('该功能还未实现')], { author: '张三' }),
+        ]),
+      ]);
+      const html = renderDocument(doc, { ...defaultCtx, draftCommentLabel: '评论者' });
+      assert.ok(html.includes('<span class="draft-comment__label">评论者 张三:</span> 该功能还未实现'), html);
+    });
+
+    it('carries @time and @disposition in the tooltip, not the label', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/p', [
+          makeEl('topic/draft-comment', [makeText('check this')], { author: 'EBP', time: '2026-11-19', disposition: 'open' }),
+        ]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(html.includes('title="time: 2026-11-19 · disposition: open"'), html);
+      assert.ok(html.includes('Comment EBP:'), 'the label stays Oxygen-shaped');
+      assert.ok(!html.includes('data-dita-tagname="draft-comment"'), 'own title wins over the generic tag tooltip');
+    });
+
+    it('escapes markup in the author and content', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/p', [
+          makeEl('topic/draft-comment', [makeText('<script>alert(1)</script>')], { author: 'A"B<&>' }),
+        ]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(html.includes('A&quot;B&lt;&amp;&gt;'), html);
+      assert.ok(!html.includes('<script>'), html);
+    });
+
+    it('keeps rich inline markup inside the comment content', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/p', [
+          makeEl('topic/draft-comment', [
+            makeText('see '),
+            makeEl('topic/b', [makeText('the spec')]),
+          ]),
+        ]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(/<span [^>]*class="draft-comment"[^>]*>.*<strong [^>]*class="ph b"[^>]*>the spec<\/strong>.*<\/span>/.test(html), html);
+    });
+
+    it('still shows the label for an empty comment (a review marker with no text yet)', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/p', [makeEl('topic/draft-comment', [], { author: 'EBP' })]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(html.includes('Comment EBP:'), html);
+    });
+
+    it('renders nothing when suppressDraftComment is set (the export default per the DITA spec)', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [
+          makeEl('topic/draft-comment', [makeText('internal note')], { author: 'EBP' }),
+          makeEl('topic/p', [
+            makeText('public '),
+            makeEl('topic/draft-comment', [makeText('hidden remark')]),
+            makeText(' text'),
+          ]),
+        ]),
+      ]);
+      const html = renderDocument(doc, { ...defaultCtx, suppressDraftComment: true });
+      assert.ok(!html.includes('draft-comment'), html);
+      assert.ok(!html.includes('internal note') && !html.includes('hidden remark'), html);
+      assert.ok(html.includes('public') && html.includes('text'), 'the surrounding content is untouched');
+    });
+
+    it('renders end-to-end from parsed XML, inline in a paragraph and block in a body', () => {
+      const xml = '<topic id="t"><title>T</title><body>' +
+        '<p>Before <draft-comment author="EBP">Where is the usage info?</draft-comment> after</p>' +
+        '<draft-comment author="EBP" disposition="open">whole-section note</draft-comment>' +
+        '</body></topic>';
+      const html = renderDocument(parseDita(xml).root, defaultCtx);
+      assert.ok(/<p[^>]*>Before <span [^>]*class="draft-comment"/.test(html), html);
+      assert.ok(/<main[^>]*>.*<div [^>]*class="draft-comment draft-comment--block"/.test(html), html);
+      assert.ok(html.includes('Comment EBP:'), html);
+    });
+
+    it('renders inline inside a table cell, which is ordinary mixed content', () => {
+      const xml = '<topic id="t"><title>T</title><body>' +
+        '<table><tgroup cols="1"><tbody><row><entry>cell <draft-comment>fix</draft-comment></entry></row></tbody></tgroup></table>' +
+        '</body></topic>';
+      const html = renderDocument(parseDita(xml).root, defaultCtx);
+      assert.ok(/<td[^>]*>cell <span [^>]*class="draft-comment"/.test(html), html);
+    });
+  });
 });

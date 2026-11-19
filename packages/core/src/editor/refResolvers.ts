@@ -597,6 +597,14 @@ export function detectIndexLabel(root: DitaNode, uiLanguage?: string): string {
   return lang.startsWith('zh') ? '\u7d22\u5f15' : 'Index';
 }
 
+/** Same xml:lang-first, uiLanguage-fallback resolution as detectNoteLabels,
+ *  for the lead-in label of a <draft-comment> box. The zh wording mirrors
+ *  Oxygen's own Chinese Author-mode label ("评论者 {author}: ..."). */
+export function detectDraftCommentLabel(root: DitaNode, uiLanguage?: string): string {
+  const lang = root.attributes?.['xml:lang'] || uiLanguage || '';
+  return lang.startsWith('zh') ? '\u8bc4\u8bba\u8005' : 'Comment';
+}
+
 // ── Ditamap reference expansion ──
 // Walks the map tree and inlines children from referenced .ditamap files
 // so key-value pairs appear inline in tree/book view.

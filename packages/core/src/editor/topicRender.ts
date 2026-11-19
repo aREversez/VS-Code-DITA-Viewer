@@ -69,6 +69,9 @@ export interface TopicRenderInput {
   /** See RenderContext.suppressIndexterm (render/renderer.ts) -- passed
    *  through untouched; only the "Export as HTML" command sets this. */
   suppressIndexterm?: boolean;
+  /** See RenderContext.suppressDraftComment (render/renderer.ts) -- passed
+   *  through untouched; only the "Export as HTML" command sets this. */
+  suppressDraftComment?: boolean;
   /**
    * Optional sink: absolute paths of every file this render read -- the
    * topic itself, each conref/conrefend target, each file consulted for an
@@ -112,6 +115,8 @@ export interface TopicXmlRenderInput {
   uiLanguage?: string;
   /** See TopicRenderInput.suppressIndexterm above. */
   suppressIndexterm?: boolean;
+  /** See TopicRenderInput.suppressDraftComment above. */
+  suppressDraftComment?: boolean;
   /** See TopicRenderInput.collectDependencies above. */
   collectDependencies?: Set<string>;
   /**
@@ -161,7 +166,7 @@ export interface ParsedTopicResult {
 
 
 export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
-  const { xml, docDir, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, collectDependencies, bookMembers, clickableExternalXrefs, docFile, markConrefs, refErrors, refErrorTexts, keyScope } = input;
+  const { xml, docDir, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, suppressDraftComment, collectDependencies, bookMembers, clickableExternalXrefs, docFile, markConrefs, refErrors, refErrorTexts, keyScope } = input;
   try {
     const preprocessedXml = preprocessEntities(xml);
     const ditaDoc = parseDita(preprocessedXml);
@@ -181,6 +186,7 @@ export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
       uiLanguage,
       includeIndexLabel: true,
       suppressIndexterm,
+      suppressDraftComment,
       bookMembers,
       clickableExternalXrefs,
       collectDependencies,
@@ -209,7 +215,7 @@ export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
 }
 
 export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
-  const { filePath, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, collectDependencies, bookMembers, clickableExternalXrefs, markConrefs, refErrors, refErrorTexts, keyScope } = input;
+  const { filePath, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, suppressDraftComment, collectDependencies, bookMembers, clickableExternalXrefs, markConrefs, refErrors, refErrorTexts, keyScope } = input;
   try {
     if (!existsSync(filePath)) {
       return { html: '', error: `File not found: ${filePath}` };
@@ -226,6 +232,7 @@ export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
       headingLevel,
       uiLanguage,
       suppressIndexterm,
+      suppressDraftComment,
       collectDependencies,
       bookMembers,
       clickableExternalXrefs,
@@ -354,6 +361,7 @@ interface TopicRenderCacheEntry {
   keyMap: Map<string, string>;
   uiLanguage: string | undefined;
   suppressIndexterm: boolean | undefined;
+  suppressDraftComment: boolean | undefined;
   /** Compared by identity, same rationale as keyMap above -- the same
    *  topic renders different HTML (a cross-file xref is a real link or
    *  not) depending on which book's membership set it was rendered
@@ -451,6 +459,7 @@ export function renderTopicCached(input: TopicRenderInput): TopicRenderResult {
     cached.keyMap === input.keyMap &&
     cached.uiLanguage === input.uiLanguage &&
     cached.suppressIndexterm === input.suppressIndexterm &&
+    cached.suppressDraftComment === input.suppressDraftComment &&
     cached.bookMembers === input.bookMembers &&
     stampFiles(cached.files) === cached.stamps
   ) {
@@ -507,6 +516,7 @@ export function renderTopicCached(input: TopicRenderInput): TopicRenderResult {
     keyMap: input.keyMap,
     uiLanguage: input.uiLanguage,
     suppressIndexterm: input.suppressIndexterm,
+    suppressDraftComment: input.suppressDraftComment,
     bookMembers: input.bookMembers,
     bytes,
   });

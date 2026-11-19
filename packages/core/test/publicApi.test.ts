@@ -41,6 +41,7 @@ describe('public API', () => {
     'collectUnknownElements',
     'computeKeyrefSpacing',
     'dependsOn',
+    'detectDraftCommentLabel',
     'detectIndexLabel',
     'detectNoteLabels',
     'expandDitamapRefs',

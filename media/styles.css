@@ -81,6 +81,12 @@
   --color-comment-bg: #efefef;
   --color-comment-border: #c4c4c4;
   --color-comment-text: #6b6b6b;
+  /* <draft-comment>: Oxygen's light-green review box with a dark-green rule
+     on the right edge -- deliberately louder than the quiet XML-comment gray
+     above, because a draft comment is an actionable review note. */
+  --color-draft-comment-bg: #90ee90;
+  --color-draft-comment-border: #006400;
+  --color-draft-comment-text: #143d14;
   --color-menucascade-arrow: #767676;
   /* Broken-reference hints (.ref-error / .xref-broken): a muted rose that
      reads as an error without shouting -- distinct from the orange
@@ -110,6 +116,10 @@
   --color-comment-bg: #2b2b2b;
   --color-comment-border: #4d4d4d;
   --color-comment-text: #9a9a9a;
+  /* Same green family as light, dimmed to sit on the dark canvas. */
+  --color-draft-comment-bg: #1e3320;
+  --color-draft-comment-border: #4c8f4c;
+  --color-draft-comment-text: #b8dcb8;
   --color-menucascade-arrow: #aaaaaa;
   /* Semi-transparent rose over the dark canvas, same hue family as light. */
   --color-ref-error-bg: rgba(224, 133, 120, 0.12);
@@ -619,6 +629,29 @@ html.dv-conref-hot [data-conref] * {
   padding: 0.15em 0.6em;
   border-left: 3px solid var(--color-comment-border);
   border-radius: 0 3px 3px 0;
+}
+/* <draft-comment> (topic/draft-comment): Oxygen Author-mode style review
+   annotation -- a green box led by a bold "Comment {author}:" label, with a
+   dark-green rule on the right edge so it reads as marginalia, not content.
+   Inline by default (the element is legal inside a sentence); the --block
+   variant is used between blocks, same split as .dv-comment--block. */
+.draft-comment {
+  background: var(--color-draft-comment-bg);
+  color: var(--color-draft-comment-text);
+  padding: 0.1em 0.4em;
+  border-right: 3px solid var(--color-draft-comment-border);
+  /* A wrapped inline comment must paint each line's box, not just the first. */
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.draft-comment--block {
+  display: block;
+  margin: 0.5em 0;
+  padding: 0.35em 0.75em;
+  border-right-width: 5px;
+}
+.draft-comment__label {
+  font-weight: 700;
 }
 body.hide-profiling .profiled {
   background: none;

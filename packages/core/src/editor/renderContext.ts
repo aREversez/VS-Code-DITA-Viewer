@@ -34,6 +34,7 @@ import {
   makeRefErrorResolver,
   detectNoteLabels,
   detectIndexLabel,
+  detectDraftCommentLabel,
   readImageDimensions,
   decodeHrefPart,
   URL_SCHEME_RE,
@@ -88,6 +89,9 @@ export interface BuildRenderContextInput {
   /** Preview and book: true; diff: false (omits ctx.indexLabel). */
   includeIndexLabel?: boolean;
   suppressIndexterm?: boolean;
+  /** Only the export path sets this: the spec's default is to strip
+   *  <draft-comment> from published output (RenderContext.suppressDraftComment). */
+  suppressDraftComment?: boolean;
   /** Book / docsite only: the set of files that make up the current book. */
   bookMembers?: ReadonlySet<string>;
   /**
@@ -157,7 +161,9 @@ export function buildRenderContext(input: BuildRenderContextInput): BuiltRenderC
     resolveConref: (conref: string) => conrefResolver(conref),
     resolveConrefRange: (conref: string, conrefend: string) => conrefRangeResolver(conref, conrefend),
     noteLabels: detectNoteLabels(ownRoot, uiLanguage),
+    draftCommentLabel: detectDraftCommentLabel(ownRoot, uiLanguage),
     suppressIndexterm: input.suppressIndexterm,
+    suppressDraftComment: input.suppressDraftComment,
     getImageDimensions: (relPath: string) => {
       try {
         const absPath = resolve(docDir, decodeHrefPart(relPath));

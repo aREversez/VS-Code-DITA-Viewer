@@ -33,6 +33,9 @@ function buildTopicExport(fsPath: string): { title: string; bodyHtml: string; er
     // the interactive preview's indexterm chips are an editing aid that
     // doesn't belong in a standalone shipped HTML file.
     suppressIndexterm: true,
+    // Draft comments are internal review notes: the DITA spec's default is
+    // to strip them from published output so they are not shipped by mistake.
+    suppressDraftComment: true,
   });
   return {
     title: result.title || basename(fsPath),
@@ -70,6 +73,7 @@ function buildMapExport(fsPath: string): { title: string; bodyHtml: string; erro
         headingLevel: Math.min(1 + entry.depth, 6),
         uiLanguage: vscode.env.language,
         suppressIndexterm: true,
+        suppressDraftComment: true,
         // The same scope Book mode renders the topic in (renderBookParts), so the
         // exported file shows what the preview shows.
         keyScope: entry.scopeChains,

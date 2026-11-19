@@ -1,5 +1,6 @@
 import { DitaNode } from '../parser/domTypes';
 import { RenderContext } from './renderer';
+import { BLOCK_COMMENT_PARENTS } from './blockCommentParents';
 import { DEFAULT_REF_ERROR_TEXTS, fillRefErrorTemplate } from './refErrorTexts';
 import { isDitaFormat } from './refTargets';
 
@@ -515,6 +516,34 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     // wrapper, `note__title` on the label, and a `note__body` wrapper around the
     // content (the only structural addition, approved in the M2-8 audit).
     return `<div class="note note--${escapeAttr(type)} ${escapeAttr(type)} note_${escapeAttr(type)}"><span class="note__label note__title">${escapeAttr(label)}:</span> <div class="note__body">${renderChildren(node, ctx)}</div></div>`;
+  },
+
+  // <draft-comment> — an internal review note, rendered the way Oxygen's
+  // Author mode shows it: a green box led by a bold "Comment {author}:"
+  // label, unmistakably not publication content. @time and @disposition
+  // (the comment's status: open / accepted / rejected / ...) ride along in
+  // the tooltip rather than the label, matching Oxygen's own lead-in shape.
+  // The element is legal both between blocks and inside a sentence, so the
+  // inline/block decision reuses the XML-comment renderer's parent set: a
+  // <div> inside a <p> would make the browser split the paragraph. Export
+  // strips the whole element (RenderContext.suppressDraftComment) per the
+  // spec's "processors SHOULD strip them out" default.
+  'topic/draft-comment': (node, ctx, renderChildren) => {
+    if (ctx.suppressDraftComment) return '';
+    const author = getAttr(node, 'author');
+    const label = ctx.draftCommentLabel || 'Comment';
+    const labelText = author ? `${label} ${author}:` : `${label}:`;
+    const meta = [
+      getAttr(node, 'time') && `time: ${getAttr(node, 'time')}`,
+      getAttr(node, 'disposition') && `disposition: ${getAttr(node, 'disposition')}`,
+    ].filter(Boolean).join(' · ');
+    // Own title= wins over injectAttributes' generic tag-name tooltip, so
+    // the review metadata is what a hover surfaces when it exists.
+    const titleAttr = meta ? safeAttr('title', meta) : '';
+    const block = BLOCK_COMMENT_PARENTS.has(ctx.ownerBaseType || '');
+    const tag = block ? 'div' : 'span';
+    const cls = block ? 'draft-comment draft-comment--block' : 'draft-comment';
+    return `<${tag} class="${cls}"${titleAttr}><span class="draft-comment__label">${escapeAttr(labelText)}</span> ${renderChildren(node, ctx)}</${tag}>`;
   },
 
   'topic/ul': (_node, ctx, renderChildren) => `<ul class="ul">${renderChildren(_node, ctx)}</ul>`,
