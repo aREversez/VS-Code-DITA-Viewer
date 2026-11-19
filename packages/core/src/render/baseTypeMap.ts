@@ -1,6 +1,6 @@
 import { DitaNode } from '../parser/domTypes';
 import { RenderContext } from './renderer';
-import { BLOCK_COMMENT_PARENTS } from './blockCommentParents';
+import { BLOCK_COMMENT_PARENTS, BLOCK_CONTENT_HOSTS, BLOCK_LEVEL_BASETYPES } from './blockCommentParents';
 import { DEFAULT_REF_ERROR_TEXTS, fillRefErrorTemplate } from './refErrorTexts';
 import { isDitaFormat } from './refTargets';
 
@@ -533,14 +533,20 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     const author = getAttr(node, 'author');
     const label = ctx.draftCommentLabel || 'Comment';
     const labelText = author ? `${label} ${author}:` : `${label}:`;
+    const metaNames = ctx.draftCommentMeta || { time: 'time', disposition: 'disposition' };
     const meta = [
-      getAttr(node, 'time') && `time: ${getAttr(node, 'time')}`,
-      getAttr(node, 'disposition') && `disposition: ${getAttr(node, 'disposition')}`,
+      getAttr(node, 'time') && `${metaNames.time}: ${getAttr(node, 'time')}`,
+      getAttr(node, 'disposition') && `${metaNames.disposition}: ${getAttr(node, 'disposition')}`,
     ].filter(Boolean).join(' · ');
     // Own title= wins over injectAttributes' generic tag-name tooltip, so
     // the review metadata is what a hover surfaces when it exists.
     const titleAttr = meta ? safeAttr('title', meta) : '';
-    const block = BLOCK_COMMENT_PARENTS.has(ctx.ownerBaseType || '');
+    // Block between blocks (element-only parent), or wherever the comment holds
+    // block content and a <div> is a legal neighbor (draft-comment's content
+    // model allows paragraphs and lists); inline otherwise.
+    const owner = ctx.ownerBaseType || '';
+    const holdsBlocks = (node.children || []).some((c) => c.type === 'element' && !!c.baseType && BLOCK_LEVEL_BASETYPES.has(c.baseType));
+    const block = BLOCK_COMMENT_PARENTS.has(owner) || (holdsBlocks && BLOCK_CONTENT_HOSTS.has(owner));
     const tag = block ? 'div' : 'span';
     const cls = block ? 'draft-comment draft-comment--block' : 'draft-comment';
     return `<${tag} class="${cls}"${titleAttr}><span class="draft-comment__label">${escapeAttr(labelText)}</span> ${renderChildren(node, ctx)}</${tag}>`;

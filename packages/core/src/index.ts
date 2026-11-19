@@ -68,7 +68,7 @@ export { computeKeyrefSpacing, needsSpace } from './render/cjkSpacing';
 export { mergeProfilingAttrs, profilingChipsHtml, profilingKeysAttr } from './render/renderer';
 export { resolveConkeyref } from './editor/conkeyref';
 export { collectMapKeys, isKeyContextAvailable, keySourceMaps, qualifiedNames, qualifiedNamesMulti, resolveKeyInScope, scopeKeyIndexKey } from './editor/keySpace';
-export { DEFAULT_NOTE_LABELS, IMAGE_DIMENSIONS_CACHE_MAX, URL_SCHEME_RE, ZH_NOTE_LABELS, clearImageDimensionsCache, detectDraftCommentLabel, detectIndexLabel, detectNoteLabels, expandDitamapRefs, makeConrefRangeResolver, makeConrefResolver, makeFileCache, makeFileTitleResolver, makeIsInCurrentBook, makeRefErrorResolver, readImageDimensions } from './editor/refResolvers';
+export { DEFAULT_NOTE_LABELS, IMAGE_DIMENSIONS_CACHE_MAX, URL_SCHEME_RE, ZH_NOTE_LABELS, clearImageDimensionsCache, detectDraftCommentLabel, detectDraftCommentMetaLabels, detectIndexLabel, detectNoteLabels, expandDitamapRefs, makeConrefRangeResolver, makeConrefResolver, makeFileCache, makeFileTitleResolver, makeIsInCurrentBook, makeRefErrorResolver, readImageDimensions } from './editor/refResolvers';
 export type { FileReader } from './editor/refResolvers';
 export { DEFAULT_REF_ERROR_TEXTS, fillRefErrorTemplate } from './render/refErrorTexts';
 export type { RefErrorTexts } from './render/refErrorTexts';

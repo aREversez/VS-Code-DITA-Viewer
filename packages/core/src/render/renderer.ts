@@ -81,6 +81,10 @@ export interface RenderContext {
    *  upstream like noteLabels/indexLabel (detectDraftCommentLabel); falls
    *  back to 'Comment' when not supplied. */
   draftCommentLabel?: string;
+  /** Localized names of the @time / @disposition fields in a <draft-comment>
+   *  tooltip. Resolved upstream like draftCommentLabel
+   *  (detectDraftCommentMetaLabels); falls back to English when not supplied. */
+  draftCommentMeta?: { time: string; disposition: string };
   /**
    * When true, <draft-comment> content is never rendered. The DITA spec
    * says processors SHOULD strip draft comments from published output so

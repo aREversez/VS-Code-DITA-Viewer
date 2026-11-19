@@ -2440,6 +2440,67 @@ describe('renderer', () => {
       assert.ok(html.includes('<span class="draft-comment__label">评论者 张三:</span> 该功能还未实现'), html);
     });
 
+    // draft-comment's content model is %basic.phandblock; (DITA 1.3.2
+    // commonElements.mod), and it is legal inside li / entry / note as well as
+    // between blocks. A <p> inside an inline <span> paints the green box in
+    // fragments around the paragraph, so block content promotes it to the
+    // block variant wherever a <div> is a legal neighbor.
+    for (const [host, wrap] of [
+      ['topic/li', (kids: DitaNode[]) => makeEl('topic/ul', [makeEl('topic/li', kids)])],
+      ['topic/note', (kids: DitaNode[]) => makeEl('topic/note', kids)],
+      ['topic/entry', (kids: DitaNode[]) => makeEl('topic/table', [makeEl('topic/tgroup', [makeEl('topic/tbody', [makeEl('topic/row', [makeEl('topic/entry', kids)])])])])],
+    ] as const) {
+      it(`uses the block box for a comment holding a paragraph inside ${host}`, () => {
+        const doc = makeEl('topic/topic', [
+          makeEl('topic/body', [
+            wrap([
+              makeText('Item '),
+              makeEl('topic/draft-comment', [makeEl('topic/p', [makeText('para in comment')])], { author: 'EBP' }),
+            ]),
+          ]),
+        ]);
+        const html = renderDocument(doc, defaultCtx);
+        assert.ok(/<div [^>]*class="draft-comment draft-comment--block"/.test(html), html);
+        assert.ok(!/<span [^>]*class="draft-comment"/.test(html), 'no inline box around block content: ' + html);
+      });
+    }
+
+    it('keeps a phrase-only comment inline inside a list item', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [
+          makeEl('topic/ul', [makeEl('topic/li', [makeText('Item '), makeEl('topic/draft-comment', [makeText('short')])])]),
+        ]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(/<span [^>]*class="draft-comment"/.test(html), html);
+      assert.ok(!html.includes('draft-comment--block'), html);
+    });
+
+    it('never promotes inside a paragraph, where a <div> would split the sentence', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [
+          makeEl('topic/p', [
+            makeText('Before '),
+            makeEl('topic/draft-comment', [makeEl('topic/p', [makeText('odd but legal')])]),
+          ]),
+        ]),
+      ]);
+      const html = renderDocument(doc, defaultCtx);
+      assert.ok(!html.includes('draft-comment--block'), html);
+    });
+
+    it('localizes the tooltip field names from ctx.draftCommentMeta and defaults to English without it', () => {
+      const doc = makeEl('topic/topic', [
+        makeEl('topic/body', [
+          makeEl('topic/p', [makeEl('topic/draft-comment', [makeText('x')], { time: '2026-11-19', disposition: 'open' })]),
+        ]),
+      ]);
+      const zh = renderDocument(doc, { ...defaultCtx, draftCommentMeta: { time: '时间', disposition: '处置' } });
+      assert.ok(zh.includes('title="时间: 2026-11-19 · 处置: open"'), zh);
+      assert.ok(!zh.includes('time:'), zh);
+      assert.ok(renderDocument(doc, defaultCtx).includes('title="time: 2026-11-19 · disposition: open"'));
+    });
+
     it('carries @time and @disposition in the tooltip, not the label', () => {
       const doc = makeEl('topic/topic', [
         makeEl('topic/p', [

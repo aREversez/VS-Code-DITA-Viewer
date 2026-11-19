@@ -605,6 +605,15 @@ export function detectDraftCommentLabel(root: DitaNode, uiLanguage?: string): st
   return lang.startsWith('zh') ? '\u8bc4\u8bba\u8005' : 'Comment';
 }
 
+/** Names of the @time / @disposition fields in the tooltip of a
+ *  <draft-comment> box, resolved exactly like detectDraftCommentLabel. English
+ *  is the schema's own attribute name; the zh wording is a plain translation
+ *  of it ("时间" / "处置"), not something copied from Oxygen. */
+export function detectDraftCommentMetaLabels(root: DitaNode, uiLanguage?: string): { time: string; disposition: string } {
+  const lang = root.attributes?.['xml:lang'] || uiLanguage || '';
+  return lang.startsWith('zh') ? { time: '\u65f6\u95f4', disposition: '\u5904\u7f6e' } : { time: 'time', disposition: 'disposition' };
+}
+
 // ── Ditamap reference expansion ──
 // Walks the map tree and inlines children from referenced .ditamap files
 // so key-value pairs appear inline in tree/book view.

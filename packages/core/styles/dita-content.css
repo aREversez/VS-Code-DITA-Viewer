@@ -629,6 +629,15 @@ html.dv-conref-hot [data-conref] *,
 .draft-comment__label {
   font-weight: 700;
 }
+/* A link inside the box would take --color-link, which is only 3.8:1 on the
+   light green (AA wants 4.5:1). Use the box's own text colour (8.7:1) and keep
+   an underline so it still reads as a link. */
+.draft-comment a,
+.draft-comment .xref,
+.draft-comment .link {
+  color: inherit;
+  text-decoration: underline;
+}
 body.hide-profiling .profiled,
 .dita-body.hide-profiling .profiled {
   background: none;

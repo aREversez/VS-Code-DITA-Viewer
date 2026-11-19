@@ -35,6 +35,7 @@ import {
   detectNoteLabels,
   detectIndexLabel,
   detectDraftCommentLabel,
+  detectDraftCommentMetaLabels,
   readImageDimensions,
   decodeHrefPart,
   URL_SCHEME_RE,
@@ -162,6 +163,7 @@ export function buildRenderContext(input: BuildRenderContextInput): BuiltRenderC
     resolveConrefRange: (conref: string, conrefend: string) => conrefRangeResolver(conref, conrefend),
     noteLabels: detectNoteLabels(ownRoot, uiLanguage),
     draftCommentLabel: detectDraftCommentLabel(ownRoot, uiLanguage),
+    draftCommentMeta: detectDraftCommentMetaLabels(ownRoot, uiLanguage),
     suppressIndexterm: input.suppressIndexterm,
     suppressDraftComment: input.suppressDraftComment,
     getImageDimensions: (relPath: string) => {

@@ -42,6 +42,7 @@ describe('public API', () => {
     'computeKeyrefSpacing',
     'dependsOn',
     'detectDraftCommentLabel',
+    'detectDraftCommentMetaLabels',
     'detectIndexLabel',
     'detectNoteLabels',
     'expandDitamapRefs',

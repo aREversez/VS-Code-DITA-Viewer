@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'fs';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { buildStandaloneHtml, makeDataUriInliner, buildBookHeading, classifyMapExportEntry } from '../../editor/exportHtmlHelpers';
@@ -185,5 +185,18 @@ describe('classifyMapExportEntry', () => {
 
   it('skips a .ditamap-href entry that also has keys (both signals say "not real content" -- keys wins the same way it does for the hrefless case)', () => {
     assert.strictEqual(classifyMapExportEntry({ href: 'sub.ditamap', keys: 'k' }), 'skip');
+  });
+});
+
+describe('exportHtml render options', () => {
+  it('every export render that drops indexterm chips also drops draft comments', () => {
+    const src = readFileSync(join(__dirname, '..', '..', '..', 'src', 'editor', 'exportHtml.ts'), 'utf8');
+    const count = (needle: string): number => src.split(needle).length - 1;
+    assert.ok(count('suppressIndexterm: true') >= 2, 'topic and map export both render with suppressIndexterm');
+    assert.strictEqual(
+      count('suppressDraftComment: true'),
+      count('suppressIndexterm: true'),
+      'the DITA spec default is to strip review notes from published output on every export path',
+    );
   });
 });
