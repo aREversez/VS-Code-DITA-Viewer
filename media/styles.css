@@ -1933,3 +1933,18 @@ body.wh_topic_page #wh_topic_body { overflow: hidden !important; }
    empty column on screen. */
 body.wh_topic_page nav#wh_topic_toc:not(:has(#__site-outline:not(.tpl-outline--empty))) { display: none !important; }
 } /* @layer dv-base */
+
+/* The inherit rule above sits in @layer dv-base, and a template's css is
+   unlayered: its `body[data-template="..."] #dita-content-root a { color:
+   var(--color-link) }` beats a layered normal declaration at any specificity,
+   putting the low-contrast link colour back inside the review box on Book and
+   Docsite pages. Repeat the rule unlayered and one class stronger than the
+   template's selector ((1,2,2) against (1,1,2)) so it wins there too. The
+   body[data-template] guard keeps it off the plain topic preview and the diff
+   view, which carry no template css to beat. */
+body[data-template] #dita-content-root .draft-comment a,
+body[data-template] #dita-content-root .draft-comment .xref,
+body[data-template] #dita-content-root .draft-comment .link {
+  color: inherit;
+  text-decoration: underline;
+}
