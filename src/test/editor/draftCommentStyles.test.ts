@@ -28,8 +28,12 @@ describe('draft-comment link legibility', () => {
 // which would put the low-contrast link colour back inside the box on Book and
 // Docsite pages. styles.css therefore repeats the rule unlayered, one class
 // stronger than the template's selector. These tripwires keep that repeat
-// outside the layer, and keep every template's content-link colour rule at the
-// weaker selector shape the repeat was checked against.
+// outside the layer, and keep every template's content-link colour rule
+// strictly below the repeat's specificity (a tie wins by source order, since
+// template css is injected after styles.css) and free of !important (an
+// unlayered !important beats the repeat's normal declaration at any
+// specificity). Every file in template.json's css list is scanned, so a
+// split or renamed stylesheet cannot slip past the guard.
 describe('draft-comment link legibility vs template css', () => {
   const css = stripComments(readRepo('media/styles.css'));
 
@@ -64,24 +68,78 @@ describe('draft-comment link legibility vs template css', () => {
     }
   });
 
-  it('every template content-link colour rule stays at the weaker selector the repeat outranks', () => {
+  it('every template content-link colour rule stays below the repeat it must lose to', () => {
+    // Specificity (ids, classes/attrs/pseudo-classes, types/pseudo-elements),
+    // computed conservatively: functional pseudo-classes are counted with
+    // their arguments summed, which can only overestimate (:is/:not take the
+    // max of their arguments, :where counts zero). An overestimate fails the
+    // cap and sends a human to re-check -- never the reverse.
+    function specificity(sel: string): [number, number, number] {
+      const ids = (sel.match(/#[\w-]+/g) || []).length;
+      const mid = (sel.match(/\.[\w-]+/g) || []).length
+        + (sel.match(/\[[^\]]*\]/g) || []).length
+        + (sel.match(/(?<!:):[\w-]+/g) || []).length;
+      let types = (sel.match(/::[\w-]+/g) || []).length;
+      for (const compound of sel.split(/[\s>+~]+/).filter(Boolean)) {
+        if (/^[a-zA-Z][\w-]*/.test(compound)) types++;
+      }
+      return [ids, mid, types];
+    }
+    /** Strictly below: a tie loses too -- template css is injected after styles.css, so equal specificity wins by source order. */
+    function below(a: [number, number, number], b: [number, number, number]): boolean {
+      for (let i = 0; i < 3; i++) {
+        if (a[i] !== b[i]) return a[i] < b[i];
+      }
+      return false;
+    }
+    // The caps come from the repeat rules themselves (asserted present and
+    // unlayered by the case above), not from a copy that could drift.
+    const capA = specificity('body[data-template] #dita-content-root .draft-comment a');
+    const capClass = specificity('body[data-template] #dita-content-root .draft-comment .xref');
+
     const names = readdirSync(join(repoRoot, 'media/templates'), { withFileTypes: true })
       .filter((d) => d.isDirectory())
       .map((d) => d.name);
     assert.ok(names.length >= 7, 'template folders found');
     for (const name of names) {
-      const tpl = stripComments(readRepo(`media/templates/${name}/${name}.css`));
-      const re = /([^{}]+)\{([^{}]*)\}/g;
-      let m: RegExpExecArray | null;
+      // Scan exactly the files the preview concatenates: template.json's css
+      // list, in order -- not a guessed `${name}/${name}.css`.
+      const manifest = JSON.parse(readRepo(`media/templates/${name}/template.json`)) as { css: string[] };
+      assert.ok(Array.isArray(manifest.css) && manifest.css.length > 0, `${name}: template.json has a css list`);
       let seen = 0;
-      while ((m = re.exec(tpl))) {
-        if (!/color\s*:/.test(m[2])) continue;
-        for (const raw of m[1].split(',')) {
-          const sel = raw.replace(/\s+/g, ' ').trim();
-          if (!/#dita-content-root (a|\.xref|\.link)(?![\w-])/.test(sel)) continue;
-          seen++;
-          assert.strictEqual(sel, `body[data-template="${name}"] #dita-content-root a`,
-            `${name}: content-link colour rule changed shape; re-check the unlayered draft-comment repeat in media/styles.css`);
+      for (const cssFile of manifest.css) {
+        const tpl = stripComments(readRepo(`media/templates/${name}/${cssFile}`));
+        const re = /([^{}]+)\{([^{}]*)\}/g;
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(tpl))) {
+          if (!/color\s*:/.test(m[2])) continue;
+          for (const raw of m[1].split(',')) {
+            const sel = raw.replace(/\s+/g, ' ').trim();
+            if (!/#dita-content-root(?![\w-])/.test(sel)) continue;
+            // Any selector that can paint a link inside the content root:
+            // its LAST compound is the element being coloured, and a class
+            // between the root and that compound must not slip past the scan.
+            const compounds = sel.split(/[\s>+~]+/).filter(Boolean);
+            const last = compounds[compounds.length - 1] || '';
+            const lastClasses: string[] = last.match(/\.[\w-]+/g) || [];
+            const lastType = (/^[a-zA-Z][\w-]*/.exec(last) || [''])[0];
+            const hitsXrefOrLink = lastClasses.includes('.xref') || lastClasses.includes('.link');
+            if (!hitsXrefOrLink && lastType !== 'a' && lastType !== '*') continue;
+            seen++;
+            const where = `${name}/${cssFile}: ${sel}`;
+            // An unlayered !important beats the repeat's unlayered normal
+            // declaration at any specificity (the book-entry rules use
+            // !important for exactly this reason), so the cap cannot save it.
+            assert.ok(!/!\s*important/i.test(m[2]),
+              `${where}: content-link colour rule uses !important; it would beat the unlayered draft-comment repeat in media/styles.css regardless of specificity`);
+            // A selector ending in .xref/.link only matches elements the
+            // stronger class repeat covers; anything else (a, *, a.foo) can
+            // match a plain link, where only the `a` repeat applies.
+            const cap = hitsXrefOrLink ? capClass : capA;
+            const spec = specificity(sel);
+            assert.ok(below(spec, cap),
+              `${where}: specificity (${spec.join(',')}) must stay below (${cap.join(',')}); re-check the unlayered draft-comment repeat in media/styles.css`);
+          }
         }
       }
       assert.ok(seen > 0, `${name}: expected a content-link colour rule`);
