@@ -167,7 +167,7 @@ describe('draft-comment link legibility vs template css', () => {
   const capA = specificity('body[data-template] #dita-content-root .draft-comment a');
   const capClass = specificity('body[data-template] #dita-content-root .draft-comment .xref');
 
-  /** Scan one template stylesheet; `seen` counts the content-link colour rules it found. */
+  /** Scan one template stylesheet; `seen` counts the content-link colour or decoration rules it found. */
   function scanTemplateCss(tplCss: string, label: string): { seen: number; problems: string[] } {
     const problems: string[] = [];
     let seen = 0;
@@ -175,7 +175,10 @@ describe('draft-comment link legibility vs template css', () => {
     const re = /([^{}]+)\{([^{}]*)\}/g;
     let m: RegExpExecArray | null;
     while ((m = re.exec(text))) {
-      if (!/color\s*:/.test(m[2])) continue;
+      // Decoration counts too: a `text-decoration: none !important` carrying no
+      // colour declaration would otherwise slip the scan. The underline itself
+      // is also pinned in real Chromium by draftCommentLinks.test.ts.
+      if (!/color\s*:|text-decoration\s*:/.test(m[2])) continue;
       for (const sel of splitTop(m[1], isComma).map((x) => x.replace(/\s+/g, ' '))) {
         if (!/#dita-content-root(?![\w-])/.test(sel)) continue;
         const subject = linkSubject(sel);
@@ -186,7 +189,7 @@ describe('draft-comment link legibility vs template css', () => {
         // declaration at any specificity (the book-entry rules use
         // !important for exactly this reason), so the cap cannot save it.
         if (/!\s*important/i.test(m[2])) {
-          problems.push(`${where}: content-link colour rule uses !important; it would beat the unlayered draft-comment repeat in media/styles.css regardless of specificity`);
+          problems.push(`${where}: content-link rule uses !important; it would beat the unlayered draft-comment repeat in media/styles.css regardless of specificity`);
         }
         // A selector that can only be an .xref/.link meets the class repeat;
         // one that can be a plain link is held to the `a` repeat.
@@ -200,7 +203,7 @@ describe('draft-comment link legibility vs template css', () => {
     return { seen, problems };
   }
 
-  it('every template content-link colour rule stays below the repeat it must lose to', () => {
+  it('every template content-link colour or decoration rule stays below the repeat it must lose to', () => {
     const names = readdirSync(join(repoRoot, 'media/templates'), { withFileTypes: true })
       .filter((d) => d.isDirectory())
       .map((d) => d.name);
@@ -216,7 +219,7 @@ describe('draft-comment link legibility vs template css', () => {
         assert.deepStrictEqual(r.problems, []);
         seen += r.seen;
       }
-      assert.ok(seen > 0, `${name}: expected a content-link colour rule`);
+      assert.ok(seen > 0, `${name}: expected a content-link colour or decoration rule`);
     }
   });
 
@@ -234,6 +237,15 @@ describe('draft-comment link legibility vs template css', () => {
       const r = scan(`${root} a { color: red !important; }`);
       assert.strictEqual(r.problems.length, 1);
       assert.ok(/!important/.test(r.problems[0]), r.problems[0]);
+    });
+    it('rejects a decoration-only !important rule that carries no colour at all', () => {
+      const r = scan(`${root} .draft-comment a { text-decoration: none !important; }`);
+      assert.strictEqual(r.seen, 1, 'the rule is recognized as a link rule');
+      assert.ok(r.problems.some((p) => /!important/.test(p)), r.problems.join('\n'));
+    });
+    it('accepts an ordinary decoration-only rule below the cap', () => {
+      const r = scan(`${root} a { text-decoration: underline; }`);
+      assert.deepStrictEqual(r, { seen: 1, problems: [] });
     });
     it('rejects a selector that ties the repeat once a class is inserted', () => {
       const r = scan(`${root} .draft-comment a { color: red; }`);

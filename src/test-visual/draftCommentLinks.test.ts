@@ -60,7 +60,10 @@ describe('draft-comment links under every template (real Chromium)', function ()
     body = renderTopicXml({ xml, docDir: repoRoot, keyMap: new Map(), asWebviewUri: (p) => p, headingLevel: 1, uiLanguage: 'en' }).html;
   });
   after(async () => {
-    await browser.close();
+    // launch() throwing (Chromium not downloaded) leaves browser undefined;
+    // closing it would bury the real startup error under a TypeError. Same
+    // guard as visual.test.ts.
+    if (browser) await browser.close();
   });
 
   it('finds the built-in templates', () => {
@@ -70,7 +73,12 @@ describe('draft-comment links under every template (real Chromium)', function ()
   for (const dark of [false, true]) {
     for (const name of templates) {
       it(`${name}, ${dark ? 'dark' : 'light'}: links in the box take the box text colour and stay underlined`, async () => {
-        const css = readFileSync(join(mediaDir, 'templates', name, `${name}.css`), 'utf-8');
+        // Load exactly the files the preview concatenates: template.json's css
+        // list, in order -- not a guessed `${name}/${name}.css`, so a template
+        // that splits its css cannot hide a rule from this matrix (same source
+        // as the unit tripwire and buildTemplateStyleText).
+        const manifest = JSON.parse(readFileSync(join(mediaDir, 'templates', name, 'template.json'), 'utf-8')) as { css: string[] };
+        const css = manifest.css.map((f) => readFileSync(join(mediaDir, 'templates', name, f), 'utf-8')).join('\n');
         await page.setContent(
           `<!doctype html><html class="${dark ? 'vscode-dark' : ''}"><head><style>${baseCss}</style><style>${css}</style></head>` +
             `<body data-template="${name}" class="mode-site"><div id="dita-content-root">${body}</div></body></html>`,
