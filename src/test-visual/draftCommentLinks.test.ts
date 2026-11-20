@@ -78,6 +78,7 @@ describe('draft-comment links under every template (real Chromium)', function ()
         // that splits its css cannot hide a rule from this matrix (same source
         // as the unit tripwire and buildTemplateStyleText).
         const manifest = JSON.parse(readFileSync(join(mediaDir, 'templates', name, 'template.json'), 'utf-8')) as { css: string[] };
+        assert.ok(Array.isArray(manifest.css) && manifest.css.length > 0, `${name}: template.json has a css list`);
         const css = manifest.css.map((f) => readFileSync(join(mediaDir, 'templates', name, f), 'utf-8')).join('\n');
         await page.setContent(
           `<!doctype html><html class="${dark ? 'vscode-dark' : ''}"><head><style>${baseCss}</style><style>${css}</style></head>` +

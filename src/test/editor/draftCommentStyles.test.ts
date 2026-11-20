@@ -167,6 +167,15 @@ describe('draft-comment link legibility vs template css', () => {
   const capA = specificity('body[data-template] #dita-content-root .draft-comment a');
   const capClass = specificity('body[data-template] #dita-content-root .draft-comment .xref');
 
+  const LEGIBILITY_PROP = /^(?:color|-webkit-text-fill-color|text-decoration(?:-[a-z]+)?|text-underline-(?:offset|position))$/;
+  /** The declarations of one rule body as {prop, value}, property names lower-cased. */
+  function declarations(body: string): { prop: string; value: string }[] {
+    const out: { prop: string; value: string }[] = [];
+    const decl = /(?:^|;)\s*([-\w]+)\s*:([^;]*)/g;
+    for (let d = decl.exec(body); d; d = decl.exec(body)) out.push({ prop: d[1].toLowerCase(), value: d[2] });
+    return out;
+  }
+
   /** Scan one template stylesheet; `seen` counts the content-link colour or decoration rules it found. */
   function scanTemplateCss(tplCss: string, label: string): { seen: number; problems: string[] } {
     const problems: string[] = [];
@@ -175,10 +184,15 @@ describe('draft-comment link legibility vs template css', () => {
     const re = /([^{}]+)\{([^{}]*)\}/g;
     let m: RegExpExecArray | null;
     while ((m = re.exec(text))) {
-      // Decoration counts too: a `text-decoration: none !important` carrying no
-      // colour declaration would otherwise slip the scan. The underline itself
-      // is also pinned in real Chromium by draftCommentLinks.test.ts.
-      if (!/color\s*:|text-decoration\s*:/.test(m[2])) continue;
+      // Only the properties that decide a link's legibility count: the text
+      // colour (`color`, `-webkit-text-fill-color`) and the decoration, longhands
+      // included (`text-decoration-line` is not matched by `text-decoration:`).
+      // A substring test on "color" also caught background-color/border-color.
+      // The underline itself is also pinned in real Chromium by
+      // draftCommentLinks.test.ts.
+      const legibility = declarations(m[2]).filter((d) => LEGIBILITY_PROP.test(d.prop));
+      if (legibility.length === 0) continue;
+      const important = legibility.some((d) => /!\s*important/i.test(d.value));
       for (const sel of splitTop(m[1], isComma).map((x) => x.replace(/\s+/g, ' '))) {
         if (!/#dita-content-root(?![\w-])/.test(sel)) continue;
         const subject = linkSubject(sel);
@@ -188,7 +202,7 @@ describe('draft-comment link legibility vs template css', () => {
         // An unlayered !important beats the repeat's unlayered normal
         // declaration at any specificity (the book-entry rules use
         // !important for exactly this reason), so the cap cannot save it.
-        if (/!\s*important/i.test(m[2])) {
+        if (important) {
           problems.push(`${where}: content-link rule uses !important; it would beat the unlayered draft-comment repeat in media/styles.css regardless of specificity`);
         }
         // A selector that can only be an .xref/.link meets the class repeat;
@@ -245,6 +259,26 @@ describe('draft-comment link legibility vs template css', () => {
     });
     it('accepts an ordinary decoration-only rule below the cap', () => {
       const r = scan(`${root} a { text-decoration: underline; }`);
+      assert.deepStrictEqual(r, { seen: 1, problems: [] });
+    });
+    it('rejects a decoration longhand: text-decoration-line is not the shorthand', () => {
+      const r = scan(`${root} .draft-comment a { text-decoration-line: none !important; }`);
+      assert.strictEqual(r.seen, 1, 'the rule is recognized as a link rule');
+      assert.ok(r.problems.some((p) => /!important/.test(p)), r.problems.join('\n'));
+    });
+    it('rejects the other decoration longhands and the text-fill colour the same way', () => {
+      for (const decl of ['text-decoration-thickness: 0 !important', 'text-decoration-color: red !important', 'text-underline-offset: 9px !important', '-webkit-text-fill-color: red !important']) {
+        const r = scan(`${root} a { ${decl}; }`);
+        assert.strictEqual(r.seen, 1, decl);
+        assert.ok(r.problems.some((p) => /!important/.test(p)), decl);
+      }
+    });
+    it('does not count a rule that only sets background-color or border-color', () => {
+      assert.deepStrictEqual(scan(`${root} a { background-color: red; }`), { seen: 0, problems: [] });
+      assert.deepStrictEqual(scan(`${root} a { border-color: red; }`), { seen: 0, problems: [] });
+    });
+    it('holds a link rule to the cap even when !important sits on an unrelated property', () => {
+      const r = scan(`${root} a { color: red; background-color: blue !important; }`);
       assert.deepStrictEqual(r, { seen: 1, problems: [] });
     });
     it('rejects a selector that ties the repeat once a class is inserted', () => {
