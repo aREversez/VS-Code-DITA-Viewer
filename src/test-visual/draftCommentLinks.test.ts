@@ -136,11 +136,17 @@ describe('draft-comment links under every template (real Chromium)', function ()
           assert.deepStrictEqual(l.hiding, [], 'nothing hides the link outside its colour');
           assert.ok(contrast(l.color, l.effBg) >= 4.5, `AA contrast ${contrast(l.color, l.effBg).toFixed(2)}`);
         }
-        // Hover is a different cascade path (a:hover rules), so probe again.
-        await page.hover('.draft-comment a');
-        const hovered = (await probe())[0];
-        assert.strictEqual(hovered.color, hovered.boxColor, 'hover keeps the box text colour');
-        assert.deepStrictEqual(hovered.hiding, [], 'hover hides nothing either');
+        // Hover is a different cascade path (a:hover rules), so probe again --
+        // both links, with the same bar as the resting state: a template's
+        // `a:hover { background: ... }` leaves the colour alone and ruins the
+        // contrast, which only the numeric ratio sees.
+        for (let i = 0; i < links.length; i++) {
+          await page.hover(`.draft-comment a >> nth=${i}`);
+          const hovered = (await probe())[i];
+          assert.strictEqual(hovered.color, hovered.boxColor, `link ${i}: hover keeps the box text colour`);
+          assert.deepStrictEqual(hovered.hiding, [], `link ${i}: hover hides nothing either`);
+          assert.ok(contrast(hovered.color, hovered.effBg) >= 4.5, `link ${i}: hover AA contrast ${contrast(hovered.color, hovered.effBg).toFixed(2)}`);
+        }
         // The fix must not leak: a link outside the box keeps the template's own colour.
         const [outside, boxColor] = await page.evaluate(() => [
           getComputedStyle(document.querySelector('#dita-content-root p a') as Element).color,
