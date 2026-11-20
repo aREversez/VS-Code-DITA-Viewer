@@ -185,10 +185,11 @@ describe('draft-comment link legibility vs template css', () => {
   }
 
   // Colour and decoration, plus the properties that hide a link while leaving
-  // its computed colour alone: opacity, text-shadow, filter, mix-blend-mode and
-  // a background image/shorthand. background-color is left to the real-Chromium
-  // contrast measurement (it is judged by outcome there, see draftCommentLinks).
-  const LEGIBILITY_PROP = /^(?:color|-webkit-text-fill-color|text-decoration(?:-[a-z]+)?|text-underline-(?:offset|position)|opacity|text-shadow|filter|mix-blend-mode|background|background-image)$/;
+  // its computed colour alone: opacity, visibility, text-shadow, filter,
+  // mix-blend-mode and a background image/shorthand. background-color is left
+  // to the real-Chromium contrast measurement (it is judged by outcome there,
+  // see draftCommentLinks).
+  const LEGIBILITY_PROP = /^(?:color|-webkit-text-fill-color|text-decoration(?:-[a-z]+)?|text-underline-(?:offset|position)|opacity|visibility|text-shadow|filter|mix-blend-mode|background|background-image)$/;
   // The subset that hides a link while leaving its computed colour alone. On a
   // LINK subject these ride the cap/!important path (the shape allowance; real
   // Chromium flags any non-inert computed value on the link itself, see
@@ -196,11 +197,12 @@ describe('draft-comment link legibility vs template css', () => {
   // contain it, the page root -- the repeat cannot help at all: it only
   // declares colour and underline on the link, so these are reported outright,
   // at any specificity, with or without !important.
-  const HIDING_PROP = /^(?:opacity|filter|mix-blend-mode|text-shadow|-webkit-text-fill-color|background|background-image)$/;
+  const HIDING_PROP = /^(?:opacity|visibility|filter|mix-blend-mode|text-shadow|-webkit-text-fill-color|background|background-image)$/;
   // Values that hide nothing; anything else (a var() included) is reported for
   // a human to re-check -- the same conservative direction as the specificity.
   const INERT_VALUE: Record<string, RegExp> = {
     opacity: /^1$/,
+    visibility: /^visible$/i,
     filter: /^none$/i,
     'mix-blend-mode': /^normal$/i,
     'text-shadow': /^none$/i,
@@ -447,6 +449,26 @@ describe('draft-comment link legibility vs template css', () => {
     it('still ignores chrome rules however loud', () => {
       const r = scan('body[data-template="x"] .tpl-header .tpl-link { opacity: .1; }');
       assert.deepStrictEqual(r, { seen: 0, problems: [] });
+    });
+    it('holds a link visibility rule to the cap and rejects !important on it', () => {
+      assert.deepStrictEqual(scan(`${root} a { visibility: hidden; }`), { seen: 1, problems: [] });
+      const r = scan(`${root} a { visibility: hidden !important; }`);
+      assert.strictEqual(r.seen, 1);
+      assert.ok(r.problems.some((p) => /!important/.test(p)), r.problems.join('\n'));
+    });
+    it('rejects visibility on the box and page containers outright', () => {
+      const box = scan(`${root} .draft-comment { visibility: hidden; }`);
+      assert.strictEqual(box.seen, 0);
+      assert.ok(box.problems.some((p) => /visibility/.test(p) && /cannot undo/.test(p)), box.problems.join('\n'));
+      const page = scan('body[data-template="x"] { visibility: hidden; }');
+      assert.ok(page.problems.some((p) => /visibility/.test(p) && /page container/.test(p)), page.problems.join('\n'));
+    });
+    it('rejects visibility: collapse, which hides like hidden off tables', () => {
+      const r = scan(`${root} p { visibility: collapse; }`);
+      assert.ok(r.problems.some((p) => /visibility/.test(p)), r.problems.join('\n'));
+    });
+    it('accepts inert visibility: visible on a container', () => {
+      assert.deepStrictEqual(scan(`${root} .draft-comment { visibility: visible; }`), { seen: 0, problems: [] });
     });
   });
 });

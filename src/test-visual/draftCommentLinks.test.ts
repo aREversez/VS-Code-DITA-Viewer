@@ -121,10 +121,14 @@ describe('draft-comment links under every template (real Chromium)', function ()
                 if (cs.filter !== 'none') hiding.push(`${who} filter`);
                 if (cs.mixBlendMode !== 'normal') hiding.push(`${who} mix-blend-mode ${cs.mixBlendMode}`);
               }
-              // Inherited text properties land on the link's own computed
-              // value, wherever they were declared (box, page, in between).
+              // Inherited properties land on the link's own computed value,
+              // wherever they were declared (box, page, in between). visibility
+              // reads correctly here too: an ancestor's hidden inherits down,
+              // while a link explicitly set visible against a hidden ancestor
+              // really is visible and must not be flagged.
               if (s.textShadow !== 'none') hiding.push('text-shadow');
               if (s.webkitTextFillColor !== s.color) hiding.push('text-fill-color');
+              if (s.visibility !== 'visible') hiding.push(`visibility ${s.visibility}`);
               return { color: s.color, line: s.textDecorationLine, boxColor: box.color, effBg, hiding };
             }),
           );
