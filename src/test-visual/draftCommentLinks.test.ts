@@ -88,25 +88,41 @@ describe('draft-comment links under every template (real Chromium)', function ()
           els.map((e) => {
             const s = getComputedStyle(e);
             const box = getComputedStyle(e.closest('.draft-comment') as Element);
-            // Contrast baseline is the link's EFFECTIVE background: its own if
-            // it paints one, else the nearest ancestor that does (normally the
-            // box). A template background on the link itself would otherwise
-            // slip past a box-background check while ruining the real ratio.
-            let effBg = 'rgb(255, 255, 255)';
+            // Contrast baseline is the link's EFFECTIVE background: every
+            // painted layer from the link up to the root, translucent ones
+            // composited over what lies beneath (white canvas at the bottom).
+            const parse = (c: string): number[] => (c.match(/[\d.]+/g) || []).map(Number);
+            const layers: number[][] = [];
             for (let n: Element | null = e; n; n = n.parentElement) {
-              const bg = getComputedStyle(n).backgroundColor;
-              if (bg && bg !== 'transparent' && !/^rgba\(\s*0,\s*0,\s*0,\s*0\s*\)$/.test(bg)) {
-                effBg = bg;
-                break;
-              }
+              const [r, g, b, a = 1] = parse(getComputedStyle(n).backgroundColor);
+              if (a > 0) layers.push([r, g, b, a]);
+              if (a === 1) break;
             }
-            return { color: s.color, line: s.textDecorationLine, boxColor: box.color, effBg };
+            let acc = [255, 255, 255];
+            for (const [r, g, b, a] of layers.reverse()) acc = [r * a + acc[0] * (1 - a), g * a + acc[1] * (1 - a), b * a + acc[2] * (1 - a)];
+            const effBg = `rgb(${acc.map(Math.round).join(', ')})`;
+            // Properties that hide a link without changing its computed colour,
+            // on the link or anything between it and the box: the contrast of
+            // colour vs background cannot see them, so each must be inert.
+            const hiding: string[] = [];
+            for (let n: Element | null = e; n && n !== e.closest('.draft-comment'); n = n.parentElement) {
+              const cs = getComputedStyle(n);
+              const who = n.tagName.toLowerCase();
+              if (cs.opacity !== '1') hiding.push(`${who} opacity ${cs.opacity}`);
+              if (cs.backgroundImage !== 'none') hiding.push(`${who} background-image`);
+              if (cs.textShadow !== 'none') hiding.push(`${who} text-shadow`);
+              if (cs.filter !== 'none') hiding.push(`${who} filter`);
+              if (cs.mixBlendMode !== 'normal') hiding.push(`${who} mix-blend-mode ${cs.mixBlendMode}`);
+              if (cs.webkitTextFillColor !== cs.color) hiding.push(`${who} text-fill-color`);
+            }
+            return { color: s.color, line: s.textDecorationLine, boxColor: box.color, effBg, hiding };
           }),
         );
         assert.strictEqual(links.length, 2, 'one link in the inline box, one in the block box');
         for (const l of links) {
           assert.strictEqual(l.color, l.boxColor, 'link colour is the box text colour');
           assert.ok(/underline/.test(l.line), 'still reads as a link');
+          assert.deepStrictEqual(l.hiding, [], 'nothing hides the link outside its colour');
           assert.ok(contrast(l.color, l.effBg) >= 4.5, `AA contrast ${contrast(l.color, l.effBg).toFixed(2)}`);
         }
         // Hover is a different cascade path (a:hover rules), so check it too.

@@ -167,7 +167,11 @@ describe('draft-comment link legibility vs template css', () => {
   const capA = specificity('body[data-template] #dita-content-root .draft-comment a');
   const capClass = specificity('body[data-template] #dita-content-root .draft-comment .xref');
 
-  const LEGIBILITY_PROP = /^(?:color|-webkit-text-fill-color|text-decoration(?:-[a-z]+)?|text-underline-(?:offset|position))$/;
+  // Colour and decoration, plus the properties that hide a link while leaving
+  // its computed colour alone: opacity, text-shadow, filter, mix-blend-mode and
+  // a background image/shorthand. background-color is left to the real-Chromium
+  // contrast measurement (it is judged by outcome there, see draftCommentLinks).
+  const LEGIBILITY_PROP = /^(?:color|-webkit-text-fill-color|text-decoration(?:-[a-z]+)?|text-underline-(?:offset|position)|opacity|text-shadow|filter|mix-blend-mode|background|background-image)$/;
   /** The declarations of one rule body as {prop, value}, property names lower-cased. */
   function declarations(body: string): { prop: string; value: string }[] {
     const out: { prop: string; value: string }[] = [];
@@ -272,6 +276,17 @@ describe('draft-comment link legibility vs template css', () => {
         assert.strictEqual(r.seen, 1, decl);
         assert.ok(r.problems.some((p) => /!important/.test(p)), decl);
       }
+    });
+    it('rejects !important on the properties that hide a link without touching its colour', () => {
+      for (const decl of ['opacity: .15 !important', 'text-shadow: 0 0 3px #90ee90 !important', 'filter: opacity(.1) !important', 'mix-blend-mode: screen !important', 'background-image: linear-gradient(#141414, #141414) !important', 'background: #141414 !important']) {
+        const r = scan(`${root} .draft-comment a { ${decl}; }`);
+        assert.strictEqual(r.seen, 1, decl);
+        assert.ok(r.problems.some((p) => /!important/.test(p)), decl);
+      }
+    });
+    it('holds an ordinary opacity or background-image link rule to the cap', () => {
+      assert.deepStrictEqual(scan(`${root} a { opacity: .8; }`), { seen: 1, problems: [] });
+      assert.ok(scan(`${root} .draft-comment a { opacity: .8; }`).problems.some((p) => /specificity/.test(p)));
     });
     it('does not count a rule that only sets background-color or border-color', () => {
       assert.deepStrictEqual(scan(`${root} a { background-color: red; }`), { seen: 0, problems: [] });
