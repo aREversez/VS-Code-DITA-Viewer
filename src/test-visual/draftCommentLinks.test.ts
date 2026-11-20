@@ -88,14 +88,26 @@ describe('draft-comment links under every template (real Chromium)', function ()
           els.map((e) => {
             const s = getComputedStyle(e);
             const box = getComputedStyle(e.closest('.draft-comment') as Element);
-            return { color: s.color, line: s.textDecorationLine, boxColor: box.color, boxBg: box.backgroundColor };
+            // Contrast baseline is the link's EFFECTIVE background: its own if
+            // it paints one, else the nearest ancestor that does (normally the
+            // box). A template background on the link itself would otherwise
+            // slip past a box-background check while ruining the real ratio.
+            let effBg = 'rgb(255, 255, 255)';
+            for (let n: Element | null = e; n; n = n.parentElement) {
+              const bg = getComputedStyle(n).backgroundColor;
+              if (bg && bg !== 'transparent' && !/^rgba\(\s*0,\s*0,\s*0,\s*0\s*\)$/.test(bg)) {
+                effBg = bg;
+                break;
+              }
+            }
+            return { color: s.color, line: s.textDecorationLine, boxColor: box.color, effBg };
           }),
         );
         assert.strictEqual(links.length, 2, 'one link in the inline box, one in the block box');
         for (const l of links) {
           assert.strictEqual(l.color, l.boxColor, 'link colour is the box text colour');
           assert.ok(/underline/.test(l.line), 'still reads as a link');
-          assert.ok(contrast(l.color, l.boxBg) >= 4.5, `AA contrast ${contrast(l.color, l.boxBg).toFixed(2)}`);
+          assert.ok(contrast(l.color, l.effBg) >= 4.5, `AA contrast ${contrast(l.color, l.effBg).toFixed(2)}`);
         }
         // Hover is a different cascade path (a:hover rules), so check it too.
         await page.hover('.draft-comment a');
