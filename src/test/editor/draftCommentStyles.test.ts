@@ -32,8 +32,11 @@ describe('draft-comment link legibility', () => {
 // strictly below the repeat's specificity (a tie wins by source order, since
 // template css is injected after styles.css) and free of !important (an
 // unlayered !important beats the repeat's normal declaration at any
-// specificity). Every file in template.json's css list is scanned, so a
-// split or renamed stylesheet cannot slip past the guard.
+// specificity). Hiding properties on the box, on anything that can contain it
+// or on the page root are reported outright: the repeat only declares colour
+// and underline on the link, so it cannot undo them. Every file in
+// template.json's css list is scanned, so a split or renamed stylesheet
+// cannot slip past the guard.
 describe('draft-comment link legibility vs template css', () => {
   const css = stripComments(readRepo('media/styles.css'));
 
@@ -167,11 +170,47 @@ describe('draft-comment link legibility vs template css', () => {
   const capA = specificity('body[data-template] #dita-content-root .draft-comment a');
   const capClass = specificity('body[data-template] #dita-content-root .draft-comment .xref');
 
+  /**
+   * Page-level subjects (body, html, :root, the content root, a bare *):
+   * compositing and inherited text properties on them reach every link, box
+   * included. Their BACKGROUND painting is legitimate page decoration -- the
+   * box's opaque background covers it -- so that is left to the real-Chromium
+   * effective-background measurement instead of being flagged here.
+   */
+  function pageSubject(sel: string): boolean {
+    const compounds = splitTop(sel, isCombinator);
+    const last = (compounds[compounds.length - 1] || '').replace(/:[\w-]+\([^()]*\)/g, '').replace(/::[\w-]+/g, '');
+    const type = (/^[a-zA-Z][\w-]*/.exec(last) || [''])[0];
+    return type === 'body' || type === 'html' || last === ':root' || /^#dita-content-root(?![\w-])/.test(last) || /^\*(?![\w-])/.test(last);
+  }
+
   // Colour and decoration, plus the properties that hide a link while leaving
   // its computed colour alone: opacity, text-shadow, filter, mix-blend-mode and
   // a background image/shorthand. background-color is left to the real-Chromium
   // contrast measurement (it is judged by outcome there, see draftCommentLinks).
   const LEGIBILITY_PROP = /^(?:color|-webkit-text-fill-color|text-decoration(?:-[a-z]+)?|text-underline-(?:offset|position)|opacity|text-shadow|filter|mix-blend-mode|background|background-image)$/;
+  // The subset that hides a link while leaving its computed colour alone. On a
+  // LINK subject these ride the cap/!important path (the shape allowance; real
+  // Chromium flags any non-inert computed value on the link itself, see
+  // draftCommentLinks). On a CONTAINER subject -- the box, anything that can
+  // contain it, the page root -- the repeat cannot help at all: it only
+  // declares colour and underline on the link, so these are reported outright,
+  // at any specificity, with or without !important.
+  const HIDING_PROP = /^(?:opacity|filter|mix-blend-mode|text-shadow|-webkit-text-fill-color|background|background-image)$/;
+  // Values that hide nothing; anything else (a var() included) is reported for
+  // a human to re-check -- the same conservative direction as the specificity.
+  const INERT_VALUE: Record<string, RegExp> = {
+    opacity: /^1$/,
+    filter: /^none$/i,
+    'mix-blend-mode': /^normal$/i,
+    'text-shadow': /^none$/i,
+    'background-image': /^none$/i,
+    '-webkit-text-fill-color': /^currentcolor$/i,
+  };
+  // A background shorthand only hides via an image component; a plain colour
+  // (or a var() holding one) is the contrast baseline's business, judged by
+  // outcome in real Chromium.
+  const IMAGE_FUNC = /url\(|gradient\(|image-set\(|element\(|paint\(|cross-fade\(/i;
   /** The declarations of one rule body as {prop, value}, property names lower-cased. */
   function declarations(body: string): { prop: string; value: string }[] {
     const out: { prop: string; value: string }[] = [];
@@ -180,7 +219,7 @@ describe('draft-comment link legibility vs template css', () => {
     return out;
   }
 
-  /** Scan one template stylesheet; `seen` counts the content-link colour or decoration rules it found. */
+  /** Scan one template stylesheet; `seen` counts the content-link colour or decoration rules it found. Container hiding properties add problems without touching `seen`. */
   function scanTemplateCss(tplCss: string, label: string): { seen: number; problems: string[] } {
     const problems: string[] = [];
     let seen = 0;
@@ -198,23 +237,47 @@ describe('draft-comment link legibility vs template css', () => {
       if (legibility.length === 0) continue;
       const important = legibility.some((d) => /!\s*important/i.test(d.value));
       for (const sel of splitTop(m[1], isComma).map((x) => x.replace(/\s+/g, ' '))) {
-        if (!/#dita-content-root(?![\w-])/.test(sel)) continue;
-        const subject = linkSubject(sel);
-        if (!subject) continue;
-        seen++;
+        const page = pageSubject(sel);
+        // Content chain: scoped to the content root, or a page-level subject
+        // (body { opacity: .3 } fades the box too, with no root in sight).
+        if (!/#dita-content-root(?![\w-])/.test(sel) && !page) continue;
         const where = `${label}: ${sel}`;
-        // An unlayered !important beats the repeat's unlayered normal
-        // declaration at any specificity (the book-entry rules use
-        // !important for exactly this reason), so the cap cannot save it.
-        if (important) {
-          problems.push(`${where}: content-link rule uses !important; it would beat the unlayered draft-comment repeat in media/styles.css regardless of specificity`);
+        const subject = linkSubject(sel);
+        if (subject) {
+          seen++;
+          // An unlayered !important beats the repeat's unlayered normal
+          // declaration at any specificity (the book-entry rules use
+          // !important for exactly this reason), so the cap cannot save it.
+          if (important) {
+            problems.push(`${where}: content-link rule uses !important; it would beat the unlayered draft-comment repeat in media/styles.css regardless of specificity`);
+          }
+          // A selector that can only be an .xref/.link meets the class repeat;
+          // one that can be a plain link is held to the `a` repeat.
+          const cap = subject === 'class' ? capClass : capA;
+          const spec = specificity(sel);
+          if (!below(spec, cap)) {
+            problems.push(`${where}: specificity (${spec.join(',')}) must stay below (${cap.join(',')}); re-check the unlayered draft-comment repeat in media/styles.css`);
+          }
+          continue;
         }
-        // A selector that can only be an .xref/.link meets the class repeat;
-        // one that can be a plain link is held to the `a` repeat.
-        const cap = subject === 'class' ? capClass : capA;
-        const spec = specificity(sel);
-        if (!below(spec, cap)) {
-          problems.push(`${where}: specificity (${spec.join(',')}) must stay below (${cap.join(',')}); re-check the unlayered draft-comment repeat in media/styles.css`);
+        // A ::before/::after generated box cannot contain the link: its
+        // painting is decoration (aurora's gradient heading underline), not
+        // a layer under the link text.
+        if (/::[\w-]/.test(splitTop(sel, isCombinator).pop() || '')) continue;
+        // Container subject: the box itself, an element that can contain it
+        // (a p wraps the inline box), or the page root. The repeat declares
+        // nothing on these, so a hiding property applies unopposed.
+        const kind = page ? 'the page container' : 'the review box or a container of it';
+        for (const d of legibility) {
+          if (!HIDING_PROP.test(d.prop)) continue;
+          if (page && (d.prop === 'background' || d.prop === 'background-image')) continue;
+          const value = d.value.trim();
+          if (d.prop === 'background') {
+            if (!IMAGE_FUNC.test(value)) continue;
+          } else if (INERT_VALUE[d.prop]?.test(value)) {
+            continue;
+          }
+          problems.push(`${where}: ${d.prop} on ${kind} can hide the link without touching its computed colour; the unlayered draft-comment repeat only declares colour and underline on the link itself and cannot undo this`);
         }
       }
     }
@@ -342,6 +405,48 @@ describe('draft-comment link legibility vs template css', () => {
       const r = scan(`@media (min-width: 600px) { ${root} a { color: red !important; } }`);
       assert.strictEqual(r.seen, 1);
       assert.strictEqual(r.problems.length, 1);
+    });
+    it('rejects a hiding property on the review box itself', () => {
+      const r = scan(`${root} .draft-comment { opacity: .2; }`);
+      assert.strictEqual(r.seen, 0, 'a container rule is not a link rule');
+      assert.ok(r.problems.some((p) => /opacity/.test(p) && /cannot undo/.test(p)), r.problems.join('\n'));
+    });
+    it('rejects a hiding property on an element that can contain the inline box', () => {
+      const r = scan(`${root} p { filter: blur(2px); }`);
+      assert.strictEqual(r.seen, 0);
+      assert.ok(r.problems.some((p) => /filter/.test(p)), r.problems.join('\n'));
+    });
+    it('rejects compositing on the page root even with no content root in the selector', () => {
+      const r = scan('body[data-template="x"] { opacity: .3; }');
+      assert.ok(r.problems.some((p) => /opacity/.test(p) && /page container/.test(p)), r.problems.join('\n'));
+    });
+    it('rejects compositing on the content root itself', () => {
+      const r = scan(`${root} { mix-blend-mode: multiply; }`);
+      assert.ok(r.problems.some((p) => /mix-blend-mode/.test(p) && /page container/.test(p)), r.problems.join('\n'));
+    });
+    it('rejects inherited text properties on a container, which land on the link', () => {
+      for (const rule of [`${root} .draft-comment { text-shadow: 0 0 3px #90ee90; }`, `${root} p { -webkit-text-fill-color: transparent; }`]) {
+        const r = scan(rule);
+        assert.strictEqual(r.problems.length, 1, rule);
+      }
+    });
+    it('rejects a background image on the box but leaves a plain colour background to Chromium', () => {
+      assert.ok(scan(`${root} .draft-comment { background-image: linear-gradient(#141414, #141414); }`).problems.some((p) => /background-image/.test(p)));
+      assert.ok(scan(`${root} .note { background: url(x.png) #fff; }`).problems.some((p) => /background/.test(p)));
+      assert.deepStrictEqual(scan(`${root} .draft-comment { background: #90ee90; }`), { seen: 0, problems: [] });
+      assert.deepStrictEqual(scan(`${root} pre { background: var(--tpl-code-bg); }`), { seen: 0, problems: [] });
+    });
+    it('leaves page-level background painting alone: the opaque box covers it', () => {
+      assert.deepStrictEqual(scan('body[data-template="x"] { background-image: url(x.png); }'), { seen: 0, problems: [] });
+      assert.deepStrictEqual(scan(`${root} { background: url(x.png); }`), { seen: 0, problems: [] });
+    });
+    it('accepts inert reset values on a container', () => {
+      const r = scan(`${root} .draft-comment { opacity: 1; filter: none; mix-blend-mode: normal; text-shadow: none; background-image: none; }`);
+      assert.deepStrictEqual(r, { seen: 0, problems: [] });
+    });
+    it('still ignores chrome rules however loud', () => {
+      const r = scan('body[data-template="x"] .tpl-header .tpl-link { opacity: .1; }');
+      assert.deepStrictEqual(r, { seen: 0, problems: [] });
     });
   });
 });
