@@ -116,8 +116,15 @@ const LEGACY_CODEPAGES = ['gbk', 'big5', 'shift_jis', 'euc-kr', 'windows-1252', 
  * code pages of English and Western European Windows (437, 850) have no
  * decoder label in Node, so a non-ASCII folder written in one of those is
  * still left to the folder scan.
+ *
+ * `env` is the same one the caller parses with, so a REG_EXPAND_SZ folder that
+ * reg prints unexpanded can still be the folder that names the right code page.
  */
-export function decodeRegistryOutput(bytes: Uint8Array, folderExists: (p: string) => boolean): string {
+export function decodeRegistryOutput(
+  bytes: Uint8Array,
+  folderExists: (p: string) => boolean,
+  env: Record<string, string | undefined> = {},
+): string {
   try {
     return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
   } catch {
@@ -130,7 +137,7 @@ export function decodeRegistryOutput(bytes: Uint8Array, folderExists: (p: string
     } catch {
       continue; // this runtime has no decoder for that label
     }
-    if (parseOxygenUninstallOutput(text).some((e) => e.installDir && folderExists(e.installDir))) return text;
+    if (parseOxygenUninstallOutput(text, env).some((e) => e.installDir && folderExists(e.installDir))) return text;
   }
   return new TextDecoder('utf-8').decode(bytes);
 }

@@ -399,12 +399,12 @@ describe('decodeRegistryOutput', () => {
   const gbkFolderName = Buffer.from([0xb2, 0xe2, 0xca, 0xd4]);
   const realFolder = 'D:\\测试\\Oxygen XML Editor 28';
 
-  const entryWithFolder = (folder: Buffer): Buffer =>
+  const entryWithFolder = (folder: Buffer, regType = 'REG_SZ'): Buffer =>
     Buffer.concat([
       Buffer.from(
         'HKEY_LOCAL_MACHINE\\SOFTWARE\\X\\Uninstall\\abc\r\n' +
           '    DisplayName    REG_SZ    Oxygen XML Editor 28.1\r\n' +
-          '    InstallLocation    REG_SZ    ',
+          `    InstallLocation    ${regType}    `,
         'utf8',
       ),
       folder,
@@ -422,6 +422,24 @@ describe('decodeRegistryOutput', () => {
   it('decodes a GBK install folder by the code page whose folder exists', () => {
     const text = decodeRegistryOutput(gbkEntry(), (p) => p === realFolder);
     assert.strictEqual(parseOxygenUninstallOutput(text)[0].installDir, realFolder);
+  });
+
+  it('decodes a GBK folder whose REG_EXPAND_SZ value needs the environment first', () => {
+    const folder = Buffer.concat([
+      Buffer.from('%ProgramFiles%\\', 'utf8'),
+      gbkFolderName,
+      Buffer.from('\\Oxygen XML Editor 28', 'utf8'),
+    ]);
+    const env = { ProgramFiles: 'D:\\Program Files' };
+    const text = decodeRegistryOutput(
+      entryWithFolder(folder, 'REG_EXPAND_SZ'),
+      (p) => p === 'D:\\Program Files\\测试\\Oxygen XML Editor 28',
+      env,
+    );
+    assert.strictEqual(
+      parseOxygenUninstallOutput(text, env)[0].installDir,
+      'D:\\Program Files\\测试\\Oxygen XML Editor 28',
+    );
   });
 
   it('keeps the lossy text when no code page names a folder that exists', () => {

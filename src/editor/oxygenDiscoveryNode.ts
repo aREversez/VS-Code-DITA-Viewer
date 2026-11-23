@@ -25,7 +25,10 @@ function runReg(args: string[]): Promise<string> {
         maxBuffer: 8 * 1024 * 1024,
       },
       // `reg` exits 1 when nothing matches; that is an empty result, not an error.
-      (_err, stdout) => resolve(decodeRegistryOutput(Buffer.isBuffer(stdout) ? stdout : Buffer.alloc(0), existsSync)),
+      (_err, stdout) =>
+        resolve(
+          decodeRegistryOutput(Buffer.isBuffer(stdout) ? stdout : Buffer.alloc(0), existsSync, process.env),
+        ),
     );
   });
 }
