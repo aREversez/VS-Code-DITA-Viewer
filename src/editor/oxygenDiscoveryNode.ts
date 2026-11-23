@@ -5,14 +5,16 @@ import { execFile } from 'child_process';
 import { existsSync, readdirSync } from 'fs';
 import { homedir } from 'os';
 import { discoverOxygenLaunchSpecs, decodeRegistryOutput } from './oxygenDiscovery';
-import type { OxygenLaunchSpec } from './oxygenLauncher';
+import { windowsSystemExe, type OxygenLaunchSpec } from './oxygenLauncher';
 
 function runReg(args: string[]): Promise<string> {
   return new Promise((resolve) => {
     // execFile, never a shell: the keys are constants or come from reg itself,
     // but nothing here should ever be one string away from command injection.
     execFile(
-      'reg',
+      // The system copy by full path: a bare name is searched for in the
+      // current directory first.
+      windowsSystemExe('reg.exe', process.env.SystemRoot),
       args,
       {
         windowsHide: true,

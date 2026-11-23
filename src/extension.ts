@@ -147,7 +147,7 @@ export function activate(context: vscode.ExtensionContext) {
       try {
         // Inside the try: a batch launcher refuses a path cmd.exe would still
         // interpret, and that refusal is reported like any other launch error.
-        const spawnArgs = buildOxygenSpawnArgs(result.spec, target.fsPath);
+        const spawnArgs = buildOxygenSpawnArgs(result.spec, target.fsPath, process.env.SystemRoot);
         const child = spawn(spawnArgs.command, spawnArgs.args, {
           detached: true,
           stdio: 'ignore',

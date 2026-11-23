@@ -255,8 +255,25 @@ export interface OxygenSpawnArgs {
   windowsVerbatimArguments?: boolean;
 }
 
-/** The full spawn invocation for opening one file with a resolved spec. */
-export function buildOxygenSpawnArgs(spec: OxygenLaunchSpec, filePath: string): OxygenSpawnArgs {
+/**
+ * A Windows system executable by its full path. Node resolves a bare name like
+ * `cmd.exe` or `reg` through the current directory first, so the system copy is
+ * named outright rather than left to that search. Without a SystemRoot (not
+ * Windows, or a stripped environment) the bare name is the fallback.
+ */
+export function windowsSystemExe(name: string, systemRoot: string | undefined): string {
+  return systemRoot ? `${systemRoot.replace(/[\\/]+$/, '')}\\System32\\${name}` : name;
+}
+
+/**
+ * The full spawn invocation for opening one file with a resolved spec.
+ * `systemRoot` (the SystemRoot variable) locates cmd.exe for a batch launcher.
+ */
+export function buildOxygenSpawnArgs(
+  spec: OxygenLaunchSpec,
+  filePath: string,
+  systemRoot?: string,
+): OxygenSpawnArgs {
   if (spec.viaCmd) {
     const unsafe = CMD_UNSAFE.test(filePath)
       ? filePath
@@ -266,7 +283,7 @@ export function buildOxygenSpawnArgs(spec: OxygenLaunchSpec, filePath: string): 
     if (unsafe !== undefined) throw new OxygenUnsafeBatchPathError(unsafe);
     // `cmd /s /c ""script" "file""`: /s strips exactly the outer pair of quotes.
     return {
-      command: 'cmd.exe',
+      command: windowsSystemExe('cmd.exe', systemRoot),
       args: ['/d', '/s', '/c', `""${spec.command}" "${filePath}""`],
       windowsVerbatimArguments: true,
     };
