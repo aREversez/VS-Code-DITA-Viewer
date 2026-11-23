@@ -605,6 +605,7 @@ describe('buildDitaOtSpawnSpec', () => {
       'C:\\dita-ot\\bin\\dita.bat',
       ['--input', 'C:\\docs\\map.ditamap'],
       'win32',
+      {},
     );
     assert.strictEqual(spec.command, 'cmd.exe');
     assert.deepStrictEqual(spec.args.slice(0, 3), ['/d', '/s', '/c']);

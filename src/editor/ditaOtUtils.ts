@@ -306,7 +306,7 @@ export function buildDitaOtSpawnSpec(
   executablePath: string,
   args: string[],
   platform: NodeJS.Platform,
-  /** process.env: names cmd.exe by its System32 path (windowsExe.ts). */
+  /** Defaults to process.env in windowsExe.ts, which names cmd.exe by its System32 path. */
   env?: Record<string, string | undefined>,
 ): SpawnSpec {
   if (platform !== 'win32') {

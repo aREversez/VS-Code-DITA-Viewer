@@ -285,6 +285,7 @@ describe('buildOxygenSpawnArgs', () => {
     const a = buildOxygenSpawnArgs(
       { command: 'C:\\Program Files\\O\\oxygen.bat', argsPrefix: [], source: 'detected', viaCmd: true },
       'C:\\docs\\a b.dita',
+      {},
     );
     assert.strictEqual(a.command, 'cmd.exe');
     assert.strictEqual(a.windowsVerbatimArguments, true);
@@ -297,7 +298,7 @@ describe('buildOxygenSpawnArgs', () => {
       buildOxygenSpawnArgs(spec, 'C:\\a.dita', { SystemRoot: 'C:\\Windows' }).command,
       'C:\\Windows\\System32\\cmd.exe',
     );
-    assert.strictEqual(buildOxygenSpawnArgs(spec, 'C:\\a.dita').command, 'cmd.exe');
+    assert.strictEqual(buildOxygenSpawnArgs(spec, 'C:\\a.dita', {}).command, 'cmd.exe');
   });
 
   it('refuses every character cmd.exe would interpret, in the file path and in the launcher path', () => {

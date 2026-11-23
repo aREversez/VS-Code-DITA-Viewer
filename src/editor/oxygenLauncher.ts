@@ -259,8 +259,8 @@ export interface OxygenSpawnArgs {
 
 /**
  * The full spawn invocation for opening one file with a resolved spec.
- * `env` (process.env) locates cmd.exe by full path for a batch launcher; see
- * windowsExe.ts.
+ * `env` locates cmd.exe by full path for a batch launcher; it defaults to
+ * process.env in windowsExe.ts.
  */
 export function buildOxygenSpawnArgs(
   spec: OxygenLaunchSpec,

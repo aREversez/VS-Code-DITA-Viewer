@@ -9,22 +9,26 @@
 import { win32 } from 'path';
 
 // A drive-absolute (C:\ or C:/) or UNC root. Anything else -- ".", "Windows",
-// "C:Windows" -- is relative to some current directory, which is exactly the
-// hazard, so it is not trusted.
+// "C:", "\Windows" -- is relative to some current directory, which is exactly
+// the hazard, so it is not trusted.
 const ABSOLUTE_ROOT = /^(?:[A-Za-z]:[\\/]|\\\\[^\\/])/;
 
 /**
  * `name` under `<SystemRoot>\System32`, from SystemRoot (else windir) in
- * `env`. Without an environment, or with no usable absolute root, the bare name
- * comes back: a missing or relative SystemRoot is not a reason to search the
- * current directory, but nor does it make spawning impossible. A SystemRoot
- * that is absolute yet wrong fails the spawn (ENOENT) rather than falling back
- * to the bare name, which would reopen the search this exists to close.
+ * `env`, which defaults to process.env: omitting the argument must not opt
+ * back into the current-directory search this exists to close.
+ *
+ * Each candidate root is judged on its own, so a relative SystemRoot (".",
+ * "Windows", "C:Windows") is skipped and a usable windir is still used. Only
+ * when neither is absolute does the bare name come back -- that leaves the
+ * current-directory search open, but a broken environment is not a reason to
+ * make spawning impossible. An absolute but wrong root is joined and fails
+ * the spawn (ENOENT) rather than falling back to the bare name.
  */
 export function windowsSystemExe(
   name: string,
-  env: Record<string, string | undefined> | undefined,
+  env: Record<string, string | undefined> = process.env,
 ): string {
-  const root = env?.SystemRoot || env?.windir;
-  return root && ABSOLUTE_ROOT.test(root) ? win32.join(root, 'System32', name) : name;
+  const root = [env.SystemRoot, env.windir].find((r) => typeof r === 'string' && ABSOLUTE_ROOT.test(r));
+  return root ? win32.join(root, 'System32', name) : name;
 }
