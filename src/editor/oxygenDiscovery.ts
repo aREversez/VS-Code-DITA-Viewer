@@ -112,7 +112,10 @@ const LEGACY_CODEPAGES = ['gbk', 'big5', 'shift_jis', 'euc-kr', 'windows-1252', 
  * so a non-ASCII install folder arrives as bytes UTF-8 cannot decode. Those
  * are decoded by the legacy code page that yields a folder which exists; with
  * none accepted the lossy UTF-8 text is kept, as before, and the folder scan
- * still runs. ASCII output, the common case, is returned untouched.
+ * still runs. ASCII output, the common case, is returned untouched. The OEM
+ * code pages of English and Western European Windows (437, 850) have no
+ * decoder label in Node, so a non-ASCII folder written in one of those is
+ * still left to the folder scan.
  */
 export function decodeRegistryOutput(bytes: Uint8Array, folderExists: (p: string) => boolean): string {
   try {
@@ -132,6 +135,11 @@ export function decodeRegistryOutput(bytes: Uint8Array, folderExists: (p: string
   return new TextDecoder('utf-8').decode(bytes);
 }
 
+// The per-user roots (LOCALAPPDATA\Programs, the home directory) are writable
+// by the user, which is the same trust the PATH probe in resolveOxygenLaunch
+// already relies on: this command spawns a launcher the user asked to open.
+// Nothing here reads the workspace, and workspace trust gates the command
+// itself (workspaceTrust.ts).
 function scanRoots(io: OxygenDiscoveryIo): string[] {
   if (io.platform === 'win32') {
     const roots = [
