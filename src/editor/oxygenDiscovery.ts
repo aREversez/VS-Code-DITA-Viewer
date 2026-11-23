@@ -49,8 +49,19 @@ export interface OxygenRegistryEntry {
  * Oxygen's entries out of `reg query ... /s` output. A key block is one
  * `HKEY_...` header line followed by indented `Name  REG_SZ  Data` lines.
  * The install folder is InstallLocation, else the folder of UninstallString.
+ * `env` expands the %VAR% of a REG_EXPAND_SZ value, which reg prints unexpanded.
  */
-export function parseOxygenUninstallOutput(output: string): OxygenRegistryEntry[] {
+export function parseOxygenUninstallOutput(
+  output: string,
+  env: Record<string, string | undefined> = {},
+): OxygenRegistryEntry[] {
+  // Windows environment names are case-insensitive.
+  const vars = new Map<string, string>();
+  for (const [name, value] of Object.entries(env)) {
+    if (value !== undefined) vars.set(name.toLowerCase(), value);
+  }
+  const expand = (text: string): string =>
+    text.replace(/%([^%]+)%/g, (whole, name: string) => vars.get(name.toLowerCase()) ?? whole);
   const entries: OxygenRegistryEntry[] = [];
   let values = new Map<string, string>();
   const flush = (): void => {
@@ -70,8 +81,8 @@ export function parseOxygenUninstallOutput(output: string): OxygenRegistryEntry[
       flush();
       continue;
     }
-    const m = /^\s+(\S+)\s+REG_(?:EXPAND_)?SZ\s+(.*)$/.exec(raw);
-    if (m) values.set(m[1].toLowerCase(), m[2]);
+    const m = /^\s+(\S+)\s+REG_(EXPAND_)?SZ\s+(.*)$/.exec(raw);
+    if (m) values.set(m[1].toLowerCase(), m[2] ? expand(m[3]) : m[3]);
   }
   flush();
   return entries;
@@ -124,7 +135,7 @@ export async function discoverOxygenLaunchSpecs(io: OxygenDiscoveryIo): Promise<
   const candidates: { dir: string; label: string }[] = [];
   if (io.platform === 'win32') {
     const outputs = await Promise.all(WIN_UNINSTALL_KEYS.map((k) => io.queryRegistry(k).catch(() => '')));
-    for (const e of outputs.flatMap(parseOxygenUninstallOutput)) {
+    for (const e of outputs.flatMap((o) => parseOxygenUninstallOutput(o, io.env))) {
       candidates.push({ dir: e.installDir, label: e.displayName });
     }
   }

@@ -47,6 +47,51 @@ describe('parseOxygenUninstallOutput', () => {
   it('returns nothing for empty output', () => {
     assert.deepStrictEqual(parseOxygenUninstallOutput(''), []);
   });
+
+  it('expands a REG_EXPAND_SZ InstallLocation from the environment', () => {
+    const out = [
+      'HKEY_LOCAL_MACHINE\\SOFTWARE\\X\\Uninstall\\abc',
+      '    DisplayName    REG_SZ    Oxygen XML Editor 28.1',
+      '    InstallLocation    REG_EXPAND_SZ    %ProgramFiles%\\Oxygen XML Editor 28',
+    ].join('\r\n');
+    assert.strictEqual(
+      parseOxygenUninstallOutput(out, { ProgramFiles: 'C:\\Program Files' })[0].installDir,
+      'C:\\Program Files\\Oxygen XML Editor 28',
+    );
+  });
+
+  it('expands a variable name case-insensitively, as Windows does', () => {
+    const out = [
+      'HKEY_LOCAL_MACHINE\\SOFTWARE\\X\\Uninstall\\abc',
+      '    DisplayName    REG_SZ    Oxygen XML Editor 28.1',
+      '    InstallLocation    REG_EXPAND_SZ    %programfiles%\\Oxygen XML Editor 28',
+    ].join('\r\n');
+    assert.strictEqual(
+      parseOxygenUninstallOutput(out, { ProgramFiles: 'C:\\Program Files' })[0].installDir,
+      'C:\\Program Files\\Oxygen XML Editor 28',
+    );
+  });
+
+  it('leaves an unknown variable in place instead of inventing a folder', () => {
+    const out = [
+      'HKEY_LOCAL_MACHINE\\SOFTWARE\\X\\Uninstall\\abc',
+      '    DisplayName    REG_SZ    Oxygen XML Editor 28.1',
+      '    InstallLocation    REG_EXPAND_SZ    %NoSuchVar%\\Oxygen XML Editor 28',
+    ].join('\r\n');
+    assert.strictEqual(parseOxygenUninstallOutput(out, {})[0].installDir, '%NoSuchVar%\\Oxygen XML Editor 28');
+  });
+
+  it('does not expand a REG_SZ value, which is stored literally', () => {
+    const out = [
+      'HKEY_LOCAL_MACHINE\\SOFTWARE\\X\\Uninstall\\abc',
+      '    DisplayName    REG_SZ    Oxygen XML Editor 28.1',
+      '    InstallLocation    REG_SZ    %ProgramFiles%\\Oxygen XML Editor 28',
+    ].join('\r\n');
+    assert.strictEqual(
+      parseOxygenUninstallOutput(out, { ProgramFiles: 'C:\\Program Files' })[0].installDir,
+      '%ProgramFiles%\\Oxygen XML Editor 28',
+    );
+  });
 });
 
 function regEntry(displayName: string, installDir: string, key = 'abc'): string {
@@ -226,6 +271,22 @@ describe('discoverOxygenLaunchSpecs', () => {
       specs.map((s) => s.argsPrefix[0]),
       ['/opt/Oxygen XML Editor 28/oxygen.sh', '/home/a/Oxygen XML Editor 26/oxygen.sh'],
     );
+  });
+
+  it('Windows: a REG_EXPAND_SZ install folder is expanded before it is searched', async () => {
+    const out = [
+      'HKEY_LOCAL_MACHINE\\SOFTWARE\\X\\Uninstall\\abc',
+      '    DisplayName    REG_SZ    Oxygen XML Editor 28.1',
+      '    InstallLocation    REG_EXPAND_SZ    %ProgramFiles%\\Oxygen XML Editor 28',
+    ].join('\r\n');
+    const specs = await discoverOxygenLaunchSpecs(
+      winIo({
+        env: { ProgramFiles: 'C:\\Program Files' },
+        reg: { [WIN_UNINSTALL_KEYS[0]]: out },
+        dirs: { 'C:\\Program Files\\Oxygen XML Editor 28': ['oxygen28.1.exe'] },
+      }),
+    );
+    assert.strictEqual(specs[0].command, 'C:\\Program Files\\Oxygen XML Editor 28\\oxygen28.1.exe');
   });
 
   it('Windows: nothing installed gives an empty list', async () => {
