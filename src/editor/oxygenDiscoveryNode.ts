@@ -4,7 +4,7 @@
 import { execFile } from 'child_process';
 import { existsSync, readdirSync } from 'fs';
 import { homedir } from 'os';
-import { discoverOxygenLaunchSpecs } from './oxygenDiscovery';
+import { discoverOxygenLaunchSpecs, decodeRegistryOutput } from './oxygenDiscovery';
 import type { OxygenLaunchSpec } from './oxygenLauncher';
 
 function runReg(args: string[]): Promise<string> {
@@ -14,9 +14,18 @@ function runReg(args: string[]): Promise<string> {
     execFile(
       'reg',
       args,
-      { windowsHide: true, timeout: 5000, encoding: 'utf8' },
+      {
+        windowsHide: true,
+        timeout: 5000,
+        // Bytes, not text: reg writes the console code page, which is not
+        // UTF-8 once a folder name holds a non-ASCII character.
+        encoding: 'buffer',
+        // /s walks the whole Uninstall tree; the 1 MB default is not worth
+        // risking on a machine with hundreds of installed programs.
+        maxBuffer: 8 * 1024 * 1024,
+      },
       // `reg` exits 1 when nothing matches; that is an empty result, not an error.
-      (_err, stdout) => resolve(typeof stdout === 'string' ? stdout : ''),
+      (_err, stdout) => resolve(decodeRegistryOutput(Buffer.isBuffer(stdout) ? stdout : Buffer.alloc(0), existsSync)),
     );
   });
 }

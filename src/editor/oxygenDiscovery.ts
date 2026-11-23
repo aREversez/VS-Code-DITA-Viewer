@@ -100,6 +100,38 @@ export function parseOxygenUninstallOutput(
   return entries;
 }
 
+/**
+ * Legacy code pages reg.exe may have written, tried only when the bytes are
+ * not UTF-8. A decoding is accepted only when the Oxygen folder it names is
+ * really there, so a wrong guess cannot invent an installation.
+ */
+const LEGACY_CODEPAGES = ['gbk', 'big5', 'shift_jis', 'euc-kr', 'windows-1252', 'windows-1251'];
+
+/**
+ * reg.exe writes the console code page, not UTF-8, when its output is a pipe,
+ * so a non-ASCII install folder arrives as bytes UTF-8 cannot decode. Those
+ * are decoded by the legacy code page that yields a folder which exists; with
+ * none accepted the lossy UTF-8 text is kept, as before, and the folder scan
+ * still runs. ASCII output, the common case, is returned untouched.
+ */
+export function decodeRegistryOutput(bytes: Uint8Array, folderExists: (p: string) => boolean): string {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    // Some byte is not UTF-8, so the text is in a legacy code page.
+  }
+  for (const label of LEGACY_CODEPAGES) {
+    let text: string;
+    try {
+      text = new TextDecoder(label).decode(bytes);
+    } catch {
+      continue; // this runtime has no decoder for that label
+    }
+    if (parseOxygenUninstallOutput(text).some((e) => e.installDir && folderExists(e.installDir))) return text;
+  }
+  return new TextDecoder('utf-8').decode(bytes);
+}
+
 function scanRoots(io: OxygenDiscoveryIo): string[] {
   if (io.platform === 'win32') {
     const roots = [

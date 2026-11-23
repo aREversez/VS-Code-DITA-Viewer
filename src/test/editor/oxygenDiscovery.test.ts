@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import {
   parseOxygenUninstallOutput,
+  decodeRegistryOutput,
   discoverOxygenLaunchSpecs,
   WIN_UNINSTALL_KEYS,
   type OxygenDiscoveryIo,
@@ -390,5 +391,61 @@ describe('discoverOxygenLaunchSpecs', () => {
       },
     });
     assert.strictEqual(called, false);
+  });
+});
+
+describe('decodeRegistryOutput', () => {
+  // "测试" as a Chinese Windows console writes it: GBK, not UTF-8.
+  const gbkFolderName = Buffer.from([0xb2, 0xe2, 0xca, 0xd4]);
+  const realFolder = 'D:\\测试\\Oxygen XML Editor 28';
+
+  const entryWithFolder = (folder: Buffer): Buffer =>
+    Buffer.concat([
+      Buffer.from(
+        'HKEY_LOCAL_MACHINE\\SOFTWARE\\X\\Uninstall\\abc\r\n' +
+          '    DisplayName    REG_SZ    Oxygen XML Editor 28.1\r\n' +
+          '    InstallLocation    REG_SZ    ',
+        'utf8',
+      ),
+      folder,
+      Buffer.from('\r\n', 'utf8'),
+    ]);
+
+  const gbkEntry = () =>
+    entryWithFolder(Buffer.concat([Buffer.from('D:\\', 'utf8'), gbkFolderName, Buffer.from('\\Oxygen XML Editor 28', 'utf8')]));
+
+  it('returns ASCII output untouched', () => {
+    const bytes = Buffer.from(REAL_REG_OUTPUT, 'utf8');
+    assert.strictEqual(decodeRegistryOutput(bytes, () => false), REAL_REG_OUTPUT);
+  });
+
+  it('decodes a GBK install folder by the code page whose folder exists', () => {
+    const text = decodeRegistryOutput(gbkEntry(), (p) => p === realFolder);
+    assert.strictEqual(parseOxygenUninstallOutput(text)[0].installDir, realFolder);
+  });
+
+  it('keeps the lossy text when no code page names a folder that exists', () => {
+    const text = decodeRegistryOutput(gbkEntry(), () => false);
+    assert.ok(text.includes('\uFFFD'));
+    assert.notStrictEqual(parseOxygenUninstallOutput(text)[0].installDir, realFolder);
+  });
+
+  it('decodes an empty result to an empty string', () => {
+    assert.strictEqual(decodeRegistryOutput(Buffer.alloc(0), () => false), '');
+  });
+
+  it('survives a tail truncated by the timeout or the buffer limit', () => {
+    // A lone GBK lead byte, as a killed query leaves behind.
+    const truncated = Buffer.concat([
+      Buffer.from(
+        'HKEY_LOCAL_MACHINE\\SOFTWARE\\X\\Uninstall\\abc\r\n' +
+          '    DisplayName    REG_SZ    Oxygen XML Editor 28.1\r\n' +
+          '    InstallLocation    REG_SZ    D:\\',
+        'utf8',
+      ),
+      Buffer.from([0xb2]),
+    ]);
+    const text = decodeRegistryOutput(truncated, () => false);
+    assert.strictEqual(parseOxygenUninstallOutput(text)[0].displayName, 'Oxygen XML Editor 28.1');
   });
 });
