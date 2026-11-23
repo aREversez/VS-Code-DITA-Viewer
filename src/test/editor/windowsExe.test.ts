@@ -24,7 +24,24 @@ describe('windowsSystemExe', () => {
   });
 
   it('defaults to the real environment, so an omitted env cannot opt out', () => {
-    assert.strictEqual(windowsSystemExe('cmd.exe', undefined), windowsSystemExe('cmd.exe', process.env));
+    // Comparing with process.env proves nothing off Windows (both sides are the
+    // bare name), so give process.env a SystemRoot of its own. windir names a
+    // different root rather than going away, which also pins the precedence:
+    // SystemRoot first, windir only when SystemRoot is not usable.
+    const saved = { SystemRoot: process.env.SystemRoot, windir: process.env.windir };
+    try {
+      process.env.SystemRoot = 'D:\\Win';
+      process.env.windir = 'E:\\Other';
+      assert.strictEqual(windowsSystemExe('cmd.exe'), 'D:\\Win\\System32\\cmd.exe');
+      assert.strictEqual(windowsSystemExe('cmd.exe', undefined), 'D:\\Win\\System32\\cmd.exe');
+      delete process.env.SystemRoot;
+      assert.strictEqual(windowsSystemExe('cmd.exe'), 'E:\\Other\\System32\\cmd.exe');
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
   });
 
   it('accepts a UNC root', () => {
