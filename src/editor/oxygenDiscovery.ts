@@ -27,8 +27,14 @@ export interface OxygenDiscoveryIo {
   /** Names in a folder; empty when it does not exist or cannot be read. */
   readDir: (p: string) => string[];
   fileExists: (p: string) => boolean;
-  /** `reg query <key> /s /f "Oxygen XML" /d` output; empty on failure or no match. */
+  /** `reg query <key> /s /f "Oxygen" /d` output; empty on failure or no match. */
   queryRegistry: (key: string) => Promise<string>;
+  /**
+   * `reg query <key>`: every value of one key. The filtered query above only
+   * prints the values whose data matched, so an install folder whose path does
+   * not contain "Oxygen" has to be read this way. Empty on failure.
+   */
+  queryRegistryKey?: (key: string) => Promise<string>;
 }
 
 const UNINSTALL = 'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall';
@@ -42,7 +48,10 @@ const PRODUCT_NAME_RE = /^Oxygen XML (?:Editor|Author|Developer)\b/i;
 
 export interface OxygenRegistryEntry {
   displayName: string;
+  /** Empty when the filtered output held no folder for this entry. */
   installDir: string;
+  /** The `HKEY_...` key the values came from, for a full re-read. */
+  key: string;
 }
 
 /**
@@ -64,6 +73,7 @@ export function parseOxygenUninstallOutput(
     text.replace(/%([^%]+)%/g, (whole, name: string) => vars.get(name.toLowerCase()) ?? whole);
   const entries: OxygenRegistryEntry[] = [];
   let values = new Map<string, string>();
+  let key = '';
   const flush = (): void => {
     const displayName = values.get('displayname') ?? '';
     let installDir = (values.get('installlocation') ?? '').trim();
@@ -73,12 +83,14 @@ export function parseOxygenUninstallOutput(
       if (cut > 0) installDir = uninstall.slice(0, cut);
     }
     installDir = installDir.replace(/^"|"$/g, '').replace(/[\\/]+$/, '');
-    if (installDir && PRODUCT_NAME_RE.test(displayName)) entries.push({ displayName, installDir });
+    // Kept even without a folder: the caller can re-read the key for it.
+    if (PRODUCT_NAME_RE.test(displayName)) entries.push({ displayName, installDir, key });
     values = new Map();
   };
   for (const raw of output.split(/\r?\n/)) {
     if (/^HKEY_/i.test(raw)) {
       flush();
+      key = raw.trim();
       continue;
     }
     const m = /^\s+(\S+)\s+REG_(EXPAND_)?SZ\s+(.*)$/.exec(raw);
@@ -136,7 +148,14 @@ export async function discoverOxygenLaunchSpecs(io: OxygenDiscoveryIo): Promise<
   if (io.platform === 'win32') {
     const outputs = await Promise.all(WIN_UNINSTALL_KEYS.map((k) => io.queryRegistry(k).catch(() => '')));
     for (const e of outputs.flatMap((o) => parseOxygenUninstallOutput(o, io.env))) {
-      candidates.push({ dir: e.installDir, label: e.displayName });
+      let dir = e.installDir;
+      // The filter matched DisplayName but printed no folder: read the whole
+      // key, which carries InstallLocation whatever its path looks like.
+      if (!dir && e.key && io.queryRegistryKey) {
+        const full = await io.queryRegistryKey(e.key).catch(() => '');
+        dir = parseOxygenUninstallOutput(full, io.env)[0]?.installDir ?? '';
+      }
+      candidates.push({ dir, label: e.displayName });
     }
   }
   for (const dir of scanInstallDirs(io)) {

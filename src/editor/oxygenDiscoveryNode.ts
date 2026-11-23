@@ -7,18 +7,28 @@ import { homedir } from 'os';
 import { discoverOxygenLaunchSpecs } from './oxygenDiscovery';
 import type { OxygenLaunchSpec } from './oxygenLauncher';
 
-function queryRegistry(key: string): Promise<string> {
+function runReg(args: string[]): Promise<string> {
   return new Promise((resolve) => {
-    // execFile, never a shell: the key is a constant, but nothing here should
-    // ever be one string away from command injection.
+    // execFile, never a shell: the keys are constants or come from reg itself,
+    // but nothing here should ever be one string away from command injection.
     execFile(
       'reg',
-      ['query', key, '/s', '/f', 'Oxygen XML', '/d'],
+      args,
       { windowsHide: true, timeout: 5000, encoding: 'utf8' },
       // `reg` exits 1 when nothing matches; that is an empty result, not an error.
       (_err, stdout) => resolve(typeof stdout === 'string' ? stdout : ''),
     );
   });
+}
+
+/** Uninstall entries whose data mentions Oxygen, in one of the three views. */
+function queryRegistry(key: string): Promise<string> {
+  return runReg(['query', key, '/s', '/f', 'Oxygen', '/d']);
+}
+
+/** Every value of one matched key, including a folder the filter did not print. */
+function queryRegistryKey(key: string): Promise<string> {
+  return runReg(['query', key]);
 }
 
 function readDir(p: string): string[] {
@@ -39,6 +49,7 @@ export async function discoverOxygenOnThisMachine(): Promise<OxygenLaunchSpec[]>
       readDir,
       fileExists: (p) => existsSync(p),
       queryRegistry,
+      queryRegistryKey,
     });
   } catch {
     return [];

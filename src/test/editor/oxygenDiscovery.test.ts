@@ -7,7 +7,9 @@ import {
 } from '../../editor/oxygenDiscovery';
 
 // Real `reg query ... /s /f "Oxygen" /d` output from a Windows machine with
-// Oxygen XML Author 28.1 installed (install4j registers the entry).
+// Oxygen XML Author 28.1 installed (install4j registers the entry). The filter
+// prints only the values whose data matched, so every line here contains
+// "Oxygen" somewhere.
 const REAL_REG_OUTPUT = `
 HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\7012-7398-7717-6547
     DisplayName    REG_SZ    Oxygen XML Author 28.1 (64-bit)
@@ -22,7 +24,25 @@ End of search: 5 match(es) found.
 describe('parseOxygenUninstallOutput', () => {
   it('reads the install folder of a real install4j registry entry', () => {
     assert.deepStrictEqual(parseOxygenUninstallOutput(REAL_REG_OUTPUT), [
-      { displayName: 'Oxygen XML Author 28.1 (64-bit)', installDir: 'C:\\Program Files\\Oxygen XML Author 28' },
+      {
+        displayName: 'Oxygen XML Author 28.1 (64-bit)',
+        installDir: 'C:\\Program Files\\Oxygen XML Author 28',
+        key: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\7012-7398-7717-6547',
+      },
+    ]);
+  });
+
+  it('keeps a matching entry whose install folder the filtered output omitted', () => {
+    const out = [
+      'HKEY_LOCAL_MACHINE\\SOFTWARE\\X\\Uninstall\\abc',
+      '    DisplayName    REG_SZ    Oxygen XML Editor 28.1',
+    ].join('\r\n');
+    assert.deepStrictEqual(parseOxygenUninstallOutput(out), [
+      {
+        displayName: 'Oxygen XML Editor 28.1',
+        installDir: '',
+        key: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\X\\Uninstall\\abc',
+      },
     ]);
   });
 
@@ -287,6 +307,41 @@ describe('discoverOxygenLaunchSpecs', () => {
       }),
     );
     assert.strictEqual(specs[0].command, 'C:\\Program Files\\Oxygen XML Editor 28\\oxygen28.1.exe');
+  });
+
+  it('Windows: re-reads a matched key whose install folder the filter did not print', async () => {
+    const key = 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\abc';
+    const filtered = [key, '    DisplayName    REG_SZ    Oxygen XML Editor 28.1', ''].join('\r\n');
+    const full = [key, '    DisplayName    REG_SZ    Oxygen XML Editor 28.1', '    InstallLocation    REG_SZ    D:\\Apps\\oxy28', ''].join('\r\n');
+    const specs = await discoverOxygenLaunchSpecs(
+      winIo({
+        reg: { [WIN_UNINSTALL_KEYS[0]]: filtered },
+        queryRegistryKey: async (k) => (k === key ? full : ''),
+        dirs: { 'D:\\Apps\\oxy28': ['oxygen28.1.exe'] },
+      }),
+    );
+    assert.strictEqual(specs[0].command, 'D:\\Apps\\oxy28\\oxygen28.1.exe');
+  });
+
+  it('Windows: a key that cannot be re-read is skipped without losing the rest', async () => {
+    const key = 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\abc';
+    const filtered = [key, '    DisplayName    REG_SZ    Oxygen XML Editor 28.1', ''].join('\r\n');
+    const specs = await discoverOxygenLaunchSpecs(
+      winIo({
+        reg: { [WIN_UNINSTALL_KEYS[0]]: filtered },
+        queryRegistryKey: async () => {
+          throw new Error('reg not found');
+        },
+        dirs: {
+          'C:\\Program Files': ['Oxygen XML Editor 28'],
+          'C:\\Program Files\\Oxygen XML Editor 28': ['oxygen28.1.exe'],
+        },
+      }),
+    );
+    assert.deepStrictEqual(
+      specs.map((s) => s.command),
+      ['C:\\Program Files\\Oxygen XML Editor 28\\oxygen28.1.exe'],
+    );
   });
 
   it('Windows: nothing installed gives an empty list', async () => {
