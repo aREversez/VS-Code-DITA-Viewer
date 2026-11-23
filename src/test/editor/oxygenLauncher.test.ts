@@ -136,7 +136,86 @@ describe('resolveOxygenLaunch', () => {
   });
 });
 
+describe('resolveOxygenLaunch: detection and launcher names', () => {
+  it('uses a detected installation after the macOS default and before PATH', () => {
+    const detected = [{ command: 'C:\\O\\oxygen28.1.exe', argsPrefix: [], source: 'detected' as const }];
+    const r = resolveOxygenLaunch({
+      platform: 'win32',
+      pathEnv: 'C:\\tools',
+      fileExists: (p) => p === 'C:/tools/oxygen.exe',
+      detected,
+    });
+    assert.ok(r.found);
+    if (r.found) assert.strictEqual(r.spec.command, 'C:\\O\\oxygen28.1.exe');
+  });
+
+  it('a configured path beats a detected installation', () => {
+    const r = resolveOxygenLaunch({
+      configuredPath: '/opt/mine/oxygen.sh',
+      platform: 'linux',
+      fileExists: (p) => p === '/opt/mine/oxygen.sh',
+      detected: [{ command: 'sh', argsPrefix: ['/other/oxygen.sh'], source: 'detected' }],
+    });
+    assert.ok(r.found);
+    if (r.found) assert.deepStrictEqual(r.spec.argsPrefix, ['/opt/mine/oxygen.sh']);
+  });
+
+  it('finds a version-suffixed exe inside a configured install directory (Windows)', () => {
+    const dir = 'C:\\Program Files\\Oxygen XML Author 28';
+    const r = resolveOxygenLaunch({
+      configuredPath: dir,
+      platform: 'win32',
+      fileExists: () => false,
+      readDir: () => ['uninstall.exe', 'oxygenAuthor28.1.exe'],
+    });
+    assert.ok(r.found);
+    if (r.found) assert.strictEqual(r.spec.command, dir + '\\oxygenAuthor28.1.exe');
+  });
+
+  it('finds oxygen.sh inside a configured install directory (Linux) and runs it through sh', () => {
+    const r = resolveOxygenLaunch({
+      configuredPath: '/opt/Oxygen XML Editor 28',
+      platform: 'linux',
+      fileExists: () => false,
+      readDir: () => ['oxygen.sh'],
+    });
+    assert.ok(r.found);
+    if (r.found) {
+      assert.strictEqual(r.spec.command, 'sh');
+      assert.deepStrictEqual(r.spec.argsPrefix, ['/opt/Oxygen XML Editor 28/oxygen.sh']);
+    }
+  });
+
+  it('a configured path straight to oxygen.bat goes through cmd.exe', () => {
+    const r = resolveOxygenLaunch({
+      configuredPath: 'C:\\O\\oxygen.bat',
+      platform: 'win32',
+      fileExists: (p) => p === 'C:\\O\\oxygen.bat',
+    });
+    assert.ok(r.found);
+    if (r.found) assert.strictEqual(r.spec.viaCmd, true);
+  });
+});
+
 describe('buildOxygenSpawnArgs', () => {
+  it('wraps a batch launcher in cmd /d /s /c with verbatim arguments', () => {
+    const a = buildOxygenSpawnArgs(
+      { command: 'C:\\Program Files\\O\\oxygen.bat', argsPrefix: [], source: 'detected', viaCmd: true },
+      'C:\\docs\\a b.dita',
+    );
+    assert.strictEqual(a.command, 'cmd.exe');
+    assert.strictEqual(a.windowsVerbatimArguments, true);
+    assert.deepStrictEqual(a.args, ['/d', '/s', '/c', '""C:\\Program Files\\O\\oxygen.bat" "C:\\docs\\a b.dita""']);
+  });
+
+  it('refuses a file path cmd.exe would interpret when using a batch launcher', () => {
+    for (const bad of ['C:\\a&calc.dita', 'C:\\%PATH%.dita', 'C:\\a^b.dita']) {
+      assert.throws(() =>
+        buildOxygenSpawnArgs({ command: 'C:\\O\\oxygen.bat', argsPrefix: [], source: 'detected', viaCmd: true }, bad),
+      );
+    }
+  });
+
   it('appends the target file after any fixed prefix args', () => {
     const args = buildOxygenSpawnArgs(
       { command: 'open', argsPrefix: ['-a', '/Applications/Oxygen XML Editor.app'], source: 'default' },
