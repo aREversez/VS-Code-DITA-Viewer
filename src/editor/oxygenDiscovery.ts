@@ -13,6 +13,7 @@
 // anything from the workspace, only fixed system locations.
 
 import {
+  compareVersion,
   compareVersionDesc,
   joinForPlatform,
   specForInstallDir,
@@ -112,23 +113,30 @@ function sameDir(platform: NodeJS.Platform, a: string, b: string): boolean {
 
 /**
  * Every Oxygen launcher found on this machine, best first: registry entries
- * (highest version first) before folder-scan hits, one spec per install folder.
+ * and folder-scan hits ranked together by version, one spec per install
+ * folder. A folder holding no launcher yields no spec, so one that merely
+ * looks like Oxygen cannot outrank a real install.
  */
 export async function discoverOxygenLaunchSpecs(io: OxygenDiscoveryIo): Promise<OxygenLaunchSpec[]> {
-  const dirs: string[] = [];
+  // Registry entries go in first: the sort compares versions only and is
+  // stable, so an equal version keeps the registered install, whose
+  // DisplayName carries the version the installer recorded.
+  const candidates: { dir: string; label: string }[] = [];
   if (io.platform === 'win32') {
     const outputs = await Promise.all(WIN_UNINSTALL_KEYS.map((k) => io.queryRegistry(k).catch(() => '')));
-    const entries = outputs
-      .flatMap(parseOxygenUninstallOutput)
-      .sort((a, b) => compareVersionDesc(a.displayName, b.displayName));
-    for (const e of entries) dirs.push(e.installDir);
+    for (const e of outputs.flatMap(parseOxygenUninstallOutput)) {
+      candidates.push({ dir: e.installDir, label: e.displayName });
+    }
   }
-  for (const d of scanInstallDirs(io)) dirs.push(d);
+  for (const dir of scanInstallDirs(io)) {
+    candidates.push({ dir, label: dir.split(/[\\/]/).pop() ?? dir });
+  }
+  candidates.sort((a, b) => compareVersion(a.label, b.label));
 
   const specs: OxygenLaunchSpec[] = [];
   const seen: string[] = [];
-  for (const dir of dirs) {
-    if (seen.some((s) => sameDir(io.platform, s, dir))) continue;
+  for (const { dir } of candidates) {
+    if (!dir || seen.some((s) => sameDir(io.platform, s, dir))) continue;
     seen.push(dir);
     // A macOS bundle found by the scan is itself the launcher.
     const spec = /\.app$/i.test(dir) && io.fileExists(dir)

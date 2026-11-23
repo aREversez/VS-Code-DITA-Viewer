@@ -49,6 +49,15 @@ describe('parseOxygenUninstallOutput', () => {
   });
 });
 
+function regEntry(displayName: string, installDir: string, key = 'abc'): string {
+  return [
+    `HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${key}`,
+    `    DisplayName    REG_SZ    ${displayName}`,
+    `    InstallLocation    REG_SZ    ${installDir}`,
+    '',
+  ].join('\r\n');
+}
+
 function winIo(over: Partial<OxygenDiscoveryIo> & { dirs?: Record<string, string[]>; reg?: Record<string, string> }): OxygenDiscoveryIo {
   const dirs = over.dirs ?? {};
   return {
@@ -142,6 +151,81 @@ describe('discoverOxygenLaunchSpecs', () => {
       }),
     );
     assert.strictEqual(specs.length, 1);
+  });
+
+  it('Windows: a newer install found by the scan beats an older registered one', async () => {
+    const specs = await discoverOxygenLaunchSpecs(
+      winIo({
+        reg: { [WIN_UNINSTALL_KEYS[0]]: regEntry('Oxygen XML Editor 27.1', 'C:\\Program Files\\Oxygen XML Editor 27') },
+        dirs: {
+          'C:\\Program Files': ['Oxygen XML Editor 27', 'Oxygen XML Editor 29'],
+          'C:\\Program Files\\Oxygen XML Editor 27': ['oxygen27.1.exe'],
+          'C:\\Program Files\\Oxygen XML Editor 29': ['oxygen29.0.exe'],
+        },
+      }),
+    );
+    assert.deepStrictEqual(
+      specs.map((s) => s.command),
+      [
+        'C:\\Program Files\\Oxygen XML Editor 29\\oxygen29.0.exe',
+        'C:\\Program Files\\Oxygen XML Editor 27\\oxygen27.1.exe',
+      ],
+    );
+  });
+
+  it('Windows: equal versions keep the registered install ahead of a portable one', async () => {
+    const specs = await discoverOxygenLaunchSpecs(
+      winIo({
+        reg: { [WIN_UNINSTALL_KEYS[0]]: regEntry('Oxygen XML Editor 28.1', 'C:\\Program Files\\Oxygen XML Editor 28') },
+        dirs: {
+          'C:\\Program Files': ['Oxygen XML Editor 28.1'],
+          'C:\\Program Files\\Oxygen XML Editor 28': ['oxygen28.1.exe'],
+          'C:\\Program Files\\Oxygen XML Editor 28.1': ['oxygen28.1.exe'],
+        },
+      }),
+    );
+    assert.strictEqual(specs.length, 2);
+    assert.strictEqual(specs[0].command, 'C:\\Program Files\\Oxygen XML Editor 28\\oxygen28.1.exe');
+  });
+
+  it('Windows: a folder that only looks like Oxygen yields no spec and cannot win', async () => {
+    const specs = await discoverOxygenLaunchSpecs(
+      winIo({
+        dirs: {
+          'C:\\Program Files': ['Oxygen XML Editor 99 notes', 'Oxygen XML Editor 28'],
+          'C:\\Program Files\\Oxygen XML Editor 99 notes': ['readme.txt'],
+          'C:\\Program Files\\Oxygen XML Editor 28': ['oxygen28.1.exe'],
+        },
+      }),
+    );
+    assert.deepStrictEqual(
+      specs.map((s) => s.command),
+      ['C:\\Program Files\\Oxygen XML Editor 28\\oxygen28.1.exe'],
+    );
+  });
+
+  it('Linux: the highest version wins across install roots, not the first root', async () => {
+    const specs = await discoverOxygenLaunchSpecs({
+      platform: 'linux',
+      env: {},
+      homedir: '/home/a',
+      readDir: (p) =>
+        p === '/home/a'
+          ? ['Oxygen XML Editor 26']
+          : p === '/home/a/Oxygen XML Editor 26'
+            ? ['oxygen.sh']
+            : p === '/opt'
+              ? ['Oxygen XML Editor 28']
+              : p === '/opt/Oxygen XML Editor 28'
+                ? ['oxygen.sh']
+                : [],
+      fileExists: () => false,
+      queryRegistry: async () => '',
+    });
+    assert.deepStrictEqual(
+      specs.map((s) => s.argsPrefix[0]),
+      ['/opt/Oxygen XML Editor 28/oxygen.sh', '/home/a/Oxygen XML Editor 26/oxygen.sh'],
+    );
   });
 
   it('Windows: nothing installed gives an empty list', async () => {

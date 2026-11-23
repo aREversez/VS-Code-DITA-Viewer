@@ -80,20 +80,29 @@ function specForFile(
 }
 
 /** Numeric parts of the first dotted number in `text` ("... 28.1 (64-bit)" -> [28, 1]). */
-export function versionKey(text: string): number[] {
+function versionKey(text: string): number[] {
   const m = /\d+(?:\.\d+)*/.exec(text);
   return m ? m[0].split('.').map(Number) : [];
 }
 
-/** Descending version order; names without a version sort last. */
-export function compareVersionDesc(a: string, b: string): number {
+/**
+ * Descending version order, 0 when the versions are equal (names without a
+ * version count as the lowest). Callers that rank a mixed list keep their own
+ * order on a tie, which a stable sort preserves.
+ */
+export function compareVersion(a: string, b: string): number {
   const ka = versionKey(a);
   const kb = versionKey(b);
   for (let i = 0; i < Math.max(ka.length, kb.length); i++) {
     const d = (kb[i] ?? -1) - (ka[i] ?? -1);
     if (d !== 0) return d;
   }
-  return a.localeCompare(b);
+  return 0;
+}
+
+/** Descending version order; names without a version sort last, ties by name. */
+export function compareVersionDesc(a: string, b: string): number {
+  return compareVersion(a, b) || a.localeCompare(b);
 }
 
 export function joinForPlatform(platform: NodeJS.Platform, dir: string, name: string): string {
