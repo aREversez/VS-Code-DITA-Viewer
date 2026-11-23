@@ -5,7 +5,8 @@ import { execFile } from 'child_process';
 import { existsSync, readdirSync } from 'fs';
 import { homedir } from 'os';
 import { discoverOxygenLaunchSpecs, decodeRegistryOutput } from './oxygenDiscovery';
-import { windowsSystemExe, type OxygenLaunchSpec } from './oxygenLauncher';
+import type { OxygenLaunchSpec } from './oxygenLauncher';
+import { windowsSystemExe } from './windowsExe';
 
 function runReg(args: string[]): Promise<string> {
   return new Promise((resolve) => {
@@ -14,7 +15,7 @@ function runReg(args: string[]): Promise<string> {
     execFile(
       // The system copy by full path: a bare name is searched for in the
       // current directory first.
-      windowsSystemExe('reg.exe', process.env.SystemRoot),
+      windowsSystemExe('reg.exe', process.env),
       args,
       {
         windowsHide: true,

@@ -39,6 +39,7 @@ import { mapTitleFromXml } from './editor/templateChrome';
 import { makeFileTitleResolver } from './editor/ditaRenderUtils';
 import { ditaOtHomeFromExecutable, getPluginStatus, installPlugin, CJK_SPACING_PLUGIN_ID } from './editor/ditaOtPlugin';
 import { ensureCommandAllowed } from './editor/workspaceTrustGate';
+import { windowsSystemExe } from './editor/windowsExe';
 
 const TRANSFORM_CMD = 'ditaViewer.transformWithDitaOt';
 
@@ -84,7 +85,7 @@ async function offerCjkSpacingPlugin(
 
   try {
     const backupDir = await installPlugin(otHome, bundledDir, () => new Promise<void>((resolveRun, rejectRun) => {
-      const spec = buildDitaOtSpawnSpec(ditaExecutable, ['install'], process.platform);
+      const spec = buildDitaOtSpawnSpec(ditaExecutable, ['install'], process.platform, process.env);
       const child = spawn(spec.command, spec.args, { windowsVerbatimArguments: spec.windowsVerbatimArguments });
       child.stdout?.on('data', (d) => outputChannel.append(String(d)));
       child.stderr?.on('data', (d) => outputChannel.append(String(d)));
@@ -795,7 +796,7 @@ export function registerTransformCommand(context: vscode.ExtensionContext): void
             // Windows batch files must run through cmd.exe; the spec quotes
             // every argument explicitly instead of using shell: true (which
             // concatenates args unquoted — space/metacharacter unsafe).
-            const spec = buildDitaOtSpawnSpec(result.location.executablePath, args, process.platform);
+            const spec = buildDitaOtSpawnSpec(result.location.executablePath, args, process.platform, process.env);
             const child = spawn(spec.command, spec.args, {
               windowsVerbatimArguments: spec.windowsVerbatimArguments,
             });
@@ -808,7 +809,7 @@ export function registerTransformCommand(context: vscode.ExtensionContext): void
                 // Kill the whole tree — terminating the cmd.exe wrapper alone
                 // leaves the DITA-OT Java process running.
                 try {
-                  spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'])
+                  spawn(windowsSystemExe('taskkill.exe', process.env), ['/pid', String(child.pid), '/t', '/f'])
                     .on('error', (e) => console.warn('Failed to kill Windows process tree:', e.message));
                 } catch (e) {
                   console.warn('Failed to kill Windows process tree:', e instanceof Error ? e.message : e);

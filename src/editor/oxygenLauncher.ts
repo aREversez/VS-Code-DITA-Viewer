@@ -23,6 +23,8 @@
  * ".app" bundle instead goes through `open -a <bundle> <file>`, since the
  * bundle itself isn't a spawnable executable.
  */
+import { windowsSystemExe } from './windowsExe';
+
 export interface OxygenLaunchSpec {
   command: string;
   /** Arguments before the target file path (macOS `open -a`, Linux `sh <script>`). */
@@ -256,23 +258,14 @@ export interface OxygenSpawnArgs {
 }
 
 /**
- * A Windows system executable by its full path. Node resolves a bare name like
- * `cmd.exe` or `reg` through the current directory first, so the system copy is
- * named outright rather than left to that search. Without a SystemRoot (not
- * Windows, or a stripped environment) the bare name is the fallback.
- */
-export function windowsSystemExe(name: string, systemRoot: string | undefined): string {
-  return systemRoot ? `${systemRoot.replace(/[\\/]+$/, '')}\\System32\\${name}` : name;
-}
-
-/**
  * The full spawn invocation for opening one file with a resolved spec.
- * `systemRoot` (the SystemRoot variable) locates cmd.exe for a batch launcher.
+ * `env` (process.env) locates cmd.exe by full path for a batch launcher; see
+ * windowsExe.ts.
  */
 export function buildOxygenSpawnArgs(
   spec: OxygenLaunchSpec,
   filePath: string,
-  systemRoot?: string,
+  env?: Record<string, string | undefined>,
 ): OxygenSpawnArgs {
   if (spec.viaCmd) {
     const unsafe = CMD_UNSAFE.test(filePath)
@@ -283,7 +276,7 @@ export function buildOxygenSpawnArgs(
     if (unsafe !== undefined) throw new OxygenUnsafeBatchPathError(unsafe);
     // `cmd /s /c ""script" "file""`: /s strips exactly the outer pair of quotes.
     return {
-      command: windowsSystemExe('cmd.exe', systemRoot),
+      command: windowsSystemExe('cmd.exe', env),
       args: ['/d', '/s', '/c', `""${spec.command}" "${filePath}""`],
       windowsVerbatimArguments: true,
     };

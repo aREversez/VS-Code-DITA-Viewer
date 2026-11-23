@@ -291,10 +291,10 @@ describe('buildOxygenSpawnArgs', () => {
     assert.deepStrictEqual(a.args, ['/d', '/s', '/c', '""C:\\Program Files\\O\\oxygen.bat" "C:\\docs\\a b.dita""']);
   });
 
-  it('names cmd.exe by its full System32 path when SystemRoot is known', () => {
+  it('names cmd.exe by its full System32 path when the environment names SystemRoot', () => {
     const spec = { command: 'C:\\O\\oxygen.bat', argsPrefix: [], source: 'detected' as const, viaCmd: true };
     assert.strictEqual(
-      buildOxygenSpawnArgs(spec, 'C:\\a.dita', 'C:\\Windows\\').command,
+      buildOxygenSpawnArgs(spec, 'C:\\a.dita', { SystemRoot: 'C:\\Windows' }).command,
       'C:\\Windows\\System32\\cmd.exe',
     );
     assert.strictEqual(buildOxygenSpawnArgs(spec, 'C:\\a.dita').command, 'cmd.exe');

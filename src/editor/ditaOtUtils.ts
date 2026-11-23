@@ -3,6 +3,7 @@ import { homedir } from 'os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'path';
 import { parseDitamap, preprocessEntities, collectMapEntries } from '@dita-viewer/core';
 import { expandDitamapRefs, decodeHrefPart } from './ditaRenderUtils';
+import { windowsSystemExe } from './windowsExe';
 
 export interface NavManifestEntry {
   file: string;
@@ -305,6 +306,8 @@ export function buildDitaOtSpawnSpec(
   executablePath: string,
   args: string[],
   platform: NodeJS.Platform,
+  /** process.env: names cmd.exe by its System32 path (windowsExe.ts). */
+  env?: Record<string, string | undefined>,
 ): SpawnSpec {
   if (platform !== 'win32') {
     return { command: executablePath, args };
@@ -312,7 +315,7 @@ export function buildDitaOtSpawnSpec(
   const quote = (a: string) => `"${a.replace(/"/g, '""')}"`;
   const commandLine = [quote(executablePath), ...args.map(quote)].join(' ');
   return {
-    command: 'cmd.exe',
+    command: windowsSystemExe('cmd.exe', env),
     // /s makes cmd strip only the outer quotes of the wrapped command line
     args: ['/d', '/s', '/c', `"${commandLine}"`],
     windowsVerbatimArguments: true,
