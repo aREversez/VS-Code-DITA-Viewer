@@ -204,6 +204,7 @@
   "Oxygen XML Editor was not found. Please configure its path in settings.": "未找到 Oxygen XML Editor，请在设置中配置其路径。",
   "Failed to launch Oxygen XML Editor: {0}": "启动 Oxygen XML Editor 失败：{0}",
   "Browse…": "浏览…",
+  "No Oxygen XML Editor launcher was found at: {0}": "未在以下位置找到 Oxygen XML Editor 启动器：{0}",
   "Select Oxygen XML Editor": "选择 Oxygen XML Editor",
   "Select the Oxygen XML Editor executable or installation folder": "选择 Oxygen XML Editor 的可执行文件或安装文件夹",
   "This file is not part of the DITA map currently shown in the navigator.": "此文件不属于导航栏中当前显示的 DITA Map。",

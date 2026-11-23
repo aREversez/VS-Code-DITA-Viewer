@@ -204,6 +204,7 @@
   "Oxygen XML Editor was not found. Please configure its path in settings.": "Oxygen XML Editor was not found. Please configure its path in settings.",
   "Failed to launch Oxygen XML Editor: {0}": "Failed to launch Oxygen XML Editor: {0}",
   "Browse…": "Browse…",
+  "No Oxygen XML Editor launcher was found at: {0}": "No Oxygen XML Editor launcher was found at: {0}",
   "Select Oxygen XML Editor": "Select Oxygen XML Editor",
   "Select the Oxygen XML Editor executable or installation folder": "Select the Oxygen XML Editor executable or installation folder",
   "This file is not part of the DITA map currently shown in the navigator.": "This file is not part of the DITA map currently shown in the navigator.",

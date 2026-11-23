@@ -158,6 +158,12 @@ export function resolveOxygenLaunch(input: {
   platform: NodeJS.Platform;
   pathEnv?: string;
   fileExists: (p: string) => boolean;
+  /**
+   * True when the path is a folder. fileExists (fs.existsSync) is true for a
+   * folder too, so without this a configured install folder would be spawned
+   * as if it were the launcher.
+   */
+  isDirectory?: (p: string) => boolean;
   /** Folder listing; empty on error. Lets version-suffixed launchers be found. */
   readDir?: (p: string) => string[];
   /** Installations found by scanning the machine (see oxygenDiscovery.ts), best first. */
@@ -170,6 +176,12 @@ export function resolveOxygenLaunch(input: {
       return input.fileExists(trimmed)
         ? { found: true, spec: appBundleSpec(trimmed, 'setting') }
         : { found: false, reason: 'setting-invalid' };
+    }
+    // An installation folder: find the launcher inside it. This is settled
+    // before fileExists, which reports a folder as existing as well.
+    if (input.isDirectory?.(trimmed)) {
+      const inDir = specForInstallDir(trimmed, input.platform, input, 'setting');
+      return inDir ? { found: true, spec: inDir } : { found: false, reason: 'setting-invalid' };
     }
     // A direct path to the launcher itself.
     if (input.fileExists(trimmed)) {

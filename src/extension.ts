@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { spawn } from 'child_process';
-import { existsSync, readdirSync } from 'fs';
+import { existsSync, readdirSync, statSync } from 'fs';
 import { registerSourceOverlay } from './editor/sourceOverlayFeed';
 import { registerSourceEditorTracker } from './editor/sourceEditorOpener';
 import { DitaViewerProvider, getLastRenderedHtmlForTesting, clearAllCaches } from './editor/DitaViewerProvider';
@@ -88,6 +88,13 @@ export function activate(context: vscode.ExtensionContext) {
           platform: process.platform,
           pathEnv: process.env.PATH,
           fileExists: (p) => existsSync(p),
+          isDirectory: (p) => {
+            try {
+              return statSync(p).isDirectory();
+            } catch {
+              return false;
+            }
+          },
           readDir: (p) => {
             try {
               return readdirSync(p);
@@ -126,9 +133,11 @@ export function activate(context: vscode.ExtensionContext) {
         const pickedPath = picked[0].fsPath;
         const checked = resolveWith(pickedPath);
         if (!checked.found) {
-          vscode.window.showErrorMessage(vscode.l10n.t('The configured Oxygen XML Editor path is invalid: {0}', pickedPath));
+          vscode.window.showErrorMessage(vscode.l10n.t('No Oxygen XML Editor launcher was found at: {0}', pickedPath));
           return;
         }
+        // Only a pick that resolved to a launcher is worth remembering: a bad
+        // value here would shadow detection on every later run.
         await vscode.workspace
           .getConfiguration('dita-viewer')
           .update('oxygenPath', pickedPath, vscode.ConfigurationTarget.Global);

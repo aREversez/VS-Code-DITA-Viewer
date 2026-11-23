@@ -1,4 +1,7 @@
 import * as assert from 'assert';
+import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { resolveOxygenLaunch, buildOxygenSpawnArgs } from '../../editor/oxygenLauncher';
 
 describe('resolveOxygenLaunch', () => {
@@ -194,6 +197,86 @@ describe('resolveOxygenLaunch: detection and launcher names', () => {
     });
     assert.ok(r.found);
     if (r.found) assert.strictEqual(r.spec.viaCmd, true);
+  });
+});
+
+describe('resolveOxygenLaunch: real file system', () => {
+  // existsSync is true for a folder as well, so "the path is the launcher
+  // itself" must not be settled before "the path is an install folder". A
+  // fileExists mock cannot express that, hence a real temporary folder.
+  let installDir: string;
+  let emptyDir: string;
+  let launcherName: string;
+
+  before(() => {
+    installDir = mkdtempSync(join(tmpdir(), 'dv-oxygen-install-'));
+    emptyDir = mkdtempSync(join(tmpdir(), 'dv-oxygen-empty-'));
+    launcherName = process.platform === 'win32' ? 'oxygen28.1.exe' : 'oxygen.sh';
+    writeFileSync(join(installDir, launcherName), '');
+    writeFileSync(join(installDir, 'uninstall.exe'), '');
+  });
+
+  after(() => {
+    rmSync(installDir, { recursive: true, force: true });
+    rmSync(emptyDir, { recursive: true, force: true });
+  });
+
+  const realIo = () => ({
+    platform: process.platform,
+    fileExists: (p: string) => existsSync(p),
+    isDirectory: (p: string) => {
+      try {
+        return statSync(p).isDirectory();
+      } catch {
+        return false;
+      }
+    },
+    readDir: (p: string) => {
+      try {
+        return readdirSync(p);
+      } catch {
+        return [];
+      }
+    },
+  });
+
+  // What the launcher inside installDir resolves to on this platform.
+  const insideInstallDir = () =>
+    process.platform === 'win32'
+      ? { command: join(installDir, launcherName), argsPrefix: [] as string[] }
+      : { command: 'sh', argsPrefix: [join(installDir, launcherName)] };
+
+  it('searches a configured install folder instead of spawning the folder', () => {
+    const r = resolveOxygenLaunch({ ...realIo(), configuredPath: installDir });
+    assert.ok(r.found);
+    if (r.found) {
+      const expected = insideInstallDir();
+      assert.strictEqual(r.spec.command, expected.command);
+      assert.deepStrictEqual(r.spec.argsPrefix, expected.argsPrefix);
+      assert.strictEqual(r.spec.source, 'setting');
+    }
+  });
+
+  it('reports setting-invalid for a real folder that holds no launcher', () => {
+    const r = resolveOxygenLaunch({ ...realIo(), configuredPath: emptyDir });
+    assert.ok(!r.found);
+    if (!r.found) assert.strictEqual(r.reason, 'setting-invalid');
+  });
+
+  it('still uses a real launcher file directly', () => {
+    const r = resolveOxygenLaunch({ ...realIo(), configuredPath: join(installDir, launcherName) });
+    assert.ok(r.found);
+    if (r.found) {
+      const expected = insideInstallDir();
+      assert.strictEqual(r.spec.command, expected.command);
+      assert.deepStrictEqual(r.spec.argsPrefix, expected.argsPrefix);
+    }
+  });
+
+  it('reports setting-invalid for a path that is not on disk', () => {
+    const r = resolveOxygenLaunch({ ...realIo(), configuredPath: join(emptyDir, 'oxygen28.1.exe') });
+    assert.ok(!r.found);
+    if (!r.found) assert.strictEqual(r.reason, 'setting-invalid');
   });
 });
 
