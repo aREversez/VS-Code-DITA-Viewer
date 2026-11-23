@@ -205,6 +205,7 @@
   "Failed to launch Oxygen XML Editor: {0}": "Failed to launch Oxygen XML Editor: {0}",
   "Browse…": "Browse…",
   "No Oxygen XML Editor launcher was found at: {0}": "No Oxygen XML Editor launcher was found at: {0}",
+  "This path contains characters that cannot be passed to oxygen.bat safely: {0}": "This path contains characters that cannot be passed to oxygen.bat safely: {0}",
   "Select Oxygen XML Editor": "Select Oxygen XML Editor",
   "Select the Oxygen XML Editor executable or installation folder": "Select the Oxygen XML Editor executable or installation folder",
   "This file is not part of the DITA map currently shown in the navigator.": "This file is not part of the DITA map currently shown in the navigator.",

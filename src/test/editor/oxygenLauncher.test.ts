@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { resolveOxygenLaunch, buildOxygenSpawnArgs } from '../../editor/oxygenLauncher';
+import { resolveOxygenLaunch, buildOxygenSpawnArgs, OxygenUnsafeBatchPathError } from '../../editor/oxygenLauncher';
 
 describe('resolveOxygenLaunch', () => {
   // ── Priority 1: configured path ──
@@ -291,11 +291,23 @@ describe('buildOxygenSpawnArgs', () => {
     assert.deepStrictEqual(a.args, ['/d', '/s', '/c', '""C:\\Program Files\\O\\oxygen.bat" "C:\\docs\\a b.dita""']);
   });
 
-  it('refuses a file path cmd.exe would interpret when using a batch launcher', () => {
-    for (const bad of ['C:\\a&calc.dita', 'C:\\%PATH%.dita', 'C:\\a^b.dita']) {
-      assert.throws(() =>
-        buildOxygenSpawnArgs({ command: 'C:\\O\\oxygen.bat', argsPrefix: [], source: 'detected', viaCmd: true }, bad),
-      );
+  it('refuses every character cmd.exe would interpret, in the file path and in the launcher path', () => {
+    const spec = { command: 'C:\\O\\oxygen.bat', argsPrefix: [], source: 'detected' as const, viaCmd: true };
+    const isRefusalOf = (path: string) => (err: unknown) =>
+      err instanceof OxygenUnsafeBatchPathError && err.path === path;
+    for (const ch of ['%', '"', '^', '&', '|', '<', '>', '!', '\r', '\n']) {
+      const file = `C:\\docs\\a${ch}b.dita`;
+      assert.throws(() => buildOxygenSpawnArgs(spec, file), isRefusalOf(file));
+      const launcher = { ...spec, command: `C:\\O${ch}\\oxygen.bat` };
+      assert.throws(() => buildOxygenSpawnArgs(launcher, 'C:\\docs\\a.dita'), isRefusalOf(launcher.command));
+    }
+  });
+
+  it('passes spaces, non-ASCII and UNC paths through, which cmd.exe quotes handle', () => {
+    const spec = { command: 'C:\\O\\oxygen.bat', argsPrefix: [], source: 'detected' as const, viaCmd: true };
+    for (const file of ['C:\\docs\\a b.dita', 'C:\\文档\\测试.dita', '\\\\server\\share\\a b.dita']) {
+      const a = buildOxygenSpawnArgs(spec, file);
+      assert.deepStrictEqual(a.args, ['/d', '/s', '/c', `""C:\\O\\oxygen.bat" "${file}""`]);
     }
   });
 

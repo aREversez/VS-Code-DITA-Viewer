@@ -10,7 +10,7 @@ import { registerMapTreeView } from './language/ditaMapTreeProvider';
 import { ditaFileWatcherCounts } from './editor/ditaFileWatcher';
 import { registerExportHtmlCommand, getActiveDitaUri } from './editor/exportHtml';
 import { registerCompareCommand, getLastDiffHtmlForTesting, openSourceDiffForTesting } from './editor/ditaDiffProvider';
-import { resolveOxygenLaunch, buildOxygenSpawnArgs, type OxygenLaunchSpec } from './editor/oxygenLauncher';
+import { resolveOxygenLaunch, buildOxygenSpawnArgs, OxygenUnsafeBatchPathError, type OxygenLaunchSpec } from './editor/oxygenLauncher';
 import { discoverOxygenOnThisMachine } from './editor/oxygenDiscoveryNode';
 import { registerWrapSelectionCommand } from './editor/wrapSelectionCommand';
 import { registerFindReferencingMapsCommand } from './editor/findDitaReferences';
@@ -144,8 +144,10 @@ export function activate(context: vscode.ExtensionContext) {
         result = checked;
       }
 
-      const spawnArgs = buildOxygenSpawnArgs(result.spec, target.fsPath);
       try {
+        // Inside the try: a batch launcher refuses a path cmd.exe would still
+        // interpret, and that refusal is reported like any other launch error.
+        const spawnArgs = buildOxygenSpawnArgs(result.spec, target.fsPath);
         const child = spawn(spawnArgs.command, spawnArgs.args, {
           detached: true,
           stdio: 'ignore',
@@ -156,6 +158,12 @@ export function activate(context: vscode.ExtensionContext) {
         });
         child.unref();
       } catch (err) {
+        if (err instanceof OxygenUnsafeBatchPathError) {
+          vscode.window.showErrorMessage(
+            vscode.l10n.t('This path contains characters that cannot be passed to oxygen.bat safely: {0}', err.path),
+          );
+          return;
+        }
         const message = err instanceof Error ? err.message : String(err);
         vscode.window.showErrorMessage(vscode.l10n.t('Failed to launch Oxygen XML Editor: {0}', message));
       }

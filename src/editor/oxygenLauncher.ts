@@ -227,6 +227,18 @@ export function resolveOxygenLaunch(input: {
  */
 const CMD_UNSAFE = /[%"^&|<>!\r\n]/;
 
+/**
+ * A path a batch launcher cannot be handed safely. `path` is the offending
+ * one, the target file or the launcher itself. The module stays vscode-free,
+ * so the caller turns this into a localized message (extension.ts).
+ */
+export class OxygenUnsafeBatchPathError extends Error {
+  constructor(readonly path: string) {
+    super(`Unsafe path for a batch launcher: ${path}`);
+    this.name = 'OxygenUnsafeBatchPathError';
+  }
+}
+
 export interface OxygenSpawnArgs {
   command: string;
   args: string[];
@@ -237,9 +249,12 @@ export interface OxygenSpawnArgs {
 /** The full spawn invocation for opening one file with a resolved spec. */
 export function buildOxygenSpawnArgs(spec: OxygenLaunchSpec, filePath: string): OxygenSpawnArgs {
   if (spec.viaCmd) {
-    if (CMD_UNSAFE.test(filePath) || CMD_UNSAFE.test(spec.command)) {
-      throw new Error('The file path contains characters that cannot be passed to oxygen.bat safely.');
-    }
+    const unsafe = CMD_UNSAFE.test(filePath)
+      ? filePath
+      : CMD_UNSAFE.test(spec.command)
+        ? spec.command
+        : undefined;
+    if (unsafe !== undefined) throw new OxygenUnsafeBatchPathError(unsafe);
     // `cmd /s /c ""script" "file""`: /s strips exactly the outer pair of quotes.
     return {
       command: 'cmd.exe',
