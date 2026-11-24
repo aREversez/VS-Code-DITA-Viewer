@@ -147,11 +147,10 @@ function walk(dir, out) {
  */
 function parseDtdFile(file) {
   const text = fs.readFileSync(file, 'utf8');
-  const lines = text.split(/\r?\n/);
 
   // Pass 1: parameter-entity symbol table.
   const entities = {};
-  const entRe = /<!ENTITY\s+%\s+([A-Za-z0-9_.\-]+)\s+"((?:[^"\\]|\\.)*)"\s*>/g;
+  const entRe = /<!ENTITY\s+%\s+([A-Za-z0-9_.-]+)\s+"((?:[^"\\]|\\.)*)"\s*>/g;
   let m;
   while ((m = entRe.exec(text)) !== null) {
     entities[m[1]] = m[2];
@@ -164,7 +163,7 @@ function parseDtdFile(file) {
   const attlistRe = /<!ATTLIST\s+([^\s>]+)([\s\S]*?)>/g;
   const classInBodyRe = /\bclass\s+CDATA\s+"([^"]*)"/;
   // References like %name; inside a class default value.
-  const peRefRe = /%([A-Za-z0-9_.\-]+);/g;
+  const peRefRe = /%([A-Za-z0-9_.-]+);/g;
 
   const results = [];
   while ((m = attlistRe.exec(text)) !== null) {
@@ -177,7 +176,7 @@ function parseDtdFile(file) {
     // Resolve any %name; parameter-entity references against the symbol table.
     if (classValue.indexOf('%') !== -1) {
       classValue = classValue.replace(peRefRe, (full, name) =>
-        entities.hasOwnProperty(name) ? entities[name] : full,
+        Object.prototype.hasOwnProperty.call(entities, name) ? entities[name] : full,
       );
     }
 
