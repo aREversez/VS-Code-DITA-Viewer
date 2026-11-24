@@ -11,7 +11,7 @@ import { win32 } from 'path';
 // A drive-absolute (C:\ or C:/) or UNC root. Anything else -- ".", "Windows",
 // "C:", "\Windows" -- is relative to some current directory, which is exactly
 // the hazard, so it is not trusted.
-const ABSOLUTE_ROOT = /^(?:[A-Za-z]:[\\/]|\\\\[^\\/])/;
+export const ABSOLUTE_ROOT = /^(?:[A-Za-z]:[\\/]|\\\\[^\\/])/;
 
 /**
  * `name` under `<SystemRoot>\System32`, from SystemRoot (else windir) in
