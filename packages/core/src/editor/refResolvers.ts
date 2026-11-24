@@ -10,6 +10,7 @@
 // ABOVE this module; nothing below reaches back up. Behaviour is unchanged --
 // this is a pure move of code lifted verbatim from ditaRenderUtils.ts.
 import { existsSync, openSync, readSync, closeSync, statSync } from 'fs';
+import { isReadAllowed } from '../pathContainment';
 import { resolve, isAbsolute, extname, dirname, relative, normalize } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
@@ -241,6 +242,9 @@ export function makeFileCache(docDir: string) {
    * target of the same file parsed once, and lands both in touchedFiles.
    */
   function loadAbsPath(absPath: string): DitaNode | undefined {
+    // Outside the host's read boundary: a missing file as far as any caller can
+    // tell. Not cached -- the boundary can change with the workspace folders.
+    if (!isReadAllowed(absPath)) return undefined;
     if (cache.has(absPath)) return cache.get(absPath);
     if (!existsSync(absPath)) { cache.set(absPath, undefined); return undefined; }
     try {
@@ -496,7 +500,7 @@ export function makeRefErrorResolver(
 
     const abs = resolve(docDir, decodeHrefPart(filePath));
     const root = cache.loadAbsPath(abs);
-    if (!root) return existsSync(abs) ? texts.parseError : texts.missingFile;
+    if (!root) return existsSync(abs) && isReadAllowed(abs) ? texts.parseError : texts.missingFile;
     if (!elementId) return undefined;
     return cache.findElementById(root, elementId) ? undefined : texts.missingId;
   };

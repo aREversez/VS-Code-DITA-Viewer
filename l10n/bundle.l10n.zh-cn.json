@@ -465,5 +465,6 @@
   "The workspace has more than {0} files, so a file of the right name may not have been seen. Nothing is ticked for you: check each target before applying.": "工作区的文件超过 {0} 个，可能有同名的文件没有被看到。不会为你预先勾选任何项：请逐项确认后再应用。",
   "{0} missing target(s) had no matching file; they are listed in the output.": "有 {0} 个缺失目标没有匹配到文件，已列在输出中。",
   "Show Output": "显示输出",
-  "Change to {0}": "改为 {0}"
+  "Change to {0}": "改为 {0}",
+  "Not opened: \"{0}\" is outside the workspace.": "未打开：“{0}”在工作区之外。"
 }

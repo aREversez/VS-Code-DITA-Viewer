@@ -3,6 +3,7 @@
 
 import { existsSync, readFileSync } from 'fs';
 import { extname, resolve } from 'path';
+import { isInsideAny } from '@dita-viewer/core';
 import { escapeAttr, decodeHrefPart } from './ditaRenderUtils';
 
 /** Builds a self-contained HTML document string. All values are escaped. */
@@ -52,11 +53,23 @@ const IMAGE_MIME: Record<string, string> = {
   tiff: 'image/tiff',
 };
 
-/** Returns a callback that inlines images as data URIs. */
-export function makeDataUriInliner(baseDir: string): (relPath: string) => string {
+/**
+ * Returns a callback that inlines images as data URIs.
+ *
+ * An exported page is meant to be shared, so a path that leaves `roots` (an
+ * `<image href="../../../.ssh/id_rsa">`, an absolute path) is NOT read: it
+ * inlines nothing and the image shows as broken. `roots` defaults to the
+ * folder of the exported file; the host passes the workspace folders so the
+ * usual `../images/x.png` still works.
+ */
+export function makeDataUriInliner(
+  baseDir: string,
+  roots: readonly string[] = [baseDir],
+): (relPath: string) => string {
   return (relPath: string): string => {
     try {
       const abs = resolve(baseDir, decodeHrefPart(relPath));
+      if (!isInsideAny(roots, abs)) return '';
       if (existsSync(abs)) {
         const ext = extname(abs).slice(1).toLowerCase();
         const mime = IMAGE_MIME[ext] || 'application/octet-stream';

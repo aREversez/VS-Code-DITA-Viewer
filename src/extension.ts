@@ -1,3 +1,4 @@
+import { registerReadBoundary } from './editor/readBoundary';
 import * as vscode from 'vscode';
 import { spawn } from 'child_process';
 import { existsSync, readdirSync, statSync } from 'fs';
@@ -28,6 +29,9 @@ export function activate(context: vscode.ExtensionContext) {
   // Unsaved editor text into the sources the previews read (sourceText.ts).
   // First, so it is in place before anything can render.
   registerSourceOverlay(context);
+
+  // References (conref, conkeyref, titles) may not read outside the workspace.
+  registerReadBoundary(context);
 
   // Remembers which tab group was active last, for "open source" in docsite mode.
   registerSourceEditorTracker(context);

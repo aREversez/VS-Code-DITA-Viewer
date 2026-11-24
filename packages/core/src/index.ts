@@ -11,6 +11,7 @@ export { buildKeySpace, getKeyDefs, getKeyScopes, getTopicScopeChains, createKey
 export type { KeyHrefDef, KeyScopeIndex, KeySpace } from './editor/keySpace';
 export { readSourceText, setSourceOverlay, clearSourceOverlay } from './editor/sourceText';
 export { decodeHrefPart } from './editor/refResolvers';
+export { isPathInside, isInsideAny, setReadRoots, isReadAllowed } from './pathContainment';
 export { buildKeyMapForDocument, buildKeySpaceForDocument } from './keyMapForDocument';
 export { complete } from './completion';
 export { collectDiagnostics } from './diagnostics';

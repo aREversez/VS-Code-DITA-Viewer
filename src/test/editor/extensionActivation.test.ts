@@ -160,6 +160,7 @@ const EXPECTED_REGISTRATIONS: string[] = [
   'vscode.workspace.onDidChangeTextDocument',
   'vscode.workspace.onDidSaveTextDocument',
   'vscode.workspace.onDidCloseTextDocument',
+  'vscode.workspace.onDidChangeWorkspaceFolders',
   'vscode.window.createStatusBarItem',
   'vscode.window.onDidChangeActiveTextEditor',
   'vscode.commands.registerCommand',

@@ -74,6 +74,27 @@ describe('makeDataUriInliner', () => {
     assert.ok(result.startsWith('data:image/svg+xml;base64,'));
   });
 
+  // An exported page is shared, so an image href must not be able to pull any
+  // file on the machine into it as base64.
+  it('inlines nothing for a path that leaves the allowed roots (../ and absolute)', () => {
+    const ws = join(tmpDir, 'ws');
+    const secret = join(tmpDir, 'secret.png');
+    mkdirSync(ws);
+    writeFileSync(secret, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    const inliner = makeDataUriInliner(ws);
+    assert.strictEqual(inliner('../secret.png'), '');
+    assert.strictEqual(inliner(secret), '');
+  });
+
+  it('inlines a ../ image that stays inside the roots the host passes', () => {
+    const ws = join(tmpDir, 'ws');
+    mkdirSync(join(ws, 'topics'), { recursive: true });
+    mkdirSync(join(ws, 'images'));
+    writeFileSync(join(ws, 'images', 'a.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    const inliner = makeDataUriInliner(join(ws, 'topics'), [ws]);
+    assert.ok(inliner('../images/a.png').startsWith('data:image/png;base64,'));
+  });
+
   it('should return empty string for a non-existent file', () => {
     const inliner = makeDataUriInliner(tmpDir);
     assert.strictEqual(inliner('nonexistent.png'), '');
