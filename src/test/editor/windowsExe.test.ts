@@ -4,7 +4,11 @@ import { windowsSystemExe } from '../../editor/windowsExe';
 describe('windowsSystemExe', () => {
   const full = 'C:\\Windows\\System32\\cmd.exe';
 
-  /** Runs `body` with these process.env values, then puts the old ones back. */
+  /**
+   * Runs `body` with these process.env values, then puts the old ones back.
+   * Safe because mocha runs this suite serially; it is not guarded against a
+   * parallel test reading process.env at the same time.
+   */
   const withProcessEnv = (vars: Record<string, string | undefined>, body: () => void): void => {
     const saved: Record<string, string | undefined> = {};
     for (const k of Object.keys(vars)) saved[k] = process.env[k];
@@ -50,11 +54,17 @@ describe('windowsSystemExe', () => {
     });
   });
 
-  it('reads SystemRoot before windir through the real environment, falling back only when it is unusable', () => {
+  it('reads SystemRoot before windir through the real environment, falling back only when it is absent or unusable', () => {
     withProcessEnv({ SystemRoot: 'D:\\Win', windir: 'E:\\Other' }, () => {
       assert.strictEqual(windowsSystemExe('cmd.exe'), 'D:\\Win\\System32\\cmd.exe');
-      delete process.env.SystemRoot;
-      assert.strictEqual(windowsSystemExe('cmd.exe'), 'E:\\Other\\System32\\cmd.exe');
+      // A relative SystemRoot is the attack shape the module exists to close:
+      // it must be skipped, not short-circuit the usable windir.
+      withProcessEnv({ SystemRoot: 'Windows' }, () => {
+        assert.strictEqual(windowsSystemExe('cmd.exe'), 'E:\\Other\\System32\\cmd.exe');
+      });
+      withProcessEnv({ SystemRoot: undefined }, () => {
+        assert.strictEqual(windowsSystemExe('cmd.exe'), 'E:\\Other\\System32\\cmd.exe');
+      });
     });
   });
 
