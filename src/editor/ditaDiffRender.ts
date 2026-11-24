@@ -45,15 +45,15 @@
 // middle of the grid. The table rules in diff-styles.css mark fragments
 // instead by tinting the collapsed grid edges of the cells themselves.
 //
-// A recursed table's own <title> follows the same rule: the preview renders a
-// table title as <caption class="title tabletitle">, but the title row of a
-// recursed group is rendered as a block of its own, outside any table, where it
-// is a heading -- and inside the re-assembled <table> here that heading would be
-// foster-parented out of it again, while a <caption> emitted in the group buffer
-// would be deleted outright (measured: 0 <caption> survives outside a table). So
-// the title row is buffered per group and converted to the preview's own caption
-// when it is attached to that group's first emitted table, ahead of everything
-// else in it.
+// A recursed table's own <title> follows the same rule. The preview renders a
+// table title as <caption class="title tabletitle">, and the title row of a
+// recursed group is rendered with the table as its parent, so it arrives already
+// a caption; bufferCaption holds it per group and attaches it, with its change
+// marker, to that group's first emitted table ahead of everything else in it. A
+// caption emitted anywhere outside a <table> would be deleted by the HTML parser,
+// which is why it is buffered rather than emitted as a block of its own. The
+// heading -> caption conversion (headingToCaption) stays as a safety net for a
+// title that still arrives as an <h{N} class="title topictitle{N}">.
 //
 // This is string surgery on markup, so two rules keep it honest: only a heading
 // sitting in a <table>'s own caption slot is rewritten (never one that merely
@@ -332,10 +332,10 @@ function wrapperClass(row: AlignedRow): string {
  * within a re-assembled table, 'topic/title' can only be that table's title --
  * DITA allows no other title below <table>, and a SECTION's own title row is
  * emitted before its table group opens, so it never reaches here as a group
- * member. Keying on markup instead (a leading <caption>) would not work: the
- * title row of a group is rendered as a block of its own, where it is a heading
- * (class `title topictitle{N}`), which is why headingToCaption below converts
- * it here to the caption class the preview uses.
+ * member. Keying on markup instead would be fragile: the title row is a caption
+ * from the preview renderer today, but headingToCaption below still accepts the
+ * older heading form (class `title topictitle{N}`), so the position and baseType
+ * are the stable signal.
  */
 function isCaptionRow(row: AlignedRow | undefined): boolean {
   if (!row) return false;
