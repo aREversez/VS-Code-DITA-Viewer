@@ -41,10 +41,12 @@ for (const rel of ['media/styles.css', 'packages/core/styles/dita-content.css'])
       assert.ok(/padding:\s*0 0 0\.4rem/.test(b), b);
     });
 
-    it('a figure image is a block with no margin of its own, so the caption sits right under it', () => {
-      const b = blocksFor(css, 'figure.fig > img.image').join('\n');
-      assert.ok(/display:\s*block/.test(b), b);
-      assert.ok(/margin:\s*0/.test(b), b);
+    it('a figure image and the preview\'s image wrapper are margin-free blocks, so the caption sits right under the picture', () => {
+      const img = blocksFor(css, 'figure.fig img.image').join('\n');
+      assert.ok(/display:\s*block/.test(img) && /margin:\s*0/.test(img), img);
+      const wrap = blocksFor(css, 'figure.fig > .dita-img-wrap').join('\n');
+      assert.ok(/display:\s*block/.test(wrap) && /margin:\s*0/.test(wrap), wrap);
+      assert.ok(/width:\s*fit-content/.test(wrap), wrap);
     });
   });
 }

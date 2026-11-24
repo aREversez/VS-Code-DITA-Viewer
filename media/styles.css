@@ -883,8 +883,14 @@ figcaption { font-style: italic; margin-top: 0.4rem; font-size: 0.95em; text-ali
 /* A figure's image is a block with no margin of its own. Inline, it sat in a
    line box (line-height leaves a strip under it) and, for placement="break",
    carried .image-break's 1rem bottom margin -- either way the caption floated
-   well away from the picture it names. */
-figure.fig > img.image { display: block; margin: 0; }
+   well away from the picture it names. In the live preview enhanceImages()
+   wraps every image in span.dita-img-wrap (inline-block), so the margin lives
+   INSIDE the wrapper and the wrapper itself sits in a line box: both the
+   descendant rule and the wrapper rule are needed. The wrapper shrinks to the
+   image (fit-content) so the hover toolbar stays anchored to the picture. */
+figure.fig img.image { display: block; margin: 0; }
+figure.fig > .dita-img-wrap { display: block; width: fit-content; margin: 0; }
+figure.fig > .dita-img-wrap + .dita-img-wrap,
 figure.fig > img.image + img.image { margin-top: 0.5rem; }
 
 /* Figure / table numbering ("Figure 1.", "Table 1."). Generated, not authored:
