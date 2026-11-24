@@ -1,3 +1,5 @@
+import { escapeJson } from './jsonEscape';
+import { escapeForStyleElement } from './templateStyle';
 import * as vscode from 'vscode';
 import {
   parseDita,
@@ -600,7 +602,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src ${webview.cspSource} data:; base-uri 'none';">
 <link rel="stylesheet" href="${stylesUri}">
-${defaultContent ? `<style>\n${defaultContent}\n</style>` : ''}
+${defaultContent ? `<style>\n${escapeForStyleElement(defaultContent)}\n</style>` : ''}
 <title>${escapeHtml(document.fileName)}</title>
 <script nonce="${nonce}">window.__cssFiles=${cssFilesJson};window.__defaultCss=${defaultNameJson};window.__widthSelection=${widthSelectionJson};window.__fontPrefs=${fontPrefsJson};window.__tagTooltips=${tagTooltipsJson};window.__ditaval=${ditavalJson};window.__initialScrollLine=${initialScrollLineJs};</script>
 </head>
@@ -637,9 +639,8 @@ function escapeHtml(text: string): string {
 // width selection, the two pieces of state it shares with this provider --
 // see FONT_PREFS_KEY and WIDTH_SELECTION_KEY above) escapes the same way
 // rather than carrying a second copy of a one-line regex to drift from.
-export function escapeJson(text: string): string {
-  return text.replace(/<\/script>/gi, '<\\/script>');
-}
+// escapeJson lives in ./jsonEscape (no vscode import, so it is unit-testable).
+export { escapeJson } from './jsonEscape';
 
 // ── Keyref: parse DITAMAP for key→value mappings ──
 

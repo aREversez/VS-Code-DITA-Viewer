@@ -50,7 +50,7 @@ export function rewriteCssUrls(css: string, cssFile: string, templateDir: string
 }
 
 /** A </style> in css text would end the block early and let markup through. */
-function escapeForStyleElement(css: string): string {
+export function escapeForStyleElement(css: string): string {
   return css.replace(/<\/(style)/gi, '<\\/$1');
 }
 

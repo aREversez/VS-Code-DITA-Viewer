@@ -69,6 +69,13 @@ export function discoverCssFiles(docUri: vscode.Uri): { files: Record<string, st
     const paths: string[] | undefined = config.get('customCss');
     if (paths) {
       for (const p of paths) {
+        // The settings promise stylesheets: a customCss entry that is not a
+        // .css file (a .env, a key, any text file) would be read and inlined
+        // into the preview as a style block.
+        if (!/\.css$/i.test(p)) {
+          console.warn(`Ignoring customCss entry that is not a .css file: ${p}`);
+          continue;
+        }
         const resolvedPath = resolveCssFilePath(p, docDir);
         if (resolvedPath) addFile(resolvedPath);
       }

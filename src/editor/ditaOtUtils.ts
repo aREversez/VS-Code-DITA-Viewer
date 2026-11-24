@@ -4,6 +4,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'pat
 import { parseDitamap, preprocessEntities, collectMapEntries } from '@dita-viewer/core';
 import { expandDitamapRefs, decodeHrefPart } from './ditaRenderUtils';
 import { windowsSystemExe } from './windowsExe';
+import { quoteCmdArg } from './cmdQuote';
 
 export interface NavManifestEntry {
   file: string;
@@ -300,7 +301,8 @@ export interface SpawnSpec {
  * arguments unquoted — breaking paths with spaces and allowing cmd
  * metacharacters (&, ^, |) in user-controlled paths to inject commands.
  * Instead every argument is explicitly double-quoted (with "" escaping)
- * and passed verbatim to `cmd.exe /d /s /c`.
+ * and passed verbatim to `cmd.exe /d /s /c`. An argument holding a `%` or a
+ * line break throws CmdUnsafeArgumentError (see cmdQuote.ts).
  */
 export function buildDitaOtSpawnSpec(
   executablePath: string,
@@ -312,8 +314,8 @@ export function buildDitaOtSpawnSpec(
   if (platform !== 'win32') {
     return { command: executablePath, args };
   }
-  const quote = (a: string) => `"${a.replace(/"/g, '""')}"`;
-  const commandLine = [quote(executablePath), ...args.map(quote)].join(' ');
+  // quoteCmdArg refuses a `%` or line break: cmd acts on those inside quotes.
+  const commandLine = [executablePath, ...args].map(quoteCmdArg).join(' ');
   return {
     command: windowsSystemExe('cmd.exe', env),
     // /s makes cmd strip only the outer quotes of the wrapped command line

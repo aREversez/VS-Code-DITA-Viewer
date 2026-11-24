@@ -24,6 +24,7 @@
  * bundle itself isn't a spawnable executable.
  */
 import { windowsSystemExe } from './windowsExe';
+import { CMD_UNSAFE } from './cmdQuote';
 
 export interface OxygenLaunchSpec {
   command: string;
@@ -232,11 +233,6 @@ export function resolveOxygenLaunch(input: {
   return { found: false, reason: 'not-configured' };
 }
 
-/**
- * Characters cmd.exe would still act on inside a quoted argument. A file path
- * holding one is refused for a batch launcher rather than escaped.
- */
-const CMD_UNSAFE = /[%"^&|<>!\r\n]/;
 
 /**
  * A path a batch launcher cannot be handed safely. `path` is the offending
