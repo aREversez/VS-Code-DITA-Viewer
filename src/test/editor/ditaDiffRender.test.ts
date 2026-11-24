@@ -262,7 +262,7 @@ describe('ditaDiffRender (rendered-diff column assembly)', () => {
     const CAP = '<title>Performance figures</title>';
     const ROWS = '<row><entry>12 Nm</entry></row>';
 
-    it('converts the preview heading into a caption without changing the preview (the panel owns this markup: baseTypeMap still renders a table title as <h{level} class="title topictitle{N}">, so the conversion cannot be a shared-renderer change, and a heading left in table scope is foster-parented out of the re-assembled table)', () => {
+    it('keeps the preview\'s caption through the diff (the preview renders a table title as <caption class="title tabletitle">; a title block the panel buffers on its own still arrives as a heading and is converted to the same caption, heading attributes kept)', () => {
       const doc = parseDita(titled(CAP, ROWS));
       const find = (n: DitaNode): DitaNode | undefined => {
         if (n.baseType === 'topic/table') return n;
@@ -272,13 +272,13 @@ describe('ditaDiffRender (rendered-diff column assembly)', () => {
         }
         return undefined;
       };
-      // The preview, untouched: a heading inside the table, and no caption.
+      // The preview: a caption inside the table, and no heading.
       const preview = renderElement(find(doc.root)!, { ...ctx0, headingLevel: 1, parentBaseType: 'topic/body' });
       assert.ok(
-        /<h1[^>]*class="title topictitle1"[^>]*>Performance figures<\/h1>/.test(preview),
-        `preview keeps its own heading markup, got: ${preview}`,
+        /<caption[^>]*class="title tabletitle"[^>]*>Performance figures<\/caption>/.test(preview),
+        `preview captions its table, got: ${preview}`,
       );
-      assert.ok(!preview.includes('<caption'), 'the preview is not restyled by the diff panel');
+      assert.ok(!/<h[1-6]\b/.test(preview), 'no heading left in table scope');
 
       // The panel, from the same source: caption markup, heading attributes kept.
       const cols = renderDiffColumns(runDiff(titled(CAP, ROWS), titled('<title>Torque</title>', ROWS)).rows);

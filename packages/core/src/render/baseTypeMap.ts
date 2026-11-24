@@ -448,7 +448,10 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
   'topic/topic': (node, ctx, renderChildren) => {
     const id = getAttr(node, 'id');
-    return `<article${safeAttr('id', id)} class="topic">${renderChildren(node, ctx)}</article>`;
+    // xml:lang -> lang, so :lang() rules (the figure/table label words) follow
+    // the topic's own language rather than the host page's fixed one.
+    const lang = getAttr(node, 'xml:lang');
+    return `<article${safeAttr('id', id)}${safeAttr('lang', lang)} class="topic">${renderChildren(node, ctx)}</article>`;
   },
 
   'topic/title': (node, ctx, renderChildren) => {
@@ -459,6 +462,14 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     // (plan §2.4: only add, never remove). Branch on the real parent -- the
     // overloaded ctx.parentBaseType would read back as 'topic/title' here.
     const owner = ctx.ownerBaseType;
+    // A table's title is its <caption>. A heading inside <table> is not valid
+    // table content: the HTML parser hoists it out in front of the table, so
+    // the title used to render as a full-size, ruled <h1> a heading-margin
+    // away from its table, and nothing could number it. org.dita.html5 does
+    // the same (<caption> with a `tabletitle`-classed title).
+    if (owner === 'topic/table' || owner === 'topic/simpletable') {
+      return `<caption class="title tabletitle">${renderChildren(node, ctx)}</caption>`;
+    }
     const titleClass =
       owner === 'topic/section' || owner === 'topic/example'
         ? 'title sectiontitle'

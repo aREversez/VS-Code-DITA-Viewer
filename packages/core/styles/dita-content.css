@@ -861,7 +861,35 @@ img[data-load-error] { cursor: default; }
    figures in Oxygen. figure has no left/right margin of its own, so this
    naturally follows whatever indent its containing block already has. */
 figure { margin: 1.5rem 0; text-align: left; }
-figcaption { font-style: italic; margin-top: 0.2rem; font-size: 0.95em; text-align: left; }
+figcaption { font-style: italic; margin-top: 0.4rem; font-size: 0.95em; text-align: left; counter-increment: dita-fig; }
+
+/* A figure's image is a block with no margin of its own. Inline, it sat in a
+   line box (line-height leaves a strip under it) and, for placement="break",
+   carried .image-break's 1rem bottom margin -- either way the caption floated
+   well away from the picture it names. */
+figure.fig > img.image { display: block; margin: 0; }
+figure.fig > img.image + img.image { margin-top: 0.5rem; }
+
+/* Figure / table numbering ("Figure 1.", "Table 1."). Generated, not authored:
+   each titled <figcaption> / <caption.tabletitle> bumps a counter and ::before
+   prints it, so the markup needs no label spans (and the diff panel, which
+   shares both elements, numbers the same way). Counters restart on a top-level
+   topic only -- the way DITA-OT numbers per output file -- so nested topics
+   continue the count and a Book page of many topics restarts per topic.
+   Untitled figures and tables are not counted. The label words come from a
+   custom property so a language only has to override the property. */
+:root { --fig-label: "Figure "; --tbl-label: "Table "; }
+:lang(zh) { --fig-label: "图 "; --tbl-label: "表 "; }
+article.topic:not(.topic .topic) { counter-reset: dita-fig dita-tbl; }
+figcaption::before { content: var(--fig-label) counter(dita-fig) ". "; font-style: normal; font-weight: 600; }
+caption.tabletitle {
+  caption-side: top;
+  text-align: left;
+  font-size: 0.95em;
+  padding: 0 0 0.4rem;
+  counter-increment: dita-tbl;
+}
+caption.tabletitle::before { content: var(--tbl-label) counter(dita-tbl) ". "; font-weight: 600; }
 
 /* Code blocks */
 pre.codeblock, pre.preformatted {

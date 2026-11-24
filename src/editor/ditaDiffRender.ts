@@ -45,15 +45,15 @@
 // middle of the grid. The table rules in diff-styles.css mark fragments
 // instead by tinting the collapsed grid edges of the cells themselves.
 //
-// A recursed table's own <title> follows the same rule, with one difference: the
-// PREVIEW renders a table title as a heading (that is the extension's existing
-// markup, and the diff panel must not restyle it), and inside the re-assembled
-// <table> here that heading would be foster-parented out of it again -- while a
-// <caption> emitted in the group buffer would be deleted outright (measured:
-// 0 <caption> survives outside a table). So the title row is buffered per group
-// and converted to a <caption> when it is attached to that group's first emitted
-// table, ahead of everything else in it. The conversion is the diff panel's own
-// layout decision, scoped to the panel; nothing in src/render changes.
+// A recursed table's own <title> follows the same rule: the preview renders a
+// table title as <caption class="title tabletitle">, but the title row of a
+// recursed group is rendered as a block of its own, outside any table, where it
+// is a heading -- and inside the re-assembled <table> here that heading would be
+// foster-parented out of it again, while a <caption> emitted in the group buffer
+// would be deleted outright (measured: 0 <caption> survives outside a table). So
+// the title row is buffered per group and converted to the preview's own caption
+// when it is attached to that group's first emitted table, ahead of everything
+// else in it.
 //
 // This is string surgery on markup, so two rules keep it honest: only a heading
 // sitting in a <table>'s own caption slot is rewritten (never one that merely
@@ -332,10 +332,10 @@ function wrapperClass(row: AlignedRow): string {
  * within a re-assembled table, 'topic/title' can only be that table's title --
  * DITA allows no other title below <table>, and a SECTION's own title row is
  * emitted before its table group opens, so it never reaches here as a group
- * member. Keying on markup instead (a leading <caption>) would tie the panel to
- * a preview change that does not exist: baseTypeMap keeps rendering a table
- * title as <h{level} class="title topictitle{N}">, which is exactly why
- * headingToCaption below converts it here.
+ * member. Keying on markup instead (a leading <caption>) would not work: the
+ * title row of a group is rendered as a block of its own, where it is a heading
+ * (class `title topictitle{N}`), which is why headingToCaption below converts
+ * it here to the caption class the preview uses.
  */
 function isCaptionRow(row: AlignedRow | undefined): boolean {
   if (!row) return false;
@@ -396,13 +396,12 @@ function headingToCaption(html: string): string {
  * The same conversion wherever a table appears INSIDE a block's html.
  *
  * A table the diff did not recurse arrives as the preview's own markup -- and so
- * does a table nested in a cell or inside an opaque <section>/<div> block, which
- * is how most titled tables in a real book reach the panel. Their title is an
- * `<h{N} class="title topictitle{N}">` in table scope, which the HTML parser
- * hoists ABOVE the table: the caption text lands outside its table and the table
- * reads as untitled. Without this the panel contradicts itself -- a recursed
- * table gets a caption (bufferCaption) while the identical table next to it keeps
- * a heading, so editing one table's title restyles its untouched neighbour too.
+ * does a table nested in a cell or inside an opaque <section>/<div> block. The
+ * preview now captions those itself, so this is the safety net for a title that
+ * still arrives as an `<h{N} class="title topictitle{N}">` in table scope, which
+ * the HTML parser hoists ABOVE the table: the caption text would land outside its
+ * table and the table would read as untitled, and a recursed table (which gets a
+ * caption from bufferCaption) would disagree with the identical table beside it.
  *
  * Runs over the finished column strings, after assembly, so it reaches every path
  * a table can arrive by. It converts only a heading sitting in the caption slot
@@ -410,7 +409,7 @@ function headingToCaption(html: string): string {
  * browser accepts, so a document that puts <title> after its <tgroup> keeps its
  * previous layout instead of gaining a caption the parser would discard. Idempotent
  * as well: the captions written here carry `tabletitle`, which the guard above
- * does not match. This is the panel's markup only -- src/render is untouched.
+ * does not match, and a table the preview already captioned is left alone.
  */
 function captionTablesIn(html: string): string {
   if (!/<(table|simpletable)\b/i.test(html)) return html;
