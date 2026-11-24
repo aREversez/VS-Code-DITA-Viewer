@@ -3,6 +3,7 @@ import { RenderContext } from './renderer';
 import { BLOCK_COMMENT_PARENTS, BLOCK_CONTENT_HOSTS, BLOCK_LEVEL_BASETYPES } from './blockCommentParents';
 import { DEFAULT_REF_ERROR_TEXTS, fillRefErrorTemplate } from './refErrorTexts';
 import { isDitaFormat } from './refTargets';
+import { isSafeHref } from './safeHref';
 
 // parentBaseType only reflects the immediate ancestor (entry sits under row,
 // not thead), so header status is carried by an explicit ctx flag set when
@@ -402,9 +403,10 @@ function renderImageMapArea(area: DitaNode, ctx: RenderContext): string {
         // cursor, no click), and the site/book click handlers key off
         // data-dita-book-xref anyway.
         hrefAttr = '#';
-      } else {
+      } else if (isSafeHref(rawHref)) {
         hrefAttr = rawHref;
       }
+      // else: javascript:/data:/... -- no href, so the area is not a link.
     }
   }
 
@@ -1044,6 +1046,9 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     const keyref = getAttr(node, 'keyref');
     const target = href || keyref || '';
     if (!target) return renderChildren(node, ctx);
+    // A scheme that can run script (javascript:, data:) is not a link: an
+    // exported page has no CSP to stop it.
+    if (!isSafeHref(target)) return `<span class="link" title="${escapeAttr(target)}">${renderChildren(node, ctx)}</span>`;
     return `<a href="${escapeAttr(target)}" class="link">${renderChildren(node, ctx)}</a>`;
   },
   'topic/linktext': (_node, ctx, renderChildren) => renderChildren(_node, ctx),
