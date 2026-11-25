@@ -33,6 +33,8 @@ for (const rel of ['media/styles.css', 'packages/core/styles/dita-content.css'])
       assert.ok(/--tbl-label:\s*"Table "/.test(css));
       assert.ok(/:lang\(zh\)[^{]*\{[^}]*--fig-label:\s*"图 "/.test(css));
       assert.ok(/:lang\(zh\)[^{]*\{[^}]*--tbl-label:\s*"表 "/.test(css));
+      // Traditional Chinese writes 圖, not the simplified 图 (:lang(zh) alone matches zh-TW too).
+      assert.ok(/:lang\(zh-TW\)[^{]*:lang\(zh-Hant\)[^{]*\{[^}]*--fig-label:\s*"圖 "/.test(css));
     });
 
     it('the table caption sits against its table (no heading margin, small bottom padding)', () => {

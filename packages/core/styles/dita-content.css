@@ -886,6 +886,7 @@ figure.fig > img.image + img.image { margin-top: 0.5rem; }
    custom property so a language only has to override the property. */
 :root { --fig-label: "Figure "; --tbl-label: "Table "; }
 :lang(zh) { --fig-label: "图 "; --tbl-label: "表 "; }
+:lang(zh-TW), :lang(zh-HK), :lang(zh-MO), :lang(zh-Hant) { --fig-label: "圖 "; --tbl-label: "表 "; }
 article.topic:not(.topic .topic) { counter-reset: dita-fig dita-tbl; }
 figcaption::before { content: var(--fig-label) counter(dita-fig) ". "; font-style: normal; font-weight: 600; }
 caption.tabletitle {

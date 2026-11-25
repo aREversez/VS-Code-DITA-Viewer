@@ -68,7 +68,7 @@ describe('figure and table numbering (real Chromium)', function () {
       // Each generated caption is four text boxes: label, number, ". ", then the title.
       const out: string[] = [];
       for (let i = 0; i + 3 < tokens.length; i++) {
-        if (/^(Figure|Table|图|表) $/.test(tokens[i]) && /^\d+$/.test(tokens[i + 1]) && tokens[i + 2] === '. ') {
+        if (/^(Figure|Table|图|圖|表) $/.test(tokens[i]) && /^\d+$/.test(tokens[i + 1]) && tokens[i + 2] === '. ') {
           out.push(`${tokens[i]}${tokens[i + 1]}. ${tokens[i + 3]}`);
           i += 3;
         }
@@ -92,6 +92,11 @@ describe('figure and table numbering (real Chromium)', function () {
   it('restarts at each top-level topic (a Book page of several topics)', async () => {
     const out = await captions(render(topic('A', '', fig('F1') + tbl('T1'))) + render(topic('B', '', fig('F1') + tbl('T1'))));
     assert.deepStrictEqual(out, ['Figure 1. F1', 'Table 1. T1', 'Figure 1. F1', 'Table 1. T1']);
+  });
+
+  it('uses 圖 / 表 for Traditional Chinese (zh-TW, zh-Hant), not the simplified 图', async () => {
+    const out = await captions(render(topic('A', 'zh-TW', fig('F1') + tbl('T1'))) + render(topic('B', 'zh-Hant', fig('F1'))));
+    assert.deepStrictEqual(out, ['圖 1. F1', '表 1. T1', '圖 1. F1']);
   });
 
   it('uses 图 / 表 for a topic with xml:lang="zh-CN", English otherwise', async () => {
