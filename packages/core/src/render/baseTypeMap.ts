@@ -75,11 +75,34 @@ function extractPlainText(node: DitaNode): string {
 // whitespace text. Comments are not content, and are left out of titles anyway.
 // A figure or table with such a title is rendered as if it had none, so it gets
 // no caption -- and so no number, no stray "Figure 3. " and no skipped count.
+// This judges a node's OWN children, so it is only honest on a node whose
+// conref/keyref has already been resolved (the title renderer receives the
+// effective node). A parent inspecting a title CHILD must judge the rendered
+// result instead -- a <title conref/> is empty in the source, and judging the
+// source would drop the pulled-in caption; see renderFigTitleHtml and
+// renderTableChildren.
 function hasContent(node: DitaNode | undefined): node is DitaNode {
   if (!node) return false;
   return (node.children || []).some(
     (c) => c.type === 'element' || (c.type === 'text' && (c.text || '').trim() !== ''),
   );
+}
+
+// A fig/imagemap title renders through the normal dispatch (wrapped as the
+// sole child of its parent) so the title's OWN conref/conkeyref/keyref fires
+// before anything judges it -- renderChildren(titleNode) alone would only
+// render the title's children and never resolve the title's own reference.
+// The topic/title renderer answers with plain inline content for a fig owner
+// (the <figcaption> is the caption), or '' when the resolved title is empty.
+// An empty result means no figcaption -- and so no number.
+function renderFigTitleHtml(
+  node: DitaNode,
+  titleNode: DitaNode | undefined,
+  ctx: RenderContext,
+  renderChildren: (node: DitaNode, ctx: RenderContext) => string,
+): string {
+  if (!titleNode) return '';
+  return renderChildren({ ...node, children: [titleNode] }, { ...ctx, headingLevel: ctx.headingLevel + 1 });
 }
 
 // A table's <title> and <desc> are both its caption. org.dita.html5 puts the
@@ -107,13 +130,19 @@ function renderTableChildren(
 
   const descHtml = renderChildren({ ...node, children: [descNode] }, ctx);
   const titleNode = kids.find((c) => c.type === 'element' && c.baseType === 'topic/title');
-  if (hasContent(titleNode)) {
-    const titleHtml = renderChildren({ ...node, children: [titleNode] }, ctx);
+  // Judge the title by what it renders, not by its source children: a
+  // <title conref/> is empty in the source but renders a full caption once
+  // resolved. The title renderer emits <caption> only for a resolved title
+  // with content; '' (empty title) or a broken-ref chip both land in the
+  // unnumbered tabledesc slot below, so the desc is never lost and the table
+  // never grows a second caption.
+  const titleHtml = titleNode ? renderChildren({ ...node, children: [titleNode] }, ctx) : '';
+  if (titleHtml.includes('<caption')) {
     const merged = titleHtml.replace(/<\/caption>(?![\s\S]*<\/caption>)/, () => ` ${descHtml}</caption>`);
     if (merged === titleHtml) return renderChildren(node, ctx);
     return merged + renderChildren({ ...node, children: rest.filter((c) => c !== titleNode) }, ctx);
   }
-  return `<caption class="tabledesc">${descHtml}</caption>` + renderChildren({ ...node, children: rest }, ctx);
+  return `<caption class="tabledesc">${titleHtml}${descHtml}</caption>` + renderChildren({ ...node, children: rest.filter((c) => c !== titleNode) }, ctx);
 }
 
 // ── Index term extraction ──
@@ -519,6 +548,13 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
       if (!hasContent(node)) return '';
       return `<caption class="title tabletitle">${renderChildren(node, ctx)}</caption>`;
     }
+    // A fig/imagemap title is its figure's <figcaption> content: plain inline
+    // markup, no heading of its own. The fig renderer wraps whatever comes
+    // back here; an empty resolved title answers '' and gets no figcaption.
+    if (owner === 'topic/fig' || owner === 'topic/imagemap') {
+      if (!hasContent(node)) return '';
+      return renderChildren(node, ctx);
+    }
     const titleClass =
       owner === 'topic/section' || owner === 'topic/example'
         ? 'title sectiontitle'
@@ -914,9 +950,8 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
       (c) => !(c.type === 'element' && c.baseType === 'topic/title'),
     );
     const figContent = renderChildren({ ...node, children: rest }, ctx);
-    const figCaption = hasContent(titleNode)
-      ? `<figcaption>${renderChildren(titleNode, { ...ctx, headingLevel: ctx.headingLevel + 1 })}</figcaption>`
-      : '';
+    const titleHtml = renderFigTitleHtml(node, titleNode, ctx, renderChildren);
+    const figCaption = titleHtml ? `<figcaption>${titleHtml}</figcaption>` : '';
     return `<figure${safeAttr('id', id)} class="fig">${figContent}${figCaption}</figure>`;
   },
 
@@ -952,9 +987,8 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
     const mapHtml = `<map${safeAttr('name', mapId)}${safeAttr('id', mapId)}>${areaNodes.map((a) => renderImageMapArea(a, ctx)).join('')}</map>`;
 
-    const figCaption = hasContent(titleNode)
-      ? `<figcaption>${renderChildren(titleNode, { ...ctx, headingLevel: ctx.headingLevel + 1 })}</figcaption>`
-      : '';
+    const titleHtml = renderFigTitleHtml(node, titleNode, ctx, renderChildren);
+    const figCaption = titleHtml ? `<figcaption>${titleHtml}</figcaption>` : '';
     return `<figure${safeAttr('id', id)} class="fig imagemap">${imgHtml}${mapHtml}${figCaption}</figure>`;
   },
 
