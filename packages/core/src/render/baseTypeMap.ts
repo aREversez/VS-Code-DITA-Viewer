@@ -70,16 +70,50 @@ function extractPlainText(node: DitaNode): string {
   return (node.children || []).map(extractPlainText).join('');
 }
 
-// A <title> with nothing to show: no element children (a <ph keyref/> or an
-// <image> is content even when it has no text of its own) and only whitespace
-// text. Comments are not content, and are left out of titles anyway. A figure
-// or table with such a title is rendered as if it had none, so it gets no
-// caption -- and so no number, no stray "Figure 3. " and no skipped count.
-function titleHasContent(title: DitaNode | undefined): title is DitaNode {
-  if (!title) return false;
-  return (title.children || []).some(
+// A <title> or <desc> with nothing to show: no element children (a <ph keyref/>
+// or an <image> is content even when it has no text of its own) and only
+// whitespace text. Comments are not content, and are left out of titles anyway.
+// A figure or table with such a title is rendered as if it had none, so it gets
+// no caption -- and so no number, no stray "Figure 3. " and no skipped count.
+function hasContent(node: DitaNode | undefined): node is DitaNode {
+  if (!node) return false;
+  return (node.children || []).some(
     (c) => c.type === 'element' || (c.type === 'text' && (c.text || '').trim() !== ''),
   );
+}
+
+// A table's <title> and <desc> are both its caption. org.dita.html5 puts the
+// desc inside the <caption>, after the title; the generic desc renderer emits a
+// <span> instead, which as a direct child of <table> the HTML parser lifts out
+// in front of the table -- above the caption, away from the table it describes.
+// So the table renders its own caption slot: the title's caption with the desc
+// appended to it, or, for a desc with no title, a caption of its own. That one
+// is `tabledesc`, not `tabletitle`, so it is neither labelled nor numbered.
+// An empty desc is dropped. Anything that goes wrong in splicing falls back to
+// the generic rendering rather than losing the desc.
+function renderTableChildren(
+  node: DitaNode,
+  ctx: RenderContext,
+  renderChildren: (node: DitaNode, ctx: RenderContext) => string,
+): string {
+  const kids = node.children || [];
+  const isDesc = (c: DitaNode): boolean => c.type === 'element' && c.baseType === 'topic/desc';
+  const descs = kids.filter(isDesc);
+  if (descs.length === 0) return renderChildren(node, ctx);
+
+  const descNode = descs.find((d) => hasContent(d));
+  const rest = kids.filter((c) => !isDesc(c));
+  if (!descNode) return renderChildren({ ...node, children: rest }, ctx);
+
+  const descHtml = renderChildren({ ...node, children: [descNode] }, ctx);
+  const titleNode = kids.find((c) => c.type === 'element' && c.baseType === 'topic/title');
+  if (hasContent(titleNode)) {
+    const titleHtml = renderChildren({ ...node, children: [titleNode] }, ctx);
+    const merged = titleHtml.replace(/<\/caption>(?![\s\S]*<\/caption>)/, () => ` ${descHtml}</caption>`);
+    if (merged === titleHtml) return renderChildren(node, ctx);
+    return merged + renderChildren({ ...node, children: rest.filter((c) => c !== titleNode) }, ctx);
+  }
+  return `<caption class="tabledesc">${descHtml}</caption>` + renderChildren({ ...node, children: rest }, ctx);
 }
 
 // ── Index term extraction ──
@@ -482,7 +516,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     // away from its table, and nothing could number it. org.dita.html5 does
     // the same (<caption> with a `tabletitle`-classed title).
     if (owner === 'topic/table' || owner === 'topic/simpletable') {
-      if (!titleHasContent(node)) return '';
+      if (!hasContent(node)) return '';
       return `<caption class="title tabletitle">${renderChildren(node, ctx)}</caption>`;
     }
     const titleClass =
@@ -614,7 +648,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
         ),
     );
     const cls = hasColspec ? 'table cals-table cals-table--fixed-layout' : 'table cals-table';
-    return `<table${safeAttr('id', id)} class="${cls}">${renderChildren(node, ctx)}</table>`;
+    return `<table${safeAttr('id', id)} class="${cls}">${renderTableChildren(node, ctx, renderChildren)}</table>`;
   },
 
   'topic/tgroup': (node, ctx, renderChildren) => {
@@ -774,7 +808,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
   'topic/simpletable': (node, ctx, renderChildren) => {
     const id = getAttr(node, 'id');
-    return `<table${safeAttr('id', id)} class="simple-table simpletable">${renderChildren(node, ctx)}</table>`;
+    return `<table${safeAttr('id', id)} class="simple-table simpletable">${renderTableChildren(node, ctx, renderChildren)}</table>`;
   },
 
   'topic/sthead': (_node, ctx, renderChildren) =>
@@ -880,7 +914,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
       (c) => !(c.type === 'element' && c.baseType === 'topic/title'),
     );
     const figContent = renderChildren({ ...node, children: rest }, ctx);
-    const figCaption = titleHasContent(titleNode)
+    const figCaption = hasContent(titleNode)
       ? `<figcaption>${renderChildren(titleNode, { ...ctx, headingLevel: ctx.headingLevel + 1 })}</figcaption>`
       : '';
     return `<figure${safeAttr('id', id)} class="fig">${figContent}${figCaption}</figure>`;
@@ -918,7 +952,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
     const mapHtml = `<map${safeAttr('name', mapId)}${safeAttr('id', mapId)}>${areaNodes.map((a) => renderImageMapArea(a, ctx)).join('')}</map>`;
 
-    const figCaption = titleHasContent(titleNode)
+    const figCaption = hasContent(titleNode)
       ? `<figcaption>${renderChildren(titleNode, { ...ctx, headingLevel: ctx.headingLevel + 1 })}</figcaption>`
       : '';
     return `<figure${safeAttr('id', id)} class="fig imagemap">${imgHtml}${mapHtml}${figCaption}</figure>`;

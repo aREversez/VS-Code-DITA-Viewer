@@ -472,6 +472,53 @@ describe('ditaDiffRender (rendered-diff column assembly)', () => {
     });
   });
 
+  describe('a recursed table keeps its <desc> in its caption', () => {
+    const doc = (head: string, cell: string) => `<?xml version="1.0"?>
+<topic id="t"><title>Spec</title><body>
+<table id="tb">${head}<tgroup cols="1"><colspec colname="c" colwidth="1*"/><tbody><row><entry>${cell}</entry></row></tbody></tgroup></table>
+</body></topic>`;
+    const BOTH = '<title>Performance</title><desc>Measured at 20 C</desc>';
+
+    it('an unchanged title and desc stay in the caption when only a cell changes (regression: the desc was a block of its own, which closed the table group, and the unchanged caption buffered before it was dropped -- a table with a <desc> lost its title in the panel)', () => {
+      const cols = renderDiffColumns(runDiff(doc(BOTH, '12 Nm'), doc(BOTH, '15 Nm')).rows);
+      for (const side of ['left', 'right'] as const) {
+        const $ = parseColumn(cols[side], side);
+        assert.strictEqual($('table > caption').length, 1, `${side}: the table keeps one caption`);
+        assert.ok(/Performance/.test($('table > caption').text()), `${side}: with its title`);
+        assert.ok(/Measured at 20 C/.test($('table > caption').text()), `${side}: and its desc`);
+        assert.strictEqual($('.desc').length, 1, `${side}: the desc is drawn once`);
+        assert.strictEqual($('.desc').closest('caption').length, 1, `${side}: inside the caption, not above the table`);
+        assert.ok(/\btabletitle\b/.test($('table > caption').attr('class')!), `${side}: a titled caption stays numbered`);
+      }
+    });
+
+    it('a changed desc is marked as its own change, and marks the caption', () => {
+      const result = runDiff(doc(BOTH, 'a'), doc('<title>Performance</title><desc>Measured at 25 C</desc>', 'a'));
+      const cols = renderDiffColumns(result.rows);
+      const left$ = parseColumn(cols.left, 'left');
+      const right$ = parseColumn(cols.right, 'right');
+      assert.ok(/20/.test(left$('table > caption .desc').text()) && /25/.test(right$('table > caption .desc').text()));
+      assert.notStrictEqual(right$('table > caption .desc').attr('data-diff-idx'), undefined, 'the desc carries a change index');
+      assert.ok(/dv-frag--modified/.test(right$('table > caption').attr('class')!), 'so the changed caption gets its gutter edge');
+      assert.strictEqual(cols.changeCount, 1, 'one edit, one change');
+    });
+
+    it('a table with a desc and no title gets an un-numbered caption of its own', () => {
+      const cols = renderDiffColumns(runDiff(doc('<desc>Measured at 20 C</desc>', 'a'), doc('<desc>Measured at 20 C</desc>', 'b')).rows);
+      const $ = parseColumn(cols.left, 'left');
+      assert.strictEqual($('table > caption').length, 1);
+      assert.ok(/\btabledesc\b/.test($('table > caption').attr('class')!) && !/\btabletitle\b/.test($('table > caption').attr('class')!));
+      assert.strictEqual($('table > caption .desc').text(), 'Measured at 20 C');
+    });
+
+    it('a desc added on one side shows on that side only, in the caption', () => {
+      const cols = renderDiffColumns(runDiff(doc('<title>Performance</title>', 'a'), doc(BOTH, 'a')).rows);
+      assert.strictEqual(parseColumn(cols.left, 'left')('.desc').length, 0);
+      assert.strictEqual(parseColumn(cols.right, 'right')('table > caption .desc').length, 1);
+      assert.strictEqual(parseColumn(cols.left, 'left')('table > caption').text(), 'Performance');
+    });
+  });
+
   describe('blocks that render nothing are not blocks', () => {
     it("emits no empty ghost row per <colspec> (regression: topic/colspec renders '' by design -- it feeds the tgroup's <colgroup> -- yet each one became an empty `<div class=\"dv-block\">`, a visible ~40px gap, so a 4-column table grew 4 phantom rows)", () => {
       const cols = renderDiffColumns(runDiff(CALS('12 Nm'), CALS('15 Nm')).rows);

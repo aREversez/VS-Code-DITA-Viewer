@@ -45,6 +45,13 @@ for (const rel of ['media/styles.css', 'packages/core/styles/dita-content.css'])
       assert.ok(/padding:\s*0 0 [\d.]+(rem|em|px)/.test(b), b);
     });
 
+    it('a desc-only caption (caption.tabledesc) is laid out like the title caption but never numbered', () => {
+      const shared = blocksFor(css, 'caption.tabledesc').join('\n');
+      assert.ok(/caption-side:\s*top/.test(shared) && /padding:\s*0 0 [\d.]+(rem|em|px)/.test(shared), shared);
+      assert.ok(!/counter-increment/.test(shared), 'a desc-only caption must not bump the table counter');
+      assert.ok(!blocksFor(css, 'caption.tabledesc::before').length, 'and prints no label');
+    });
+
     it('a figure image and the preview\'s image wrapper are margin-free blocks, so the caption sits right under the picture', () => {
       const img = blocksFor(css, 'figure.fig img.image').join('\n');
       assert.ok(/display:\s*block/.test(img) && /margin:\s*0/.test(img), img);

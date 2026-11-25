@@ -906,13 +906,16 @@ figure.fig > img.image + img.image { margin-top: 0.5rem; }
 :lang(zh-TW), :lang(zh-HK), :lang(zh-MO), :lang(zh-Hant) { --fig-label: "圖 "; --tbl-label: "表 "; }
 article.topic:not(.topic .topic) { counter-reset: dita-fig dita-tbl; }
 figcaption::before { content: var(--fig-label) counter(dita-fig) ". "; font-style: normal; font-weight: 600; }
-caption.tabletitle {
+caption.tabletitle,
+caption.tabledesc {
   caption-side: top;
   text-align: left;
   font-size: 0.95em;
   padding: 0 0 0.4rem;
-  counter-increment: dita-tbl;
 }
+/* Only a titled caption is numbered: a table with just a <desc> has a caption
+   (the desc lives in it) but no "Table N.". */
+caption.tabletitle { counter-increment: dita-tbl; }
 caption.tabletitle::before { content: var(--tbl-label) counter(dita-tbl) ". "; font-weight: 600; }
 
 /* Code blocks */

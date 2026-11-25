@@ -234,6 +234,15 @@ function collectColumns(rows: AlignedRow[], sink: ColumnSink, inTableGroup: bool
       continue;
     }
 
+    // The table's <desc> is part of its caption too (the preview renders it
+    // inside the <caption>): without this it would be a block of its own, which
+    // ends the group, and the unchanged caption buffered above is then dropped
+    // with it -- a table with a <desc> lost its title in the panel.
+    if (inTableGroup && isDescRow(row)) {
+      bufferCaptionDesc(row, sink);
+      continue;
+    }
+
     const idxAttr = takeIdxAttr(row, sink);
 
     // A row is paired by baseType, so one side's fragment kind is the other's;
@@ -439,6 +448,36 @@ function captionTablesIn(html: string): string {
     i = hit.after;
   }
   return out;
+}
+
+/** A block that is a table's own <desc>, in the same group position as the caption row. */
+function isDescRow(row: AlignedRow | undefined): boolean {
+  if (!row) return false;
+  const side = row.left || row.right;
+  return !!side && side.baseType === 'topic/desc';
+}
+
+/**
+ * Fold the table's <desc> into the group's buffered caption, the way the preview
+ * puts it inside the <caption>; a desc with no title gets a caption of its own
+ * (`tabledesc`, which is never numbered). The changed desc is its own change: the
+ * span carries the fragment class and the change index, so it has its own
+ * connector and inline marks, and a changed desc also marks the caption, which is
+ * what the gutter-edge rules for a changed caption key on.
+ */
+function bufferCaptionDesc(row: AlignedRow, sink: ColumnSink): void {
+  const cls = `dv-frag dv-frag--${row.changeType}` + fragFlags(row);
+  const idxAttr = takeIdxAttr(row, sink);
+  const changed = row.changeType !== 'unchanged';
+  const fold = (existing: PendingCaption | undefined, block: RenderedBlock, side: 'left' | 'right'): PendingCaption => {
+    const span = injectFragmentAttrs(applyInlineDiff(block.html, row, side), cls, idxAttr);
+    let html = existing ? existing.html : '<caption class="tabledesc"></caption>';
+    if (changed) html = injectFragmentAttrs(html, cls, '');
+    const merged = html.replace(/<\/caption>(?![\s\S]*<\/caption>)/, () => `${existing ? ' ' : ''}${span}</caption>`);
+    return { html: merged, changed: changed || !!existing?.changed };
+  };
+  if (row.left) sink.captionLeft = fold(sink.captionLeft, row.left, 'left');
+  if (row.right) sink.captionRight = fold(sink.captionRight, row.right, 'right');
 }
 
 /** Mark a caption like any other fragment and hold it for this table group. */

@@ -72,6 +72,60 @@ describe('table titles render as a caption', () => {
   });
 });
 
+// org.dita.html5 puts a table's <desc> in its <caption>. As a <span> directly
+// under <table> the HTML parser lifts it out in front of the table, above the
+// caption, away from what it describes.
+describe('a table desc lives in the caption', () => {
+  const CALS = (head: string) => `<table>${head}<tgroup cols="1"><tbody><row><entry>x</entry></row></tbody></tgroup></table>`;
+  const outsideCaption = (table: string) => table.replace(/<caption\b[\s\S]*?<\/caption>/, '');
+
+  it('a titled table puts its desc inside the title caption, after the title', () => {
+    const html = render(CALS('<title>Torque</title><desc>At 20 C</desc>'));
+    const table = /<table\b[\s\S]*<\/table>/.exec(html)![0];
+    assert.ok(
+      /<caption\b[^>]*class="title tabletitle"[^>]*>Torque <span\b[^>]*class="desc"[^>]*>At 20 C<\/span><\/caption>/.test(table),
+      table,
+    );
+    assert.ok(!/class="desc"/.test(outsideCaption(table)), `no desc left directly in the table: ${table}`);
+    assert.ok(/<table\b[^>]*>\s*<caption\b/.test(table), 'and the caption is still the first child');
+  });
+
+  it('a simpletable does the same', () => {
+    const html = render('<simpletable><title>Sizes</title><desc>In mm</desc><strow><stentry>y</stentry></strow></simpletable>');
+    const table = /<table\b[\s\S]*<\/table>/.exec(html)![0];
+    assert.ok(/<caption\b[^>]*tabletitle[^>]*>Sizes <span\b[^>]*class="desc"[^>]*>In mm<\/span><\/caption>/.test(table), table);
+  });
+
+  it('a desc with no title gets a caption of its own that is not a tabletitle, so it is never numbered', () => {
+    const table = /<table\b[\s\S]*<\/table>/.exec(render(CALS('<desc>At 20 C</desc>')))![0];
+    assert.ok(/<caption\b[^>]*class="tabledesc"[^>]*>\s*<span\b[^>]*class="desc"[^>]*>At 20 C<\/span><\/caption>/.test(table), table);
+    assert.ok(!/tabletitle/.test(table), table);
+    assert.ok(!/class="desc"/.test(outsideCaption(table)), table);
+  });
+
+  it('an empty desc is dropped; an empty title still yields no tabletitle', () => {
+    const empty = /<table\b[\s\S]*<\/table>/.exec(render(CALS('<title>Torque</title><desc>  </desc>')))![0];
+    assert.ok(!/class="desc"/.test(empty), empty);
+    assert.ok(/<caption\b[^>]*tabletitle[^>]*>Torque<\/caption>/.test(empty), empty);
+    const noTitle = /<table\b[\s\S]*<\/table>/.exec(render(CALS('<title/><desc>At 20 C</desc>')))![0];
+    assert.ok(!/tabletitle/.test(noTitle) && /tabledesc/.test(noTitle), noTitle);
+  });
+
+  it('a table nested in a cell keeps its own caption and desc apart from its parent\'s', () => {
+    const inner = '<table><title>Inner</title><desc>inner desc</desc><tgroup cols="1"><tbody><row><entry>y</entry></row></tbody></tgroup></table>';
+    const html = render(
+      `<table><title>Outer</title><desc>outer desc</desc><tgroup cols="1"><tbody><row><entry>${inner}</entry></row></tbody></tgroup></table>`,
+    );
+    assert.ok(/<caption\b[^>]*>Outer <span\b[^>]*>outer desc<\/span><\/caption>/.test(html), html);
+    assert.ok(/<caption\b[^>]*>Inner <span\b[^>]*>inner desc<\/span><\/caption>/.test(html), html);
+  });
+
+  it('a table without a desc renders exactly as before', () => {
+    const table = /<table\b[\s\S]*<\/table>/.exec(render(CALS('<title>Torque</title>')))![0];
+    assert.ok(/<caption\b[^>]*tabletitle[^>]*>Torque<\/caption>/.test(table), table);
+  });
+});
+
 describe('figure titles', () => {
   it('a fig with an empty or whitespace-only title gets no figcaption', () => {
     for (const title of ['<title/>', '<title>   </title>', '<title><!-- later --></title>']) {
