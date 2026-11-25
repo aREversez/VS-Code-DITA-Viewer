@@ -16,11 +16,13 @@ export interface GitExecResult {
 
 export type GitExecutor = (args: string[], cwd: string) => Promise<GitExecResult>;
 
-let gitExe: string | undefined | null = null; // null: not looked up yet
+// Remember a git that was found, not a git that was not: someone who installs
+// git after the first failed diff should not have to reload the window.
+let foundGit: string | undefined;
 
 function gitCommand(): string | undefined {
-  if (gitExe === null) gitExe = resolveGitExe(process.platform, process.env, existsSync);
-  return gitExe;
+  if (foundGit === undefined) foundGit = resolveGitExe(process.platform, process.env, existsSync);
+  return foundGit;
 }
 
 export const defaultGitExecutor: GitExecutor = (args, cwd) =>
