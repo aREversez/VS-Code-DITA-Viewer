@@ -485,18 +485,20 @@ function bufferCaption(row: AlignedRow, sink: ColumnSink): void {
   const cls = `dv-frag dv-frag--${row.changeType}` + fragFlags(row);
   const idxAttr = takeIdxAttr(row, sink);
   const changed = row.changeType !== 'unchanged';
-  if (row.left) {
-    sink.captionLeft = {
-      html: injectFragmentAttrs(headingToCaption(applyInlineDiff(row.left.html, row, 'left')), cls, idxAttr),
-      changed,
-    };
-  }
-  if (row.right) {
-    sink.captionRight = {
-      html: injectFragmentAttrs(headingToCaption(applyInlineDiff(row.right.html, row, 'right')), cls, idxAttr),
-      changed,
-    };
-  }
+  // A title with nothing to show (<title/>, whitespace only) renders '' -- the
+  // preview gives such a table no caption -- but the engine still emits its row.
+  // A side that renders nothing buffers nothing: an empty string is not a
+  // caption, and bufferCaptionDesc splices the desc in before a </caption> that
+  // it lacks, so a table with an empty title and a desc lost its desc here.
+  const side = (block: RenderedBlock, which: 'left' | 'right'): PendingCaption | undefined =>
+    block.html.trim() === ''
+      ? undefined
+      : {
+          html: injectFragmentAttrs(headingToCaption(applyInlineDiff(block.html, row, which)), cls, idxAttr),
+          changed,
+        };
+  if (row.left) sink.captionLeft = side(row.left, 'left');
+  if (row.right) sink.captionRight = side(row.right, 'right');
 }
 
 /**

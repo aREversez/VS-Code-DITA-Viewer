@@ -517,6 +517,39 @@ describe('ditaDiffRender (rendered-diff column assembly)', () => {
       assert.strictEqual(parseColumn(cols.right, 'right')('table > caption .desc').length, 1);
       assert.strictEqual(parseColumn(cols.left, 'left')('table > caption').text(), 'Performance');
     });
+
+    // An empty <title/> renders '' (a figure or table with nothing to show gets
+    // no caption), but the engine still emits its row. That empty block must not
+    // be buffered as the group's caption: the desc is folded into a buffered
+    // caption by splicing before its </caption>, which an empty string lacks, so
+    // the desc was dropped -- the preview shows it in a tabledesc caption.
+    for (const [name, title] of [
+      ['an empty <title/>', '<title/>'],
+      ['a whitespace-only title', '<title>   </title>'],
+    ] as const) {
+      it(`${name} plus a desc keeps the desc, in an un-numbered caption of its own`, () => {
+        const head = `${title}<desc>Measured at 20 C</desc>`;
+        const cols = renderDiffColumns(runDiff(doc(head, 'a'), doc(head, 'b')).rows);
+        for (const side of ['left', 'right'] as const) {
+          const $ = parseColumn(cols[side], side);
+          assert.strictEqual($('table > caption').length, 1, `${side}: one caption`);
+          const cls = $('table > caption').attr('class')!;
+          assert.ok(/\btabledesc\b/.test(cls) && !/\btabletitle\b/.test(cls), `${side}: ${cls}`);
+          assert.strictEqual($('table > caption .desc').text(), 'Measured at 20 C', `${side}: the desc survives`);
+        }
+      });
+    }
+
+    it('a title emptied on one side leaves no empty table shell there, and the other side keeps its caption', () => {
+      const cols = renderDiffColumns(runDiff(doc('<title>Performance</title>', 'a'), doc('<title/>', 'b')).rows);
+      const l$ = parseColumn(cols.left, 'left');
+      const r$ = parseColumn(cols.right, 'right');
+      assert.strictEqual(l$('table > caption').text(), 'Performance');
+      assert.strictEqual(r$('table > caption').length, 0, 'the emptied side has no caption');
+      for (const [side, $] of [['left', l$], ['right', r$]] as const) {
+        assert.strictEqual($('table').filter((_i, t) => $(t).find('td, th').length === 0).length, 0, `${side}: no table without cells`);
+      }
+    });
   });
 
   describe('blocks that render nothing are not blocks', () => {
