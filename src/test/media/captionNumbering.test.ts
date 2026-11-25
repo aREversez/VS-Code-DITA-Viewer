@@ -40,7 +40,9 @@ for (const rel of ['media/styles.css', 'packages/core/styles/dita-content.css'])
     it('the table caption sits against its table (no heading margin, small bottom padding)', () => {
       const b = blocksFor(css, 'caption.tabletitle').join('\n');
       assert.ok(/caption-side:\s*top/.test(b), b);
-      assert.ok(/padding:\s*0 0 0\.4rem/.test(b), b);
+      // Only the shape matters (no top/side padding, a small bottom gap), not the exact length:
+      // the Chromium tests measure the gap itself.
+      assert.ok(/padding:\s*0 0 [\d.]+(rem|em|px)/.test(b), b);
     });
 
     it('a figure image and the preview\'s image wrapper are margin-free blocks, so the caption sits right under the picture', () => {
