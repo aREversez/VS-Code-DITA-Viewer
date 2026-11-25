@@ -899,6 +899,10 @@ caption.tabledesc {
 /* Only a titled caption is numbered: a table with just a <desc> has a caption
    (the desc lives in it) but no "Table N.". */
 caption.tabletitle { counter-increment: dita-tbl; }
+/* A table's desc follows the title inside the caption. On its own line and a
+   little quieter, so the two do not read as one sentence ("Table 1. Torque
+   Maximum values ..."). opacity, not a colour: it follows light and dark themes. */
+caption.tabletitle .desc { display: block; opacity: 0.8; }
 caption.tabletitle::before { content: var(--tbl-label) counter(dita-tbl) ". "; font-weight: 600; }
 
 /* Code blocks */

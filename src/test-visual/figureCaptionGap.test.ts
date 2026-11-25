@@ -41,6 +41,7 @@ const xml =
   '<fig id="brk"><title>Break</title><image href="p.svg" placement="break" width="200" height="100"/></fig>' +
   '<fig id="inl"><title>Inline</title><image href="p.svg" width="200" height="100"/></fig>' +
   '<table id="tb"><title>Sizes</title><tgroup cols="1"><tbody><row><entry>cell</entry></row></tbody></tgroup></table>' +
+  '<table id="td"><title>Torque</title><desc>Maximum values for each fastener size.</desc><tgroup cols="1"><tbody><row><entry>cell</entry></row></tbody></tgroup></table>' +
   '</body></topic>';
 
 describe('figure and table caption spacing in the live preview (real Chromium)', function () {
@@ -112,5 +113,21 @@ describe('figure and table caption spacing in the live preview (real Chromium)',
       return body.getBoundingClientRect().top - cap.getBoundingClientRect().bottom;
     });
     assert.ok(gap >= 0 && gap <= 8, `gap ${gap}px`);
+  });
+
+  // The desc follows the title inside the caption. Inline, the two ran together
+  // ("Table 2. Torque Maximum values ...") and read as one sentence; it is a block
+  // now, starting on the line below the title.
+  it('a table desc starts on its own line, below the title, and the caption stays against the table', async () => {
+    const m = await page.$eval('table#td', (t) => {
+      const cap = t.querySelector('caption') as HTMLElement;
+      const desc = cap.querySelector('.desc') as HTMLElement;
+      const body = t.querySelector('tbody') as HTMLElement;
+      const c = cap.getBoundingClientRect();
+      const d = desc.getBoundingClientRect();
+      return { below: d.top - c.top, gap: body.getBoundingClientRect().top - d.bottom };
+    });
+    assert.ok(m.below >= 12, `desc is ${m.below}px below the top of the caption (should be on a second line)`);
+    assert.ok(m.gap >= 0 && m.gap <= 10, `desc to table ${m.gap}px`);
   });
 });

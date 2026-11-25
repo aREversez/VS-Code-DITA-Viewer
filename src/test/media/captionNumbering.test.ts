@@ -52,6 +52,11 @@ for (const rel of ['media/styles.css', 'packages/core/styles/dita-content.css'])
       assert.ok(!blocksFor(css, 'caption.tabledesc::before').length, 'and prints no label');
     });
 
+    it('a table desc inside the title caption is a block on its own line', () => {
+      const b = blocksFor(css, 'caption.tabletitle .desc').join('\n');
+      assert.ok(/display:\s*block/.test(b), b);
+    });
+
     it('a figure image and the preview\'s image wrapper are margin-free blocks, so the caption sits right under the picture', () => {
       const img = blocksFor(css, 'figure.fig img.image').join('\n');
       assert.ok(/display:\s*block/.test(img) && /margin:\s*0/.test(img), img);
