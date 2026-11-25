@@ -35,9 +35,16 @@ export type { AlignedRow, DiffChangeType, DiffPart, RenderedBlock, TopicDiffResu
 // swaps the chip's numbers; reusing the old ones left the chip contradicting
 // the view (an insertion-only diff showing "+1 −0" over a lone deletion).
 // This is the only place that flips the numbers; the renderer shows them as is.
-export function swapDiffResult<T extends { rows: AlignedRow[]; stats: { added: number; removed: number; modified: number } }>(result: T): T {
+export function swapDiffResult<T extends { rows: AlignedRow[]; stats: { added: number; removed: number; modified: number }; leftLang?: string; rightLang?: string }>(result: T): T {
   const rows = swapAlignedRows(result.rows);
-  return { ...result, rows, stats: computeRowStats(rows) };
+  const out: T = { ...result, rows, stats: computeRowStats(rows) };
+  // The language rides with its side's content, so it turns around too.
+  if ('leftLang' in result || 'rightLang' in result) {
+    const langs = out as { leftLang?: string; rightLang?: string };
+    langs.leftLang = result.rightLang;
+    langs.rightLang = result.leftLang;
+  }
+  return out;
 }
 
 export function swapAlignedRows(rows: AlignedRow[]): AlignedRow[] {
@@ -149,6 +156,7 @@ export function diffTopics(input: DiffTopicsInput): TopicDiffResult {
     const rightBlocks = extractTopicBlocks(rightDoc!.root, { renderBlock });
     return {
       rightTitle: extractTitle(rightDoc!),
+      rightLang: extractLang(rightDoc!),
       rows: rightBlocks.map((b) => ({ right: b, changeType: 'added' as const })),
       stats: { added: rightBlocks.length, removed: 0, modified: 0 },
       errorLeft,
@@ -160,6 +168,7 @@ export function diffTopics(input: DiffTopicsInput): TopicDiffResult {
     const leftBlocks = extractTopicBlocks(leftDoc.root, { renderBlock });
     return {
       leftTitle: extractTitle(leftDoc),
+      leftLang: extractLang(leftDoc),
       rows: leftBlocks.map((b) => ({ left: b, changeType: 'removed' as const })),
       stats: { added: 0, removed: leftBlocks.length, modified: 0 },
       errorRight,
@@ -202,6 +211,8 @@ export function diffTopics(input: DiffTopicsInput): TopicDiffResult {
   return {
     leftTitle: extractTitle(leftDoc),
     rightTitle: extractTitle(rightDoc),
+    leftLang: extractLang(leftDoc),
+    rightLang: extractLang(rightDoc),
     rows,
     stats,
   };
@@ -212,6 +223,13 @@ function extractTitle(doc: DitaDocument): string | undefined {
     (c) => c.type === 'element' && c.baseType === 'topic/title',
   );
   return titleNode ? collectText(titleNode) : undefined;
+}
+
+// The side's own xml:lang. The panel renders a topic as a run of blocks with
+// no <article> around them, so the column container carries this as `lang` --
+// that is what lets the :lang() figure/table label words follow the topic.
+function extractLang(doc: DitaDocument): string | undefined {
+  return doc.root.attributes?.['xml:lang'];
 }
 
 function countStats(rows: AlignedRow[], stats: { added: number; removed: number; modified: number }): void {

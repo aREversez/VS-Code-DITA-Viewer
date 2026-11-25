@@ -63,6 +63,11 @@ export interface AlignedRow {
 export interface TopicDiffResult {
   leftTitle?: string;
   rightTitle?: string;
+  /** Each side's root xml:lang, for the panel to put on that column as `lang`
+   *  so the :lang() figure/table label words follow the topic, not the host
+   *  page's fixed one. The two sides can differ across git history. */
+  leftLang?: string;
+  rightLang?: string;
   rows: AlignedRow[];
   stats: { added: number; removed: number; modified: number };
   errorLeft?: string;

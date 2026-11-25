@@ -62,6 +62,21 @@
 // a <codeblock>/<pre> is escaped by the renderer, so it never reads as a tag here.
 
 import { AlignedRow, RenderedBlock, applyInlineMarksToHtml } from './ditaDiffEngine';
+import { escapeAttr } from './htmlEscape';
+
+/**
+ * The `lang` attribute for one diff column, from that side's topic xml:lang
+ * (TopicDiffResult.leftLang/rightLang). The panel's host page declares a fixed
+ * `lang="en"` and no <article> wraps the blocks, so without the topic's own
+ * language on the column the :lang() figure/table label words (styles.css)
+ * would read "Figure/Table" for a Chinese topic here while the preview reads
+ * 图/表. Each side carries its own -- across git history the two versions can
+ * declare different languages. Undefined (no declaration, or a side that
+ * failed to parse) emits nothing and the host language stands.
+ */
+export function diffColumnLangAttr(lang: string | undefined): string {
+  return lang ? ` lang="${escapeAttr(lang)}"` : '';
+}
 
 /** Complete: renders its own <colgroup>/<thead>/<tbody> children inside. */
 const COMPLETE_TABLE_FRAGMENT = new Set(['topic/tgroup']);

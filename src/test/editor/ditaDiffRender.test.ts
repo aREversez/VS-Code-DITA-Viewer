@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { load } from 'cheerio';
 import { parseDita, DitaNode, RenderContext, renderElement } from '@dita-viewer/core';
 import { diffTopics, DiffTopicsInput, swapAlignedRows } from '../../editor/ditaDiffEngine';
-import { renderDiffColumns, injectFragmentAttrs } from '../../editor/ditaDiffRender';
+import { renderDiffColumns, injectFragmentAttrs, diffColumnLangAttr } from '../../editor/ditaDiffRender';
 
 /**
  * These tests run the diff panel's REAL two-stage pipeline -- the actual
@@ -647,5 +647,20 @@ describe('ditaDiffRender (rendered-diff column assembly)', () => {
         ['0', '1', '2'],
       );
     });
+  });
+});
+
+describe('diffColumnLangAttr', () => {
+  it('emits a lang attribute for a declared language', () => {
+    assert.strictEqual(diffColumnLangAttr('zh-CN'), ' lang="zh-CN"');
+  });
+
+  it('emits nothing without one', () => {
+    assert.strictEqual(diffColumnLangAttr(undefined), '');
+    assert.strictEqual(diffColumnLangAttr(''), '');
+  });
+
+  it('escapes the value so a hostile xml:lang cannot break out of the attribute', () => {
+    assert.strictEqual(diffColumnLangAttr('zh" onload="x"'), ' lang="zh&quot; onload=&quot;x&quot;"');
   });
 });

@@ -178,7 +178,9 @@ body {
   flex: 1;
   min-width: 0;
   /* No <article.topic> wraps the blocks here, so the figure/table counters (see
-     styles.css) are reset per column: each column is its own document. */
+     styles.css) are reset per column: each column is its own document. The
+     column also carries its side's xml:lang as `lang` (ditaDiffProvider.ts),
+     which is what lets the :lang() label words follow the topic here too. */
   counter-reset: dita-fig dita-tbl;
 }
 
@@ -405,13 +407,14 @@ body {
   outline-offset: -2px;
 }
 
-/* A table's own <title> is rendered into this panel as that table's <caption>
-   (ditaDiffRender.ts converts the preview's heading; the preview itself keeps
-   emitting a heading, so the rule that makes a caption read like a table
-   heading lives here rather than in styles.css). HTML's default caption
-   alignment is centered, which in an otherwise left-aligned document reads as
-   a stray heading -- and here it would misalign against the left-aligned cells
-   directly below it. */
+/* A table's own <title> arrives in this panel as that table's <caption> --
+   the preview emits it that way, and ditaDiffRender.ts's headingToCaption is
+   only a safety net for a title that still arrives as a heading. styles.css
+   already left-aligns caption.tabletitle; this rule covers EVERY caption in
+   the panel, including a re-assembled table's marked one. HTML's default
+   caption alignment is centered, which in an otherwise left-aligned document
+   reads as a stray heading -- and here it would misalign against the
+   left-aligned cells directly below it. */
 .diff-col table > caption {
   text-align: left;
   font-weight: 600;

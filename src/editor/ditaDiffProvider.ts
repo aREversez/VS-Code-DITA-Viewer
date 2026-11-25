@@ -22,7 +22,7 @@ import {
   buildQuickCommitChoices,
   arrangeByRecency,
 } from './ditaDiffEngine';
-import { renderDiffColumns } from './ditaDiffRender';
+import { renderDiffColumns, diffColumnLangAttr } from './ditaDiffRender';
 import {
   getRepoRoot,
   toRepoRelPath,
@@ -633,9 +633,9 @@ function buildDiffHtml(
 ${result.errorLeft ? `<div class="diff-error">${escapeHtml(result.errorLeft)}</div>` : ''}
 ${result.errorRight ? `<div class="diff-error">${escapeHtml(result.errorRight)}</div>` : ''}
 <div class="diff-columns">
-  <div class="diff-col diff-col--left">${cols.left}</div>
+  <div class="diff-col diff-col--left"${diffColumnLangAttr(result.leftLang)}>${cols.left}</div>
   <div class="diff-gutter" id="diff-gutter"><svg id="align-svg" class="align-svg" xmlns="http://www.w3.org/2000/svg"></svg></div>
-  <div class="diff-col diff-col--right">${cols.right}</div>
+  <div class="diff-col diff-col--right"${diffColumnLangAttr(result.rightLang)}>${cols.right}</div>
 </div>
 </div>
 <script nonce="${nonce}" src="${diffScriptUri}"></script>
