@@ -70,6 +70,18 @@ function extractPlainText(node: DitaNode): string {
   return (node.children || []).map(extractPlainText).join('');
 }
 
+// A <title> with nothing to show: no element children (a <ph keyref/> or an
+// <image> is content even when it has no text of its own) and only whitespace
+// text. Comments are not content, and are left out of titles anyway. A figure
+// or table with such a title is rendered as if it had none, so it gets no
+// caption -- and so no number, no stray "Figure 3. " and no skipped count.
+function titleHasContent(title: DitaNode | undefined): title is DitaNode {
+  if (!title) return false;
+  return (title.children || []).some(
+    (c) => c.type === 'element' || (c.type === 'text' && (c.text || '').trim() !== ''),
+  );
+}
+
 // ── Index term extraction ──
 //
 // <indexterm> nesting encodes index levels: <indexterm>A<indexterm>B
@@ -470,6 +482,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     // away from its table, and nothing could number it. org.dita.html5 does
     // the same (<caption> with a `tabletitle`-classed title).
     if (owner === 'topic/table' || owner === 'topic/simpletable') {
+      if (!titleHasContent(node)) return '';
       return `<caption class="title tabletitle">${renderChildren(node, ctx)}</caption>`;
     }
     const titleClass =
@@ -867,7 +880,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
       (c) => !(c.type === 'element' && c.baseType === 'topic/title'),
     );
     const figContent = renderChildren({ ...node, children: rest }, ctx);
-    const figCaption = titleNode
+    const figCaption = titleHasContent(titleNode)
       ? `<figcaption>${renderChildren(titleNode, { ...ctx, headingLevel: ctx.headingLevel + 1 })}</figcaption>`
       : '';
     return `<figure${safeAttr('id', id)} class="fig">${figContent}${figCaption}</figure>`;
@@ -905,7 +918,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
     const mapHtml = `<map${safeAttr('name', mapId)}${safeAttr('id', mapId)}>${areaNodes.map((a) => renderImageMapArea(a, ctx)).join('')}</map>`;
 
-    const figCaption = titleNode
+    const figCaption = titleHasContent(titleNode)
       ? `<figcaption>${renderChildren(titleNode, { ...ctx, headingLevel: ctx.headingLevel + 1 })}</figcaption>`
       : '';
     return `<figure${safeAttr('id', id)} class="fig imagemap">${imgHtml}${mapHtml}${figCaption}</figure>`;

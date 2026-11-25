@@ -52,6 +52,39 @@ describe('table titles render as a caption', () => {
     const html = render('<table><tgroup cols="1"><tbody><row><entry>x</entry></row></tbody></tgroup></table>');
     assert.ok(!html.includes('<caption'), html);
   });
+
+  // The CSS counter bumps on every caption, so an empty one would print a bare
+  // "Table 2. " and shift every number after it.
+  it('an empty, whitespace-only or comment-only title gets no caption either', () => {
+    for (const title of ['<title/>', '<title></title>', '<title>  \n </title>', '<title><!-- later --></title>']) {
+      const cals = render(`<table>${title}<tgroup cols="1"><tbody><row><entry>x</entry></row></tbody></tgroup></table>`);
+      assert.ok(!cals.includes('<caption'), `${title}: ${cals}`);
+      const simple = render(`<simpletable>${title}<strow><stentry>y</stentry></strow></simpletable>`);
+      assert.ok(!simple.includes('<caption'), `${title}: ${simple}`);
+    }
+  });
+
+  it('a title that holds only an element still gets its caption', () => {
+    const html = render(
+      '<table><title><ph>Torque</ph></title><tgroup cols="1"><tbody><row><entry>x</entry></row></tbody></tgroup></table>',
+    );
+    assert.ok(/<caption\b[^>]*>[\s\S]*Torque[\s\S]*<\/caption>/.test(html), html);
+  });
+});
+
+describe('figure titles', () => {
+  it('a fig with an empty or whitespace-only title gets no figcaption', () => {
+    for (const title of ['<title/>', '<title>   </title>', '<title><!-- later --></title>']) {
+      const html = render(`<fig>${title}<image href="a.png"/></fig>`);
+      assert.ok(html.includes('<figure'), html);
+      assert.ok(!html.includes('<figcaption'), `${title}: ${html}`);
+    }
+  });
+
+  it('a fig with a titled caption still gets one', () => {
+    const html = render('<fig><title>Layout</title><image href="a.png"/></fig>');
+    assert.ok(/<figcaption>Layout<\/figcaption>/.test(html), html);
+  });
 });
 
 // The "Figure "/"Table " label words are chosen by :lang(), and the host page
