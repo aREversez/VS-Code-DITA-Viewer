@@ -40,6 +40,7 @@ import {
   decodeHrefPart,
   URL_SCHEME_RE,
 } from './refResolvers';
+import { isReadAllowed } from '../pathContainment';
 import { DEFAULT_REF_ERROR_TEXTS, RefErrorTexts } from '../render/refErrorTexts';
 import { defaultTopicScopeChains, getKeyDefs, getKeyScopes, KeyDefLookup, KeyHrefDef, resolveKeyInScope } from './keySpace';
 import { diagnoseConkeyref, resolveConkeyref } from './conkeyref';
@@ -262,6 +263,7 @@ export function buildRenderContext(input: BuildRenderContextInput): BuiltRenderC
           keyDefs,
           loadTopic,
           (baseDir, href) => existsSync(resolve(baseDir, decodeHrefPart(href.split('#')[0]))),
+          (baseDir, href) => isReadAllowed(resolve(baseDir, decodeHrefPart(href.split('#')[0]))),
         );
         return failure === undefined ? undefined : texts[failure];
       };

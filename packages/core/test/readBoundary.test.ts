@@ -30,10 +30,27 @@ describe('read boundary on the reference resolvers', () => {
     assert.ok(r('in.dita#a/p'));
   });
 
-  it('set: an outside target is reported as a missing file, not a parse error', () => {
+  // Neither "does not exist" nor "cannot be parsed" is true of a file the
+  // boundary refused, and the author cannot fix either; say what it is.
+  it('set: a file outside the boundary is reported as outside the workspace', () => {
     setReadRoots([join(base, 'ws')]);
     const diagnose = makeRefErrorResolver(join(base, 'ws'));
-    assert.strictEqual(diagnose('../outside/out.dita#b/p'), DEFAULT_REF_ERROR_TEXTS.missingFile);
+    assert.strictEqual(diagnose('../outside/out.dita#b/p'), DEFAULT_REF_ERROR_TEXTS.outsideWorkspace);
+  });
+
+  it('set: a file that is really missing is still reported as missing', () => {
+    setReadRoots([join(base, 'ws')]);
+    const diagnose = makeRefErrorResolver(join(base, 'ws'));
+    assert.strictEqual(diagnose('../outside/nope.dita#b/p'), DEFAULT_REF_ERROR_TEXTS.missingFile);
+    assert.strictEqual(diagnose('nope.dita#b/p'), DEFAULT_REF_ERROR_TEXTS.missingFile);
+  });
+
+  it('a host that supplies no outsideWorkspace text still gets the English default', () => {
+    setReadRoots([join(base, 'ws')]);
+    const { outsideWorkspace: _omit, ...older } = DEFAULT_REF_ERROR_TEXTS;
+    void _omit;
+    const diagnose = makeRefErrorResolver(join(base, 'ws'), undefined, undefined, older);
+    assert.strictEqual(diagnose('../outside/out.dita#b/p'), 'target file is outside the workspace');
   });
 
   it('an empty list lifts the boundary', () => {

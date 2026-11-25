@@ -23,5 +23,6 @@ export function refErrorTexts(): RefErrorTexts {
     missingFile: vscode.l10n.t('target file does not exist'),
     parseError: vscode.l10n.t('target file cannot be parsed as XML'),
     missingId: vscode.l10n.t('target ID does not exist'),
+    outsideWorkspace: vscode.l10n.t('target file is outside the workspace'),
   };
 }

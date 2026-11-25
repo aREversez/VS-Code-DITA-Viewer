@@ -109,7 +109,7 @@ export function resolveConkeyref(
 }
 
 
-export type ConkeyrefFailure = 'missingKey' | 'missingFile' | 'parseError' | 'missingId';
+export type ConkeyrefFailure = 'missingKey' | 'missingFile' | 'parseError' | 'missingId' | 'outsideWorkspace';
 
 /**
  * Why a conkeyref pulls nothing, in the order resolveConkeyref checks:
@@ -124,6 +124,8 @@ export function diagnoseConkeyref(
   defs: KeyDefLookup,
   loadTopic: (baseDir: string, href: string) => DitaNode | undefined,
   fileExists: (baseDir: string, href: string) => boolean,
+  /** Whether the host lets a reference read that file; omitted means always. */
+  isReadable: (baseDir: string, href: string) => boolean = () => true,
 ): ConkeyrefFailure | undefined {
   const { keyName, elementId } = parseConkeyref(conkeyref);
   if (!keyName) return undefined;
@@ -136,7 +138,12 @@ export function diagnoseConkeyref(
   // is stripped first -- it is the target format's own, not a DITA id.
   if (isNonDitaTarget(def.href.split('#')[0])) return undefined;
   const root = loadTopic(def.baseDir, def.href);
-  if (!root) return fileExists(def.baseDir, def.href) ? 'parseError' : 'missingFile';
+  if (!root) {
+    if (!fileExists(def.baseDir, def.href)) return 'missingFile';
+    // Present but not loadable: either the host's read boundary refused it or
+    // it is not well-formed. The author can act on the first, so say so.
+    return isReadable(def.baseDir, def.href) ? 'parseError' : 'outsideWorkspace';
+  }
   const targetId = elementId ?? hrefFragmentTarget(def.href);
   if (!targetId) return undefined;
   return findElementById(root, targetId) ? undefined : 'missingId';

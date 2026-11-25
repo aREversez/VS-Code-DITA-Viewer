@@ -36,6 +36,12 @@ export interface RefErrorTexts {
   parseError: string;
   /** Reason: the file parses but #topicId/elementId names no id in it. */
   missingId: string;
+  /**
+   * Reason: the file exists but lies outside the folders the host allows
+   * references to read (see setReadRoots). Optional so a host built against an
+   * earlier RefErrorTexts keeps compiling; the English default fills it in.
+   */
+  outsideWorkspace?: string;
 }
 
 export const DEFAULT_REF_ERROR_TEXTS: RefErrorTexts = {
@@ -45,6 +51,7 @@ export const DEFAULT_REF_ERROR_TEXTS: RefErrorTexts = {
   missingFile: 'target file does not exist',
   parseError: 'target file cannot be parsed as XML',
   missingId: 'target ID does not exist',
+  outsideWorkspace: 'target file is outside the workspace',
 };
 
 /**

@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import { DitaNode } from '../../src/parser/domTypes';
 import { KeyHrefDef } from '../../src/editor/keySpace';
-import { resolveConkeyref } from '../../src/editor/conkeyref';
+import { diagnoseConkeyref, resolveConkeyref } from '../../src/editor/conkeyref';
 
 const RANGE = { startLine: 0, startCol: 0, endLine: 0, endCol: 0 };
 
@@ -113,5 +113,22 @@ describe('resolveConkeyref with a fragment on the key href', () => {
   it('a fragment naming a missing element is unresolvable, so the caller can fall back', () => {
     const defs = new Map<string, KeyHrefDef>([['legal', { href: 'common.dita#common/nope', baseDir: '/maps' }]]);
     assert.strictEqual(resolveConkeyref('legal', defs, load), undefined);
+  });
+});
+
+describe('diagnoseConkeyref: a file the host will not let a reference read', () => {
+  const defs = new Map([['k', { href: '../shared/x.dita', baseDir: '/ws/topics' }]]) as never;
+  const none = (): undefined => undefined;
+  const exists = (): boolean => true;
+
+  it('is "outsideWorkspace" when the file exists but is refused', () => {
+    assert.strictEqual(diagnoseConkeyref('k/p', defs, none, exists, () => false), 'outsideWorkspace');
+  });
+  it('is still "parseError" when it is readable but does not load', () => {
+    assert.strictEqual(diagnoseConkeyref('k/p', defs, none, exists, () => true), 'parseError');
+    assert.strictEqual(diagnoseConkeyref('k/p', defs, none, exists), 'parseError');
+  });
+  it('is "missingFile" when it does not exist, boundary or not', () => {
+    assert.strictEqual(diagnoseConkeyref('k/p', defs, none, () => false, () => false), 'missingFile');
   });
 });

@@ -466,5 +466,6 @@
   "{0} missing target(s) had no matching file; they are listed in the output.": "有 {0} 个缺失目标没有匹配到文件，已列在输出中。",
   "Show Output": "显示输出",
   "Change to {0}": "改为 {0}",
-  "Not opened: \"{0}\" is outside the workspace.": "未打开：“{0}”在工作区之外。"
+  "Not opened: \"{0}\" is outside the workspace.": "未打开：“{0}”在工作区之外。",
+  "target file is outside the workspace": "目标文件在工作区之外"
 }

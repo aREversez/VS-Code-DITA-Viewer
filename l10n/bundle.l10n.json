@@ -466,5 +466,6 @@
   "{0} missing target(s) had no matching file; they are listed in the output.": "{0} missing target(s) had no matching file; they are listed in the output.",
   "Show Output": "Show Output",
   "Change to {0}": "Change to {0}",
-  "Not opened: \"{0}\" is outside the workspace.": "Not opened: \"{0}\" is outside the workspace."
+  "Not opened: \"{0}\" is outside the workspace.": "Not opened: \"{0}\" is outside the workspace.",
+  "target file is outside the workspace": "target file is outside the workspace"
 }

@@ -500,7 +500,13 @@ export function makeRefErrorResolver(
 
     const abs = resolve(docDir, decodeHrefPart(filePath));
     const root = cache.loadAbsPath(abs);
-    if (!root) return existsSync(abs) && isReadAllowed(abs) ? texts.parseError : texts.missingFile;
+    if (!root) {
+      if (!existsSync(abs)) return texts.missingFile;
+      // Present but refused by the host's read boundary: say so, rather than
+      // "does not exist" or "cannot be parsed", neither of which is true.
+      if (!isReadAllowed(abs)) return texts.outsideWorkspace ?? DEFAULT_REF_ERROR_TEXTS.outsideWorkspace!;
+      return texts.parseError;
+    }
     if (!elementId) return undefined;
     return cache.findElementById(root, elementId) ? undefined : texts.missingId;
   };
