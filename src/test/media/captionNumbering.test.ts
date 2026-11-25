@@ -50,3 +50,11 @@ for (const rel of ['media/styles.css', 'packages/core/styles/dita-content.css'])
     });
   });
 }
+
+// The diff panel has no article.topic, so its columns reset the counters.
+describe('caption numbering: diff panel columns', () => {
+  it('resets both counters on each .diff-col', () => {
+    const css = stripComments(readRepo('media/diff-styles.css'));
+    assert.ok(blocksFor(css, '.diff-col').some((b) => /counter-reset:\s*dita-fig\s+dita-tbl/.test(b)));
+  });
+});

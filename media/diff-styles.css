@@ -177,6 +177,9 @@ body {
 .diff-col {
   flex: 1;
   min-width: 0;
+  /* No <article.topic> wraps the blocks here, so the figure/table counters (see
+     styles.css) are reset per column: each column is its own document. */
+  counter-reset: dita-fig dita-tbl;
 }
 
 /* Center gutter: the empty channel the two documents are joined by, echoing
