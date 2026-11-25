@@ -63,25 +63,26 @@ describe('openHrefTarget', () => {
     assert.deepStrictEqual(calls, [`vscode.openWith ${resolve(base, 'my topic.dita')} ditaViewer.preview`]);
   });
 
-  it('hands a display-safe file (pdf, raster images, text) to the system handler', () => {
+  it('hands a display-safe file (html, pdf, images, text) to the system handler', () => {
     const { api, calls } = fakeVscode();
-    for (const f of ['guide.pdf', 'pic.PNG', 'notes.txt', 'README.md']) openHrefTarget(api, f, base);
+    const safe = ['guide.pdf', 'pic.PNG', 'notes.txt', 'README.md', 'page.html', 'old.HTM', 'logo.svg'];
+    for (const f of safe) openHrefTarget(api, f, base);
     assert.deepStrictEqual(
       calls,
-      ['guide.pdf', 'pic.PNG', 'notes.txt', 'README.md'].map((f) => `external file:${resolve(base, f)}`),
+      safe.map((f) => `external file:${resolve(base, f)}`),
     );
   });
 
   // One click on a hotspot must not be able to run a program: anything that is
   // not display-safe is revealed in the file manager, never openExternal'd.
-  it('reveals, and never executes, a file type the OS would run or a browser would script', () => {
+  it('reveals, and never executes, a file type the OS would run', () => {
     const { api, calls } = fakeVscode();
-    for (const f of ['tool.exe', 'run.bat', 'x.lnk', 'script.sh', 'noext', 'page.html', 'old.HTM', 'logo.svg']) {
+    for (const f of ['tool.exe', 'run.bat', 'x.lnk', 'script.sh', 'noext']) {
       openHrefTarget(api, f, base);
     }
     assert.deepStrictEqual(
       calls,
-      ['tool.exe', 'run.bat', 'x.lnk', 'script.sh', 'noext', 'page.html', 'old.HTM', 'logo.svg'].map((f) => `revealFileInOS ${resolve(base, f)}`),
+      ['tool.exe', 'run.bat', 'x.lnk', 'script.sh', 'noext'].map((f) => `revealFileInOS ${resolve(base, f)}`),
     );
   });
 

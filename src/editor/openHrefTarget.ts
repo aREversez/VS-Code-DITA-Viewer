@@ -13,10 +13,13 @@ import { decodeHrefPart, isInsideAny } from '@dita-viewer/core';
 // What the OS may be asked to open for a hotspot or link. Anything else (an
 // .exe, .lnk, .bat, a script, a shell-registered type) is only revealed in the
 // file manager: a rendered page is content from a document, and one click must
-// never be able to launch a program. .html/.htm/.svg are deliberately NOT here:
-// opened by the system they run script in the browser, and a DITA source has no
-// need to open one (HTML output is generated, not linked).
-const OPEN_EXTERNALLY = new Set(['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.txt', '.md']);
+// never be able to launch a program. .html/.htm/.svg are here on purpose: a link
+// to a local page opens in the default browser, which is what authors expect
+// (an <image> click is a different path -- the preview's own lightbox). The
+// workspace boundary below still applies to them.
+const OPEN_EXTERNALLY = new Set([
+  '.html', '.htm', '.pdf', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.txt', '.md',
+]);
 
 /**
  * Resolves an imagemap hotspot / link href the same way the map tree's
@@ -30,7 +33,7 @@ const OPEN_EXTERNALLY = new Set(['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp
  * open): `../..` and absolute paths that leave it are refused with a warning,
  * for every branch. Inside it, DITA sources open in the matching preview editor
  * (.ditamap -> ditaViewer.mapPreview, .dita/.xml -> ditaViewer.preview),
- * mirroring openTopic's view-type decision; display-safe files (pdf, raster
+ * mirroring openTopic's view-type decision; display-safe files (html, pdf,
  * images, text) go to the system handler; every other type is revealed in the
  * OS file manager instead of being executed.
  */
