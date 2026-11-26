@@ -1,4 +1,5 @@
 import { exists, realPath } from './runtime/fs';
+import { stateSlot } from './runtime';
 import { isAbsolute, getSep, relative, resolve } from './runtime/path';
 
 // "Is this path inside that folder?" for hosts that resolve a href an author
@@ -36,14 +37,15 @@ export function isInsideAny(roots: readonly string[], target: string): boolean {
 // is then treated as a missing file instead of being parsed. Unset (the
 // default, and what a host with no folder open uses) means unrestricted -- the
 // same global-hook shape as setSourceOverlay in ./editor/sourceText.
-let readRoots: readonly string[] | undefined;
+const readRootsState = stateSlot<{ roots: readonly string[] | undefined }>(() => ({ roots: undefined }));
 
 /** Restrict resolver reads to `roots`; pass undefined or an empty list to lift the limit. */
 export function setReadRoots(roots: readonly string[] | undefined): void {
-  readRoots = roots && roots.length > 0 ? [...roots] : undefined;
+  readRootsState().roots = roots && roots.length > 0 ? [...roots] : undefined;
 }
 
 /** False only when a boundary is set and `absPath` is outside it. */
 export function isReadAllowed(absPath: string): boolean {
-  return readRoots === undefined || isInsideAny(readRoots, absPath);
+  const roots = readRootsState().roots;
+  return roots === undefined || isInsideAny(roots, absPath);
 }

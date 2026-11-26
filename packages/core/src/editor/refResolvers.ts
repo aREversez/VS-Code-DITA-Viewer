@@ -10,6 +10,7 @@
 // ABOVE this module; nothing below reaches back up. Behaviour is unchanged --
 // this is a pure move of code lifted verbatim from ditaRenderUtils.ts.
 import { exists, readHead, stat } from '../runtime/fs';
+import { stateSlot } from '../runtime';
 import { isReadAllowed } from '../pathContainment';
 import { resolve, isAbsolute, extname, dirname, relative, normalize } from '../runtime/path';
 import { DitaNode } from '../parser/domTypes';
@@ -169,13 +170,14 @@ const IMAGE_DIMENSION_READERS: Record<string, (buf: Uint8Array) => ImageDims | u
  * numbers), but the project's rule is that every cache stays bounded and
  * clearable, and this one is cleared alongside the rest on deactivation.
  */
-const imageDimensionsCache = new Map<string, { mtimeMs: number; dimensions: { width: number; height: number } | undefined }>();
+// Per runtime (DESIGN.md 3.4), like every other cache.
+const imageDimensionsCacheOf = stateSlot(() => new Map<string, { mtimeMs: number; dimensions: { width: number; height: number } | undefined }>());
 // One entry per distinct image file ever previewed; bound it the same way
 // keyMapCache is bounded in DitaViewerProvider.ts.
 export const IMAGE_DIMENSIONS_CACHE_MAX = 1000;
 
 export function clearImageDimensionsCache(): void {
-  imageDimensionsCache.clear();
+  imageDimensionsCacheOf().clear();
 }
 
 export function readImageDimensions(filePath: string): { width: number; height: number } | undefined {
@@ -183,17 +185,17 @@ export function readImageDimensions(filePath: string): { width: number; height: 
   // and any previous cache entry for this path is now stale.
   const st = stat(filePath);
   if (!st) {
-    imageDimensionsCache.delete(filePath);
+    imageDimensionsCacheOf().delete(filePath);
     return undefined;
   }
   const mtimeMs = st.mtimeMs;
 
-  const cached = imageDimensionsCache.get(filePath);
+  const cached = imageDimensionsCacheOf().get(filePath);
   if (cached && cached.mtimeMs === mtimeMs) {
     // Re-insert so a cache hit keeps the entry from being the oldest
     // (and therefore first-evicted) candidate.
-    imageDimensionsCache.delete(filePath);
-    imageDimensionsCache.set(filePath, cached);
+    imageDimensionsCacheOf().delete(filePath);
+    imageDimensionsCacheOf().set(filePath, cached);
     return cached.dimensions;
   }
 
@@ -209,11 +211,11 @@ export function readImageDimensions(filePath: string): { width: number; height: 
       }
     }
   }
-  if (imageDimensionsCache.size >= IMAGE_DIMENSIONS_CACHE_MAX) {
-    const oldest = imageDimensionsCache.keys().next().value;
-    if (oldest !== undefined) imageDimensionsCache.delete(oldest);
+  if (imageDimensionsCacheOf().size >= IMAGE_DIMENSIONS_CACHE_MAX) {
+    const oldest = imageDimensionsCacheOf().keys().next().value;
+    if (oldest !== undefined) imageDimensionsCacheOf().delete(oldest);
   }
-  imageDimensionsCache.set(filePath, { mtimeMs, dimensions });
+  imageDimensionsCacheOf().set(filePath, { mtimeMs, dimensions });
   return dimensions;
 }
 

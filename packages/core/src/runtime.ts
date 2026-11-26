@@ -9,8 +9,12 @@
 
 import type { Platform } from './platform';
 
-/** Everything that used to be a module-level variable. Filled in as it moves (DESIGN.md 3.6, step 4). */
-export type RuntimeState = Record<string, never>;
+/**
+ * Everything that used to be a module-level variable (source overlays, render
+ * caches, read roots, counters). Each module owns its own slot in it, made with
+ * stateSlot(), so this type does not have to know what they hold.
+ */
+export type RuntimeState = Map<object, unknown>;
 
 export interface Runtime {
   readonly platform: Platform;
@@ -18,7 +22,26 @@ export interface Runtime {
 }
 
 export function createRuntime(platform: Platform): Runtime {
-  return { platform, state: {} };
+  return { platform, state: new Map() };
+}
+
+/**
+ * Declares one piece of per-runtime state and returns its accessor. The state
+ * is created by `init` the first time a runtime asks for it, so two engines
+ * never share it, and each starts empty. Call the accessor at the point of use,
+ * never at module load, since it resolves the active runtime through rt().
+ */
+export function stateSlot<T>(init: () => T): () => T {
+  const slot = {};
+  return () => {
+    const state = rt().state;
+    let value = state.get(slot) as T | undefined;
+    if (value === undefined) {
+      value = init();
+      state.set(slot, value);
+    }
+    return value;
+  };
 }
 
 let current: Runtime | undefined;

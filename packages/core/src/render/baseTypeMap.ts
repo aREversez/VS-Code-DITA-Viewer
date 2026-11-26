@@ -4,6 +4,7 @@ import { BLOCK_COMMENT_PARENTS, BLOCK_CONTENT_HOSTS, BLOCK_LEVEL_BASETYPES } fro
 import { DEFAULT_REF_ERROR_TEXTS, fillRefErrorTemplate } from './refErrorTexts';
 import { isDitaFormat } from './refTargets';
 import { isSafeHref } from './safeHref';
+import { stateSlot } from '../runtime';
 
 // parentBaseType only reflects the immediate ancestor (entry sits under row,
 // not thead), so header status is carried by an explicit ctx flag set when
@@ -424,7 +425,7 @@ function safeAttr(name: string, value: string | undefined | null): string {
 // needs uniqueness within one rendered document, which is also all it
 // guarantees (re-renders restart the count, and separate documents never
 // share a DOM).
-let imagemapSequence = 0;
+const imagemapSequence = stateSlot<{ n: number }>(() => ({ n: 0 }));
 
 // Region geometry + destination for one <area>. Only shape/coords/xref
 // are meaningful here (sort-as is authoring metadata for link-text
@@ -970,8 +971,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     const imageNode = children.find((c) => c.baseType === 'topic/image');
     const areaNodes = children.filter((c) => c.baseType === 'topic/area');
 
-    imagemapSequence += 1;
-    const mapId = `dita-imagemap-${imagemapSequence}`;
+    const mapId = `dita-imagemap-${++imagemapSequence().n}`;
 
     // The hotspot image reuses the full topic/image renderer — webview URI
     // resolution, natural-dimension reservation, @width/@height/@scale,

@@ -14,22 +14,34 @@
  */
 import { isCaseSensitive, normalize } from '../runtime/path';
 import { readText, stat } from '../runtime/fs';
+import { stateSlot } from '../runtime';
 
 interface OverlayEntry {
   text: string;
   rev: number;
 }
 
-const overlay = new Map<string, OverlayEntry>();
-
 /**
- * One counter for every overlay change to every file, never reset. A stamp
- * built from it cannot collide with an earlier one: document.version, the
- * obvious alternative, restarts at 1 whenever a document is closed and
- * reopened, so "discard changes, reopen, type something else" could land on
- * a version number a cache entry was already built for.
+ * Per runtime, not per process: two engines must not see each other's unsaved
+ * text, revision numbers or read recording (DESIGN.md 3.4). The top-level
+ * functions below act on the default runtime's state.
  */
-let revision = 0;
+interface SourceState {
+  /** Unsaved text by normalised path key. */
+  overlay: Map<string, OverlayEntry>;
+  /**
+   * One counter for every overlay change to every file, never reset (within a
+   * runtime). A stamp built from it cannot collide with an earlier one:
+   * document.version, the obvious alternative, restarts at 1 whenever a
+   * document is closed and reopened, so "discard changes, reopen, type
+   * something else" could land on a version number a cache entry was already
+   * built for.
+   */
+  revision: number;
+  /** The set trackSourceReads is currently filling, if any. */
+  recorder: Set<string> | undefined;
+}
+const sourceState = stateSlot<SourceState>(() => ({ overlay: new Map(), revision: 0, recorder: undefined }));
 
 /**
  * Same file however the path is spelled: `..` segments, case on Windows, and
@@ -51,23 +63,24 @@ function key(filePath: string): string {
  */
 export function setSourceOverlay(filePath: string, text: string): void {
   const k = key(filePath);
-  const existing = overlay.get(k);
+  const existing = sourceState().overlay.get(k);
   if (existing && existing.text === text) return;
-  overlay.set(k, { text, rev: ++revision });
+  const s = sourceState();
+  s.overlay.set(k, { text, rev: ++s.revision });
 }
 
 /** The file is saved, reverted or closed: the disk is the truth again. */
 export function clearSourceOverlay(filePath: string): void {
-  overlay.delete(key(filePath));
+  sourceState().overlay.delete(key(filePath));
 }
 
 export function clearAllSourceOverlays(): void {
-  overlay.clear();
+  sourceState().overlay.clear();
 }
 
 /** How many files currently have unsaved text -- test hook. */
 export function sourceOverlaySize(): number {
-  return overlay.size;
+  return sourceState().overlay.size;
 }
 
 /**
@@ -79,8 +92,9 @@ export function sourceOverlaySize(): number {
  */
 export function readSourceText(filePath: string, _encoding: 'utf-8' = 'utf-8'): string {
   const k = key(filePath);
-  recorder?.add(k);
-  const entry = overlay.get(k);
+  const s = sourceState();
+  s.recorder?.add(k);
+  const entry = s.overlay.get(k);
   return entry ? entry.text : readText(filePath);
 }
 
@@ -90,8 +104,6 @@ export function readSourceText(filePath: string, _encoding: 'utf-8' = 'utf-8'): 
 // whether that edit can change what it shows. The answer is exactly "did my
 // last render read that file", which the readers above can report as they go.
 
-let recorder: Set<string> | undefined;
-
 /**
  * Runs `fn` and returns its result along with every source file read through
  * readSourceText while it ran (as normalized keys, for dependsOn). Nests: an
@@ -100,13 +112,14 @@ let recorder: Set<string> | undefined;
  * cached answer was built from -- see noteSourceDependencies.
  */
 export function trackSourceReads<T>(fn: () => T): { result: T; files: ReadonlySet<string> } {
-  const outer = recorder;
+  const s = sourceState();
+  const outer = s.recorder;
   const mine = new Set<string>();
-  recorder = mine;
+  s.recorder = mine;
   try {
     return { result: fn(), files: mine };
   } finally {
-    recorder = outer;
+    s.recorder = outer;
     if (outer) for (const f of mine) outer.add(f);
   }
 }
@@ -118,6 +131,7 @@ export function trackSourceReads<T>(fn: () => T): { result: T; files: ReadonlySe
  * first. A no-op outside a tracker.
  */
 export function noteSourceDependencies(filePaths: Iterable<string>): void {
+  const recorder = sourceState().recorder;
   if (!recorder) return;
   for (const p of filePaths) recorder.add(key(p));
 }
@@ -142,7 +156,7 @@ export function dependsOn(files: ReadonlySet<string>, filePath: string): boolean
  * the other half of the same requirement.
  */
 export function sourceStamp(filePath: string): string {
-  const entry = overlay.get(key(filePath));
+  const entry = sourceState().overlay.get(key(filePath));
   if (entry) return `dirty:${entry.rev}`;
   const st = stat(filePath);
   return st ? `${st.mtimeMs}:${st.size}` : '?';

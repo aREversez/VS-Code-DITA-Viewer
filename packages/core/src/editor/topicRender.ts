@@ -6,6 +6,7 @@
 import { dirname, join } from '../runtime/path';
 import { exists, readDir } from '../runtime/fs';
 import { utf8ByteLength } from '../utf8';
+import { stateSlot } from '../runtime';
 import type { WalkEntry } from '../language/referenceableFiles';
 import { DitaNode } from '../parser/domTypes';
 import { parseDita, preprocessEntities } from '../parser/ditaParser';
@@ -377,23 +378,27 @@ interface TopicRenderCacheEntry {
   bytes: number;
 }
 
-const topicRenderCache = new Map<string, TopicRenderCacheEntry>();
-let topicRenderCacheBytes = 0;
-let topicRenderCacheBudget = TOPIC_RENDER_CACHE_MAX_BYTES;
+/** Per runtime (DESIGN.md 3.4): two engines never share cached renders or a budget. */
+interface TopicCacheState {
+  entries: Map<string, TopicRenderCacheEntry>;
+  bytes: number;
+  budget: number;
+}
+const topicCache = stateSlot<TopicCacheState>(() => ({ entries: new Map(), bytes: 0, budget: TOPIC_RENDER_CACHE_MAX_BYTES }));
 
 export function clearTopicRenderCache(): void {
-  topicRenderCache.clear();
-  topicRenderCacheBytes = 0;
+  topicCache().entries.clear();
+  topicCache().bytes = 0;
 }
 
 /** How many topic renders are currently held -- test hook for eviction/clear. */
 export function topicRenderCacheSize(): number {
-  return topicRenderCache.size;
+  return topicCache().entries.size;
 }
 
 /** Bytes of HTML currently held -- test hook, paired with the size above. */
 export function topicRenderCacheBytesHeld(): number {
-  return topicRenderCacheBytes;
+  return topicCache().bytes;
 }
 
 /**
@@ -402,18 +407,18 @@ export function topicRenderCacheBytesHeld(): number {
  * production budget. Nothing outside the test suite calls this.
  */
 export function setTopicRenderCacheBudgetForTesting(bytes?: number): void {
-  topicRenderCacheBudget = bytes ?? TOPIC_RENDER_CACHE_MAX_BYTES;
+  topicCache().budget = bytes ?? TOPIC_RENDER_CACHE_MAX_BYTES;
 }
 
 function dropTopicEntry(key: string): void {
-  const entry = topicRenderCache.get(key);
+  const entry = topicCache().entries.get(key);
   if (!entry) return;
-  topicRenderCache.delete(key);
-  topicRenderCacheBytes -= entry.bytes;
+  topicCache().entries.delete(key);
+  topicCache().bytes -= entry.bytes;
 }
 
 function dropOldestTopicEntry(): void {
-  const oldest = topicRenderCache.keys().next().value;
+  const oldest = topicCache().entries.keys().next().value;
   if (oldest !== undefined) dropTopicEntry(oldest);
 }
 
@@ -455,7 +460,7 @@ export function renderTopicCached(input: TopicRenderInput): TopicRenderResult {
   const textsKey = JSON.stringify(input.refErrorTexts ?? {});
   const key = `${input.filePath}\u0000${input.headingLevel}\u0000${input.keyScope ? JSON.stringify(input.keyScope) : ''}\u0000${textsKey}`;
 
-  const cached = topicRenderCache.get(key);
+  const cached = topicCache().entries.get(key);
   if (
     cached &&
     cached.keyMap === input.keyMap &&
@@ -468,8 +473,8 @@ export function renderTopicCached(input: TopicRenderInput): TopicRenderResult {
     // Re-insert so a hit keeps the entry from being the oldest (and therefore
     // first-evicted) candidate -- same LRU-by-reinsertion as
     // imageDimensionsCache above.
-    topicRenderCache.delete(key);
-    topicRenderCache.set(key, cached);
+    topicCache().entries.delete(key);
+    topicCache().entries.set(key, cached);
     // A hit reads nothing, but the answer still stands for these files.
     noteSourceDependencies(cached.files);
     return { html: cached.html, title: cached.title };
@@ -495,7 +500,7 @@ export function renderTopicCached(input: TopicRenderInput): TopicRenderResult {
   // UTF-8 bytes, not html.length: DITA content is frequently CJK, where the
   // character count understates what is actually retained by up to 3x.
   const bytes = utf8ByteLength(result.html);
-  if (bytes > topicRenderCacheBudget) {
+  if (bytes > topicCache().budget) {
     // A single topic larger than the entire budget. Caching it would evict
     // everything else and then be evicted itself on the next insert, so skip
     // it: that entry alone falls back to uncached rendering.
@@ -507,10 +512,10 @@ export function renderTopicCached(input: TopicRenderInput): TopicRenderResult {
   // already holds -- overwriting it in place would otherwise leak its bytes
   // out of the running total and shrink the effective budget permanently.
   dropTopicEntry(key);
-  while (topicRenderCache.size > 0 && topicRenderCacheBytes + bytes > topicRenderCacheBudget) {
+  while (topicCache().entries.size > 0 && topicCache().bytes + bytes > topicCache().budget) {
     dropOldestTopicEntry();
   }
-  topicRenderCache.set(key, {
+  topicCache().entries.set(key, {
     html: result.html,
     title: result.title,
     files,
@@ -522,6 +527,6 @@ export function renderTopicCached(input: TopicRenderInput): TopicRenderResult {
     bookMembers: input.bookMembers,
     bytes,
   });
-  topicRenderCacheBytes += bytes;
+  topicCache().bytes += bytes;
   return result;
 }
