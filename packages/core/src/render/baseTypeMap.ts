@@ -548,12 +548,17 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
       if (!hasContent(node)) return '';
       return `<caption class="title tabletitle">${renderChildren(node, ctx)}</caption>`;
     }
-    // A fig/imagemap title is its figure's <figcaption> content: plain inline
-    // markup, no heading of its own. The fig renderer wraps whatever comes
-    // back here; an empty resolved title answers '' and gets no figcaption.
+    // A fig/imagemap title is its figure's <figcaption> content, with no heading
+    // of its own. The fig renderer wraps whatever comes back here in the
+    // <figcaption>; an empty resolved title answers '' and gets no figcaption.
+    // The content gets a span of its own rather than being returned bare:
+    // renderElement stamps this node's source-mapping attributes onto the first
+    // tag of the output, so a title that began with an inline element (<ph>, <b>)
+    // used to hand its data-dita-tagname="title" to that child, duplicating the
+    // child's own and making a <ph> report itself as the title.
     if (owner === 'topic/fig' || owner === 'topic/imagemap') {
       if (!hasContent(node)) return '';
-      return renderChildren(node, ctx);
+      return `<span class="figtitle">${renderChildren(node, ctx)}</span>`;
     }
     const titleClass =
       owner === 'topic/section' || owner === 'topic/example'

@@ -203,7 +203,7 @@ describe('imagemap rendering (utilities domain)', () => {
       </imagemap>
     </body></topic>`;
     const { html } = parseAndRender(xml);
-    assert.ok(html.includes('<figcaption>World map</figcaption>'), `got: ${html}`);
+    assert.ok(/<figcaption><span\b[^>]*class="figtitle"[^>]*>World map<\/span><\/figcaption>/.test(html), `got: ${html}`);
   });
 
   it('an imagemap with an empty title gets no figcaption', () => {

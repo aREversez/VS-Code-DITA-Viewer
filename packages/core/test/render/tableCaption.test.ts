@@ -137,7 +137,7 @@ describe('figure titles', () => {
 
   it('a fig with a titled caption still gets one', () => {
     const html = render('<fig><title>Layout</title><image href="a.png"/></fig>');
-    assert.ok(/<figcaption>Layout<\/figcaption>/.test(html), html);
+    assert.ok(/<figcaption><span\b[^>]*class="figtitle"[^>]*>Layout<\/span><\/figcaption>/.test(html), html);
   });
 });
 

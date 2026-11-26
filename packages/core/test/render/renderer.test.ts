@@ -802,7 +802,7 @@ describe('renderer', () => {
     ]);
     const html = renderDocument(doc, defaultCtx);
     assert.ok(html.includes('<figure'));
-    assert.ok(html.includes('<figcaption>Figure 1</figcaption>'));
+    assert.ok(/<figcaption><span\b[^>]*class="figtitle"[^>]*>Figure 1<\/span><\/figcaption>/.test(html), html);
   });
 
   it('should render local xref as clickable anchor', () => {

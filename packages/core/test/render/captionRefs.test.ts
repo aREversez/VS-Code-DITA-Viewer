@@ -59,25 +59,25 @@ const keyrefCtx: RenderContext = {
 describe('a fig title pulled in by reference keeps its figcaption', () => {
   it('conref: the resolved text lands in the figcaption', () => {
     const html = render('<fig><title conref="reuse.dita#r/cap"/><image href="a.png"/></fig>', conrefCtx);
-    assert.ok(/<figcaption[^>]*>Pulled caption<\/figcaption>/.test(html), html);
+    assert.ok(/<figcaption[^>]*><span\b[^>]*class="figtitle"[^>]*>Pulled caption<\/span><\/figcaption>/.test(html), html);
   });
 
   it('conkeyref: same shape, resolved through the key space', () => {
     const ctx: RenderContext = { ...baseCtx, resolveConkeyref: (ref) => (ref === 'reuse/cap' ? target : undefined) };
     const html = render('<fig><title conkeyref="reuse/cap"/><image href="a.png"/></fig>', ctx);
-    assert.ok(/<figcaption[^>]*>Pulled caption<\/figcaption>/.test(html), html);
+    assert.ok(/<figcaption[^>]*><span\b[^>]*class="figtitle"[^>]*>Pulled caption<\/span><\/figcaption>/.test(html), html);
   });
 
   it('keyref: the key text lands in the figcaption', () => {
     const html = render('<fig><title keyref="cap-key"/><image href="a.png"/></fig>', keyrefCtx);
-    assert.ok(/<figcaption[^>]*>Key caption<\/figcaption>/.test(html), html);
+    assert.ok(/<figcaption[^>]*><span\b[^>]*class="figtitle"[^>]*>Key caption<\/span><\/figcaption>/.test(html), html);
   });
 
   it('inline markup in the conref target survives inside the figcaption', () => {
     const rich = makeEl('topic/title', [makeEl('topic/b', [makeText('Bold')]), makeText(' tail')], { id: 'cap' });
     const ctx: RenderContext = { ...baseCtx, resolveConref: () => rich };
     const html = render('<fig><title conref="reuse.dita#r/cap"/><image href="a.png"/></fig>', ctx);
-    assert.ok(/<figcaption[^>]*><strong\b[^>]*>Bold<\/strong> tail<\/figcaption>/.test(html), html);
+    assert.ok(/<figcaption[^>]*><span\b[^>]*class="figtitle"[^>]*><strong\b[^>]*>Bold<\/strong> tail<\/span><\/figcaption>/.test(html), html);
   });
 
   it('imagemap behaves the same', () => {
@@ -85,7 +85,7 @@ describe('a fig title pulled in by reference keeps its figcaption', () => {
       '<imagemap><title conref="reuse.dita#r/cap"/><image href="m.png"/><area><shape>rect</shape><coords>0,0,1,1</coords><xref href="a.dita">A</xref></area></imagemap>',
       conrefCtx,
     );
-    assert.ok(/<figcaption[^>]*>Pulled caption<\/figcaption>/.test(html), html);
+    assert.ok(/<figcaption[^>]*><span\b[^>]*class="figtitle"[^>]*>Pulled caption<\/span><\/figcaption>/.test(html), html);
   });
 
   it('an unresolvable conref title still gets no figcaption (and no number)', () => {
