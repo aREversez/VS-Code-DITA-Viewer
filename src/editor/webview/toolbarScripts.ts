@@ -101,17 +101,21 @@ export function getSiteHomeButtonScript(opts: { title: string; switchSitePageMsg
  * click) by updateHistoryButtons in getSiteNavClickHandlerScript.
  */
 export function getSiteHistoryButtonsScript(opts: { backLabel: string; backTitle: string; forwardLabel: string; forwardTitle: string }): string {
-  const backLabel = JSON.stringify(opts.backLabel);
   const backTitle = JSON.stringify(opts.backTitle);
-  const forwardLabel = JSON.stringify(opts.forwardLabel);
   const forwardTitle = JSON.stringify(opts.forwardTitle);
+  // The labels are icon markup (SVG), so they cannot be assigned through a
+  // JSON.stringify'd literal directly -- but they still travel into the
+  // script as serialized data and are only read back from the parsed object,
+  // so no raw string interpolation ever lands in the executable script text.
+  const icons = JSON.stringify({ back: opts.backLabel, forward: opts.forwardLabel });
   return `
+  var siteHistoryIcons = ${icons};
   var siteBackBtn = document.createElement('button');
   siteBackBtn.id = '__site-back-btn';
   // innerHTML, not textContent: the label is the caller's own constant
   // icon markup (a short SVG arrow), never translated or user text -- the
   // translated part is the title below.
-  siteBackBtn.innerHTML = ${backLabel};
+  siteBackBtn.innerHTML = siteHistoryIcons.back;
   siteBackBtn.title = ${backTitle};
   siteBackBtn.setAttribute('aria-label', ${backTitle});
   siteBackBtn.disabled = true;
@@ -119,7 +123,7 @@ export function getSiteHistoryButtonsScript(opts: { backLabel: string; backTitle
 
   var siteForwardBtn = document.createElement('button');
   siteForwardBtn.id = '__site-forward-btn';
-  siteForwardBtn.innerHTML = ${forwardLabel};
+  siteForwardBtn.innerHTML = siteHistoryIcons.forward;
   siteForwardBtn.title = ${forwardTitle};
   siteForwardBtn.setAttribute('aria-label', ${forwardTitle});
   siteForwardBtn.disabled = true;
@@ -137,22 +141,25 @@ export function getSiteHistoryButtonsScript(opts: { backLabel: string; backTitle
  * function only needs to create the two elements, not wire them up.
  */
 export function getSitePrevNextButtonsScript(opts: { prevLabel: string; prevTitle: string; nextLabel: string; nextTitle: string }): string {
-  const prevLabel = JSON.stringify(opts.prevLabel);
   const prevTitle = JSON.stringify(opts.prevTitle);
-  const nextLabel = JSON.stringify(opts.nextLabel);
   const nextTitle = JSON.stringify(opts.nextTitle);
+  // Same data-object indirection as getSiteHistoryButtonsScript: the labels
+  // are icon markup, serialized as data and read back -- never interpolated
+  // as raw literals into the script text.
+  const icons = JSON.stringify({ prev: opts.prevLabel, next: opts.nextLabel });
   return `
+  var siteStepIcons = ${icons};
   var sitePrevBtn = document.createElement('button');
   sitePrevBtn.id = '__site-prev-btn';
   // innerHTML: the label is the caller's constant icon markup (see PREV_TOPIC_ICON_SVG), never translated or user text.
-  sitePrevBtn.innerHTML = ${prevLabel};
+  sitePrevBtn.innerHTML = siteStepIcons.prev;
   sitePrevBtn.title = ${prevTitle};
   sitePrevBtn.setAttribute('aria-label', ${prevTitle});
   sitePrevBtn.style.cssText = btnStyle + '${SITE_NAV_BTN_STYLE}';
 
   var siteNextBtn = document.createElement('button');
   siteNextBtn.id = '__site-next-btn';
-  siteNextBtn.innerHTML = ${nextLabel};
+  siteNextBtn.innerHTML = siteStepIcons.next;
   siteNextBtn.title = ${nextTitle};
   siteNextBtn.setAttribute('aria-label', ${nextTitle});
   siteNextBtn.style.cssText = btnStyle + '${SITE_NAV_BTN_STYLE}';
@@ -216,10 +223,11 @@ export function getModeToggleScript(opts: {
   modeOutline: string;
   modeBook: string;
   modeSite: string;
-  switchModeMsgType: string; // raw, e.g. 'switchMode'
+  switchModeMsgType: string; // serialized with JSON.stringify below, like every other interpolated string in this file
   switchingLabel: string;
 }): string {
   const switchModeTitle = JSON.stringify(opts.switchModeTitle);
+  const switchModeMsgType = JSON.stringify(opts.switchModeMsgType);
   const modeOutline = JSON.stringify(opts.modeOutline);
   const modeBook = JSON.stringify(opts.modeBook);
   const modeSite = JSON.stringify(opts.modeSite);
@@ -290,7 +298,7 @@ export function getModeToggleScript(opts: {
     var cr = document.getElementById('dita-content-root');
     if (cr) cr.classList.add('mode-switching');
     pendingSwitchOverlayTimer = setTimeout(showPendingSwitchOverlay, 400);
-    vscode.postMessage({ type: '${opts.switchModeMsgType}', mode: newMode });
+    vscode.postMessage({ type: ${switchModeMsgType}, mode: newMode });
     // Safety net, not the normal path: applyModeStage (or a render-failure's
     // full reload, which replaces this whole document anyway) is what
     // ordinarily clears the disabled state. This just guards against the

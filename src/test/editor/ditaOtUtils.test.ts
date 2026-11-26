@@ -594,11 +594,18 @@ describe('buildDitaOtSpawnSpec', () => {
     assert.strictEqual(spec.windowsVerbatimArguments, undefined);
   });
 
+  it('names cmd.exe by its System32 path when given the environment', () => {
+    const spec = buildDitaOtSpawnSpec('C:\\dita\\bin\\dita.bat', ['-i', 'a.ditamap'], 'win32', { SystemRoot: 'C:\\Windows' });
+    assert.strictEqual(spec.command, 'C:\\Windows\\System32\\cmd.exe');
+    assert.strictEqual(spec.windowsVerbatimArguments, true);
+  });
+
   it('should wrap the command line with cmd.exe /d /s /c on Windows', () => {
     const spec = buildDitaOtSpawnSpec(
       'C:\\dita-ot\\bin\\dita.bat',
       ['--input', 'C:\\docs\\map.ditamap'],
       'win32',
+      {},
     );
     assert.strictEqual(spec.command, 'cmd.exe');
     assert.deepStrictEqual(spec.args.slice(0, 3), ['/d', '/s', '/c']);

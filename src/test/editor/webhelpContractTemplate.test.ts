@@ -78,7 +78,6 @@ interface ChromeApi {
  * against an always-empty bar.
  */
 function chromeHtml(): { menuHtml: string; crumbHtml: string } {
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
   const factory = new Function(
     'document',
     'MutationObserver',

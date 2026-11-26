@@ -2,7 +2,7 @@
 // Split out of ditaRenderUtils.ts, which re-exports every name here.
 
 import { dirname, resolve } from 'path';
-import type { MapEntry } from '@dita-viewer/core';
+import type { MapEntry, RefErrorTexts } from '@dita-viewer/core';
 import { decodeHrefPart, renderTopicCached } from '@dita-viewer/core';
 import type { BookPart } from './bookPatch';
 import { escapeAttr, escapeHtml } from './htmlEscape';
@@ -63,6 +63,14 @@ export interface BookRenderInput {
    */
   fileToWebviewUri: (absPath: string) => string;
   uiLanguage?: string;
+  /**
+   * Localized wording for the broken-reference hints (refError), passed
+   * straight to renderTopicCached. Like fileToWebviewUri, the vscode-side
+   * l10n lookup stays with the caller (MapViewerProvider) so this module
+   * remains testable without a VS Code instance; absent, the core's
+   * English defaults apply.
+   */
+  refErrorTexts?: Partial<RefErrorTexts>;
 }
 
 /**
@@ -137,7 +145,7 @@ function getStableBookMembers(entries: MapEntry[], docDir: string): ReadonlySet<
  * this function used to return, byte for byte.
  */
 export function renderBookParts(input: BookRenderInput): BookPart[] {
-  const { entries, docDir, keyMap, fileToWebviewUri, uiLanguage } = input;
+  const { entries, docDir, keyMap, fileToWebviewUri, uiLanguage, refErrorTexts } = input;
 
   // Track visited absolute paths to avoid duplicates
   const visited = new Set<string>();
@@ -251,6 +259,7 @@ export function renderBookParts(input: BookRenderInput): BookPart[] {
         // Where the map put this topic: the same topic under two keyscopes shows
         // each scope's key text, and the cache keeps them apart.
         keyScope: entry.scopeChains,
+        refErrorTexts,
       });
 
       if (result.error) {

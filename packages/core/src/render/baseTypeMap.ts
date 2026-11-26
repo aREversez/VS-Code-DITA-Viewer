@@ -1,5 +1,9 @@
 import { DitaNode } from '../parser/domTypes';
 import { RenderContext } from './renderer';
+import { BLOCK_COMMENT_PARENTS, BLOCK_CONTENT_HOSTS, BLOCK_LEVEL_BASETYPES } from './blockCommentParents';
+import { DEFAULT_REF_ERROR_TEXTS, fillRefErrorTemplate } from './refErrorTexts';
+import { isDitaFormat } from './refTargets';
+import { isSafeHref } from './safeHref';
 
 // parentBaseType only reflects the immediate ancestor (entry sits under row,
 // not thead), so header status is carried by an explicit ctx flag set when
@@ -64,6 +68,81 @@ function mapCalsAlign(value: string | undefined): string | undefined {
 function extractPlainText(node: DitaNode): string {
   if (node.type === 'text') return node.text || '';
   return (node.children || []).map(extractPlainText).join('');
+}
+
+// A <title> or <desc> with nothing to show: no element children (a <ph keyref/>
+// or an <image> is content even when it has no text of its own) and only
+// whitespace text. Comments are not content, and are left out of titles anyway.
+// A figure or table with such a title is rendered as if it had none, so it gets
+// no caption -- and so no number, no stray "Figure 3. " and no skipped count.
+// This judges a node's OWN children, so it is only honest on a node whose
+// conref/keyref has already been resolved (the title renderer receives the
+// effective node). A parent inspecting a title CHILD must judge the rendered
+// result instead -- a <title conref/> is empty in the source, and judging the
+// source would drop the pulled-in caption; see renderFigTitleHtml and
+// renderTableChildren.
+function hasContent(node: DitaNode | undefined): node is DitaNode {
+  if (!node) return false;
+  return (node.children || []).some(
+    (c) => c.type === 'element' || (c.type === 'text' && (c.text || '').trim() !== ''),
+  );
+}
+
+// A fig/imagemap title renders through the normal dispatch (wrapped as the
+// sole child of its parent) so the title's OWN conref/conkeyref/keyref fires
+// before anything judges it -- renderChildren(titleNode) alone would only
+// render the title's children and never resolve the title's own reference.
+// The topic/title renderer answers with plain inline content for a fig owner
+// (the <figcaption> is the caption), or '' when the resolved title is empty.
+// An empty result means no figcaption -- and so no number.
+function renderFigTitleHtml(
+  node: DitaNode,
+  titleNode: DitaNode | undefined,
+  ctx: RenderContext,
+  renderChildren: (node: DitaNode, ctx: RenderContext) => string,
+): string {
+  if (!titleNode) return '';
+  return renderChildren({ ...node, children: [titleNode] }, { ...ctx, headingLevel: ctx.headingLevel + 1 });
+}
+
+// A table's <title> and <desc> are both its caption. org.dita.html5 puts the
+// desc inside the <caption>, after the title; the generic desc renderer emits a
+// <span> instead, which as a direct child of <table> the HTML parser lifts out
+// in front of the table -- above the caption, away from the table it describes.
+// So the table renders its own caption slot: the title's caption with the desc
+// appended to it, or, for a desc with no title, a caption of its own. That one
+// is `tabledesc`, not `tabletitle`, so it is neither labelled nor numbered.
+// An empty desc is dropped. Anything that goes wrong in splicing falls back to
+// the generic rendering rather than losing the desc.
+function renderTableChildren(
+  node: DitaNode,
+  ctx: RenderContext,
+  renderChildren: (node: DitaNode, ctx: RenderContext) => string,
+): string {
+  const kids = node.children || [];
+  const isDesc = (c: DitaNode): boolean => c.type === 'element' && c.baseType === 'topic/desc';
+  const descs = kids.filter(isDesc);
+  if (descs.length === 0) return renderChildren(node, ctx);
+
+  const descNode = descs.find((d) => hasContent(d));
+  const rest = kids.filter((c) => !isDesc(c));
+  if (!descNode) return renderChildren({ ...node, children: rest }, ctx);
+
+  const descHtml = renderChildren({ ...node, children: [descNode] }, ctx);
+  const titleNode = kids.find((c) => c.type === 'element' && c.baseType === 'topic/title');
+  // Judge the title by what it renders, not by its source children: a
+  // <title conref/> is empty in the source but renders a full caption once
+  // resolved. The title renderer emits <caption> only for a resolved title
+  // with content; '' (empty title) or a broken-ref chip both land in the
+  // unnumbered tabledesc slot below, so the desc is never lost and the table
+  // never grows a second caption.
+  const titleHtml = titleNode ? renderChildren({ ...node, children: [titleNode] }, ctx) : '';
+  if (titleHtml.includes('<caption')) {
+    const merged = titleHtml.replace(/<\/caption>(?![\s\S]*<\/caption>)/, () => ` ${descHtml}</caption>`);
+    if (merged === titleHtml) return renderChildren(node, ctx);
+    return merged + renderChildren({ ...node, children: rest.filter((c) => c !== titleNode) }, ctx);
+  }
+  return `<caption class="tabledesc">${titleHtml}${descHtml}</caption>` + renderChildren({ ...node, children: rest.filter((c) => c !== titleNode) }, ctx);
 }
 
 // ── Index term extraction ──
@@ -399,9 +478,10 @@ function renderImageMapArea(area: DitaNode, ctx: RenderContext): string {
         // cursor, no click), and the site/book click handlers key off
         // data-dita-book-xref anyway.
         hrefAttr = '#';
-      } else {
+      } else if (isSafeHref(rawHref)) {
         hrefAttr = rawHref;
       }
+      // else: javascript:/data:/... -- no href, so the area is not a link.
     }
   }
 
@@ -445,7 +525,10 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
   'topic/topic': (node, ctx, renderChildren) => {
     const id = getAttr(node, 'id');
-    return `<article${safeAttr('id', id)} class="topic">${renderChildren(node, ctx)}</article>`;
+    // xml:lang -> lang, so :lang() rules (the figure/table label words) follow
+    // the topic's own language rather than the host page's fixed one.
+    const lang = getAttr(node, 'xml:lang');
+    return `<article${safeAttr('id', id)}${safeAttr('lang', lang)} class="topic">${renderChildren(node, ctx)}</article>`;
   },
 
   'topic/title': (node, ctx, renderChildren) => {
@@ -456,6 +539,27 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     // (plan §2.4: only add, never remove). Branch on the real parent -- the
     // overloaded ctx.parentBaseType would read back as 'topic/title' here.
     const owner = ctx.ownerBaseType;
+    // A table's title is its <caption>. A heading inside <table> is not valid
+    // table content: the HTML parser hoists it out in front of the table, so
+    // the title used to render as a full-size, ruled <h1> a heading-margin
+    // away from its table, and nothing could number it. org.dita.html5 does
+    // the same (<caption> with a `tabletitle`-classed title).
+    if (owner === 'topic/table' || owner === 'topic/simpletable') {
+      if (!hasContent(node)) return '';
+      return `<caption class="title tabletitle">${renderChildren(node, ctx)}</caption>`;
+    }
+    // A fig/imagemap title is its figure's <figcaption> content, with no heading
+    // of its own. The fig renderer wraps whatever comes back here in the
+    // <figcaption>; an empty resolved title answers '' and gets no figcaption.
+    // The content gets a span of its own rather than being returned bare:
+    // renderElement stamps this node's source-mapping attributes onto the first
+    // tag of the output, so a title that began with an inline element (<ph>, <b>)
+    // used to hand its data-dita-tagname="title" to that child, duplicating the
+    // child's own and making a <ph> report itself as the title.
+    if (owner === 'topic/fig' || owner === 'topic/imagemap') {
+      if (!hasContent(node)) return '';
+      return `<span class="figtitle">${renderChildren(node, ctx)}</span>`;
+    }
     const titleClass =
       owner === 'topic/section' || owner === 'topic/example'
         ? 'title sectiontitle'
@@ -515,6 +619,40 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     return `<div class="note note--${escapeAttr(type)} ${escapeAttr(type)} note_${escapeAttr(type)}"><span class="note__label note__title">${escapeAttr(label)}:</span> <div class="note__body">${renderChildren(node, ctx)}</div></div>`;
   },
 
+  // <draft-comment> — an internal review note, rendered the way Oxygen's
+  // Author mode shows it: a green box led by a bold "Comment {author}:"
+  // label, unmistakably not publication content. @time and @disposition
+  // (the comment's status: open / accepted / rejected / ...) ride along in
+  // the tooltip rather than the label, matching Oxygen's own lead-in shape.
+  // The element is legal both between blocks and inside a sentence, so the
+  // inline/block decision reuses the XML-comment renderer's parent set: a
+  // <div> inside a <p> would make the browser split the paragraph. Export
+  // strips the whole element (RenderContext.suppressDraftComment) per the
+  // spec's "processors SHOULD strip them out" default.
+  'topic/draft-comment': (node, ctx, renderChildren) => {
+    if (ctx.suppressDraftComment) return '';
+    const author = getAttr(node, 'author');
+    const label = ctx.draftCommentLabel || 'Comment';
+    const labelText = author ? `${label} ${author}:` : `${label}:`;
+    const metaNames = ctx.draftCommentMeta || { time: 'time', disposition: 'disposition' };
+    const meta = [
+      getAttr(node, 'time') && `${metaNames.time}: ${getAttr(node, 'time')}`,
+      getAttr(node, 'disposition') && `${metaNames.disposition}: ${getAttr(node, 'disposition')}`,
+    ].filter(Boolean).join(' · ');
+    // Own title= wins over injectAttributes' generic tag-name tooltip, so
+    // the review metadata is what a hover surfaces when it exists.
+    const titleAttr = meta ? safeAttr('title', meta) : '';
+    // Block between blocks (element-only parent), or wherever the comment holds
+    // block content and a <div> is a legal neighbor (draft-comment's content
+    // model allows paragraphs and lists); inline otherwise.
+    const owner = ctx.ownerBaseType || '';
+    const holdsBlocks = (node.children || []).some((c) => c.type === 'element' && !!c.baseType && BLOCK_LEVEL_BASETYPES.has(c.baseType));
+    const block = BLOCK_COMMENT_PARENTS.has(owner) || (holdsBlocks && BLOCK_CONTENT_HOSTS.has(owner));
+    const tag = block ? 'div' : 'span';
+    const cls = block ? 'draft-comment draft-comment--block' : 'draft-comment';
+    return `<${tag} class="${cls}"${titleAttr}><span class="draft-comment__label">${escapeAttr(labelText)}</span> ${renderChildren(node, ctx)}</${tag}>`;
+  },
+
   'topic/ul': (_node, ctx, renderChildren) => `<ul class="ul">${renderChildren(_node, ctx)}</ul>`,
   'topic/ol': (_node, ctx, renderChildren) => `<ol class="ol">${renderChildren(_node, ctx)}</ol>`,
   'topic/li': (_node, ctx, renderChildren) => `<li class="li">${renderChildren(_node, ctx)}</li>`,
@@ -551,7 +689,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
         ),
     );
     const cls = hasColspec ? 'table cals-table cals-table--fixed-layout' : 'table cals-table';
-    return `<table${safeAttr('id', id)} class="${cls}">${renderChildren(node, ctx)}</table>`;
+    return `<table${safeAttr('id', id)} class="${cls}">${renderTableChildren(node, ctx, renderChildren)}</table>`;
   },
 
   'topic/tgroup': (node, ctx, renderChildren) => {
@@ -711,7 +849,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
   'topic/simpletable': (node, ctx, renderChildren) => {
     const id = getAttr(node, 'id');
-    return `<table${safeAttr('id', id)} class="simple-table simpletable">${renderChildren(node, ctx)}</table>`;
+    return `<table${safeAttr('id', id)} class="simple-table simpletable">${renderTableChildren(node, ctx, renderChildren)}</table>`;
   },
 
   'topic/sthead': (_node, ctx, renderChildren) =>
@@ -817,9 +955,8 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
       (c) => !(c.type === 'element' && c.baseType === 'topic/title'),
     );
     const figContent = renderChildren({ ...node, children: rest }, ctx);
-    const figCaption = titleNode
-      ? `<figcaption>${renderChildren(titleNode, { ...ctx, headingLevel: ctx.headingLevel + 1 })}</figcaption>`
-      : '';
+    const titleHtml = renderFigTitleHtml(node, titleNode, ctx, renderChildren);
+    const figCaption = titleHtml ? `<figcaption>${titleHtml}</figcaption>` : '';
     return `<figure${safeAttr('id', id)} class="fig">${figContent}${figCaption}</figure>`;
   },
 
@@ -855,9 +992,8 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
 
     const mapHtml = `<map${safeAttr('name', mapId)}${safeAttr('id', mapId)}>${areaNodes.map((a) => renderImageMapArea(a, ctx)).join('')}</map>`;
 
-    const figCaption = titleNode
-      ? `<figcaption>${renderChildren(titleNode, { ...ctx, headingLevel: ctx.headingLevel + 1 })}</figcaption>`
-      : '';
+    const titleHtml = renderFigTitleHtml(node, titleNode, ctx, renderChildren);
+    const figCaption = titleHtml ? `<figcaption>${titleHtml}</figcaption>` : '';
     return `<figure${safeAttr('id', id)} class="fig imagemap">${imgHtml}${mapHtml}${figCaption}</figure>`;
   },
 
@@ -919,6 +1055,29 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
       return `<span class="xref unresolved-keyref" title="Unresolved key: ${escapeAttr(keyref)}">[${escapeAttr(keyref)}]</span>`;
     }
 
+    // An EMPTY xref whose local target is broken (host-diagnosed, see
+    // RenderContext.refError): the title/href fallback below would render
+    // the raw href in a link-shaped hint that reads as if the reference
+    // worked -- the silent failure this marker exists to surface. Keep the
+    // arrow convention of the xref-external hint, but in the error colour
+    // with a dashed underline and the reason appended. An xref WITH author
+    // text keeps it (content wins, same rule as keyref); scope=external/peer
+    // references are not local documents and are never diagnosed.
+    if (!hasContentChildren(node) && ctx.refError) {
+      const scope = getAttr(node, 'scope');
+      // An xref whose @format names a non-DITA target (html, pdf, ...) does
+      // not point at a DITA id: its fragment is the target format's own
+      // (#page=3, #section), so it is never diagnosed.
+      if (scope !== 'external' && scope !== 'peer' && isDitaFormat(getAttr(node, 'format'))) {
+        const reason = ctx.refError(href);
+        if (reason !== undefined) {
+          const texts = { ...DEFAULT_REF_ERROR_TEXTS, ...ctx.refErrorTexts };
+          const text = fillRefErrorTemplate(texts.xref, href, reason);
+          return `<span class="xref-broken" title="${escapeAttr(href)}">${escapeAttr(text)}</span>`;
+        }
+      }
+    }
+
     let content: string;
     if (hasContentChildren(node)) {
       content = renderChildren(node, ctx);
@@ -973,6 +1132,9 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     const keyref = getAttr(node, 'keyref');
     const target = href || keyref || '';
     if (!target) return renderChildren(node, ctx);
+    // A scheme that can run script (javascript:, data:) is not a link: an
+    // exported page has no CSP to stop it.
+    if (!isSafeHref(target)) return `<span class="link" title="${escapeAttr(target)}">${renderChildren(node, ctx)}</span>`;
     return `<a href="${escapeAttr(target)}" class="link">${renderChildren(node, ctx)}</a>`;
   },
   'topic/linktext': (_node, ctx, renderChildren) => renderChildren(_node, ctx),

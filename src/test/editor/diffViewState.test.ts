@@ -73,7 +73,6 @@ describe('diff view state across a re-render', () => {
         createElementNS: () => makeEl('n'),
         addEventListener: () => undefined,
       };
-      // eslint-disable-next-line @typescript-eslint/no-implied-eval
       const run = new Function('document', 'window', 'requestAnimationFrame', 'ResizeObserver', 'acquireVsCodeApi', script);
       run(doc, { addEventListener: () => undefined }, () => 0, undefined, () => ({ postMessage: (m: Record<string, unknown>) => posted.push(m) }));
       return { posted, listeners, byId, classes };

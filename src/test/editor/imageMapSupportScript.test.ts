@@ -124,7 +124,6 @@ function runScript(opts: Options): Harness {
       return { zoom: zoomVal.value };
     },
   };
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
   const boot = new Function(
     'document',
     'window',

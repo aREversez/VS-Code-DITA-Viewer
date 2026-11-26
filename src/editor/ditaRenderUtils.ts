@@ -31,6 +31,7 @@ export type { FileReader } from '@dita-viewer/core';
 export { getImageMapSupportScript } from './webview/imageMapScript';
 export { getProfilingFilterScript } from './webview/profilingFilterScript';
 export { getImageLightboxScript } from './webview/lightboxScript';
+export { getCodeCopyScript } from './webview/codeCopyScript';
 export { getSearchOverlayScript } from './webview/searchOverlayScript';
 export { clampSidebarWidth, getSiteSidebarResizerScript } from './webview/siteSidebarResizerScript';
 export {

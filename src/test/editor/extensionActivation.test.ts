@@ -82,7 +82,6 @@ async function activateWithStub(): Promise<Log> {
   const realLoad = loader._load;
   loader._load = (request: string, ...rest: unknown[]) => (request === 'vscode' ? stub : realLoad.call(Module, request, ...rest));
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const ext = require(out) as { activate: (c: unknown) => unknown };
     const context = {
       subscriptions: [] as unknown[],
@@ -161,6 +160,7 @@ const EXPECTED_REGISTRATIONS: string[] = [
   'vscode.workspace.onDidChangeTextDocument',
   'vscode.workspace.onDidSaveTextDocument',
   'vscode.workspace.onDidCloseTextDocument',
+  'vscode.workspace.onDidChangeWorkspaceFolders',
   'vscode.window.createStatusBarItem',
   'vscode.window.onDidChangeActiveTextEditor',
   'vscode.commands.registerCommand',

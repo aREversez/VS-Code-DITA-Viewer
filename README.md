@@ -298,7 +298,7 @@ my-templates/
 - A folder with a `<publishing-template>` `.opt` file instead of `template.json` also works for the name, the description, the colour tag, the preview image, the `<logo>` / `<favicon>` and the css list; its `webhelp.*` parameters, `<html-fragments>` and `<html-page-layout-files>` are ignored, and it has no header or footer of the kind above. An `.opt` is taken to be written for the WebHelp-style DOM (see the next section), because that is what an Oxygen publishing template's css is written against; a `template.json` in the same folder wins and can say `"dom": "own"` to keep this extension's own markup.
 - The toolbar is not part of the header: in Docsite and Book view it is the page's top bar (`#__topbar`), above the header, so the header can use its whole width.
 - Everything a template names must stay inside its own folder.
-- Scope your css with `body[data-template="<folder name>"]`. Use `html.vscode-dark body[data-template="…"]` for the dark palette, or mark a dark-only template by using `body[data-template="…"].template-dark` (the class is added when `template.json` sets `"defaultDark": true`). The page structure to target is the extension's own — `.site-nav`, `.site-nav-link`, `#dita-content-root`, `.tpl-header`, `.tpl-footer` — and re-pointing the `--vscode-*` and `--color-*` custom properties on `body` recolours the toolbar, sidebar, notes and code blocks in one go. `media/templates/classic-docs/classic-docs.css` is a complete example. Do not override `content-visibility` rules: Book view relies on them for large maps.
+- Scope your css with `body[data-template="<folder name>"]`. Use `html.vscode-dark body[data-template="…"]` for the dark palette, or mark a dark-only template by using `body[data-template="…"].template-dark` (the class is added when `template.json` sets `"defaultDark": true`). The page structure to target is the extension's own — `.site-nav`, `.site-nav-link`, `#dita-content-root`, `.tpl-header`, `.tpl-footer` — and re-pointing the `--vscode-*` and `--color-*` custom properties on `body` recolours the toolbar, sidebar, notes and code blocks in one go. `media/templates/classic-docs/classic-docs.css` is a complete example. Do not override `content-visibility` rules: Book view relies on them for large maps. Likewise leave links inside `.draft-comment` alone: the review box's light green is only 3.8:1 against a typical link colour, so `styles.css` gives those links the box's own text colour and repeats that rule unlayered and one class stronger than `body[data-template] #dita-content-root a`. A template rule with `!important`, or one aimed at a link state or class of its own, can put the low-contrast colour back.
 - Changing `dita-viewer.templatesDirectory` needs the preview reopened before a template's fonts and images load.
 - `dita-viewer.templatesDirectory` is resource-scoped like the CSS settings above: a folder's `settings.json` lists templates for the maps inside that folder, so in a multi-root window a folder can carry its own templates without affecting the others.
 
@@ -450,6 +450,15 @@ location for verification.
   than 10 hops, or one that loops back on itself, falls back to the first hop;
   a hop that cannot be resolved ends the chain at the last element that could.
   (`@dita-viewer/core`, `render/renderer.ts`, `followConrefChain`)
+
+- **A conkeyref through an external keydef that uses a relative path is still
+  checked as a local file.** The broken-reference hint skips a key whose `href`
+  is a URL, an absolute path or a `.html`/`.htm`/`.pdf` file, but the key space
+  does not record a keydef's `scope` or `format`, so a `scope="external"` key
+  written as a relative path ending in `.dita` (a topic in another package) can
+  show a "target file does not exist" hint although the reference is fine.
+  Recording `scope` and `format` on the key definition would remove it.
+  (`@dita-viewer/core`, `editor/conkeyref.ts`, `diagnoseConkeyref`)
 
 - **A keyref inside conref-pulled content gets no CJK spacing.** The bundled
   DITA-OT plugin (`com.dita-viewer.cjk-spacing`) runs at

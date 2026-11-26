@@ -12,7 +12,7 @@ import { getHighlightRunScript } from './highlightRunScript';
 import { getConrefJumpScript } from './conrefJumpScript';
 import { MSG_CHOOSE_DITAVAL, MSG_CLEAR_DITAVAL, MSG_OPEN_CONREF_TARGET, MSG_OPEN_XREF_TARGET, MSG_SET_DITAVAL } from '../mapMessages';
 import { getProfilingToggleScript } from './profilingToggleScript';
-import { getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getImageMapSupportScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getRefreshButtonScript } from '../ditaRenderUtils';
+import { getSearchOverlayScript, getProfilingFilterScript, getImageLightboxScript, getCodeCopyScript, getImageMapSupportScript, getToolbarScaffoldScript, getFontPrefsScript, getToolbarFontWidthTagTooltipsButtonsScript, getRefreshButtonScript } from '../ditaRenderUtils';
 import { sharedWebviewStrings } from '../webviewL10n';
 
 export function getWebviewScript(): string {
@@ -119,36 +119,77 @@ export function getWebviewScript(): string {
   var programmaticScroll = false;
   var programmaticScrollFallbackTimer = null;
   var supportsScrollend = 'onscrollend' in window;
+  // scrollend only fires for a scroll that moved something, and the paths
+  // that raise the flag each have to know in advance whether theirs will. That
+  // has been got wrong more than once (a scrollTo that was already there, a
+  // scrollIntoView clamped by the end of the document), and the cost of a flag
+  // that never comes down is real: the reader's next scroll is swallowed
+  // instead of reported, and a new highlight takes the page for one in
+  // flight and re-aims. So whatever raises the flag also arms this timer,
+  // long enough for the longest smooth scroll there is (a few seconds is many
+  // times what one across a very long document takes), and it ends the
+  // scroll exactly as scrollend would have -- including the correction that
+  // scrollend runs. Without scrollend (an old webview) it is the only thing
+  // that ends one, which is why that case gets a shorter wait.
+  var PROGRAMMATIC_SCROLL_WATCHDOG_MS = 4000;
+  var PROGRAMMATIC_SCROLL_FALLBACK_MS = 2000;
   function beginProgrammaticScroll() {
     programmaticScroll = true;
-    if (!supportsScrollend) {
-      // Old-webview fallback only -- current VS Code's Chromium has
-      // supported scrollend since well before this was written. Generous
-      // on purpose, since the only failure mode of guessing too long here
-      // is a brief window where a genuine user scroll right on the heels
-      // of a programmatic one doesn't get reported -- much less disruptive
-      // than the AtTop-reveal jump guessing too short used to cause.
-      if (programmaticScrollFallbackTimer) clearTimeout(programmaticScrollFallbackTimer);
-      programmaticScrollFallbackTimer = setTimeout(function() { programmaticScroll = false; }, 2000);
-    }
+    if (programmaticScrollFallbackTimer) clearTimeout(programmaticScrollFallbackTimer);
+    programmaticScrollFallbackTimer = setTimeout(function() {
+      programmaticScrollFallbackTimer = null;
+      if (!programmaticScroll) return;
+      programmaticScroll = false;
+      settleAnchor();
+    }, supportsScrollend ? PROGRAMMATIC_SCROLL_WATCHDOG_MS : PROGRAMMATIC_SCROLL_FALLBACK_MS);
   }
   if (supportsScrollend) {
     window.addEventListener('scrollend', function() {
       // Checked and cleared together, synchronously, in the one place that
       // both this flag and the resulting report are decided -- no separate
       // timer racing against the real scroll to get the order wrong.
-      if (programmaticScroll) { programmaticScroll = false; return; }
+      if (programmaticScroll) {
+        programmaticScroll = false;
+        if (programmaticScrollFallbackTimer) { clearTimeout(programmaticScrollFallbackTimer); programmaticScrollFallbackTimer = null; }
+        settleAnchor();
+        return;
+      }
       onScrollEnd();
     });
   }
 
   function scrollToLine(targetLine, instant) {
+    // A reveal is the source editor telling the preview where to be: it is a
+    // new instruction, so any highlight correction still pending must not
+    // survive it. settleAnchor() runs on every programmatic scrollend, so a
+    // pending one would drag the page back to the highlighted element right
+    // after the reveal had landed it on the line the reader is looking at --
+    // and again on every source scroll for the rest of the 3s window.
+    alignPending = null;
     var behavior = instant ? 'auto' : 'smooth';
-    if (targetLine <= 0) { beginProgrammaticScroll(); window.scrollTo({ top: 0, behavior: behavior }); return; }
+    if (targetLine <= 0) {
+      // scrollend only fires for a scroll that actually moved something, so a
+      // no-op scrollTo here would leave programmaticScroll raised with no
+      // scrollend coming to clear it. The reader's next real scroll would then
+      // be the one to clear (and be swallowed by) it, and the first highlight
+      // after load would read it as "a scroll is in flight" and re-centre even
+      // a target that is already on screen.
+      if (window.scrollY === 0) return;
+      beginProgrammaticScroll();
+      window.scrollTo({ top: 0, behavior: behavior });
+      return;
+    }
     var best = findClosest(targetLine);
     if (!best) return;
     var rect = best.getBoundingClientRect();
     if (rect.top < -5 || rect.top > 5) {
+      // scrollIntoView stops at the end of the document, so a line whose
+      // element sits below the top of the screen on a page that cannot scroll
+      // any further moves nothing -- and then no scrollend comes to lower the
+      // flag raised for it.
+      var maxY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+      var wantY = Math.max(0, Math.min(maxY, window.scrollY + rect.top));
+      if (Math.abs(wantY - window.scrollY) < 2) return;
       beginProgrammaticScroll();
       best.scrollIntoView({ block: 'start', behavior: behavior });
     }
@@ -183,6 +224,14 @@ export function getWebviewScript(): string {
     copyUnsupportedLabel: L.imgCopyUnsupportedLabel,
     copyToastDone: L.imgCopyToastDone,
     copyToastFailed: L.imgCopyToastFailed,
+  })}
+
+  // Clicking a code block's language chip copies its code. Document-level
+  // delegation, so content swaps need no re-run -- see getCodeCopyScript.
+  ${getCodeCopyScript({
+    copyTitle: L.codeCopyTitle,
+    doneLabel: L.codeCopyDoneLabel,
+    failedLabel: L.codeCopyFailedLabel,
   })}
 
   // Image-map hotspots: keeps <area> hit regions aligned with the rendered
@@ -475,6 +524,84 @@ export function getWebviewScript(): string {
     vscode.postMessage({ type: 'navigateToLine', line: line, col: col });
   });
 
+  // Where a highlighted element should end up, and when it needs to move at
+  // all. Centering suits a short element (a paragraph, a list item); a
+  // go-to-definition jump lands on a <section> or a <fig>, which can be many
+  // screens tall, and centering THAT puts its middle on screen with the
+  // heading far above the fold -- the preview looked like it had jumped to
+  // the wrong place. A tall element is therefore placed by its top, a little
+  // below the edge, and is only considered \"already there\" when that top is
+  // actually on screen (any overlap counts for a short one, as before).
+  var ALIGN_SETTLE_MS = 3000;
+  var ALIGN_TOLERANCE_PX = 12;
+  var alignPending = null;
+  function isTallAnchor(el) {
+    return el.getBoundingClientRect().height > window.innerHeight * 0.6;
+  }
+  function anchorDesiredTop(el) {
+    var h = window.innerHeight;
+    if (isTallAnchor(el)) return Math.min(h * 0.2, 160);
+    return (h - el.getBoundingClientRect().height) / 2;
+  }
+  function anchorNeedsScroll(el, line) {
+    var r = el.getBoundingClientRect();
+    var startsHere = parseInt(el.getAttribute('data-line'), 10) === line;
+    if (startsHere && isTallAnchor(el)) {
+      return !(r.top >= 0 && r.top < window.innerHeight * 0.7);
+    }
+    return !isElementVisible(el);
+  }
+  // Moves the page so the anchor sits at its desired top. Reports whether it
+  // actually asked the browser to scroll: scrollend only fires for a scroll
+  // that moved something, so beginProgrammaticScroll() must not be raised for
+  // a no-op or the next real scroll of the reader's would be swallowed. While
+  // a programmatic scroll is already in flight the request always goes
+  // through, even when the target is where the page is right now: it is the
+  // only way to cancel the animation that is carrying the page away.
+  function scrollAnchorIntoPlace(el, instant) {
+    var maxY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    var target = window.scrollY + el.getBoundingClientRect().top - anchorDesiredTop(el);
+    target = Math.max(0, Math.min(maxY, target));
+    if (!programmaticScroll && Math.abs(target - window.scrollY) < 2) return false;
+    beginProgrammaticScroll();
+    window.scrollTo({ top: target, behavior: instant ? 'auto' : 'smooth' });
+    return true;
+  }
+  // A smooth scroll toward an element is computed once, but the page keeps
+  // changing under it: images below the fold are loading=\"lazy\" and shrink
+  // to their default preview size only once decoded, so everything past them
+  // shifts after the destination was fixed. After the scroll settles, and
+  // again as each image loads, put the anchor back where it belongs -- at
+  // most a few times, and never once the reader has taken over the scroll.
+  function settleAnchor() {
+    var a = alignPending;
+    if (!a) return;
+    if (!a.el.isConnected || Date.now() > a.until || a.attempts >= 8) { alignPending = null; return; }
+    var r = a.el.getBoundingClientRect();
+    if (Math.abs(r.top - anchorDesiredTop(a.el)) <= ALIGN_TOLERANCE_PX) return;
+    a.attempts++;
+    scrollAnchorIntoPlace(a.el, true);
+  }
+  ['wheel', 'touchstart', 'keydown', 'mousedown'].forEach(function(type) {
+    window.addEventListener(type, function() { alignPending = null; }, { passive: true, capture: true });
+  });
+  // Deferred one frame on purpose: this listener is on the capture phase, so
+  // it runs BEFORE the <img>'s own load handler (enhanceOneImage ->
+  // applyDefaultPreviewScale), which is what shrinks it to its default preview
+  // size. Measuring here read the box as it was before that resize -- the
+  // natural 500px on the way in, 375px once scaled -- so every correction
+  // aimed at a layout that no longer existed, the current image's own shift
+  // went uncounted, and the last image to decode left its shift uncorrected
+  // for good.
+  document.addEventListener('load', function(e) {
+    if (programmaticScroll || !e.target || e.target.tagName !== 'IMG') return;
+    requestAnimationFrame(function() {
+      // Re-checked a frame later: a highlight that arrived in between owns the
+      // scroll now, and its own scrollend settles it.
+      if (!programmaticScroll) settleAnchor();
+    });
+  }, true);
+
   // Tracked so a content swap (updateContent below) that lands mid-flight
   // of an in-progress highlight/scroll can re-apply it against the fresh
   // DOM, instead of abandoning it. The scrollIntoView triggered here can
@@ -490,6 +617,8 @@ export function getWebviewScript(): string {
   // from wherever the preview happened to already be scrolled, since
   // that's when the initial scroll has the most distance (and time) left
   // to still be animating when the first content update lands.
+  var HIGHLIGHT_DEBOUNCE_MS = 180;
+  var highlightTimer = null;
   var lastHighlightLine = null;
   var lastHighlightCol = 0;
   function applyHighlightLine(line, col) {
@@ -502,9 +631,18 @@ export function getWebviewScript(): string {
       var run = findRunElements(best);
       highlightElements(run.els, run.isRun);
       var anchor = (run.els && run.els.length) ? run.els[0] : best;
-      if (!isElementVisible(anchor)) {
-        beginProgrammaticScroll();
-        anchor.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      alignPending = null;
+      // A smooth scroll still in flight was aimed at the previous cursor
+      // position (a click on a link places the cursor at the link, and the
+      // go-to-definition jump follows a few milliseconds later). Where the
+      // page happens to be right now says nothing about where it is going,
+      // so a new highlight never trusts the visibility check then: it
+      // re-aims, which also replaces the old animation. Otherwise the target
+      // looked on screen at the start of the old scroll, nothing was asked
+      // for, and the old scroll carried the preview back to the link.
+      if (programmaticScroll || anchorNeedsScroll(anchor, line)) {
+        alignPending = { el: anchor, attempts: 0, until: Date.now() + ALIGN_SETTLE_MS };
+        scrollAnchorIntoPlace(anchor, false);
       }
     }
   }
@@ -516,7 +654,16 @@ export function getWebviewScript(): string {
     if (e.data.type === 'highlightLine') {
       lastHighlightLine = e.data.line;
       lastHighlightCol = e.data.col || 0;
-      applyHighlightLine(lastHighlightLine, lastHighlightCol);
+      // Trailing debounce: a click on a link is two cursor moves a few
+      // tens to a couple of hundred milliseconds apart (the click, then the
+      // go-to-definition jump), and following the first one sent the
+      // preview sliding toward the link before it turned around for the
+      // target. Only the last position of a burst is acted on.
+      if (highlightTimer) clearTimeout(highlightTimer);
+      highlightTimer = setTimeout(function() {
+        highlightTimer = null;
+        applyHighlightLine(lastHighlightLine, lastHighlightCol);
+      }, HIGHLIGHT_DEBOUNCE_MS);
     }
     if (e.data.type === 'updateContent') {
       var contentRoot = document.getElementById('dita-content-root');
@@ -529,7 +676,8 @@ export function getWebviewScript(): string {
         contentRoot.innerHTML = e.data.html;
         enhanceImages(); // per-image zoom toolbars -- idempotent, only wraps images not already wrapped
         refreshAfterContentSwap(); // profiling filter, its open panel, page search and tag tooltips all point at the DOM that was just replaced
-        if (lastHighlightLine !== null) {
+        if (lastHighlightLine !== null && !highlightTimer) {
+          // (A pending debounced highlight is about to apply the same position.)
           // Re-target the still-current cursor position against the new
           // DOM. If the earlier scroll had already settled and the spot
           // is still on screen, applyHighlightLine's own isElementVisible

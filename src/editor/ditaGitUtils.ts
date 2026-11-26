@@ -4,7 +4,9 @@
 
 import { execFile, ExecFileException } from 'child_process';
 import * as vscode from 'vscode';
+import { existsSync } from 'fs';
 import { relative, sep } from 'path';
+import { resolveGitExe } from './gitExe';
 
 export interface GitExecResult {
   code: number;
@@ -14,9 +16,23 @@ export interface GitExecResult {
 
 export type GitExecutor = (args: string[], cwd: string) => Promise<GitExecResult>;
 
+// Remember a git that was found, not a git that was not: someone who installs
+// git after the first failed diff should not have to reload the window.
+let foundGit: string | undefined;
+
+function gitCommand(): string | undefined {
+  if (foundGit === undefined) foundGit = resolveGitExe(process.platform, process.env, existsSync);
+  return foundGit;
+}
+
 export const defaultGitExecutor: GitExecutor = (args, cwd) =>
   new Promise((resolve, reject) => {
-    execFile('git', args, { cwd, encoding: 'utf-8', maxBuffer: 64 * 1024 * 1024, timeout: 15000 }, (err, stdout, stderr) => {
+    const exe = gitCommand();
+    if (!exe) {
+      reject(new Error('Git not found'));
+      return;
+    }
+    execFile(exe, args, { cwd, encoding: 'utf-8', maxBuffer: 64 * 1024 * 1024, timeout: 15000 }, (err, stdout, stderr) => {
       const execErr = err as ExecFileException | null;
       if (execErr?.code === 'ENOENT') {
         reject(new Error('Git not found'));

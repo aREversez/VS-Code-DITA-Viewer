@@ -21,18 +21,27 @@ export { getActiveDitaUri };
 
 // ── Content builders ──
 
+/** Where an export may read images from: the workspace folders, else the topic's own folder. */
+function exportRoots(topicDir: string): string[] {
+  const folders = (vscode.workspace.workspaceFolders || []).map((f) => f.uri.fsPath);
+  return folders.length > 0 ? folders : [topicDir];
+}
+
 function buildTopicExport(fsPath: string): { title: string; bodyHtml: string; error?: string } {
   const keyMap = buildKeyMap(vscode.Uri.file(fsPath));
   const result = renderTopicToHtml({
     filePath: fsPath,
     keyMap,
-    asWebviewUri: makeDataUriInliner(dirname(fsPath)),
+    asWebviewUri: makeDataUriInliner(dirname(fsPath), exportRoots(dirname(fsPath))),
     headingLevel: 1,
     uiLanguage: vscode.env.language,
     // Index terms are authoring/publishing metadata, not reading content --
     // the interactive preview's indexterm chips are an editing aid that
     // doesn't belong in a standalone shipped HTML file.
     suppressIndexterm: true,
+    // Draft comments are internal review notes: the DITA spec's default is
+    // to strip them from published output so they are not shipped by mistake.
+    suppressDraftComment: true,
   });
   return {
     title: result.title || basename(fsPath),
@@ -66,10 +75,11 @@ function buildMapExport(fsPath: string): { title: string; bodyHtml: string; erro
       const result = renderTopicToHtml({
         filePath: absPath,
         keyMap,
-        asWebviewUri: makeDataUriInliner(dirname(absPath)),
+        asWebviewUri: makeDataUriInliner(dirname(absPath), exportRoots(dirname(absPath))),
         headingLevel: Math.min(1 + entry.depth, 6),
         uiLanguage: vscode.env.language,
         suppressIndexterm: true,
+        suppressDraftComment: true,
         // The same scope Book mode renders the topic in (renderBookParts), so the
         // exported file shows what the preview shows.
         keyScope: entry.scopeChains,

@@ -1558,7 +1558,6 @@ describe('getSearchOverlayScript', () => {
     const scrollCalls: Record<string, unknown>[] = [];
     const win = { scrollY: 0, innerHeight: 768, scrollTo: (o: Record<string, unknown>) => { scrollCalls.push(o); }, ...winExtras };
     const script = getSearchOverlayScript(opts);
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval
     const api = new Function('document', 'window', 'CSS', 'Highlight', script + '\nreturn { refresh: typeof refreshSearchAfterDomChange === "function" ? refreshSearchAfterDomChange : function() {}, open: openSearchBar };')(
       doc, win, css, FakeHighlight,
     ) as { refresh: () => void; open: () => void };
@@ -4057,7 +4056,6 @@ describe('getImageLightboxScript', () => {
 
   function run(doc: FakeDocument) {
     const fakeWindow = { innerWidth: 1024, innerHeight: 768 };
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval
     new Function('document', 'window', getImageLightboxScript(opts))(doc, fakeWindow);
   }
 
@@ -4274,9 +4272,7 @@ describe('getImageLightboxScript', () => {
     const tricky = { ...opts, copyMenuItem: 'Copy "the" image\\thing' };
     const doc = makeFakeDocument();
     const fakeWindow = { innerWidth: 1024, innerHeight: 768 };
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval
     assert.doesNotThrow(() => new Function('document', 'window', getImageLightboxScript(tricky))(doc, fakeWindow));
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval
     new Function('document', 'window', getImageLightboxScript(tricky))(doc, fakeWindow);
     const img = makeFakeElement('img');
     img.setAttribute('data-dita-src', 'a.png');

@@ -1,3 +1,5 @@
+import { escapeJson } from './jsonEscape';
+import { escapeForStyleElement } from './templateStyle';
 import * as vscode from 'vscode';
 import {
   parseDita,
@@ -20,8 +22,10 @@ import { findDitamapFiles, buildKeyMap, getKeySourceMaps, clearKeyMapCache } fro
 import { onKeyContextChanged } from './keyContext';
 import { readForDocument, writeForDocument } from './perDocumentState';
 import { affectsPanel } from './sourceOverlaySync';
+import { createSourcePreviewSyncGate } from './sourcePreviewSyncGate';
 import { MSG_CHOOSE_DITAVAL, MSG_CLEAR_DITAVAL, MSG_SET_DITAVAL } from './mapMessages';
 import { ditavalForDocument, handleDitavalRequest } from './profilingDitaval';
+import { refErrorTexts } from './refErrorTexts';
 
 // Test-only hook: @vscode/test-electron integration tests can't read a
 // webview's rendered HTML directly (VS Code doesn't expose the WebviewPanel
@@ -132,7 +136,8 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       webviewPanel.webview.postMessage({ type: 'revealLine', line });
     };
 
-    let skipVisibleUntil = 0;
+    // Decides when the source editor may move the preview (see the module).
+    const syncGate = createSourcePreviewSyncGate();
 
     webviewPanel.webview.onDidReceiveMessage((message) => {
       if (message.type === 'refresh') {
@@ -152,7 +157,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
           if (currentTopLine !== undefined) {
             const diff = Math.abs(message.line - currentTopLine);
             if (diff >= 2) {
-              skipVisibleUntil = Date.now() + 250;
+              syncGate.notePreviewScroll();
               const line = Math.max(0, Math.min(message.line, document.lineCount - 1));
               editor.revealRange(new vscode.Range(line, 0, line, 0), vscode.TextEditorRevealType.AtTop);
             }
@@ -232,9 +237,12 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
     // Source click → preview: highlight + scroll if not visible
     const selectionSub = vscode.window.onDidChangeTextEditorSelection((e) => {
       if (e.textEditor.document.uri.toString() !== document.uri.toString()) return;
-      if (Date.now() < skipVisibleUntil) return;
       const sel = e.selections[0];
       if (!sel || sel.start.line !== sel.end.line) return;
+      // Not swallowed by an earlier selection's window: a click on a link
+      // and the go-to-definition jump it triggers are two selection changes
+      // a few ms apart, and the second is the one the preview must follow.
+      if (!syncGate.acceptSelection()) return;
       // Moving the cursor somewhere not currently on screen (e.g. clicking
       // near the end of a long file while the editor happens to be
       // scrolled elsewhere) very often also moves the editor's own visible
@@ -252,17 +260,16 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
       // always the same event; a genuine independent source scroll (mouse
       // wheel, no cursor movement) never touches this path at all, since
       // it never fires onDidChangeTextEditorSelection to begin with.
-      skipVisibleUntil = Date.now() + 400;
       webviewPanel.webview.postMessage({ type: 'highlightLine', line: sel.start.line, col: sel.start.character });
     });
 
     let visibleRangeTimer: ReturnType<typeof setTimeout> | undefined;
     const editorSub = vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
       if (e.textEditor.document.uri.toString() !== document.uri.toString()) return;
-      if (Date.now() < skipVisibleUntil) return;
+      if (!syncGate.acceptVisibleRange()) return;
       if (visibleRangeTimer) clearTimeout(visibleRangeTimer);
       visibleRangeTimer = setTimeout(() => {
-        if (Date.now() < skipVisibleUntil) return;
+        if (!syncGate.acceptVisibleRange()) return;
         const topLine = e.textEditor.visibleRanges[0]?.start.line;
         if (topLine !== undefined) postRevealLine(topLine);
       }, 120);
@@ -513,6 +520,10 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
         // of the dead xref-external hint. Book/site rendering (which needs
         // page switching, not file opening) and export keep their own shapes.
         clickableExternalXrefs: true,
+        // Broken references surface as placeholder chips / dashed markers
+        // instead of silently empty elements, in the editor's own language.
+        refErrors: true,
+        refErrorTexts: refErrorTexts(),
       });
 
       const content = renderDocument(ditaDoc.root, ctx);
@@ -591,7 +602,7 @@ export class DitaViewerProvider implements vscode.CustomTextEditorProvider {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src ${webview.cspSource} data:; base-uri 'none';">
 <link rel="stylesheet" href="${stylesUri}">
-${defaultContent ? `<style>\n${defaultContent}\n</style>` : ''}
+${defaultContent ? `<style>\n${escapeForStyleElement(defaultContent)}\n</style>` : ''}
 <title>${escapeHtml(document.fileName)}</title>
 <script nonce="${nonce}">window.__cssFiles=${cssFilesJson};window.__defaultCss=${defaultNameJson};window.__widthSelection=${widthSelectionJson};window.__fontPrefs=${fontPrefsJson};window.__tagTooltips=${tagTooltipsJson};window.__ditaval=${ditavalJson};window.__initialScrollLine=${initialScrollLineJs};</script>
 </head>
@@ -628,9 +639,8 @@ function escapeHtml(text: string): string {
 // width selection, the two pieces of state it shares with this provider --
 // see FONT_PREFS_KEY and WIDTH_SELECTION_KEY above) escapes the same way
 // rather than carrying a second copy of a one-line regex to drift from.
-export function escapeJson(text: string): string {
-  return text.replace(/<\/script>/gi, '<\\/script>');
-}
+// escapeJson lives in ./jsonEscape (no vscode import, so it is unit-testable).
+export { escapeJson } from './jsonEscape';
 
 // ── Keyref: parse DITAMAP for key→value mappings ──
 

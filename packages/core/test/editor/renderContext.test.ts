@@ -76,6 +76,35 @@ describe('buildRenderContext (P2 shared factory)', () => {
     assert.strictEqual(without.ctx.indexLabel, undefined, 'indexLabel absent for diff');
   });
 
+  it('wires the draft-comment lead-in label like noteLabels: xml:lang first, uiLanguage fallback', () => {
+    const en = buildRenderContext(baseInput());
+    assert.strictEqual(en.ctx.draftCommentLabel, 'Comment');
+    const zhUi = buildRenderContext(baseInput({ uiLanguage: 'zh-cn' }));
+    assert.strictEqual(zhUi.ctx.draftCommentLabel, '评论者');
+    const zhDoc = buildRenderContext(baseInput({
+      uiLanguage: 'en',
+      ownRoot: node('topic/topic', { id: 't', 'xml:lang': 'zh-CN' }, [p1]),
+    }));
+    assert.strictEqual(zhDoc.ctx.draftCommentLabel, '评论者', 'the document\'s own xml:lang wins over the UI language');
+  });
+
+  it('wires the draft-comment tooltip field names the same way (xml:lang first, uiLanguage fallback)', () => {
+    assert.deepStrictEqual(buildRenderContext(baseInput()).ctx.draftCommentMeta, { time: 'time', disposition: 'disposition' });
+    assert.deepStrictEqual(buildRenderContext(baseInput({ uiLanguage: 'zh-cn' })).ctx.draftCommentMeta, { time: '时间', disposition: '处置' });
+    const zhDoc = buildRenderContext(baseInput({
+      uiLanguage: 'en',
+      ownRoot: node('topic/topic', { id: 't', 'xml:lang': 'zh-CN' }, [p1]),
+    }));
+    assert.deepStrictEqual(zhDoc.ctx.draftCommentMeta, { time: '时间', disposition: '处置' });
+  });
+
+  it('passes suppressDraftComment through only when asked (export strips, preview/diff keep)', () => {
+    const exportShape = buildRenderContext(baseInput({ suppressDraftComment: true }));
+    assert.strictEqual(exportShape.ctx.suppressDraftComment, true);
+    const preview = buildRenderContext(baseInput());
+    assert.strictEqual(preview.ctx.suppressDraftComment, undefined);
+  });
+
   describe('resolveKeyHref', () => {
     // Hand-built defs, the same shape buildKeySpace records: href relative to
     // the map that defined the key (baseDir), fragment included.

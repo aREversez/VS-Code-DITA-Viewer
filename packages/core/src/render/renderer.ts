@@ -1,6 +1,8 @@
 import { DitaNode, SourceRange } from '../parser/domTypes';
 import { BASE_TYPE_RENDERERS } from './baseTypeMap';
+import { BLOCK_COMMENT_PARENTS } from './blockCommentParents';
 import { computeKeyrefSpacing } from './cjkSpacing';
+import { DEFAULT_REF_ERROR_TEXTS, RefErrorTexts, fillRefErrorTemplate } from './refErrorTexts';
 
 export interface RenderContext {
   headingLevel: number;
@@ -74,6 +76,24 @@ export interface RenderContext {
    *  noteLabels is, so this module stays free of any locale logic of its
    *  own. Falls back to 'Index' when not supplied. */
   indexLabel?: string;
+  /** Localized "Comment" label heading a <draft-comment> box (Oxygen's
+   *  Author mode shows the same lead-in, followed by @author). Resolved
+   *  upstream like noteLabels/indexLabel (detectDraftCommentLabel); falls
+   *  back to 'Comment' when not supplied. */
+  draftCommentLabel?: string;
+  /** Localized names of the @time / @disposition fields in a <draft-comment>
+   *  tooltip. Resolved upstream like draftCommentLabel
+   *  (detectDraftCommentMetaLabels); falls back to English when not supplied. */
+  draftCommentMeta?: { time: string; disposition: string };
+  /**
+   * When true, <draft-comment> content is never rendered. The DITA spec
+   * says processors SHOULD strip draft comments from published output so
+   * internal review notes are not shipped by mistake -- "Export as HTML"
+   * sets this, the same rule suppressIndexterm follows. The interactive
+   * preview and the diff view leave it off: showing review comments is
+   * exactly what those views are for.
+   */
+  suppressDraftComment?: boolean;
   /**
    * When true, <indexterm> content is never rendered -- neither as an
    * inline chip in the body nor pulled out of <prolog><metadata><keywords>.
@@ -130,6 +150,43 @@ export interface RenderContext {
    * applied to xref titles.
    */
   isInCurrentBook?: (href: string) => string | undefined;
+  /**
+   * Opt-in broken-reference diagnosis: given a raw @conref or @href value,
+   * returns a human-readable reason when the reference is broken (the
+   * target file is missing, does not parse as XML, or names no such id),
+   * and undefined when it is fine -- or when the host chooses not to
+   * diagnose it (external URLs and absolute paths are the host's to
+   * exclude; see makeRefErrorResolver). The renderer only PRESENTS the
+   * answer: a conref that resolved to nothing becomes a .ref-error
+   * placeholder chip instead of a silently empty element, and an EMPTY
+   * xref with a broken target becomes a .xref-broken marker instead of a
+   * link-shaped hint that reads as if it worked. Same injection pattern
+   * as noteLabels/resolveTitle -- the host owns the diagnosis logic and
+   * the wording's locale, this module stays host-neutral. Absent: every
+   * render path keeps its historical shape byte-for-byte.
+   *
+   * Deliberately NOT consulted for a conref cycle (conrefChain already
+   * holds the reference): a loop renders its literal content, and a
+   * "could not be resolved" chip there would mislabel a different class
+   * of problem. A failed conrefend range falls through to the single
+   * conref path, so the chip covers it naturally.
+   */
+  refError?: (ref: string) => string | undefined;
+  /**
+   * Wording for the two refError presentations (see refErrorTexts.ts).
+   * The host localizes these; absent or partial fields fall back to the
+   * English defaults. Only read when refError is wired.
+   */
+  refErrorTexts?: RefErrorTexts;
+  /**
+   * The conkeyref counterpart of refError: given a raw @conkeyref value,
+   * the reason it pulls nothing (key not defined / no target, file missing
+   * or unparseable, id absent), or undefined when it resolves. Wired only
+   * when the host has a key space, so a topic previewed without a map is
+   * not flagged for keys it cannot have. Consulted only when the element
+   * has no @conref of its own that rescues it.
+   */
+  conkeyrefError?: (conkeyref: string) => string | undefined;
 }
 
 const CONTAINER_BASETYPES = new Set([
@@ -531,7 +588,7 @@ function followConrefChain(first: DitaNode, context: RenderContext): DitaNode {
 function resolveConrefForNode(
   node: DitaNode,
   context: RenderContext,
-): { node: DitaNode; chainKey?: string; mark?: ConrefMark } {
+): { node: DitaNode; chainKey?: string; mark?: ConrefMark; refErrorReason?: string; refErrorRef?: string } {
   const conkeyref = node.attributes?.conkeyref;
   if (conkeyref && context.resolveConkeyref && !context.conrefChain?.has(conkeyref)) {
     const keyTarget = context.resolveConkeyref(conkeyref);
@@ -541,14 +598,73 @@ function resolveConrefForNode(
     }
   }
   const conref = node.attributes?.conref;
-  if (!conref || !context.resolveConref) return { node };
+  if (!conref || !context.resolveConref) {
+    // An unresolved conkeyref with no @conref to fall back on: the element
+    // would render its own (usually empty) content. Not on a cycle -- the
+    // chain check above already excluded that case.
+    if (conkeyref && !conref && context.resolveConkeyref && !context.conrefChain?.has(conkeyref)) {
+      const reason = context.conkeyrefError?.(conkeyref);
+      if (reason !== undefined) return { node, refErrorReason: reason, refErrorRef: conkeyref };
+    }
+    return { node };
+  }
   // A conref already resolved on this branch points back here — stop the
   // cycle and render the element's literal content instead of recursing.
   if (context.conrefChain?.has(conref)) return { node };
   const target = context.resolveConref(conref);
-  if (!target) return { node };
+  if (!target) {
+    // Resolution was attempted and pulled nothing. When the host wired a
+    // diagnosis, a broken reference reads as a placeholder chip instead of
+    // the element's (usually empty) literal content -- the silent-empty
+    // render is the dangerous shape in a review. A cycle above deliberately
+    // never reaches this branch.
+    const reason = context.refError?.(conref);
+    return reason !== undefined ? { node, refErrorReason: reason, refErrorRef: conref } : { node };
+  }
   const end = followConrefChain(target, context);
   return { node: mergeConrefTarget(node, end), chainKey: conref, mark: conrefMarkFor(end, context) };
+}
+
+/**
+ * The placeholder chip for a conref that pulled nothing (see
+ * RenderContext.refError). title carries the raw reference value so it can
+ * be copied straight out of the tooltip to fix the source; the data-line*
+ * range is the referencing element's own, so the chip keeps participating
+ * in click-to-source, scroll-sync and diff highlighting exactly like the
+ * element it stands in for.
+ */
+function renderRefErrorPlaceholder(node: DitaNode, context: RenderContext, ref: string, reason: string): string {
+  const texts = { ...DEFAULT_REF_ERROR_TEXTS, ...context.refErrorTexts };
+  const range = node.sourceRange;
+  const label = escapeHtml(fillRefErrorTemplate(texts.content, reason));
+  const attrs =
+    ` title="${escapeHtml(ref)}"` +
+    ` data-line="${range.startLine}" data-end-line="${range.endLine}"` +
+    ` data-start-col="${range.startCol}" data-end-col="${range.endCol}"`;
+  // The chip must be a legal child of whatever the stand-in element would
+  // have been: a bare <span> directly in <tbody> is foster-parented by the
+  // browser to just before the whole table (the same trap the comment
+  // renderer avoids), and a <span> directly in <ul> is invalid. So rows and
+  // cells stay rows and cells, items stay items, and a block-level slot
+  // gets a <div>; only a slot that holds running text keeps the inline span.
+  const baseType = node.baseType;
+  if (baseType === 'topic/row' || baseType === 'topic/strow') {
+    // colspan 1000 is the HTML maximum: the chip spans the whole row.
+    return `<tr class="ref-error-row"><td class="ref-error"${attrs} colspan="1000">${label}</td></tr>`;
+  }
+  if (baseType === 'topic/tbody' || baseType === 'topic/thead' || baseType === 'topic/tgroup' || baseType === 'topic/sthead') {
+    // A whole row group (or the tgroup around it) failed: one full-width
+    // row inside a <tbody> stands in for it, so it stays in the table.
+    return `<tbody class="ref-error-rows"><tr class="ref-error-row"><td class="ref-error"${attrs} colspan="1000">${label}</td></tr></tbody>`;
+  }
+  if (baseType === 'topic/entry' || baseType === 'topic/stentry') {
+    return `<td class="ref-error"${attrs}>${label}</td>`;
+  }
+  if (baseType === 'topic/li' || baseType === 'topic/sli') {
+    return `<li class="ref-error"${attrs}>${label}</li>`;
+  }
+  const tag = BLOCK_COMMENT_PARENTS.has(context.parentBaseType || '') ? 'div' : 'span';
+  return `<${tag} class="ref-error"${attrs}>${label}</${tag}>`;
 }
 
 /**
@@ -672,37 +788,6 @@ function renderConrefRange(node: DitaNode, range: DitaNode[], context: RenderCon
     .join('');
 }
 
-// Parents whose content model is element-only, so a comment written inside
-// them sits between blocks rather than inside a sentence and should get a
-// block of its own. Everything else -- p, ph, li, entry, title, note text --
-// holds mixed content, where an inline <span> is both valid and what the
-// author saw. This is the same inline/block distinction profiling markers
-// make (INLINE_PROFILING_BASETYPES), stated the other way round: there,
-// inline was the short list; here the inline cases are the majority, and
-// getting it wrong on the block side is the harmless direction (a comment on
-// its own line inside a phrase) while a <div> inside a <p> would make the
-// browser close the paragraph and split the sentence around it.
-const BLOCK_COMMENT_PARENTS = new Set([
-  'topic/body',
-  'topic/section',
-  'topic/example',
-  'topic/fig',
-  'topic/div',
-  'topic/bodydiv',
-  'topic/sectiondiv',
-  'topic/topic',
-  'topic/abstract',
-  'topic/related-links',
-  'topic/imagemap',
-  // List containers: a comment written between two <li>s is not part of
-  // either item's sentence, and an inline span there would be a stray
-  // fragment of the previous item.
-  'topic/ul',
-  'topic/ol',
-  'topic/sl',
-  'topic/dl',
-]);
-
 /**
  * An XML comment, shown in the flow at the position it was authored in --
  * Oxygen's Author mode shows the comment text the same way, instead of the
@@ -754,6 +839,9 @@ export function renderElement(node: DitaNode, context: RenderContext, conrefMark
   }
 
   const resolved = resolveConrefForNode(node, context);
+  if (resolved.refErrorReason !== undefined) {
+    return renderRefErrorPlaceholder(node, context, resolved.refErrorRef ?? conref!, resolved.refErrorReason);
+  }
   const effectiveNode = resolveKeyrefForNode(resolved.node, context);
   // The element's own conref wins over a mark handed down by a range.
   return renderEffectiveNode(effectiveNode, context, resolved.chainKey, resolved.mark ?? conrefMark);

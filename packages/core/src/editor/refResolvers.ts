@@ -10,10 +10,13 @@
 // ABOVE this module; nothing below reaches back up. Behaviour is unchanged --
 // this is a pure move of code lifted verbatim from ditaRenderUtils.ts.
 import { existsSync, openSync, readSync, closeSync, statSync } from 'fs';
+import { isReadAllowed } from '../pathContainment';
 import { resolve, isAbsolute, extname, dirname, relative, normalize } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { extractText, getMapTitleText, isDitamapRef } from '../render/mapTypeMap';
+import { DEFAULT_REF_ERROR_TEXTS, RefErrorTexts } from '../render/refErrorTexts';
+import { URL_SCHEME_RE, isNonDitaTarget } from '../render/refTargets';
 import { readSourceText } from './sourceText';
 // ── Image dimensions (for reserving layout space before the image loads) ──
 //
@@ -239,6 +242,9 @@ export function makeFileCache(docDir: string) {
    * target of the same file parsed once, and lands both in touchedFiles.
    */
   function loadAbsPath(absPath: string): DitaNode | undefined {
+    // Outside the host's read boundary: a missing file as far as any caller can
+    // tell. Not cached -- the boundary can change with the workspace folders.
+    if (!isReadAllowed(absPath)) return undefined;
     if (cache.has(absPath)) return cache.get(absPath);
     if (!existsSync(absPath)) { cache.set(absPath, undefined); return undefined; }
     try {
@@ -434,6 +440,78 @@ export function makeConrefRangeResolver(
   };
 }
 
+/**
+ * Default broken-reference diagnosis for RenderContext.refError: the
+ * three-state reason a local reference can fail with, in the order the
+ * resolver chain itself checks --
+ *   missing file  -- nothing at the referenced path in the closure;
+ *   parse error   -- the file is there but is not well-formed XML (the
+ *                    common review case: an author broke a DIFFERENT file);
+ *   missing id    -- the file parses but #topicId/elementId names no id.
+ * Returns undefined for a reference that resolves, and for ones it will
+ * not diagnose at all: external URLs, absolute paths, and hrefs that are
+ * neither a fragment nor a DITA-shaped file path (a bare id is not a
+ * filename to probe). Same-document fragments (#id, #./topicId/id) are
+ * checked against ownRoot without touching the filesystem.
+ *
+ * Rides the shared file cache so a target already loaded for conref/title
+ * resolution is not parsed twice, and every probed path -- missing ones
+ * included -- lands in touchedFiles() for the caller's dependency set:
+ * creating the missing target is exactly the change that must invalidate
+ * a cached render. The cache memoizes missing and unparsable alike as
+ * undefined, so existsSync is what tells the two apart.
+ *
+ * The renderer only presents the returned reason (see refErrorTexts.ts);
+ * a host with its own diagnostic rules supplies its own callback instead.
+ */
+export function makeRefErrorResolver(
+  docDir: string,
+  ownRoot?: DitaNode,
+  sharedCache?: ReturnType<typeof makeFileCache>,
+  texts: RefErrorTexts = DEFAULT_REF_ERROR_TEXTS,
+): (ref: string) => string | undefined {
+  const cache = sharedCache ?? makeFileCache(docDir);
+
+  return (ref: string): string | undefined => {
+    if (!ref) return undefined;
+    const hashIdx = ref.indexOf('#');
+    const filePath = hashIdx >= 0 ? ref.substring(0, hashIdx) : ref;
+    // "#./topicId/elementId" shorthand: strip the same-document marker
+    // before splitting, the same rule makeConrefRangeResolver applies.
+    const idPart = hashIdx >= 0 ? ref.substring(hashIdx + 1).replace(/^\.\/+/, '') : '';
+    const parts = idPart.split('/');
+    const elementId = parts.length > 1 ? parts[1] : parts[0];
+
+    // URL, absolute path, or a web document (guide.html#sec): not a local
+    // DITA target, so never probed -- see isNonDitaTarget.
+    if (isNonDitaTarget(filePath)) return undefined;
+
+    if (!filePath) {
+      // Same-document fragment: the id must exist in the document itself.
+      if (!idPart || !elementId || !ownRoot) return undefined;
+      return cache.findElementById(ownRoot, elementId) ? undefined : texts.missingId;
+    }
+
+    // No fragment: only a DITA-shaped file path is a file-level reference
+    // worth probing (a bare word is not a filename). With a fragment the
+    // file part is always checked, whatever its extension -- conref/xref
+    // targets are .dita/.xml in practice but the resolver loads any path.
+    if (hashIdx < 0 && !/\.(dita|xml|ditamap)$/i.test(filePath)) return undefined;
+
+    const abs = resolve(docDir, decodeHrefPart(filePath));
+    const root = cache.loadAbsPath(abs);
+    if (!root) {
+      if (!existsSync(abs)) return texts.missingFile;
+      // Present but refused by the host's read boundary: say so, rather than
+      // "does not exist" or "cannot be parsed", neither of which is true.
+      if (!isReadAllowed(abs)) return texts.outsideWorkspace ?? DEFAULT_REF_ERROR_TEXTS.outsideWorkspace!;
+      return texts.parseError;
+    }
+    if (!elementId) return undefined;
+    return cache.findElementById(root, elementId) ? undefined : texts.missingId;
+  };
+}
+
 export function makeFileTitleResolver(
   docDir: string,
   sharedCache?: ReturnType<typeof makeFileCache>,
@@ -529,13 +607,30 @@ export function detectIndexLabel(root: DitaNode, uiLanguage?: string): string {
   return lang.startsWith('zh') ? '\u7d22\u5f15' : 'Index';
 }
 
+/** Same xml:lang-first, uiLanguage-fallback resolution as detectNoteLabels,
+ *  for the lead-in label of a <draft-comment> box. The zh wording mirrors
+ *  Oxygen's own Chinese Author-mode label ("评论者 {author}: ..."). */
+export function detectDraftCommentLabel(root: DitaNode, uiLanguage?: string): string {
+  const lang = root.attributes?.['xml:lang'] || uiLanguage || '';
+  return lang.startsWith('zh') ? '\u8bc4\u8bba\u8005' : 'Comment';
+}
+
+/** Names of the @time / @disposition fields in the tooltip of a
+ *  <draft-comment> box, resolved exactly like detectDraftCommentLabel. English
+ *  is the schema's own attribute name; the zh wording is a plain translation
+ *  of it ("时间" / "处置"), not something copied from Oxygen. */
+export function detectDraftCommentMetaLabels(root: DitaNode, uiLanguage?: string): { time: string; disposition: string } {
+  const lang = root.attributes?.['xml:lang'] || uiLanguage || '';
+  return lang.startsWith('zh') ? { time: '\u65f6\u95f4', disposition: '\u5904\u7f6e' } : { time: 'time', disposition: 'disposition' };
+}
+
 // ── Ditamap reference expansion ──
 // Walks the map tree and inlines children from referenced .ditamap files
 // so key-value pairs appear inline in tree/book view.
 
 export type FileReader = (path: string, encoding: 'utf-8') => string;
 
-export const URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
+export { URL_SCHEME_RE };
 
 /**
  * Builds the render context's isInCurrentBook resolver: given a cross-file

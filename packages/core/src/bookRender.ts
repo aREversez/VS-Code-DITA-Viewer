@@ -20,6 +20,7 @@ import { readSourceText } from './editor/sourceText';
 import { renderTopicXml } from './editor/topicRender';
 import { collectMapEntries, getMapTitleText } from './render/mapTypeMap';
 import type { MapEntry, RoleLabelFormatter } from './render/mapTypeMap';
+import type { RefErrorTexts } from './render/refErrorTexts';
 import { pruneExcluded } from './profiling';
 import type { ProfileFilter } from './profiling';
 
@@ -66,6 +67,13 @@ export interface BookXmlRenderInput {
    * render without touching the disk.
    */
   readFile?: (absPath: string) => string;
+  /**
+   * Localized wording for the broken-reference hints (see
+   * BuildRenderContextInput.refErrorTexts). Book/site rendering always
+   * surfaces the hints (refErrors is forced on, like markConrefs); a host
+   * that shows another language passes its own strings here.
+   */
+  refErrorTexts?: Partial<RefErrorTexts>;
 }
 
 export interface BookXmlRenderResult {
@@ -196,6 +204,8 @@ export function renderBookXml(input: BookXmlRenderInput): BookXmlRenderResult {
       bookMembers: members,
       docFile: absPath,
       markConrefs: true,
+      refErrors: true,
+      refErrorTexts: input.refErrorTexts,
     });
     if (result.error !== undefined) {
       sections.push(`<p class="dita-book-error">${escapeHtml(result.error)}</p>`);

@@ -198,7 +198,6 @@ function runScript() {
     createElement: () => ({ id: '', className: '', textContent: '' }),
   };
   const src = getConrefJumpScript({ openMsgType: MSG_OPEN_CONREF_TARGET, title: 'Open it', hint: 'Reusable content. Press Enter to jump.' });
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
   new Function('document', 'vscode', 'getComputedStyle', src)(
     fakeDocument,
     { postMessage: (m: unknown) => posted.push(m) },

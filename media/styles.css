@@ -81,7 +81,19 @@
   --color-comment-bg: #efefef;
   --color-comment-border: #c4c4c4;
   --color-comment-text: #6b6b6b;
+  /* <draft-comment>: Oxygen's light-green review box with a dark-green rule
+     on the right edge -- deliberately louder than the quiet XML-comment gray
+     above, because a draft comment is an actionable review note. */
+  --color-draft-comment-bg: #90ee90;
+  --color-draft-comment-border: #006400;
+  --color-draft-comment-text: #143d14;
   --color-menucascade-arrow: #767676;
+  /* Broken-reference hints (.ref-error / .xref-broken): a muted rose that
+     reads as an error without shouting -- distinct from the orange
+     unresolved-keyref chip and the red danger callout. */
+  --color-ref-error-bg: #f8efee;
+  --color-ref-error-fg: #97534a;
+  --color-ref-error-border: #dfc1bb;
 }
 
 .vscode-dark {
@@ -104,7 +116,15 @@
   --color-comment-bg: #2b2b2b;
   --color-comment-border: #4d4d4d;
   --color-comment-text: #9a9a9a;
+  /* Same green family as light, dimmed to sit on the dark canvas. */
+  --color-draft-comment-bg: #1e3320;
+  --color-draft-comment-border: #4c8f4c;
+  --color-draft-comment-text: #b8dcb8;
   --color-menucascade-arrow: #aaaaaa;
+  /* Semi-transparent rose over the dark canvas, same hue family as light. */
+  --color-ref-error-bg: rgba(224, 133, 120, 0.12);
+  --color-ref-error-fg: #d99a90;
+  --color-ref-error-border: rgba(224, 133, 120, 0.45);
 }
 
 body {
@@ -610,6 +630,38 @@ html.dv-conref-hot [data-conref] * {
   border-left: 3px solid var(--color-comment-border);
   border-radius: 0 3px 3px 0;
 }
+/* <draft-comment> (topic/draft-comment): Oxygen Author-mode style review
+   annotation -- a green box led by a bold "Comment {author}:" label, with a
+   dark-green rule on the right edge so it reads as marginalia, not content.
+   Inline by default (the element is legal inside a sentence); the --block
+   variant is used between blocks, same split as .dv-comment--block. */
+.draft-comment {
+  background: var(--color-draft-comment-bg);
+  color: var(--color-draft-comment-text);
+  padding: 0.1em 0.4em;
+  border-right: 3px solid var(--color-draft-comment-border);
+  /* A wrapped inline comment must paint each line's box, not just the first. */
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.draft-comment--block {
+  display: block;
+  margin: 0.5em 0;
+  padding: 0.35em 0.75em;
+  border-right-width: 5px;
+}
+.draft-comment__label {
+  font-weight: 700;
+}
+/* A link inside the box would take --color-link, which is only 3.8:1 on the
+   light green (AA wants 4.5:1). Use the box's own text colour (8.7:1) and keep
+   an underline so it still reads as a link. */
+.draft-comment a,
+.draft-comment .xref,
+.draft-comment .link {
+  color: inherit;
+  text-decoration: underline;
+}
 body.hide-profiling .profiled {
   background: none;
   box-shadow: none;
@@ -826,7 +878,49 @@ img[data-load-error] { cursor: default; }
    figures in Oxygen. figure has no left/right margin of its own, so this
    naturally follows whatever indent its containing block already has. */
 figure { margin: 1.5rem 0; text-align: left; }
-figcaption { font-style: italic; margin-top: 0.2rem; font-size: 0.95em; text-align: left; }
+figcaption { font-style: italic; margin-top: 0.4rem; font-size: 0.95em; text-align: left; counter-increment: dita-fig; }
+
+/* A figure's image is a block with no margin of its own. Inline, it sat in a
+   line box (line-height leaves a strip under it) and, for placement="break",
+   carried .image-break's 1rem bottom margin -- either way the caption floated
+   well away from the picture it names. In the live preview enhanceImages()
+   wraps every image in span.dita-img-wrap (inline-block), so the margin lives
+   INSIDE the wrapper and the wrapper itself sits in a line box: both the
+   descendant rule and the wrapper rule are needed. The wrapper shrinks to the
+   image (fit-content) so the hover toolbar stays anchored to the picture. */
+figure.fig img.image { display: block; margin: 0; }
+figure.fig > .dita-img-wrap { display: block; width: fit-content; margin: 0; }
+figure.fig > .dita-img-wrap + .dita-img-wrap,
+figure.fig > img.image + img.image { margin-top: 0.5rem; }
+
+/* Figure / table numbering ("Figure 1.", "Table 1."). Generated, not authored:
+   each titled <figcaption> / <caption.tabletitle> bumps a counter and ::before
+   prints it, so the markup needs no label spans (and the diff panel, which
+   shares both elements, numbers the same way). Counters restart on a top-level
+   topic only -- the way DITA-OT numbers per output file -- so nested topics
+   continue the count and a Book page of many topics restarts per topic.
+   Untitled figures and tables are not counted. The label words come from a
+   custom property so a language only has to override the property. */
+:root { --fig-label: "Figure "; --tbl-label: "Table "; }
+:lang(zh) { --fig-label: "图 "; --tbl-label: "表 "; }
+:lang(zh-TW), :lang(zh-HK), :lang(zh-MO), :lang(zh-Hant) { --fig-label: "圖 "; --tbl-label: "表 "; }
+article.topic:not(.topic .topic) { counter-reset: dita-fig dita-tbl; }
+figcaption::before { content: var(--fig-label) counter(dita-fig) ". "; font-style: normal; font-weight: 600; }
+caption.tabletitle,
+caption.tabledesc {
+  caption-side: top;
+  text-align: left;
+  font-size: 0.95em;
+  padding: 0 0 0.4rem;
+}
+/* Only a titled caption is numbered: a table with just a <desc> has a caption
+   (the desc lives in it) but no "Table N.". */
+caption.tabletitle { counter-increment: dita-tbl; }
+/* A table's desc follows the title inside the caption. On its own line and a
+   little quieter, so the two do not read as one sentence ("Table 1. Torque
+   Maximum values ..."). opacity, not a colour: it follows light and dark themes. */
+caption.tabletitle .desc { display: block; opacity: 0.8; }
+caption.tabletitle::before { content: var(--tbl-label) counter(dita-tbl) ". "; font-weight: 600; }
 
 /* Code blocks */
 pre.codeblock, pre.preformatted {
@@ -866,6 +960,24 @@ pre.codeblock, pre.preformatted {
   pointer-events: none;
 }
 
+/* The language chip doubles as a copy button in previews that run
+   codeCopyScript (which marks <html> with .dv-code-copy); everywhere else it
+   stays the inert label above. */
+.dv-code-copy .codeblock-lang {
+  pointer-events: auto;
+  cursor: pointer;
+  user-select: none;
+}
+.dv-code-copy .codeblock-lang:hover {
+  filter: brightness(1.2);
+}
+/* The script gives the chip role="button" tabindex="0"; show the standard
+   focus ring for keyboard activation (Enter/Space). */
+.dv-code-copy .codeblock-lang:focus-visible {
+  outline: 1px solid var(--dita-focus, #007fd4);
+  outline-offset: 1px;
+}
+
 code {
   font-family: var(--code-font);
   font-size: 0.9em;
@@ -881,6 +993,35 @@ pre code { background: none; padding: 0; border-radius: 0; }
 .xref { color: var(--color-link); text-decoration: none; }
 .xref:hover { text-decoration: underline; }
 .xref-external { font-style: italic; font-size: 0.9em; opacity: 0.7; }
+/* Broken-reference hints (RenderContext.refError). A conref that pulled
+   nothing renders as a dashed placeholder chip in place of the silently
+   empty element; an empty xref whose target is gone keeps the arrow hint
+   but reads as an error. Both carry the raw reference in title= and the
+   referencing element's data-line range, so click-to-source and diff
+   highlighting keep working on them. */
+.ref-error {
+  display: inline-block;
+  padding: 0 0.4em;
+  border: 1px dashed var(--color-ref-error-border);
+  border-radius: 4px;
+  background: var(--color-ref-error-bg);
+  color: var(--color-ref-error-fg);
+  font-size: 0.9em;
+  font-style: normal;
+  cursor: help;
+}
+/* The same chip in a block, list or table slot (see renderRefErrorPlaceholder):
+   inline-block would drop the list marker and break the table cell. */
+div.ref-error { display: block; width: fit-content; }
+li.ref-error { display: list-item; }
+td.ref-error { display: table-cell; }
+.xref-broken {
+  font-style: italic;
+  font-size: 0.9em;
+  color: var(--color-ref-error-fg);
+  border-bottom: 1px dashed var(--color-ref-error-fg);
+  cursor: help;
+}
 .link { color: var(--color-link); text-decoration: none; }
 .link:hover { text-decoration: underline; }
 
@@ -1834,3 +1975,18 @@ body.wh_topic_page #wh_topic_body { overflow: hidden !important; }
    empty column on screen. */
 body.wh_topic_page nav#wh_topic_toc:not(:has(#__site-outline:not(.tpl-outline--empty))) { display: none !important; }
 } /* @layer dv-base */
+
+/* The inherit rule above sits in @layer dv-base, and a template's css is
+   unlayered: its `body[data-template="..."] #dita-content-root a { color:
+   var(--color-link) }` beats a layered normal declaration at any specificity,
+   putting the low-contrast link colour back inside the review box on Book and
+   Docsite pages. Repeat the rule unlayered and one class stronger than the
+   template's selector ((1,2,2) against (1,1,2)) so it wins there too. The
+   body[data-template] guard keeps it off the plain topic preview and the diff
+   view, which carry no template css to beat. */
+body[data-template] #dita-content-root .draft-comment a,
+body[data-template] #dita-content-root .draft-comment .xref,
+body[data-template] #dita-content-root .draft-comment .link {
+  color: inherit;
+  text-decoration: underline;
+}

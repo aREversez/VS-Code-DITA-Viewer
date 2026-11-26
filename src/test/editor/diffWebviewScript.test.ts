@@ -161,7 +161,6 @@ describe('diff panel webview script', () => {
           observed.push(target);
         }
       }
-      // eslint-disable-next-line @typescript-eslint/no-implied-eval
       const run = new Function(
         'document',
         'window',

@@ -24,7 +24,6 @@ const makeLinks = (): FakeEl => makeEl('old links');
 
 function load(site: boolean, nav: FakeEl | null, updatePrevNext?: () => void): (html: string) => void {
   const script = getSidebarUpdateScript({ site });
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
   const factory = new Function(
     'document',
     'updatePrevNextButtons',
@@ -98,7 +97,6 @@ describe('sidebar update script', () => {
 
     function run(site: boolean, navObj: FakeEl, activeElement: unknown, html: string) {
       const script = getSidebarUpdateScript({ site });
-      // eslint-disable-next-line @typescript-eslint/no-implied-eval
       const factory = new Function('document', 'updatePrevNextButtons', `${script}\nreturn applySidebarUpdate;`) as (
         d: unknown, u: unknown,
       ) => (html: string) => void;

@@ -9,6 +9,7 @@ import {
   coalesceDiffParts,
   applyInlineMarksToHtml,
   swapAlignedRows,
+  swapDiffResult,
   computeRowStats,
   buildQuickCommitChoices,
   arrangeByRecency,
@@ -1037,5 +1038,40 @@ describe('ditaDiffEngine', () => {
       assert.notStrictEqual(choices[0].refHash, choices[1].refHash);
       assert.ok(!choices.some((c) => c.refHash === 'full-hash-of-third'));
     });
+  });
+});
+
+// The panel puts these on its column containers as `lang`, so the :lang()
+// figure/table label words follow the topic instead of the host page's fixed
+// `lang="en"` (see diffColumnLangAttr and the diffCaptionNumbering visual test).
+describe('topic language for the diff columns', () => {
+  const zh = (lang: string, body: string) =>
+    `<?xml version="1.0"?><topic id="t" xml:lang="${lang}"><title>S</title><body>${body}</body></topic>`;
+  const plain = (body: string) =>
+    `<?xml version="1.0"?><topic id="t"><title>S</title><body>${body}</body></topic>`;
+
+  it('carries each side\'s root xml:lang as leftLang/rightLang', () => {
+    const result = runDiff(zh('zh-CN', '<p>a</p>'), zh('zh-TW', '<p>b</p>'));
+    assert.strictEqual(result.leftLang, 'zh-CN');
+    assert.strictEqual(result.rightLang, 'zh-TW');
+  });
+
+  it('no xml:lang, no language fields', () => {
+    const result = runDiff(plain('<p>a</p>'), plain('<p>b</p>'));
+    assert.strictEqual(result.leftLang, undefined);
+    assert.strictEqual(result.rightLang, undefined);
+  });
+
+  it('a side that failed to parse contributes no language; the other keeps its own', () => {
+    const result = runDiff('<topic', zh('zh-CN', '<p>a</p>'));
+    assert.ok(result.errorLeft);
+    assert.strictEqual(result.leftLang, undefined);
+    assert.strictEqual(result.rightLang, 'zh-CN');
+  });
+
+  it('swapDiffResult turns the languages around with the content', () => {
+    const swapped = swapDiffResult(runDiff(zh('zh-CN', '<p>a</p>'), zh('zh-TW', '<p>b</p>')));
+    assert.strictEqual(swapped.leftLang, 'zh-TW');
+    assert.strictEqual(swapped.rightLang, 'zh-CN');
   });
 });

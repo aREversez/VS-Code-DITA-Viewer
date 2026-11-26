@@ -101,5 +101,12 @@ export function sharedWebviewStrings() {
     imgCopyUnsupportedLabel: vscode.l10n.t('Copying images is not supported here'),
     imgCopyToastDone: vscode.l10n.t('Image copied to clipboard'),
     imgCopyToastFailed: vscode.l10n.t('Copy failed'),
+    // ── code block copy chip, passed to getCodeCopyScript as values ──
+    // Clicking the language chip of a code block copies its code; both
+    // previews render the same chip, so the strings are shared like the
+    // image-copy ones above.
+    codeCopyTitle: vscode.l10n.t('Copy code'),
+    codeCopyDoneLabel: vscode.l10n.t('Copied!'),
+    codeCopyFailedLabel: vscode.l10n.t('Copy failed'),
   };
 }

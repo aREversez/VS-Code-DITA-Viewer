@@ -429,11 +429,11 @@ export function alignSectionChildren(
   //
   // Tables/simpletables are included on the same terms sections already were:
   // the row goes out as the group's FIRST row, and ditaDiffRender.ts buffers a
-  // title inside that group and re-writes it into the assembled <table>'s
-  // caption slot rather than flowing it beside the table -- an <h1> inside
-  // <table> is foster-parented out of it by the parser, and a <caption> emitted
-  // anywhere but that slot is deleted outright. The panel does that conversion
-  // itself from the preview's own heading markup; src/render is untouched.
+  // title inside that group and attaches it to the assembled <table>'s
+  // caption slot rather than flowing it beside the table -- a <caption> emitted
+  // anywhere but that slot is deleted outright by the parser. The preview
+  // already emits that title as a <caption>; the panel's headingToCaption is
+  // only a safety net for a title that still arrives as a heading.
   const parentType = leftParent.baseType || rightParent.baseType || '';
   if (
     parentType === 'topic/section' ||

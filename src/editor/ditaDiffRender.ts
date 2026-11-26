@@ -45,15 +45,15 @@
 // middle of the grid. The table rules in diff-styles.css mark fragments
 // instead by tinting the collapsed grid edges of the cells themselves.
 //
-// A recursed table's own <title> follows the same rule, with one difference: the
-// PREVIEW renders a table title as a heading (that is the extension's existing
-// markup, and the diff panel must not restyle it), and inside the re-assembled
-// <table> here that heading would be foster-parented out of it again -- while a
-// <caption> emitted in the group buffer would be deleted outright (measured:
-// 0 <caption> survives outside a table). So the title row is buffered per group
-// and converted to a <caption> when it is attached to that group's first emitted
-// table, ahead of everything else in it. The conversion is the diff panel's own
-// layout decision, scoped to the panel; nothing in src/render changes.
+// A recursed table's own <title> follows the same rule. The preview renders a
+// table title as <caption class="title tabletitle">, and the title row of a
+// recursed group is rendered with the table as its parent, so it arrives already
+// a caption; bufferCaption holds it per group and attaches it, with its change
+// marker, to that group's first emitted table ahead of everything else in it. A
+// caption emitted anywhere outside a <table> would be deleted by the HTML parser,
+// which is why it is buffered rather than emitted as a block of its own. The
+// heading -> caption conversion (headingToCaption) stays as a safety net for a
+// title that still arrives as an <h{N} class="title topictitle{N}">.
 //
 // This is string surgery on markup, so two rules keep it honest: only a heading
 // sitting in a <table>'s own caption slot is rewritten (never one that merely
@@ -62,6 +62,21 @@
 // a <codeblock>/<pre> is escaped by the renderer, so it never reads as a tag here.
 
 import { AlignedRow, RenderedBlock, applyInlineMarksToHtml } from './ditaDiffEngine';
+import { escapeAttr } from './htmlEscape';
+
+/**
+ * The `lang` attribute for one diff column, from that side's topic xml:lang
+ * (TopicDiffResult.leftLang/rightLang). The panel's host page declares a fixed
+ * `lang="en"` and no <article> wraps the blocks, so without the topic's own
+ * language on the column the :lang() figure/table label words (styles.css)
+ * would read "Figure/Table" for a Chinese topic here while the preview reads
+ * 图/表. Each side carries its own -- across git history the two versions can
+ * declare different languages. Undefined (no declaration, or a side that
+ * failed to parse) emits nothing and the host language stands.
+ */
+export function diffColumnLangAttr(lang: string | undefined): string {
+  return lang ? ` lang="${escapeAttr(lang)}"` : '';
+}
 
 /** Complete: renders its own <colgroup>/<thead>/<tbody> children inside. */
 const COMPLETE_TABLE_FRAGMENT = new Set(['topic/tgroup']);
@@ -234,6 +249,15 @@ function collectColumns(rows: AlignedRow[], sink: ColumnSink, inTableGroup: bool
       continue;
     }
 
+    // The table's <desc> is part of its caption too (the preview renders it
+    // inside the <caption>): without this it would be a block of its own, which
+    // ends the group, and the unchanged caption buffered above is then dropped
+    // with it -- a table with a <desc> lost its title in the panel.
+    if (inTableGroup && isDescRow(row)) {
+      bufferCaptionDesc(row, sink);
+      continue;
+    }
+
     const idxAttr = takeIdxAttr(row, sink);
 
     // A row is paired by baseType, so one side's fragment kind is the other's;
@@ -332,10 +356,10 @@ function wrapperClass(row: AlignedRow): string {
  * within a re-assembled table, 'topic/title' can only be that table's title --
  * DITA allows no other title below <table>, and a SECTION's own title row is
  * emitted before its table group opens, so it never reaches here as a group
- * member. Keying on markup instead (a leading <caption>) would tie the panel to
- * a preview change that does not exist: baseTypeMap keeps rendering a table
- * title as <h{level} class="title topictitle{N}">, which is exactly why
- * headingToCaption below converts it here.
+ * member. Keying on markup instead would be fragile: the title row is a caption
+ * from the preview renderer today, but headingToCaption below still accepts the
+ * older heading form (class `title topictitle{N}`), so the position and baseType
+ * are the stable signal.
  */
 function isCaptionRow(row: AlignedRow | undefined): boolean {
   if (!row) return false;
@@ -396,13 +420,12 @@ function headingToCaption(html: string): string {
  * The same conversion wherever a table appears INSIDE a block's html.
  *
  * A table the diff did not recurse arrives as the preview's own markup -- and so
- * does a table nested in a cell or inside an opaque <section>/<div> block, which
- * is how most titled tables in a real book reach the panel. Their title is an
- * `<h{N} class="title topictitle{N}">` in table scope, which the HTML parser
- * hoists ABOVE the table: the caption text lands outside its table and the table
- * reads as untitled. Without this the panel contradicts itself -- a recursed
- * table gets a caption (bufferCaption) while the identical table next to it keeps
- * a heading, so editing one table's title restyles its untouched neighbour too.
+ * does a table nested in a cell or inside an opaque <section>/<div> block. The
+ * preview now captions those itself, so this is the safety net for a title that
+ * still arrives as an `<h{N} class="title topictitle{N}">` in table scope, which
+ * the HTML parser hoists ABOVE the table: the caption text would land outside its
+ * table and the table would read as untitled, and a recursed table (which gets a
+ * caption from bufferCaption) would disagree with the identical table beside it.
  *
  * Runs over the finished column strings, after assembly, so it reaches every path
  * a table can arrive by. It converts only a heading sitting in the caption slot
@@ -410,7 +433,7 @@ function headingToCaption(html: string): string {
  * browser accepts, so a document that puts <title> after its <tgroup> keeps its
  * previous layout instead of gaining a caption the parser would discard. Idempotent
  * as well: the captions written here carry `tabletitle`, which the guard above
- * does not match. This is the panel's markup only -- src/render is untouched.
+ * does not match, and a table the preview already captioned is left alone.
  */
 function captionTablesIn(html: string): string {
   if (!/<(table|simpletable)\b/i.test(html)) return html;
@@ -442,23 +465,55 @@ function captionTablesIn(html: string): string {
   return out;
 }
 
+/** A block that is a table's own <desc>, in the same group position as the caption row. */
+function isDescRow(row: AlignedRow | undefined): boolean {
+  if (!row) return false;
+  const side = row.left || row.right;
+  return !!side && side.baseType === 'topic/desc';
+}
+
+/**
+ * Fold the table's <desc> into the group's buffered caption, the way the preview
+ * puts it inside the <caption>; a desc with no title gets a caption of its own
+ * (`tabledesc`, which is never numbered). The changed desc is its own change: the
+ * span carries the fragment class and the change index, so it has its own
+ * connector and inline marks, and a changed desc also marks the caption, which is
+ * what the gutter-edge rules for a changed caption key on.
+ */
+function bufferCaptionDesc(row: AlignedRow, sink: ColumnSink): void {
+  const cls = `dv-frag dv-frag--${row.changeType}` + fragFlags(row);
+  const idxAttr = takeIdxAttr(row, sink);
+  const changed = row.changeType !== 'unchanged';
+  const fold = (existing: PendingCaption | undefined, block: RenderedBlock, side: 'left' | 'right'): PendingCaption => {
+    const span = injectFragmentAttrs(applyInlineDiff(block.html, row, side), cls, idxAttr);
+    let html = existing ? existing.html : '<caption class="tabledesc"></caption>';
+    if (changed) html = injectFragmentAttrs(html, cls, '');
+    const merged = html.replace(/<\/caption>(?![\s\S]*<\/caption>)/, () => `${existing ? ' ' : ''}${span}</caption>`);
+    return { html: merged, changed: changed || !!existing?.changed };
+  };
+  if (row.left) sink.captionLeft = fold(sink.captionLeft, row.left, 'left');
+  if (row.right) sink.captionRight = fold(sink.captionRight, row.right, 'right');
+}
+
 /** Mark a caption like any other fragment and hold it for this table group. */
 function bufferCaption(row: AlignedRow, sink: ColumnSink): void {
   const cls = `dv-frag dv-frag--${row.changeType}` + fragFlags(row);
   const idxAttr = takeIdxAttr(row, sink);
   const changed = row.changeType !== 'unchanged';
-  if (row.left) {
-    sink.captionLeft = {
-      html: injectFragmentAttrs(headingToCaption(applyInlineDiff(row.left.html, row, 'left')), cls, idxAttr),
-      changed,
-    };
-  }
-  if (row.right) {
-    sink.captionRight = {
-      html: injectFragmentAttrs(headingToCaption(applyInlineDiff(row.right.html, row, 'right')), cls, idxAttr),
-      changed,
-    };
-  }
+  // A title with nothing to show (<title/>, whitespace only) renders '' -- the
+  // preview gives such a table no caption -- but the engine still emits its row.
+  // A side that renders nothing buffers nothing: an empty string is not a
+  // caption, and bufferCaptionDesc splices the desc in before a </caption> that
+  // it lacks, so a table with an empty title and a desc lost its desc here.
+  const side = (block: RenderedBlock, which: 'left' | 'right'): PendingCaption | undefined =>
+    block.html.trim() === ''
+      ? undefined
+      : {
+          html: injectFragmentAttrs(headingToCaption(applyInlineDiff(block.html, row, which)), cls, idxAttr),
+          changed,
+        };
+  if (row.left) sink.captionLeft = side(row.left, 'left');
+  if (row.right) sink.captionRight = side(row.right, 'right');
 }
 
 /**

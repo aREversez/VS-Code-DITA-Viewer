@@ -21,6 +21,7 @@
 //     collectDependencies also folds image reads into the dependency set.
 //   - suppressIndexterm: only the export path sets it.
 
+import { existsSync } from 'fs';
 import { resolve, relative, isAbsolute } from 'path';
 import { DitaNode } from '../parser/domTypes';
 import { RenderContext } from '../render/renderer';
@@ -30,14 +31,19 @@ import {
   makeConrefRangeResolver,
   makeFileTitleResolver,
   makeIsInCurrentBook,
+  makeRefErrorResolver,
   detectNoteLabels,
   detectIndexLabel,
+  detectDraftCommentLabel,
+  detectDraftCommentMetaLabels,
   readImageDimensions,
   decodeHrefPart,
   URL_SCHEME_RE,
 } from './refResolvers';
+import { isReadAllowed } from '../pathContainment';
+import { DEFAULT_REF_ERROR_TEXTS, RefErrorTexts } from '../render/refErrorTexts';
 import { defaultTopicScopeChains, getKeyDefs, getKeyScopes, KeyDefLookup, KeyHrefDef, resolveKeyInScope } from './keySpace';
-import { resolveConkeyref } from './conkeyref';
+import { diagnoseConkeyref, resolveConkeyref } from './conkeyref';
 
 export interface BuildRenderContextInput {
   /** Directory hrefs in this document resolve against (== RenderContext.documentDir). */
@@ -85,6 +91,9 @@ export interface BuildRenderContextInput {
   /** Preview and book: true; diff: false (omits ctx.indexLabel). */
   includeIndexLabel?: boolean;
   suppressIndexterm?: boolean;
+  /** Only the export path sets this: the spec's default is to strip
+   *  <draft-comment> from published output (RenderContext.suppressDraftComment). */
+  suppressDraftComment?: boolean;
   /** Book / docsite only: the set of files that make up the current book. */
   bookMembers?: ReadonlySet<string>;
   /**
@@ -96,6 +105,23 @@ export interface BuildRenderContextInput {
   clickableExternalXrefs?: boolean;
   /** Book / site only: sink that records every file the render read. */
   collectDependencies?: Set<string>;
+  /**
+   * Opt-in: wire RenderContext.refError with the default three-state
+   * diagnosis (makeRefErrorResolver) so a conref that pulls nothing renders
+   * as a placeholder chip and an empty xref with a broken target as a
+   * .xref-broken marker, instead of silently empty/link-shaped output.
+   * Preview and diff paths set this; "Export as HTML" does not -- a shipped
+   * document has no editing context for the hints, the same rule
+   * suppressIndexterm and markConrefs follow.
+   */
+  refErrors?: boolean;
+  /**
+   * Localized wording for the refError hints, merged over the English
+   * defaults (DEFAULT_REF_ERROR_TEXTS). The host fills these from its own
+   * string catalog -- the VS Code extension via vscode.l10n.t -- so the
+   * factory itself stays free of locale logic, like noteLabels.
+   */
+  refErrorTexts?: Partial<RefErrorTexts>;
 }
 
 export interface BuiltRenderContext {
@@ -137,7 +163,10 @@ export function buildRenderContext(input: BuildRenderContextInput): BuiltRenderC
     resolveConref: (conref: string) => conrefResolver(conref),
     resolveConrefRange: (conref: string, conrefend: string) => conrefRangeResolver(conref, conrefend),
     noteLabels: detectNoteLabels(ownRoot, uiLanguage),
+    draftCommentLabel: detectDraftCommentLabel(ownRoot, uiLanguage),
+    draftCommentMeta: detectDraftCommentMetaLabels(ownRoot, uiLanguage),
     suppressIndexterm: input.suppressIndexterm,
+    suppressDraftComment: input.suppressDraftComment,
     getImageDimensions: (relPath: string) => {
       try {
         const absPath = resolve(docDir, decodeHrefPart(relPath));
@@ -163,6 +192,15 @@ export function buildRenderContext(input: BuildRenderContextInput): BuiltRenderC
   if (input.includeIndexLabel) ctx.indexLabel = detectIndexLabel(ownRoot, uiLanguage);
   if (input.bookMembers) ctx.isInCurrentBook = makeIsInCurrentBook(docDir, input.bookMembers);
   if (input.clickableExternalXrefs) ctx.clickableExternalXrefs = true;
+
+  if (input.refErrors) {
+    const texts: RefErrorTexts = { ...DEFAULT_REF_ERROR_TEXTS, ...input.refErrorTexts };
+    ctx.refErrorTexts = texts;
+    // Same shared cache as the conref/title resolvers: a target probed here
+    // is usually one they already loaded, and every probe (missing files
+    // included) joins touchedFiles for the caller's dependency set.
+    ctx.refError = makeRefErrorResolver(docDir, ownRoot, fileCache, texts);
+  }
 
   // conkeyref rides on the same file cache: a key's href resolves against the
   // map that defined it (baseDir), not the topic being rendered, so it needs
@@ -214,6 +252,22 @@ export function buildRenderContext(input: BuildRenderContextInput): BuiltRenderC
       if (el && lastLoaded) fileCache.noteOrigin(el, lastLoaded);
       return el;
     };
+    // Only with a key space (this block): a topic previewed with no map has
+    // no keys at all, and "key is not defined" there would flag every
+    // conkeyref for a reason the author cannot act on.
+    if (input.refErrors) {
+      const texts: RefErrorTexts = { ...DEFAULT_REF_ERROR_TEXTS, ...input.refErrorTexts };
+      ctx.conkeyrefError = (conkeyref: string) => {
+        const failure = diagnoseConkeyref(
+          conkeyref,
+          keyDefs,
+          loadTopic,
+          (baseDir, href) => existsSync(resolve(baseDir, decodeHrefPart(href.split('#')[0]))),
+          (baseDir, href) => isReadAllowed(resolve(baseDir, decodeHrefPart(href.split('#')[0]))),
+        );
+        return failure === undefined ? undefined : texts[failure];
+      };
+    }
   }
 
   // One hop further along a reference chain, resolved relative to the file

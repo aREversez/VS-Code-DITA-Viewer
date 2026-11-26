@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { load } from 'cheerio';
 import { parseDita, DitaNode, RenderContext, renderElement } from '@dita-viewer/core';
 import { diffTopics, DiffTopicsInput, swapAlignedRows } from '../../editor/ditaDiffEngine';
-import { renderDiffColumns, injectFragmentAttrs } from '../../editor/ditaDiffRender';
+import { renderDiffColumns, injectFragmentAttrs, diffColumnLangAttr } from '../../editor/ditaDiffRender';
 
 /**
  * These tests run the diff panel's REAL two-stage pipeline -- the actual
@@ -262,7 +262,7 @@ describe('ditaDiffRender (rendered-diff column assembly)', () => {
     const CAP = '<title>Performance figures</title>';
     const ROWS = '<row><entry>12 Nm</entry></row>';
 
-    it('converts the preview heading into a caption without changing the preview (the panel owns this markup: baseTypeMap still renders a table title as <h{level} class="title topictitle{N}">, so the conversion cannot be a shared-renderer change, and a heading left in table scope is foster-parented out of the re-assembled table)', () => {
+    it('keeps the preview\'s caption through the diff (the preview renders a table title as <caption class="title tabletitle">; a title block the panel buffers on its own still arrives as a heading and is converted to the same caption, heading attributes kept)', () => {
       const doc = parseDita(titled(CAP, ROWS));
       const find = (n: DitaNode): DitaNode | undefined => {
         if (n.baseType === 'topic/table') return n;
@@ -272,13 +272,13 @@ describe('ditaDiffRender (rendered-diff column assembly)', () => {
         }
         return undefined;
       };
-      // The preview, untouched: a heading inside the table, and no caption.
+      // The preview: a caption inside the table, and no heading.
       const preview = renderElement(find(doc.root)!, { ...ctx0, headingLevel: 1, parentBaseType: 'topic/body' });
       assert.ok(
-        /<h1[^>]*class="title topictitle1"[^>]*>Performance figures<\/h1>/.test(preview),
-        `preview keeps its own heading markup, got: ${preview}`,
+        /<caption[^>]*class="title tabletitle"[^>]*>Performance figures<\/caption>/.test(preview),
+        `preview captions its table, got: ${preview}`,
       );
-      assert.ok(!preview.includes('<caption'), 'the preview is not restyled by the diff panel');
+      assert.ok(!/<h[1-6]\b/.test(preview), 'no heading left in table scope');
 
       // The panel, from the same source: caption markup, heading attributes kept.
       const cols = renderDiffColumns(runDiff(titled(CAP, ROWS), titled('<title>Torque</title>', ROWS)).rows);
@@ -472,6 +472,86 @@ describe('ditaDiffRender (rendered-diff column assembly)', () => {
     });
   });
 
+  describe('a recursed table keeps its <desc> in its caption', () => {
+    const doc = (head: string, cell: string) => `<?xml version="1.0"?>
+<topic id="t"><title>Spec</title><body>
+<table id="tb">${head}<tgroup cols="1"><colspec colname="c" colwidth="1*"/><tbody><row><entry>${cell}</entry></row></tbody></tgroup></table>
+</body></topic>`;
+    const BOTH = '<title>Performance</title><desc>Measured at 20 C</desc>';
+
+    it('an unchanged title and desc stay in the caption when only a cell changes (regression: the desc was a block of its own, which closed the table group, and the unchanged caption buffered before it was dropped -- a table with a <desc> lost its title in the panel)', () => {
+      const cols = renderDiffColumns(runDiff(doc(BOTH, '12 Nm'), doc(BOTH, '15 Nm')).rows);
+      for (const side of ['left', 'right'] as const) {
+        const $ = parseColumn(cols[side], side);
+        assert.strictEqual($('table > caption').length, 1, `${side}: the table keeps one caption`);
+        assert.ok(/Performance/.test($('table > caption').text()), `${side}: with its title`);
+        assert.ok(/Measured at 20 C/.test($('table > caption').text()), `${side}: and its desc`);
+        assert.strictEqual($('.desc').length, 1, `${side}: the desc is drawn once`);
+        assert.strictEqual($('.desc').closest('caption').length, 1, `${side}: inside the caption, not above the table`);
+        assert.ok(/\btabletitle\b/.test($('table > caption').attr('class')!), `${side}: a titled caption stays numbered`);
+      }
+    });
+
+    it('a changed desc is marked as its own change, and marks the caption', () => {
+      const result = runDiff(doc(BOTH, 'a'), doc('<title>Performance</title><desc>Measured at 25 C</desc>', 'a'));
+      const cols = renderDiffColumns(result.rows);
+      const left$ = parseColumn(cols.left, 'left');
+      const right$ = parseColumn(cols.right, 'right');
+      assert.ok(/20/.test(left$('table > caption .desc').text()) && /25/.test(right$('table > caption .desc').text()));
+      assert.notStrictEqual(right$('table > caption .desc').attr('data-diff-idx'), undefined, 'the desc carries a change index');
+      assert.ok(/dv-frag--modified/.test(right$('table > caption').attr('class')!), 'so the changed caption gets its gutter edge');
+      assert.strictEqual(cols.changeCount, 1, 'one edit, one change');
+    });
+
+    it('a table with a desc and no title gets an un-numbered caption of its own', () => {
+      const cols = renderDiffColumns(runDiff(doc('<desc>Measured at 20 C</desc>', 'a'), doc('<desc>Measured at 20 C</desc>', 'b')).rows);
+      const $ = parseColumn(cols.left, 'left');
+      assert.strictEqual($('table > caption').length, 1);
+      assert.ok(/\btabledesc\b/.test($('table > caption').attr('class')!) && !/\btabletitle\b/.test($('table > caption').attr('class')!));
+      assert.strictEqual($('table > caption .desc').text(), 'Measured at 20 C');
+    });
+
+    it('a desc added on one side shows on that side only, in the caption', () => {
+      const cols = renderDiffColumns(runDiff(doc('<title>Performance</title>', 'a'), doc(BOTH, 'a')).rows);
+      assert.strictEqual(parseColumn(cols.left, 'left')('.desc').length, 0);
+      assert.strictEqual(parseColumn(cols.right, 'right')('table > caption .desc').length, 1);
+      assert.strictEqual(parseColumn(cols.left, 'left')('table > caption').text(), 'Performance');
+    });
+
+    // An empty <title/> renders '' (a figure or table with nothing to show gets
+    // no caption), but the engine still emits its row. That empty block must not
+    // be buffered as the group's caption: the desc is folded into a buffered
+    // caption by splicing before its </caption>, which an empty string lacks, so
+    // the desc was dropped -- the preview shows it in a tabledesc caption.
+    for (const [name, title] of [
+      ['an empty <title/>', '<title/>'],
+      ['a whitespace-only title', '<title>   </title>'],
+    ] as const) {
+      it(`${name} plus a desc keeps the desc, in an un-numbered caption of its own`, () => {
+        const head = `${title}<desc>Measured at 20 C</desc>`;
+        const cols = renderDiffColumns(runDiff(doc(head, 'a'), doc(head, 'b')).rows);
+        for (const side of ['left', 'right'] as const) {
+          const $ = parseColumn(cols[side], side);
+          assert.strictEqual($('table > caption').length, 1, `${side}: one caption`);
+          const cls = $('table > caption').attr('class')!;
+          assert.ok(/\btabledesc\b/.test(cls) && !/\btabletitle\b/.test(cls), `${side}: ${cls}`);
+          assert.strictEqual($('table > caption .desc').text(), 'Measured at 20 C', `${side}: the desc survives`);
+        }
+      });
+    }
+
+    it('a title emptied on one side leaves no empty table shell there, and the other side keeps its caption', () => {
+      const cols = renderDiffColumns(runDiff(doc('<title>Performance</title>', 'a'), doc('<title/>', 'b')).rows);
+      const l$ = parseColumn(cols.left, 'left');
+      const r$ = parseColumn(cols.right, 'right');
+      assert.strictEqual(l$('table > caption').text(), 'Performance');
+      assert.strictEqual(r$('table > caption').length, 0, 'the emptied side has no caption');
+      for (const [side, $] of [['left', l$], ['right', r$]] as const) {
+        assert.strictEqual($('table').filter((_i, t) => $(t).find('td, th').length === 0).length, 0, `${side}: no table without cells`);
+      }
+    });
+  });
+
   describe('blocks that render nothing are not blocks', () => {
     it("emits no empty ghost row per <colspec> (regression: topic/colspec renders '' by design -- it feeds the tgroup's <colgroup> -- yet each one became an empty `<div class=\"dv-block\">`, a visible ~40px gap, so a 4-column table grew 4 phantom rows)", () => {
       const cols = renderDiffColumns(runDiff(CALS('12 Nm'), CALS('15 Nm')).rows);
@@ -567,5 +647,20 @@ describe('ditaDiffRender (rendered-diff column assembly)', () => {
         ['0', '1', '2'],
       );
     });
+  });
+});
+
+describe('diffColumnLangAttr', () => {
+  it('emits a lang attribute for a declared language', () => {
+    assert.strictEqual(diffColumnLangAttr('zh-CN'), ' lang="zh-CN"');
+  });
+
+  it('emits nothing without one', () => {
+    assert.strictEqual(diffColumnLangAttr(undefined), '');
+    assert.strictEqual(diffColumnLangAttr(''), '');
+  });
+
+  it('escapes the value so a hostile xml:lang cannot break out of the attribute', () => {
+    assert.strictEqual(diffColumnLangAttr('zh" onload="x"'), ' lang="zh&quot; onload=&quot;x&quot;"');
   });
 });

@@ -1,6 +1,7 @@
+import { registerReadBoundary } from './editor/readBoundary';
 import * as vscode from 'vscode';
 import { spawn } from 'child_process';
-import { existsSync } from 'fs';
+import { existsSync, readdirSync, statSync } from 'fs';
 import { registerSourceOverlay } from './editor/sourceOverlayFeed';
 import { registerSourceEditorTracker } from './editor/sourceEditorOpener';
 import { DitaViewerProvider, getLastRenderedHtmlForTesting, clearAllCaches } from './editor/DitaViewerProvider';
@@ -10,7 +11,8 @@ import { registerMapTreeView } from './language/ditaMapTreeProvider';
 import { ditaFileWatcherCounts } from './editor/ditaFileWatcher';
 import { registerExportHtmlCommand, getActiveDitaUri } from './editor/exportHtml';
 import { registerCompareCommand, getLastDiffHtmlForTesting, openSourceDiffForTesting } from './editor/ditaDiffProvider';
-import { resolveOxygenLaunch, buildOxygenSpawnArgs } from './editor/oxygenLauncher';
+import { resolveOxygenLaunch, buildOxygenSpawnArgs, OxygenUnsafeBatchPathError, type OxygenLaunchSpec } from './editor/oxygenLauncher';
+import { discoverOxygenOnThisMachine } from './editor/oxygenDiscoveryNode';
 import { registerWrapSelectionCommand } from './editor/wrapSelectionCommand';
 import { registerFindReferencingMapsCommand } from './editor/findDitaReferences';
 import { registerKeyContextCommand } from './editor/keyContextCommand';
@@ -27,6 +29,9 @@ export function activate(context: vscode.ExtensionContext) {
   // Unsaved editor text into the sources the previews read (sourceText.ts).
   // First, so it is in place before anything can render.
   registerSourceOverlay(context);
+
+  // References (conref, conkeyref, titles) may not read outside the workspace.
+  registerReadBoundary(context);
 
   // Remembers which tab group was active last, for "open source" in docsite mode.
   registerSourceEditorTracker(context);
@@ -81,34 +86,88 @@ export function activate(context: vscode.ExtensionContext) {
       const configPath: string | undefined = vscode.workspace.getConfiguration('dita-viewer').get('oxygenPath');
       const configuredPath = configPath && configPath.trim() ? configPath.trim() : undefined;
 
-      const result = resolveOxygenLaunch({
-        configuredPath,
-        platform: process.platform,
-        pathEnv: process.env.PATH,
-        fileExists: (p) => existsSync(p),
-      });
+      const resolveWith = (path: string | undefined, detected?: OxygenLaunchSpec[]) =>
+        resolveOxygenLaunch({
+          configuredPath: path,
+          platform: process.platform,
+          pathEnv: process.env.PATH,
+          fileExists: (p) => existsSync(p),
+          isDirectory: (p) => {
+            try {
+              return statSync(p).isDirectory();
+            } catch {
+              return false;
+            }
+          },
+          readDir: (p) => {
+            try {
+              return readdirSync(p);
+            } catch {
+              return [];
+            }
+          },
+          detected,
+        });
+
+      // A configured path wins outright; only without one is the machine
+      // scanned (registry / install folders), so the common case costs nothing.
+      let result = resolveWith(configuredPath, configuredPath ? undefined : await discoverOxygenOnThisMachine());
 
       if (!result.found) {
         const openSettingsLabel = vscode.l10n.t('Open Settings');
+        const browseLabel = vscode.l10n.t('Browse…');
         const message =
           result.reason === 'setting-invalid'
             ? vscode.l10n.t('The configured Oxygen XML Editor path is invalid: {0}', configuredPath ?? '')
             : vscode.l10n.t('Oxygen XML Editor was not found. Please configure its path in settings.');
-        const action = await vscode.window.showErrorMessage(message, openSettingsLabel);
+        const action = await vscode.window.showErrorMessage(message, browseLabel, openSettingsLabel);
         if (action === openSettingsLabel) {
           vscode.commands.executeCommand('workbench.action.openSettings', 'dita-viewer.oxygenPath');
+          return;
         }
-        return;
+        if (action !== browseLabel) return;
+        const picked = await vscode.window.showOpenDialog({
+          canSelectFiles: true,
+          canSelectFolders: true,
+          canSelectMany: false,
+          openLabel: vscode.l10n.t('Select Oxygen XML Editor'),
+          title: vscode.l10n.t('Select the Oxygen XML Editor executable or installation folder'),
+        });
+        if (!picked || picked.length === 0) return;
+        const pickedPath = picked[0].fsPath;
+        const checked = resolveWith(pickedPath);
+        if (!checked.found) {
+          vscode.window.showErrorMessage(vscode.l10n.t('No Oxygen XML Editor launcher was found at: {0}', pickedPath));
+          return;
+        }
+        // Only a pick that resolved to a launcher is worth remembering: a bad
+        // value here would shadow detection on every later run.
+        await vscode.workspace
+          .getConfiguration('dita-viewer')
+          .update('oxygenPath', pickedPath, vscode.ConfigurationTarget.Global);
+        result = checked;
       }
 
-      const spawnArgs = buildOxygenSpawnArgs(result.spec, target.fsPath);
       try {
-        const child = spawn(spawnArgs.command, spawnArgs.args, { detached: true, stdio: 'ignore' });
+        // Inside the try: a batch launcher refuses a path cmd.exe would still
+        // interpret, and that refusal is reported like any other launch error.
+        const spawnArgs = buildOxygenSpawnArgs(result.spec, target.fsPath, process.env);
+        const child = spawn(spawnArgs.command, spawnArgs.args, {
+          detached: true,
+          stdio: 'ignore',
+          windowsVerbatimArguments: spawnArgs.windowsVerbatimArguments,
+        });
         child.on('error', (err) => {
           vscode.window.showErrorMessage(vscode.l10n.t('Failed to launch Oxygen XML Editor: {0}', err.message));
         });
         child.unref();
       } catch (err) {
+        if (err instanceof OxygenUnsafeBatchPathError) {
+          vscode.window.showErrorMessage(
+            vscode.l10n.t('This path contains characters that cannot be passed to oxygen.bat safely: {0}', err.path),
+          );
+          return;
+        }
         const message = err instanceof Error ? err.message : String(err);
         vscode.window.showErrorMessage(vscode.l10n.t('Failed to launch Oxygen XML Editor: {0}', message));
       }

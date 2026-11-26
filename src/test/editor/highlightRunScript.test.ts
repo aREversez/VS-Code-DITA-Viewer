@@ -86,7 +86,6 @@ function harness() {
     now = until;
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
   const factory = new Function(
     'document',
     'setTimeout',

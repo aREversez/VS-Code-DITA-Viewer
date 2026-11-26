@@ -14,6 +14,7 @@ import {
   getImageLightboxScript,
 } from './ditaRenderUtils';
 import { sharedWebviewStrings } from './webviewL10n';
+import { refErrorTexts } from './refErrorTexts';
 import {
   diffTopics,
   TopicDiffResult,
@@ -21,7 +22,7 @@ import {
   buildQuickCommitChoices,
   arrangeByRecency,
 } from './ditaDiffEngine';
-import { renderDiffColumns } from './ditaDiffRender';
+import { renderDiffColumns, diffColumnLangAttr } from './ditaDiffRender';
 import {
   getRepoRoot,
   toRepoRelPath,
@@ -345,6 +346,12 @@ function computeDiff(
       uiLanguage: vscode.env.language,
       // includeIndexLabel omitted: the diff view never surfaces indexterm
       // chips, so it has never set ctx.indexLabel (preserved byte-for-byte).
+      // Broken references DO surface here: a review is exactly where a
+      // silently empty conref is most dangerous, and the placeholder chip
+      // carries the referencing element's data-line range, so it takes part
+      // in diff highlighting and click-to-source like any other block.
+      refErrors: true,
+      refErrorTexts: refErrorTexts(),
     });
 
     return (node: DitaNode, parentBaseType: string, headingLevel: number) => {
@@ -626,9 +633,9 @@ function buildDiffHtml(
 ${result.errorLeft ? `<div class="diff-error">${escapeHtml(result.errorLeft)}</div>` : ''}
 ${result.errorRight ? `<div class="diff-error">${escapeHtml(result.errorRight)}</div>` : ''}
 <div class="diff-columns">
-  <div class="diff-col diff-col--left">${cols.left}</div>
+  <div class="diff-col diff-col--left"${diffColumnLangAttr(result.leftLang)}>${cols.left}</div>
   <div class="diff-gutter" id="diff-gutter"><svg id="align-svg" class="align-svg" xmlns="http://www.w3.org/2000/svg"></svg></div>
-  <div class="diff-col diff-col--right">${cols.right}</div>
+  <div class="diff-col diff-col--right"${diffColumnLangAttr(result.rightLang)}>${cols.right}</div>
 </div>
 </div>
 <script nonce="${nonce}" src="${diffScriptUri}"></script>

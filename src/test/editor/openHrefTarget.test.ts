@@ -4,7 +4,7 @@ import { openHrefTarget } from '../../editor/openHrefTarget';
 
 // A stand-in for the vscode API: it records what would have been opened. The
 // function takes the API as an argument precisely so this is possible.
-function fakeVscode() {
+function fakeVscode(folders: string[] = [resolve('/docs')]) {
   const calls: string[] = [];
   const api = {
     Uri: {
@@ -18,11 +18,19 @@ function fakeVscode() {
       },
     },
     commands: {
-      executeCommand: (cmd: string, uri: { value: string }, viewType: string) => {
-        calls.push(`${cmd} ${uri.value} ${viewType}`);
+      executeCommand: (cmd: string, uri: { value: string }, viewType?: string) => {
+        calls.push(viewType ? `${cmd} ${uri.value} ${viewType}` : `${cmd} ${uri.value}`);
         return Promise.resolve();
       },
     },
+    workspace: { workspaceFolders: folders.map((f) => ({ uri: { fsPath: f } })) },
+    window: {
+      showWarningMessage: (m: string) => {
+        calls.push(`warn ${m}`);
+        return Promise.resolve(undefined);
+      },
+    },
+    l10n: { t: (m: string, ...a: string[]) => m.replace(/\{(\d)\}/g, (_x, i) => a[Number(i)]) },
   };
   return { api: api as unknown as typeof import('vscode'), calls };
 }
@@ -55,10 +63,45 @@ describe('openHrefTarget', () => {
     assert.deepStrictEqual(calls, [`vscode.openWith ${resolve(base, 'my topic.dita')} ditaViewer.preview`]);
   });
 
-  it('hands any other file (html, pdf, images) to the system handler', () => {
+  it('hands a display-safe file (html, pdf, images, text) to the system handler', () => {
     const { api, calls } = fakeVscode();
-    openHrefTarget(api, 'guide.pdf', base);
-    assert.deepStrictEqual(calls, [`external file:${resolve(base, 'guide.pdf')}`]);
+    const safe = ['guide.pdf', 'pic.PNG', 'notes.txt', 'README.md', 'page.html', 'old.HTM', 'logo.svg'];
+    for (const f of safe) openHrefTarget(api, f, base);
+    assert.deepStrictEqual(
+      calls,
+      safe.map((f) => `external file:${resolve(base, f)}`),
+    );
+  });
+
+  // One click on a hotspot must not be able to run a program: anything that is
+  // not display-safe is revealed in the file manager, never openExternal'd.
+  it('reveals, and never executes, a file type the OS would run', () => {
+    const { api, calls } = fakeVscode();
+    for (const f of ['tool.exe', 'run.bat', 'x.lnk', 'script.sh', 'noext']) {
+      openHrefTarget(api, f, base);
+    }
+    assert.deepStrictEqual(
+      calls,
+      ['tool.exe', 'run.bat', 'x.lnk', 'script.sh', 'noext'].map((f) => `revealFileInOS ${resolve(base, f)}`),
+    );
+  });
+
+  it('refuses a target outside the workspace, for every branch, with a warning', () => {
+    const { api, calls } = fakeVscode();
+    for (const href of ['../../secret.pdf', '../../x.dita', '../../m.ditamap', '../../tool.exe', '/etc/hosts']) {
+      openHrefTarget(api, href, base);
+    }
+    assert.strictEqual(calls.length, 5);
+    assert.ok(calls.every((c) => c.startsWith('warn Not opened: ') && c.endsWith('is outside the workspace.')), calls.join('\n'));
+  });
+
+  it('with no workspace folder, the document folder is the boundary', () => {
+    const { api, calls } = fakeVscode([]);
+    openHrefTarget(api, 'sub/a.dita', base);
+    openHrefTarget(api, '../a.dita', base);
+    assert.strictEqual(calls.length, 2);
+    assert.ok(calls[0].startsWith('vscode.openWith'), calls[0]);
+    assert.ok(calls[1].startsWith('warn '), calls[1]);
   });
 
   it('does nothing for an empty href, a same-page anchor or only a fragment', () => {

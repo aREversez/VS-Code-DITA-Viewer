@@ -64,7 +64,6 @@ function setup(links: FakeEl[]) {
     setState: () => {},
   };
   const script = getSiteNavClickHandlerScript({ switchSitePageMsgType: 'switchSitePage' });
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
   new Function('document', 'window', 'vscode', 'setTimeout', script)(document, window, vscode, () => 0);
   const fire = (e: Record<string, unknown>) => {
     const ev: Record<string, unknown> = { ...e, defaultPrevented: false, preventDefault: () => { ev.defaultPrevented = true; } };

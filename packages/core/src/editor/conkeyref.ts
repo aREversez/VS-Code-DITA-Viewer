@@ -25,6 +25,7 @@
 
 import { DitaNode } from '../parser/domTypes';
 import { KeyDefLookup } from './keySpace';
+import { isNonDitaTarget } from '../render/refTargets';
 
 /**
  * Addressing inside the key's target topic: the whole topic when the value has
@@ -105,4 +106,45 @@ export function resolveConkeyref(
   const targetId = elementId ?? hrefFragmentTarget(def.href);
   if (!targetId) return root;
   return findElementById(root, targetId);
+}
+
+
+export type ConkeyrefFailure = 'missingKey' | 'missingFile' | 'parseError' | 'missingId' | 'outsideWorkspace';
+
+/**
+ * Why a conkeyref pulls nothing, in the order resolveConkeyref checks:
+ * the key is undefined or has no href; its file is missing or not
+ * well-formed (`fileExists` tells the two apart, as loadTopic cannot); the
+ * addressed id is absent. Undefined when the reference resolves. Kept next
+ * to resolveConkeyref and built on the same steps so the two cannot
+ * disagree about what "resolves" means.
+ */
+export function diagnoseConkeyref(
+  conkeyref: string,
+  defs: KeyDefLookup,
+  loadTopic: (baseDir: string, href: string) => DitaNode | undefined,
+  fileExists: (baseDir: string, href: string) => boolean,
+  /** Whether the host lets a reference read that file; omitted means always. */
+  isReadable: (baseDir: string, href: string) => boolean = () => true,
+): ConkeyrefFailure | undefined {
+  const { keyName, elementId } = parseConkeyref(conkeyref);
+  if (!keyName) return undefined;
+  const def = defs.get(keyName);
+  if (!def || !def.href) return 'missingKey';
+  // A keydef may name a non-local or non-DITA resource (scope="external"
+  // href="https://...", format="pdf" href="manual.pdf"): keySpace records
+  // hrefs without filtering scope/format, so the exclusion lives here, from
+  // the same rule makeRefErrorResolver applies to a direct ref. The fragment
+  // is stripped first -- it is the target format's own, not a DITA id.
+  if (isNonDitaTarget(def.href.split('#')[0])) return undefined;
+  const root = loadTopic(def.baseDir, def.href);
+  if (!root) {
+    if (!fileExists(def.baseDir, def.href)) return 'missingFile';
+    // Present but not loadable: either the host's read boundary refused it or
+    // it is not well-formed. The author can act on the first, so say so.
+    return isReadable(def.baseDir, def.href) ? 'parseError' : 'outsideWorkspace';
+  }
+  const targetId = elementId ?? hrefFragmentTarget(def.href);
+  if (!targetId) return undefined;
+  return findElementById(root, targetId) ? undefined : 'missingId';
 }

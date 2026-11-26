@@ -30,6 +30,7 @@ import { randomBytes } from 'crypto';
 import { readForDocument, writeForDocument } from './perDocumentState';
 import { MAP_VIEW_STATE_KEY, parseMapViewState } from './mapViewState';
 import { ditavalForDocument, handleDitavalRequest, isDitavalRequest } from './profilingDitaval';
+import { refErrorTexts } from './refErrorTexts';
 
 // Test-only hook: see the identical comment in DitaViewerProvider.ts.
 const lastRenderedHtmlByUri = new Map<string, string>();
@@ -559,6 +560,7 @@ export class MapViewerProvider implements vscode.CustomTextEditorProvider {
       uiLanguage: vscode.env.language,
       bookMembers,
       keyScope,
+      refErrorTexts: refErrorTexts(),
     });
     if (result.error) return { error: result.error };
     return { html: result.html };
@@ -1025,6 +1027,7 @@ ${shell.html}
       keyMap,
       fileToWebviewUri: (absPath) => webview.asWebviewUri(vscode.Uri.file(absPath)).toString(),
       uiLanguage: vscode.env.language,
+      refErrorTexts: refErrorTexts(),
     });
 
     // Book mode's own sidebar (nested-fold-and-highlight-plan.md item 1) --

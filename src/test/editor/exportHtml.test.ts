@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'fs';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { buildStandaloneHtml, makeDataUriInliner, buildBookHeading, classifyMapExportEntry } from '../../editor/exportHtmlHelpers';
@@ -72,6 +72,27 @@ describe('makeDataUriInliner', () => {
     const inliner = makeDataUriInliner(tmpDir);
     const result = inliner('icon.svg');
     assert.ok(result.startsWith('data:image/svg+xml;base64,'));
+  });
+
+  // An exported page is shared, so an image href must not be able to pull any
+  // file on the machine into it as base64.
+  it('inlines nothing for a path that leaves the allowed roots (../ and absolute)', () => {
+    const ws = join(tmpDir, 'ws');
+    const secret = join(tmpDir, 'secret.png');
+    mkdirSync(ws);
+    writeFileSync(secret, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    const inliner = makeDataUriInliner(ws);
+    assert.strictEqual(inliner('../secret.png'), '');
+    assert.strictEqual(inliner(secret), '');
+  });
+
+  it('inlines a ../ image that stays inside the roots the host passes', () => {
+    const ws = join(tmpDir, 'ws');
+    mkdirSync(join(ws, 'topics'), { recursive: true });
+    mkdirSync(join(ws, 'images'));
+    writeFileSync(join(ws, 'images', 'a.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    const inliner = makeDataUriInliner(join(ws, 'topics'), [ws]);
+    assert.ok(inliner('../images/a.png').startsWith('data:image/png;base64,'));
   });
 
   it('should return empty string for a non-existent file', () => {
@@ -185,5 +206,18 @@ describe('classifyMapExportEntry', () => {
 
   it('skips a .ditamap-href entry that also has keys (both signals say "not real content" -- keys wins the same way it does for the hrefless case)', () => {
     assert.strictEqual(classifyMapExportEntry({ href: 'sub.ditamap', keys: 'k' }), 'skip');
+  });
+});
+
+describe('exportHtml render options', () => {
+  it('every export render that drops indexterm chips also drops draft comments', () => {
+    const src = readFileSync(join(__dirname, '..', '..', '..', 'src', 'editor', 'exportHtml.ts'), 'utf8');
+    const count = (needle: string): number => src.split(needle).length - 1;
+    assert.ok(count('suppressIndexterm: true') >= 2, 'topic and map export both render with suppressIndexterm');
+    assert.strictEqual(
+      count('suppressDraftComment: true'),
+      count('suppressIndexterm: true'),
+      'the DITA spec default is to strip review notes from published output on every export path',
+    );
   });
 });

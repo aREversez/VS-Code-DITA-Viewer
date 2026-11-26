@@ -13,7 +13,6 @@ interface Model {
 }
 
 function load(): Model {
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
   const factory = new Function(
     `${getSiteHistoryModelScript()}
      return { create: siteHistoryCreate, push: siteHistoryPush, step: siteHistoryStep,
