@@ -6,6 +6,13 @@
 //
 // Not part of `verify`: it installs from the npm registry (the package depends
 // on sax), so it needs the network. Run it before every publish.
+//
+//   npm run check:core-portable
+//
+// The offline half, and part of `verify`: build core, bundle the portable entry
+// for a browser with no Node built-ins available, and run the bundle in a
+// context that has no require, process or Buffer. This is what keeps core
+// usable where there is no Node (DESIGN.md goal G1).
 
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -40,6 +47,64 @@ const check = (ok, message) => {
   if (!ok) failures.push(message);
 };
 
+// Bundles `entry` as a browser would (no Node built-ins, nothing external) and
+// renders a topic from an in-memory file system inside a vm context that has no
+// require, process or Buffer: only what a browser or worker has.
+async function checkPortable(entry, resolveDir, label) {
+  const esbuild = createRequire(join(root, 'package.json'))('esbuild');
+  const vm = await import('node:vm');
+  let code;
+  try {
+    code = esbuild.buildSync({
+      stdin: { contents: `export * from ${JSON.stringify(entry)};`, resolveDir, loader: 'js' },
+      bundle: true, write: false, platform: 'browser', format: 'iife', globalName: 'DitaCore', logLevel: 'silent',
+    }).outputFiles[0].text;
+  } catch (e) {
+    check(false, `${label}: bundles for a browser with no Node built-ins: ${(e.errors || []).map((x) => x.text).join('; ') || e.message}`);
+    return;
+  }
+  check(true, `${label}: bundles for a browser with no Node built-ins (${Math.round(code.length / 1024)} KB)`);
+  check(!/require\(["'](node:)?(fs|path|os|url|child_process|crypto|util|buffer)["']\)/.test(code), `${label}: the bundle requires no Node built-in`);
+  // (sax tries require('stream') inside try/catch and works without it, so `stream` is not on the list.)
+  try {
+    const sandbox = { TextEncoder, TextDecoder, console };
+    vm.createContext(sandbox);
+    vm.runInContext(code, sandbox);
+    const out = vm.runInContext(
+      `(() => {
+        const C = DitaCore;
+        if (typeof require !== 'undefined' || typeof process !== 'undefined' || typeof Buffer !== 'undefined') throw new Error('sandbox is not clean');
+        const fs = C.createMemoryFileSystem({ '/ws/other.dita': '<topic id="o"><title>Other</title></topic>', '/ws/i.png': new Uint8Array([137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,0,0,1,44,0,0,0,100]) });
+        const engine = C.createEngine({ fs, path: C.posixPath });
+        const html = engine.renderTopicXml({ xml: '<topic id="t"><title>Hello</title><body><p>x <xref href="other.dita"/></p><fig><image href="i.png"/></fig></body></topic>', docDir: '/ws', keyMap: new Map(), asWebviewUri: (p) => p, headingLevel: 1 }).html;
+        const ast = C.parseDita('<topic id="t"><title>T</title></topic>');
+        return JSON.stringify({ html, root: !!ast.root, pure: typeof C.complete, none: typeof C.renderTopicXml });
+      })()`,
+      sandbox,
+    );
+    const r = JSON.parse(out);
+    check(/Hello/.test(r.html) && /Other/.test(r.html) && /width="300"/.test(r.html) && r.root && r.pure === 'function' && r.none === 'undefined',
+      `${label}: renders from an in-memory file system in a context with no require, process or Buffer`);
+  } catch (e) {
+    check(false, `${label}: runs with no Node globals: ${e.message}`);
+  }
+}
+
+if (process.argv.includes('--portable')) {
+  try {
+    npm(['run', 'build', '-w', '@dita-viewer/core'], root);
+    await checkPortable(join(pkgDir, 'dist-esm', 'portable.js'), pkgDir, 'portable entry');
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
+  if (failures.length > 0) {
+    console.error(`\n${failures.length} check(s) failed.`);
+    process.exit(1);
+  }
+  console.log('\nportable check passed.');
+  process.exit(0);
+}
+
 try {
   // npm pack runs prepublishOnly's sibling lifecycle for `pack`, not publish; build explicitly.
   npm(['run', 'build', '-w', '@dita-viewer/core'], root);
@@ -71,6 +136,8 @@ try {
   check(has('README.md') && has('package.json'), 'tarball has README.md and package.json');
   check(has('dist/index.js') && has('dist/index.d.ts'), 'tarball has dist/index.js and dist/index.d.ts');
   check(has('dist-esm/index.js') && has('dist-esm/package.json'), 'tarball has dist-esm/index.js, the ES module build for bundlers');
+  check(has('dist/portable.js') && has('dist/portable.d.ts') && has('dist-esm/portable.js'), 'tarball has the portable entry (CommonJS, types, ES module)');
+  check(has('dist/node/index.js') && has('dist/node/index.d.ts') && has('dist-esm/node/index.js'), 'tarball has the node entry (CommonJS, types, ES module)');
   check(has('styles/dita-content.css') && has('styles/TOKENS.md'), 'tarball has the stylesheet and the token contract');
   check(!files.some((f) => f.endsWith('.map')), 'tarball has no source maps');
   check(!files.some((f) => f.startsWith('src/') || f.startsWith('test/') || f.startsWith('dist-test/')), 'tarball has no src, test or dist-test');
@@ -119,6 +186,39 @@ console.log(Object.keys(core).length);`,
     check(false, `a bundler drops the modules it does not use: ${e.message}`);
   }
 
+  // The subpath entries, from the installed package: CommonJS, ES module, a browser bundle, types.
+  try {
+    const out = run('node', ['-e', `
+      const p = require('@dita-viewer/core/portable');
+      const n = require('@dita-viewer/core/node');
+      if (typeof p.createEngine !== 'function' || typeof p.parseDita !== 'function' || 'renderTopicXml' in p) throw new Error('portable surface');
+      const e = n.createNodeEngine();
+      const html = e.renderTopicXml({ xml: '<topic id="t"><title>Hello</title></topic>', docDir: process.cwd(), keyMap: new Map(), asWebviewUri: (x) => x, headingLevel: 1 }).html;
+      if (!/Hello/.test(html) || typeof n.nodePlatform.fs.readText !== 'function') throw new Error('node engine');
+      console.log('ok');`], consumer).trim();
+    check(out === 'ok', 'a CommonJS consumer can use the portable and node entries');
+  } catch (e) {
+    check(false, `a CommonJS consumer can use the portable and node entries: ${e.stderr || e.message}`);
+  }
+  try {
+    const out = run(process.execPath, ['--input-type=module', '-e', "import { createEngine, posixPath, createMemoryFileSystem } from '@dita-viewer/core/portable'; import { createNodeEngine } from '@dita-viewer/core/node'; console.log([typeof createEngine, typeof posixPath.join, typeof createMemoryFileSystem, typeof createNodeEngine].join());"], consumer).trim();
+    check(out === 'function,function,function,function', 'a Node ES module consumer can import the portable and node entries');
+  } catch (e) {
+    check(false, `a Node ES module consumer can import the portable and node entries: ${e.stderr || e.message}`);
+  }
+  await checkPortable('@dita-viewer/core/portable', consumer, 'installed portable entry');
+
+  writeFileSync(
+    join(consumer, 'use-subpaths.ts'),
+    `import { createEngine, createMemoryFileSystem, posixPath, parseDita, type Engine, type Platform, type FileSystem } from '@dita-viewer/core/portable';
+import { createNodeEngine, nodePlatform } from '@dita-viewer/core/node';
+const platform: Platform = { fs: createMemoryFileSystem({ '/a.dita': '<topic id="a"/>' }) satisfies FileSystem, path: posixPath };
+const engine: Engine = createEngine(platform);
+const html: string = engine.renderTopicXml({ xml: '', docDir: '/', keyMap: new Map(), asWebviewUri: (p) => p, headingLevel: 1 }).html;
+const node: Engine = createNodeEngine();
+export { html, node, nodePlatform, parseDita };
+`,
+  );
   writeFileSync(
     join(consumer, 'use.ts'),
     `import { parseDita, renderTopicXml, type DitaDocument, type DitaNode } from '@dita-viewer/core';
@@ -130,7 +230,7 @@ export { node, html };
   );
   writeFileSync(
     join(consumer, 'tsconfig.json'),
-    JSON.stringify({ compilerOptions: { module: 'node16', moduleResolution: 'node16', target: 'es2022', strict: true, noEmit: true, skipLibCheck: false, types: ['node'] }, files: ['use.ts'] }),
+    JSON.stringify({ compilerOptions: { module: 'node16', moduleResolution: 'node16', target: 'es2022', strict: true, noEmit: true, skipLibCheck: false, types: ['node'] }, files: ['use.ts', 'use-subpaths.ts'] }),
   );
   try {
     run(process.execPath, [join(consumer, 'node_modules', 'typescript', 'bin', 'tsc'), '-p', 'tsconfig.json'], consumer);

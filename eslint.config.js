@@ -31,6 +31,34 @@ module.exports = [
       'no-console': 'off',
     },
   },
+  // @dita-viewer/core must run where there is no Node: outside src/node/, no Node
+  // built-in, no Buffer, no process. File access goes through the runtime's
+  // FileSystem (src/runtime/fs.ts) and paths through its PathOps
+  // (src/runtime/path.ts); see packages/core/DESIGN.md 3.1, goal G1.
+  {
+    files: ['packages/core/src/**/*.ts'],
+    ignores: ['packages/core/src/node/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: ['fs', 'path', 'os', 'url', 'child_process', 'crypto', 'stream', 'util', 'vm', 'zlib', 'http', 'https', 'net', 'worker_threads', 'module', 'buffer', 'process', 'events', 'readline', 'assert'].map((name) => ({
+            name,
+            message: 'core must not import Node built-ins outside src/node/; use runtime/fs or runtime/path.',
+          })),
+          patterns: [{ group: ['node:*', 'fs/*', 'path/*'], message: 'core must not import Node built-ins outside src/node/.' }],
+        },
+      ],
+      'no-restricted-globals': [
+        'error',
+        { name: 'Buffer', message: 'No Buffer in core: use Uint8Array and DataView (src/utf8.ts has the helpers).' },
+        { name: 'process', message: 'No process in core: ask the platform (PathOps.caseSensitive, ...).' },
+        { name: '__dirname', message: 'No Node globals in core.' },
+        { name: '__filename', message: 'No Node globals in core.' },
+        { name: 'require', message: 'No require in core.' },
+      ],
+    },
+  },
   prettierConfig,
   // Test files legitimately use require()-style imports: they hijack the
   // module cache (new Module + _compile) to stub 'vscode' and lazily load

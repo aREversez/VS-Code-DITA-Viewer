@@ -1,6 +1,6 @@
 # @dita-viewer/core — Design: toward a host-agnostic DITA engine
 
-Status: draft 1 · 2026-11-26 · measured at `e739149` (core 0.3.0)
+Status: draft 1 · 2026-11-26 · Phase 1 implemented 2026-11-27 · measured at `e739149` (core 0.3.0)
 Phase 1 is designed in full (section 3). Phases 2 and 3 are roadmap only (section 1) and are meant to be designed later, one at a time.
 
 ## 0. How to use this document
@@ -42,7 +42,7 @@ Explicit non-goal: core is **not a DITA-OT replacement**. It does not aim at pub
 
 | Phase | Goal | Status | Exit criteria (summary) |
 | --- | --- | --- | --- |
-| 1. Decouple | Core runs with no Node built-ins and no process-wide state, behind injected I/O | Designed, not started | Portable entry bundles for the browser; Node and in-memory platforms render byte-identical HTML; two engines in one process do not interact; both consumers unchanged. Details in 3.7. |
+| 1. Decouple | Core runs with no Node built-ins and no process-wide state, behind injected I/O | Implemented on `dev` (five patches); release `core-0.4.0` pending | Portable entry bundles for the browser; Node and in-memory platforms render byte-identical HTML; two engines in one process do not interact; both consumers unchanged. Details in 3.7. |
 | 2. Capabilities | Fill in the DITA semantics hosts need, as host-neutral functions that return structured data | Roadmap only | Each capability is an engine function with fixture tests; a coverage table says supported / partial / unsupported; host features (e.g. the VS Code map checks) contain no DITA logic of their own. |
 | 3. Ecosystem | An outside developer can use core without reading the extension's source | Roadmap only | Consumer-facing README and API reference; stable API tier separated from internals; three examples run in CI; semver policy written down. |
 
@@ -224,6 +224,14 @@ Five patches, in order. After each one `npm run verify` and `npm run check:core-
 5. **Entry points, enforcement and release prep.** `src/portable.ts`, `createEngine`, `RUNTIME_DEPENDENT`, the `exports` map, `check:core-portable` (below), the conformance and tripwire tests, a lint rule restricting Node built-ins, `Buffer` and `process` outside `src/node/`, README section on the new subpaths, and the status table in this file. Then the maintainer tags `core-0.4.0`.
 
 ### 3.7 Acceptance tests and exit criteria
+
+*Implementation notes (2026-11-27).* Phase 1 landed as the five patches of 3.6. Where it differs from the text below:
+
+- The pure / runtime-dependent split is computed, not listed by hand. `test/exportKinds.test.ts` runs a static call-graph analysis (`test/helpers/reachesRuntime.ts`) and fails if a name in `PORTABLE_PURE` can reach the runtime, or a name that can reach it is in no list. The result: 75 pure names, 49 engine methods, and `BASE_TYPE_RENDERERS` (a table of functions) available only from the Node entry. `renderDocument` and `renderElement` are engine methods, not pure, because the imagemap id counter is per-runtime state.
+- Per-runtime state uses `stateSlot()` in `runtime.ts`, so `runtime.ts` does not import the types of what it holds.
+- The imagemap counter still only increases within a runtime; resetting it per render is left to Phase 2 (see 3.8).
+- Conformance runs on `test-dita-file/fixture` (topics, maps, book and site renders, diagnostics, key maps). It does not yet vary profiling. The tripwire test calls about twenty pure exports with no runtime installed; the static analysis covers the rest.
+- `npm run check:core-portable` is part of `npm run verify`; `check:core-pack` covers the subpaths. Legacy `moduleResolution: node` TypeScript consumers cannot resolve the new subpaths (no `typesVersions`); node16 and bundler resolution can.
 
 Phase 1 is done when all of these hold:
 

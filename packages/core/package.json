@@ -30,6 +30,16 @@
       "module": "./dist-esm/index.js",
       "default": "./dist/index.js"
     },
+    "./portable": {
+      "types": "./dist/portable.d.ts",
+      "module": "./dist-esm/portable.js",
+      "default": "./dist/portable.js"
+    },
+    "./node": {
+      "types": "./dist/node/index.d.ts",
+      "module": "./dist-esm/node/index.js",
+      "default": "./dist/node/index.js"
+    },
     "./styles/dita-content.css": "./styles/dita-content.css",
     "./styles/TOKENS.md": "./styles/TOKENS.md"
   },
