@@ -6,7 +6,7 @@
 // near the document and resolve their key definitions, the same way the VS
 // Code preview does when no context map is set.
 
-import { dirname } from 'path';
+import { dirname } from './runtime/path';
 import { collectDitamapFilesUpward } from './editor/topicRender';
 import { KeySpace, buildKeySpace } from './editor/keySpace';
 import { readSourceText } from './editor/sourceText';

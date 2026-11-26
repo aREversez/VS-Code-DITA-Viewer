@@ -1,5 +1,5 @@
 import { existsSync, realpathSync } from 'fs';
-import { isAbsolute, relative, resolve, sep } from 'path';
+import { isAbsolute, getSep, relative, resolve } from './runtime/path';
 
 // "Is this path inside that folder?" for hosts that resolve a href an author
 // wrote. A reference such as `../../../.ssh/id_rsa` or `/etc/hosts` resolves
@@ -22,7 +22,7 @@ function real(p: string): string {
 export function isPathInside(root: string, target: string): boolean {
   const rel = relative(real(root), real(target));
   if (rel === '') return true;
-  return rel !== '..' && !rel.startsWith('..' + sep) && !isAbsolute(rel);
+  return rel !== '..' && !rel.startsWith('..' + getSep()) && !isAbsolute(rel);
 }
 
 /** True when `target` is inside at least one of `roots` (false for an empty list). */

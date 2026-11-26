@@ -5,6 +5,13 @@
 // and holds no copies of ./parser, ./render and ./editor (see README), so they
 // are edited here and released as a new version.
 
+import { nodePlatform } from './node/nodePlatform';
+import { createRuntime, setDefaultRuntime } from './runtime';
+
+// This entry point targets Node-compatible hosts: every function below runs on
+// Node's fs and path unless it is called through an engine (DESIGN.md 3.4).
+setDefaultRuntime(createRuntime(nodePlatform));
+
 export { renderTopicXml, buildTitleMap, collectDitamapFilesUpward } from './editor/topicRender';
 export type { TopicXmlRenderInput, TopicRenderInput, TopicRenderResult, ParsedTopicResult } from './editor/topicRender';
 export { buildKeySpace, getKeyDefs, getKeyScopes, getTopicScopeChains, createKeyScopeIndex } from './editor/keySpace';

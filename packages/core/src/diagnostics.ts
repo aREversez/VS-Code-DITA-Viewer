@@ -11,7 +11,7 @@
 // read fine as XML: references to nothing and ids used twice.
 
 import { existsSync } from 'fs';
-import { dirname, isAbsolute, resolve } from 'path';
+import { dirname, isAbsolute, resolve } from './runtime/path';
 import sax from 'sax';
 import { DitaNode } from './parser/domTypes';
 import { parseDita, parseDitamap } from './parser/ditaParser';

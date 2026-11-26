@@ -22,7 +22,7 @@
 //   - suppressIndexterm: only the export path sets it.
 
 import { existsSync } from 'fs';
-import { resolve, relative, isAbsolute } from 'path';
+import { resolve, relative, isAbsolute } from '../runtime/path';
 import { DitaNode } from '../parser/domTypes';
 import { RenderContext } from '../render/renderer';
 import {

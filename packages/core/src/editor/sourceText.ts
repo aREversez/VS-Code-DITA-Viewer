@@ -13,7 +13,7 @@
  * that feeds it from editor events is in sourceOverlaySync.ts.
  */
 import { readFileSync, statSync } from 'fs';
-import { normalize } from 'path';
+import { normalize } from '../runtime/path';
 
 interface OverlayEntry {
   text: string;

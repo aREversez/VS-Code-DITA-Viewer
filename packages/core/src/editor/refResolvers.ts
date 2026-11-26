@@ -11,7 +11,7 @@
 // this is a pure move of code lifted verbatim from ditaRenderUtils.ts.
 import { existsSync, openSync, readSync, closeSync, statSync } from 'fs';
 import { isReadAllowed } from '../pathContainment';
-import { resolve, isAbsolute, extname, dirname, relative, normalize } from 'path';
+import { resolve, isAbsolute, extname, dirname, relative, normalize } from '../runtime/path';
 import { DitaNode } from '../parser/domTypes';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { extractText, getMapTitleText, isDitamapRef } from '../render/mapTypeMap';

@@ -4,7 +4,7 @@
 // imports its dependencies from sibling modules so no cycle through the barrel.
 
 import { existsSync, readdirSync } from 'fs';
-import { dirname, join } from 'path';
+import { dirname, join } from '../runtime/path';
 import { DitaNode } from '../parser/domTypes';
 import { parseDita, preprocessEntities } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';

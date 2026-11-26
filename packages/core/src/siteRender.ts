@@ -15,7 +15,7 @@
 // manifest to switch pages before scrolling to the anchor.
 
 import { statSync } from 'fs';
-import { dirname, resolve } from 'path';
+import { dirname, resolve } from './runtime/path';
 import { DitaDocument } from './parser/domTypes';
 import { parseDitamap, preprocessEntities } from './parser/ditaParser';
 import { decodeHrefPart, expandDitamapRefs } from './editor/refResolvers';
