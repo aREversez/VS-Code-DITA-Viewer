@@ -3,8 +3,10 @@
 // unchanged topics. Moved verbatim from ditaRenderUtils.ts (P5 pure refactor);
 // imports its dependencies from sibling modules so no cycle through the barrel.
 
-import { existsSync, readdirSync } from 'fs';
 import { dirname, join } from '../runtime/path';
+import { exists, readDir } from '../runtime/fs';
+import { utf8ByteLength } from '../utf8';
+import type { WalkEntry } from '../language/referenceableFiles';
 import { DitaNode } from '../parser/domTypes';
 import { parseDita, preprocessEntities } from '../parser/ditaParser';
 import { renderDocument } from '../render/renderer';
@@ -217,7 +219,7 @@ export function renderTopicXml(input: TopicXmlRenderInput): ParsedTopicResult {
 export function renderTopicToHtml(input: TopicRenderInput): TopicRenderResult {
   const { filePath, keyMap, asWebviewUri, headingLevel, uiLanguage, suppressIndexterm, suppressDraftComment, collectDependencies, bookMembers, clickableExternalXrefs, markConrefs, refErrors, refErrorTexts, keyScope } = input;
   try {
-    if (!existsSync(filePath)) {
+    if (!exists(filePath)) {
       return { html: '', error: `File not found: ${filePath}` };
     }
     // The topic's own file is a dependency of its own render even though it
@@ -302,16 +304,16 @@ export function collectDitamapFilesUpward(startDir: string, root: string, stopAt
 function collectDitamapFilesRecursive(dir: string, results: string[], visited: Set<string>): void {
   if (visited.has(dir)) return;
   visited.add(dir);
-  let entries: import('fs').Dirent[];
+  let entries: WalkEntry[];
   try {
-    entries = readdirSync(dir, { withFileTypes: true });
+    entries = readDir(dir);
   } catch (e) {
     console.warn(`Failed to read directory ${dir}:`, e instanceof Error ? e.message : e);
     return;
   }
   for (const entry of entries) {
     const full = join(dir, entry.name);
-    if (entry.isDirectory()) {
+    if (entry.isDirectory) {
       collectDitamapFilesRecursive(full, results, visited);
     } else if (entry.name.toLowerCase().endsWith('.ditamap')) {
       results.push(full);
@@ -492,7 +494,7 @@ export function renderTopicCached(input: TopicRenderInput): TopicRenderResult {
   const files = [...dependencies];
   // UTF-8 bytes, not html.length: DITA content is frequently CJK, where the
   // character count understates what is actually retained by up to 3x.
-  const bytes = Buffer.byteLength(result.html, 'utf8');
+  const bytes = utf8ByteLength(result.html);
   if (bytes > topicRenderCacheBudget) {
     // A single topic larger than the entire budget. Caching it would evict
     // everything else and then be evicted itself on the next insert, so skip

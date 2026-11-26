@@ -21,7 +21,7 @@
 //     collectDependencies also folds image reads into the dependency set.
 //   - suppressIndexterm: only the export path sets it.
 
-import { existsSync } from 'fs';
+import { exists } from '../runtime/fs';
 import { resolve, relative, isAbsolute } from '../runtime/path';
 import { DitaNode } from '../parser/domTypes';
 import { RenderContext } from '../render/renderer';
@@ -262,7 +262,7 @@ export function buildRenderContext(input: BuildRenderContextInput): BuiltRenderC
           conkeyref,
           keyDefs,
           loadTopic,
-          (baseDir, href) => existsSync(resolve(baseDir, decodeHrefPart(href.split('#')[0]))),
+          (baseDir, href) => exists(resolve(baseDir, decodeHrefPart(href.split('#')[0]))),
           (baseDir, href) => isReadAllowed(resolve(baseDir, decodeHrefPart(href.split('#')[0]))),
         );
         return failure === undefined ? undefined : texts[failure];

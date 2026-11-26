@@ -13,3 +13,5 @@ export const normalize = (path: string): string => rt().platform.path.normalize(
 export const extname = (path: string): string => rt().platform.path.extname(path);
 /** A function, not a constant: the separator belongs to whichever platform is active at the call. */
 export const getSep = (): string => rt().platform.path.sep;
+/** False when path keys must be lower-cased to name the same file (Windows). */
+export const isCaseSensitive = (): boolean => rt().platform.path.caseSensitive;

@@ -12,8 +12,8 @@
  * Pure of the vscode module, so the rules here can be unit-tested; the code
  * that feeds it from editor events is in sourceOverlaySync.ts.
  */
-import { readFileSync, statSync } from 'fs';
-import { normalize } from '../runtime/path';
+import { isCaseSensitive, normalize } from '../runtime/path';
+import { readText, stat } from '../runtime/fs';
 
 interface OverlayEntry {
   text: string;
@@ -40,7 +40,7 @@ let revision = 0;
  */
 function key(filePath: string): string {
   const n = normalize(filePath).replace(/\\/g, '/');
-  return process.platform === 'win32' ? n.toLowerCase() : n;
+  return isCaseSensitive() ? n : n.toLowerCase();
 }
 
 /**
@@ -77,11 +77,11 @@ export function sourceOverlaySize(): number {
  * error handling. The one-value encoding parameter is what expandDitamapRefs'
  * FileReader type asks for.
  */
-export function readSourceText(filePath: string, encoding: 'utf-8' = 'utf-8'): string {
+export function readSourceText(filePath: string, _encoding: 'utf-8' = 'utf-8'): string {
   const k = key(filePath);
   recorder?.add(k);
   const entry = overlay.get(k);
-  return entry ? entry.text : readFileSync(filePath, encoding);
+  return entry ? entry.text : readText(filePath);
 }
 
 // ── Which sources a render read ──
@@ -144,10 +144,6 @@ export function dependsOn(files: ReadonlySet<string>, filePath: string): boolean
 export function sourceStamp(filePath: string): string {
   const entry = overlay.get(key(filePath));
   if (entry) return `dirty:${entry.rev}`;
-  try {
-    const st = statSync(filePath);
-    return `${st.mtimeMs}:${st.size}`;
-  } catch {
-    return '?';
-  }
+  const st = stat(filePath);
+  return st ? `${st.mtimeMs}:${st.size}` : '?';
 }

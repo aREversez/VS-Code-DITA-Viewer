@@ -1,4 +1,4 @@
-import { existsSync, realpathSync } from 'fs';
+import { exists, realPath } from './runtime/fs';
 import { isAbsolute, getSep, relative, resolve } from './runtime/path';
 
 // "Is this path inside that folder?" for hosts that resolve a href an author
@@ -12,7 +12,7 @@ import { isAbsolute, getSep, relative, resolve } from './runtime/path';
 function real(p: string): string {
   const abs = resolve(p);
   try {
-    return existsSync(abs) ? realpathSync(abs) : abs;
+    return exists(abs) ? realPath(abs) : abs;
   } catch {
     return abs;
   }

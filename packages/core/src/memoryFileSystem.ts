@@ -36,7 +36,8 @@ function fail(code: string, op: string, path: string): never {
  */
 export function createMemoryFileSystem(files: Record<string, MemoryFileContent> = {}): MemoryFileSystem {
   const encoder = new TextEncoder();
-  const decoder = new TextDecoder('utf-8');
+  // ignoreBOM: keep a leading BOM in the text, as readFileSync does.
+  const decoder = new TextDecoder('utf-8', { ignoreBOM: true });
   const entries = new Map<string, Entry>();
   let counter = 0;
 
