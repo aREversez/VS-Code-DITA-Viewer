@@ -1,8 +1,10 @@
 import * as assert from 'assert';
+import * as nodeFs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { createEngine, type Engine } from '../../src/engine';
 import { nodePlatform } from '../../src/node/nodePlatform';
-import { parseDitaval } from '../../src/profiling';
+import { parseDitaval, type ProfileFilter } from '../../src/profiling';
 import { posixPath } from '../../src/posixPath';
 import { loadDirIntoMemory } from '../helpers/loadDirIntoMemory';
 
@@ -107,5 +109,51 @@ describeIfPosix('Node and memory platforms agree on test-dita-file', function ()
   it('compared a lot, and most of it rendered rather than threw', () => {
     assert.ok(compared > 1000, `compared ${compared}`);
     assert.ok(threw < compared / 4, `${threw} of ${compared} threw`);
+  });
+});
+
+// The corpus test above compares what each platform does under three filters, but
+// nothing there shows that a filter removes anything from those maps, so two
+// platforms that both ignored it would agree. Build a map whose topicrefs carry
+// profiling attributes, on disk and in memory, and require that each filter prunes
+// exactly the topic it names, and that both platforms agree on every result.
+describeIfPosix('Node and memory platforms agree when a filter prunes the map', function () {
+  this.timeout(60000);
+  const dir = nodeFs.mkdtempSync(path.join(os.tmpdir(), 'core-conformance-'));
+  const topic = (id: string, title: string): string => `<topic id="${id}"><title>${title}</title><body><p>${title} text</p></body></topic>`;
+  const map = '<map><title>Filtered</title><topicref href="a.dita"/><topicref href="b.dita" audience="expert"/><topicref href="c.dita" product="pro"/></map>';
+  const mapFile = path.join(dir, 'm.ditamap');
+
+  before(() => {
+    nodeFs.writeFileSync(path.join(dir, 'a.dita'), topic('a', 'Alpha'));
+    nodeFs.writeFileSync(path.join(dir, 'b.dita'), topic('b', 'Bravo'));
+    nodeFs.writeFileSync(path.join(dir, 'c.dita'), topic('c', 'Charlie'));
+    nodeFs.writeFileSync(mapFile, map);
+  });
+  after(() => nodeFs.rmSync(dir, { recursive: true, force: true }));
+
+  const filters: Record<string, ProfileFilter | undefined> = {
+    none: undefined,
+    hidden: { hidden: new Set(['audience:expert']) },
+    ditaval: { ditaval: parseDitaval('<val><prop att="product" val="pro" action="exclude"/></val>') },
+  };
+
+  it('book and site renders are the same on both platforms, and the filters really prune', () => {
+    const { fs: memoryFs } = loadDirIntoMemory(dir);
+    const onNode = createEngine(nodePlatform);
+    const onMemory = createEngine({ fs: memoryFs, path: posixPath });
+    const norm = (v: unknown): string => JSON.stringify(v);
+    const toResourceUrl = (p: string): string => `vscode-resource:${p}`;
+    const html: Record<string, string> = {};
+    for (const [name, filter] of Object.entries(filters)) {
+      const input = { xml: map, docDir: dir, toResourceUrl, filter };
+      const book = onNode.renderBookXml({ ...input, headingLevel: 1 });
+      assert.strictEqual(norm(onMemory.renderBookXml({ ...input, headingLevel: 1 })), norm(book), `${name} book`);
+      assert.strictEqual(norm(onMemory.renderSiteXml(input)), norm(onNode.renderSiteXml(input)), `${name} site`);
+      html[name] = book.html;
+    }
+    assert.ok(html.none.includes('Bravo text') && html.none.includes('Charlie text'), 'unfiltered shows every topic');
+    assert.ok(!html.hidden.includes('Bravo text') && html.hidden.includes('Charlie text'), 'hand-hidden audience:expert prunes only the expert topic');
+    assert.ok(!html.ditaval.includes('Charlie text') && html.ditaval.includes('Bravo text'), 'a DITAVAL excluding product=pro prunes only that topic');
   });
 });
