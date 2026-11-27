@@ -102,14 +102,19 @@ const boundFunctions = new WeakSet<object>();
 
 /**
  * bindRuntime for every own function-valued property of a freshly made object
- * (a render context, a file cache), in place. `skip` names properties that hold
- * the host's own callbacks, which keep their identity.
+ * (a render context, a file cache), in place.
+ *
+ * `hostOwned` lists functions the host passed in and core only stored on the
+ * object unchanged (compared by identity): those keep their identity and are not
+ * wrapped. Naming them by value rather than by property name means a callback
+ * the host gains later is left alone without anyone remembering to list it; a
+ * function core made around a host one is a different function and is bound.
  */
-export function bindRuntimeMethods<T extends object>(obj: T, skip: readonly string[] = []): T {
+export function bindRuntimeMethods<T extends object>(obj: T, hostOwned: readonly unknown[] = []): T {
   const record = obj as Record<string, unknown>;
   for (const key of Object.keys(record)) {
     const value = record[key];
-    if (typeof value === 'function' && !skip.includes(key)) record[key] = bindRuntime(value as (...args: never[]) => unknown);
+    if (typeof value === 'function' && !hostOwned.includes(value)) record[key] = bindRuntime(value as (...args: never[]) => unknown);
   }
   return obj;
 }

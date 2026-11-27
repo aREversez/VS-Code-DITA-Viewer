@@ -286,6 +286,8 @@ export function buildRenderContext(input: BuildRenderContextInput): BuiltRenderC
   };
 
   // The context outlives this call and is used by whoever renders with it, so its own
-  // closures keep the runtime they were made under; the host's asWebviewUri stays as given.
-  return { ctx: bindRuntimeMethods(ctx, ['asWebviewUri']), touchedFiles: () => fileCache.touchedFiles() };
+  // closures keep the runtime they were made under. Functions the host passed in and
+  // the context holds as given (asWebviewUri today) keep their identity.
+  const hostCallbacks = Object.values(input).filter((v) => typeof v === 'function');
+  return { ctx: bindRuntimeMethods(ctx, hostCallbacks), touchedFiles: () => fileCache.touchedFiles() };
 }

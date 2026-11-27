@@ -8,7 +8,7 @@ import { RUNTIME_DEPENDENT } from '../src/exportKinds';
 import { createMemoryFileSystem } from '../src/memoryFileSystem';
 import { posixPath } from '../src/posixPath';
 import { parseDita } from '../src/parser/ditaParser';
-import { bindRuntime, getDefaultRuntime, setDefaultRuntime } from '../src/runtime';
+import { bindRuntime, bindRuntimeMethods, createRuntime, getDefaultRuntime, setDefaultRuntime, withRuntime } from '../src/runtime';
 import { analyseCallableReturns } from './helpers/returnsCallable';
 
 // A function an engine hands out is called later, after the engine call has
@@ -110,4 +110,37 @@ describe('functions an engine hands out keep the engine\'s runtime', () => {
     assert.deepStrictEqual(found, [...HANDS_OUT_FUNCTIONS].sort(), 'a new export returns a function: bind it with bindRuntime, test it above, and add its name to HANDS_OUT_FUNCTIONS');
   });
 
+});
+
+describe('bindRuntimeMethods leaves host-owned functions alone', () => {
+  it('keeps the identity of a function listed as host-owned, by value, and binds every other function', () => {
+    const rtA = createRuntime({ fs: createMemoryFileSystem(), path: posixPath });
+    const host = (): string => 'host';
+    const ours = (): string => 'ours';
+    const object = { host, ours, data: 1 };
+    const bound = withRuntime(rtA, () => bindRuntimeMethods(object, [host]));
+    assert.strictEqual(bound, object, 'in place');
+    assert.strictEqual(bound.host, host, 'the host function is untouched');
+    assert.notStrictEqual(bound.ours, ours, 'ours is wrapped');
+    assert.strictEqual(bound.ours(), 'ours');
+    assert.strictEqual(bound.data, 1);
+  });
+
+  it('a function core made around a host one is not host-owned, so it is bound', () => {
+    const rtA = createRuntime({ fs: createMemoryFileSystem(), path: posixPath });
+    const host = (p: string): string => p;
+    const wrapper = (p: string): string => host(p);
+    const bound = withRuntime(rtA, () => bindRuntimeMethods({ wrapper }, [host]));
+    assert.notStrictEqual(bound.wrapper, wrapper);
+  });
+});
+
+describe('buildRenderContext holds the host callback as given, whatever it is called', () => {
+  it('every function the host passes in keeps its identity on the context', () => {
+    const engine = engineOnMemory();
+    const asWebviewUri = (p: string): string => p;
+    const { ctx } = engine.buildRenderContext({ docDir: '/p', ownRoot, titleMap: new Map(), keyMap: new Map(), asWebviewUri, headingLevel: 1 });
+    const hostFunctions = Object.values({ asWebviewUri });
+    for (const fn of hostFunctions) assert.ok(Object.values(ctx).includes(fn), 'still on the context, unwrapped');
+  });
 });
