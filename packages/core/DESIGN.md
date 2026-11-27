@@ -42,7 +42,7 @@ Explicit non-goal: core is **not a DITA-OT replacement**. It does not aim at pub
 
 | Phase | Goal | Status | Exit criteria (summary) |
 | --- | --- | --- | --- |
-| 1. Decouple | Core runs with no Node built-ins and no process-wide state, behind injected I/O | Implemented on `dev` (five patches); release `core-0.4.0` pending | Portable entry bundles for the browser; Node and in-memory platforms render byte-identical HTML; two engines in one process do not interact; both consumers unchanged. Details in 3.7. |
+| 1. Decouple | Core runs with no Node built-ins and no process-wide state, behind injected I/O | Done: released as `core-0.4.0` | Portable entry bundles for the browser; Node and in-memory platforms render byte-identical HTML; two engines in one process do not interact; both consumers unchanged. Details in 3.7. |
 | 2. Capabilities | Fill in the DITA semantics hosts need, as host-neutral functions that return structured data | Roadmap only | Each capability is an engine function with fixture tests; a coverage table says supported / partial / unsupported; host features (e.g. the VS Code map checks) contain no DITA logic of their own. |
 | 3. Ecosystem | An outside developer can use core without reading the extension's source | Roadmap only | Consumer-facing README and API reference; stable API tier separated from internals; three examples run in CI; semver policy written down. |
 
@@ -223,7 +223,7 @@ Five patches, in order. After each one `npm run verify` and `npm run check:core-
 2. **Route path arithmetic through `runtime/path`.** Mechanical: the `from 'path'` imports in the 13 files change; no other edits. Tests unchanged. Add the default-runtime installation to the existing entry here so everything keeps resolving to the Node `path`.
 3. **Route file access through `runtime/fs`.** The 14 call sites, plus the default of `fileExists` in `diagnostics.ts`; rewrite the image-header readers over `Uint8Array` and `DataView` instead of `Buffer`; replace `Buffer.byteLength` with a small UTF-8 length helper; replace both `process.platform` checks with `path.caseSensitive`; `isPathInside` uses `fs.realPath` when present. Reconcile `readDir` entries with `WalkEntry`. The image-dimension tests must pass unmodified.
 4. **Move process-wide state into the runtime.** Overlays, revision, recorder, topic cache and budget, image-dimension cache, read roots, imagemap counter. The existing top-level functions (`setSourceOverlay`, `setReadRoots`, `clearTopicRenderCache`, ...) now act on the default runtime's state. Add the isolation test (3.7).
-5. **Entry points, enforcement and release prep.** `src/portable.ts`, `createEngine`, `RUNTIME_DEPENDENT`, the `exports` map, `check:core-portable` (below), the conformance and tripwire tests, a lint rule restricting Node built-ins, `Buffer` and `process` outside `src/node/`, README section on the new subpaths, and the status table in this file. Then the maintainer tags `core-0.4.0`.
+5. **Entry points, enforcement and release prep.** `src/portable.ts`, `createEngine`, `RUNTIME_DEPENDENT`, the `exports` map, `check:core-portable` (below), the conformance and tripwire tests, a lint rule restricting Node built-ins, `Buffer` and `process` outside `src/node/`, README section on the new subpaths, and the status table in this file. Released as `core-0.4.0`.
 
 ### 3.7 Acceptance tests and exit criteria
 
