@@ -7,6 +7,7 @@ import { nodePlatform } from '../../src/node/nodePlatform';
 import { parseDitaval, type ProfileFilter } from '../../src/profiling';
 import { posixPath } from '../../src/posixPath';
 import { loadDirIntoMemory } from '../helpers/loadDirIntoMemory';
+import { stable } from '../helpers/stable';
 
 // The Node platform and the in-memory platform must produce the same output for
 // the same files: this is what lets a browser host trust that it renders what
@@ -27,7 +28,7 @@ describeIfPosix('Node and memory platforms agree on test-dita-file', function ()
   // either { value } or { error }.
   const outcome = (run: (e: Engine) => unknown, e: Engine): string => {
     try {
-      return JSON.stringify({ value: run(e) }, (_k, x) => (x instanceof Set ? [...x].sort() : x instanceof Map ? [...x.entries()] : x));
+      return stable({ value: run(e) });
     } catch (err) {
       return JSON.stringify({ error: (err as Error).message });
     }
@@ -142,7 +143,7 @@ describeIfPosix('Node and memory platforms agree when a filter prunes the map', 
     const { fs: memoryFs } = loadDirIntoMemory(dir);
     const onNode = createEngine(nodePlatform);
     const onMemory = createEngine({ fs: memoryFs, path: posixPath });
-    const norm = (v: unknown): string => JSON.stringify(v);
+    const norm = stable;
     const toResourceUrl = (p: string): string => `vscode-resource:${p}`;
     const html: Record<string, string> = {};
     for (const [name, filter] of Object.entries(filters)) {
