@@ -671,15 +671,16 @@ function renderRefErrorPlaceholder(node: DitaNode, context: RenderContext, ref: 
  * Per DITA keyref semantics, the key's resource target becomes the
  * referencing element's effective href when the element carries no href of
  * its own -- this is what turns `<xref keyref="k"/>` into a link to the
- * key's target. Applies to link-shaped elements only (topic/xref): other
- * keyref consumers (ph, keyword, term) never link, and handing topic/link
- * a href would change its rendered shape without the webview-side handling
- * to click it safely, so the gate stays on the element's base type.
+ * key's target, and `<image keyref="k"/>` into the picture the key names.
+ * Applies to topic/xref and topic/image only: other keyref consumers (ph,
+ * keyword, term) never link, and handing topic/link a href would change its
+ * rendered shape without the webview-side handling to click it safely, so
+ * the gate stays on the element's base type.
  * Resolved for local content too: `<xref keyref="k">text</xref>` keeps its
  * text and still links to the key's target.
  */
 function withResolvedKeyHref(node: DitaNode, keyref: string, context: RenderContext): DitaNode {
-  if (node.baseType !== 'topic/xref') return node;
+  if (node.baseType !== 'topic/xref' && node.baseType !== 'topic/image') return node;
   if (!context.resolveKeyHref || node.attributes?.href) return node;
   const keyHref = context.resolveKeyHref(keyref);
   if (!keyHref) {
@@ -695,6 +696,9 @@ function withResolvedKeyHref(node: DitaNode, keyref: string, context: RenderCont
 function resolveKeyrefForNode(node: DitaNode, context: RenderContext): DitaNode {
   const keyref = node.attributes?.keyref;
   if (!keyref || !context.resolveKey) return node;
+  // An image's children are its alt text, not link text, so the key's text
+  // never replaces them; only the key's resource target (the picture) applies.
+  if (node.baseType === 'topic/image') return withResolvedKeyHref(node, keyref, context);
   // Per the DITA spec, existing element content wins over the key-resolved
   // text — only substitute when the element is effectively empty.
   const hasLocalContent = (node.children || []).some(

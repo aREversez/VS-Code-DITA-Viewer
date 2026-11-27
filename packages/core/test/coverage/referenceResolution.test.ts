@@ -91,10 +91,30 @@ describe('coverage probes: reference resolution', () => {
     });
 
     // DITA 1.3, keyref on image: the key's href is the image.
-    // Today the renderer leaves src empty, so a key that only defines an href renders a blank image.
-    it.skip('a key that only defines an href gives the image its src', () => {
+    it('a key that only defines an href gives the image its src', () => {
       const html = body('<p><image keyref="k"/></p>', '<keydef keys="k" href="images/pic.png"/>', PIC);
       assert.match(html, /<img src="images\/pic\.png"/);
+    });
+
+    it('the key\'s href is relative to the map that defines it, not to the topic', () => {
+      const files = { 'shared/maps/m.ditamap': '<map><keydef keys="logo" href="../art/logo.png"/></map>', 'shared/art/logo.png': 'x' };
+      const html = body('<p><image keyref="logo"/></p>', '<mapref href="shared/maps/m.ditamap"/>', files);
+      assert.match(html, /<img src="shared\/art\/logo\.png"/);
+    });
+
+    it('an href written on the image wins over its keyref', () => {
+      const html = body('<p><image href="images/own.png" keyref="k"/></p>', '<keydef keys="k" href="images/pic.png"/>', PIC);
+      assert.match(html, /<img src="images\/own\.png"/);
+    });
+
+    it('an external key href is used as given', () => {
+      const html = body('<p><image keyref="k"/></p>', '<keydef keys="k" href="https://example.com/a.png" scope="external" format="png"/>');
+      assert.match(html, /<img src="https:\/\/example\.com\/a\.png"/);
+    });
+
+    it('a key with no href leaves the image without a src, as before', () => {
+      const html = body('<p><image keyref="k"/></p>', '<keydef keys="k"><topicmeta><keywords><keyword>K</keyword></keywords></topicmeta></keydef>', PIC);
+      assert.match(html, /<img src=""/);
     });
   });
 
