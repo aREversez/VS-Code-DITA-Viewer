@@ -20,7 +20,9 @@ const MAX_DEPTH = 4;
 export function analyseCallableReturns(coreRoot: string, entryRel: string): Set<string> {
   const cfg = ts.readConfigFile(path.join(coreRoot, 'tsconfig.json'), ts.sys.readFile);
   const parsed = ts.parseJsonConfigFileContent(cfg.config, ts.sys, coreRoot);
-  const srcRoot = path.join(coreRoot, 'src') + path.sep;
+  // TypeScript reports file names with forward slashes on every platform, so
+  // the prefix compared against them must be posix too.
+  const srcRoot = path.join(coreRoot, 'src').replace(/\\/g, '/') + '/';
   const entry = path.join(coreRoot, entryRel);
   const program = ts.createProgram({ rootNames: [entry, ...parsed.fileNames.filter((f) => f.startsWith(srcRoot))], options: { ...parsed.options, noEmit: true } });
   const checker = program.getTypeChecker();

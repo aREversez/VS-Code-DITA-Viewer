@@ -22,16 +22,21 @@ export interface ReachResult {
 const isUnit = (n: ts.Node): n is ts.FunctionDeclaration | ts.VariableDeclaration | ts.ClassDeclaration =>
   ts.isFunctionDeclaration(n) || ts.isVariableDeclaration(n) || ts.isClassDeclaration(n);
 
+// TypeScript reports file names with forward slashes on every platform, so the
+// prefixes compared against them must be posix too (path.join would give
+// backslashes on Windows and every startsWith would fail).
+const toPosix = (p: string) => p.replace(/\\/g, '/');
+
 export function analyseRuntimeReach(coreRoot: string, entryRel: string): ReachResult {
   const cfgPath = path.join(coreRoot, 'tsconfig.json');
   const cfg = ts.readConfigFile(cfgPath, ts.sys.readFile);
   const parsed = ts.parseJsonConfigFileContent(cfg.config, ts.sys, coreRoot);
-  const srcRoot = path.join(coreRoot, 'src') + path.sep;
-  const entry = path.join(coreRoot, entryRel);
+  const srcRoot = toPosix(path.join(coreRoot, 'src')) + '/';
+  const entry = toPosix(path.join(coreRoot, entryRel));
   const program = ts.createProgram({ rootNames: [entry, ...parsed.fileNames.filter((f) => f.startsWith(srcRoot))], options: { ...parsed.options, noEmit: true } });
   const checker = program.getTypeChecker();
   const inSrc = (f: ts.SourceFile) => f.fileName.startsWith(srcRoot) && !f.fileName.endsWith('.d.ts');
-  const isRuntimeFile = (f: string) => f.startsWith(path.join(coreRoot, 'src', 'runtime') + path.sep) || f === path.join(coreRoot, 'src', 'runtime.ts');
+  const isRuntimeFile = (f: string) => f.startsWith(toPosix(path.join(coreRoot, 'src', 'runtime')) + '/') || f === toPosix(path.join(coreRoot, 'src', 'runtime.ts'));
 
   // The unit (top-level function / variable / class) a declaration belongs to.
   const unitOf = (decl: ts.Node): ts.Node | undefined => {
