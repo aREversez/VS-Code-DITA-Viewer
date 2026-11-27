@@ -371,7 +371,7 @@ The graph is derived from a `CrawlResult` and walks nothing new. `Issue` and `Di
 
 ### 4.6 Warning sink
 
-`console.warn` in `topicRender.ts` and `referenceableFiles.ts` becomes `onWarning({ code, message, path })`. Both functions are called through paths that already carry an options object or a host; the sink is a new optional field. The Node entry's default sink writes `console.warn`, so the extension's logging is unchanged until it chooses a sink; the portable entry's default is silent. A lint rule forbids `console.*` in `packages/core/src` outside `src/node/`.
+`console.warn` in `topicRender.ts` (`collectDitamapFilesUpward`) and `referenceableFiles.ts` (`collectReferenceableFiles`) became `onWarning(AnalysisWarning)`, a new optional argument or option (`src/warnings.ts`; `KeyMapOptions.onWarning` passes it through `buildKeySpaceForDocument`). Without a sink core is silent, in the Node entry too: the draft proposed a console default in the Node entry, but that would need wrapper exports that are no longer the same function as the portable ones, and the one host that wants the lines (the extension) can ask for them. The extension passes `warnToConsole` (`src/warnToConsole.ts`), so its log is unchanged. ESLint forbids `console` in `packages/core/src` outside `src/node/`. Step 4 folds `onWarning` into `AnalysisHost` with the same type.
 
 ### 4.7 Patch sequence
 

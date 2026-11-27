@@ -10,6 +10,7 @@ import { dirname } from './runtime/path';
 import { collectDitamapFilesUpward } from './editor/topicRender';
 import { KeySpace, buildKeySpace } from './editor/keySpace';
 import { readSourceText } from './editor/sourceText';
+import type { WarningSink } from './warnings';
 
 export interface KeyMapOptions {
   /**
@@ -26,6 +27,8 @@ export interface KeyMapOptions {
    */
   nearestOnly?: boolean;
   onError?: (mapPath: string, error: unknown) => void;
+  /** Told about a directory the search could not read; without it the search skips it silently. */
+  onWarning?: WarningSink;
 }
 
 /**
@@ -34,7 +37,7 @@ export interface KeyMapOptions {
  * and the files (to watch); render paths and completion want the values map.
  */
 export function buildKeySpaceForDocument(docFile: string, options: KeyMapOptions): KeySpace {
-  const maps = collectDitamapFilesUpward(dirname(docFile), options.root, options.nearestOnly ?? true);
+  const maps = collectDitamapFilesUpward(dirname(docFile), options.root, options.nearestOnly ?? true, options.onWarning);
   return buildKeySpace(undefined, maps, readSourceText, options.onError);
 }
 

@@ -5,6 +5,7 @@ import {
   toRelativeHref,
 } from '../../src/language/referenceableFiles';
 import type { ReadDir, WalkEntry } from '../../src/language/referenceableFiles';
+import type { AnalysisWarning } from '../../src/warnings';
 
 /**
  * The folder walk behind href/conref completion.
@@ -58,19 +59,13 @@ describe('collectReferenceableFiles', () => {
     return new Map(spec);
   }
 
-  /** Runs fn with console.warn captured, so "it warned once" becomes an
-   *  assertion instead of noise in the test output. */
-  async function captureWarnings<T>(fn: () => Promise<T>): Promise<{ value: T; warnings: string[] }> {
-    const warnings: string[] = [];
-    const original = console.warn;
-    console.warn = (...args: unknown[]): void => {
-      warnings.push(args.map((a) => String(a)).join(' '));
-    };
-    try {
-      return { value: await fn(), warnings };
-    } finally {
-      console.warn = original;
-    }
+  /** Collects what the walk reports through onWarning, so "it warned once" is an assertion. */
+  async function captureWarnings(
+    run: (onWarning: (w: AnalysisWarning) => void) => Promise<string[]>,
+  ): Promise<{ value: string[]; warnings: AnalysisWarning[] }> {
+    const warnings: AnalysisWarning[] = [];
+    const value = await run((w) => warnings.push(w));
+    return { value, warnings };
   }
 
   it('offers files in the document folder and three levels below, and never reads the fourth', async () => {
@@ -206,19 +201,19 @@ describe('collectReferenceableFiles', () => {
     // vanished between listing its parent and reading it.
     const h = harnessFor(tree([[at(), [f('before.dita'), d('gone'), f('after.dita')]]]));
 
-    const { value, warnings } = await captureWarnings(() => collectReferenceableFiles(ROOT, h.readDir));
+    const { value, warnings } = await captureWarnings((onWarning) => collectReferenceableFiles(ROOT, h.readDir, { onWarning }));
 
     // The siblings on both sides survive: one unreadable folder in a document
     // set must not cost the user the whole completion list.
     assert.deepStrictEqual(value, ['before.dita', 'after.dita']);
-    assert.strictEqual(warnings.length, 1, `expected exactly one warning, got: ${warnings.join(' | ')}`);
-    assert.ok(warnings[0].includes('ENOENT'), `warning should carry the cause: ${warnings[0]}`);
+    assert.strictEqual(warnings.length, 1, `expected exactly one warning, got: ${warnings.map((w) => w.message).join(' | ')}`);
+    assert.ok(warnings[0].message.includes('ENOENT'), `warning should carry the cause: ${warnings[0].message}`);
   });
 
   it('returns nothing but still warns when the document folder itself cannot be read', async () => {
     const h = harnessFor(tree([]));
 
-    const { value, warnings } = await captureWarnings(() => collectReferenceableFiles(ROOT, h.readDir));
+    const { value, warnings } = await captureWarnings((onWarning) => collectReferenceableFiles(ROOT, h.readDir, { onWarning }));
 
     assert.deepStrictEqual(value, []);
     assert.strictEqual(warnings.length, 1);

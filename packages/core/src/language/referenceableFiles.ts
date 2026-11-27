@@ -14,6 +14,7 @@
 // what let the runtime version switch from readdirSync to
 // workspace.fs.readDirectory without touching a single rule below.
 
+import { directoryUnreadable, type WarningSink } from '../warnings';
 import { join, normalize, relative } from '../runtime/path';
 
 /** One directory entry, reduced to the two facts the walk needs. */
@@ -75,6 +76,8 @@ export interface CollectOptions {
    * after that is pure waste -- the answer is already unwanted.
    */
   isCancelled?: () => boolean;
+  /** Told about each directory that could not be read; without it the walk skips them silently. */
+  onWarning?: WarningSink;
 }
 
 /**
@@ -105,7 +108,7 @@ export async function collectReferenceableFiles(
       // keep the rest. Completion degrading to "fewer suggestions" beats
       // throwing into VS Code's completion pipeline, and the synchronous walk
       // this replaces swallowed readdirSync failures the same way.
-      console.warn(`Failed to read directory ${dir}:`, e instanceof Error ? e.message : e);
+      options.onWarning?.(directoryUnreadable(dir, e));
       return;
     }
     for (const entry of entries) {

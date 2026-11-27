@@ -21,11 +21,12 @@ import { dirname } from 'path';
 import { stampFiles, collectDitamapFilesUpward } from './ditaRenderUtils';
 import { getKeyContextMap, reportKeyContextMissing } from './keyContext';
 import { parseDocRoot } from './docPaths';
+import { warnToConsole } from '../warnToConsole';
 
 export function findDitamapFiles(docUri: vscode.Uri, stopAtFirstMatch = true): string[] {
   const docDir = dirname(docUri.fsPath);
   const root = parseDocRoot(docDir);
-  return collectDitamapFilesUpward(docDir, root, stopAtFirstMatch);
+  return collectDitamapFilesUpward(docDir, root, stopAtFirstMatch, warnToConsole);
 }
 
 // buildKeyMap sits on hot paths (preview re-render, completion, diagnostics,

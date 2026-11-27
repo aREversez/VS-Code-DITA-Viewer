@@ -100,3 +100,4 @@ export const HOST_TOKENS = [
   '--dita-code-inline-bg',
   '--dita-font',
 ] as const;
+export type { AnalysisWarning, WarningSink } from './warnings';

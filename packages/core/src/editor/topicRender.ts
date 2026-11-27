@@ -3,6 +3,7 @@
 // unchanged topics. Moved verbatim from ditaRenderUtils.ts (P5 pure refactor);
 // imports its dependencies from sibling modules so no cycle through the barrel.
 
+import { directoryUnreadable, type WarningSink } from '../warnings';
 import { dirname, join } from '../runtime/path';
 import { exists, readDir } from '../runtime/fs';
 import { utf8ByteLength } from '../utf8';
@@ -284,7 +285,12 @@ export function stampFiles(files: string[]): string {
  * unrelated .ditamap happens to sit directly in a further-up ancestor, if
  * any, instead of the real one (kill test: keyMap.test.ts).
  */
-export function collectDitamapFilesUpward(startDir: string, root: string, stopAtFirstMatch: boolean): string[] {
+export function collectDitamapFilesUpward(
+  startDir: string,
+  root: string,
+  stopAtFirstMatch: boolean,
+  onWarning?: WarningSink,
+): string[] {
   const results: string[] = [];
   // A directory two ancestor levels up recursively covers everything a
   // closer level already scanned, so without this a .ditamap nested a
@@ -293,7 +299,7 @@ export function collectDitamapFilesUpward(startDir: string, root: string, stopAt
   const visited = new Set<string>();
   let dir = startDir;
   while (dir.length >= root.length) {
-    collectDitamapFilesRecursive(dir, results, visited);
+    collectDitamapFilesRecursive(dir, results, visited, onWarning);
     if (stopAtFirstMatch && results.length > 0) return results;
     const parent = dirname(dir);
     if (parent === dir) break;
@@ -302,20 +308,25 @@ export function collectDitamapFilesUpward(startDir: string, root: string, stopAt
   return results;
 }
 
-function collectDitamapFilesRecursive(dir: string, results: string[], visited: Set<string>): void {
+function collectDitamapFilesRecursive(
+  dir: string,
+  results: string[],
+  visited: Set<string>,
+  onWarning: WarningSink | undefined,
+): void {
   if (visited.has(dir)) return;
   visited.add(dir);
   let entries: WalkEntry[];
   try {
     entries = readDir(dir);
   } catch (e) {
-    console.warn(`Failed to read directory ${dir}:`, e instanceof Error ? e.message : e);
+    onWarning?.(directoryUnreadable(dir, e));
     return;
   }
   for (const entry of entries) {
     const full = join(dir, entry.name);
     if (entry.isDirectory) {
-      collectDitamapFilesRecursive(full, results, visited);
+      collectDitamapFilesRecursive(full, results, visited, onWarning);
     } else if (entry.name.toLowerCase().endsWith('.ditamap')) {
       results.push(full);
     }

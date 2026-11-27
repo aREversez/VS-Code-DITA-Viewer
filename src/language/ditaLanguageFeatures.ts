@@ -4,6 +4,7 @@
 // behind href/conref completion in referenceableFiles.ts -- both unit-tested,
 // and neither imports vscode, which is what keeps them testable that way.
 
+import { warnToConsole } from '../warnToConsole';
 import * as vscode from 'vscode';
 import { existsSync, readFileSync } from 'fs';
 import { dirname, isAbsolute, resolve, normalize } from 'path';
@@ -366,7 +367,7 @@ async function listReferenceableFiles(
         isDirectory: (type & vscode.FileType.Directory) !== 0,
       }));
     },
-    { isCancelled: (): boolean => token.isCancellationRequested },
+    { isCancelled: (): boolean => token.isCancellationRequested, onWarning: warnToConsole },
   );
 }
 
