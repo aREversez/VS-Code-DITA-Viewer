@@ -1,6 +1,6 @@
 {
   "name": "@dita-viewer/core",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Host-neutral DITA parsing and HTML rendering core, shared by the VS Code DITA Viewer and obsidian-dita.",
   "keywords": [
     "dita",
