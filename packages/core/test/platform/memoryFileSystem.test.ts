@@ -107,6 +107,32 @@ describe('createMemoryFileSystem', () => {
     assert.deepStrictEqual(fs.readDir('/'), []);
   });
 
+  it('a directory exists exactly while a file is below it, whatever is added, replaced or deleted', () => {
+    const fs = createMemoryFileSystem();
+    assert.ok(!fs.exists('/p') && !fs.exists('/p/q'));
+    fs.set('/p/q/a.dita', 'a');
+    fs.set('/p/q/r/b.dita', 'b');
+    assert.ok(fs.exists('/p') && fs.exists('/p/q') && fs.exists('/p/q/r'));
+    fs.set('/p/q/a.dita', 'a again'); // replacing a file must not count it twice
+    assert.ok(fs.delete('/p/q/a.dita'));
+    assert.ok(fs.exists('/p/q') && fs.exists('/p'), 'still holds /p/q/r/b.dita');
+    assert.ok(!fs.delete('/p/q/a.dita'), 'deleting what is not there says so...');
+    assert.ok(fs.exists('/p/q/r'), '...and changes nothing');
+    assert.ok(fs.delete('/p/q/r/b.dita'));
+    assert.ok(!fs.exists('/p') && !fs.exists('/p/q') && !fs.exists('/p/q/r'), 'the last file takes its directories with it');
+    assert.ok(fs.exists('/'), 'the root stays');
+    assert.strictEqual(fs.stat('/p'), undefined);
+    assert.throws(() => fs.readDir('/p'), /ENOENT/);
+  });
+
+  it('a file added again after its directory vanished brings the directory back', () => {
+    const fs = createMemoryFileSystem({ '/p/a.dita': 'a' });
+    fs.delete('/p/a.dita');
+    fs.set('/p/sub/a.dita', 'a');
+    assert.deepStrictEqual(fs.readDir('/p'), [{ name: 'sub', isDirectory: true }]);
+    assert.deepStrictEqual(fs.stat('/p/sub'), { size: 0, mtimeMs: 0 });
+  });
+
   it('has no realPath, so a path is its own real path', () => {
     assert.strictEqual(make().realPath, undefined);
   });

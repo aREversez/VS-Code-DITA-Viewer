@@ -39,27 +39,42 @@ export function createMemoryFileSystem(files: Record<string, MemoryFileContent> 
   // ignoreBOM: keep a leading BOM in the text, as readFileSync does.
   const decoder = new TextDecoder('utf-8', { ignoreBOM: true });
   const entries = new Map<string, Entry>();
+  // How many files lie below each directory, at any depth. A directory exists
+  // exactly while its count is above zero, so asking whether a path is one (which
+  // every lookup of a missing file does) does not scan every file.
+  const filesBelow = new Map<string, number>();
   let counter = 0;
 
   const key = (path: string): string => posixPath.resolve(path);
 
-  const set = (path: string, content: MemoryFileContent): void => {
-    const bytes = typeof content === 'string' ? encoder.encode(content) : content.slice();
-    entries.set(key(path), { bytes, version: ++counter });
+  const addBelow = (abs: string, by: 1 | -1): void => {
+    for (let dir = posixPath.dirname(abs); ; dir = posixPath.dirname(dir)) {
+      const n = (filesBelow.get(dir) ?? 0) + by;
+      if (n > 0) filesBelow.set(dir, n);
+      else filesBelow.delete(dir);
+      if (dir === '/') break;
+    }
   };
 
-  const isDirectory = (abs: string): boolean => {
-    if (abs === '/') return true;
-    const prefix = `${abs}/`;
-    for (const k of entries.keys()) if (k.startsWith(prefix)) return true;
-    return false;
+  const set = (path: string, content: MemoryFileContent): void => {
+    const bytes = typeof content === 'string' ? encoder.encode(content) : content.slice();
+    const abs = key(path);
+    if (!entries.has(abs)) addBelow(abs, 1);
+    entries.set(abs, { bytes, version: ++counter });
   };
+
+  const isDirectory = (abs: string): boolean => abs === '/' || filesBelow.has(abs);
 
   for (const [path, content] of Object.entries(files)) set(path, content);
 
   return {
     set,
-    delete: (path) => entries.delete(key(path)),
+    delete(path) {
+      const abs = key(path);
+      if (!entries.delete(abs)) return false;
+      addBelow(abs, -1);
+      return true;
+    },
     readText(path) {
       const abs = key(path);
       const entry = entries.get(abs);
