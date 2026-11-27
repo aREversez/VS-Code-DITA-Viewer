@@ -203,6 +203,8 @@ Threading a `platform` argument through every function signature would touch nea
 
 **Invariant:** this is safe only because the whole pipeline is synchronous, so calls cannot interleave. Any future async API must thread the runtime explicitly. Record this as a comment at `withRuntime`.
 
+**Functions that leave the call.** `withRuntime` restores the previous runtime when an engine call returns, so a function an engine method hands out (a resolver, a render context) and that is called later would run on whatever is active then. Core therefore binds every such function to the runtime it was made under (`bindRuntime` / `bindRuntimeMethods` in `runtime.ts`); the host's own callbacks keep their identity. `test/closureEscape.test.ts` exercises each of them in the portable shape, with the Node default installed, and while another engine is running, and a static analysis of return types (`test/helpers/returnsCallable.ts`) fails when an engine method that returns a function is not in its list. A new factory of this kind must be bound and listed.
+
 Rejected alternatives: threading a `platform` parameter through every signature (right in the end if core ever goes async, but a large diff now); a class `Engine` whose methods reimplement the functions (duplicates the code); making `fs` an optional input on each `render*` call (does not reach the readers buried in key-space and reference resolution).
 
 ### 3.5 Entry points and package layout
@@ -228,6 +230,7 @@ Five patches, in order. After each one `npm run verify` and `npm run check:core-
 *Implementation notes (2026-11-27).* Phase 1 landed as the five patches of 3.6. Where it differs from the text below:
 
 - The pure / runtime-dependent split is computed, not listed by hand. `test/exportKinds.test.ts` runs a static call-graph analysis (`test/helpers/reachesRuntime.ts`) and fails if a name in `PORTABLE_PURE` can reach the runtime, or a name that can reach it is in no list. The result: 75 pure names, 49 engine methods, and `BASE_TYPE_RENDERERS` (a table of functions) available only from the Node entry. `renderDocument` and `renderElement` are engine methods, not pure, because the imagemap id counter is per-runtime state.
+- The first implementation lost the runtime of functions that outlive an engine call (`engine.makeFileCache(...)`, the other `make*` resolvers, `buildRenderContext`): called later, they read the default Node file system, or threw in the portable shape. Fixed by binding them at creation (see 3.4), with tests.
 - Per-runtime state uses `stateSlot()` in `runtime.ts`, so `runtime.ts` does not import the types of what it holds.
 - The imagemap counter still only increases within a runtime; resetting it per render is left to Phase 2 (see 3.8).
 - Conformance covers every file under `test-dita-file/` (about 600 files, loaded into memory at their own absolute paths): topic renders (plain, and with ref errors and conref marks), diagnostics for topics and maps, key maps and key spaces, map renders, and book and site renders with no filter, a hand-hidden filter and a DITAVAL. A render that throws must throw the same message on both platforms. Windows is skipped.

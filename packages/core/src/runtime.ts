@@ -60,6 +60,11 @@ export function getDefaultRuntime(): Runtime | undefined {
  * Runs `fn` with `runtime` active and restores the previous one afterwards, so
  * calls nest (a host callback such as asWebviewUri may re-enter another engine).
  *
+ * While `fn` runs, the top-level functions of core also resolve to `runtime`
+ * (they ask rt()), including when a host callback that `fn` invokes calls them.
+ * Functions that outlive the call are bound to their runtime at creation
+ * (bindRuntime), so they do not depend on what is active when they run.
+ *
  * INVARIANT: this is safe only because the whole pipeline is synchronous, so
  * two calls can never interleave. Any future async API must thread the runtime
  * explicitly instead of relying on `current`.
@@ -72,6 +77,41 @@ export function withRuntime<T>(runtime: Runtime, fn: () => T): T {
   } finally {
     current = previous;
   }
+}
+
+/**
+ * Ties a function that core hands out to the runtime it was created under.
+ *
+ * withRuntime restores the previous runtime when an engine call returns, so a
+ * resolver made inside `engine.makeFileCache(...)` and called later would
+ * otherwise run on whatever is active then: the default Node runtime (reading
+ * the wrong files without any error) or none (an error). Every closure that
+ * leaves a call must therefore be made with this. The runtime is the active
+ * one, else the default; with neither, the function is returned unchanged and
+ * fails with the usual clear error when called. Binding is idempotent.
+ */
+export function bindRuntime<F extends (...args: never[]) => unknown>(fn: F): F {
+  const runtime = current ?? fallback;
+  if (!runtime || boundFunctions.has(fn)) return fn;
+  const bound = ((...args: Parameters<F>) => (current === runtime ? fn(...args) : withRuntime(runtime, () => fn(...args)))) as F;
+  boundFunctions.add(bound);
+  return bound;
+}
+
+const boundFunctions = new WeakSet<object>();
+
+/**
+ * bindRuntime for every own function-valued property of a freshly made object
+ * (a render context, a file cache), in place. `skip` names properties that hold
+ * the host's own callbacks, which keep their identity.
+ */
+export function bindRuntimeMethods<T extends object>(obj: T, skip: readonly string[] = []): T {
+  const record = obj as Record<string, unknown>;
+  for (const key of Object.keys(record)) {
+    const value = record[key];
+    if (typeof value === 'function' && !skip.includes(key)) record[key] = bindRuntime(value as (...args: never[]) => unknown);
+  }
+  return obj;
 }
 
 /** The active runtime, else the default one; throws when neither exists. */

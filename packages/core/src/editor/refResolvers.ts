@@ -10,7 +10,7 @@
 // ABOVE this module; nothing below reaches back up. Behaviour is unchanged --
 // this is a pure move of code lifted verbatim from ditaRenderUtils.ts.
 import { exists, readHead, stat } from '../runtime/fs';
-import { stateSlot } from '../runtime';
+import { bindRuntime, bindRuntimeMethods, stateSlot } from '../runtime';
 import { isReadAllowed } from '../pathContainment';
 import { resolve, isAbsolute, extname, dirname, relative, normalize } from '../runtime/path';
 import { DitaNode } from '../parser/domTypes';
@@ -312,7 +312,7 @@ export function makeFileCache(docDir: string) {
     return [...cache.keys()];
   }
 
-  return { loadFile, loadAbsPath, findElementById, findTitleOfElement, touchedFiles, noteOrigin, originOf };
+  return bindRuntimeMethods({ loadFile, loadAbsPath, findElementById, findTitleOfElement, touchedFiles, noteOrigin, originOf });
 }
 
 export function makeConrefResolver(
@@ -327,7 +327,7 @@ export function makeConrefResolver(
    * chain: its origin decides what a relative path or a same-file "#id" is
    * relative to. Without it the reference belongs to the document being rendered.
    */
-  return (conref: string, from?: DitaNode): DitaNode | undefined => {
+  return bindRuntime((conref: string, from?: DitaNode): DitaNode | undefined => {
     const hashIdx = conref.indexOf('#');
     if (hashIdx < 0) return undefined;
     const filePath = conref.substring(0, hashIdx);
@@ -367,7 +367,7 @@ export function makeConrefResolver(
     // resolveConrefForNode in the renderer decides whether to replace just
     // the children (same-type conref) or the entire element (cross-type).
     return el;
-  };
+  });
 }
 
 // conrefend extends a conref reference from a single element to a run of
@@ -424,7 +424,7 @@ export function makeConrefRangeResolver(
     return undefined;
   }
 
-  return (conref: string, conrefend: string): DitaNode[] | undefined => {
+  return bindRuntime((conref: string, conrefend: string): DitaNode[] | undefined => {
     const start = resolveRef(conref);
     const end = resolveRef(conrefend);
     if (!start || !end) return undefined;
@@ -450,7 +450,7 @@ export function makeConrefRangeResolver(
     // run sits under one parent (checked above), hence in one file.
     for (const el of run) cache.noteOrigin(el, { file: start.file, root: start.root });
     return run;
-  };
+  });
 }
 
 /**
@@ -485,7 +485,7 @@ export function makeRefErrorResolver(
 ): (ref: string) => string | undefined {
   const cache = sharedCache ?? makeFileCache(docDir);
 
-  return (ref: string): string | undefined => {
+  return bindRuntime((ref: string): string | undefined => {
     if (!ref) return undefined;
     const hashIdx = ref.indexOf('#');
     const filePath = hashIdx >= 0 ? ref.substring(0, hashIdx) : ref;
@@ -522,7 +522,7 @@ export function makeRefErrorResolver(
     }
     if (!elementId) return undefined;
     return cache.findElementById(root, elementId) ? undefined : texts.missingId;
-  };
+  });
 }
 
 export function makeFileTitleResolver(
@@ -532,7 +532,7 @@ export function makeFileTitleResolver(
 ): (href: string) => string | undefined {
   const cache = sharedCache ?? makeFileCache(docDir);
 
-  return (href: string): string | undefined => {
+  return bindRuntime((href: string): string | undefined => {
     // Only local relative references can be resolved from disk — never probe
     // the filesystem for external URLs or absolute paths (on Windows an
     // https:// href would otherwise resolve to a junk docDir\https:\ path).
@@ -565,7 +565,7 @@ export function makeFileTitleResolver(
     const root = cache.loadFile(filePath);
     if (!root) return undefined;
     return cache.findTitleOfElement(root, topicId, resolveKey);
-  };
+  });
 }
 
 // ── Default note labels ──
@@ -659,13 +659,13 @@ export function makeIsInCurrentBook(
   docDir: string,
   bookMembers: ReadonlySet<string>,
 ): (href: string) => string | undefined {
-  return (href: string): string | undefined => {
+  return bindRuntime((href: string): string | undefined => {
     if (!href || URL_SCHEME_RE.test(href) || isAbsolute(href)) return undefined;
     const pathPart = href.split('#')[0];
     if (!pathPart) return undefined;
     const absPath = resolve(docDir, decodeHrefPart(pathPart));
     return bookMembers.has(absPath) ? absPath : undefined;
-  };
+  });
 }
 
 /**

@@ -21,6 +21,7 @@
 //     collectDependencies also folds image reads into the dependency set.
 //   - suppressIndexterm: only the export path sets it.
 
+import { bindRuntimeMethods } from '../runtime';
 import { exists } from '../runtime/fs';
 import { resolve, relative, isAbsolute } from '../runtime/path';
 import { DitaNode } from '../parser/domTypes';
@@ -284,5 +285,7 @@ export function buildRenderContext(input: BuildRenderContextInput): BuiltRenderC
     return conref ? conrefResolver(conref, from) : undefined;
   };
 
-  return { ctx, touchedFiles: () => fileCache.touchedFiles() };
+  // The context outlives this call and is used by whoever renders with it, so its own
+  // closures keep the runtime they were made under; the host's asWebviewUri stays as given.
+  return { ctx: bindRuntimeMethods(ctx, ['asWebviewUri']), touchedFiles: () => fileCache.touchedFiles() };
 }
