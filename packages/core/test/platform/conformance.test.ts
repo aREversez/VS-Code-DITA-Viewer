@@ -2,44 +2,69 @@ import * as assert from 'assert';
 import * as path from 'path';
 import { createEngine, type Engine } from '../../src/engine';
 import { nodePlatform } from '../../src/node/nodePlatform';
+import { parseDitaval } from '../../src/profiling';
 import { posixPath } from '../../src/posixPath';
 import { loadDirIntoMemory } from '../helpers/loadDirIntoMemory';
 
 // The Node platform and the in-memory platform must produce the same output for
 // the same files: this is what lets a browser host trust that it renders what
-// the extension renders. POSIX only (the memory platform has no drive letters).
-const fixtureDir = path.resolve(__dirname, '..', '..', '..', '..', '..', 'test-dita-file', 'fixture');
+// the extension renders. It covers every file under test-dita-file/, loaded
+// into memory at its own absolute path so rendered paths match byte for byte.
+// POSIX only (the memory platform has no drive letters).
+const fixtureRoot = path.resolve(__dirname, '..', '..', '..', '..', '..', 'test-dita-file');
 
 const describeIfPosix = process.platform === 'win32' ? describe.skip : describe;
 
-describeIfPosix('Node and memory platforms agree on test-dita-file/fixture', function () {
-  this.timeout(60000);
-  const { fs, files } = loadDirIntoMemory(fixtureDir);
+describeIfPosix('Node and memory platforms agree on test-dita-file', function () {
+  this.timeout(180000);
+  const { fs, files } = loadDirIntoMemory(fixtureRoot);
   const onNode: Engine = createEngine(nodePlatform);
   const onMemory: Engine = createEngine({ fs, path: posixPath });
-  const norm = (v: unknown): string => JSON.stringify(v, (_k, x) => (x instanceof Set ? [...x].sort() : x instanceof Map ? [...x.entries()] : x));
-  const same = (what: string, run: (e: Engine) => unknown): void => assert.strictEqual(norm(run(onMemory)), norm(run(onNode)), what);
+
+  // A render that throws must throw the same way on both, so each result is
+  // either { value } or { error }.
+  const outcome = (run: (e: Engine) => unknown, e: Engine): string => {
+    try {
+      return JSON.stringify({ value: run(e) }, (_k, x) => (x instanceof Set ? [...x].sort() : x instanceof Map ? [...x.entries()] : x));
+    } catch (err) {
+      return JSON.stringify({ error: (err as Error).message });
+    }
+  };
+  let compared = 0;
+  let threw = 0;
+  const same = (what: string, run: (e: Engine) => unknown): void => {
+    const a = outcome(run, onMemory);
+    const b = outcome(run, onNode);
+    assert.strictEqual(a, b, what);
+    compared++;
+    if (b.startsWith('{"error"')) threw++;
+  };
   const read = (f: string): string => fs.readText(f);
 
   const topics = files.filter((f) => /\.dita$/i.test(f));
   const maps = files.filter((f) => /\.ditamap$/i.test(f));
+  const filters = {
+    none: undefined,
+    hidden: { hidden: new Set(['audience:novice', 'product:b', 'platform:linux', 'otherprops:x']) },
+    ditaval: { ditaval: parseDitaval('<val><prop att="audience" val="expert" action="exclude"/><prop att="product" val="a" action="flag"/><prop att="platform" action="exclude"/></val>') },
+  };
 
-  it('finds fixtures to compare', () => {
-    assert.ok(topics.length >= 5, `topics: ${topics.length}`);
-    assert.ok(maps.length >= 2, `maps: ${maps.length}`);
-  });
-
-  it('renders something real, so agreement is not agreement on nothing', () => {
-    const f = topics[0];
-    const html = onNode.renderTopicXml({ xml: read(f), docDir: path.dirname(f), docFile: f, keyMap: new Map(), asWebviewUri: (p) => p, headingLevel: 1 }).html;
-    assert.ok(html.length > 200 && html.includes('<h1'), html.slice(0, 100));
+  it('has a real corpus to compare', () => {
+    assert.ok(topics.length >= 100, `topics: ${topics.length}`);
+    assert.ok(maps.length >= 20, `maps: ${maps.length}`);
   });
 
   it('the same files are on disk and in memory', () => {
     for (const f of files) assert.ok(onNode.platform.fs.exists(f) && onMemory.platform.fs.exists(f), f);
   });
 
-  it('topics: renderTopicXml (plain, with ref errors and conref marks) and collectDiagnostics', () => {
+  it('renders something real, so agreement is not agreement on nothing', () => {
+    const f = topics.find((t) => t.includes('/fixture/')) ?? topics[0];
+    const html = onNode.renderTopicXml({ xml: read(f), docDir: path.dirname(f), docFile: f, keyMap: new Map(), asWebviewUri: (p) => p, headingLevel: 1 }).html;
+    assert.ok(html.length > 200 && html.includes('<h1'), html.slice(0, 100));
+  });
+
+  it('topics: renderTopicXml (plain, and with ref errors and conref marks) and collectDiagnostics', () => {
     for (const f of topics) {
       const base = { xml: read(f), docDir: path.dirname(f), docFile: f, keyMap: new Map<string, string>(), asWebviewUri: (p: string) => `vscode-resource:${p}`, headingLevel: 1 };
       same(`${f} plain`, (e) => e.renderTopicXml(base));
@@ -48,23 +73,39 @@ describeIfPosix('Node and memory platforms agree on test-dita-file/fixture', fun
     }
   });
 
-  it('topics: the key map a document sees is the same', () => {
-    for (const f of topics) same(`${f} keys`, (e) => e.buildKeyMapForDocument(f, { root: fixtureDir }));
+  it('topics: the key space a document sees', () => {
+    for (const f of topics) {
+      const root = path.dirname(path.dirname(f));
+      same(`${f} keys`, (e) => e.buildKeyMapForDocument(f, { root }));
+      same(`${f} key space`, (e) => {
+        const ks = e.buildKeySpaceForDocument(f, { root });
+        return { keys: ks.keys, defs: ks.defs, scopes: ks.scopes, files: ks.files };
+      });
+    }
   });
 
-  it('maps: renderMapXml, book and site renders', () => {
+  it('maps: renderMapXml, and book and site renders with no filter, a hand-hidden filter and a DITAVAL', () => {
     for (const f of maps) {
       const input = { xml: read(f), docDir: path.dirname(f) };
       same(`${f} map`, (e) => e.renderMapXml(input));
-      same(`${f} book`, (e) => e.renderBookXml({ ...input, toResourceUrl: (p) => `vscode-resource:${p}`, headingLevel: 1 }));
-      same(`${f} site`, (e) => e.renderSiteXml({ ...input, toResourceUrl: (p) => `vscode-resource:${p}` }));
+      same(`${f} diagnostics`, (e) => e.collectDiagnostics({ xml: input.xml, absPath: f }));
+      for (const [name, filter] of Object.entries(filters)) {
+        const toResourceUrl = (p: string) => `vscode-resource:${p}`;
+        same(`${f} book (${name})`, (e) => e.renderBookXml({ ...input, toResourceUrl, headingLevel: 1, filter }));
+        same(`${f} site (${name})`, (e) => e.renderSiteXml({ ...input, toResourceUrl, filter }));
+      }
     }
   });
 
   it('a second pass over the same engines (warm caches, advanced counters) still agrees', () => {
-    for (const f of topics.slice(0, 5)) {
+    for (const f of topics.slice(0, 25)) {
       const input = { xml: read(f), docDir: path.dirname(f), docFile: f, keyMap: new Map<string, string>(), asWebviewUri: (p: string) => p, headingLevel: 2 };
       same(`${f} again`, (e) => e.renderTopicXml(input));
     }
+  });
+
+  it('compared a lot, and most of it rendered rather than threw', () => {
+    assert.ok(compared > 1000, `compared ${compared}`);
+    assert.ok(threw < compared / 4, `${threw} of ${compared} threw`);
   });
 });
