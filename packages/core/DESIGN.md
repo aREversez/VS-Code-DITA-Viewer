@@ -1,7 +1,7 @@
 # @dita-viewer/core — Design: toward a host-agnostic DITA engine
 
 Status: draft 1 · 2026-11-26 · Phase 1 implemented 2026-11-27 · measured at `e739149` (core 0.3.0)
-Phase 1 is designed in full (section 3). Phases 2 and 3 are roadmap only (section 1) and are meant to be designed later, one at a time.
+Phase 1 is designed in full (section 3). Phase 2 is designed in section 4 (awaiting the maintainer's acceptance). Phase 3 is roadmap only (section 1) and is meant to be designed later.
 
 ## 0. How to use this document
 
@@ -43,7 +43,7 @@ Explicit non-goal: core is **not a DITA-OT replacement**. It does not aim at pub
 | Phase | Goal | Status | Exit criteria (summary) |
 | --- | --- | --- | --- |
 | 1. Decouple | Core runs with no Node built-ins and no process-wide state, behind injected I/O | Done: released as `core-0.4.0` | Portable entry bundles for the browser; Node and in-memory platforms render byte-identical HTML; two engines in one process do not interact; both consumers unchanged. Details in 3.7. |
-| 2. Capabilities | Fill in the DITA semantics hosts need, as host-neutral functions that return structured data | Roadmap only | Each capability is an engine function with fixture tests; a coverage table says supported / partial / unsupported; host features (e.g. the VS Code map checks) contain no DITA logic of their own. |
+| 2. Capabilities | Fill in the DITA semantics hosts need, as host-neutral functions that return structured data | Designed (section 4), not accepted | Each capability is an engine function with fixture tests; a coverage table says supported / partial / unsupported; host features (e.g. the VS Code map checks) contain no DITA logic of their own. |
 | 3. Ecosystem | An outside developer can use core without reading the extension's source | Roadmap only | Consumer-facing README and API reference; stable API tier separated from internals; three examples run in CI; semver policy written down. |
 
 Order matters: Phase 2 features are written against the engine interfaces from Phase 1, and Phase 3 documents an API that Phase 2 has finished changing.
@@ -255,6 +255,170 @@ Phase 1 is done when all of these hold:
 - **`console.warn` in `collectDitamapFilesRecursive`.** A library writing to the console; deferred to Phase 2 (injected warning sink). Do not widen Phase 1 to fix it.
 - **`ReadDir` stays async-capable.** The two I/O worlds (the synchronous render pipeline, and the asynchronous-capable completion walk) are intentionally not unified in Phase 1. Revisit only if a Phase 2 feature walks directories (for example unreferenced-resource search); decide there which one it uses.
 - **Windows.** `nodePlatform` keeps the platform's own `path`. The portable path does not handle drive letters, and a Windows host that wants a virtual file system must supply its own `PathOps`.
+
+## 4. Phase 2 design — Capabilities
+
+Status: draft 1 · 2026-11-27 · measured at `d0d7e25` (core 0.4.0). **Not accepted: nothing in this section is implemented.** Section 4.9 lists the decisions the maintainer has to take before step 1 starts.
+
+### 4.1 Goals and non-goals
+
+Goals:
+
+1. Every DITA-semantic capability a host needs is an engine-level function that returns structured data and has no UI, no `vscode`, no direct `fs` or `path`.
+2. The extension's project-analysis features (completeness check, unreferenced resources, broken references and their fixes, reference-update edits on rename, "which maps reference this file") call those functions and hold no DITA logic of their own.
+3. A coverage table (`packages/core/COVERAGE.md`) states, per DITA feature, whether it is supported, partial or unsupported, with the fixture test that proves it.
+4. The analysis code runs unchanged over the Node platform and over an in-memory file system (the Phase 1 conformance method).
+
+Non-goals:
+
+- Structural validation (DTD / RNG / Schematron). Recommended decision in 4.9: out of scope, stated in the coverage table.
+- New host UI. Findings leave core as data; the host decides how to show them.
+- Changing rendering output. A Phase 2 step that changes rendered HTML is listed as its own step and has its own kill test.
+- API tiering and the `/internal` split (Phase 3). New names are added next to the existing ones.
+
+### 4.2 Current state (measured) and corrections to the 1.4 brief
+
+The brief in 1.4 was written before the extension's analysis code was read. Reading it changes the shape of the phase from "build" to "move and harden".
+
+- **The analysis already exists, in the extension, and is already free of `vscode`.** About 4,500 lines (table below) hold the crawler, the completeness checks, the unreferenced-resource search, the broken-reference finder and fixer, and the rename edit computation. Of the files below only `findDitaReferences.ts` imports `vscode`; the UI and wiring files that do stay in the extension. So "project analysis in core" is a move plus the removal of three couplings (`path`, `NodeJS.Platform`, the async host), not a new feature.
+- **Unreferenced resources and validate-and-check-completeness are not pending**: they are `unreferencedResources.ts` and `mapCrawl.ts` / `mapChecks.ts`, with a corpus and baseline harness (`check:completeness*`). The brief's "pending features" wording is out of date.
+- **The keyref-to-href fallback for `xref` exists** (`withResolvedKeyHref` in `render/renderer.ts`). The gap named in the brief is therefore not confirmed for `xref`. For `image` it is unverified (no keyref handling found in `render/baseTypeMap.ts` by a text search, which proves nothing about the renderer as a whole). Step 1 settles both with probes instead of reading.
+- **There are two `console.warn` sites, not one**: `editor/topicRender.ts` (`collectDitamapFilesRecursive`) and `language/referenceableFiles.ts`.
+- **DITAVAL and profiling logic exists twice.** The extension's `ditaval.ts` (a `sax` reader that answers "is this element excluded") and `mapXmlScan.ts`'s `PROFILING_ATTRS` (7 names) duplicate `profiling.ts` in core (`parseDitaval`, `PROFILE_ATTRS`, 10 names: it also has `base`, `importance`, `status`). The two may disagree. This is the clearest instance of "host features contain DITA logic of their own".
+- **Single-topic rendering takes no filter**: a text search of `editor/topicRender.ts` finds no `filter` input. `renderBookXml` and `renderSiteXml` do.
+- **The async problem.** The crawl is async (`CrawlHost.readFile` returns a promise, `cancelled()` is polled between files). The ambient runtime of 3.4 is only valid across synchronous calls ("any future async API must thread the runtime explicitly"). The analysis therefore cannot use `runtime/path` and `runtime/fs`; it must take its host as an argument. 3.8 left this open ("decide there which one it uses"); 4.4 decides it.
+
+Modules that move (sizes at `d0d7e25`):
+
+| Extension file | Lines | Couplings to remove | Becomes (core) |
+| --- | --- | --- | --- |
+| `mapCrawl.ts`, `mapCrawlTypes.ts` | 940 + 392 | `path`; `CrawlHost.platform: NodeJS.Platform` | `analysis/crawl.ts` |
+| `mapChecks.ts`, `mapChecks/*` | 418 + 1,088 | `path` | `analysis/checks/*` |
+| `mapCheckMessages.ts` | 138 | none | `analysis/messages.ts` |
+| `mapXmlScan.ts`, `ditaClass.ts`, `ditaval.ts` | 170 + 183 + 85 | duplicates of core profiling (above) | `analysis/` (deduplicated, step 3) |
+| `unreferencedResources.ts`, `mapReferenceTools.ts` | 280 + 84 | `path`; its own `ListHost` | `analysis/unreferenced.ts` |
+| `brokenRefs.ts`, `refRenameEdits.ts` | 474 + 239 | `path/win32` and `path/posix` chosen by a platform argument | `analysis/brokenRefs.ts`, `analysis/refEdits.ts` |
+| `findDitaReferences.ts` | 105 | `vscode`, `fs` | the data part becomes `referencingMaps` on the graph (4.5) |
+
+Stays in the extension: `mapCheckShared.ts`, `completenessCheckUi.ts`, `unreferencedResourcesUi.ts`, `fixBrokenRefsCommand.ts`, `brokenRefCodeAction.ts`, `refRenameParticipant.ts`, `keyContext*.ts`, the tree provider. They keep picking, showing and applying; the localization templates stay a core data table and the `vscode.l10n.t` calls stay in the UI file (the existing test that every template has a translation entry point stays in the extension).
+
+Existing tests that move with the code: `mapCrawl`, `brokenRefs`, `unreferencedResources`, `refRenameEdits`, `ditaClass`, `mapCheckWiring`, `profilingFilterDitaval` and the completeness harness, about 1,800 lines plus the corpus.
+
+### 4.3 Principles specific to this phase
+
+1. **Move, then change.** A step that moves code changes imports and the host argument and nothing else. A step that changes behaviour moves nothing. Never both in one patch.
+2. **The completeness baseline is the gate for every move.** `npm run check:completeness` output must be byte-identical before and after each move step. A moved test may change its import lines only.
+3. **The extension imports from core, and the old file is deleted in the same patch** that makes the move. No re-export shims left behind (that is how duplicated logic comes back).
+4. **Results are data.** Findings carry a code plus arguments (`Msg`), a location, a severity and related locations; English text is a convenience field. Nothing in core formats for a UI.
+
+### 4.4 Interfaces
+
+**The analysis host.** One async-capable interface replaces `CrawlHost`, `ListHost` and the `platform` arguments. The path operations are explicit, never ambient.
+
+```ts
+export interface AnalysisHost {
+  readonly path: PathOps;                       // replaces NodeJS.Platform
+  readFile(abs: string): Promise<string>;       // unsaved editor text if the host has it
+  exists(abs: string): Promise<boolean>;
+  isDirectory?(abs: string): Promise<boolean>;
+  readDir?(abs: string): Promise<string[] | undefined>;
+  listDir?(abs: string): Promise<WalkEntry[] | undefined>; // folds ListHost in
+  cancelled?(): boolean;
+  onWarning?(w: AnalysisWarning): void;         // 4.6
+}
+export function analysisHostFromFileSystem(platform: Platform, opts?: { cancelled?(): boolean; onWarning?(w: AnalysisWarning): void }): AnalysisHost;
+```
+
+`analysisHostFromFileSystem` adapts the synchronous Phase 1 `FileSystem`, so a browser host that preloads files into `createMemoryFileSystem` gets the whole analysis with no extra work, and the conformance test can run both worlds. The extension keeps its own host (editor overlay text, cancellation token) and passes `nodePlatform.path`.
+
+Why async stays: the extension reads unsaved editor text, yields to the UI and cancels long crawls, and a project crawl is the one place where the cost is real. Why not the ambient runtime: it does not survive an `await`.
+
+**Windows.** `brokenRefs.ts` and `refEdits` choose `path/win32` or `path/posix` by a platform argument today. In core they take `path: PathOps` from the host. The portable path stays POSIX-only (3.8); the Windows tests build a `PathOps` over `path.win32` in the test helper.
+
+**New names, all additive** (existing names keep their signatures in the extension's view; the moved functions keep their names): `crawlMaps`, `runChecks`, `optionsFromSettings`, `findUnreferencedResources`, `findBrokenRefs`, `proposeFixes`, `computeRefEdits`, `MESSAGE_TEMPLATES` and `formatMessage`, plus:
+
+```ts
+export function issueToDiagnostic(issue: Issue): DitaDiagnostic;   // 0-based, to match 1.4's "compatible with DitaDiagnostic"
+export function buildReferenceGraph(crawl: CrawlResult): ReferenceGraph;
+export interface ReferenceGraph {
+  readonly files: ReadonlyMap<string, GraphFile>;
+  readonly edges: readonly GraphEdge[];
+  readonly keys: readonly KeyDef[];
+  referencedBy(file: string): readonly GraphEdge[];
+  reachableFrom(roots: readonly string[]): ReadonlySet<string>;
+}
+export interface GraphEdge {
+  from: string; line: number; to?: string; href: string; kind: RefKind;
+  via: 'href' | 'keyref' | 'conref' | 'conkeyref';
+  remote: boolean; resolved: boolean;
+}
+```
+
+The graph is derived from a `CrawlResult` and walks nothing new. `Issue` and `DitaDiagnostic` stay two types: `Issue` has `info` severity, related locations and 1-based lines; the adapter is the single place that converts.
+
+### 4.5 Capability triage (the 1.4 candidates)
+
+| Candidate | Decision | Step |
+| --- | --- | --- |
+| Project analysis (unreferenced resources, completeness) | In: move and host-neutralize | 3–6 |
+| Broken references, fix proposals, rename edits | In (not in the brief; same code family and the same coupling) | 6 |
+| Reference-resolution gaps (keyref→href, conref ranges, mapref, conkeyref, key scopes) | In as **audit**: probe tests plus coverage rows; fix only what a probe proves broken, one patch per fix | 1, 2 |
+| Profiling and DITAVAL | In: one DITAVAL implementation (core's), then single-topic filter, then `flag` / `rev` audit | 3, 8 |
+| Reference graph | In: derived data over the crawl | 7 |
+| Validation scope | Decision: structural validation out of scope, coverage table says so | 9 |
+| Library hygiene: warning sink | In | 2 |
+| Library hygiene: reproducible imagemap ids | Out unless a host needs it (3.8 stays valid) | none |
+
+### 4.6 Warning sink
+
+`console.warn` in `topicRender.ts` and `referenceableFiles.ts` becomes `onWarning({ code, message, path })`. Both functions are called through paths that already carry an options object or a host; the sink is a new optional field. The Node entry's default sink writes `console.warn`, so the extension's logging is unchanged until it chooses a sink; the portable entry's default is silent. A lint rule forbids `console.*` in `packages/core/src` outside `src/node/`.
+
+### 4.7 Patch sequence
+
+Nine steps, one patch each (step 2 and step 8 may split, see below). After each: `npm run verify`, `npm run check:core-pack`, `check:completeness` byte-identical (moves), `publicApi.test.ts` extended but never edited for existing names, and a `git am --check` dry run. Extension code changes only where a step says so.
+
+1. **Probes and coverage table.** Add `COVERAGE.md` and fixture probes for the reference-resolution candidates: `xref` and `image` with a `keyref` that defines only an `href`, conref ranges, `conkeyref`, mapref chains, scoped keys. Each probe asserts what the code does today; where it contradicts the DITA 1.3.2 spec it is recorded as `partial` or `unsupported` with a `todo` test that names the spec section. No behaviour change. Kill check: a probe for the 1.4 claim (keyref→href on `image`) must be able to fail.
+2. **Warning sink** (4.6), then one patch per gap that step 1 proved real (each with its own failing test first, each a rendering change, each on its own).
+3. **Foundations into core.** `messages`, `mapXmlScan`, `ditaClass`; DITAVAL and profiling attributes **deduplicated onto core's `profiling.ts`**. This is the one step where "move, then change" is hard to hold: split it as 3a (move the three modules untouched) and 3b (delete `ditaval.ts` and `PROFILING_ATTRS` in favour of `profiling.ts`), with a test that runs both implementations over the corpus's `.ditaval` files and every profiling combination and shows they agree first; if they disagree, the disagreement is reported to the maintainer instead of choosing silently.
+4. **Crawler.** `AnalysisHost`, `analysisHostFromFileSystem`, `crawlMaps` moved; `CrawlHost.platform` replaced by `host.path`. The extension's `makeHost` supplies `path`.
+5. **Checks.** `runChecks` and `mapChecks/*`, `issueToDiagnostic`. The extension's UI file keeps the localization calls.
+6. **Unreferenced resources, broken references, rename edits.** Three modules, folding `ListHost` into `AnalysisHost.listDir` and the win32/posix choice into `host.path`.
+7. **Reference graph.** `buildReferenceGraph`; `findMapsReferencingFile` in the extension becomes a call to `referencedBy` plus the part that needs `vscode` (labels, picker). Adds `referencingMaps` if the graph needs a helper for it.
+8. **Profiling gaps.** Single-topic filter on `renderTopicXml` (and the render-cache key that must include it), `flag` and `rev` handling audit. Behaviour changes, one patch per change.
+9. **Close the phase.** Final coverage table, README claim ("host-agnostic" scope sentence from 1.1), CHANGELOG, status table in 1.3, version bump to `core-0.5.0` left to the maintainer (as in Phase 1).
+
+### 4.8 Acceptance tests and exit criteria
+
+Phase 2 is done when all of these hold:
+
+1. **No duplicate logic.** None of the files in the 4.2 table remains in the extension except the ones listed as staying, and `check:cycles` and a new ownership script (`check:analysis-ownership`: fails if the extension imports `sax` or implements a DITAVAL reader) are green.
+2. **Conformance for analysis.** For every map under `test-dita-file/` that the completeness corpus covers, `runChecks` over `analysisHostFromFileSystem(nodePlatform)` and over `analysisHostFromFileSystem({ fs: createMemoryFileSystem(sameFiles), path: posixPath })` gives equal issue lists, and the same for the unreferenced-resource result and the graph. POSIX only (as in 3.7).
+3. **No ambient runtime in analysis.** The tripwire test of 3.7 is extended: every analysis export is called with a platform whose methods throw, and a host that supplies everything explicitly, and none reaches `rt()`. `exportKinds.test.ts` classifies them pure.
+4. **Baseline.** `check:completeness`, `:oxygen`, `:run` and `:real` give the same output as at `d0d7e25` (modulo any step-2 or step-8 fix, each of which names the rows it changes).
+5. **Coverage.** Every row of `COVERAGE.md` has a status and a test name or a spec reference; `partial` and `unsupported` rows say what is missing.
+6. **Bundle.** `check:core-pack` still shows that the analysis is dropped by a bundler when unused, and `check:core-portable` bundles it for a browser with no unresolved built-ins.
+7. **Both consumers.** `npm run verify` green in the extension; obsidian-dita's 29 names (Appendix A) still resolve and its tests pass with the packed tarball, with no change to its sources.
+8. **Released** as a minor version.
+
+### 4.9 Risks and decisions needed from the maintainer
+
+Risks:
+
+- **Behaviour drift in a move.** Mitigated by 4.3 principle 2 (baseline byte-identical), moved tests unmodified, and splitting step 3.
+- **DITAVAL deduplication changes results.** The two readers were written for different questions (the extension's: "is this excluded"; core's: render-time action, flag and rev). Step 3b is gated on the agreement test; a disagreement is a finding, not something to resolve quietly.
+- **Public surface grows by about 25 names** while the version is 0.x, before the Phase 3 tiering. Accepted: tiering is the next phase and is easier with all the names present.
+- **Bundle size.** About 4,500 lines move into core; the tree-shaking assertion (6 in 4.8) is the guard.
+- **`sax` already is a core dependency** (parser, diagnostics, profiling), so no new dependency appears.
+- **Large crawls and memory file systems.** A browser host that preloads a big project pays the cost in 3.8; the analysis does not make it worse, but the graph holds every reference of a project in memory.
+
+Decisions needed (recommended answer first):
+
+1. **Scope of the move.** Everything in the 4.2 table including broken references, fix proposals and rename edits, or only crawl, checks and unreferenced resources. Recommended: everything, because the three modules share the same couplings and the same `FILE_REF_ATTRS`.
+2. **Host contract.** Async `AnalysisHost` with an adapter from the sync `FileSystem` (4.4), or make the analysis synchronous over `FileSystem` and give up cancellation and editor-overlay reads. Recommended: async host.
+3. **Validation scope.** Structural validation out of scope, stated in the coverage table. Recommended: out.
+4. **Imagemap ids.** Leave as they are. Recommended: leave.
+5. **Gaps found by the probes in step 1.** Fix in Phase 2 (one patch each), or record only. Recommended: fix those the extension's own preview shows wrong; record the rest.
+6. **Release shape.** One `core-0.5.0` at the end, or a release after step 6 (the point where the extension no longer holds the analysis) and another after step 9. Recommended: one release at the end, since obsidian-dita does not use the analysis.
 
 ## Appendix A — Re-measuring the facts
 
