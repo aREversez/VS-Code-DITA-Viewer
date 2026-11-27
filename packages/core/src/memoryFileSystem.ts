@@ -43,23 +43,41 @@ export function createMemoryFileSystem(files: Record<string, MemoryFileContent> 
   // exactly while its count is above zero, so asking whether a path is one (which
   // every lookup of a missing file does) does not scan every file.
   const filesBelow = new Map<string, number>();
+  // The same count for each directory's immediate children, by name: a file child
+  // counts itself (1), a subdirectory child counts the files below it. A name
+  // is listed while its count is above zero, so readDir reads one directory's own
+  // entries instead of scanning every file.
+  const kids = new Map<string, Map<string, number>>();
   let counter = 0;
 
   const key = (path: string): string => posixPath.resolve(path);
 
-  const addBelow = (abs: string, by: 1 | -1): void => {
-    for (let dir = posixPath.dirname(abs); ; dir = posixPath.dirname(dir)) {
-      const n = (filesBelow.get(dir) ?? 0) + by;
-      if (n > 0) filesBelow.set(dir, n);
-      else filesBelow.delete(dir);
+  const bump = <K>(map: Map<K, number>, k: K, by: 1 | -1): void => {
+    const n = (map.get(k) ?? 0) + by;
+    if (n > 0) map.set(k, n);
+    else map.delete(k);
+  };
+
+  /** A file is added (+1) or removed (-1) at `abs`: count it in every ancestor directory. */
+  const adjust = (abs: string, by: 1 | -1): void => {
+    let child = abs;
+    for (;;) {
+      const dir = posixPath.dirname(child);
+      bump(filesBelow, dir, by);
+      let names = kids.get(dir);
+      if (!names) kids.set(dir, (names = new Map()));
+      bump(names, child.slice(dir === '/' ? 1 : dir.length + 1), by);
+      if (names.size === 0) kids.delete(dir);
       if (dir === '/') break;
+      child = dir;
     }
   };
 
   const set = (path: string, content: MemoryFileContent): void => {
     const bytes = typeof content === 'string' ? encoder.encode(content) : content.slice();
     const abs = key(path);
-    if (!entries.has(abs)) addBelow(abs, 1);
+    if (abs === '/') return fail('EISDIR', 'write', path); // the root is always a directory
+    if (!entries.has(abs)) adjust(abs, 1);
     entries.set(abs, { bytes, version: ++counter });
   };
 
@@ -72,7 +90,7 @@ export function createMemoryFileSystem(files: Record<string, MemoryFileContent> 
     delete(path) {
       const abs = key(path);
       if (!entries.delete(abs)) return false;
-      addBelow(abs, -1);
+      adjust(abs, -1);
       return true;
     },
     readText(path) {
@@ -100,16 +118,9 @@ export function createMemoryFileSystem(files: Record<string, MemoryFileContent> 
     readDir(path): WalkEntry[] {
       const abs = key(path);
       if (entries.has(abs) || !isDirectory(abs)) return fail(entries.has(abs) ? 'ENOTDIR' : 'ENOENT', 'scandir', path);
-      const prefix = abs === '/' ? '/' : `${abs}/`;
-      const children = new Map<string, boolean>();
-      for (const k of entries.keys()) {
-        if (!k.startsWith(prefix)) continue;
-        const rest = k.slice(prefix.length);
-        const slash = rest.indexOf('/');
-        if (slash === -1) children.set(rest, false);
-        else children.set(rest.slice(0, slash), true);
-      }
-      return [...children.keys()].sort().map((name) => ({ name, isDirectory: children.get(name) === true }));
+      const under = abs === '/' ? '/' : `${abs}/`;
+      // A name that is both a file and a directory (a file at /p and another at /p/q) lists as a directory.
+      return [...(kids.get(abs)?.keys() ?? [])].sort().map((name) => ({ name, isDirectory: filesBelow.has(under + name) }));
     },
   };
 }

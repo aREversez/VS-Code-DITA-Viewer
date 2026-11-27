@@ -144,3 +144,74 @@ describe('createMemoryFileSystem', () => {
     assert.strictEqual(fs.readHead('/b.bin', 1)[0], 1);
   });
 });
+
+// readDir, exists and stat are answered from indexes kept in step with every set
+// and delete. Check them against a model that recomputes everything from the plain
+// list of files, over a long random sequence of changes.
+describe('createMemoryFileSystem indexes agree with a plain model', () => {
+  const names = ['a', 'b', 'c'];
+  const universe: string[] = [];
+  for (const x of names) {
+    universe.push(`/${x}`, `/p/${x}`, `/p/q/${x}`, `/p/q/r/${x}`, `/s/${x}`);
+  }
+
+  const model = (files: Set<string>) => {
+    const dirs = new Set<string>(['/']);
+    for (const f of files) for (let d = f.slice(0, f.lastIndexOf('/')); d !== ''; d = d.slice(0, d.lastIndexOf('/'))) dirs.add(d);
+    const list = (dir: string) => {
+      const kids = new Map<string, boolean>();
+      const prefix = dir === '/' ? '/' : `${dir}/`;
+      for (const f of files) {
+        if (!f.startsWith(prefix)) continue;
+        const rest = f.slice(prefix.length);
+        const slash = rest.indexOf('/');
+        const name = slash === -1 ? rest : rest.slice(0, slash);
+        kids.set(name, (kids.get(name) ?? false) || slash !== -1);
+      }
+      return [...kids.keys()].sort().map((name) => ({ name, isDirectory: kids.get(name) === true }));
+    };
+    return { dirs, list };
+  };
+
+  it('after every one of 600 random sets and deletes', () => {
+    let seed = 12345;
+    const rnd = (n: number): number => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed % n;
+    };
+    const fs = createMemoryFileSystem();
+    const files = new Set<string>();
+    const probes = [...universe, '/', '/p', '/p/q', '/p/q/r', '/s', '/none', '/p/none'];
+    for (let step = 0; step < 600; step++) {
+      const f = universe[rnd(universe.length)];
+      if (rnd(3) === 0) {
+        assert.strictEqual(fs.delete(f), files.delete(f), `delete ${f}`);
+      } else {
+        fs.set(f, `v${step}`);
+        files.add(f);
+      }
+      const m = model(files);
+      for (const p of probes) {
+        const isFile = files.has(p);
+        const isDir = m.dirs.has(p);
+        assert.strictEqual(fs.exists(p), isFile || isDir, `step ${step} exists ${p}`);
+        assert.strictEqual(fs.stat(p) !== undefined, isFile || isDir, `step ${step} stat ${p}`);
+        if (isDir && !isFile) assert.deepStrictEqual(fs.readDir(p), m.list(p), `step ${step} readDir ${p}`);
+        else if (isFile) assert.throws(() => fs.readDir(p), /ENOTDIR/, `step ${step} readDir of file ${p}`);
+        else assert.throws(() => fs.readDir(p), /ENOENT/, `step ${step} readDir of missing ${p}`);
+      }
+    }
+  });
+
+  it('a name that is both a file and a directory lists as a directory', () => {
+    const fs = createMemoryFileSystem({ '/p/q': 'file', '/p/q/x.dita': 'x', '/p/other.dita': 'o' });
+    assert.deepStrictEqual(fs.readDir('/p'), [
+      { name: 'other.dita', isDirectory: false },
+      { name: 'q', isDirectory: true },
+    ]);
+  });
+
+  it('the root cannot be written as a file', () => {
+    assert.throws(() => createMemoryFileSystem().set('/', 'x'), /EISDIR/);
+  });
+});
