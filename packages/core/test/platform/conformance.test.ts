@@ -46,6 +46,16 @@ describeIfPosix('Node and memory platforms agree on test-dita-file', function ()
 
   const topics = files.filter((f) => /\.dita$/i.test(f));
   const maps = files.filter((f) => /\.ditamap$/i.test(f));
+
+  // The a-case probes reference 'ok.dita' with the wrong capitalization on
+  // purpose, and whether the reference then resolves is the host disk's case
+  // sensitivity, not a platform difference: Node's fs finds 'Ok.dita' on the
+  // case-insensitive disks of Windows and macOS runners, the memory file
+  // system is exact and never does. On such a disk those diagnostics are not
+  // part of the comparison (the probes' own comments say the same). Everything
+  // else in the corpus matches its target exactly.
+  const caseInsensitiveDisk = nodeFs.existsSync(path.join(fixtureRoot, 'completeness-corpus-2', 'topics', 'Ok.dita'));
+  const aCaseProbes = /\/topics\/a-case-(edge|pos)\.dita$/;
   const filters = {
     none: undefined,
     hidden: { hidden: new Set(['audience:novice', 'product:b', 'platform:linux', 'otherprops:x']) },
@@ -72,6 +82,7 @@ describeIfPosix('Node and memory platforms agree on test-dita-file', function ()
       const base = { xml: read(f), docDir: path.dirname(f), docFile: f, keyMap: new Map<string, string>(), asWebviewUri: (p: string) => `vscode-resource:${p}`, headingLevel: 1 };
       same(`${f} plain`, (e) => e.renderTopicXml(base));
       same(`${f} refErrors`, (e) => e.renderTopicXml({ ...base, refErrors: true, markConrefs: true, clickableExternalXrefs: true }));
+      if (caseInsensitiveDisk && aCaseProbes.test(f)) continue;
       same(`${f} diagnostics`, (e) => e.collectDiagnostics({ xml: base.xml, absPath: f }));
     }
   });
