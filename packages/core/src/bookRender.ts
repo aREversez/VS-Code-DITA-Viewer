@@ -12,7 +12,7 @@
 // (see baseTypeMap.ts); the host uses the wrapper to find the target section
 // and scroll to it instead of opening another file.
 
-import { dirname, isAbsolute, resolve } from 'path';
+import { dirname, isAbsolute, resolve } from './runtime/path';
 import { DitaDocument } from './parser/domTypes';
 import { parseDitamap, preprocessEntities } from './parser/ditaParser';
 import { decodeHrefPart, expandDitamapRefs } from './editor/refResolvers';

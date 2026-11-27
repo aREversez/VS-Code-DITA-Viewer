@@ -44,6 +44,23 @@ fails when the set of tokens the two read drifts apart. What remains is that
 the extension keeps its own copy of the rules; `dita-content.css` also holds the
 Obsidian-only book and site rules the extension does not need.
 
+## Entry points
+
+- `@dita-viewer/core` — as before. Loading it installs Node's `fs` and `path` as the default platform, so every function works with no setup.
+- `@dita-viewer/core/portable` — for hosts without Node (a browser, a worker). No Node built-in is reachable from it. It exports what needs no platform at top level (parsing, profiling, completion, the language utilities) and `createEngine(platform)`, which gives the rest (rendering, key spaces, diagnostics, reference resolution) as methods. `createMemoryFileSystem(files)` and `posixPath` make a platform over files the host has already loaded; a host whose own file API is asynchronous loads what it needs first, because core reads synchronously and never writes.
+- `@dita-viewer/core/node` — `nodePlatform` and `createNodeEngine()`, an engine on Node's fs and path with state of its own.
+
+```ts
+import { createEngine, createMemoryFileSystem, posixPath } from '@dita-viewer/core/portable';
+
+const engine = createEngine({ fs: createMemoryFileSystem({ '/ws/a.dita': xml }), path: posixPath });
+const { html } = engine.renderTopicXml({ xml, docDir: '/ws', keyMap: new Map(), asWebviewUri: (p) => p, headingLevel: 1 });
+```
+
+A bundle that uses `createEngine` contains the whole engine, because its methods are looked up by name and a bundler cannot tell which ones are used; a host that only needs parsing, profiling or completion imports those pure functions and gets a much smaller bundle. Functions an engine hands out (the resolvers from `makeFileCache` and friends, a render context) stay bound to that engine, however late they are called.
+
+Two engines never share source overlays, caches, read roots or counters. The in-memory platform is POSIX-only (`/`, no drive letters). `packages/core/DESIGN.md` has the design and the roadmap.
+
 ## Two builds
 
 `npm run build` writes `dist/` (CommonJS, with the type declarations) and

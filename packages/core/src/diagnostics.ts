@@ -10,8 +10,8 @@
 // error would be a guess. Only then is the tree walked for the mistakes that
 // read fine as XML: references to nothing and ids used twice.
 
-import { existsSync } from 'fs';
-import { dirname, isAbsolute, resolve } from 'path';
+import { exists } from './runtime/fs';
+import { dirname, isAbsolute, resolve } from './runtime/path';
 import sax from 'sax';
 import { DitaNode } from './parser/domTypes';
 import { parseDita, parseDitamap } from './parser/ditaParser';
@@ -38,7 +38,7 @@ export interface DiagnosticsInput {
   /** Keys the ditamaps near the document define; see buildKeyMapForDocument. */
   keys?: ReadonlyMap<string, string>;
   /**
-   * Existence test for an absolute path. Defaults to fs.existsSync; a host
+   * Existence test for an absolute path. Defaults to the active platform's exists; a host
    * that can only reach files inside its own workspace passes its own.
    */
   fileExists?: (absPath: string) => boolean;
@@ -393,7 +393,7 @@ function checkDuplicateIds(state: CheckState, root: DitaNode): void {
  * document is well formed and every reference it makes can be resolved.
  */
 export function collectDiagnostics(input: DiagnosticsInput): DitaDiagnostic[] {
-  const { xml, absPath, keys, keyFiles, fileExists = existsSync, idsIn, collectDependencies } = input;
+  const { xml, absPath, keys, keyFiles, fileExists = exists, idsIn, collectDependencies } = input;
   // Key maps are dependencies whatever the document turns out to contain: a
   // keyref that resolves today can stop resolving when the map changes, and
   // no other file is read to find that out.

@@ -14,8 +14,8 @@
 // data-dita-book-xref="path#id" (see baseTypeMap.ts); the host uses this
 // manifest to switch pages before scrolling to the anchor.
 
-import { statSync } from 'fs';
-import { dirname, resolve } from 'path';
+import { stat } from './runtime/fs';
+import { dirname, resolve } from './runtime/path';
 import { DitaDocument } from './parser/domTypes';
 import { parseDitamap, preprocessEntities } from './parser/ditaParser';
 import { decodeHrefPart, expandDitamapRefs } from './editor/refResolvers';
@@ -136,12 +136,8 @@ function finishTitle(raw: string, resolveKey: (key: string) => string | undefine
 
 /** modified time + size, or undefined when the file cannot be statted (then nothing is cached). */
 function fileStamp(absPath: string): string | undefined {
-  try {
-    const st = statSync(absPath);
-    return `${st.mtimeMs}:${st.size}`;
-  } catch {
-    return undefined;
-  }
+  const st = stat(absPath);
+  return st ? `${st.mtimeMs}:${st.size}` : undefined;
 }
 
 function pageOpen(absPath: string, depth?: number): string {

@@ -14,7 +14,7 @@
 // what let the runtime version switch from readdirSync to
 // workspace.fs.readDirectory without touching a single rule below.
 
-import { join, normalize, relative } from 'path';
+import { join, normalize, relative } from '../runtime/path';
 
 /** One directory entry, reduced to the two facts the walk needs. */
 export interface WalkEntry {

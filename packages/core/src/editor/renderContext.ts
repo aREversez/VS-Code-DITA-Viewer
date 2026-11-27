@@ -21,8 +21,9 @@
 //     collectDependencies also folds image reads into the dependency set.
 //   - suppressIndexterm: only the export path sets it.
 
-import { existsSync } from 'fs';
-import { resolve, relative, isAbsolute } from 'path';
+import { bindRuntimeMethods } from '../runtime';
+import { exists } from '../runtime/fs';
+import { resolve, relative, isAbsolute } from '../runtime/path';
 import { DitaNode } from '../parser/domTypes';
 import { RenderContext } from '../render/renderer';
 import {
@@ -262,7 +263,7 @@ export function buildRenderContext(input: BuildRenderContextInput): BuiltRenderC
           conkeyref,
           keyDefs,
           loadTopic,
-          (baseDir, href) => existsSync(resolve(baseDir, decodeHrefPart(href.split('#')[0]))),
+          (baseDir, href) => exists(resolve(baseDir, decodeHrefPart(href.split('#')[0]))),
           (baseDir, href) => isReadAllowed(resolve(baseDir, decodeHrefPart(href.split('#')[0]))),
         );
         return failure === undefined ? undefined : texts[failure];
@@ -284,5 +285,9 @@ export function buildRenderContext(input: BuildRenderContextInput): BuiltRenderC
     return conref ? conrefResolver(conref, from) : undefined;
   };
 
-  return { ctx, touchedFiles: () => fileCache.touchedFiles() };
+  // The context outlives this call and is used by whoever renders with it, so its own
+  // closures keep the runtime they were made under. Functions the host passed in and
+  // the context holds as given (asWebviewUri today) keep their identity.
+  const hostCallbacks = Object.values(input).filter((v) => typeof v === 'function');
+  return { ctx: bindRuntimeMethods(ctx, hostCallbacks), touchedFiles: () => fileCache.touchedFiles() };
 }

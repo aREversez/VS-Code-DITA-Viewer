@@ -9,9 +9,10 @@
 // expandDitamapRefs). renderContext, keySpace and ditaRenderUtils now all sit
 // ABOVE this module; nothing below reaches back up. Behaviour is unchanged --
 // this is a pure move of code lifted verbatim from ditaRenderUtils.ts.
-import { existsSync, openSync, readSync, closeSync, statSync } from 'fs';
+import { exists, readHead, stat } from '../runtime/fs';
+import { bindRuntime, bindRuntimeMethods, stateSlot } from '../runtime';
 import { isReadAllowed } from '../pathContainment';
-import { resolve, isAbsolute, extname, dirname, relative, normalize } from 'path';
+import { resolve, isAbsolute, extname, dirname, relative, normalize } from '../runtime/path';
 import { DitaNode } from '../parser/domTypes';
 import { parseDita, parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { extractText, getMapTitleText, isDitamapRef } from '../render/mapTypeMap';
@@ -38,49 +39,60 @@ import { readSourceText } from './sourceText';
 
 const IMAGE_HEADER_READ_BYTES = 65536;
 
-function readHeaderBytes(filePath: string, maxBytes: number): Buffer | undefined {
-  let fd: number | undefined;
+function readHeaderBytes(filePath: string, maxBytes: number): Uint8Array | undefined {
   try {
-    fd = openSync(filePath, 'r');
-    const buf = Buffer.alloc(maxBytes);
-    const bytesRead = readSync(fd, buf, 0, maxBytes, 0);
-    return buf.subarray(0, bytesRead);
+    return readHead(filePath, maxBytes);
   } catch {
     return undefined;
-  } finally {
-    if (fd !== undefined) {
-      try { closeSync(fd); } catch { /* already closed / never opened */ }
-    }
   }
 }
 
-function readPngDimensions(buf: Buffer): { width: number; height: number } | undefined {
+// The readers below take plain bytes (Uint8Array), not a Node Buffer, so they
+// run wherever core does. A DataView supplies the big/little-endian reads.
+type ImageDims = { width: number; height: number };
+
+function view(buf: Uint8Array): DataView {
+  return new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+}
+
+function ascii(buf: Uint8Array, start: number, end: number): string {
+  let out = '';
+  for (let i = start; i < end && i < buf.length; i++) out += String.fromCharCode(buf[i] & 0x7f);
+  return out;
+}
+
+function readPngDimensions(buf: Uint8Array): ImageDims | undefined {
   // 8-byte signature, then a 4-byte chunk length + "IHDR" + width (4B BE) + height (4B BE)
   if (buf.length < 24) return undefined;
-  if (buf.readUInt32BE(0) !== 0x89504e47 || buf.readUInt32BE(4) !== 0x0d0a1a0a) return undefined;
-  if (buf.toString('ascii', 12, 16) !== 'IHDR') return undefined;
-  return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+  const v = view(buf);
+  if (v.getUint32(0) !== 0x89504e47 || v.getUint32(4) !== 0x0d0a1a0a) return undefined;
+  if (ascii(buf, 12, 16) !== 'IHDR') return undefined;
+  return { width: v.getUint32(16), height: v.getUint32(20) };
 }
 
-function readGifDimensions(buf: Buffer): { width: number; height: number } | undefined {
+function readGifDimensions(buf: Uint8Array): ImageDims | undefined {
   if (buf.length < 10) return undefined;
-  const sig = buf.toString('ascii', 0, 6);
+  const sig = ascii(buf, 0, 6);
   if (sig !== 'GIF87a' && sig !== 'GIF89a') return undefined;
-  return { width: buf.readUInt16LE(6), height: buf.readUInt16LE(8) };
+  const v = view(buf);
+  return { width: v.getUint16(6, true), height: v.getUint16(8, true) };
 }
 
-function readBmpDimensions(buf: Buffer): { width: number; height: number } | undefined {
+function readBmpDimensions(buf: Uint8Array): ImageDims | undefined {
   if (buf.length < 26) return undefined;
-  if (buf.toString('ascii', 0, 2) !== 'BM') return undefined;
-  const width = buf.readInt32LE(18);
-  const height = buf.readInt32LE(22);
+  if (ascii(buf, 0, 2) !== 'BM') return undefined;
+  const v = view(buf);
+  const width = v.getInt32(18, true);
+  const height = v.getInt32(22, true);
   // A negative height means a top-down (rather than the default
   // bottom-up) bitmap -- the magnitude is still the real pixel height.
   return { width: Math.abs(width), height: Math.abs(height) };
 }
 
-function readJpegDimensions(buf: Buffer): { width: number; height: number } | undefined {
-  if (buf.length < 4 || buf.readUInt16BE(0) !== 0xffd8) return undefined;
+function readJpegDimensions(buf: Uint8Array): ImageDims | undefined {
+  if (buf.length < 4) return undefined;
+  const v = view(buf);
+  if (v.getUint16(0) !== 0xffd8) return undefined;
   let offset = 2;
   while (offset + 4 <= buf.length) {
     if (buf[offset] !== 0xff) { offset++; continue; }
@@ -91,11 +103,11 @@ function readJpegDimensions(buf: Buffer): { width: number; height: number } | un
       continue;
     }
     if (offset + 4 > buf.length) break;
-    const segmentLength = buf.readUInt16BE(offset + 2);
+    const segmentLength = v.getUint16(offset + 2);
     const isSof = marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
     if (isSof) {
       if (offset + 9 > buf.length) return undefined; // truncated read -- header didn't fit in what we sampled
-      return { height: buf.readUInt16BE(offset + 5), width: buf.readUInt16BE(offset + 7) };
+      return { height: v.getUint16(offset + 5), width: v.getUint16(offset + 7) };
     }
     if (marker === 0xda) return undefined; // Start of Scan reached with no SOF found
     offset += 2 + segmentLength;
@@ -103,8 +115,9 @@ function readJpegDimensions(buf: Buffer): { width: number; height: number } | un
   return undefined;
 }
 
-function readSvgDimensions(buf: Buffer): { width: number; height: number } | undefined {
-  const text = buf.toString('utf-8');
+function readSvgDimensions(buf: Uint8Array): ImageDims | undefined {
+  // ignoreBOM: keep a leading BOM in the text, as Buffer#toString does.
+  const text = new TextDecoder('utf-8', { ignoreBOM: true }).decode(buf);
   const svgTagMatch = text.match(/<svg\b[^>]*>/);
   if (!svgTagMatch) return undefined;
   const tag = svgTagMatch[0];
@@ -127,7 +140,7 @@ function readSvgDimensions(buf: Buffer): { width: number; height: number } | und
   return undefined;
 }
 
-const IMAGE_DIMENSION_READERS: Record<string, (buf: Buffer) => { width: number; height: number } | undefined> = {
+const IMAGE_DIMENSION_READERS: Record<string, (buf: Uint8Array) => ImageDims | undefined> = {
   '.png': readPngDimensions,
   '.gif': readGifDimensions,
   '.bmp': readBmpDimensions,
@@ -157,32 +170,32 @@ const IMAGE_DIMENSION_READERS: Record<string, (buf: Buffer) => { width: number; 
  * numbers), but the project's rule is that every cache stays bounded and
  * clearable, and this one is cleared alongside the rest on deactivation.
  */
-const imageDimensionsCache = new Map<string, { mtimeMs: number; dimensions: { width: number; height: number } | undefined }>();
+// Per runtime (DESIGN.md 3.4), like every other cache.
+const imageDimensionsCacheOf = stateSlot(() => new Map<string, { mtimeMs: number; dimensions: { width: number; height: number } | undefined }>());
 // One entry per distinct image file ever previewed; bound it the same way
 // keyMapCache is bounded in DitaViewerProvider.ts.
 export const IMAGE_DIMENSIONS_CACHE_MAX = 1000;
 
 export function clearImageDimensionsCache(): void {
-  imageDimensionsCache.clear();
+  imageDimensionsCacheOf().clear();
 }
 
 export function readImageDimensions(filePath: string): { width: number; height: number } | undefined {
-  let mtimeMs: number;
-  try {
-    mtimeMs = statSync(filePath).mtimeMs;
-  } catch {
-    // Not statable (doesn't exist, permissions, ...) -- nothing to read,
-    // and any previous cache entry for this path is now stale.
-    imageDimensionsCache.delete(filePath);
+  // Not statable (doesn't exist, permissions, ...) -- nothing to read,
+  // and any previous cache entry for this path is now stale.
+  const st = stat(filePath);
+  if (!st) {
+    imageDimensionsCacheOf().delete(filePath);
     return undefined;
   }
+  const mtimeMs = st.mtimeMs;
 
-  const cached = imageDimensionsCache.get(filePath);
+  const cached = imageDimensionsCacheOf().get(filePath);
   if (cached && cached.mtimeMs === mtimeMs) {
     // Re-insert so a cache hit keeps the entry from being the oldest
     // (and therefore first-evicted) candidate.
-    imageDimensionsCache.delete(filePath);
-    imageDimensionsCache.set(filePath, cached);
+    imageDimensionsCacheOf().delete(filePath);
+    imageDimensionsCacheOf().set(filePath, cached);
     return cached.dimensions;
   }
 
@@ -198,11 +211,11 @@ export function readImageDimensions(filePath: string): { width: number; height: 
       }
     }
   }
-  if (imageDimensionsCache.size >= IMAGE_DIMENSIONS_CACHE_MAX) {
-    const oldest = imageDimensionsCache.keys().next().value;
-    if (oldest !== undefined) imageDimensionsCache.delete(oldest);
+  if (imageDimensionsCacheOf().size >= IMAGE_DIMENSIONS_CACHE_MAX) {
+    const oldest = imageDimensionsCacheOf().keys().next().value;
+    if (oldest !== undefined) imageDimensionsCacheOf().delete(oldest);
   }
-  imageDimensionsCache.set(filePath, { mtimeMs, dimensions });
+  imageDimensionsCacheOf().set(filePath, { mtimeMs, dimensions });
   return dimensions;
 }
 
@@ -246,7 +259,7 @@ export function makeFileCache(docDir: string) {
     // tell. Not cached -- the boundary can change with the workspace folders.
     if (!isReadAllowed(absPath)) return undefined;
     if (cache.has(absPath)) return cache.get(absPath);
-    if (!existsSync(absPath)) { cache.set(absPath, undefined); return undefined; }
+    if (!exists(absPath)) { cache.set(absPath, undefined); return undefined; }
     try {
       const content = readSourceText(absPath, 'utf-8');
       // A .ditamap parses with the map tag table: without it, a map's own
@@ -299,7 +312,7 @@ export function makeFileCache(docDir: string) {
     return [...cache.keys()];
   }
 
-  return { loadFile, loadAbsPath, findElementById, findTitleOfElement, touchedFiles, noteOrigin, originOf };
+  return bindRuntimeMethods({ loadFile, loadAbsPath, findElementById, findTitleOfElement, touchedFiles, noteOrigin, originOf });
 }
 
 export function makeConrefResolver(
@@ -314,7 +327,7 @@ export function makeConrefResolver(
    * chain: its origin decides what a relative path or a same-file "#id" is
    * relative to. Without it the reference belongs to the document being rendered.
    */
-  return (conref: string, from?: DitaNode): DitaNode | undefined => {
+  return bindRuntime((conref: string, from?: DitaNode): DitaNode | undefined => {
     const hashIdx = conref.indexOf('#');
     if (hashIdx < 0) return undefined;
     const filePath = conref.substring(0, hashIdx);
@@ -354,7 +367,7 @@ export function makeConrefResolver(
     // resolveConrefForNode in the renderer decides whether to replace just
     // the children (same-type conref) or the entire element (cross-type).
     return el;
-  };
+  });
 }
 
 // conrefend extends a conref reference from a single element to a run of
@@ -411,7 +424,7 @@ export function makeConrefRangeResolver(
     return undefined;
   }
 
-  return (conref: string, conrefend: string): DitaNode[] | undefined => {
+  return bindRuntime((conref: string, conrefend: string): DitaNode[] | undefined => {
     const start = resolveRef(conref);
     const end = resolveRef(conrefend);
     if (!start || !end) return undefined;
@@ -437,7 +450,7 @@ export function makeConrefRangeResolver(
     // run sits under one parent (checked above), hence in one file.
     for (const el of run) cache.noteOrigin(el, { file: start.file, root: start.root });
     return run;
-  };
+  });
 }
 
 /**
@@ -472,7 +485,7 @@ export function makeRefErrorResolver(
 ): (ref: string) => string | undefined {
   const cache = sharedCache ?? makeFileCache(docDir);
 
-  return (ref: string): string | undefined => {
+  return bindRuntime((ref: string): string | undefined => {
     if (!ref) return undefined;
     const hashIdx = ref.indexOf('#');
     const filePath = hashIdx >= 0 ? ref.substring(0, hashIdx) : ref;
@@ -501,7 +514,7 @@ export function makeRefErrorResolver(
     const abs = resolve(docDir, decodeHrefPart(filePath));
     const root = cache.loadAbsPath(abs);
     if (!root) {
-      if (!existsSync(abs)) return texts.missingFile;
+      if (!exists(abs)) return texts.missingFile;
       // Present but refused by the host's read boundary: say so, rather than
       // "does not exist" or "cannot be parsed", neither of which is true.
       if (!isReadAllowed(abs)) return texts.outsideWorkspace ?? DEFAULT_REF_ERROR_TEXTS.outsideWorkspace!;
@@ -509,7 +522,7 @@ export function makeRefErrorResolver(
     }
     if (!elementId) return undefined;
     return cache.findElementById(root, elementId) ? undefined : texts.missingId;
-  };
+  });
 }
 
 export function makeFileTitleResolver(
@@ -519,7 +532,7 @@ export function makeFileTitleResolver(
 ): (href: string) => string | undefined {
   const cache = sharedCache ?? makeFileCache(docDir);
 
-  return (href: string): string | undefined => {
+  return bindRuntime((href: string): string | undefined => {
     // Only local relative references can be resolved from disk — never probe
     // the filesystem for external URLs or absolute paths (on Windows an
     // https:// href would otherwise resolve to a junk docDir\https:\ path).
@@ -552,7 +565,7 @@ export function makeFileTitleResolver(
     const root = cache.loadFile(filePath);
     if (!root) return undefined;
     return cache.findTitleOfElement(root, topicId, resolveKey);
-  };
+  });
 }
 
 // ── Default note labels ──
@@ -646,13 +659,13 @@ export function makeIsInCurrentBook(
   docDir: string,
   bookMembers: ReadonlySet<string>,
 ): (href: string) => string | undefined {
-  return (href: string): string | undefined => {
+  return bindRuntime((href: string): string | undefined => {
     if (!href || URL_SCHEME_RE.test(href) || isAbsolute(href)) return undefined;
     const pathPart = href.split('#')[0];
     if (!pathPart) return undefined;
     const absPath = resolve(docDir, decodeHrefPart(pathPart));
     return bookMembers.has(absPath) ? absPath : undefined;
-  };
+  });
 }
 
 /**

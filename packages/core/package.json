@@ -1,6 +1,6 @@
 {
   "name": "@dita-viewer/core",
-  "version": "0.2.5",
+  "version": "0.4.0",
   "description": "Host-neutral DITA parsing and HTML rendering core, shared by the VS Code DITA Viewer and obsidian-dita.",
   "keywords": [
     "dita",
@@ -30,8 +30,24 @@
       "module": "./dist-esm/index.js",
       "default": "./dist/index.js"
     },
+    "./portable": {
+      "types": "./dist/portable.d.ts",
+      "module": "./dist-esm/portable.js",
+      "default": "./dist/portable.js"
+    },
+    "./node": {
+      "types": "./dist/node/index.d.ts",
+      "module": "./dist-esm/node/index.js",
+      "default": "./dist/node/index.js"
+    },
     "./styles/dita-content.css": "./styles/dita-content.css",
     "./styles/TOKENS.md": "./styles/TOKENS.md"
+  },
+  "typesVersions": {
+    "*": {
+      "portable": ["dist/portable.d.ts"],
+      "node": ["dist/node/index.d.ts"]
+    }
   },
   "files": [
     "dist",

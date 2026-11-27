@@ -4,7 +4,7 @@
 // referenced submaps, render), as one host-neutral call. Nothing here is new
 // rendering logic -- it only sequences the copied parser and renderer.
 
-import { resolve } from 'path';
+import { resolve } from './runtime/path';
 import { parseDitamap, preprocessEntities } from './parser/ditaParser';
 import { expandDitamapRefs } from './editor/refResolvers';
 import { readSourceText } from './editor/sourceText';

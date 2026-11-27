@@ -4,6 +4,7 @@ import { BLOCK_COMMENT_PARENTS, BLOCK_CONTENT_HOSTS, BLOCK_LEVEL_BASETYPES } fro
 import { DEFAULT_REF_ERROR_TEXTS, fillRefErrorTemplate } from './refErrorTexts';
 import { isDitaFormat } from './refTargets';
 import { isSafeHref } from './safeHref';
+import { stateSlot } from '../runtime';
 
 // parentBaseType only reflects the immediate ancestor (entry sits under row,
 // not thead), so header status is carried by an explicit ctx flag set when
@@ -419,12 +420,16 @@ function safeAttr(name: string, value: string | undefined | null): string {
 
 // The <map> id needs to be unique per imagemap instance (two imagemaps
 // in one rendered page would otherwise fight over the same map, and the
-// browser only honors the first). A monotonic module-level counter keeps
-// it deterministic and collision-free across a whole book render; it only
-// needs uniqueness within one rendered document, which is also all it
-// guarantees (re-renders restart the count, and separate documents never
-// share a DOM).
-let imagemapSequence = 0;
+// browser only honors the first). A monotonic counter, one per runtime (an
+// engine, or the default one), keeps it unique across everything that runtime
+// renders: every topic of a book, and every earlier render a host keeps.
+// It is deliberately NOT reset between renders. Hosts cache rendered topic
+// HTML (renderTopicCached), and that HTML keeps the id it was rendered with, so
+// restarting the count could give a fresh render the id a cached one on the
+// same page already uses. The price is that the ids in a render depend on how
+// many imagemaps the runtime rendered before; tests therefore read the id from
+// the markup (usemap="#...") instead of assuming a value.
+const imagemapSequence = stateSlot<{ n: number }>(() => ({ n: 0 }));
 
 // Region geometry + destination for one <area>. Only shape/coords/xref
 // are meaningful here (sort-as is authoring metadata for link-text
@@ -970,8 +975,7 @@ export const BASE_TYPE_RENDERERS: Record<string, Renderer> = {
     const imageNode = children.find((c) => c.baseType === 'topic/image');
     const areaNodes = children.filter((c) => c.baseType === 'topic/area');
 
-    imagemapSequence += 1;
-    const mapId = `dita-imagemap-${imagemapSequence}`;
+    const mapId = `dita-imagemap-${++imagemapSequence().n}`;
 
     // The hotspot image reuses the full topic/image renderer — webview URI
     // resolution, natural-dimension reservation, @width/@height/@scale,

@@ -1,4 +1,4 @@
-import { isAbsolute } from 'path';
+import { isAbsolute } from '../runtime/path';
 import { DitaNode } from '../parser/domTypes';
 import { mergeProfilingAttrs, profilingKeysAttr, profilingChipsHtml } from './renderer';
 

@@ -5,7 +5,7 @@
 // keys a map defines" go through collectMapKeys so there is one rule for
 // what a keydef contributes.
 
-import { dirname, resolve } from 'path';
+import { dirname, isCaseSensitive, resolve } from '../runtime/path';
 import { DitaNode } from '../parser/domTypes';
 import { parseDitamap, preprocessEntities } from '../parser/ditaParser';
 import { isDitamapRef } from '../render/mapTypeMap';
@@ -149,7 +149,7 @@ export function createKeyScopeIndex(): KeyScopeIndex {
 
 function topicScopeKey(absPath: string): string {
   const p = resolve(absPath);
-  return process.platform === 'win32' ? p.toLowerCase() : p;
+  return isCaseSensitive() ? p : p.toLowerCase();
 }
 
 /** The scope chains of the topicrefs that publish `absPath`, or undefined when no topicref does. */
