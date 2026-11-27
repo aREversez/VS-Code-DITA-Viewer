@@ -43,6 +43,12 @@
     "./styles/dita-content.css": "./styles/dita-content.css",
     "./styles/TOKENS.md": "./styles/TOKENS.md"
   },
+  "typesVersions": {
+    "*": {
+      "portable": ["dist/portable.d.ts"],
+      "node": ["dist/node/index.d.ts"]
+    }
+  },
   "files": [
     "dist",
     "dist-esm",

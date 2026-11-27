@@ -238,6 +238,20 @@ export { node, html };
   } catch (e) {
     check(false, `a TypeScript consumer resolves the types: ${e.stdout || e.message}`);
   }
+
+  // Classic resolution (node10) ignores `exports`, so the subpaths resolve only
+  // through typesVersions in package.json. A project that has not moved to
+  // node16 or bundler resolution must still be able to import them.
+  writeFileSync(
+    join(consumer, 'tsconfig.node10.json'),
+    JSON.stringify({ compilerOptions: { module: 'commonjs', moduleResolution: 'node10', target: 'es2022', strict: true, noEmit: true, skipLibCheck: false, types: ['node'] }, files: ['use.ts', 'use-subpaths.ts'] }),
+  );
+  try {
+    run(process.execPath, [join(consumer, 'node_modules', 'typescript', 'bin', 'tsc'), '-p', 'tsconfig.node10.json'], consumer);
+    check(true, 'a TypeScript consumer resolves the types, subpaths included (classic node10 resolution)');
+  } catch (e) {
+    check(false, `a classic-resolution TypeScript consumer resolves the types: ${e.stdout || e.message}`);
+  }
 } finally {
   rmSync(work, { recursive: true, force: true });
 }
