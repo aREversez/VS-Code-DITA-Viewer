@@ -57,6 +57,8 @@ const engine = createEngine({ fs: createMemoryFileSystem({ '/ws/a.dita': xml }),
 const { html } = engine.renderTopicXml({ xml, docDir: '/ws', keyMap: new Map(), asWebviewUri: (p) => p, headingLevel: 1 });
 ```
 
+A bundle that uses `createEngine` contains the whole engine, because its methods are looked up by name and a bundler cannot tell which ones are used; a host that only needs parsing, profiling or completion imports those pure functions and gets a much smaller bundle. Functions an engine hands out (the resolvers from `makeFileCache` and friends, a render context) stay bound to that engine, however late they are called.
+
 Two engines never share source overlays, caches, read roots or counters. The in-memory platform is POSIX-only (`/`, no drive letters). `packages/core/DESIGN.md` has the design and the roadmap.
 
 ## Two builds
