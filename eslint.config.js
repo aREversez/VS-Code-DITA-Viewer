@@ -65,10 +65,13 @@ module.exports = [
   // Test files legitimately use require()-style imports: they hijack the
   // module cache (new Module + _compile) to stub 'vscode' and lazily load
   // compiled output, which cannot be expressed as static ESM imports.
+  // Both rule names: typescript-eslint v7 still ships the old no-var-requires
+  // beside the new no-require-imports, each flagged separately.
   {
     files: ['src/test/**/*.ts', 'src/test-e2e/**/*.ts', 'src/test-visual/**/*.ts'],
     rules: {
       '@typescript-eslint/no-require-imports': 'off',
+      '@typescript-eslint/no-var-requires': 'off',
     },
   },
   // Plain-JS tooling and the diff webview: not type-checked by tsc, so lint is
