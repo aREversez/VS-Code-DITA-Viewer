@@ -116,6 +116,19 @@ describe('coverage probes: reference resolution', () => {
       const html = body('<p><image keyref="k"/></p>', '<keydef keys="k"><topicmeta><keywords><keyword>K</keyword></keywords></topicmeta></keydef>', PIC);
       assert.match(html, /<img src=""/);
     });
+
+    // DITA 1.3 §2.3.4.9: an empty <image> (no text, no <alt> child, no @alt)
+    // takes the key's effective content as alternate text, equivalent to an
+    // <alt> child. Core resolves the key's href but never substitutes text
+    // for images, so the alt is missing.
+    it.skip('an empty image takes the key\'s text as alt text', () => {
+      const html = body(
+        '<p><image keyref="k"/></p>',
+        '<keydef keys="k" href="images/pic.png"><topicmeta><linktext>LT</linktext></topicmeta></keydef>',
+        PIC,
+      );
+      assert.match(html, /<img [^>]*alt="LT"/);
+    });
   });
 
   describe('conref and conkeyref', () => {

@@ -10,7 +10,7 @@ Statuses: **supported** (a passing test pins it), **partial** (works for the com
 
 Measured at core 0.4.0. Tests are under `packages/core/test/`; the probes written for this table are in
 `coverage/referenceResolution.test.ts`, where a skipped test states the behaviour DITA 1.3 asks for and the step
-that switches it on (one is left: the `xref` link text).
+that switches it on (two are left: the `xref` link text and the `image` alt text).
 
 ## References and reuse
 
@@ -20,7 +20,7 @@ that switches it on (one is left: the `xref` link text).
 | `xref` + `keyref`: link text from the key's `linktext` | supported | | `coverage/referenceResolution`: "takes the link text from the key's linktext" |
 | `xref` + `keyref`, no content, no `linktext` | partial | The link text is the key name; a direct `href` gives the target's title. Planned (Phase 2, step 2). | skipped probe "link text is the target topic's title" |
 | `xref` + `keyref` to a key with no `href` and no `linktext` | supported | Rendered as an unresolved keyref, marked. | `coverage/referenceResolution` |
-| `image` + `keyref` to a key that defines an `href` | supported | The key's href is rebased from the defining map to the topic; an `href` on the image wins. The key's text is not used as alt text. | `coverage/referenceResolution`: "keyref on image" |
+| `image` + `keyref` to a key that defines an `href` | partial | The key's href is rebased from the defining map to the topic; an `href` on the image wins. An empty image (no text, no `<alt>`, no `@alt`) does not take the key's text as alt text, which DITA 1.3 §2.3.4.9 asks for. Planned (Phase 2, step 2). | `coverage/referenceResolution`: "keyref on image"; skipped probe "the key's text becomes the alt text" |
 | `conref` (element, same or other file) | supported | | `render/renderer.test.ts`, `editor/renderContext.test.ts` |
 | `conref` + `conrefend` (range of siblings) | supported | Same parent only (the restriction is documented in `editor/refResolvers.ts`). | `coverage/referenceResolution` |
 | `conkeyref` | supported | A resolvable `conkeyref` wins over a co-located `conref`; cycles terminate. | `editor/conkeyrefRender.test.ts` |
