@@ -139,5 +139,5 @@ export {
   sideOfRoot,
 } from './analysis/ditaClass';
 export type { ClassSide, ClassSyntaxProblem, Doctype } from './analysis/ditaClass';
-export { parseDitaval as parseDitavalFilter, parseDitavalRules } from './analysis/ditaval';
+export { parseDitavalFilter, parseDitavalRules } from './analysis/ditaval';
 export type { DitavalFilter, DitavalRule as DitavalRuleAtLine } from './analysis/ditaval';

@@ -8,7 +8,7 @@
 -->
 <val>
   <prop action="exclude" att="audience" val="developer"/>
-  <prop action="exclude" att="rev" val="planned"/>
+  <prop action="exclude" att="otherprops" val="planned"/>
   <prop action="exclude" att="product" val="brandA"/>
   <prop action="include" att="product" val="brandB"/>
 </val>

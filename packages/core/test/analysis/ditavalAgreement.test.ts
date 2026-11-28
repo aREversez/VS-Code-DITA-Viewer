@@ -1,15 +1,18 @@
-// Two DITAVAL readers exist: the completeness check's (src/analysis/ditaval.ts,
-// "would this element be filtered out?") and the render-time one in
-// src/profiling.ts. DESIGN.md 4.7 step 3b merges them, and says to show that
-// they agree first and report the disagreement instead of choosing silently.
-// This file is that evidence: where they agree it pins it, where they differ it
-// pins both answers and names which one DITA 1.3 supports, so the merge changes
-// exactly these rows and nothing else.
+// The completeness check's DITAVAL filter (src/analysis/ditaval.ts) is built on
+// the render-time reader of src/profiling.ts, plus one rule: an attribute that a
+// <prop> names and the element writes directly is a profiling value, because
+// `att` may name a props specialization, which is an attribute of its own name
+// (DITA 1.3, langRef/ditaval/ditaval-prop). DESIGN.md 4.10 has the history: the
+// two readers used to differ in the rows below, each pinned there with the answer
+// DITA 1.3.2 supports, and the merge took the render reader's answer in all of them.
+//
+// What this file now guards: the two answer the same everywhere except the one
+// rule above, which the render path does not have yet (step 8).
 
 import * as assert from 'assert';
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { dirname, join } from 'path';
-import { parseDitaval as parseCompletenessDitaval } from '../../src/analysis/ditaval';
+import { parseDitavalFilter } from '../../src/analysis/ditaval';
 import { isExcluded, parseDitaval as parseRenderDitaval, profileValuesOf } from '../../src/profiling';
 
 const exclude = (att: string, val?: string): string => `<prop att="${att}" ${val === undefined ? '' : `val="${val}" `}action="exclude"/>`;
@@ -17,12 +20,12 @@ const include = (att: string, val?: string): string => `<prop att="${att}" ${val
 const val = (body: string): string => `<val>${body}</val>`;
 
 /** The completeness reader's answer: is an element carrying these attributes filtered out? */
-const completeness = (xml: string, attrs: Record<string, string>): boolean => parseCompletenessDitaval(xml).excludes(attrs);
+const completeness = (xml: string, attrs: Record<string, string>): boolean => parseDitavalFilter(xml).excludes(attrs);
 /** The render-time reader's answer for the same element. */
 const render = (xml: string, attrs: Record<string, string>): boolean =>
   isExcluded(profileValuesOf(attrs), { ditaval: parseRenderDitaval(xml) });
 
-describe('the two DITAVAL readers', () => {
+describe('the completeness DITAVAL filter and the render-time reader', () => {
   describe('agree on ordinary filtering', () => {
     const cases: Array<[string, string, Record<string, string>, boolean]> = [
       ['an excluded audience value', val(exclude('audience', 'a')), { audience: 'a' }, true],
@@ -46,15 +49,15 @@ describe('the two DITAVAL readers', () => {
     }
   });
 
-  describe('differ, and which one DITA 1.3 supports', () => {
-    // Each row: what the completeness reader says, what the render reader says, and the
-    // reason one of them is right. Step 3b turns the wrong side into the right one.
+  describe('the rows where they used to differ now agree, except the specialized attribute', () => {
+    // Each row: the completeness filter, the render reader, and why that answer is the one
+    // DITA 1.3 supports (or why the spec leaves it open).
     const differences: Array<{ name: string; xml: string; attrs: Record<string, string>; completeness: boolean; render: boolean; why: string }> = [
       {
         name: 'a filter on rev',
         xml: val(exclude('rev', '1')),
         attrs: { rev: '1' },
-        completeness: true,
+        completeness: false,
         render: false,
         why: 'render is right: rev "can only be used for flagging" (langRef/ditaval/ditaval-revprop)',
       },
@@ -62,7 +65,7 @@ describe('the two DITAVAL readers', () => {
         name: 'a filter on base, importance or status',
         xml: val(exclude('status', 'draft')),
         attrs: { status: 'draft' },
-        completeness: true,
+        completeness: false,
         render: false,
         why: 'render is right: a prop\'s att must be props, audience, platform, product, otherprops, deliveryTarget or a props specialization (ditaval-prop)',
       },
@@ -70,7 +73,7 @@ describe('the two DITAVAL readers', () => {
         name: 'a bare value of props next to a specialization group',
         xml: val(exclude('props', 'x')),
         attrs: { props: 'region(emea) x' },
-        completeness: false,
+        completeness: true,
         render: true,
         why: 'render is right: region(emea) belongs to region, so props holds the bare value x only',
       },
@@ -86,7 +89,7 @@ describe('the two DITAVAL readers', () => {
         name: 'a prop whose action is not include, exclude, flag or passthrough',
         xml: val(exclude('audience') + '<prop att="audience" val="a" action="bogus"/>'),
         attrs: { audience: 'a' },
-        completeness: false,
+        completeness: true,
         render: true,
         why: 'undefined by the spec (an invalid file); render skips the rule, completeness lets it override the default',
       },
@@ -94,7 +97,7 @@ describe('the two DITAVAL readers', () => {
         name: 'val="" on a prop',
         xml: val('<prop att="audience" val="" action="exclude"/>'),
         attrs: { audience: 'a' },
-        completeness: false,
+        completeness: true,
         render: true,
         why: 'undefined by the spec; render reads an empty val as absent (the attribute default), completeness as a value no element carries',
       },
@@ -102,7 +105,7 @@ describe('the two DITAVAL readers', () => {
         name: 'two defaults for one attribute',
         xml: val(exclude('audience') + include('audience')),
         attrs: { audience: 'a' },
-        completeness: true,
+        completeness: false,
         render: false,
         why: 'the spec calls it an error and leaves recovery to the processor; completeness keeps the first, render the last',
       },
@@ -110,7 +113,7 @@ describe('the two DITAVAL readers', () => {
         name: 'a prop after a malformed spot in the file',
         xml: `<val>${include('audience', 'a')}<x></y>${exclude('audience', 'b')}</val>`,
         attrs: { audience: 'b' },
-        completeness: true,
+        completeness: false,
         render: false,
         why: 'undefined by the spec; render stops at the first error and reports it, completeness reads on',
       },
@@ -140,13 +143,11 @@ describe('the two DITAVAL readers', () => {
     };
     walk(join(root, 'test-dita-file'));
 
-    const NOT_FILTERING = new Set(['rev', 'base', 'importance', 'status']);
-
     it('finds the corpus files', () => {
       assert.ok(files.length >= 5, `found ${files.length}`);
     });
 
-    it('agree on every element built from the file\'s own attributes and values, except on attributes the spec does not filter on', () => {
+    it('agree on every element built from the file\'s own attributes and values', () => {
       const unexpected: string[] = [];
       for (const file of files) {
         const xml = readFileSync(file, 'utf8');
@@ -160,7 +161,7 @@ describe('the two DITAVAL readers', () => {
           for (const v of vals) {
             for (const value of [v, `${v} zzz`, vals.slice(0, 2).join(' ')]) {
               const attrs = { [att]: value };
-              if (completeness(xml, attrs) !== render(xml, attrs) && !NOT_FILTERING.has(att)) {
+              if (completeness(xml, attrs) !== render(xml, attrs)) {
                 unexpected.push(`${file}: ${JSON.stringify(attrs)}`);
               }
             }
@@ -168,13 +169,6 @@ describe('the two DITAVAL readers', () => {
         }
       }
       assert.deepStrictEqual(unexpected, []);
-    });
-
-    it('the corpus does exercise the one real difference: a prop that filters on rev', () => {
-      const withRev = files.filter((f) =>
-        [...readFileSync(f, 'utf8').matchAll(/<prop\b[^>]*>/g)].some((m) => /\batt="rev"/.test(m[0]) && /\baction="exclude"/.test(m[0])),
-      );
-      assert.ok(withRev.length >= 1, 'no corpus .ditaval filters on rev any more; the row above has no real-file witness');
     });
   });
 });

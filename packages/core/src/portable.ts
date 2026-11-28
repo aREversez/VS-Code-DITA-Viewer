@@ -14,7 +14,7 @@ export { HOST_TOKENS } from './api';
 export { MESSAGE_TEMPLATES, fill, formatMessage, msg } from './analysis/mapCheckMessages';
 export { PROFILING_ATTRS, TOPICREF_TAGS, URL_RE, classOf, hasNavTitle, isDitaHref, isMapTag, keyrefSyntax, profileValueOf, pruneExcludedXNodes, scanXml, walk } from './analysis/mapXmlScan';
 export { chainHas, classChain, classElementTag, classPairTag, classSyntaxProblem, declaresGrammar, defaultClassOf, effectiveClassOf, isDitaDoctype, readDoctype, sideOfRoot } from './analysis/ditaClass';
-export { parseDitaval as parseDitavalFilter, parseDitavalRules } from './analysis/ditaval';
+export { parseDitavalFilter, parseDitavalRules } from './analysis/ditaval';
 export { complete } from './completion';
 export { IMAGE_EXT } from './completionData';
 export { resolveConkeyref } from './editor/conkeyref';

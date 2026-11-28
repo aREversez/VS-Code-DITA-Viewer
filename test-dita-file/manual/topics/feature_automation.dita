@@ -35,7 +35,7 @@
     </section>    <section>
       <title>规则优先级</title>
       <p>当多条规则的动作冲突（如一条开灯、一条关灯）时，按规则创建时间由新到旧执行，最后创建的规则生效。</p>
-    </section>    <section rev="planned">
+    </section>    <section otherprops="planned">
       <title>开发者接口（规划中）</title>
       <p>即将开放本地 WebSocket 订阅接口，供第三方面板接收设备状态变更事件；事件负载采用 JSON 格式，字段以发布版文档为准。</p>
 <note type="caution" audience="developer"><p>该接口属开发中特性，仅在开发版固件中可见，字段命名与行为可能调整。</p></note>

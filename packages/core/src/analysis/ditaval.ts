@@ -1,12 +1,16 @@
-// Minimal DITAVAL reader: just enough of the format to answer "would this
-// element be filtered out of the output?" for the completeness check.
+// The completeness check's view of a DITAVAL file: "would this element be
+// filtered out of the output?", and where each <prop> is written.
 //
-// Handles <prop att= val= action="include|exclude|flag|passthrough"/>,
-// including the attribute-level default (a <prop> with no @val) and the
-// `props="audience(admin) platform(linux)"` generalization syntax. Flagging
-// and revision props never remove content, so they are ignored.
+// The filter is the render-time reader of ../profiling (one implementation of
+// include/exclude/default, the spec's attribute list and props groups) plus one
+// rule: an attribute that a <prop> names and an element writes directly counts as
+// a profiling value. `att` may name a specialization of props, which is an
+// attribute of its own name (DITA 1.3, langRef/ditaval/ditaval-prop), and the
+// render reader only knows the ten names in PROFILE_ATTRS. A rule is taken at its
+// word: it filters whatever attribute it names. DESIGN.md 4.10 has the history.
 
 import sax from 'sax';
+import { PROFILE_ATTRS, isExcluded, parseDitaval, profileValuesOf } from '../profiling';
 
 export interface DitavalFilter {
   /** True when an element carrying these attributes is filtered out. */
@@ -47,39 +51,20 @@ export function parseDitavalRules(xml: string): DitavalRule[] {
   return rules;
 }
 
-export function parseDitaval(xml: string): DitavalFilter {
-  const rules: Rule[] = parseDitavalRules(xml);
-  if (rules.every((r) => r.action !== 'exclude')) return NO_FILTER;
-
-  const actionFor = (att: string, value: string): string => {
-    const explicit = rules.find((r) => r.att === att && r.val === value);
-    if (explicit) return explicit.action;
-    const dflt = rules.find((r) => r.att === att && r.val === undefined);
-    return dflt ? dflt.action : 'include';
-  };
-  const attNames = [...new Set(rules.map((r) => r.att))];
-
+export function parseDitavalFilter(xml: string): DitavalFilter {
+  const ditaval = parseDitaval(xml);
+  if (!ditaval.rules.some((r) => r.action === 'exclude')) return NO_FILTER;
+  const known = new Set<string>(PROFILE_ATTRS);
+  const named = [...new Set(ditaval.rules.map((r) => r.att))].filter((att) => !known.has(att));
+  const filter = { ditaval };
   return {
     excludes(attrs) {
-      for (const att of attNames) {
-        const values = valuesFor(attrs, att);
-        if (values.length > 0 && values.every((v) => actionFor(att, v) === 'exclude')) return true;
+      const values = profileValuesOf(attrs);
+      for (const att of named) {
+        const direct = attrs[att]?.split(/\s+/).filter(Boolean);
+        if (direct && direct.length > 0) (values[att] ??= []).push(...direct);
       }
-      return false;
+      return isExcluded(values, filter);
     },
   };
-}
-
-/** Values of a (possibly generalized) profiling attribute on an element. */
-function valuesFor(attrs: Record<string, string>, att: string): string[] {
-  const out: string[] = [];
-  const direct = attrs[att];
-  if (direct) out.push(...direct.trim().split(/\s+/).filter(Boolean));
-  const props = attrs['props'];
-  if (props) {
-    const re = new RegExp(`(?:^|\\s)${att.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\(([^)]*)\\)`, 'g');
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(props)) !== null) out.push(...m[1].trim().split(/\s+/).filter(Boolean));
-  }
-  return out;
 }

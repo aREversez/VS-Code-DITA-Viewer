@@ -1,7 +1,7 @@
 # @dita-viewer/core — Design: toward a host-agnostic DITA engine
 
 Status: draft 1 · 2026-11-26 · Phase 1 implemented 2026-11-27 · measured at `e739149` (core 0.3.0)
-Phase 1 is designed in full (section 3). Phase 2 is designed in section 4; step 1, step 2 (2a to 2c) and step 3a are implemented; the 4.9 decisions were taken as recommended. Phase 3 is roadmap only (section 1) and is meant to be designed later.
+Phase 1 is designed in full (section 3). Phase 2 is designed in section 4; step 1, step 2 (2a to 2c) and step 3 (3a, 3b) are implemented; the 4.9 decisions were taken as recommended. Phase 3 is roadmap only (section 1) and is meant to be designed later.
 
 ## 0. How to use this document
 
@@ -258,7 +258,7 @@ Phase 1 is done when all of these hold:
 
 ## 4. Phase 2 design — Capabilities
 
-Status: draft 1 · 2026-11-27 · measured at `d0d7e25` (core 0.4.0). Steps 1, 2 (2a to 2c) and 3a implemented (2c measured at the commit that adds it); the decisions in 4.9 were taken as recommended.
+Status: draft 1 · 2026-11-27 · measured at `d0d7e25` (core 0.4.0). Steps 1, 2 (2a to 2c) and 3 (3a, 3b) implemented (2c measured at the commit that adds it); the decisions in 4.9 were taken as recommended.
 
 ### 4.1 Goals and non-goals
 
@@ -422,7 +422,7 @@ Decisions needed (recommended answer first):
 
 ### 4.10 Step 3b findings: the two DITAVAL readers
 
-Step 3b was to delete the completeness check's reader (`analysis/ditaval.ts`) in favour of the render-time one (`profiling.ts`), once a test showed they agree. They do not always. `test/analysis/ditavalAgreement.test.ts` pins both answers for every difference found (a pass on a row means the code still says what the table says) and was checked against DITA 1.3.2 (`langRef/ditaval/`). Over the five `.ditaval` files in `test-dita-file/` and 150 to 350 element shapes each, they agree everywhere except on `rev`, which two of the manual samples filter on.
+Step 3b was to delete the completeness check's reader (`analysis/ditaval.ts`) in favour of the render-time one (`profiling.ts`), once a test showed they agree. They did not always. `test/analysis/ditavalAgreement.test.ts` pins both answers for every difference found (a pass on a row means the code still says what the table says) and was checked against DITA 1.3.2 (`langRef/ditaval/`). Over the five `.ditaval` files in `test-dita-file/` and 150 to 350 element shapes each, they agree everywhere except on `rev`, which two of the manual samples filter on.
 
 | Case | Completeness reader | Render reader | DITA 1.3 |
 | --- | --- | --- | --- |
@@ -433,12 +433,14 @@ Step 3b was to delete the completeness check's reader (`analysis/ditaval.ts`) in
 | two defaults for one attribute | first wins | last wins | error, recovery is the processor's |
 | a file that is not well-formed | reads past the error | stops at the first error and reports it | undefined |
 
-Proposed merge (nothing changed yet; each point is a decision for the maintainer):
+Merge (step 3b part 2), done on the maintainer's instruction to follow the recommendation:
 
-1. **Take the render reader's answer on every row it is right about**, which is every row except the specialized attribute. This changes the completeness check for exactly two real files: `manual/ditavals/rebrand.ditaval` and `release.ditaval`, whose `rev` exclusions are not valid DITAVAL filtering. They stop excluding `rev="planned"` content; the samples should switch to a rule the spec allows (or be left as the witness for this row).
-2. **Keep what the completeness reader is right about** by building the completeness filter on core's reader plus one rule: an attribute named by a rule, not in `PROFILE_ATTRS`, and written directly on the element counts as a profiling value. It lives in core next to `isExcluded`, so `parseDitavalFilter` shrinks to a few lines over `parseDitaval`. `parseDitavalRules` stays: it reports the line of each `<prop>`, which no other reader does, and is not a filter.
-3. **The same rule is a gap in render-time filtering** (a directly-written specialization is never filtered or chipped in the preview). Fixing it is a rendering change, so it belongs to step 8 with its own failing test, not to the merge.
-4. **Malformed files**: the completeness check keeps reporting through the same path as today; the merge only changes which rules count after the first error.
+1. **The render reader's answer is taken on every row it is right about**, which is every row except the specialized attribute. The completeness check therefore stops filtering on `rev`, `base`, `importance` and `status`. The only real files that did were `manual/ditavals/rebrand.ditaval` and `release.ditaval`; the manual sample now marks the planned sections `otherprops="planned"` (two topics, three `.ditaval` files, three map descriptions), which both DITA-OT and the preview filter on.
+2. **What the completeness reader was right about is kept**: `parseDitavalFilter` is core's `parseDitaval` and `isExcluded`, plus the rule that an attribute named by a `<prop>` and written directly on the element is a profiling value. `parseDitavalRules` stays; it reports the line of each `<prop>`, which no other reader does, and is not a filter. The old reader's 60 lines of rule lookup are gone.
+3. **The same rule is still missing from render-time filtering** (a directly-written specialization is never filtered or chipped in the preview). The agreement test pins that row as the one place the two differ. It is a rendering change and belongs to step 8.
+4. **A file that is not well-formed** now stops at the first error in the completeness check too, as in the render path.
+
+A rule is taken at its word: `<prop att="id" ...>` filters elements by `id`, as the old reader did. The spec limits `att` to conditional-processing attributes and props specializations, but an instance file does not say which attributes are specializations.
 
 ## Appendix A — Re-measuring the facts
 

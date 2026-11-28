@@ -34,7 +34,7 @@
         <li rev="2.0">设备离线检测灵敏度优化，从 5 分钟缩短至 90 秒。</li>
         <li rev="2.0">固件升级支持断点续传。</li>
       </ul>
-    </section>    <section rev="planned">
+    </section>    <section otherprops="planned">
       <title>下一版本预览</title>
       <p>以下为开发中的功能，正式发布版不包含，仅供内部与尝鲜用户评估：</p>
       <ul>

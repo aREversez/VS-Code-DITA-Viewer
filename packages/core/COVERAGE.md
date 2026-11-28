@@ -36,6 +36,8 @@ that switches it on (none is left).
 | Feature | Status | What is missing / notes | Evidence |
 | --- | --- | --- | --- |
 | DITAVAL `include` / `exclude` on `props`, `platform`, `product`, `audience`, `otherprops`, `deliveryTarget` | supported | | `profiling.test.ts` |
+| DITAVAL `exclude` of a props specialization written as its own attribute (`region="emea"`) | partial | The completeness check filters on it; the preview does not (it only knows the ten names in `PROFILE_ATTRS`). Planned (Phase 2, step 8). | `analysis/ditavalAgreement.test.ts`: "a specialized attribute written directly" |
+| DITAVAL filtering on `rev`, `base`, `importance`, `status` | supported (as not filtering) | Ignored by both the preview and the completeness check, as DITA 1.3 says `rev` is flag-only. | `analysis/ditavalAgreement.test.ts`, `profiling.test.ts` |
 | DITAVAL `flag` and `passthrough` | **unsupported** | Parsed, never rendered; they never remove content. Audited in Phase 2, step 8. | `profiling.ts` header comment |
 | DITAVAL `<revprop>` and `<style-conflict>` | **unsupported** | Read and ignored. Step 8. | `profiling.test.ts`: "ignores revprop, style-conflict ..." |
 | Single-topic preview with a profile / DITAVAL filter | unverified | Book and site rendering take a filter; whether the topic render does is settled in step 8. | none yet |
