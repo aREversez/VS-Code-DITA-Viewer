@@ -1,7 +1,7 @@
 # @dita-viewer/core — Design: toward a host-agnostic DITA engine
 
 Status: draft 1 · 2026-11-26 · Phase 1 implemented 2026-11-27 · measured at `e739149` (core 0.3.0)
-Phase 1 is designed in full (section 3). Phase 2 is designed in section 4 (awaiting the maintainer's acceptance). Phase 3 is roadmap only (section 1) and is meant to be designed later.
+Phase 1 is designed in full (section 3). Phase 2 is designed in section 4; steps 1, 2a and 2b are implemented, the remaining steps await the maintainer's acceptance. Phase 3 is roadmap only (section 1) and is meant to be designed later.
 
 ## 0. How to use this document
 
@@ -43,7 +43,7 @@ Explicit non-goal: core is **not a DITA-OT replacement**. It does not aim at pub
 | Phase | Goal | Status | Exit criteria (summary) |
 | --- | --- | --- | --- |
 | 1. Decouple | Core runs with no Node built-ins and no process-wide state, behind injected I/O | Done: released as `core-0.4.0` | Portable entry bundles for the browser; Node and in-memory platforms render byte-identical HTML; two engines in one process do not interact; both consumers unchanged. Details in 3.7. |
-| 2. Capabilities | Fill in the DITA semantics hosts need, as host-neutral functions that return structured data | Designed (section 4), not accepted | Each capability is an engine function with fixture tests; a coverage table says supported / partial / unsupported; host features (e.g. the VS Code map checks) contain no DITA logic of their own. |
+| 2. Capabilities | Fill in the DITA semantics hosts need, as host-neutral functions that return structured data | Designed (section 4); steps 1, 2a, 2b implemented, remaining steps await acceptance | Each capability is an engine function with fixture tests; a coverage table says supported / partial / unsupported; host features (e.g. the VS Code map checks) contain no DITA logic of their own. |
 | 3. Ecosystem | An outside developer can use core without reading the extension's source | Roadmap only | Consumer-facing README and API reference; stable API tier separated from internals; three examples run in CI; semver policy written down. |
 
 Order matters: Phase 2 features are written against the engine interfaces from Phase 1, and Phase 3 documents an API that Phase 2 has finished changing.
@@ -258,7 +258,7 @@ Phase 1 is done when all of these hold:
 
 ## 4. Phase 2 design — Capabilities
 
-Status: draft 1 · 2026-11-27 · measured at `d0d7e25` (core 0.4.0). **Not accepted: nothing in this section is implemented.** Section 4.9 lists the decisions the maintainer has to take before step 1 starts.
+Status: draft 1 · 2026-11-27 · measured at `d0d7e25` (core 0.4.0). Steps 1, 2a and 2b implemented (measured at `73a9f9c`); the remaining steps await the maintainer's acceptance of the decisions in 4.9.
 
 ### 4.1 Goals and non-goals
 
