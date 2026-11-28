@@ -1,9 +1,11 @@
 // The completeness check's settings, ids, issue categories and the shapes shared by every check module.
-// Split out of mapChecks.ts; pure functions over a crawl result, no vscode dependency.
+// Split out of mapChecks.ts; pure functions over a crawl result, no vscode dependency and no Node
+// built-in: the settings helpers that need real path arithmetic (toStoredPath, resolveStoredPath)
+// stayed in the extension, where the settings they read and write live.
 
-import { isAbsolute, relative, resolve } from 'path';
-import { AnalysisHost, Location } from '@dita-viewer/core';
-import { Msg } from '@dita-viewer/core';
+import type { AnalysisHost } from '../host';
+import type { Location } from '../mapCrawlTypes';
+import type { Msg } from '../mapCheckMessages';
 
 export interface CompletenessOptions {
   batchValidate: boolean;
@@ -81,16 +83,6 @@ export function optionsFromSettings(enabled: readonly string[] | undefined, dita
 /** Ids to store in the `enabledChecks` setting for a set of picked ids (known ids only, in list order). */
 export function normalizeEnabled(picked: readonly string[]): CheckId[] {
   return CHECK_IDS.filter((id) => picked.includes(id));
-}
-
-/** A DITAVAL path as stored in settings: relative to the map's folder when inside it, else absolute. */
-export function toStoredPath(mapDir: string, abs: string): string {
-  const rel = relative(mapDir, abs);
-  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel) ? rel.replace(/\\/g, '/') : abs;
-}
-
-export function resolveStoredPath(mapDir: string, stored: string): string {
-  return isAbsolute(stored) ? stored : resolve(mapDir, stored);
 }
 
 /** Every kind of finding the completeness check can report (also the ledger's row keys). */

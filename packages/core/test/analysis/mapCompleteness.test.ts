@@ -1,21 +1,18 @@
-import { nodePlatform } from '@dita-viewer/core/node';
+import { nodePlatform } from '../../src/node/nodePlatform';
 import * as assert from 'assert';
 import { basename, dirname, resolve } from 'path';
-import { crawlMaps, AnalysisHost } from '@dita-viewer/core';
+import { crawlMaps } from '../../src/analysis/mapCrawl';
+import type { AnalysisHost } from '../../src/analysis/host';
+import { parseDitavalFilter } from '../../src/analysis/ditaval';
+import { runChecks } from '../../src/analysis/checks/mapChecks';
 import {
-  runChecks,
   DEFAULT_COMPLETENESS_OPTIONS,
   DEFAULT_ENABLED_CHECKS,
   CHECK_IDS,
-  CompletenessOptions,
-  Issue,
-  ProfilingPreferences,
   optionsFromSettings,
   normalizeEnabled,
-  toStoredPath,
-  resolveStoredPath,
-} from '../../editor/mapChecks';
-import { parseDitavalFilter } from '@dita-viewer/core';
+} from '../../src/analysis/checks/checkTypes';
+import type { CompletenessOptions, Issue, ProfilingPreferences } from '../../src/analysis/checks/checkTypes';
 
 const P = (p: string) => resolve('/proj', p);
 
@@ -1282,12 +1279,6 @@ describe('completeness: settings mapping', () => {
   });
   it('normalizeEnabled keeps list order and drops unknown ids', () => {
     assert.deepStrictEqual(normalizeEnabled(['reportTableProblems', 'x', 'batchValidate']), ['batchValidate', 'reportTableProblems']);
-  });
-  it('stores DITAVAL paths relative to the map folder when inside it', () => {
-    assert.strictEqual(toStoredPath(P('docs'), P('docs/filters/a.ditaval')), 'filters/a.ditaval');
-    assert.strictEqual(toStoredPath(P('docs'), P('other/a.ditaval')), P('other/a.ditaval'));
-    assert.strictEqual(resolveStoredPath(P('docs'), 'filters/a.ditaval'), P('docs/filters/a.ditaval'));
-    assert.strictEqual(resolveStoredPath(P('docs'), P('other/a.ditaval')), P('other/a.ditaval'));
   });
 });
 

@@ -1,11 +1,11 @@
 // Checks on ids and targets: id references, conref forms, filtering, duplicate ids, resource-only and unreferenced reusable content.
-// Split out of mapChecks.ts; pure functions over a crawl result, no vscode dependency.
+// Split out of mapChecks.ts; pure functions over a crawl result, no vscode dependency and no Node
+// built-in: path arithmetic goes through the host a CheckEnv carries.
 
-import { dirname } from 'path';
-import { CrawlResult } from '@dita-viewer/core';
-import { parseDitavalRules } from '@dita-viewer/core';
-import { msg } from '@dita-viewer/core';
-import { CheckEnv, CompletenessOptions, Issue, resolveStoredPath } from './checkTypes';
+import type { CrawlResult } from '../mapCrawlTypes';
+import { parseDitavalRules } from '../ditaval';
+import { msg } from '../mapCheckMessages';
+import { CheckEnv, CompletenessOptions, Issue } from './checkTypes';
 import { pathPartOf } from './syntaxChecks';
 
 /** Normalized target file -> the set of topic ids declared in it (root and nested). */
@@ -286,9 +286,12 @@ export async function duplicateFilterConditionIssues(
   env: CheckEnv,
 ): Promise<Array<Omit<Issue, 'message'>>> {
   const out: Array<Omit<Issue, 'message'>> = [];
+  const { isAbsolute, resolve, dirname } = env.host.path;
   const mapDir = dirname(crawl.rootMaps[0] ?? '');
   for (const stored of opts.ditavalFiles) {
-    const path = resolveStoredPath(mapDir, stored);
+    // A stored DITAVAL path is absolute as-is, else relative to the map's folder --
+    // resolveStoredPath's rule, on the host's own paths.
+    const path = isAbsolute(stored) ? stored : resolve(mapDir, stored);
     let text: string;
     try {
       text = await env.host.readFile(path);

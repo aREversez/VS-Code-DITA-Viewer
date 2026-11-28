@@ -16,6 +16,16 @@ export { PROFILING_ATTRS, TOPICREF_TAGS, URL_RE, classOf, hasNavTitle, isDitaHre
 export { crawlMaps } from './analysis/mapCrawl';
 export { analysisHostFromFileSystem } from './analysis/host';
 export { comparablePath } from './analysis/pathKey';
+export { runChecks, dedupeIssues } from './analysis/checks/mapChecks';
+export { issueToDiagnostic } from './analysis/checks/issueToDiagnostic';
+export {
+  CHECK_IDS,
+  DEFAULT_COMPLETENESS_OPTIONS,
+  DEFAULT_ENABLED_CHECKS,
+  ISSUE_CATEGORIES,
+  normalizeEnabled,
+  optionsFromSettings,
+} from './analysis/checks/checkTypes';
 export { chainHas, classChain, classElementTag, classPairTag, classSyntaxProblem, declaresGrammar, defaultClassOf, effectiveClassOf, isDitaDoctype, readDoctype, sideOfRoot } from './analysis/ditaClass';
 export { parseDitavalFilter, parseDitavalRules } from './analysis/ditaval';
 export { complete } from './completion';

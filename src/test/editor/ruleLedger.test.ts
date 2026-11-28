@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { ISSUE_CATEGORIES } from '../../editor/mapChecks';
+import { ISSUE_CATEGORIES } from '@dita-viewer/core';
 
 // __dirname is dist-test/test/editor at runtime, so the repo root is three up.
 const repoRoot = join(__dirname, '..', '..', '..');

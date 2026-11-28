@@ -1,9 +1,10 @@
 // Checks on how a reference is written: spelling, case, encoding, key and id syntax, scope, and target format.
-// Split out of mapChecks.ts; pure functions over a crawl result, no vscode dependency.
+// Split out of mapChecks.ts; pure functions over a crawl result, no vscode dependency and no Node
+// built-in: the case check's path arithmetic goes through the host's own operations.
 
-import { dirname, isAbsolute, join, relative } from 'path';
-import { AnalysisHost, CrawlResult, FileRoot, Reference } from '@dita-viewer/core';
-import { msg, MsgCode } from '@dita-viewer/core';
+import type { AnalysisHost } from '../host';
+import type { CrawlResult, FileRoot, Reference } from '../mapCrawlTypes';
+import { msg, MsgCode } from '../mapCheckMessages';
 import { Issue } from './checkTypes';
 
 const URL_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
@@ -76,6 +77,7 @@ export function referenceSyntaxIssues(crawl: CrawlResult): Array<Omit<Issue, 'me
  */
 export async function incorrectCaseIssues(crawl: CrawlResult, host: AnalysisHost): Promise<Array<Omit<Issue, 'message'>>> {
   if (!host.readDir) return [];
+  const { dirname, isAbsolute, join, relative } = host.path;
   const cache = new Map<string, Promise<string[] | undefined>>();
   const list = (dir: string): Promise<string[] | undefined> => {
     let p = cache.get(dir);

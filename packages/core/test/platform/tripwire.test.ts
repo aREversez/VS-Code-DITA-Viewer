@@ -6,6 +6,7 @@ import type { Platform } from '../../src/platform';
 import { getDefaultRuntime, setDefaultRuntime } from '../../src/runtime';
 import { createMemoryFileSystem } from '../../src/memoryFileSystem';
 import { posixPath } from '../../src/posixPath';
+import type { Issue } from '../../src/analysis/checks/checkTypes';
 
 // DESIGN.md 3.7 item 4. With no runtime installed, and with an engine over a
 // platform whose every method throws sitting next to them, every name classified
@@ -88,6 +89,27 @@ describe('tripwire: every pure export works with no platform', () => {
       const host = portable.analysisHostFromFileSystem({ fs: createMemoryFileSystem(files), path: posixPath });
       const crawl = await portable.crawlMaps(['/p/root.ditamap'], host);
       assert.deepStrictEqual([...crawl.topics], ['/p/a.dita']);
+    },
+    runChecks: async () => {
+      const files = { '/p/root.ditamap': '<map><topicref href="a.dita"/></map>', '/p/a.dita': '<topic id="t"><title>T</title><body><image href="x.png"/></body></topic>' };
+      const host = portable.analysisHostFromFileSystem({ fs: createMemoryFileSystem(files), path: posixPath });
+      const crawl = await portable.crawlMaps(['/p/root.ditamap'], host);
+      const issues = await portable.runChecks(crawl, portable.DEFAULT_COMPLETENESS_OPTIONS, { host });
+      assert.ok(issues.some((i) => i.category === 'missing-resource' && i.message.includes('x.png')), JSON.stringify(issues));
+    },
+    dedupeIssues: () => {
+      const issue: Issue = { category: 'missing-reference', severity: 'error', file: '/p/a.dita', line: 2, msg: portable.msg('ref.missingTopic', 'x.dita'), message: 'Referenced topic not found: x.dita' };
+      assert.strictEqual(portable.dedupeIssues([issue, { ...issue }]).length, 1);
+    },
+    issueToDiagnostic: () => {
+      const issue: Issue = { category: 'missing-reference', severity: 'error', file: '/p/a.dita', line: 3, msg: portable.msg('ref.missingTopic', 'x.dita'), message: 'Referenced topic not found: x.dita' };
+      assert.deepStrictEqual(portable.issueToDiagnostic(issue), { severity: 'error', message: 'Referenced topic not found: x.dita', startLine: 2, startCol: 0, endLine: 3, endCol: 0 });
+    },
+    normalizeEnabled: () => assert.deepStrictEqual(portable.normalizeEnabled(['nope', 'reportDuplicateKeys']), ['reportDuplicateKeys']),
+    optionsFromSettings: () => {
+      const o = portable.optionsFromSettings(['batchValidate'], ['f.ditaval']);
+      assert.strictEqual(o.batchValidate, true);
+      assert.deepStrictEqual(o.ditavalFiles, []); // "useDitaval" is off, so no DITAVAL applies
     },
     chainHas: () => portable.chainHas(' - topic/topic ', 'topic/topic'),
     classChain: () => portable.classChain('- topic/topic '),

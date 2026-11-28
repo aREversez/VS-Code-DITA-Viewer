@@ -1,8 +1,11 @@
-import { nodePlatform } from '@dita-viewer/core/node';
+import { nodePlatform } from '../../src/node/nodePlatform';
 import * as assert from 'assert';
 import { basename, resolve } from 'path';
-import { crawlMaps, AnalysisHost } from '@dita-viewer/core';
-import { runChecks, DEFAULT_COMPLETENESS_OPTIONS, CompletenessOptions, Issue } from '../../editor/mapChecks';
+import { crawlMaps } from '../../src/analysis/mapCrawl';
+import type { AnalysisHost } from '../../src/analysis/host';
+import { runChecks } from '../../src/analysis/checks/mapChecks';
+import { DEFAULT_COMPLETENESS_OPTIONS } from '../../src/analysis/checks/checkTypes';
+import type { CompletenessOptions, Issue } from '../../src/analysis/checks/checkTypes';
 
 // R066: a key resolves in the key scope of the place that uses it. A key defined
 // inside a keyscope is visible there (bare) and from outside only through its

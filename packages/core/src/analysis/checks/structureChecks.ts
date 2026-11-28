@@ -1,10 +1,11 @@
 // Checks on a document's own structure: @class / @domains, root and section shape, conref class, parse errors, nav titles.
-// Split out of mapChecks.ts; pure functions over a crawl result, no vscode dependency.
+// Split out of mapChecks.ts; pure functions over a crawl result, no vscode dependency and no Node
+// built-in: the one path it needs (a copy-to's folder) comes from the host's path operations.
 
-import { dirname } from 'path';
-import { CrawlResult, FileRoot, Reference } from '@dita-viewer/core';
-import { classChain, classPairTag } from '@dita-viewer/core';
-import { msg, MsgCode } from '@dita-viewer/core';
+import type { PathOps } from '../../platform';
+import type { CrawlResult, FileRoot, Reference } from '../mapCrawlTypes';
+import { classChain, classPairTag } from '../ditaClass';
+import { msg, MsgCode } from '../mapCheckMessages';
 import { Issue, IssueCategory } from './checkTypes';
 
 /** The class-dependent rules read the @class the crawl resolved, per finding kind. */
@@ -160,8 +161,10 @@ export function missingCode(ref: Reference): MsgCode {
   }
 }
 
-export function copyToKey(ref: Reference): string {
-  return `copy-to\u0000${dirname(ref.file)}\u0000${ref.copyTo}`;
+/** The copy-to file's own identity: it is a different topic from its source file, wherever
+ *  the map that declares it lives (the folder is part of the key, via the host's paths). */
+export function copyToKey(ref: Reference, path: PathOps): string {
+  return `copy-to\u0000${path.dirname(ref.file)}\u0000${ref.copyTo}`;
 }
 
 /**

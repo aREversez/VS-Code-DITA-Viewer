@@ -154,3 +154,18 @@ export type {
   KeyLinkWithoutTarget, KeyUse, LinkWithoutTarget, Location, MapEntry as CrawlMapEntry, ProfilingConflict, ProfilingValueUse,
   RecursiveRef, RefKind, Reference, ReusableCandidate, SectionIssue, TableInfo, TopicId, UndefinedKey,
 } from './analysis/mapCrawlTypes';
+
+// The completeness checks over a crawl, and the adapter to the host-facing diagnostic
+// (DESIGN.md 4.4, step 5). The checks' paths come from the host a CheckEnv carries; the
+// settings-storage helpers that need real path arithmetic stayed in the extension.
+export { runChecks, dedupeIssues } from './analysis/checks/mapChecks';
+export { issueToDiagnostic } from './analysis/checks/issueToDiagnostic';
+export {
+  CHECK_IDS,
+  DEFAULT_COMPLETENESS_OPTIONS,
+  DEFAULT_ENABLED_CHECKS,
+  ISSUE_CATEGORIES,
+  normalizeEnabled,
+  optionsFromSettings,
+} from './analysis/checks/checkTypes';
+export type { CheckEnv, CheckId, CompletenessOptions, Issue, IssueCategory, ProfilingPreferences } from './analysis/checks/checkTypes';

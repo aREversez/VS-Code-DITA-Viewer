@@ -1,8 +1,8 @@
 import * as assert from 'assert';
 import { readFileSync } from 'fs';
-import { join } from 'path';
-import { MESSAGE_TEMPLATES, fill, formatMessage, msg } from '@dita-viewer/core';
-import { CHECK_IDS, DEFAULT_ENABLED_CHECKS } from '../../editor/mapChecks';
+import { join, resolve } from 'path';
+import { MESSAGE_TEMPLATES, CHECK_IDS, DEFAULT_ENABLED_CHECKS, fill, formatMessage, msg } from '@dita-viewer/core';
+import { resolveStoredPath, toStoredPath } from '../../editor/storedPaths';
 
 // The UI modules import `vscode`, so (like mapToolbarOrder.test.ts) the
 // wiring is asserted on source/manifest text.
@@ -65,6 +65,16 @@ describe('completeness check message templates', () => {
   it('fill substitutes positional arguments, in any order', () => {
     assert.strictEqual(fill('a {1} b {0}', ['x', 2]), 'a 2 b x');
     assert.strictEqual(formatMessage(msg('ref.multiple', 't.dita', 3)), 'Topic referenced more than once (3 times): t.dita');
+  });
+
+  // Moved here from mapCompleteness.test.ts when the checks moved into core: the stored-path
+  // helpers stayed with the settings they read and write (mapCheckShared.ts).
+  it('stores DITAVAL paths relative to the map folder when inside it', () => {
+    const P = (p: string) => resolve('/proj', p);
+    assert.strictEqual(toStoredPath(P('docs'), P('docs/filters/a.ditaval')), 'filters/a.ditaval');
+    assert.strictEqual(toStoredPath(P('docs'), P('other/a.ditaval')), P('other/a.ditaval'));
+    assert.strictEqual(resolveStoredPath(P('docs'), 'filters/a.ditaval'), P('docs/filters/a.ditaval'));
+    assert.strictEqual(resolveStoredPath(P('docs'), P('other/a.ditaval')), P('other/a.ditaval'));
   });
 });
 

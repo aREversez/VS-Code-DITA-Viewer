@@ -1,8 +1,12 @@
-import { nodePlatform } from '@dita-viewer/core/node';
+import { nodePlatform } from '../../src/node/nodePlatform';
 import * as assert from 'assert';
 import { resolve } from 'path';
-import { crawlMaps, AnalysisHost, qualifiedNamesMulti } from '@dita-viewer/core';
-import { runChecks, DEFAULT_COMPLETENESS_OPTIONS, CompletenessOptions, Issue } from '../../editor/mapChecks';
+import { crawlMaps } from '../../src/analysis/mapCrawl';
+import { qualifiedNamesMulti } from '../../src/editor/keySpace';
+import type { AnalysisHost } from '../../src/analysis/host';
+import { runChecks } from '../../src/analysis/checks/mapChecks';
+import { DEFAULT_COMPLETENESS_OPTIONS } from '../../src/analysis/checks/checkTypes';
+import type { CompletenessOptions, Issue } from '../../src/analysis/checks/checkTypes';
 
 const P = (p: string) => resolve('/proj', p);
 

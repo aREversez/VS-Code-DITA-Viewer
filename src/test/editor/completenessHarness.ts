@@ -18,7 +18,7 @@ import {
   Issue,
   ProfilingPreferences,
   runChecks,
-} from '../../editor/mapChecks';
+} from '@dita-viewer/core';
 
 /** Every check enabled; remote probing off so the harness never touches the network. */
 export const CORPUS_OPTIONS: CompletenessOptions = {

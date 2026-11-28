@@ -7,20 +7,21 @@
 //   - Profiling preferences come from the dita-viewer.completenessCheck.*
 //     settings rather than Oxygen's preferences page.
 
-// The checks themselves live in ./mapChecks/ (types and settings, reference syntax, document
+// The checks themselves live in this directory (types and settings, reference syntax, document
 // structure, ids and targets). This file keeps the orchestrator, runChecks, plus issue de-duplication,
 // and re-exports every name it has always exported, so importers of this path are unaffected.
+// The paths it takes come from the host (env.host.path), so nothing here imports Node's path.
 
-import { dirname } from 'path';
-import { CrawlResult, Reference } from '@dita-viewer/core';
-import { comparablePath, formatMessage, msg } from '@dita-viewer/core';
-import { CheckEnv, CompletenessOptions, Issue } from './mapChecks/checkTypes';
-import { conrefFormIssues, duplicateElementIdIssues, duplicateFilterConditionIssues, filteredReferenceIssues, idReferenceIssues, invalidRefTopicIds, keyLinkIssues, namesElement, resourceOnlyTargetIssues, topicrefToElementIssues, unreferencedReusable } from './mapChecks/idChecks';
-import { classFormatIssues, conrefClassIssues, copyToKey, ditaParseIssues, domainsFormatIssues, missingCode, missingNavTitleIssues, scopeKey, sectionStructureIssues, typeClassIssues } from './mapChecks/structureChecks';
-import { externalScopeIssues, folderReferenceIssues, formatIssues, incorrectCaseIssues, invalidIdSyntaxIssues, invalidKeySyntaxIssues, linkTargetIssues, referenceDocumentIssues, referenceSyntaxIssues } from './mapChecks/syntaxChecks';
+import type { CrawlResult, Reference } from '../mapCrawlTypes';
+import { comparablePath } from '../pathKey';
+import { formatMessage, msg } from '../mapCheckMessages';
+import { CheckEnv, CompletenessOptions, Issue } from './checkTypes';
+import { conrefFormIssues, duplicateElementIdIssues, duplicateFilterConditionIssues, filteredReferenceIssues, idReferenceIssues, invalidRefTopicIds, keyLinkIssues, namesElement, resourceOnlyTargetIssues, topicrefToElementIssues, unreferencedReusable } from './idChecks';
+import { classFormatIssues, conrefClassIssues, copyToKey, ditaParseIssues, domainsFormatIssues, missingCode, missingNavTitleIssues, scopeKey, sectionStructureIssues, typeClassIssues } from './structureChecks';
+import { externalScopeIssues, folderReferenceIssues, formatIssues, incorrectCaseIssues, invalidIdSyntaxIssues, invalidKeySyntaxIssues, linkTargetIssues, referenceDocumentIssues, referenceSyntaxIssues } from './syntaxChecks';
 
-export type { CheckEnv, CheckId, CompletenessOptions, Issue, IssueCategory, ProfilingPreferences } from './mapChecks/checkTypes';
-export { CHECK_IDS, DEFAULT_COMPLETENESS_OPTIONS, DEFAULT_ENABLED_CHECKS, ISSUE_CATEGORIES, normalizeEnabled, optionsFromSettings, resolveStoredPath, toStoredPath } from './mapChecks/checkTypes';
+export type { CheckEnv, CheckId, CompletenessOptions, Issue, IssueCategory, ProfilingPreferences } from './checkTypes';
+export { CHECK_IDS, DEFAULT_COMPLETENESS_OPTIONS, DEFAULT_ENABLED_CHECKS, ISSUE_CATEGORIES, normalizeEnabled, optionsFromSettings } from './checkTypes';
 
 export async function runChecks(
   crawl: CrawlResult,
@@ -29,7 +30,7 @@ export async function runChecks(
 ): Promise<Issue[]> {
   const norm = (p: string) => comparablePath(p, env.host.path.caseSensitive);
   const issues: Array<Omit<Issue, 'message'>> = [];
-  const rootDir = crawl.rootMaps.length > 0 ? dirname(crawl.rootMaps[0]) : '';
+  const rootDir = crawl.rootMaps.length > 0 ? env.host.path.dirname(crawl.rootMaps[0]) : '';
 
   // Existence probes are cached: one image is usually referenced many times.
   const existsCache = new Map<string, Promise<boolean>>();
@@ -219,7 +220,7 @@ export async function runChecks(
     const groups = new Map<string, Reference[]>();
     for (const ref of crawl.refs) {
       if (ref.kind !== 'topicref' || ref.inReltable || !ref.dita || !ref.target) continue;
-      const identity = `${ref.copyTo ? copyToKey(ref) : norm(ref.target)}\u0000${scopeKey(ref)}`;
+      const identity = `${ref.copyTo ? copyToKey(ref, env.host.path) : norm(ref.target)}\u0000${scopeKey(ref)}`;
       const list = groups.get(identity);
       if (list) list.push(ref);
       else groups.set(identity, [ref]);

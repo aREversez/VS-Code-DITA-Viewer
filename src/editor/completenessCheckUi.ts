@@ -6,8 +6,8 @@
 // the Problems panel (the category is shown beside each one) with a summary
 // notification that opens it. Which checks are on and which DITAVAL files apply are ordinary settings
 // (dita-viewer.completenessCheck.*), so a team can share them in
-// .vscode/settings.json. The checks themselves are pure and live in
-// mapCrawl.ts / mapChecks.ts.
+// .vscode/settings.json. The checks themselves are pure and live in core
+// (analysis/mapCrawl.ts / analysis/checks/), reached through the AnalysisHost.
 
 import * as vscode from 'vscode';
 import { promises as fsp } from 'fs';
@@ -23,10 +23,8 @@ import {
   ProfilingPreferences,
   normalizeEnabled,
   optionsFromSettings,
-  resolveStoredPath,
   runChecks,
-  toStoredPath,
-} from './mapChecks';
+} from '@dita-viewer/core';
 import { Msg, MsgCode, formatMessage } from '@dita-viewer/core';
 import {
   MapCheckDeps,
@@ -36,6 +34,7 @@ import {
   mapFromArg,
   updateSetting,
 } from './mapCheckShared';
+import { resolveStoredPath, toStoredPath } from './storedPaths';
 
 const VALIDATE_CMD = 'ditaViewer.validateMapCompleteness';
 const SETTINGS = 'dita-viewer.completenessCheck';
