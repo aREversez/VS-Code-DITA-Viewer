@@ -39,7 +39,7 @@ module.exports = [
     files: ['packages/core/src/**/*.ts'],
     ignores: ['packages/core/src/node/**'],
     rules: {
-      // Core reports through the host's onWarning sink (src/warnings.ts), never the console.
+      // Core reports through the host's onWarning sink (packages/core/src/warnings.ts), never the console.
       'no-console': 'error',
       'no-restricted-imports': [
         'error',
