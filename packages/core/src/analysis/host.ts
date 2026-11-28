@@ -42,6 +42,10 @@ export function analysisHostFromFileSystem(
         fs.readDir(p);
         return true;
       } catch {
+        // A folder the host cannot list reads as a file here: this adapter cannot
+        // tell "not a folder" from "a folder readDir rejects on", and the phase's
+        // FileSystem has no isDirectory of its own. The extension's host supplies
+        // the real answer; a browser host over a memory file system never hits it.
         return false;
       }
     },
