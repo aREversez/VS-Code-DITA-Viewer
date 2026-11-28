@@ -1,7 +1,7 @@
 # @dita-viewer/core — Design: toward a host-agnostic DITA engine
 
 Status: draft 1 · 2026-11-26 · Phase 1 implemented 2026-11-27 · measured at `e739149` (core 0.3.0)
-Phase 1 is designed in full (section 3). Phase 2 is designed in section 4; step 1, step 2 (2a to 2c) and step 3 (3a, 3b) are implemented; the 4.9 decisions were taken as recommended. Phase 3 is roadmap only (section 1) and is meant to be designed later.
+Phase 1 is designed in full (section 3). Phase 2 is designed in section 4; step 1, step 2 (2a to 2c), step 3 (3a, 3b) and step 4 are implemented; the 4.9 decisions were taken as recommended. Phase 3 is roadmap only (section 1) and is meant to be designed later.
 
 ## 0. How to use this document
 
@@ -258,7 +258,7 @@ Phase 1 is done when all of these hold:
 
 ## 4. Phase 2 design — Capabilities
 
-Status: draft 1 · 2026-11-27 · measured at `d0d7e25` (core 0.4.0). Steps 1, 2 (2a to 2c) and 3 (3a, 3b) implemented (2c measured at the commit that adds it); the decisions in 4.9 were taken as recommended.
+Status: draft 1 · 2026-11-27 · measured at `d0d7e25` (core 0.4.0). Steps 1, 2 (2a to 2c), 3 (3a, 3b) and 4 implemented (2c measured at the commit that adds it); the decisions in 4.9 were taken as recommended.
 
 ### 4.1 Goals and non-goals
 
@@ -292,7 +292,7 @@ Modules that move (sizes at `d0d7e25`):
 
 | Extension file | Lines | Couplings to remove | Becomes (core) |
 | --- | --- | --- | --- |
-| `mapCrawl.ts`, `mapCrawlTypes.ts` | 940 + 392 | `path`; `CrawlHost.platform: NodeJS.Platform` | `analysis/crawl.ts` |
+| `mapCrawl.ts`, `mapCrawlTypes.ts` | 940 + 392 | `path`; `CrawlHost.platform: NodeJS.Platform` | `analysis/mapCrawl.ts`, `analysis/mapCrawlTypes.ts`, `analysis/host.ts` (step 4, done) |
 | `mapChecks.ts`, `mapChecks/*` | 418 + 1,088 | `path` | `analysis/checks/*` |
 | `mapCheckMessages.ts` | 138 | none | `analysis/mapCheckMessages.ts` |
 | `mapXmlScan.ts`, `ditaClass.ts`, `ditaval.ts` | 170 + 183 + 85 | duplicates of core profiling (above) | `analysis/mapXmlScan.ts`, `analysis/ditaClass.ts`, `analysis/ditaval.ts` (deduplicated, step 3b) |
@@ -332,6 +332,13 @@ export function analysisHostFromFileSystem(platform: Platform, opts?: { cancelle
 `analysisHostFromFileSystem` adapts the synchronous Phase 1 `FileSystem`, so a browser host that preloads files into `createMemoryFileSystem` gets the whole analysis with no extra work, and the conformance test can run both worlds. The extension keeps its own host (editor overlay text, cancellation token) and passes `nodePlatform.path`.
 
 Why async stays: the extension reads unsaved editor text, yields to the UI and cancels long crawls, and a project crawl is the one place where the cost is real. Why not the ambient runtime: it does not survive an `await`.
+
+Step 4 as built, where it differs from the draft above:
+
+- `AnalysisHost` has `path`, `readFile`, `exists`, `isDirectory?`, `readDir?`, `cancelled?` and `onWarning?`; `listDir` is not there yet, because the unreferenced-resource walk that needs it moves in step 6. `CrawlHost` is gone: the extension, its tests and its `makeHost` use `AnalysisHost` with `path: nodePlatform.path` (from `@dita-viewer/core/node`).
+- `analysisHostFromFileSystem(platform, { cancelled?, onWarning? })` adapts the synchronous `Platform`; the conformance test (`test/platform/crawlConformance.test.ts`) crawls every map of `test-dita-file/` through the Node disk and through an in-memory copy and requires equal results.
+- The crawl compares paths with `comparablePath(path, caseSensitive)` (`analysis/pathKey.ts`), taken from `host.path.caseSensitive`. `mapReferenceTools.normalizePathForCompare` in the extension is now a one-line call to it, kept until step 6 moves `brokenRefs` and `refRenameEdits`, whose forty call sites still pass a Node platform name; `computeUnreferencedFiles` takes `caseSensitive` instead of a platform.
+- The crawl's `MapEntry` is exported as `CrawlMapEntry`: the root already exports the map renderer's `MapEntry`.
 
 **Windows.** `brokenRefs.ts` and `refEdits` choose `path/win32` or `path/posix` by a platform argument today. In core they take `path: PathOps` from the host. The portable path stays POSIX-only (3.8); the Windows tests build a `PathOps` over `path.win32` in the test helper.
 

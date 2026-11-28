@@ -2,7 +2,7 @@
 // Split out of mapChecks.ts; pure functions over a crawl result, no vscode dependency.
 
 import { isAbsolute, relative, resolve } from 'path';
-import { CrawlHost, Location } from '../mapCrawl';
+import { AnalysisHost, Location } from '@dita-viewer/core';
 import { Msg } from '@dita-viewer/core';
 
 export interface CompletenessOptions {
@@ -164,7 +164,7 @@ export interface ProfilingPreferences {
 }
 
 export interface CheckEnv {
-  host: CrawlHost;
+  host: AnalysisHost;
   /** HEAD-style existence probe for remote URLs; only called when includeRemote is on. */
   checkRemote?: (url: string) => Promise<boolean>;
   preferences?: ProfilingPreferences;

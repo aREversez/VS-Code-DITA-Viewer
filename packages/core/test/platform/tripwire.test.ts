@@ -4,6 +4,8 @@ import { createEngine } from '../../src/engine';
 import { PORTABLE_PURE } from '../../src/exportKinds';
 import type { Platform } from '../../src/platform';
 import { getDefaultRuntime, setDefaultRuntime } from '../../src/runtime';
+import { createMemoryFileSystem } from '../../src/memoryFileSystem';
+import { posixPath } from '../../src/posixPath';
 
 // DESIGN.md 3.7 item 4. With no runtime installed, and with an engine over a
 // platform whose every method throws sitting next to them, every name classified
@@ -75,6 +77,18 @@ describe('tripwire: every pure export works with no platform', () => {
     getKeyScopes: () => portable.getKeyScopes(keys),
     getMapRefName: () => portable.getMapRefName(map),
     getMapTitleText: () => portable.getMapTitleText(map),
+    analysisHostFromFileSystem: async () => {
+      const host = portable.analysisHostFromFileSystem({ fs: createMemoryFileSystem({ '/a.txt': 'x' }), path: posixPath });
+      assert.strictEqual(await host.readFile('/a.txt'), 'x');
+      assert.strictEqual(await host.isDirectory?.('/a.txt'), false);
+    },
+    comparablePath: () => portable.comparablePath('A\\B', false),
+    crawlMaps: async () => {
+      const files = { '/p/root.ditamap': '<map><topicref href="a.dita"/></map>', '/p/a.dita': '<topic id="t"><title>T</title><body><image href="x.png"/></body></topic>' };
+      const host = portable.analysisHostFromFileSystem({ fs: createMemoryFileSystem(files), path: posixPath });
+      const crawl = await portable.crawlMaps(['/p/root.ditamap'], host);
+      assert.deepStrictEqual([...crawl.topics], ['/p/a.dita']);
+    },
     chainHas: () => portable.chainHas(' - topic/topic ', 'topic/topic'),
     classChain: () => portable.classChain('- topic/topic '),
     classElementTag: () => portable.classElementTag('- topic/topic '),

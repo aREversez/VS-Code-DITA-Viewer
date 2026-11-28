@@ -11,6 +11,7 @@
 // vscode, and is unit-tested directly rather than through the commands.
 
 import { resolve } from 'path';
+import { comparablePath } from '@dita-viewer/core';
 import { decodeHrefPart } from './ditaRenderUtils';
 
 /**
@@ -45,8 +46,7 @@ export function normalizePathForCompare(
   path: string,
   platform: NodeJS.Platform,
 ): string {
-  const slashed = path.replace(/\\/g, '/');
-  return platform === 'win32' ? slashed.toLowerCase() : slashed;
+  return comparablePath(path, platform !== 'win32');
 }
 
 /** Whether a map entry's href resolves to the given absolute target path. */
@@ -73,12 +73,9 @@ export function hrefMatchesTarget(
 export function computeUnreferencedFiles(
   candidateAbsPaths: string[],
   referencedAbsPaths: Iterable<string>,
-  platform: NodeJS.Platform,
+  caseSensitive: boolean,
 ): string[] {
   const referenced = new Set<string>();
-  for (const p of referencedAbsPaths)
-    referenced.add(normalizePathForCompare(p, platform));
-  return candidateAbsPaths.filter(
-    (p) => !referenced.has(normalizePathForCompare(p, platform)),
-  );
+  for (const p of referencedAbsPaths) referenced.add(comparablePath(p, caseSensitive));
+  return candidateAbsPaths.filter((p) => !referenced.has(comparablePath(p, caseSensitive)));
 }

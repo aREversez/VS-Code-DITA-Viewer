@@ -1,22 +1,9 @@
 // The crawl's data model: the host it reads files through, and everything a crawl records (references, keys, ids, conrefs, profiling, table and class findings).
-// Split out of mapCrawl.ts, which re-exports every name here. No vscode dependency.
+// Split out of mapCrawl.ts, which re-exports every name here. The host it reads through is AnalysisHost (host.ts).
 
-import { DitavalFilter } from '@dita-viewer/core';
-import { Msg } from '@dita-viewer/core';
-import { ClassSide, ClassSyntaxProblem } from '@dita-viewer/core';
-
-export interface CrawlHost {
-  /** Text of a file (unsaved editor text if any). Rejects when unreadable. */
-  readFile(absPath: string): Promise<string>;
-  exists(absPath: string): Promise<boolean>;
-  platform: NodeJS.Platform;
-  /** Whether an existing path is a folder (folder-reference check). */
-  isDirectory?(absPath: string): Promise<boolean>;
-  /** Entry names of a folder, or undefined when it cannot be listed (capitalization check). */
-  readDir?(absPath: string): Promise<string[] | undefined>;
-  /** Polled between files; returning true stops the crawl early. */
-  cancelled?(): boolean;
-}
+import type { DitavalFilter } from './ditaval';
+import type { Msg } from './mapCheckMessages';
+import type { ClassSide, ClassSyntaxProblem } from './ditaClass';
 
 export type RefKind =
   | 'topicref'
@@ -388,5 +375,3 @@ export interface CrawlResult {
   visited: Map<string, string>;
   cancelled: boolean;
 }
-
-// ── XML scan ────────────────────────────────────────────────────────────

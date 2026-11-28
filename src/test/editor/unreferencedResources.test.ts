@@ -1,3 +1,4 @@
+import { nodePlatform } from '@dita-viewer/core/node';
 import * as assert from 'assert';
 import { resolve, join, basename } from 'path';
 import {
@@ -18,14 +19,14 @@ import {
   DEFAULT_UNREFERENCED_FILTERS,
   ListHost,
 } from '../../editor/unreferencedResources';
-import { CrawlHost, crawlMaps } from '../../editor/mapCrawl';
+import { AnalysisHost, crawlMaps } from '@dita-viewer/core';
 
 const R = (p: string) => resolve('/proj', p);
 
-function fakeFs(files: Record<string, string>): { host: CrawlHost; list: ListHost } {
+function fakeFs(files: Record<string, string>): { host: AnalysisHost; list: ListHost } {
   const abs = new Map(Object.entries(files).map(([k, v]) => [R(k), v]));
-  const host: CrawlHost = {
-    platform: 'linux',
+  const host: AnalysisHost = {
+    path: nodePlatform.path,
     readFile: async (p) => {
       const v = abs.get(p);
       if (v === undefined) throw new Error('ENOENT');

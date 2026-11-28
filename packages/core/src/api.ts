@@ -141,3 +141,16 @@ export {
 export type { ClassSide, ClassSyntaxProblem, Doctype } from './analysis/ditaClass';
 export { parseDitavalFilter, parseDitavalRules } from './analysis/ditaval';
 export type { DitavalFilter, DitavalRule as DitavalRuleAtLine } from './analysis/ditaval';
+
+// The reference crawler and the host it reads through (DESIGN.md 4.4, step 4).
+// The crawl's MapEntry is CrawlMapEntry here: the root already exports the map renderer's MapEntry.
+export { crawlMaps } from './analysis/mapCrawl';
+export { analysisHostFromFileSystem } from './analysis/host';
+export { comparablePath } from './analysis/pathKey';
+export type { AnalysisHost } from './analysis/host';
+export type {
+  ClassIssue, ConkeyrefTarget, ConrefShape, ConrefTargetValue, ConrefUse, CrawlOptions, CrawlResult, DomainsIssue,
+  EmptyProfilingValue, ExcludedElement, FileIssue, FileRoot, IdUse, IgnoredMaprefContent, KeyDef, KeyElementPath,
+  KeyLinkWithoutTarget, KeyUse, LinkWithoutTarget, Location, MapEntry as CrawlMapEntry, ProfilingConflict, ProfilingValueUse,
+  RecursiveRef, RefKind, Reference, ReusableCandidate, SectionIssue, TableInfo, TopicId, UndefinedKey,
+} from './analysis/mapCrawlTypes';

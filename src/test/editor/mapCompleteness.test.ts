@@ -1,6 +1,7 @@
+import { nodePlatform } from '@dita-viewer/core/node';
 import * as assert from 'assert';
 import { basename, dirname, resolve } from 'path';
-import { crawlMaps, CrawlHost } from '../../editor/mapCrawl';
+import { crawlMaps, AnalysisHost } from '@dita-viewer/core';
 import {
   runChecks,
   DEFAULT_COMPLETENESS_OPTIONS,
@@ -18,11 +19,11 @@ import { parseDitavalFilter } from '@dita-viewer/core';
 
 const P = (p: string) => resolve('/proj', p);
 
-function makeHost(files: Record<string, string>, dirs: string[] = []): CrawlHost {
+function makeHost(files: Record<string, string>, dirs: string[] = []): AnalysisHost {
   const abs = new Map(Object.entries(files).map(([k, v]) => [P(k), v]));
   const dirSet = new Set(dirs.map(P));
   return {
-    platform: 'linux',
+    path: nodePlatform.path,
     readFile: async (p) => {
       const v = abs.get(p);
       if (v === undefined) throw new Error('ENOENT');

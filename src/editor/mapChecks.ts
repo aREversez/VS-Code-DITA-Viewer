@@ -12,9 +12,8 @@
 // and re-exports every name it has always exported, so importers of this path are unaffected.
 
 import { dirname } from 'path';
-import { normalizePathForCompare } from './mapReferenceTools';
-import { CrawlResult, Reference } from './mapCrawl';
-import { formatMessage, msg } from '@dita-viewer/core';
+import { CrawlResult, Reference } from '@dita-viewer/core';
+import { comparablePath, formatMessage, msg } from '@dita-viewer/core';
 import { CheckEnv, CompletenessOptions, Issue } from './mapChecks/checkTypes';
 import { conrefFormIssues, duplicateElementIdIssues, duplicateFilterConditionIssues, filteredReferenceIssues, idReferenceIssues, invalidRefTopicIds, keyLinkIssues, namesElement, resourceOnlyTargetIssues, topicrefToElementIssues, unreferencedReusable } from './mapChecks/idChecks';
 import { classFormatIssues, conrefClassIssues, copyToKey, ditaParseIssues, domainsFormatIssues, missingCode, missingNavTitleIssues, scopeKey, sectionStructureIssues, typeClassIssues } from './mapChecks/structureChecks';
@@ -28,7 +27,7 @@ export async function runChecks(
   opts: CompletenessOptions,
   env: CheckEnv,
 ): Promise<Issue[]> {
-  const norm = (p: string) => normalizePathForCompare(p, env.host.platform);
+  const norm = (p: string) => comparablePath(p, env.host.path.caseSensitive);
   const issues: Array<Omit<Issue, 'message'>> = [];
   const rootDir = crawl.rootMaps.length > 0 ? dirname(crawl.rootMaps[0]) : '';
 

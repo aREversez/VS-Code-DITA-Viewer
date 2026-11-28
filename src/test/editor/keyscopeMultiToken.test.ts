@@ -1,14 +1,15 @@
+import { nodePlatform } from '@dita-viewer/core/node';
 import * as assert from 'assert';
 import { resolve } from 'path';
-import { crawlMaps, CrawlHost, qualifiedNamesMulti } from '../../editor/mapCrawl';
+import { crawlMaps, AnalysisHost, qualifiedNamesMulti } from '@dita-viewer/core';
 import { runChecks, DEFAULT_COMPLETENESS_OPTIONS, CompletenessOptions, Issue } from '../../editor/mapChecks';
 
 const P = (p: string) => resolve('/proj', p);
 
-function makeHost(files: Record<string, string>): CrawlHost {
+function makeHost(files: Record<string, string>): AnalysisHost {
   const abs = new Map(Object.entries(files).map(([k, v]) => [P(k), v]));
   return {
-    platform: 'linux',
+    path: nodePlatform.path,
     readFile: async (p) => {
       const v = abs.get(p);
       if (v === undefined) throw new Error('ENOENT');

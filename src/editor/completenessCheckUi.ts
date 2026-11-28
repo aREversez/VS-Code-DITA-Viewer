@@ -12,7 +12,7 @@
 import * as vscode from 'vscode';
 import { promises as fsp } from 'fs';
 import { basename, dirname } from 'path';
-import { crawlMaps } from './mapCrawl';
+import { crawlMaps } from '@dita-viewer/core';
 import { parseDitavalFilter, DitavalFilter } from '@dita-viewer/core';
 import {
   CheckId,

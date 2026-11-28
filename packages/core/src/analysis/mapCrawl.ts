@@ -7,25 +7,26 @@
 // for each hit. The checks in mapChecks.ts and the unreferenced-file finder
 // in unreferencedResources.ts are both pure functions of the CrawlResult.
 //
-// Pure of the vscode module (file access is injected via CrawlHost), so the
-// whole thing is unit-testable against an in-memory file system.
+// Pure of the vscode module and of Node: files are read through the AnalysisHost
+// it is given and paths are made with the host's own path operations, so the
+// whole thing runs against the Node disk or an in-memory file system alike.
 //
-// The data model lives in mapCrawlTypes.ts and the XML scan in mapXmlScan.ts; both are
-// re-exported from here, so importers of this path are unaffected.
+// The data model lives in mapCrawlTypes.ts and the XML scan in mapXmlScan.ts; the
+// types are re-exported from here.
 
-import { dirname, resolve } from 'path';
-import { qualifiedNamesMulti, resolveKeyInScope, scopeKeyIndexKey } from '@dita-viewer/core';
-import { decodeHrefPart } from './ditaRenderUtils';
-import { normalizePathForCompare } from './mapReferenceTools';
-import { Msg, msg } from '@dita-viewer/core';
-import { chainHas, classElementTag, ClassSide, classSyntaxProblem, declaresGrammar, Doctype, effectiveClassOf, readDoctype, sideOfRoot } from '@dita-viewer/core';
-import { CrawlHost, CrawlOptions, CrawlResult, KeyDef, KeyUse, Location, RefKind, Reference } from './mapCrawlTypes';
-import { PROFILING_ATTRS, TOPICREF_TAGS, URL_RE, XNode, classOf, hasNavTitle, isDitaHref, isMapTag, keyrefSyntax, profileValueOf, pruneExcludedXNodes, scanXml, walk } from '@dita-viewer/core';
+import { qualifiedNamesMulti, resolveKeyInScope, scopeKeyIndexKey } from '../editor/keySpace';
+import { decodeHrefPart } from '../editor/refResolvers';
+import { comparablePath } from './pathKey';
+import { Msg, msg } from './mapCheckMessages';
+import { chainHas, classElementTag, ClassSide, classSyntaxProblem, declaresGrammar, Doctype, effectiveClassOf, readDoctype, sideOfRoot } from './ditaClass';
+import type { AnalysisHost } from './host';
+import { CrawlOptions, CrawlResult, KeyDef, KeyUse, Location, RefKind, Reference } from './mapCrawlTypes';
+import { PROFILING_ATTRS, TOPICREF_TAGS, URL_RE, XNode, classOf, hasNavTitle, isDitaHref, isMapTag, keyrefSyntax, profileValueOf, pruneExcludedXNodes, scanXml, walk } from './mapXmlScan';
 
-export type { ClassIssue, ConkeyrefTarget, ConrefShape, ConrefTargetValue, ConrefUse, CrawlHost, CrawlOptions, CrawlResult, DomainsIssue, EmptyProfilingValue, ExcludedElement, FileIssue, FileRoot, IdUse, IgnoredMaprefContent, KeyDef, KeyElementPath, KeyLinkWithoutTarget, KeyUse, LinkWithoutTarget, Location, MapEntry, ProfilingConflict, ProfilingValueUse, RecursiveRef, RefKind, Reference, ReusableCandidate, SectionIssue, TableInfo, TopicId, UndefinedKey } from './mapCrawlTypes';
-export { scanXml } from '@dita-viewer/core';
+export type { ClassIssue, ConkeyrefTarget, ConrefShape, ConrefTargetValue, ConrefUse, CrawlOptions, CrawlResult, DomainsIssue, EmptyProfilingValue, ExcludedElement, FileIssue, FileRoot, IdUse, IgnoredMaprefContent, KeyDef, KeyElementPath, KeyLinkWithoutTarget, KeyUse, LinkWithoutTarget, Location, MapEntry, ProfilingConflict, ProfilingValueUse, RecursiveRef, RefKind, Reference, ReusableCandidate, SectionIssue, TableInfo, TopicId, UndefinedKey } from './mapCrawlTypes';
 
-export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: CrawlOptions = {}): Promise<CrawlResult> {
+export async function crawlMaps(rootMaps: string[], host: AnalysisHost, opts: CrawlOptions = {}): Promise<CrawlResult> {
+  const { dirname, resolve } = host.path;
   const result: CrawlResult = {
     rootMaps: rootMaps.map((m) => resolve(m)),
     maps: new Set(),
@@ -61,7 +62,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     visited: new Map(),
     cancelled: false,
   };
-  const norm = (p: string) => normalizePathForCompare(p, host.platform);
+  const norm = (p: string) => comparablePath(p, host.path.caseSensitive);
   const seenMaps = new Map<string, Set<string>>();
   /** A key definition by its element (file + scan uid), so a map's second scope
    * extends it instead of cloning it. */
@@ -934,7 +935,3 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────
-
-// qualifiedNames / qualifiedNamesMulti live in keySpace.ts (the preview's key
-// lookup uses the same rule); re-exported so existing importers keep working.
-export { qualifiedNames, qualifiedNamesMulti } from '@dita-viewer/core';

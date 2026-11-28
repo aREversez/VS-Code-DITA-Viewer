@@ -2,7 +2,7 @@
 // Split out of mapChecks.ts; pure functions over a crawl result, no vscode dependency.
 
 import { dirname } from 'path';
-import { CrawlResult, FileRoot, Reference } from '../mapCrawl';
+import { CrawlResult, FileRoot, Reference } from '@dita-viewer/core';
 import { classChain, classPairTag } from '@dita-viewer/core';
 import { msg, MsgCode } from '@dita-viewer/core';
 import { Issue, IssueCategory } from './checkTypes';

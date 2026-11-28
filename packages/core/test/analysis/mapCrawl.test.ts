@@ -1,13 +1,16 @@
 import * as assert from 'assert';
 import { resolve } from 'path';
-import { crawlMaps, scanXml, CrawlHost } from '../../editor/mapCrawl';
+import { crawlMaps } from '../../src/analysis/mapCrawl';
+import { scanXml } from '../../src/analysis/mapXmlScan';
+import type { AnalysisHost } from '../../src/analysis/host';
+import { nodePlatform } from '../../src/node/nodePlatform';
 
 const P = (p: string) => resolve('/proj', p);
 
-function makeHost(files: Record<string, string>): CrawlHost {
+function makeHost(files: Record<string, string>): AnalysisHost {
   const abs = new Map(Object.entries(files).map(([k, v]) => [P(k), v]));
   return {
-    platform: 'linux',
+    path: nodePlatform.path,
     readFile: async (p) => {
       const v = abs.get(p);
       if (v === undefined) throw new Error('ENOENT');

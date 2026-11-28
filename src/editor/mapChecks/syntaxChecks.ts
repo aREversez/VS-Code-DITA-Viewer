@@ -2,7 +2,7 @@
 // Split out of mapChecks.ts; pure functions over a crawl result, no vscode dependency.
 
 import { dirname, isAbsolute, join, relative } from 'path';
-import { CrawlHost, CrawlResult, FileRoot, Reference } from '../mapCrawl';
+import { AnalysisHost, CrawlResult, FileRoot, Reference } from '@dita-viewer/core';
 import { msg, MsgCode } from '@dita-viewer/core';
 import { Issue } from './checkTypes';
 
@@ -74,7 +74,7 @@ export function referenceSyntaxIssues(crawl: CrawlResult): Array<Omit<Issue, 'me
  * a case-insensitive file system the reference resolves anyway; on a case-
  * sensitive one it breaks, so the spelling is reported wherever it is seen.
  */
-export async function incorrectCaseIssues(crawl: CrawlResult, host: CrawlHost): Promise<Array<Omit<Issue, 'message'>>> {
+export async function incorrectCaseIssues(crawl: CrawlResult, host: AnalysisHost): Promise<Array<Omit<Issue, 'message'>>> {
   if (!host.readDir) return [];
   const cache = new Map<string, Promise<string[] | undefined>>();
   const list = (dir: string): Promise<string[] | undefined> => {
@@ -121,7 +121,7 @@ export async function incorrectCaseIssues(crawl: CrawlResult, host: CrawlHost): 
 }
 
 /** A reference whose target is an existing folder (Oxygen's dmv.folder.ref). */
-export async function folderReferenceIssues(crawl: CrawlResult, host: CrawlHost): Promise<Array<Omit<Issue, 'message'>>> {
+export async function folderReferenceIssues(crawl: CrawlResult, host: AnalysisHost): Promise<Array<Omit<Issue, 'message'>>> {
   if (!host.isDirectory) return [];
   const out: Array<Omit<Issue, 'message'>> = [];
   for (const ref of crawl.refs) {

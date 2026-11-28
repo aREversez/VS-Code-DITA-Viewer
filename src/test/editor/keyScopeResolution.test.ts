@@ -1,6 +1,7 @@
+import { nodePlatform } from '@dita-viewer/core/node';
 import * as assert from 'assert';
 import { basename, resolve } from 'path';
-import { crawlMaps, CrawlHost } from '../../editor/mapCrawl';
+import { crawlMaps, AnalysisHost } from '@dita-viewer/core';
 import { runChecks, DEFAULT_COMPLETENESS_OPTIONS, CompletenessOptions, Issue } from '../../editor/mapChecks';
 
 // R066: a key resolves in the key scope of the place that uses it. A key defined
@@ -9,10 +10,10 @@ import { runChecks, DEFAULT_COMPLETENESS_OPTIONS, CompletenessOptions, Issue } f
 
 const P = (p: string) => resolve('/proj', p);
 
-function makeHost(files: Record<string, string>): CrawlHost {
+function makeHost(files: Record<string, string>): AnalysisHost {
   const abs = new Map(Object.entries(files).map(([k, v]) => [P(k), v]));
   return {
-    platform: 'linux',
+    path: nodePlatform.path,
     readFile: async (p) => {
       const v = abs.get(p);
       if (v === undefined) throw new Error('ENOENT');

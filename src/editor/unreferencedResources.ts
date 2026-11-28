@@ -5,7 +5,7 @@
 // and `?` wildcards; excluded folders are not descended into at all.
 
 import { dirname, join, relative, resolve } from 'path';
-import { CrawlHost, CrawlResult, crawlMaps } from './mapCrawl';
+import { AnalysisHost, CrawlResult, crawlMaps } from '@dita-viewer/core';
 import { computeUnreferencedFiles } from './mapReferenceTools';
 
 export interface UnreferencedFilters {
@@ -122,7 +122,7 @@ export function referencedPaths(crawl: CrawlResult): string[] {
 
 export async function findUnreferencedResources(
   query: UnreferencedQuery,
-  host: CrawlHost,
+  host: AnalysisHost,
   list: ListHost,
 ): Promise<UnreferencedResult> {
   const crawl = await crawlMaps(query.maps, host);
@@ -137,7 +137,7 @@ export async function findUnreferencedResources(
       candidates.push(f);
     }
   }
-  const unreferenced = computeUnreferencedFiles(candidates, referenced, host.platform).sort((a, b) =>
+  const unreferenced = computeUnreferencedFiles(candidates, referenced, host.path.caseSensitive).sort((a, b) =>
     a.localeCompare(b),
   );
   return { unreferenced, scanned: candidates.length, crawl };

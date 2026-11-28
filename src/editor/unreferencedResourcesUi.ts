@@ -32,7 +32,7 @@ import {
   suggestFolders,
   summarizeExtensions,
 } from './unreferencedResources';
-import { CrawlResult, crawlMaps } from './mapCrawl';
+import { CrawlResult, crawlMaps } from '@dita-viewer/core';
 import { clearCompletenessResults } from './completenessCheckUi';
 import { computeUnreferencedFiles } from './mapReferenceTools';
 import {
@@ -90,7 +90,7 @@ async function addFolder(scan: Scan, dir: string, token: vscode.CancellationToke
   const fresh = (await listFilteredFiles(dir, listHost, readFilters(), host.cancelled)).filter((f) => !have.has(f));
   const referenced = [...scan.referenced];
   scan.files.push(...fresh);
-  scan.unreferenced.push(...computeUnreferencedFiles(fresh, referenced, host.platform));
+  scan.unreferenced.push(...computeUnreferencedFiles(fresh, referenced, host.path.caseSensitive));
   const roots = mergeRoots([...scan.stats.map((s) => s.dir), dir]);
   const stats = new Map(scan.stats.map((s) => [s.dir, s]));
   for (const s of folderStats(scan.files, scan.unreferenced, roots, STATS_DEPTH)) stats.set(s.dir, s);
@@ -124,7 +124,7 @@ async function scanMaps(maps: string[]): Promise<Scan | undefined> {
           }
         }
         if (token.isCancellationRequested) return undefined;
-        const unreferenced = computeUnreferencedFiles(files, referenced, host.platform);
+        const unreferenced = computeUnreferencedFiles(files, referenced, host.path.caseSensitive);
         const stats = folderStats(files, unreferenced, roots, STATS_DEPTH);
         return { maps, crawl, referenced, files, unreferenced, stats, suggested: suggestFolders(stats, resourceFolders, mapDirs) };
       } catch (err) {

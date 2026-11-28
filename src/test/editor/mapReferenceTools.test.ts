@@ -79,7 +79,7 @@ describe('computeUnreferencedFiles', () => {
     const result = computeUnreferencedFiles(
       ['/repo/topics/a.dita', '/repo/topics/b.dita', '/repo/topics/c.dita'],
       ['/repo/topics/b.dita'],
-      'linux',
+      true,
     );
     assert.deepStrictEqual(result, ['/repo/topics/a.dita', '/repo/topics/c.dita']);
   });
@@ -88,7 +88,7 @@ describe('computeUnreferencedFiles', () => {
     const result = computeUnreferencedFiles(
       ['C:\\repo\\topics\\A.dita'],
       ['c:\\repo\\topics\\a.dita'],
-      'win32',
+      false,
     );
     assert.deepStrictEqual(result, []);
   });
@@ -97,18 +97,18 @@ describe('computeUnreferencedFiles', () => {
     const result = computeUnreferencedFiles(
       ['/repo/topics/A.dita'],
       ['/repo/topics/a.dita'],
-      'linux',
+      true,
     );
     assert.deepStrictEqual(result, ['/repo/topics/A.dita']);
   });
 
   it('returns everything when nothing is referenced', () => {
-    const result = computeUnreferencedFiles(['/a.dita', '/b.dita'], [], 'linux');
+    const result = computeUnreferencedFiles(['/a.dita', '/b.dita'], [], true);
     assert.deepStrictEqual(result, ['/a.dita', '/b.dita']);
   });
 
   it('returns nothing when every candidate is referenced', () => {
-    const result = computeUnreferencedFiles(['/a.dita'], ['/a.dita'], 'linux');
+    const result = computeUnreferencedFiles(['/a.dita'], ['/a.dita'], true);
     assert.deepStrictEqual(result, []);
   });
 });

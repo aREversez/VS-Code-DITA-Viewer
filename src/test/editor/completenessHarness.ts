@@ -8,10 +8,11 @@
 // corpus directory is passed in (never derived from `__dirname`), so the module
 // works both compiled under mocha and bundled by scripts/completeness-baseline.cjs.
 
+import { nodePlatform } from '@dita-viewer/core/node';
 import { access, readFile, readdir, stat } from 'fs/promises';
 import { basename, relative, resolve, sep } from 'path';
 import { DitavalFilter, parseDitavalFilter } from '@dita-viewer/core';
-import { CrawlHost, crawlMaps } from '../../editor/mapCrawl';
+import { AnalysisHost, crawlMaps } from '@dita-viewer/core';
 import {
   CompletenessOptions,
   Issue,
@@ -154,9 +155,9 @@ export interface NormalizedFinding {
   message: string;
 }
 
-function makeDiskHost(): CrawlHost {
+function makeDiskHost(): AnalysisHost {
   return {
-    platform: process.platform,
+    path: nodePlatform.path,
     readFile: (p: string) => readFile(p, 'utf8'),
     exists: async (p: string) => {
       try {

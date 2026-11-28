@@ -5,9 +5,10 @@
 // cancel button, a tree view for results (mapCheckResultsView.ts) -- not
 // custom webview forms.
 
+import { nodePlatform } from '@dita-viewer/core/node';
 import * as vscode from 'vscode';
 import { promises as fsp } from 'fs';
-import { CrawlHost } from './mapCrawl';
+import { AnalysisHost } from '@dita-viewer/core';
 import { getActiveDitaUri } from './activeDitaUri';
 import { readSourceText } from '@dita-viewer/core';
 
@@ -16,9 +17,9 @@ export interface MapCheckDeps {
   currentTreeMap(): string | undefined;
 }
 
-export function makeHost(token?: vscode.CancellationToken): CrawlHost {
+export function makeHost(token?: vscode.CancellationToken): AnalysisHost {
   return {
-    platform: process.platform,
+    path: nodePlatform.path,
     readFile: async (p) => readSourceText(p),
     exists: async (p) => {
       try {
