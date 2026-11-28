@@ -420,6 +420,26 @@ Decisions needed (recommended answer first):
 5. **Gaps found by the probes in step 1.** Fix in Phase 2 (one patch each), or record only. Recommended: fix those the extension's own preview shows wrong; record the rest.
 6. **Release shape.** One `core-0.5.0` at the end, or a release after step 6 (the point where the extension no longer holds the analysis) and another after step 9. Recommended: one release at the end, since obsidian-dita does not use the analysis.
 
+### 4.10 Step 3b findings: the two DITAVAL readers
+
+Step 3b was to delete the completeness check's reader (`analysis/ditaval.ts`) in favour of the render-time one (`profiling.ts`), once a test showed they agree. They do not always. `test/analysis/ditavalAgreement.test.ts` pins both answers for every difference found (a pass on a row means the code still says what the table says) and was checked against DITA 1.3.2 (`langRef/ditaval/`). Over the five `.ditaval` files in `test-dita-file/` and 150 to 350 element shapes each, they agree everywhere except on `rev`, which two of the manual samples filter on.
+
+| Case | Completeness reader | Render reader | DITA 1.3 |
+| --- | --- | --- | --- |
+| `<prop att="rev" ... action="exclude">` (also `base`, `importance`, `status`) | filters | does not | render: `rev` is flag-only; `att` must be a conditional-processing attribute or a `props` specialization |
+| `att="props"` on `props="region(emea) x"` | sees `region(emea)` as a value of `props` | sees `x` only | render |
+| a specialized attribute written directly (`region="emea"`, rule `att="region"`) | filters | does not | completeness: `att` may name a specialization, which is an attribute of its own name |
+| rule with an invalid `action`, or `val=""` | invalid action overrides the default; `""` is a value | invalid action skipped; `""` is the default | undefined |
+| two defaults for one attribute | first wins | last wins | error, recovery is the processor's |
+| a file that is not well-formed | reads past the error | stops at the first error and reports it | undefined |
+
+Proposed merge (nothing changed yet; each point is a decision for the maintainer):
+
+1. **Take the render reader's answer on every row it is right about**, which is every row except the specialized attribute. This changes the completeness check for exactly two real files: `manual/ditavals/rebrand.ditaval` and `release.ditaval`, whose `rev` exclusions are not valid DITAVAL filtering. They stop excluding `rev="planned"` content; the samples should switch to a rule the spec allows (or be left as the witness for this row).
+2. **Keep what the completeness reader is right about** by building the completeness filter on core's reader plus one rule: an attribute named by a rule, not in `PROFILE_ATTRS`, and written directly on the element counts as a profiling value. It lives in core next to `isExcluded`, so `parseDitavalFilter` shrinks to a few lines over `parseDitaval`. `parseDitavalRules` stays: it reports the line of each `<prop>`, which no other reader does, and is not a filter.
+3. **The same rule is a gap in render-time filtering** (a directly-written specialization is never filtered or chipped in the preview). Fixing it is a rendering change, so it belongs to step 8 with its own failing test, not to the merge.
+4. **Malformed files**: the completeness check keeps reporting through the same path as today; the merge only changes which rules count after the first error.
+
 ## Appendix A — Re-measuring the facts
 
 Run from `packages/core`:
