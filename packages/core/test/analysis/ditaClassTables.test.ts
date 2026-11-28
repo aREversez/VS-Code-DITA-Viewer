@@ -1,7 +1,7 @@
 import * as assert from 'assert';
-import { classChain } from '../../editor/ditaClass';
-import { MAP_CLASS_DEFAULTS, TOPIC_CLASS_DEFAULTS } from '../../parser/ditaClassDefaults';
-import { MAP_STANDARD_TAG_TO_BASETYPE, STANDARD_TAG_TO_BASETYPE } from '@dita-viewer/core';
+import { classChain } from '../../src/analysis/ditaClass';
+import { MAP_CLASS_DEFAULTS, TOPIC_CLASS_DEFAULTS } from '../../src/parser/ditaClassDefaults';
+import { MAP_STANDARD_TAG_TO_BASETYPE, STANDARD_TAG_TO_BASETYPE } from '../../src/api';
 
 /**
  * The hand-maintained tag -> base type maps and the generated @class table hold
@@ -15,7 +15,7 @@ import { MAP_STANDARD_TAG_TO_BASETYPE, STANDARD_TAG_TO_BASETYPE } from '@dita-vi
  *     its own (b -> topic/b while its DTD class is "+ topic/ph hi-d/b "),
  *   - or, for the bookmap lists, the shared `map/bookmap-structural` renderer.
  *
- * Regenerating src/parser/ditaClassDefaults.ts after a DITA-OT upgrade is what
+ * Regenerating packages/core/src/parser/ditaClassDefaults.ts after a DITA-OT upgrade is what
  * breaks this test when the DTD changed its classes: the chain moves and the
  * hand map has to be reviewed with it.
  */

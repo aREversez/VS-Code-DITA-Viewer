@@ -14,7 +14,7 @@ import {
   toStoredPath,
   resolveStoredPath,
 } from '../../editor/mapChecks';
-import { parseDitaval } from '../../editor/ditaval';
+import { parseDitavalFilter } from '@dita-viewer/core';
 
 const P = (p: string) => resolve('/proj', p);
 
@@ -71,7 +71,7 @@ async function checkWith(
 ): Promise<Issue[]> {
   const host = makeHost(files);
   const crawl = await crawlMaps([P(extra.root ?? 'root.ditamap')], host, {
-    filter: extra.filterXml ? parseDitaval(extra.filterXml) : undefined,
+    filter: extra.filterXml ? parseDitavalFilter(extra.filterXml) : undefined,
   });
   const options: CompletenessOptions = { ...NONE, ditavalFiles: extra.ditavalFiles ?? [], ...opts };
   return runChecks(crawl, options, { host, preferences: extra.preferences });
@@ -1234,7 +1234,7 @@ describe('completeness: validation and DITAVAL', () => {
       'a.dita': topic('a', '<p audience="novice"><image href="missing.png"/></p>'),
     };
     const host = makeHost(files);
-    const filter = parseDitaval('<val><prop att="audience" val="novice" action="exclude"/></val>');
+    const filter = parseDitavalFilter('<val><prop att="audience" val="novice" action="exclude"/></val>');
     const crawl = await crawlMaps([P('root.ditamap')], host, { filter });
     const issues = await runChecks(crawl, { ...NONE, checkNonDita: true }, { host });
     assert.strictEqual(issues.length, 0, JSON.stringify(issues));
@@ -1243,14 +1243,14 @@ describe('completeness: validation and DITAVAL', () => {
 
 describe('ditaval', () => {
   it('excludes only when every value is excluded, honouring the attribute default', () => {
-    const f = parseDitaval('<val><prop att="audience" action="exclude"/><prop att="audience" val="admin" action="include"/></val>');
+    const f = parseDitavalFilter('<val><prop att="audience" action="exclude"/><prop att="audience" val="admin" action="include"/></val>');
     assert.strictEqual(f.excludes({ audience: 'user' }), true);
     assert.strictEqual(f.excludes({ audience: 'admin' }), false);
     assert.strictEqual(f.excludes({ audience: 'admin user' }), false);
     assert.strictEqual(f.excludes({ platform: 'x' }), false);
   });
   it('reads values from the props generalization syntax', () => {
-    const f = parseDitaval('<val><prop att="deliveryTarget" val="pdf" action="exclude"/></val>');
+    const f = parseDitavalFilter('<val><prop att="deliveryTarget" val="pdf" action="exclude"/></val>');
     assert.strictEqual(f.excludes({ props: 'deliveryTarget(pdf)' }), true);
     assert.strictEqual(f.excludes({ props: 'deliveryTarget(html)' }), false);
   });

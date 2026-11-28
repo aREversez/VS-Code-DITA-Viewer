@@ -17,13 +17,13 @@ import { dirname, resolve } from 'path';
 import { qualifiedNamesMulti, resolveKeyInScope, scopeKeyIndexKey } from '@dita-viewer/core';
 import { decodeHrefPart } from './ditaRenderUtils';
 import { normalizePathForCompare } from './mapReferenceTools';
-import { Msg, msg } from './mapCheckMessages';
-import { chainHas, classElementTag, ClassSide, classSyntaxProblem, declaresGrammar, Doctype, effectiveClassOf, readDoctype, sideOfRoot } from './ditaClass';
+import { Msg, msg } from '@dita-viewer/core';
+import { chainHas, classElementTag, ClassSide, classSyntaxProblem, declaresGrammar, Doctype, effectiveClassOf, readDoctype, sideOfRoot } from '@dita-viewer/core';
 import { CrawlHost, CrawlOptions, CrawlResult, KeyDef, KeyUse, Location, RefKind, Reference } from './mapCrawlTypes';
-import { PROFILING_ATTRS, TOPICREF_TAGS, URL_RE, XNode, classOf, hasNavTitle, isDitaHref, isMapTag, keyrefSyntax, profileValueOf, pruneExcluded, scanXml, walk } from './mapXmlScan';
+import { PROFILING_ATTRS, TOPICREF_TAGS, URL_RE, XNode, classOf, hasNavTitle, isDitaHref, isMapTag, keyrefSyntax, profileValueOf, pruneExcludedXNodes, scanXml, walk } from '@dita-viewer/core';
 
 export type { ClassIssue, ConkeyrefTarget, ConrefShape, ConrefTargetValue, ConrefUse, CrawlHost, CrawlOptions, CrawlResult, DomainsIssue, EmptyProfilingValue, ExcludedElement, FileIssue, FileRoot, IdUse, IgnoredMaprefContent, KeyDef, KeyElementPath, KeyLinkWithoutTarget, KeyUse, LinkWithoutTarget, Location, MapEntry, ProfilingConflict, ProfilingValueUse, RecursiveRef, RefKind, Reference, ReusableCandidate, SectionIssue, TableInfo, TopicId, UndefinedKey } from './mapCrawlTypes';
-export { scanXml } from './mapXmlScan';
+export { scanXml } from '@dita-viewer/core';
 
 export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: CrawlOptions = {}): Promise<CrawlResult> {
   const result: CrawlResult = {
@@ -106,7 +106,7 @@ export async function crawlMaps(rootMaps: string[], host: CrawlHost, opts: Crawl
     if (prune && opts.filter && scanned.root) {
       const root = scanned.root;
       const topicIdOf = (n: XNode): string | undefined => (isTopicElement(n) ? n.attrs['id'] : undefined);
-      pruneExcluded(root, opts.filter, topicIdOf(root), topicIdOf, (removed, removedTopicId) => {
+      pruneExcludedXNodes(root, opts.filter, topicIdOf(root), topicIdOf, (removed, removedTopicId) => {
         const id = removed.attrs['id'];
         if (id) result.excludedElements.push({ file: path, line: removed.line, id, tag: removed.tag, topicId: removedTopicId });
       });

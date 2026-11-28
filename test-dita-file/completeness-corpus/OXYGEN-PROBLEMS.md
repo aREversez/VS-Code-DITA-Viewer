@@ -494,7 +494,7 @@ What the run settled:
 - **Remote targets are not fetched.** `maps/m-uri-target-edge.ditamap:10` draws
   `dmv.invalid.parse.dita.content` in Oxygen (the URL cannot be read) and `external-reference`
   from the extension — one row each way, for the two reasons corpus 2 recorded.
-- **The class table covers three vocabularies.** `src/parser/ditaClassDefaults.ts` is generated
+- **The class table covers three vocabularies.** `packages/core/src/parser/ditaClassDefaults.ts` is generated
   from the DITA-OT 1.3 DTDs of base, technicalContent and bookmap (333 topic entries, 49 map
   entries, queried per side because `title` and friends differ between them). `learning/`,
   `machineryIndustry/` and the foreign-namespace modules were not extracted, and no custom

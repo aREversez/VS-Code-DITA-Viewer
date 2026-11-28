@@ -101,3 +101,43 @@ export const HOST_TOKENS = [
   '--dita-font',
 ] as const;
 export type { AnalysisWarning, WarningSink } from './warnings';
+
+// Project-analysis foundations, moved from the extension (DESIGN.md 4.2, step 3a):
+// the check messages, the tolerant XML scan, the @class helpers and the
+// completeness check's DITAVAL reader. Generic names (walk, fill, msg ...) sit at
+// the root until the Phase 3 tiering decides where they belong. Two names changed
+// in the move because the root already had them for the render-time profiling:
+// pruneExcluded is pruneExcludedXNodes, the DITAVAL reader is parseDitavalFilter and its rule type is DitavalRuleAtLine.
+export { MESSAGE_TEMPLATES, fill, formatMessage, msg } from './analysis/mapCheckMessages';
+export type { Msg, MsgCode } from './analysis/mapCheckMessages';
+export {
+  PROFILING_ATTRS,
+  TOPICREF_TAGS,
+  URL_RE,
+  classOf,
+  hasNavTitle,
+  isDitaHref,
+  isMapTag,
+  keyrefSyntax,
+  profileValueOf,
+  pruneExcludedXNodes,
+  scanXml,
+  walk,
+} from './analysis/mapXmlScan';
+export type { XNode } from './analysis/mapXmlScan';
+export {
+  chainHas,
+  classChain,
+  classElementTag,
+  classPairTag,
+  classSyntaxProblem,
+  declaresGrammar,
+  defaultClassOf,
+  effectiveClassOf,
+  isDitaDoctype,
+  readDoctype,
+  sideOfRoot,
+} from './analysis/ditaClass';
+export type { ClassSide, ClassSyntaxProblem, Doctype } from './analysis/ditaClass';
+export { parseDitaval as parseDitavalFilter, parseDitavalRules } from './analysis/ditaval';
+export type { DitavalFilter, DitavalRule as DitavalRuleAtLine } from './analysis/ditaval';

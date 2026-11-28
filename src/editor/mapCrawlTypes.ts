@@ -1,9 +1,9 @@
 // The crawl's data model: the host it reads files through, and everything a crawl records (references, keys, ids, conrefs, profiling, table and class findings).
 // Split out of mapCrawl.ts, which re-exports every name here. No vscode dependency.
 
-import { DitavalFilter } from './ditaval';
-import { Msg } from './mapCheckMessages';
-import { ClassSide, ClassSyntaxProblem } from './ditaClass';
+import { DitavalFilter } from '@dita-viewer/core';
+import { Msg } from '@dita-viewer/core';
+import { ClassSide, ClassSyntaxProblem } from '@dita-viewer/core';
 
 export interface CrawlHost {
   /** Text of a file (unsaved editor text if any). Rejects when unreadable. */

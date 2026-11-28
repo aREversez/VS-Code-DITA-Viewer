@@ -3,8 +3,8 @@
 
 import { dirname } from 'path';
 import { CrawlResult } from '../mapCrawl';
-import { parseDitavalRules } from '../ditaval';
-import { msg } from '../mapCheckMessages';
+import { parseDitavalRules } from '@dita-viewer/core';
+import { msg } from '@dita-viewer/core';
 import { CheckEnv, CompletenessOptions, Issue, resolveStoredPath } from './checkTypes';
 import { pathPartOf } from './syntaxChecks';
 

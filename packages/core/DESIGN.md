@@ -1,7 +1,7 @@
 # @dita-viewer/core — Design: toward a host-agnostic DITA engine
 
 Status: draft 1 · 2026-11-26 · Phase 1 implemented 2026-11-27 · measured at `e739149` (core 0.3.0)
-Phase 1 is designed in full (section 3). Phase 2 is designed in section 4; step 1 and step 2 (2a to 2c) are implemented; the 4.9 decisions were taken as recommended. Phase 3 is roadmap only (section 1) and is meant to be designed later.
+Phase 1 is designed in full (section 3). Phase 2 is designed in section 4; step 1, step 2 (2a to 2c) and step 3a are implemented; the 4.9 decisions were taken as recommended. Phase 3 is roadmap only (section 1) and is meant to be designed later.
 
 ## 0. How to use this document
 
@@ -258,7 +258,7 @@ Phase 1 is done when all of these hold:
 
 ## 4. Phase 2 design — Capabilities
 
-Status: draft 1 · 2026-11-27 · measured at `d0d7e25` (core 0.4.0). Steps 1 and 2 (2a to 2c) implemented (2c measured at the commit that adds it); the decisions in 4.9 were taken as recommended.
+Status: draft 1 · 2026-11-27 · measured at `d0d7e25` (core 0.4.0). Steps 1, 2 (2a to 2c) and 3a implemented (2c measured at the commit that adds it); the decisions in 4.9 were taken as recommended.
 
 ### 4.1 Goals and non-goals
 
@@ -294,8 +294,8 @@ Modules that move (sizes at `d0d7e25`):
 | --- | --- | --- | --- |
 | `mapCrawl.ts`, `mapCrawlTypes.ts` | 940 + 392 | `path`; `CrawlHost.platform: NodeJS.Platform` | `analysis/crawl.ts` |
 | `mapChecks.ts`, `mapChecks/*` | 418 + 1,088 | `path` | `analysis/checks/*` |
-| `mapCheckMessages.ts` | 138 | none | `analysis/messages.ts` |
-| `mapXmlScan.ts`, `ditaClass.ts`, `ditaval.ts` | 170 + 183 + 85 | duplicates of core profiling (above) | `analysis/` (deduplicated, step 3) |
+| `mapCheckMessages.ts` | 138 | none | `analysis/mapCheckMessages.ts` |
+| `mapXmlScan.ts`, `ditaClass.ts`, `ditaval.ts` | 170 + 183 + 85 | duplicates of core profiling (above) | `analysis/mapXmlScan.ts`, `analysis/ditaClass.ts`, `analysis/ditaval.ts` (deduplicated, step 3b) |
 | `unreferencedResources.ts`, `mapReferenceTools.ts` | 280 + 84 | `path`; its own `ListHost` | `analysis/unreferenced.ts` |
 | `brokenRefs.ts`, `refRenameEdits.ts` | 474 + 239 | `path/win32` and `path/posix` chosen by a platform argument | `analysis/brokenRefs.ts`, `analysis/refEdits.ts` |
 | `findDitaReferences.ts` | 105 | `vscode`, `fs` | the data part becomes `referencingMaps` on the graph (4.5) |

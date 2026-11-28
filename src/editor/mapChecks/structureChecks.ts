@@ -3,8 +3,8 @@
 
 import { dirname } from 'path';
 import { CrawlResult, FileRoot, Reference } from '../mapCrawl';
-import { classChain, classPairTag } from '../ditaClass';
-import { msg, MsgCode } from '../mapCheckMessages';
+import { classChain, classPairTag } from '@dita-viewer/core';
+import { msg, MsgCode } from '@dita-viewer/core';
 import { Issue, IssueCategory } from './checkTypes';
 
 /** The class-dependent rules read the @class the crawl resolved, per finding kind. */

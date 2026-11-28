@@ -14,7 +14,7 @@
 import { dirname } from 'path';
 import { normalizePathForCompare } from './mapReferenceTools';
 import { CrawlResult, Reference } from './mapCrawl';
-import { formatMessage, msg } from './mapCheckMessages';
+import { formatMessage, msg } from '@dita-viewer/core';
 import { CheckEnv, CompletenessOptions, Issue } from './mapChecks/checkTypes';
 import { conrefFormIssues, duplicateElementIdIssues, duplicateFilterConditionIssues, filteredReferenceIssues, idReferenceIssues, invalidRefTopicIds, keyLinkIssues, namesElement, resourceOnlyTargetIssues, topicrefToElementIssues, unreferencedReusable } from './mapChecks/idChecks';
 import { classFormatIssues, conrefClassIssues, copyToKey, ditaParseIssues, domainsFormatIssues, missingCode, missingNavTitleIssues, scopeKey, sectionStructureIssues, typeClassIssues } from './mapChecks/structureChecks';

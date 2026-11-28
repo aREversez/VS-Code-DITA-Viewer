@@ -149,7 +149,7 @@ topics.
 
 ## What the class table covers
 
-`src/parser/ditaClassDefaults.ts` is generated from the DITA-OT 1.3 DTDs of **base**,
+`packages/core/src/parser/ditaClassDefaults.ts` is generated from the DITA-OT 1.3 DTDs of **base**,
 **technicalContent** and **bookmap**: 333 topic entries and 49 map entries, kept per side because
 `title`, `shortdesc`, `linktext` and `searchtitle` carry different classes in a map and in a
 topic. `learning/`, `machineryIndustry/` and the foreign-namespace modules were not extracted,

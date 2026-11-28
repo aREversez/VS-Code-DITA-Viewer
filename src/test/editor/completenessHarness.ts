@@ -10,7 +10,7 @@
 
 import { access, readFile, readdir, stat } from 'fs/promises';
 import { basename, relative, resolve, sep } from 'path';
-import { DitavalFilter, parseDitaval } from '../../editor/ditaval';
+import { DitavalFilter, parseDitavalFilter } from '@dita-viewer/core';
 import { CrawlHost, crawlMaps } from '../../editor/mapCrawl';
 import {
   CompletenessOptions,
@@ -229,7 +229,7 @@ export async function collectExtensionFindings(
   if (ditavalFiles.length === 0) filters.push(undefined);
   for (const file of ditavalFiles) {
     try {
-      filters.push(parseDitaval(await readFile(file, 'utf8')));
+      filters.push(parseDitavalFilter(await readFile(file, 'utf8')));
     } catch {
       // An unreadable DITAVAL is skipped, not fatal, as in the UI.
     }

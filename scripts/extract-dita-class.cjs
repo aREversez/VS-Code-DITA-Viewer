@@ -18,7 +18,7 @@
 //
 // The same scan also writes the runtime table the completeness checks use:
 //   node scripts/extract-dita-class.cjs --emit-module
-//     -> src/parser/ditaClassDefaults.ts (plus the two JSON artifacts above)
+//     -> packages/core/src/parser/ditaClassDefaults.ts (plus the two JSON artifacts above)
 //
 // and verifies it without the DTDs, so `npm run verify` never needs DITA-OT:
 //   node scripts/extract-dita-class.cjs --check-module
@@ -111,7 +111,7 @@ const MAP_RENDERER_SRC = path.join(CORE_DIST, 'render', 'mapTypeMap.js');
 
 const EXTRACTED_JSON = path.join(__dirname, 'dita-class-extracted.json');
 const DIFF_MD = path.join(__dirname, 'dita-class-diff.md');
-const CLASS_MODULE = path.join(REPO_ROOT, 'src', 'parser', 'ditaClassDefaults.ts');
+const CLASS_MODULE = path.join(REPO_ROOT, 'packages', 'core', 'src', 'parser', 'ditaClassDefaults.ts');
 
 // ── 1. Walk DTD files ────────────────────────────────────────────────
 
@@ -330,7 +330,7 @@ function loadCachedCandidates() {
 
 // ── 5c. The runtime @class table ───────────────────────────────────────
 //
-// src/parser/ditaClassDefaults.ts is the only consumer: the completeness checks
+// packages/core/src/parser/ditaClassDefaults.ts is the only consumer: the completeness checks
 // resolve an element's class from the file's own @class when it has one, and
 // from this table when the DTD default is what applies. Everything in the file
 // below the header is generated, in sorted order, so a rescan produces the same
@@ -410,7 +410,7 @@ function diffClassTables(expected, actual) {
 }
 
 /**
- * --emit-module writes src/parser/ditaClassDefaults.ts from the table;
+ * --emit-module writes packages/core/src/parser/ditaClassDefaults.ts from the table;
  * --check-module only reports. Either way the comparison is module <-> JSON, so
  * neither mode reads the DTDs and both run offline.
  */
@@ -463,7 +463,7 @@ function main() {
     const extracted = {};
     dupConflicts = [];
     // Every element's DTD-default class value, base elements included: this is
-    // the table src/parser/ditaClassDefaults.ts is generated from.
+    // the table packages/core/src/parser/ditaClassDefaults.ts is generated from.
     classDefaults = { topic: {}, map: {} };
     classDefaultConflicts = [];
 

@@ -10,7 +10,7 @@ import {
   isDitaDoctype,
   readDoctype,
   sideOfRoot,
-} from '../../editor/ditaClass';
+} from '../../src/analysis/ditaClass';
 
 /**
  * The @class helpers the completeness checks are built on: the generated DTD

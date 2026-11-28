@@ -1,8 +1,8 @@
 // The crawler's tolerant XML scan into a light node tree, with its element and href helpers.
-// Split out of mapCrawl.ts, which re-exports every name here. No vscode dependency.
+// Split out of mapCrawl.ts, which re-exports every name here. No vscode dependency. Lives in core (DESIGN.md 4.2).
 
 import sax from 'sax';
-import { preprocessEntities } from '@dita-viewer/core';
+import { preprocessEntities } from '../parser/ditaParser';
 import { DitavalFilter } from './ditaval';
 
 export interface XNode {
@@ -74,7 +74,7 @@ function countNewlines(s: string): number {
 }
 
 /** Removes (in place) every descendant the DITAVAL filter would drop from the output. */
-export function pruneExcluded(
+export function pruneExcludedXNodes(
   n: XNode,
   filter: DitavalFilter,
   topicId: string | undefined,
@@ -93,7 +93,7 @@ export function pruneExcluded(
       below(c, topicId);
     } else {
       keep.push(c);
-      pruneExcluded(c, filter, topicIdOf(c) ?? topicId, topicIdOf, onRemove);
+      pruneExcludedXNodes(c, filter, topicIdOf(c) ?? topicId, topicIdOf, onRemove);
     }
   }
   n.children = keep;

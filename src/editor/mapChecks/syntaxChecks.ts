@@ -3,7 +3,7 @@
 
 import { dirname, isAbsolute, join, relative } from 'path';
 import { CrawlHost, CrawlResult, FileRoot, Reference } from '../mapCrawl';
-import { msg, MsgCode } from '../mapCheckMessages';
+import { msg, MsgCode } from '@dita-viewer/core';
 import { Issue } from './checkTypes';
 
 const URL_SCHEME = /^[a-z][a-z0-9+.-]*:/i;

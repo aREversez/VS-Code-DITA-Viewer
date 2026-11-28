@@ -3,7 +3,7 @@
 
 import { isAbsolute, relative, resolve } from 'path';
 import { CrawlHost, Location } from '../mapCrawl';
-import { Msg } from '../mapCheckMessages';
+import { Msg } from '@dita-viewer/core';
 
 export interface CompletenessOptions {
   batchValidate: boolean;

@@ -13,7 +13,7 @@ import * as vscode from 'vscode';
 import { promises as fsp } from 'fs';
 import { basename, dirname } from 'path';
 import { crawlMaps } from './mapCrawl';
-import { parseDitaval, DitavalFilter } from './ditaval';
+import { parseDitavalFilter, DitavalFilter } from '@dita-viewer/core';
 import {
   CheckId,
   CompletenessOptions,
@@ -27,7 +27,7 @@ import {
   runChecks,
   toStoredPath,
 } from './mapChecks';
-import { Msg, MsgCode, formatMessage } from './mapCheckMessages';
+import { Msg, MsgCode, formatMessage } from '@dita-viewer/core';
 import {
   MapCheckDeps,
   activeMapPath,
@@ -249,7 +249,7 @@ export async function runCompleteness(map: string, options: CompletenessOptions,
   if (options.ditavalFiles.length === 0) filters.push(undefined);
   for (const f of options.ditavalFiles) {
     try {
-      filters.push(parseDitaval(await fsp.readFile(f, 'utf8')));
+      filters.push(parseDitavalFilter(await fsp.readFile(f, 'utf8')));
     } catch {
       vscode.window.showWarningMessage(vscode.l10n.t('DITAVAL file could not be read: {0}', f));
     }

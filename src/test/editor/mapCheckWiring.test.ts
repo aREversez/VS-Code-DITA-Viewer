@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { MESSAGE_TEMPLATES, fill, formatMessage, msg } from '../../editor/mapCheckMessages';
+import { MESSAGE_TEMPLATES, fill, formatMessage, msg } from '@dita-viewer/core';
 import { CHECK_IDS, DEFAULT_ENABLED_CHECKS } from '../../editor/mapChecks';
 
 // The UI modules import `vscode`, so (like mapToolbarOrder.test.ts) the
