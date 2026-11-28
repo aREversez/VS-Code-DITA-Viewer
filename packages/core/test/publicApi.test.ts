@@ -1,7 +1,7 @@
 import { strict as assert } from 'assert';
 import * as core from '../src/index';
 // Type-only: fails the build, not just the run, if a type the extension needs stops being exported.
-import type { DitaDocument, DitaNode, DocSymbolSpec, FileReader, RefErrorTexts, RenderContext, SourceRange } from '../src/index';
+import type { AnalysisWarning, DitaDocument, DitaNode, DocSymbolSpec, FileReader, RefErrorTexts, RenderContext, SourceRange, WarningSink } from '../src/index';
 
 describe('public API', () => {
   // What the VS Code viewer imports from the modules it copied. If one of these
@@ -105,7 +105,7 @@ describe('public API', () => {
     assert.equal(core.STANDARD_TAG_TO_BASETYPE.p, 'topic/p');
     assert.equal(core.MAP_STANDARD_TAG_TO_BASETYPE.topicref, 'map/topicref');
     // RenderContext is only named here, so a rename or removal is a compile error.
-    const unused: RenderContext | DocSymbolSpec | FileReader | RefErrorTexts | undefined = undefined;
+    const unused: RenderContext | DocSymbolSpec | FileReader | RefErrorTexts | AnalysisWarning | WarningSink | undefined = undefined;
     assert.equal(unused, undefined);
   });
 });
