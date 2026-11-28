@@ -122,6 +122,12 @@ export function resolveKeyInScope<T>(key: string, chains: string[][], index: Rea
 export interface KeyHrefDef {
   href?: string;
   baseDir: string;
+  /**
+   * The key's own text (keyword, linktext, navtitle or shortdesc, in that order), or undefined
+   * when the definition has none. The flat name map answers a text-less key with the key's name
+   * so a `<ph keyref>` shows something; this is what tells that fallback from real text.
+   */
+  text?: string;
 }
 
 /**
@@ -233,7 +239,7 @@ export function collectMapKeys(
         for (const name of qualifiedNamesMulti(keyName, chains)) {
           if (!into.has(name)) {
             into.set(name, value || keyName);
-            hrefs?.set(name, { href: node.attributes?.href, baseDir: mapDir });
+            hrefs?.set(name, { href: node.attributes?.href, baseDir: mapDir, text: value });
           }
         }
         if (scopes) {
@@ -243,7 +249,7 @@ export function collectMapKeys(
             const at = scopeKeyIndexKey(chain.join('/'), keyName);
             if (!scopes.values.has(at)) {
               scopes.values.set(at, value || keyName);
-              scopes.defs.set(at, { href: node.attributes?.href, baseDir: mapDir });
+              scopes.defs.set(at, { href: node.attributes?.href, baseDir: mapDir, text: value });
             }
           }
         }

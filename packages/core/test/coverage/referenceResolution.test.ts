@@ -75,11 +75,27 @@ describe('coverage probes: reference resolution', () => {
       assert.match(html, /unresolved-keyref/);
     });
 
-    // DITA 1.3, xref: an xref without content takes its link text from the
-    // target. Written directly (<xref href>) core does; through a keyref it shows the key name.
-    it.skip('with no content and no linktext, the link text is the target topic\'s title, as for a direct href', () => {
+    // DITA 1.3 archSpec, "Processing key references to generate text or link text": a key with no
+    // text gives an empty xref no effective content, so its link text comes from the target, as for
+    // a direct href, and not from the key's name.
+    it('with no content and no key text, the link text is the target topic\'s title, as for a direct href', () => {
       const html = body('<p><xref keyref="k"/></p>', '<keydef keys="k" href="other.dita"/>', OTHER);
       assert.match(html, /<a [^>]*class="xref">OTitle<\/a>/);
+    });
+
+    it('with no key text and a target that has no title, the link text is the href, as for a direct href', () => {
+      const html = body('<p><xref keyref="k"/></p>', '<keydef keys="k" href="gone.dita"/>');
+      assert.match(html, /<a [^>]*class="xref">gone\.dita<\/a>/);
+    });
+
+    it('a key whose own text is the key name still shows that text', () => {
+      const html = body('<p><xref keyref="k"/></p>', keywordKey('k', 'k').replace('<keydef keys="k">', '<keydef keys="k" href="other.dita">'), OTHER);
+      assert.match(html, /<a [^>]*class="xref">k<\/a>/);
+    });
+
+    it('a key with no href and no text is still an unresolved reference showing the key name', () => {
+      const html = body('<p><xref keyref="k"/></p>', '<keydef keys="k"/>', OTHER);
+      assert.match(html, /unresolved-keyref/);
     });
   });
 
@@ -119,15 +135,36 @@ describe('coverage probes: reference resolution', () => {
 
     // DITA 1.3 §2.3.4.9: an empty <image> (no text, no <alt> child, no @alt)
     // takes the key's effective content as alternate text, equivalent to an
-    // <alt> child. Core resolves the key's href but never substitutes text
-    // for images, so the alt is missing.
-    it.skip('an empty image takes the key\'s text as alt text', () => {
+    // <alt> child.
+    it('an empty image takes the key\'s text as alt text', () => {
       const html = body(
         '<p><image keyref="k"/></p>',
         '<keydef keys="k" href="images/pic.png"><topicmeta><linktext>LT</linktext></topicmeta></keydef>',
         PIC,
       );
       assert.match(html, /<img [^>]*alt="LT"/);
+    });
+
+    const LT = '<keydef keys="k" href="images/pic.png"><topicmeta><linktext>LT</linktext></topicmeta></keydef>';
+
+    it('an alt written on the image wins over the key\'s text', () => {
+      assert.match(body('<p><image keyref="k" alt="Own"/></p>', LT, PIC), /alt="Own"/);
+    });
+
+    it('an <alt> child wins over the key\'s text', () => {
+      const html = body('<p><image keyref="k"><alt>Child</alt></image></p>', LT, PIC);
+      assert.match(html, /alt="Child"/);
+      assert.ok(!html.includes('alt="LT"'));
+    });
+
+    it('a key with an href and no text gives no alt attribute, not the key name', () => {
+      const html = body('<p><image keyref="k"/></p>', '<keydef keys="k" href="images/pic.png"/>', PIC);
+      assert.ok(!/alt=/.test(html), html);
+    });
+
+    it('the key text is escaped in the alt attribute', () => {
+      const key = '<keydef keys="k" href="images/pic.png"><topicmeta><linktext>a &quot;b&quot; &lt;c&gt;</linktext></topicmeta></keydef>';
+      assert.match(body('<p><image keyref="k"/></p>', key, PIC), /alt="a &quot;b&quot; &lt;c&gt;"/);
     });
   });
 

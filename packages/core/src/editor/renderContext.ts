@@ -224,6 +224,7 @@ export function buildRenderContext(input: BuildRenderContextInput): BuiltRenderC
     // relative to the DOCUMENT's folder -- so rebase here, preserving any
     // element-id fragment, and hand through the shapes that are not
     // filesystem paths (URL schemes, absolute paths) untouched.
+    ctx.resolveKeyText = (key: string): string | undefined => keyDefs.get(key)?.text;
     ctx.resolveKeyHref = (key: string): string | undefined => {
       const def = keyDefs.get(key);
       if (!def?.href) return undefined;

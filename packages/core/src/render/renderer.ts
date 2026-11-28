@@ -120,6 +120,16 @@ export interface RenderContext {
    */
   resolveKeyHref?: (key: string) => string | undefined;
   /**
+   * The key's own text, or undefined when the definition has none (resolveKey
+   * answers a text-less key with the key's name instead). Lets an element that
+   * is empty tell a key that supplies content from one that only supplies a
+   * target: an xref takes its link text from the target in the second case, and
+   * an empty image takes the key's text as its alt text (DITA 1.3, "Processing
+   * key references to generate text or link text"). Without it both elements
+   * keep using resolveKey's answer.
+   */
+  resolveKeyText?: (key: string) => string | undefined;
+  /**
    * Opt-in for the standalone single-topic preview: cross-file xrefs whose
    * target is NOT part of a book (no isInCurrentBook context) render as a
    * real <a> carrying the raw href in data-dita-href, which the preview's
@@ -696,15 +706,31 @@ function withResolvedKeyHref(node: DitaNode, keyref: string, context: RenderCont
 function resolveKeyrefForNode(node: DitaNode, context: RenderContext): DitaNode {
   const keyref = node.attributes?.keyref;
   if (!keyref || !context.resolveKey) return node;
-  // An image's children are its alt text, not link text, so the key's text
-  // never replaces them; only the key's resource target (the picture) applies.
-  if (node.baseType === 'topic/image') return withResolvedKeyHref(node, keyref, context);
+  // An image's children are its alt text, not content to replace: the key
+  // supplies the picture, and its text only when the image is empty and has
+  // no alt of its own, as an alt (equivalent to an <alt> child).
+  if (node.baseType === 'topic/image') {
+    const withHref = withResolvedKeyHref(node, keyref, context);
+    const isEmpty = !(node.children || []).some((c) => c.type === 'element' || (c.text || '').trim() !== '');
+    const altText = isEmpty && !node.attributes?.alt ? context.resolveKeyText?.(keyref) : undefined;
+    return altText ? { ...withHref, attributes: { ...withHref.attributes, alt: altText } } : withHref;
+  }
   // Per the DITA spec, existing element content wins over the key-resolved
   // text — only substitute when the element is effectively empty.
   const hasLocalContent = (node.children || []).some(
     (c) => c.type === 'element' || (c.text || '').trim() !== '',
   );
   if (hasLocalContent) return withResolvedKeyHref(node, keyref, context);
+  // A key that only names a target gives an empty xref no content: its link
+  // text then comes from the target, as for a direct href, not from the key's name.
+  if (
+    node.baseType === 'topic/xref' &&
+    context.resolveKeyText &&
+    context.resolveKeyHref?.(keyref) &&
+    !context.resolveKeyText(keyref)
+  ) {
+    return withResolvedKeyHref(node, keyref, context);
+  }
   const resolved = context.resolveKey(keyref);
   if (!resolved) return node;
   // Strip keyref after resolving, replace children with resolved text
